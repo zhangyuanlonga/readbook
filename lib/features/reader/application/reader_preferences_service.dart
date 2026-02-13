@@ -1,0 +1,116 @@
+import 'dart:convert';
+
+import 'package:shared_preferences/shared_preferences.dart';
+
+import '../../../domain/entities/reader_settings.dart';
+import '../../../domain/entities/reading_progress.dart';
+
+class ReaderPreferencesService {
+  ReaderPreferencesService({SharedPreferences? preferences})
+    : _preferencesFuture =
+          preferences == null
+              ? SharedPreferences.getInstance()
+              : Future.value(preferences);
+
+  final Future<SharedPreferences> _preferencesFuture;
+
+  static const String _fontSizeKey = 'reader.settings.fontSize';
+  static const String _lineHeightKey = 'reader.settings.lineHeight';
+  static const String _horizontalPaddingKey =
+      'reader.settings.horizontalPadding';
+  static const String _paragraphSpacingKey = 'reader.settings.paragraphSpacing';
+  static const String _paragraphIndentKey = 'reader.settings.paragraphIndent';
+  static const String _brightnessKey = 'reader.settings.brightness';
+  static const String _themeModeKey = 'reader.settings.themeMode';
+  static const String _pageTurnModeKey = 'reader.settings.pageTurnMode';
+  static const String _backgroundStyleKey = 'reader.settings.backgroundStyle';
+  static const String _pageTurnStepRatioKey =
+      'reader.settings.pageTurnStepRatio';
+  static const String _progressPrefix = 'reader.progress.';
+
+  Future<ReaderSettings> loadSettings() async {
+    final prefs = await _preferencesFuture;
+
+    final modeName = prefs.getString(_themeModeKey);
+    final mode = ReaderThemeMode.values.firstWhere(
+      (item) => item.name == modeName,
+      orElse: () => ReaderThemeMode.light,
+    );
+
+    final pageTurnModeName = prefs.getString(_pageTurnModeKey);
+    final pageTurnMode = ReaderPageTurnMode.values.firstWhere(
+      (item) => item.name == pageTurnModeName,
+      orElse: () => ReaderPageTurnMode.tap,
+    );
+
+    final backgroundName = prefs.getString(_backgroundStyleKey);
+    final backgroundStyle = ReaderBackgroundStyle.values.firstWhere(
+      (item) => item.name == backgroundName,
+      orElse: () => ReaderBackgroundStyle.plain,
+    );
+
+    return ReaderSettings(
+      fontSize: prefs.getDouble(_fontSizeKey) ?? 18,
+      lineHeight: prefs.getDouble(_lineHeightKey) ?? 1.7,
+      horizontalPadding: prefs.getDouble(_horizontalPaddingKey) ?? 18,
+      paragraphSpacing: prefs.getDouble(_paragraphSpacingKey) ?? 14,
+      paragraphIndent: prefs.getDouble(_paragraphIndentKey) ?? 0,
+      brightness: (prefs.getDouble(_brightnessKey) ?? 1).clamp(0.2, 1.0),
+      themeMode: mode,
+      pageTurnMode: pageTurnMode,
+      backgroundStyle: backgroundStyle,
+      pageTurnStepRatio: (prefs.getDouble(_pageTurnStepRatioKey) ?? 0.88).clamp(
+        0.6,
+        1.0,
+      ),
+    );
+  }
+
+  Future<void> saveSettings(ReaderSettings settings) async {
+    final prefs = await _preferencesFuture;
+
+    await prefs.setDouble(_fontSizeKey, settings.fontSize);
+    await prefs.setDouble(_lineHeightKey, settings.lineHeight);
+    await prefs.setDouble(_horizontalPaddingKey, settings.horizontalPadding);
+    await prefs.setDouble(_paragraphSpacingKey, settings.paragraphSpacing);
+    await prefs.setDouble(_paragraphIndentKey, settings.paragraphIndent);
+    await prefs.setDouble(_brightnessKey, settings.brightness);
+    await prefs.setString(_themeModeKey, settings.themeMode.name);
+    await prefs.setString(_pageTurnModeKey, settings.pageTurnMode.name);
+    await prefs.setString(_backgroundStyleKey, settings.backgroundStyle.name);
+    await prefs.setDouble(_pageTurnStepRatioKey, settings.pageTurnStepRatio);
+  }
+
+  Future<ReadingProgress?> loadProgress(String bookId) async {
+    if (bookId.trim().isEmpty) {
+      return null;
+    }
+
+    final prefs = await _preferencesFuture;
+    final raw = prefs.getString('$_progressPrefix${bookId.trim()}');
+    if (raw == null || raw.trim().isEmpty) {
+      return null;
+    }
+
+    try {
+      final decoded = jsonDecode(raw);
+      if (decoded is! Map) {
+        return null;
+      }
+
+      return ReadingProgress.fromJson(
+        decoded.map((key, value) => MapEntry(key.toString(), value)),
+      );
+    } on FormatException {
+      return null;
+    }
+  }
+
+  Future<void> saveProgress(ReadingProgress progress) async {
+    final prefs = await _preferencesFuture;
+    await prefs.setString(
+      '$_progressPrefix${progress.bookId}',
+      jsonEncode(progress.toJson()),
+    );
+  }
+}

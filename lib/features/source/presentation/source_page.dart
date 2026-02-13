@@ -1,0 +1,1104 @@
+import 'package:file_selector/file_selector.dart';
+import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+
+import '../../../core/errors/app_exception.dart';
+import '../../../core/errors/error_codes.dart';
+import '../../../core/errors/error_stage.dart';
+import '../../../core/network/request_context.dart';
+import '../../../core/result/result.dart';
+import '../../../data/datasources/local/app_database.dart';
+import '../../../data/repositories/source_repository_impl.dart';
+import '../../../domain/entities/source_definition.dart';
+import '../../../domain/repositories/source_repository.dart';
+import '../../search/application/search_service.dart';
+import '../application/source_import_service.dart';
+
+class SourcePage extends StatefulWidget {
+  const SourcePage({super.key});
+
+  @override
+  State<SourcePage> createState() => _SourcePageState();
+}
+
+class _SourcePageState extends State<SourcePage> {
+  final SourceImportService _importService = SourceImportService();
+  final SourceRepository _repository = SourceRepositoryImpl(
+    AppDatabase.instance,
+  );
+
+  late final SearchService _searchService;
+
+  bool _isImporting = false;
+  bool _isSelectionMode = false;
+  bool _isBatchDeleting = false;
+  final Set<String> _testingSourceIds = <String>{};
+  final Set<String> _changingEnabledSourceIds = <String>{};
+  final Set<String> _deletingSourceIds = <String>{};
+  final Set<String> _selectedSourceIds = <String>{};
+  List<SourceDefinition> _visibleSources = const <SourceDefinition>[];
+
+  static const String _defaultConnectivityKeyword = '凡人修仙传';
+
+  @override
+  void initState() {
+    super.initState();
+    _searchService = SearchService(sourceRepository: _repository);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(
+        leading:
+            _isSelectionMode
+                ? IconButton(
+                  onPressed: _exitSelectionMode,
+                  tooltip: '取消选择',
+                  icon: const Icon(Icons.close),
+                )
+                : null,
+        title: Text(
+          _isSelectionMode ? '已选择 ${_selectedSourceIds.length} 项' : '书源管理',
+        ),
+        actions: [
+          if (_isSelectionMode) ...[
+            IconButton(
+              onPressed:
+                  _visibleSources.isEmpty ? null : _selectAllVisibleSources,
+              tooltip: '全选',
+              icon: const Icon(Icons.select_all),
+            ),
+            IconButton(
+              onPressed: _visibleSources.isEmpty ? null : _invertSelection,
+              tooltip: '反选',
+              icon: const Icon(Icons.flip),
+            ),
+            IconButton(
+              onPressed:
+                  _selectedSourceIds.isEmpty || _isBatchDeleting
+                      ? null
+                      : _deleteSelectedSources,
+              tooltip: '删除已选',
+              icon: const Icon(Icons.delete_outline),
+            ),
+          ] else if (_isImporting)
+            const Padding(
+              padding: EdgeInsets.only(right: 16),
+              child: Center(
+                child: SizedBox(
+                  width: 18,
+                  height: 18,
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                ),
+              ),
+            )
+          else
+            PopupMenuButton<_ImportAction>(
+              tooltip: '导入书源',
+              icon: const Icon(Icons.add),
+              onSelected: (action) {
+                switch (action) {
+                  case _ImportAction.paste:
+                    _importFromPaste();
+                  case _ImportAction.file:
+                    _importFromFile();
+                  case _ImportAction.batchSample:
+                    _importFromBuiltInBatch();
+                }
+              },
+              itemBuilder:
+                  (context) => const [
+                    PopupMenuItem(
+                      value: _ImportAction.paste,
+                      child: Text('粘贴导入 JSON'),
+                    ),
+                    PopupMenuItem(
+                      value: _ImportAction.file,
+                      child: Text('文件导入'),
+                    ),
+                    PopupMenuItem(
+                      value: _ImportAction.batchSample,
+                      child: Text('批量导入 read/test'),
+                    ),
+                  ],
+            ),
+        ],
+      ),
+      body: StreamBuilder<List<SourceDefinition>>(
+        stream: _repository.watchAll(),
+        initialData: const [],
+        builder: (context, snapshot) {
+          final sources = snapshot.data ?? const <SourceDefinition>[];
+          _visibleSources = sources;
+
+          if (_isSelectionMode) {
+            final visibleIds = sources.map((item) => item.id).toSet();
+            _selectedSourceIds.removeWhere((id) => !visibleIds.contains(id));
+
+            if (sources.isEmpty) {
+              WidgetsBinding.instance.addPostFrameCallback((_) {
+                if (!mounted || !_isSelectionMode) {
+                  return;
+                }
+                setState(() {
+                  _isSelectionMode = false;
+                  _selectedSourceIds.clear();
+                });
+              });
+            }
+          }
+
+          if (sources.isEmpty) {
+            return ListView(
+              padding: const EdgeInsets.all(16),
+              children: const [
+                Card(
+                  child: Padding(
+                    padding: EdgeInsets.all(16),
+                    child: Text('当前没有书源，点击右上角 + 开始导入。'),
+                  ),
+                ),
+              ],
+            );
+          }
+
+          return ListView(
+            padding: const EdgeInsets.all(16),
+            children: [
+              Text(
+                '已导入书源：${sources.length}',
+                style: Theme.of(context).textTheme.titleMedium,
+              ),
+              if (_isSelectionMode) ...[
+                const SizedBox(height: 8),
+                _buildSelectionHintCard(),
+              ],
+              const SizedBox(height: 8),
+              ...sources.map(_buildSourceCard),
+            ],
+          );
+        },
+      ),
+    );
+  }
+
+  Widget _buildSelectionHintCard() {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      decoration: BoxDecoration(
+        color: Theme.of(context).colorScheme.primaryContainer,
+        borderRadius: BorderRadius.circular(10),
+      ),
+      child: Text(
+        _selectedSourceIds.isEmpty
+            ? '多选模式：可点击条目进行选择，也可使用顶部全选/反选。'
+            : '多选模式：已选 ${_selectedSourceIds.length} 项，点击右上角删除。',
+        style: TextStyle(
+          color: Theme.of(context).colorScheme.onPrimaryContainer,
+        ),
+      ),
+    );
+  }
+
+  Widget _buildSourceCard(SourceDefinition source) {
+    final statusText = _healthStatusText(source.lastCheckStatus);
+    final checkedAtText = _formatDateTime(source.lastCheckedAt);
+    final isTesting = _testingSourceIds.contains(source.id);
+    final isChangingEnabled = _changingEnabledSourceIds.contains(source.id);
+    final isDeleting = _deletingSourceIds.contains(source.id);
+    final selected = _selectedSourceIds.contains(source.id);
+    final lastCheckMessage = source.lastCheckMessage?.trim();
+    final isActionLocked = _isBatchDeleting || isDeleting;
+
+    return Card(
+      margin: const EdgeInsets.only(bottom: 8),
+      clipBehavior: Clip.antiAlias,
+      child: InkWell(
+        onLongPress: () => _startSelectionMode(source.id),
+        onTap: _isSelectionMode ? () => _toggleSelected(source.id) : null,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              if (_isSelectionMode)
+                Padding(
+                  padding: const EdgeInsets.only(top: 4, right: 6),
+                  child: Checkbox(
+                    value: selected,
+                    onChanged: (_) => _toggleSelected(source.id),
+                  ),
+                ),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Expanded(
+                          child: Text(
+                            source.name,
+                            style: Theme.of(context).textTheme.titleSmall,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                        if (source.comment != null &&
+                            source.comment!.trim().isNotEmpty)
+                          const Padding(
+                            padding: EdgeInsets.only(left: 6),
+                            child: Icon(Icons.sticky_note_2_outlined, size: 16),
+                          ),
+                      ],
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      source.baseUrl,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: Theme.of(context).textTheme.bodySmall,
+                    ),
+                    const SizedBox(height: 8),
+                    Wrap(
+                      spacing: 6,
+                      runSpacing: 6,
+                      children: [
+                        _buildSourceMetaChip('分组', source.group ?? '未分组'),
+                        _buildSourceMetaChip('状态', statusText),
+                        _buildSourceMetaChip('测试', checkedAtText),
+                      ],
+                    ),
+                    if (lastCheckMessage != null &&
+                        lastCheckMessage.isNotEmpty) ...[
+                      const SizedBox(height: 6),
+                      Text(
+                        '测试摘要：$lastCheckMessage',
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: Theme.of(context).textTheme.bodySmall,
+                      ),
+                    ],
+                    if (source.comment != null &&
+                        source.comment!.trim().isNotEmpty) ...[
+                      const SizedBox(height: 6),
+                      Text(
+                        '备注：${source.comment!.trim()}',
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: Theme.of(context).textTheme.bodySmall,
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+              if (!_isSelectionMode)
+                Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Switch(
+                      value: source.enabled,
+                      onChanged:
+                          isActionLocked || isChangingEnabled
+                              ? null
+                              : (value) => _setEnabled(source.id, value),
+                    ),
+                    if (isTesting || isChangingEnabled || isDeleting)
+                      const Padding(
+                        padding: EdgeInsets.only(bottom: 4),
+                        child: SizedBox(
+                          width: 16,
+                          height: 16,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        ),
+                      ),
+                    PopupMenuButton<_SourceAction>(
+                      tooltip: '更多操作',
+                      icon: const Icon(Icons.more_vert),
+                      onSelected:
+                          isActionLocked
+                              ? null
+                              : (action) => _handleSourceAction(
+                                action: action,
+                                source: source,
+                                isTesting: isTesting,
+                              ),
+                      itemBuilder:
+                          (context) => [
+                            PopupMenuItem(
+                              value: _SourceAction.test,
+                              enabled: !isTesting && !isActionLocked,
+                              child: const Text('连通性测试'),
+                            ),
+                            PopupMenuItem(
+                              value: _SourceAction.editComment,
+                              enabled: !isActionLocked,
+                              child: const Text('编辑备注'),
+                            ),
+                            PopupMenuItem(
+                              value: _SourceAction.delete,
+                              enabled: !isActionLocked,
+                              child: const Text('删除书源'),
+                            ),
+                          ],
+                    ),
+                  ],
+                ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildSourceMetaChip(String label, String value) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+      decoration: BoxDecoration(
+        color: Theme.of(context).colorScheme.surfaceContainerHighest,
+        borderRadius: BorderRadius.circular(999),
+      ),
+      child: Text(
+        '$label: $value',
+        style: Theme.of(context).textTheme.bodySmall,
+      ),
+    );
+  }
+
+  void _handleSourceAction({
+    required _SourceAction action,
+    required SourceDefinition source,
+    required bool isTesting,
+  }) {
+    switch (action) {
+      case _SourceAction.test:
+        if (!isTesting) {
+          _runConnectivityTest(source);
+        }
+        return;
+      case _SourceAction.editComment:
+        _editComment(source);
+        return;
+      case _SourceAction.delete:
+        _deleteSource(source.id);
+        return;
+    }
+  }
+
+  Future<void> _importFromPaste() async {
+    try {
+      final clipboardData = await Clipboard.getData(Clipboard.kTextPlain);
+      final clipboardText = clipboardData?.text?.trim() ?? '';
+      if (clipboardText.isNotEmpty) {
+        await _importSingleText(content: clipboardText, sourceLabel: '剪贴板');
+        return;
+      }
+    } on PlatformException {
+      _showMessage('读取剪贴板失败，请手动粘贴 JSON 内容。');
+    }
+
+    final text = await _showPasteDialog();
+    if (!mounted || text == null) {
+      return;
+    }
+
+    await _importSingleText(content: text, sourceLabel: '粘贴内容');
+  }
+
+  Future<void> _importFromFile() async {
+    XFile? file;
+
+    try {
+      file = await openFile(
+        acceptedTypeGroups: const [
+          XTypeGroup(label: 'JSON', extensions: ['json', 'txt']),
+        ],
+        confirmButtonText: '导入书源',
+      );
+    } on PlatformException catch (error) {
+      _showMessage('打开文件选择器失败：${error.message ?? error.code}');
+      return;
+    } catch (error) {
+      _showMessage('打开文件选择器失败：$error');
+      return;
+    }
+
+    if (!mounted || file == null) {
+      return;
+    }
+
+    try {
+      final bytes = await file.readAsBytes();
+      final content = _importService.decodeSourceBytes(bytes);
+      await _importSingleText(content: content, sourceLabel: file.name);
+    } catch (_) {
+      _showMessage('读取文件失败：${file.name}');
+    }
+  }
+
+  Future<void> _importFromBuiltInBatch() async {
+    const assetFiles = ['read.json', 'test_read.json'];
+
+    _setImporting(true);
+    try {
+      final reports = <SourceImportPreviewReport>[];
+      for (final assetFile in assetFiles) {
+        try {
+          final content = await rootBundle.loadString(assetFile);
+          final preview = await _importService.previewFromTextInBackground(
+            content,
+          );
+          if (preview case Success<SourceImportPreviewReport>(
+            data: final report,
+          )) {
+            reports.add(_attachSourceLabel(report, assetFile));
+          } else if (preview case Failure<SourceImportPreviewReport>(
+            exception: final error,
+          )) {
+            reports.add(
+              SourceImportPreviewReport(
+                validSources: const [],
+                issues: [
+                  SourceImportIssue(
+                    sourceLabel: assetFile,
+                    message: error.briefMessage,
+                  ),
+                ],
+                totalCount: 0,
+              ),
+            );
+          }
+        } catch (_) {
+          reports.add(
+            SourceImportPreviewReport(
+              validSources: const [],
+              issues: [
+                SourceImportIssue(
+                  sourceLabel: assetFile,
+                  message: '读取内置文件失败，请确认已在 pubspec.yaml 注册资源。',
+                ),
+              ],
+              totalCount: 0,
+            ),
+          );
+        }
+      }
+
+      final merged = _mergePreviewReports(reports);
+      await _applyImportPreview(merged, actionLabel: '批量导入');
+    } finally {
+      _setImporting(false);
+    }
+  }
+
+  Future<void> _importSingleText({
+    required String content,
+    required String sourceLabel,
+  }) async {
+    _setImporting(true);
+    try {
+      final preview = await _importService.previewFromTextInBackground(content);
+      if (preview case Failure<SourceImportPreviewReport>(
+        exception: final error,
+      )) {
+        _showMessage(error.briefMessage);
+        return;
+      }
+
+      final report = _attachSourceLabel(
+        (preview as Success<SourceImportPreviewReport>).data,
+        sourceLabel,
+      );
+      await _applyImportPreview(report, actionLabel: '导入');
+    } finally {
+      _setImporting(false);
+    }
+  }
+
+  Future<void> _applyImportPreview(
+    SourceImportPreviewReport report, {
+    required String actionLabel,
+  }) async {
+    if (report.totalCount == 0 && !report.hasIssues) {
+      _showMessage('$actionLabel未发现可处理书源。');
+      return;
+    }
+
+    var shouldImport = true;
+    if (report.hasIssues) {
+      shouldImport =
+          await _showImportPreviewDialog(report, title: '$actionLabel预校验结果') ??
+          false;
+    }
+
+    if (!shouldImport) {
+      return;
+    }
+
+    if (report.validSources.isEmpty) {
+      _showMessage('$actionLabel失败：没有可导入书源。');
+      return;
+    }
+
+    await _repository.upsertAll(report.validSources);
+
+    if (report.invalidCount == 0) {
+      _showMessage('$actionLabel成功：共 ${report.validCount} 条。');
+      return;
+    }
+
+    _showMessage(
+      '$actionLabel完成：成功 ${report.validCount} 条，失败 ${report.invalidCount} 条。',
+    );
+  }
+
+  SourceImportPreviewReport _attachSourceLabel(
+    SourceImportPreviewReport report,
+    String sourceLabel,
+  ) {
+    return SourceImportPreviewReport(
+      validSources: report.validSources,
+      issues: report.issues
+          .map((issue) => issue.withSourceLabel(sourceLabel))
+          .toList(growable: false),
+      totalCount: report.totalCount,
+    );
+  }
+
+  SourceImportPreviewReport _mergePreviewReports(
+    List<SourceImportPreviewReport> reports,
+  ) {
+    final validSources = <SourceDefinition>[];
+    final issues = <SourceImportIssue>[];
+    var totalCount = 0;
+
+    for (final report in reports) {
+      validSources.addAll(report.validSources);
+      issues.addAll(report.issues);
+      totalCount += report.totalCount;
+    }
+
+    return SourceImportPreviewReport(
+      validSources: List.unmodifiable(validSources),
+      issues: List.unmodifiable(issues),
+      totalCount: totalCount,
+    );
+  }
+
+  Future<bool?> _showImportPreviewDialog(
+    SourceImportPreviewReport report, {
+    required String title,
+  }) {
+    final issueLines = report.issues
+        .map((issue) => issue.toDisplayText())
+        .take(80)
+        .toList(growable: false);
+
+    return showDialog<bool>(
+      context: context,
+      builder: (context) {
+        return AlertDialog(
+          title: Text(title),
+          content: SizedBox(
+            width: 620,
+            child: SingleChildScrollView(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text('总条目：${report.totalCount}'),
+                  const SizedBox(height: 4),
+                  Text('可导入：${report.validCount}'),
+                  const SizedBox(height: 4),
+                  Text('失败：${report.invalidCount}'),
+                  const SizedBox(height: 10),
+                  Text(
+                    '失败明细（含条目和行号）',
+                    style: Theme.of(context).textTheme.titleSmall,
+                  ),
+                  const SizedBox(height: 6),
+                  ...issueLines.map(
+                    (line) => Padding(
+                      padding: const EdgeInsets.only(bottom: 4),
+                      child: SelectableText(line),
+                    ),
+                  ),
+                  if (report.issues.length > issueLines.length)
+                    Text(
+                      '... 其余 ${report.issues.length - issueLines.length} 条请查看日志',
+                    ),
+                ],
+              ),
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(false),
+              child: const Text('取消'),
+            ),
+            FilledButton.tonal(
+              onPressed:
+                  report.validCount > 0
+                      ? () => Navigator.of(context).pop(true)
+                      : null,
+              child: const Text('仅导入可用书源'),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  void _startSelectionMode(String sourceId) {
+    setState(() {
+      _isSelectionMode = true;
+      _selectedSourceIds.add(sourceId);
+    });
+  }
+
+  void _toggleSelected(String sourceId) {
+    setState(() {
+      if (_selectedSourceIds.contains(sourceId)) {
+        _selectedSourceIds.remove(sourceId);
+      } else {
+        _selectedSourceIds.add(sourceId);
+      }
+    });
+  }
+
+  void _exitSelectionMode() {
+    setState(() {
+      _isSelectionMode = false;
+      _selectedSourceIds.clear();
+    });
+  }
+
+  void _selectAllVisibleSources() {
+    setState(() {
+      _selectedSourceIds
+        ..clear()
+        ..addAll(_visibleSources.map((source) => source.id));
+    });
+  }
+
+  void _invertSelection() {
+    final allIds = _visibleSources.map((source) => source.id).toSet();
+    setState(() {
+      final next = <String>{};
+      for (final id in allIds) {
+        if (!_selectedSourceIds.contains(id)) {
+          next.add(id);
+        }
+      }
+      _selectedSourceIds
+        ..clear()
+        ..addAll(next);
+    });
+  }
+
+  Future<void> _deleteSelectedSources() async {
+    final total = _selectedSourceIds.length;
+    if (total == 0 || _isBatchDeleting) {
+      return;
+    }
+
+    final confirmed = await _showConfirmDialog(
+      title: '删除书源',
+      content: '确定删除选中的 $total 个书源吗？',
+      confirmText: '删除',
+    );
+
+    if (confirmed != true) {
+      return;
+    }
+
+    final ids = _selectedSourceIds.toList(growable: false);
+    setState(() {
+      _isBatchDeleting = true;
+    });
+
+    try {
+      await _repository.deleteByIds(ids);
+
+      if (!mounted) {
+        return;
+      }
+
+      setState(() {
+        _selectedSourceIds.clear();
+        _isSelectionMode = false;
+      });
+
+      _showMessage('已删除 $total 条书源。');
+    } catch (_) {
+      _showMessage('批量删除失败，请稍后重试。');
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isBatchDeleting = false;
+        });
+      }
+    }
+  }
+
+  Future<void> _setEnabled(String sourceId, bool enabled) async {
+    if (_changingEnabledSourceIds.contains(sourceId) || _isBatchDeleting) {
+      return;
+    }
+
+    setState(() {
+      _changingEnabledSourceIds.add(sourceId);
+    });
+
+    try {
+      await _repository.setEnabled(sourceId: sourceId, enabled: enabled);
+    } catch (_) {
+      _showMessage('更新书源状态失败，请重试。');
+    } finally {
+      if (mounted) {
+        setState(() {
+          _changingEnabledSourceIds.remove(sourceId);
+        });
+      }
+    }
+  }
+
+  Future<void> _deleteSource(String sourceId) async {
+    if (_deletingSourceIds.contains(sourceId) || _isBatchDeleting) {
+      return;
+    }
+
+    final confirmed = await _showConfirmDialog(
+      title: '删除书源',
+      content: '确认删除该书源吗？',
+      confirmText: '删除',
+    );
+
+    if (confirmed != true) {
+      return;
+    }
+
+    setState(() {
+      _deletingSourceIds.add(sourceId);
+    });
+
+    try {
+      await _repository.deleteById(sourceId);
+      _showMessage('已删除书源。');
+    } catch (_) {
+      _showMessage('删除书源失败，请重试。');
+    } finally {
+      if (mounted) {
+        setState(() {
+          _deletingSourceIds.remove(sourceId);
+        });
+      }
+    }
+  }
+
+  Future<void> _editComment(SourceDefinition source) async {
+    final input = await _showCommentDialog(source.comment);
+    if (!mounted || input == null) {
+      return;
+    }
+
+    final latestSource = await _getSourceById(source.id);
+    if (latestSource == null) {
+      _showMessage('书源不存在，无法更新备注。');
+      return;
+    }
+
+    final trimmed = input.trim();
+    await _repository.upsertAll([
+      latestSource.copyWith(comment: trimmed, clearComment: trimmed.isEmpty),
+    ]);
+
+    _showMessage(trimmed.isEmpty ? '备注已清空。' : '备注已更新。');
+  }
+
+  Future<void> _runConnectivityTest(SourceDefinition source) async {
+    final keyword = _defaultConnectivityKeyword;
+
+    setState(() {
+      _testingSourceIds.add(source.id);
+    });
+
+    try {
+      final latestSource = await _getSourceById(source.id) ?? source;
+      final report = await _searchService
+          .testSingleSource(
+            source: latestSource,
+            keyword: keyword,
+            validateRules: false,
+            skipInit: true,
+            connectTimeout: const Duration(seconds: 4),
+            receiveTimeout: const Duration(seconds: 6),
+          )
+          .timeout(
+            const Duration(seconds: 12),
+            onTimeout:
+                () => SourceConnectivityTestReport(
+                  sourceId: latestSource.id,
+                  sourceName: latestSource.name,
+                  keyword: keyword,
+                  method: HttpRequestMethod.get,
+                  matchedBookCount: 0,
+                  error: const AppException(
+                    code: ErrorCode.network,
+                    stage: ErrorStage.search,
+                    briefMessage: '连通性测试超时，请检查网络或切换书源后重试。',
+                  ),
+                  probeOnly: true,
+                ),
+          );
+
+      if (!mounted) {
+        return;
+      }
+
+      await _showConnectivityResultDialog(report);
+    } finally {
+      if (mounted) {
+        setState(() {
+          _testingSourceIds.remove(source.id);
+        });
+      }
+    }
+  }
+
+  Future<SourceDefinition?> _getSourceById(String sourceId) async {
+    final sources = await _repository.getAll();
+    for (final source in sources) {
+      if (source.id == sourceId) {
+        return source;
+      }
+    }
+    return null;
+  }
+
+  Future<void> _showConnectivityResultDialog(
+    SourceConnectivityTestReport report,
+  ) {
+    final error = report.error;
+    final isSuccess = report.isSuccess;
+
+    return showDialog<void>(
+      context: context,
+      builder: (context) {
+        return AlertDialog(
+          title: Text('连通性测试 - ${report.sourceName}'),
+          content: SizedBox(
+            width: 560,
+            child: SingleChildScrollView(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    isSuccess
+                        ? report.probeOnly
+                            ? '结果: 通过（网络可达）'
+                            : '结果: 通过'
+                        : '结果: 失败',
+                  ),
+                  const SizedBox(height: 8),
+                  Text('关键词: ${report.keyword}'),
+                  const SizedBox(height: 4),
+                  Text('请求方法: ${report.method.name.toUpperCase()}'),
+                  if (report.statusCode != null) ...[
+                    const SizedBox(height: 4),
+                    Text('响应状态: ${report.statusCode}'),
+                  ],
+                  if (report.requestUrl != null &&
+                      report.requestUrl!.isNotEmpty) ...[
+                    const SizedBox(height: 4),
+                    SelectableText('请求地址: ${report.requestUrl}'),
+                  ],
+                  const SizedBox(height: 8),
+                  if (isSuccess)
+                    Text(
+                      report.probeOnly
+                          ? '探活模式: 已验证网络可达（未执行规则解析）'
+                          : '规则命中: ${report.matchedBookCount} 条',
+                    )
+                  else ...[
+                    Text('失败分类: ${_failureTypeText(error!.code)}'),
+                    const SizedBox(height: 4),
+                    Text('错误码: ${error.code.name}'),
+                    const SizedBox(height: 4),
+                    Text('错误信息: ${error.briefMessage}'),
+                  ],
+                ],
+              ),
+            ),
+          ),
+          actions: [
+            FilledButton(
+              onPressed: () => Navigator.of(context).pop(),
+              child: const Text('关闭'),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  String _failureTypeText(ErrorCode code) {
+    return switch (code) {
+      ErrorCode.network => '网络失败',
+      ErrorCode.ruleParse || ErrorCode.decode => '解析失败',
+      ErrorCode.ruleMatchEmpty => '规则命中为空',
+      ErrorCode.validation => '规则为空或配置不完整',
+      ErrorCode.unknownSource || ErrorCode.unknown => '未知失败',
+    };
+  }
+
+  String _healthStatusText(SourceHealthStatus status) {
+    return switch (status) {
+      SourceHealthStatus.unknown => '未测试',
+      SourceHealthStatus.healthy => '可用',
+      SourceHealthStatus.degraded => '异常(规则/解析)',
+      SourceHealthStatus.unavailable => '不可用(网络/服务)',
+    };
+  }
+
+  String _formatDateTime(DateTime? time) {
+    if (time == null) {
+      return '未测试';
+    }
+
+    final local = time.toLocal();
+    final year = local.year.toString().padLeft(4, '0');
+    final month = local.month.toString().padLeft(2, '0');
+    final day = local.day.toString().padLeft(2, '0');
+    final hour = local.hour.toString().padLeft(2, '0');
+    final minute = local.minute.toString().padLeft(2, '0');
+    final second = local.second.toString().padLeft(2, '0');
+    return '$year-$month-$day $hour:$minute:$second';
+  }
+
+  void _setImporting(bool value) {
+    if (!mounted) {
+      return;
+    }
+    setState(() {
+      _isImporting = value;
+    });
+  }
+
+  void _showMessage(String text) {
+    if (!mounted) {
+      return;
+    }
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(text)));
+  }
+
+  Future<String?> _showPasteDialog() async {
+    final controller = TextEditingController();
+
+    final result = await showDialog<String>(
+      context: context,
+      builder: (context) {
+        return AlertDialog(
+          title: const Text('粘贴 JSON 内容'),
+          content: SizedBox(
+            width: 560,
+            child: TextField(
+              controller: controller,
+              minLines: 10,
+              maxLines: 16,
+              autofocus: false,
+              decoration: const InputDecoration(
+                hintText: '{...} 或 [{...}]',
+                border: OutlineInputBorder(),
+              ),
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(),
+              child: const Text('取消'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.of(context).pop(controller.text),
+              child: const Text('导入'),
+            ),
+          ],
+        );
+      },
+    );
+
+    controller.dispose();
+    return result;
+  }
+
+  Future<String?> _showCommentDialog(String? initialValue) async {
+    final controller = TextEditingController(text: initialValue ?? '');
+
+    final result = await showDialog<String>(
+      context: context,
+      builder: (context) {
+        return AlertDialog(
+          title: const Text('编辑备注'),
+          content: SizedBox(
+            width: 560,
+            child: TextField(
+              controller: controller,
+              minLines: 2,
+              maxLines: 4,
+              autofocus: true,
+              decoration: const InputDecoration(
+                hintText: '输入备注，留空可清空备注',
+                border: OutlineInputBorder(),
+              ),
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(),
+              child: const Text('取消'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.of(context).pop(controller.text),
+              child: const Text('保存'),
+            ),
+          ],
+        );
+      },
+    );
+
+    controller.dispose();
+    return result;
+  }
+
+  Future<bool?> _showConfirmDialog({
+    required String title,
+    required String content,
+    required String confirmText,
+  }) {
+    return showDialog<bool>(
+      context: context,
+      builder: (context) {
+        return AlertDialog(
+          title: Text(title),
+          content: Text(content),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(false),
+              child: const Text('取消'),
+            ),
+            FilledButton.tonal(
+              onPressed: () => Navigator.of(context).pop(true),
+              child: Text(confirmText),
+            ),
+          ],
+        );
+      },
+    );
+  }
+}
+
+enum _ImportAction { paste, file, batchSample }
+
+enum _SourceAction { test, editComment, delete }

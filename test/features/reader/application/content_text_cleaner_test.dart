@@ -1,0 +1,42 @@
+import 'package:flutter_appread/features/reader/application/content_text_cleaner.dart';
+import 'package:flutter_test/flutter_test.dart';
+
+void main() {
+  group('ContentTextCleaner', () {
+    const cleaner = ContentTextCleaner();
+
+    test('removes scripts and common ad lines', () {
+      const raw = '''
+      <div class="content">
+        <script>alert('x')</script>
+        <p>第一段内容。</p>
+        <p>最新网址：www.example.com</p>
+        <p>第二段内容。</p>
+      </div>
+      ''';
+
+      final cleaned = cleaner.clean(raw);
+
+      expect(cleaned, contains('第一段内容。'));
+      expect(cleaned, contains('第二段内容。'));
+      expect(cleaned, isNot(contains('alert')));
+      expect(cleaned, isNot(contains('最新网址')));
+    });
+
+    test('normalizes escaped line breaks from json content', () {
+      const raw = '第一段\r\n\r\n第二段\n第三段';
+
+      final cleaned = cleaner.clean(raw);
+
+      expect(cleaned, contains('第一段'));
+      expect(cleaned, contains('第二段'));
+      expect(cleaned, contains('第三段'));
+      expect(cleaned, isNot(contains(r'\r\n')));
+    });
+
+    test('returns empty when source has no readable text', () {
+      const raw = '<div><script>123</script></div>';
+      expect(cleaner.clean(raw), isEmpty);
+    });
+  });
+}
