@@ -340,15 +340,12 @@ class _BookshelfPageState extends State<BookshelfPage> {
                         overflow: TextOverflow.ellipsis,
                       ),
                       const SizedBox(height: 6),
-                      Wrap(
-                        spacing: 6,
-                        runSpacing: 6,
-                        children: [
-                          _buildInfoPill('来源', book.sourceId),
-                          if (book.author != null && book.author!.isNotEmpty)
-                            _buildInfoPill('作者', book.author!),
-                        ],
-                      ),
+                      if (book.author != null && book.author!.isNotEmpty)
+                        Wrap(
+                          spacing: 6,
+                          runSpacing: 6,
+                          children: [_buildInfoPill('作者', book.author!)],
+                        ),
                       const SizedBox(height: 6),
                       Text(
                         '收藏时间: ${_formatDateTime(book.addedAt)}',
