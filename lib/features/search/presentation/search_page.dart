@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:html/parser.dart' as html_parser;
+
 import '../../../core/errors/app_exception.dart';
 import '../../../data/datasources/local/app_database.dart';
 import '../../../data/repositories/source_repository_impl.dart';
@@ -42,6 +43,8 @@ class _SearchPageState extends State<SearchPage> {
 
   @override
   Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+
     return Scaffold(
       appBar: AppBar(
         leading: IconButton(
@@ -57,67 +60,97 @@ class _SearchPageState extends State<SearchPage> {
         ),
         title: const Text('搜索'),
       ),
-      body: ListView(
-        padding: const EdgeInsets.all(16),
-        children: [
-          _buildSearchInput(context),
-          const SizedBox(height: 12),
-          if (_isSearching) _buildSearchingCard() else const SizedBox.shrink(),
-          if (_report != null) ...[
+      body: DecoratedBox(
+        decoration: BoxDecoration(
+          gradient: LinearGradient(
+            begin: Alignment.topCenter,
+            end: Alignment.bottomCenter,
+            colors: [colorScheme.surface, colorScheme.surfaceContainerLow],
+          ),
+        ),
+        child: ListView(
+          padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
+          children: [
+            _buildSearchInputCard(),
             const SizedBox(height: 12),
-            _buildReportSummary(_report!),
-            const SizedBox(height: 12),
-            if (_report!.failures.isNotEmpty) _buildFailureList(_report!),
-            const SizedBox(height: 12),
-            _buildResultList(_report!),
-          ] else if (!_isSearching)
-            const Card(
-              child: Padding(
-                padding: EdgeInsets.all(16),
-                child: Text('输入关键词后开始搜索。'),
+            if (_isSearching || _report != null) _buildProgressCard(),
+            if (_report != null) ...[
+              const SizedBox(height: 12),
+              _buildReportSummary(_report!),
+              if (_report!.failures.isNotEmpty) ...[
+                const SizedBox(height: 12),
+                _buildFailureBanner(_report!),
+              ],
+              const SizedBox(height: 12),
+              _buildResultList(_report!),
+            ] else if (!_isSearching)
+              Card(
+                child: Padding(
+                  padding: const EdgeInsets.all(16),
+                  child: Text(
+                    '输入关键词后开始搜索。',
+                    style: Theme.of(context).textTheme.bodyMedium,
+                  ),
+                ),
               ),
-            ),
-        ],
+          ],
+        ),
       ),
     );
   }
 
-  Widget _buildSearchInput(BuildContext context) {
+  Widget _buildSearchInputCard() {
+    final colorScheme = Theme.of(context).colorScheme;
+
     return Card(
       child: Padding(
-        padding: const EdgeInsets.all(16),
+        padding: const EdgeInsets.all(14),
         child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            TextField(
-              controller: _keywordController,
-              textInputAction: TextInputAction.search,
-              onSubmitted: (_) => _runSearch(),
-              decoration: const InputDecoration(
-                hintText: '输入书名或作者，例如：凡人修仙传',
-                border: OutlineInputBorder(),
+            Container(
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(14),
+                border: Border.all(color: colorScheme.outline),
+              ),
+              child: TextField(
+                controller: _keywordController,
+                textInputAction: TextInputAction.search,
+                onSubmitted: (_) => _runSearch(),
+                decoration: const InputDecoration(
+                  hintText: '输入书名或作者，例如：凡人修仙传',
+                  border: InputBorder.none,
+                  filled: false,
+                  prefixIcon: Icon(Icons.search),
+                  contentPadding: EdgeInsets.symmetric(
+                    horizontal: 14,
+                    vertical: 10,
+                  ),
+                ),
               ),
             ),
             const SizedBox(height: 10),
             Row(
               children: [
-                FilledButton.icon(
-                  onPressed: _runSearch,
-                  icon: Icon(_isSearching ? Icons.refresh : Icons.search),
-                  label: Text(_isSearching ? '取消并重新搜索' : '搜索'),
+                Expanded(
+                  child: FilledButton(
+                    onPressed: _runSearch,
+                    child: Text(_isSearching ? '取消并重新搜索' : '搜索'),
+                  ),
                 ),
                 const SizedBox(width: 8),
-                OutlinedButton(
-                  onPressed:
-                      _isSearching
-                          ? null
-                          : () {
-                            _keywordController.clear();
-                            setState(() {
-                              _report = null;
-                            });
-                          },
-                  child: const Text('清空结果'),
+                Expanded(
+                  child: OutlinedButton(
+                    onPressed:
+                        _isSearching
+                            ? null
+                            : () {
+                              _keywordController.clear();
+                              setState(() {
+                                _report = null;
+                              });
+                            },
+                    child: const Text('清空结果'),
+                  ),
                 ),
               ],
             ),
@@ -127,25 +160,42 @@ class _SearchPageState extends State<SearchPage> {
     );
   }
 
-  Widget _buildSearchingCard() {
+  Widget _buildProgressCard() {
+    final colorScheme = Theme.of(context).colorScheme;
     final report = _report;
+    final sourceCount = report?.sourceCount ?? 1;
+    final processedCount = report?.processedSourceCount ?? 0;
+    final progressValue =
+        sourceCount == 0 ? 0.0 : (processedCount / sourceCount).clamp(0.0, 1.0);
+    final progressPercent = (progressValue * 100).round();
+
     final progressText =
-        report == null
-            ? '正在搜索，请稍候...'
-            : '正在搜索，已完成 ${report.processedSourceCount}/${report.sourceCount} 个书源，命中 ${report.books.length} 本。';
+        report == null ? '正在搜索书源...' : '正在搜索 $processedCount/$sourceCount 个书源';
 
     return Card(
+      color: colorScheme.surfaceContainerHigh,
       child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Row(
+        padding: const EdgeInsets.all(14),
+        child: Column(
           children: [
-            const SizedBox(
-              width: 18,
-              height: 18,
-              child: CircularProgressIndicator(strokeWidth: 2),
+            Row(
+              children: [
+                Expanded(child: Text(progressText)),
+                Text(
+                  '$progressPercent%',
+                  style: Theme.of(context).textTheme.labelLarge?.copyWith(
+                    color: colorScheme.primary,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ],
             ),
-            const SizedBox(width: 12),
-            Expanded(child: Text(progressText)),
+            const SizedBox(height: 8),
+            LinearProgressIndicator(
+              value: progressValue,
+              minHeight: 6,
+              borderRadius: BorderRadius.circular(999),
+            ),
           ],
         ),
       ),
@@ -153,97 +203,194 @@ class _SearchPageState extends State<SearchPage> {
   }
 
   Widget _buildReportSummary(SearchExecutionReport report) {
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text('关键词：${report.keyword}'),
-            const SizedBox(height: 6),
-            Text(
-              '命中 ${report.books.length} 本，成功源 ${report.successSourceCount}/${report.sourceCount}，失败 ${report.failedSourceCount}',
-            ),
-          ],
+    return Wrap(
+      spacing: 8,
+      runSpacing: 8,
+      children: [
+        _buildSummaryChip('关键词', report.keyword),
+        _buildSummaryChip('结果', '${report.books.length} 本'),
+        _buildSummaryChip(
+          '成功源',
+          '${report.successSourceCount}/${report.sourceCount}',
+        ),
+        if (report.failedSourceCount > 0)
+          _buildSummaryChip('失败源', '${report.failedSourceCount}'),
+      ],
+    );
+  }
+
+  Widget _buildSummaryChip(String label, String value) {
+    final colorScheme = Theme.of(context).colorScheme;
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+      decoration: BoxDecoration(
+        color: colorScheme.secondaryContainer,
+        borderRadius: BorderRadius.circular(999),
+      ),
+      child: Text(
+        '$label: $value',
+        style: Theme.of(context).textTheme.labelMedium?.copyWith(
+          color: colorScheme.onSecondaryContainer,
+          fontWeight: FontWeight.w600,
         ),
       ),
     );
   }
 
-  Widget _buildFailureList(SearchExecutionReport report) {
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text('失败书源', style: Theme.of(context).textTheme.titleMedium),
-            const SizedBox(height: 8),
-            ...report.failures.map(
-              (failure) => Padding(
-                padding: const EdgeInsets.only(bottom: 8),
-                child: Container(
-                  decoration: BoxDecoration(
-                    color: Theme.of(context).colorScheme.errorContainer,
-                    borderRadius: BorderRadius.circular(10),
-                  ),
-                  padding: const EdgeInsets.all(10),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        '${failure.sourceName} (${failure.code.name})',
-                        style: TextStyle(
-                          color: Theme.of(context).colorScheme.onErrorContainer,
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
-                      const SizedBox(height: 4),
-                      Text(
-                        failure.message,
-                        style: TextStyle(
-                          color: Theme.of(context).colorScheme.onErrorContainer,
-                        ),
-                      ),
-                      if (failure.requestUrl != null &&
-                          failure.requestUrl!.trim().isNotEmpty) ...[
-                        const SizedBox(height: 4),
-                        SelectableText(
-                          failure.requestUrl!,
-                          style: TextStyle(
-                            color:
-                                Theme.of(context).colorScheme.onErrorContainer,
-                            fontSize: 12,
-                          ),
-                        ),
-                      ],
-                    ],
+  Widget _buildFailureBanner(SearchExecutionReport report) {
+    final colorScheme = Theme.of(context).colorScheme;
+    final preview = report.failures.take(3).toList(growable: false);
+    final canOpenDetail = report.failures.length > 3;
+
+    final content = Container(
+      width: double.infinity,
+      decoration: BoxDecoration(
+        color: colorScheme.errorContainer,
+        borderRadius: BorderRadius.circular(16),
+      ),
+      padding: const EdgeInsets.all(12),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Expanded(
+                child: Text(
+                  '${report.failedSourceCount} 个书源异常',
+                  style: Theme.of(context).textTheme.labelLarge?.copyWith(
+                    color: colorScheme.onErrorContainer,
+                    fontWeight: FontWeight.w700,
                   ),
                 ),
               ),
+              if (canOpenDetail)
+                Icon(Icons.chevron_right, color: colorScheme.onErrorContainer),
+            ],
+          ),
+          const SizedBox(height: 6),
+          ...preview.map(
+            (failure) => Padding(
+              padding: const EdgeInsets.only(bottom: 4),
+              child: Text(
+                '${failure.sourceName} (${failure.code.name}): ${failure.message}',
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                  color: colorScheme.onErrorContainer,
+                ),
+              ),
             ),
-          ],
-        ),
+          ),
+          if (canOpenDetail)
+            Text(
+              '点击查看全部异常明细',
+              style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                color: colorScheme.onErrorContainer,
+                fontWeight: FontWeight.w600,
+              ),
+            )
+          else if (report.failures.length > preview.length)
+            Text(
+              '其余 ${report.failures.length - preview.length} 条可在错误中心查看',
+              style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                color: colorScheme.onErrorContainer,
+              ),
+            ),
+        ],
       ),
+    );
+
+    if (!canOpenDetail) {
+      return content;
+    }
+
+    return InkWell(
+      borderRadius: BorderRadius.circular(16),
+      onTap: () => _showFailureDetails(report),
+      child: content,
+    );
+  }
+
+  Future<void> _showFailureDetails(SearchExecutionReport report) async {
+    if (!mounted || report.failures.length <= 3) {
+      return;
+    }
+
+    await showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      showDragHandle: true,
+      builder: (context) {
+        final colorScheme = Theme.of(context).colorScheme;
+        return SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(16, 4, 16, 16),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Align(
+                  alignment: Alignment.centerLeft,
+                  child: Text(
+                    '书源异常明细 (${report.failures.length})',
+                    style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 8),
+                Flexible(
+                  child: ListView.separated(
+                    shrinkWrap: true,
+                    itemCount: report.failures.length,
+                    separatorBuilder:
+                        (_, __) => Divider(
+                          height: 1,
+                          color: colorScheme.outlineVariant,
+                        ),
+                    itemBuilder: (context, index) {
+                      final failure = report.failures[index];
+                      return ListTile(
+                        contentPadding: EdgeInsets.zero,
+                        title: Text(
+                          failure.sourceName,
+                          style: Theme.of(context).textTheme.titleSmall,
+                        ),
+                        subtitle: Text(
+                          '[${failure.code.name}] ${failure.message}',
+                          maxLines: 3,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      );
+                    },
+                  ),
+                ),
+              ],
+            ),
+          ),
+        );
+      },
     );
   }
 
   Widget _buildResultList(SearchExecutionReport report) {
     final books = report.books;
     if (books.isEmpty) {
-      return const Card(
+      return Card(
         child: Padding(
-          padding: EdgeInsets.all(16),
-          child: Text('暂无可展示结果，请检查书源规则或更换关键词。'),
+          padding: const EdgeInsets.all(16),
+          child: Text(
+            '暂无可展示结果，请检查书源规则或更换关键词。',
+            style: Theme.of(context).textTheme.bodyMedium,
+          ),
         ),
       );
     }
 
     return Column(
-      children:
-          books
-              .map((book) => _buildBookCard(book, report.sourceNames))
-              .toList(),
+      children: books
+          .map((book) => _buildBookCard(book, report.sourceNames))
+          .toList(growable: false),
     );
   }
 
@@ -251,11 +398,12 @@ class _SearchPageState extends State<SearchPage> {
     final sourceName = sourceNames[book.sourceId] ?? book.sourceId;
     final latestChapter = _normalizeSnippet(book.latestChapter);
     final intro = _normalizeSnippet(book.intro);
+    final author = book.author?.trim();
 
     return Card(
       margin: const EdgeInsets.only(bottom: 10),
-      child: ListTile(
-        minLeadingWidth: 56,
+      clipBehavior: Clip.antiAlias,
+      child: InkWell(
         onTap: () {
           final route =
               Uri(
@@ -268,58 +416,106 @@ class _SearchPageState extends State<SearchPage> {
               ).toString();
           context.push(route);
         },
-        leading: _buildCoverPreview(book.coverUrl),
-        title: Text(book.title),
-        subtitle: Padding(
-          padding: const EdgeInsets.only(top: 4),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
+        child: Padding(
+          padding: const EdgeInsets.all(12),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.center,
             children: [
-              Wrap(
-                spacing: 8,
-                runSpacing: 6,
-                children: [
-                  _buildInfoPill('来源', sourceName),
-                  if (book.author != null && book.author!.isNotEmpty)
-                    _buildInfoPill('作者', book.author!),
-                ],
+              _buildCoverPreview(book.coverUrl),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      book.title,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Wrap(
+                      spacing: 6,
+                      runSpacing: 6,
+                      children: [
+                        _buildInfoPill('来源', sourceName),
+                        if (author != null && author.isNotEmpty)
+                          _buildInfoPill('作者', author),
+                      ],
+                    ),
+                    if (latestChapter != null && latestChapter.isNotEmpty)
+                      Padding(
+                        padding: const EdgeInsets.only(top: 6),
+                        child: Text(
+                          '最新章节: $latestChapter',
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: Theme.of(context).textTheme.bodySmall,
+                        ),
+                      ),
+                    if (intro != null && intro.isNotEmpty)
+                      Padding(
+                        padding: const EdgeInsets.only(top: 6),
+                        child: Container(
+                          width: double.infinity,
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 8,
+                            vertical: 6,
+                          ),
+                          decoration: BoxDecoration(
+                            color:
+                                Theme.of(
+                                  context,
+                                ).colorScheme.surfaceContainerHigh,
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          child: Text(
+                            intro,
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
+                            style: Theme.of(
+                              context,
+                            ).textTheme.bodySmall?.copyWith(
+                              color:
+                                  Theme.of(
+                                    context,
+                                  ).colorScheme.onSurfaceVariant,
+                              height: 1.35,
+                            ),
+                          ),
+                        ),
+                      ),
+                  ],
+                ),
               ),
-              if (latestChapter != null && latestChapter.isNotEmpty)
-                Padding(
-                  padding: const EdgeInsets.only(top: 6),
-                  child: Text(
-                    '最新章节：$latestChapter',
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                  ),
+              const SizedBox(width: 8),
+              Center(
+                child: Icon(
+                  Icons.chevron_right,
+                  color: Theme.of(context).colorScheme.onSurfaceVariant,
                 ),
-              if (intro != null && intro.isNotEmpty)
-                Padding(
-                  padding: const EdgeInsets.only(top: 6),
-                  child: Text(
-                    intro,
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                ),
+              ),
             ],
           ),
         ),
-        trailing: const Icon(Icons.chevron_right),
       ),
     );
   }
 
   Widget _buildInfoPill(String label, String value) {
+    final colorScheme = Theme.of(context).colorScheme;
+
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
       decoration: BoxDecoration(
-        color: Theme.of(context).colorScheme.surfaceContainerHighest,
-        borderRadius: BorderRadius.circular(999),
+        color: colorScheme.surfaceContainerHighest,
+        borderRadius: BorderRadius.circular(8),
       ),
       child: Text(
         '$label: $value',
-        style: Theme.of(context).textTheme.bodySmall,
+        style: Theme.of(context).textTheme.labelSmall,
       ),
     );
   }
@@ -331,11 +527,11 @@ class _SearchPageState extends State<SearchPage> {
     }
 
     return ClipRRect(
-      borderRadius: BorderRadius.circular(6),
+      borderRadius: BorderRadius.circular(8),
       child: Image.network(
         coverUrl!,
-        width: 52,
-        height: 74,
+        width: 56,
+        height: 80,
         fit: BoxFit.cover,
         errorBuilder: (context, error, stackTrace) => _buildCoverFallback(),
       ),
@@ -343,15 +539,17 @@ class _SearchPageState extends State<SearchPage> {
   }
 
   Widget _buildCoverFallback() {
+    final colorScheme = Theme.of(context).colorScheme;
+
     return Container(
-      width: 52,
-      height: 74,
+      width: 56,
+      height: 80,
       alignment: Alignment.center,
       decoration: BoxDecoration(
-        color: Theme.of(context).colorScheme.surfaceContainerHighest,
-        borderRadius: BorderRadius.circular(6),
+        color: colorScheme.surfaceContainerHighest,
+        borderRadius: BorderRadius.circular(8),
       ),
-      child: const Text('封面', style: TextStyle(fontSize: 11)),
+      child: Text('封面', style: Theme.of(context).textTheme.labelSmall),
     );
   }
 
@@ -437,7 +635,7 @@ class _SearchPageState extends State<SearchPage> {
         return;
       }
       _showMessage(error.briefMessage);
-    } catch (error) {
+    } catch (_) {
       if (!mounted || token.isCancelled || sessionId != _searchSessionId) {
         return;
       }
@@ -458,6 +656,7 @@ class _SearchPageState extends State<SearchPage> {
     if (!mounted) {
       return;
     }
+
     ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(text)));
   }
 }

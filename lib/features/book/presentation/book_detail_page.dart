@@ -46,6 +46,8 @@ class _BookDetailPageState extends State<BookDetailPage> {
 
   @override
   Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+
     return Scaffold(
       appBar: AppBar(
         title: Text(
@@ -57,97 +59,85 @@ class _BookDetailPageState extends State<BookDetailPage> {
             tooltip: '刷新目录',
             icon: const Icon(Icons.refresh),
           ),
-          IconButton(
-            onPressed:
-                _isLoading || _result == null || _isShelfActionLoading
-                    ? null
-                    : _toggleBookshelf,
-            tooltip: _isInBookshelf ? '移出书架' : '加入书架',
-            icon:
-                _isShelfActionLoading
-                    ? const SizedBox(
-                      width: 18,
-                      height: 18,
-                      child: CircularProgressIndicator(strokeWidth: 2),
-                    )
-                    : Icon(
-                      _isInBookshelf
-                          ? Icons.bookmark_added
-                          : Icons.bookmark_add_outlined,
-                    ),
-          ),
         ],
       ),
-      body: ListView(
-        padding: const EdgeInsets.all(16),
-        children: [
-          if (_isMissingParams)
-            Card(
-              child: Padding(
-                padding: const EdgeInsets.all(16),
-                child: Text(
-                  '缺少 sourceId/detailUrl，无法加载详情。请从搜索结果进入。bookId=${widget.bookId}',
+      body: DecoratedBox(
+        decoration: BoxDecoration(
+          gradient: LinearGradient(
+            begin: Alignment.topCenter,
+            end: Alignment.bottomCenter,
+            colors: [colorScheme.surface, colorScheme.surfaceContainerLow],
+          ),
+        ),
+        child: ListView(
+          padding: const EdgeInsets.all(16),
+          children: [
+            if (_isMissingParams)
+              Card(
+                child: Padding(
+                  padding: const EdgeInsets.all(16),
+                  child: Text(
+                    '缺少 sourceId/detailUrl，无法加载详情。请从搜索结果进入。bookId=${widget.bookId}',
+                  ),
                 ),
-              ),
-            )
-          else if (_isLoading)
-            const Card(
-              child: Padding(
-                padding: EdgeInsets.all(16),
-                child: Row(
-                  children: [
-                    SizedBox(
-                      width: 18,
-                      height: 18,
-                      child: CircularProgressIndicator(strokeWidth: 2),
-                    ),
-                    SizedBox(width: 12),
-                    Expanded(child: Text('正在加载详情和目录...')),
-                  ],
-                ),
-              ),
-            )
-          else if (_errorText != null)
-            Card(
-              color: Theme.of(context).colorScheme.errorContainer,
-              child: Padding(
-                padding: const EdgeInsets.all(16),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      '加载失败',
-                      style: TextStyle(
-                        color: Theme.of(context).colorScheme.onErrorContainer,
-                        fontWeight: FontWeight.w600,
+              )
+            else if (_isLoading)
+              const Card(
+                child: Padding(
+                  padding: EdgeInsets.all(16),
+                  child: Row(
+                    children: [
+                      SizedBox(
+                        width: 18,
+                        height: 18,
+                        child: CircularProgressIndicator(strokeWidth: 2),
                       ),
-                    ),
-                    const SizedBox(height: 8),
-                    Text(
-                      _errorText!,
-                      style: TextStyle(
-                        color: Theme.of(context).colorScheme.onErrorContainer,
-                      ),
-                    ),
-                    const SizedBox(height: 10),
-                    FilledButton.tonal(
-                      onPressed: _load,
-                      child: const Text('重试'),
-                    ),
-                  ],
+                      SizedBox(width: 12),
+                      Expanded(child: Text('正在加载详情和目录...')),
+                    ],
+                  ),
                 ),
-              ),
-            )
-          else if (_result != null) ...[
-            _buildDetailCard(_result!),
-            if (_resolveLatestChapter(_result!) != null) ...[
+              )
+            else if (_errorText != null)
+              Card(
+                color: colorScheme.errorContainer,
+                child: Padding(
+                  padding: const EdgeInsets.all(16),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        '加载失败',
+                        style: TextStyle(
+                          color: colorScheme.onErrorContainer,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      Text(
+                        _errorText!,
+                        style: TextStyle(color: colorScheme.onErrorContainer),
+                      ),
+                      const SizedBox(height: 10),
+                      FilledButton.tonal(
+                        onPressed: _load,
+                        child: const Text('重试'),
+                      ),
+                    ],
+                  ),
+                ),
+              )
+            else if (_result != null) ...[
+              _buildDetailCard(_result!),
+              if (_resolveLatestChapter(_result!) != null) ...[
+                const SizedBox(height: 12),
+                _buildLatestChapterCard(_resolveLatestChapter(_result!)!),
+              ],
               const SizedBox(height: 12),
-              _buildLatestChapterCard(_resolveLatestChapter(_result!)!),
+              _buildChapterSection(_result!),
             ],
-            const SizedBox(height: 12),
-            _buildChapterSection(_result!),
           ],
-        ],
+        ),
       ),
     );
   }
@@ -162,82 +152,104 @@ class _BookDetailPageState extends State<BookDetailPage> {
   Widget _buildDetailCard(BookDetailLoadResult result) {
     final detail = result.detail;
     final intro = _resolveIntro(detail.intro);
+    final colorScheme = Theme.of(context).colorScheme;
 
     return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                _buildCoverPreview(detail.coverUrl),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        detail.title,
-                        style: Theme.of(context).textTheme.titleLarge,
-                      ),
-                      const SizedBox(height: 6),
-                      Text(
-                        '点击目录章节即可开始阅读',
-                        style: Theme.of(context).textTheme.bodySmall,
-                      ),
-                    ],
+      clipBehavior: Clip.antiAlias,
+      child: Container(
+        decoration: BoxDecoration(
+          gradient: LinearGradient(
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+            colors: [colorScheme.surface, colorScheme.surfaceContainerLowest],
+          ),
+        ),
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  _buildCoverPreview(detail.coverUrl),
+                  const SizedBox(width: 14),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          detail.title,
+                          style: Theme.of(context).textTheme.titleLarge
+                              ?.copyWith(fontWeight: FontWeight.w700),
+                        ),
+                        const SizedBox(height: 6),
+                        Text(
+                          '点击目录章节即可开始阅读',
+                          style: Theme.of(context).textTheme.bodySmall
+                              ?.copyWith(color: colorScheme.onSurfaceVariant),
+                        ),
+                        const SizedBox(height: 10),
+                        Wrap(
+                          spacing: 8,
+                          runSpacing: 8,
+                          children: [
+                            _buildMetaChip('来源', result.sourceName),
+                            if (detail.author != null &&
+                                detail.author!.isNotEmpty)
+                              _buildMetaChip('作者', detail.author!),
+                          ],
+                        ),
+                        const SizedBox(height: 12),
+                        Wrap(
+                          spacing: 8,
+                          runSpacing: 8,
+                          children: [
+                            FilledButton.icon(
+                              onPressed:
+                                  result.chapters.isEmpty
+                                      ? null
+                                      : () =>
+                                          _openChapter(result.chapters.first),
+                              icon: const Icon(
+                                Icons.chrome_reader_mode_outlined,
+                              ),
+                              label: const Text('开始阅读'),
+                            ),
+                            OutlinedButton.icon(
+                              onPressed:
+                                  _isShelfActionLoading
+                                      ? null
+                                      : _toggleBookshelf,
+                              icon:
+                                  _isShelfActionLoading
+                                      ? const SizedBox(
+                                        width: 16,
+                                        height: 16,
+                                        child: CircularProgressIndicator(
+                                          strokeWidth: 2,
+                                        ),
+                                      )
+                                      : Icon(
+                                        _isInBookshelf
+                                            ? Icons.bookmark_remove_outlined
+                                            : Icons.bookmark_add_outlined,
+                                      ),
+                              label: Text(_isInBookshelf ? '移出书架' : '加入书架'),
+                            ),
+                          ],
+                        ),
+                      ],
+                    ),
                   ),
-                ),
+                ],
+              ),
+              if (intro != null) ...[
+                const SizedBox(height: 14),
+                _buildIntroCard(intro),
               ],
-            ),
-            const SizedBox(height: 12),
-            Wrap(
-              spacing: 8,
-              runSpacing: 8,
-              children: [
-                _buildMetaChip('来源', result.sourceName),
-                if (detail.author != null && detail.author!.isNotEmpty)
-                  _buildMetaChip('作者', detail.author!),
-              ],
-            ),
-            const SizedBox(height: 12),
-            Wrap(
-              spacing: 8,
-              runSpacing: 8,
-              children: [
-                FilledButton.icon(
-                  onPressed:
-                      result.chapters.isEmpty
-                          ? null
-                          : () => _openChapter(result.chapters.first),
-                  icon: const Icon(Icons.chrome_reader_mode_outlined),
-                  label: const Text('开始阅读'),
-                ),
-                OutlinedButton.icon(
-                  onPressed: _isShelfActionLoading ? null : _toggleBookshelf,
-                  icon:
-                      _isShelfActionLoading
-                          ? const SizedBox(
-                            width: 16,
-                            height: 16,
-                            child: CircularProgressIndicator(strokeWidth: 2),
-                          )
-                          : Icon(
-                            _isInBookshelf
-                                ? Icons.bookmark_remove_outlined
-                                : Icons.bookmark_add_outlined,
-                          ),
-                  label: Text(_isInBookshelf ? '移出书架' : '加入书架'),
-                ),
-              ],
-            ),
-            if (intro != null) ...[
-              const SizedBox(height: 12),
-              _buildIntroCard(intro),
             ],
-          ],
+          ),
         ),
       ),
     );
@@ -247,11 +259,11 @@ class _BookDetailPageState extends State<BookDetailPage> {
     final uri = Uri.tryParse(coverUrl ?? '');
     if (uri != null && uri.hasScheme) {
       return ClipRRect(
-        borderRadius: BorderRadius.circular(8),
+        borderRadius: BorderRadius.circular(14),
         child: Image.network(
           coverUrl!,
-          width: 92,
-          height: 132,
+          width: 96,
+          height: 136,
           fit: BoxFit.cover,
           errorBuilder:
               (context, error, stackTrace) => _buildCoverFallback('封面加载失败'),
@@ -263,15 +275,16 @@ class _BookDetailPageState extends State<BookDetailPage> {
   }
 
   Widget _buildCoverFallback(String text) {
+    final colorScheme = Theme.of(context).colorScheme;
     return Container(
-      width: 92,
-      height: 132,
+      width: 96,
+      height: 136,
       decoration: BoxDecoration(
-        color: Theme.of(context).colorScheme.surfaceContainerHighest,
-        borderRadius: BorderRadius.circular(8),
+        color: colorScheme.surfaceContainerHighest,
+        borderRadius: BorderRadius.circular(14),
       ),
       alignment: Alignment.center,
-      padding: const EdgeInsets.all(8),
+      padding: const EdgeInsets.all(10),
       child: Text(
         text,
         textAlign: TextAlign.center,
@@ -281,15 +294,20 @@ class _BookDetailPageState extends State<BookDetailPage> {
   }
 
   Widget _buildMetaChip(String label, String value) {
+    final colorScheme = Theme.of(context).colorScheme;
+
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
       decoration: BoxDecoration(
-        color: Theme.of(context).colorScheme.surfaceContainerHighest,
+        color: colorScheme.secondaryContainer,
         borderRadius: BorderRadius.circular(999),
       ),
       child: Text(
         '$label: $value',
-        style: Theme.of(context).textTheme.bodySmall,
+        style: Theme.of(context).textTheme.labelMedium?.copyWith(
+          color: colorScheme.onSecondaryContainer,
+          fontWeight: FontWeight.w600,
+        ),
       ),
     );
   }
@@ -314,45 +332,86 @@ class _BookDetailPageState extends State<BookDetailPage> {
 
   Widget _buildLatestChapterCard(Chapter latestChapter) {
     final latestTitle = _normalizeText(latestChapter.title);
+    final colorScheme = Theme.of(context).colorScheme;
 
-    return Container(
-      width: double.infinity,
-      decoration: BoxDecoration(
-        color: Theme.of(context).colorScheme.surfaceContainerHighest,
-        borderRadius: BorderRadius.circular(10),
-      ),
-      child: ListTile(
-        contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
-        leading: const Icon(Icons.new_releases_outlined),
-        title: const Text('最新章节'),
-        subtitle: Text(
-          latestTitle,
-          maxLines: 2,
-          overflow: TextOverflow.ellipsis,
-        ),
-        trailing: FilledButton.tonal(
-          onPressed: () => _openChapter(latestChapter),
-          child: const Text('去阅读'),
-        ),
+    return Card(
+      color: colorScheme.surfaceContainerHigh,
+      child: InkWell(
+        borderRadius: BorderRadius.circular(20),
         onTap: () => _openChapter(latestChapter),
+        child: Padding(
+          padding: const EdgeInsets.all(14),
+          child: Row(
+            children: [
+              Container(
+                width: 4,
+                height: 50,
+                decoration: BoxDecoration(
+                  color: colorScheme.primary,
+                  borderRadius: BorderRadius.circular(999),
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      '最新章节',
+                      style: Theme.of(context).textTheme.labelMedium?.copyWith(
+                        color: colorScheme.primary,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      latestTitle,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: Theme.of(context).textTheme.bodyMedium,
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 10),
+              FilledButton.tonal(
+                onPressed: () => _openChapter(latestChapter),
+                child: const Text('去阅读'),
+              ),
+            ],
+          ),
+        ),
       ),
     );
   }
 
   Widget _buildIntroCard(String intro) {
+    final colorScheme = Theme.of(context).colorScheme;
+
     return Container(
       width: double.infinity,
-      padding: const EdgeInsets.all(12),
+      padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
-        color: Theme.of(context).colorScheme.surfaceContainerHighest,
-        borderRadius: BorderRadius.circular(10),
+        color: colorScheme.surfaceContainerHigh,
+        borderRadius: BorderRadius.circular(14),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text('简介', style: Theme.of(context).textTheme.titleSmall),
+          Text(
+            '简介',
+            style: Theme.of(
+              context,
+            ).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w700),
+          ),
           const SizedBox(height: 8),
-          Text(intro, style: Theme.of(context).textTheme.bodyMedium),
+          Text(
+            intro,
+            style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+              color: colorScheme.onSurfaceVariant,
+              height: 1.45,
+            ),
+          ),
         ],
       ),
     );
@@ -383,6 +442,7 @@ class _BookDetailPageState extends State<BookDetailPage> {
 
   Widget _buildChapterSection(BookDetailLoadResult result) {
     final displayedChapters = _buildDisplayedChapters(result.chapters);
+    final colorScheme = Theme.of(context).colorScheme;
 
     return Card(
       child: Padding(
@@ -392,18 +452,24 @@ class _BookDetailPageState extends State<BookDetailPage> {
           children: [
             Row(
               children: [
+                Icon(Icons.menu_book_rounded, color: colorScheme.primary),
+                const SizedBox(width: 8),
                 Expanded(
                   child: Text(
                     '目录（${displayedChapters.length} 章）',
-                    style: Theme.of(context).textTheme.titleMedium,
+                    style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                      fontWeight: FontWeight.w700,
+                    ),
                   ),
                 ),
                 if (result.tocFromCache)
                   Padding(
                     padding: const EdgeInsets.only(right: 8),
                     child: Text(
-                      '来自缓存',
-                      style: Theme.of(context).textTheme.bodySmall,
+                      '缓存',
+                      style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                        color: colorScheme.onSurfaceVariant,
+                      ),
                     ),
                   ),
                 IconButton(
@@ -416,33 +482,42 @@ class _BookDetailPageState extends State<BookDetailPage> {
                             });
                           },
                   tooltip: _manualTocReversed ? '切换为正序' : '切换为倒序',
-                  icon: const Icon(Icons.swap_vert),
+                  icon: Icon(
+                    _manualTocReversed
+                        ? Icons.arrow_downward_rounded
+                        : Icons.arrow_upward_rounded,
+                  ),
                 ),
               ],
             ),
             const SizedBox(height: 4),
             Text(
               _manualTocReversed ? '当前展示：倒序' : '当前展示：正序',
-              style: Theme.of(context).textTheme.bodySmall,
+              style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                color: colorScheme.onSurfaceVariant,
+              ),
             ),
             if (displayedChapters.isNotEmpty) ...[
-              const SizedBox(height: 10),
-              Wrap(
-                spacing: 8,
-                runSpacing: 8,
+              const SizedBox(height: 12),
+              Row(
                 children: [
-                  FilledButton.tonal(
-                    onPressed: () => _openChapter(displayedChapters.first),
-                    child: const Text('阅读当前首章'),
+                  Expanded(
+                    child: FilledButton.tonal(
+                      onPressed: () => _openChapter(displayedChapters.first),
+                      child: const Text('阅读当前首章'),
+                    ),
                   ),
-                  OutlinedButton(
-                    onPressed: () => _openChapter(displayedChapters.last),
-                    child: const Text('阅读当前末章'),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: OutlinedButton(
+                      onPressed: () => _openChapter(displayedChapters.last),
+                      child: const Text('阅读当前末章'),
+                    ),
                   ),
                 ],
               ),
             ],
-            const SizedBox(height: 8),
+            const SizedBox(height: 10),
             ...displayedChapters.asMap().entries.map(
               (entry) => _buildChapterTile(
                 displayIndex: entry.key,
@@ -467,20 +542,42 @@ class _BookDetailPageState extends State<BookDetailPage> {
     required int displayIndex,
     required Chapter chapter,
   }) {
-    return ListTile(
-      dense: true,
-      contentPadding: EdgeInsets.zero,
-      leading: SizedBox(
-        width: 28,
-        child: Text(
-          '${displayIndex + 1}',
-          textAlign: TextAlign.center,
-          style: Theme.of(context).textTheme.bodySmall,
+    final colorScheme = Theme.of(context).colorScheme;
+
+    return InkWell(
+      borderRadius: BorderRadius.circular(10),
+      onTap: () => _openChapter(chapter),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 10),
+        decoration: BoxDecoration(
+          border: Border(
+            bottom: BorderSide(
+              color: colorScheme.outlineVariant.withValues(alpha: 0.55),
+            ),
+          ),
+        ),
+        child: Row(
+          children: [
+            SizedBox(
+              width: 28,
+              child: Text(
+                '${displayIndex + 1}',
+                textAlign: TextAlign.center,
+                style: Theme.of(context).textTheme.bodySmall,
+              ),
+            ),
+            const SizedBox(width: 6),
+            Expanded(
+              child: Text(
+                chapter.title,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+              ),
+            ),
+            Icon(Icons.chevron_right, color: colorScheme.onSurfaceVariant),
+          ],
         ),
       ),
-      title: Text(chapter.title, maxLines: 1, overflow: TextOverflow.ellipsis),
-      trailing: const Icon(Icons.chevron_right),
-      onTap: () => _openChapter(chapter),
     );
   }
 

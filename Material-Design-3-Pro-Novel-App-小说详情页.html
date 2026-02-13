@@ -1,0 +1,141 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Material Design 3 Pro - Novel App - 小说详情页</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+    <style>
+        :root {
+            --md-primary: #6750A4;
+            --md-on-primary: #FFFFFF;
+            --md-primary-container: #EADDFF;
+            --md-on-primary-container: #21005D;
+            --md-surface: #F7F2FA;
+            --md-surface-variant: #E7E0EC;
+            --md-on-surface: #1C1B1F;
+            --md-outline: #79747E;
+            --md-error-container: #F9DEDC;
+            --md-on-error-container: #410E0B;
+        }
+        /* 调整 body 样式以居中显示单个手机容器 */
+        body { 
+            background: #e0e0e0; 
+            font-family: 'Segoe UI', system-ui, sans-serif;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh; /* 确保占据整个视口高度 */
+            margin: 0;
+            padding: 20px; /* 增加一些内边距 */
+            box-sizing: border-box; /* 防止内边距导致溢出 */
+        }
+        
+        /* 手机容器 */
+        .phone-container {
+            width: 360px; height: 760px; background: var(--md-surface);
+            border-radius: 32px; overflow: hidden; position: relative;
+            box-shadow: 0 20px 40px rgba(0,0,0,0.2); display: flex; flex-direction: column;
+        }
+
+        /* 核心 MD3 组件 */
+        .md-card { background: white; border-radius: 12px; padding: 16px; margin-bottom: 12px; }
+        .md-card-tonal { background: var(--md-surface-variant); border-radius: 12px; padding: 16px; margin-bottom: 12px; }
+        
+        .md-btn-filled { background: var(--md-primary); color: white; border-radius: 100px; padding: 10px 24px; font-weight: 500; font-size: 14px; }
+        .md-btn-tonal { background: var(--md-primary-container); color: var(--md-on-primary-container); border-radius: 100px; padding: 10px 20px; font-size: 14px; }
+        .md-btn-outline { border: 1px solid var(--md-outline); border-radius: 100px; padding: 10px 20px; font-size: 14px; }
+
+        /* 悬浮导航栏 (虽然此页面没有使用，但保留通用样式定义) */
+        .floating-nav {
+            position: absolute; bottom: 20px; left: 50%; transform: translateX(-50%);
+            width: 280px; height: 64px; background: #EEE8F4;
+            border-radius: 32px; display: flex; align-items: center; justify-content: space-around;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.1); z-index: 100;
+        }
+        .nav-item { display: flex; flex-direction: column; align-items: center; color: #49454F; }
+        .nav-item.active { color: var(--md-on-primary-container); }
+        .nav-active-pill {
+            background: var(--md-primary-container); width: 64px; height: 32px;
+            border-radius: 16px; display: flex; align-items: center; justify-content: center; margin-bottom: 4px;
+        }
+
+        .scroll-area { flex: 1; overflow-y: auto; padding: 16px; scrollbar-width: none; }
+        .scroll-area::-webkit-scrollbar { display: none; }
+        
+        .tag { font-size: 11px; padding: 2px 8px; border-radius: 8px; background: var(--md-surface-variant); margin-right: 4px; }
+    </style>
+</head>
+<body>
+
+    <!-- 3. 小说详情页 -->
+    <div class="phone-container">
+        <div class="p-4 flex justify-between items-center">
+            <i class="fa-solid fa-arrow-left"></i>
+            <span class="font-medium">凡人修仙传</span>
+            <i class="fa-solid fa-rotate-right text-sm"></i>
+        </div>
+
+        <div class="scroll-area">
+            <div class="flex gap-4 mb-6">
+                <img src="https://img0.baidu.com/it/u=3070445657,3585093557&fm=253&fmt=auto&app=138&f=JPEG?w=500&h=667" class="w-24 h-32 object-cover rounded-xl shadow-md">
+                <div class="flex-1">
+                    <h2 class="text-xl font-bold">凡人修仙传</h2>
+                    <p class="text-xs text-gray-500 mt-1">点击目录章节即可开始阅读</p>
+                    <div class="flex gap-2 mt-3">
+                        <span class="tag">球球浏览器</span>
+                        <span class="tag">忘语</span>
+                    </div>
+                    <div class="flex gap-2 mt-4">
+                        <button class="md-btn-filled !px-4 !py-2 !text-xs">开始阅读</button>
+                        <button class="md-btn-outline !px-4 !py-2 !text-xs">移出书架</button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 简介区 -->
+            <div class="md-card-tonal">
+                <h4 class="text-sm font-bold mb-2">简介</h4>
+                <p class="text-xs leading-relaxed text-gray-600 line-clamp-3">
+                    杨洋、金晨主演同名影视剧热播中！一个普通山村小子，偶然下进入到当地江湖小门派...
+                </p>
+            </div>
+
+            <!-- 最新章节 -->
+            <div class="md-card-tonal flex justify-between items-center border-l-4 border-[var(--md-primary)]">
+                <div>
+                    <p class="text-[10px] text-[var(--md-primary)] font-bold">最新章节</p>
+                    <p class="text-xs mt-1">第2558章 忘语新书《玄界之门》</p>
+                </div>
+                <button class="text-xs text-[var(--md-primary)] font-bold">去阅读</button>
+            </div>
+
+            <!-- 目录控制 -->
+            <div class="mt-6">
+                <div class="flex justify-between items-center mb-4">
+                    <h4 class="font-bold">目录 (2558章)</h4>
+                    <i class="fa-solid fa-sort-amount-down text-gray-400"></i>
+                </div>
+                <div class="flex gap-2 mb-4">
+                    <button class="md-btn-tonal flex-1 !text-xs">阅读当前首章</button>
+                    <button class="md-btn-outline flex-1 !text-xs">阅读当前末章</button>
+                </div>
+                <!-- 章节列表 -->
+                <div class="space-y-4">
+                    <div class="flex justify-between text-sm py-2 border-b border-gray-100">
+                        <span class="text-gray-700">1 第1章 山边小村</span>
+                        <i class="fa-solid fa-chevron-right text-gray-300 text-xs"></i>
+                    </div>
+                    <div class="flex justify-between text-sm py-2 border-b border-gray-100">
+                        <span class="text-gray-700">2 第2章 青牛镇</span>
+                        <i class="fa-solid fa-chevron-right text-gray-300 text-xs"></i>
+                    </div>
+                </div>
+            </div>
+            <div class="h-20"></div> <!-- 留给导航栏的占位，即便此页面没有底部导航栏，保留占位防止内容被底部遮挡 -->
+        </div>
+    </div>
+
+</body>
+</html>
