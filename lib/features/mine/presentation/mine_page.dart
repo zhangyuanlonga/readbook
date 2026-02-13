@@ -1,11 +1,12 @@
 import 'package:flutter/material.dart';
-import 'package:go_router/go_router.dart';
 
 class MinePage extends StatelessWidget {
   const MinePage({super.key});
 
   @override
   Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+
     return Scaffold(
       appBar: AppBar(title: const Text('我的')),
       body: ListView(
@@ -18,11 +19,10 @@ class MinePage extends StatelessWidget {
                 children: [
                   CircleAvatar(
                     radius: 22,
-                    backgroundColor:
-                        Theme.of(context).colorScheme.primaryContainer,
+                    backgroundColor: colorScheme.primaryContainer,
                     child: Icon(
                       Icons.auto_stories_rounded,
-                      color: Theme.of(context).colorScheme.onPrimaryContainer,
+                      color: colorScheme.onPrimaryContainer,
                     ),
                   ),
                   const SizedBox(width: 12),
@@ -36,8 +36,9 @@ class MinePage extends StatelessWidget {
                         ),
                         const SizedBox(height: 4),
                         Text(
-                          '在这里查看错误中心。',
-                          style: Theme.of(context).textTheme.bodySmall,
+                          '个人中心能力持续建设中。',
+                          style: Theme.of(context).textTheme.bodySmall
+                              ?.copyWith(color: colorScheme.onSurfaceVariant),
                         ),
                       ],
                     ),
@@ -48,16 +49,10 @@ class MinePage extends StatelessWidget {
           ),
           const SizedBox(height: 12),
           Card(
-            child: Column(
-              children: [
-                ListTile(
-                  leading: const Icon(Icons.warning_amber_rounded),
-                  title: const Text('错误中心'),
-                  subtitle: const Text('查看规则/网络失败日志并复制诊断信息'),
-                  trailing: const Icon(Icons.chevron_right),
-                  onTap: () => context.push('/errors'),
-                ),
-              ],
+            child: ListTile(
+              leading: const Icon(Icons.construction_rounded),
+              title: const Text('更多功能规划中'),
+              subtitle: const Text('后续会补充账号、同步与阅读统计能力。'),
             ),
           ),
         ],

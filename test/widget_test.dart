@@ -11,7 +11,7 @@ void main() {
     await tester.pump(const Duration(milliseconds: 200));
 
     expect(find.text('书架'), findsWidgets);
-    expect(find.text('去搜索新书'), findsOneWidget);
+    expect(find.text('去搜索'), findsOneWidget);
     expect(find.text('书源'), findsOneWidget);
     expect(find.text('我的'), findsOneWidget);
     expect(find.text('错误'), findsNothing);

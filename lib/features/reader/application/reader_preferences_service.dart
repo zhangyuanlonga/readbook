@@ -26,6 +26,11 @@ class ReaderPreferencesService {
   static const String _backgroundStyleKey = 'reader.settings.backgroundStyle';
   static const String _pageTurnStepRatioKey =
       'reader.settings.pageTurnStepRatio';
+  static const String _fontWeightLevelKey = 'reader.settings.fontWeightLevel';
+  static const String _pageAnimationStyleKey =
+      'reader.settings.pageAnimationStyle';
+  static const String _backgroundImageBase64Key =
+      'reader.settings.backgroundImageBase64';
   static const String _progressPrefix = 'reader.progress.';
 
   Future<ReaderSettings> loadSettings() async {
@@ -49,6 +54,18 @@ class ReaderPreferencesService {
       orElse: () => ReaderBackgroundStyle.plain,
     );
 
+    final fontWeightName = prefs.getString(_fontWeightLevelKey);
+    final fontWeightLevel = ReaderFontWeightLevel.values.firstWhere(
+      (item) => item.name == fontWeightName,
+      orElse: () => ReaderFontWeightLevel.regular,
+    );
+
+    final animationName = prefs.getString(_pageAnimationStyleKey);
+    final pageAnimationStyle = ReaderPageAnimationStyle.values.firstWhere(
+      (item) => item.name == animationName,
+      orElse: () => ReaderPageAnimationStyle.simulation,
+    );
+
     return ReaderSettings(
       fontSize: prefs.getDouble(_fontSizeKey) ?? 18,
       lineHeight: prefs.getDouble(_lineHeightKey) ?? 1.7,
@@ -63,6 +80,9 @@ class ReaderPreferencesService {
         0.6,
         1.0,
       ),
+      fontWeightLevel: fontWeightLevel,
+      pageAnimationStyle: pageAnimationStyle,
+      backgroundImageBase64: prefs.getString(_backgroundImageBase64Key),
     );
   }
 
@@ -79,6 +99,17 @@ class ReaderPreferencesService {
     await prefs.setString(_pageTurnModeKey, settings.pageTurnMode.name);
     await prefs.setString(_backgroundStyleKey, settings.backgroundStyle.name);
     await prefs.setDouble(_pageTurnStepRatioKey, settings.pageTurnStepRatio);
+    await prefs.setString(_fontWeightLevelKey, settings.fontWeightLevel.name);
+    await prefs.setString(
+      _pageAnimationStyleKey,
+      settings.pageAnimationStyle.name,
+    );
+    final backgroundImageBase64 = settings.backgroundImageBase64;
+    if (backgroundImageBase64 == null || backgroundImageBase64.isEmpty) {
+      await prefs.remove(_backgroundImageBase64Key);
+    } else {
+      await prefs.setString(_backgroundImageBase64Key, backgroundImageBase64);
+    }
   }
 
   Future<ReadingProgress?> loadProgress(String bookId) async {

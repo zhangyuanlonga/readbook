@@ -23,6 +23,9 @@ void main() {
         pageTurnMode: ReaderPageTurnMode.scroll,
         backgroundStyle: ReaderBackgroundStyle.paper,
         pageTurnStepRatio: 0.72,
+        fontWeightLevel: ReaderFontWeightLevel.medium,
+        pageAnimationStyle: ReaderPageAnimationStyle.cover,
+        backgroundImageBase64: 'dGVzdF9iZw==',
       );
 
       await service.saveSettings(settings);
@@ -38,6 +41,9 @@ void main() {
       expect(restored.pageTurnMode, ReaderPageTurnMode.scroll);
       expect(restored.backgroundStyle, ReaderBackgroundStyle.paper);
       expect(restored.pageTurnStepRatio, 0.72);
+      expect(restored.fontWeightLevel, ReaderFontWeightLevel.medium);
+      expect(restored.pageAnimationStyle, ReaderPageAnimationStyle.cover);
+      expect(restored.backgroundImageBase64, 'dGVzdF9iZw==');
     });
 
     test('saves and loads reading progress', () async {

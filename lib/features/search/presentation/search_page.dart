@@ -292,7 +292,7 @@ class _SearchPageState extends State<SearchPage> {
             )
           else if (report.failures.length > preview.length)
             Text(
-              '其余 ${report.failures.length - preview.length} 条可在错误中心查看',
+              '其余 ${report.failures.length - preview.length} 条请展开明细查看',
               style: Theme.of(context).textTheme.bodySmall?.copyWith(
                 color: colorScheme.onErrorContainer,
               ),

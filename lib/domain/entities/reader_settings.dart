@@ -4,6 +4,10 @@ enum ReaderPageTurnMode { tap, scroll }
 
 enum ReaderBackgroundStyle { plain, paper, warm }
 
+enum ReaderFontWeightLevel { light, regular, medium }
+
+enum ReaderPageAnimationStyle { simulation, cover, translate, vertical, none }
+
 class ReaderSettings {
   const ReaderSettings({
     this.fontSize = 18,
@@ -16,6 +20,9 @@ class ReaderSettings {
     this.pageTurnMode = ReaderPageTurnMode.tap,
     this.backgroundStyle = ReaderBackgroundStyle.plain,
     this.pageTurnStepRatio = 0.88,
+    this.fontWeightLevel = ReaderFontWeightLevel.regular,
+    this.pageAnimationStyle = ReaderPageAnimationStyle.simulation,
+    this.backgroundImageBase64,
   });
 
   final double fontSize;
@@ -28,6 +35,9 @@ class ReaderSettings {
   final ReaderPageTurnMode pageTurnMode;
   final ReaderBackgroundStyle backgroundStyle;
   final double pageTurnStepRatio;
+  final ReaderFontWeightLevel fontWeightLevel;
+  final ReaderPageAnimationStyle pageAnimationStyle;
+  final String? backgroundImageBase64;
 
   ReaderSettings copyWith({
     double? fontSize,
@@ -40,6 +50,10 @@ class ReaderSettings {
     ReaderPageTurnMode? pageTurnMode,
     ReaderBackgroundStyle? backgroundStyle,
     double? pageTurnStepRatio,
+    ReaderFontWeightLevel? fontWeightLevel,
+    ReaderPageAnimationStyle? pageAnimationStyle,
+    String? backgroundImageBase64,
+    bool clearBackgroundImage = false,
   }) {
     return ReaderSettings(
       fontSize: fontSize ?? this.fontSize,
@@ -52,6 +66,12 @@ class ReaderSettings {
       pageTurnMode: pageTurnMode ?? this.pageTurnMode,
       backgroundStyle: backgroundStyle ?? this.backgroundStyle,
       pageTurnStepRatio: pageTurnStepRatio ?? this.pageTurnStepRatio,
+      fontWeightLevel: fontWeightLevel ?? this.fontWeightLevel,
+      pageAnimationStyle: pageAnimationStyle ?? this.pageAnimationStyle,
+      backgroundImageBase64:
+          clearBackgroundImage
+              ? null
+              : backgroundImageBase64 ?? this.backgroundImageBase64,
     );
   }
 
@@ -67,6 +87,9 @@ class ReaderSettings {
       'pageTurnMode': pageTurnMode.name,
       'backgroundStyle': backgroundStyle.name,
       'pageTurnStepRatio': pageTurnStepRatio,
+      'fontWeightLevel': fontWeightLevel.name,
+      'pageAnimationStyle': pageAnimationStyle.name,
+      'backgroundImageBase64': backgroundImageBase64,
     };
   }
 
@@ -89,6 +112,21 @@ class ReaderSettings {
       orElse: () => ReaderBackgroundStyle.plain,
     );
 
+    final fontWeightName = json['fontWeightLevel']?.toString();
+    final fontWeightLevel = ReaderFontWeightLevel.values.firstWhere(
+      (item) => item.name == fontWeightName,
+      orElse: () => ReaderFontWeightLevel.regular,
+    );
+
+    final animationName = json['pageAnimationStyle']?.toString();
+    final pageAnimationStyle = ReaderPageAnimationStyle.values.firstWhere(
+      (item) => item.name == animationName,
+      orElse: () => ReaderPageAnimationStyle.simulation,
+    );
+
+    final backgroundImageBase64 =
+        json['backgroundImageBase64']?.toString().trim();
+
     return ReaderSettings(
       fontSize: _asDouble(json['fontSize']) ?? 18,
       lineHeight: _asDouble(json['lineHeight']) ?? 1.7,
@@ -101,6 +139,12 @@ class ReaderSettings {
       backgroundStyle: backgroundStyle,
       pageTurnStepRatio:
           _asDouble(json['pageTurnStepRatio'])?.clamp(0.6, 1.0) ?? 0.88,
+      fontWeightLevel: fontWeightLevel,
+      pageAnimationStyle: pageAnimationStyle,
+      backgroundImageBase64:
+          backgroundImageBase64 == null || backgroundImageBase64.isEmpty
+              ? null
+              : backgroundImageBase64,
     );
   }
 
