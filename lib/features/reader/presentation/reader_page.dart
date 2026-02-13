@@ -79,6 +79,7 @@ class _ReaderPageState extends State<ReaderPage>
   Timer? _progressDebounceTimer;
   String? _cachedBackgroundImageKey;
   MemoryImage? _cachedBackgroundImage;
+  double _horizontalDragOffset = 0;
 
   @override
   void initState() {
@@ -403,6 +404,25 @@ class _ReaderPageState extends State<ReaderPage>
           onTapUp:
               (details) =>
                   _onReaderTap(details.localPosition, constraints.biggest),
+          onHorizontalDragStart:
+              _settings.pageTurnMode == ReaderPageTurnMode.tap
+                  ? (_) => _horizontalDragOffset = 0
+                  : null,
+          onHorizontalDragUpdate:
+              _settings.pageTurnMode == ReaderPageTurnMode.tap
+                  ? (details) {
+                    _horizontalDragOffset += details.primaryDelta ?? 0;
+                  }
+                  : null,
+          onHorizontalDragCancel:
+              _settings.pageTurnMode == ReaderPageTurnMode.tap
+                  ? () => _horizontalDragOffset = 0
+                  : null,
+          onHorizontalDragEnd:
+              _settings.pageTurnMode == ReaderPageTurnMode.tap
+                  ? (details) =>
+                      _onHorizontalDragEnd(details, constraints.biggest.height)
+                  : null,
           child: child,
         );
       },
@@ -1289,8 +1309,9 @@ class _ReaderPageState extends State<ReaderPage>
       return;
     }
 
+    final pageDelta = _resolvePageTurnDelta(viewportHeight);
     final target =
-        (position.pixels - viewportHeight * _settings.pageTurnStepRatio)
+        (position.pixels - pageDelta)
             .clamp(0, position.maxScrollExtent)
             .toDouble();
 
@@ -1309,12 +1330,26 @@ class _ReaderPageState extends State<ReaderPage>
       return;
     }
 
+    final pageDelta = _resolvePageTurnDelta(viewportHeight);
     final target =
-        (position.pixels + viewportHeight * _settings.pageTurnStepRatio)
+        (position.pixels + pageDelta)
             .clamp(0, position.maxScrollExtent)
             .toDouble();
 
     await _performPageTurnTo(target: target, direction: 1);
+  }
+
+  double _resolvePageTurnDelta(double viewportHeight) {
+    final baseStep = viewportHeight * _settings.pageTurnStepRatio;
+    final estimatedLineHeight = _settings.fontSize * _settings.lineHeight;
+    final overlap = (estimatedLineHeight * 2.2 + _settings.paragraphSpacing)
+        .clamp(20.0, viewportHeight * 0.22);
+
+    final minStep = (baseStep * 0.68).clamp(40.0, viewportHeight).toDouble();
+    final maxStep =
+        (viewportHeight - 8).clamp(minStep, viewportHeight).toDouble();
+
+    return (baseStep - overlap).clamp(minStep, maxStep).toDouble();
   }
 
   Future<void> _performPageTurnTo({
@@ -1424,6 +1459,34 @@ class _ReaderPageState extends State<ReaderPage>
     });
 
     _showChapterSwitchFailedSnackbar(index);
+  }
+
+  void _onHorizontalDragEnd(DragEndDetails details, double viewportHeight) {
+    final velocity = details.primaryVelocity ?? 0;
+    final offset = _horizontalDragOffset;
+    _horizontalDragOffset = 0;
+
+    if (_showOverlayControls) {
+      _hideOverlayControls();
+      return;
+    }
+
+    const minDistance = 42.0;
+    const minVelocity = 320.0;
+    final passedDistance = offset.abs() >= minDistance;
+    final passedVelocity = velocity.abs() >= minVelocity;
+    if (!passedDistance && !passedVelocity) {
+      return;
+    }
+
+    if (offset < 0 || velocity < -minVelocity) {
+      unawaited(_goToNextPage(viewportHeight));
+      return;
+    }
+
+    if (offset > 0 || velocity > minVelocity) {
+      unawaited(_goToPreviousPage(viewportHeight));
+    }
   }
 
   void _onReaderTap(Offset localPosition, Size size) {
