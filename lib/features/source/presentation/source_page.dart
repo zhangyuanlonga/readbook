@@ -48,6 +48,8 @@ class _SourcePageState extends State<SourcePage> {
 
   @override
   Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+
     return Scaffold(
       appBar: AppBar(
         leading:
@@ -59,7 +61,7 @@ class _SourcePageState extends State<SourcePage> {
                 )
                 : null,
         title: Text(
-          _isSelectionMode ? '已选择 ${_selectedSourceIds.length} 项' : '书源管理',
+          _isSelectionMode ? '已选择 ${_selectedSourceIds.length} 项' : '书源',
         ),
         actions: [
           if (_isSelectionMode) ...[
@@ -125,79 +127,188 @@ class _SourcePageState extends State<SourcePage> {
             ),
         ],
       ),
-      body: StreamBuilder<List<SourceDefinition>>(
-        stream: _repository.watchAll(),
-        initialData: const [],
-        builder: (context, snapshot) {
-          final sources = snapshot.data ?? const <SourceDefinition>[];
-          _visibleSources = sources;
+      body: DecoratedBox(
+        decoration: BoxDecoration(
+          gradient: LinearGradient(
+            begin: Alignment.topCenter,
+            end: Alignment.bottomCenter,
+            colors: [colorScheme.surface, colorScheme.surfaceContainerLow],
+          ),
+        ),
+        child: StreamBuilder<List<SourceDefinition>>(
+          stream: _repository.watchAll(),
+          initialData: const [],
+          builder: (context, snapshot) {
+            final sources = snapshot.data ?? const <SourceDefinition>[];
+            _visibleSources = sources;
 
-          if (_isSelectionMode) {
-            final visibleIds = sources.map((item) => item.id).toSet();
-            _selectedSourceIds.removeWhere((id) => !visibleIds.contains(id));
+            if (_isSelectionMode) {
+              final visibleIds = sources.map((item) => item.id).toSet();
+              _selectedSourceIds.removeWhere((id) => !visibleIds.contains(id));
 
-            if (sources.isEmpty) {
-              WidgetsBinding.instance.addPostFrameCallback((_) {
-                if (!mounted || !_isSelectionMode) {
-                  return;
-                }
-                setState(() {
-                  _isSelectionMode = false;
-                  _selectedSourceIds.clear();
+              if (sources.isEmpty) {
+                WidgetsBinding.instance.addPostFrameCallback((_) {
+                  if (!mounted || !_isSelectionMode) {
+                    return;
+                  }
+                  setState(() {
+                    _isSelectionMode = false;
+                    _selectedSourceIds.clear();
+                  });
                 });
-              });
+              }
             }
-          }
 
-          if (sources.isEmpty) {
+            final enabledCount = sources.where((item) => item.enabled).length;
+
             return ListView(
               padding: const EdgeInsets.all(16),
-              children: const [
-                Card(
-                  child: Padding(
-                    padding: EdgeInsets.all(16),
-                    child: Text('当前没有书源，点击右上角 + 开始导入。'),
+              children: [
+                _buildOverviewCard(
+                  totalCount: sources.length,
+                  enabledCount: enabledCount,
+                ),
+                if (_isSelectionMode) ...[
+                  const SizedBox(height: 10),
+                  _buildSelectionHintCard(),
+                ],
+                const SizedBox(height: 10),
+                if (sources.isEmpty)
+                  _buildEmptySourceCard()
+                else
+                  ...sources.map(_buildSourceCard),
+              ],
+            );
+          },
+        ),
+      ),
+    );
+  }
+
+  Widget _buildOverviewCard({
+    required int totalCount,
+    required int enabledCount,
+  }) {
+    final disabledCount = (totalCount - enabledCount).clamp(0, totalCount);
+    final colorScheme = Theme.of(context).colorScheme;
+
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(14),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Icon(Icons.storage_rounded, color: colorScheme.primary),
+                const SizedBox(width: 8),
+                Text(
+                  '书源概览',
+                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                    fontWeight: FontWeight.w700,
                   ),
                 ),
               ],
-            );
-          }
-
-          return ListView(
-            padding: const EdgeInsets.all(16),
-            children: [
-              Text(
-                '已导入书源：${sources.length}',
-                style: Theme.of(context).textTheme.titleMedium,
-              ),
-              if (_isSelectionMode) ...[
-                const SizedBox(height: 8),
-                _buildSelectionHintCard(),
+            ),
+            const SizedBox(height: 10),
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: [
+                _buildOverviewChip('总数', '$totalCount'),
+                _buildOverviewChip('启用', '$enabledCount'),
+                _buildOverviewChip('停用', '$disabledCount'),
               ],
-              const SizedBox(height: 8),
-              ...sources.map(_buildSourceCard),
-            ],
-          );
-        },
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildOverviewChip(String label, String value) {
+    final colorScheme = Theme.of(context).colorScheme;
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+      decoration: BoxDecoration(
+        color: colorScheme.secondaryContainer,
+        borderRadius: BorderRadius.circular(999),
+      ),
+      child: Text(
+        '$label: $value',
+        style: Theme.of(context).textTheme.labelMedium?.copyWith(
+          color: colorScheme.onSecondaryContainer,
+          fontWeight: FontWeight.w600,
+        ),
+      ),
+    );
+  }
+
+  Widget _buildEmptySourceCard() {
+    final colorScheme = Theme.of(context).colorScheme;
+
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(18),
+        child: Column(
+          children: [
+            Icon(
+              Icons.cloud_upload_outlined,
+              size: 28,
+              color: colorScheme.primary,
+            ),
+            const SizedBox(height: 10),
+            Text(
+              '当前没有书源',
+              style: Theme.of(
+                context,
+              ).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w700),
+            ),
+            const SizedBox(height: 6),
+            Text(
+              '点击右上角 + 开始导入。',
+              style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                color: colorScheme.onSurfaceVariant,
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
 
   Widget _buildSelectionHintCard() {
+    final colorScheme = Theme.of(context).colorScheme;
+
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
       decoration: BoxDecoration(
-        color: Theme.of(context).colorScheme.primaryContainer,
-        borderRadius: BorderRadius.circular(10),
+        color: colorScheme.primaryContainer,
+        borderRadius: BorderRadius.circular(12),
       ),
-      child: Text(
-        _selectedSourceIds.isEmpty
-            ? '多选模式：可点击条目进行选择，也可使用顶部全选/反选。'
-            : '多选模式：已选 ${_selectedSourceIds.length} 项，点击右上角删除。',
-        style: TextStyle(
-          color: Theme.of(context).colorScheme.onPrimaryContainer,
-        ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(
+            Icons.task_alt_rounded,
+            size: 18,
+            color: colorScheme.onPrimaryContainer,
+          ),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(
+              _selectedSourceIds.isEmpty
+                  ? '多选模式：可点击条目进行选择，也可使用顶部全选/反选。'
+                  : '多选模式：已选 ${_selectedSourceIds.length} 项，点击右上角删除。',
+              style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                color: colorScheme.onPrimaryContainer,
+                height: 1.35,
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -211,15 +322,16 @@ class _SourcePageState extends State<SourcePage> {
     final selected = _selectedSourceIds.contains(source.id);
     final lastCheckMessage = source.lastCheckMessage?.trim();
     final isActionLocked = _isBatchDeleting || isDeleting;
+    final colorScheme = Theme.of(context).colorScheme;
 
     return Card(
-      margin: const EdgeInsets.only(bottom: 8),
+      margin: const EdgeInsets.only(bottom: 10),
       clipBehavior: Clip.antiAlias,
       child: InkWell(
         onLongPress: () => _startSelectionMode(source.id),
         onTap: _isSelectionMode ? () => _toggleSelected(source.id) : null,
         child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
           child: Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
@@ -240,25 +352,43 @@ class _SourcePageState extends State<SourcePage> {
                         Expanded(
                           child: Text(
                             source.name,
-                            style: Theme.of(context).textTheme.titleSmall,
+                            style: Theme.of(context).textTheme.titleSmall
+                                ?.copyWith(fontWeight: FontWeight.w700),
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
                           ),
                         ),
                         if (source.comment != null &&
                             source.comment!.trim().isNotEmpty)
-                          const Padding(
-                            padding: EdgeInsets.only(left: 6),
-                            child: Icon(Icons.sticky_note_2_outlined, size: 16),
+                          Padding(
+                            padding: const EdgeInsets.only(left: 6),
+                            child: Icon(
+                              Icons.sticky_note_2_outlined,
+                              size: 16,
+                              color: colorScheme.onSurfaceVariant,
+                            ),
                           ),
                       ],
                     ),
-                    const SizedBox(height: 2),
-                    Text(
-                      source.baseUrl,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: Theme.of(context).textTheme.bodySmall,
+                    const SizedBox(height: 6),
+                    Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 8,
+                        vertical: 6,
+                      ),
+                      decoration: BoxDecoration(
+                        color: colorScheme.surfaceContainerHighest,
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: Text(
+                        source.baseUrl,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                          color: colorScheme.onSurfaceVariant,
+                        ),
+                      ),
                     ),
                     const SizedBox(height: 8),
                     Wrap(
@@ -353,15 +483,19 @@ class _SourcePageState extends State<SourcePage> {
   }
 
   Widget _buildSourceMetaChip(String label, String value) {
+    final colorScheme = Theme.of(context).colorScheme;
+
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
       decoration: BoxDecoration(
-        color: Theme.of(context).colorScheme.surfaceContainerHighest,
+        color: colorScheme.surfaceContainerHigh,
         borderRadius: BorderRadius.circular(999),
       ),
       child: Text(
         '$label: $value',
-        style: Theme.of(context).textTheme.bodySmall,
+        style: Theme.of(
+          context,
+        ).textTheme.labelSmall?.copyWith(color: colorScheme.onSurfaceVariant),
       ),
     );
   }
