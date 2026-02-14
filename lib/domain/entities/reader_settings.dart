@@ -4,6 +4,14 @@ enum ReaderPageTurnMode { tap, scroll }
 
 enum ReaderBackgroundStyle { plain, paper, warm }
 
+enum ReaderBackgroundTone {
+  surface,
+  containerLow,
+  container,
+  containerHigh,
+  containerHighest,
+}
+
 enum ReaderFontWeightLevel { light, regular, medium }
 
 enum ReaderPageAnimationStyle {
@@ -27,6 +35,7 @@ class ReaderSettings {
     this.themeMode = ReaderThemeMode.light,
     this.pageTurnMode = ReaderPageTurnMode.tap,
     this.backgroundStyle = ReaderBackgroundStyle.plain,
+    this.backgroundTone = ReaderBackgroundTone.surface,
     this.pageTurnStepRatio = 0.88,
     this.fontWeightLevel = ReaderFontWeightLevel.regular,
     this.pageAnimationStyle = ReaderPageAnimationStyle.curl,
@@ -42,6 +51,7 @@ class ReaderSettings {
   final ReaderThemeMode themeMode;
   final ReaderPageTurnMode pageTurnMode;
   final ReaderBackgroundStyle backgroundStyle;
+  final ReaderBackgroundTone backgroundTone;
   final double pageTurnStepRatio;
   final ReaderFontWeightLevel fontWeightLevel;
   final ReaderPageAnimationStyle pageAnimationStyle;
@@ -57,6 +67,7 @@ class ReaderSettings {
     ReaderThemeMode? themeMode,
     ReaderPageTurnMode? pageTurnMode,
     ReaderBackgroundStyle? backgroundStyle,
+    ReaderBackgroundTone? backgroundTone,
     double? pageTurnStepRatio,
     ReaderFontWeightLevel? fontWeightLevel,
     ReaderPageAnimationStyle? pageAnimationStyle,
@@ -73,6 +84,7 @@ class ReaderSettings {
       themeMode: themeMode ?? this.themeMode,
       pageTurnMode: pageTurnMode ?? this.pageTurnMode,
       backgroundStyle: backgroundStyle ?? this.backgroundStyle,
+      backgroundTone: backgroundTone ?? this.backgroundTone,
       pageTurnStepRatio: pageTurnStepRatio ?? this.pageTurnStepRatio,
       fontWeightLevel: fontWeightLevel ?? this.fontWeightLevel,
       pageAnimationStyle: pageAnimationStyle ?? this.pageAnimationStyle,
@@ -94,6 +106,7 @@ class ReaderSettings {
       'themeMode': themeMode.name,
       'pageTurnMode': pageTurnMode.name,
       'backgroundStyle': backgroundStyle.name,
+      'backgroundTone': backgroundTone.name,
       'pageTurnStepRatio': pageTurnStepRatio,
       'fontWeightLevel': fontWeightLevel.name,
       'pageAnimationStyle': pageAnimationStyle.name,
@@ -118,6 +131,12 @@ class ReaderSettings {
     final backgroundStyle = ReaderBackgroundStyle.values.firstWhere(
       (item) => item.name == backgroundName,
       orElse: () => ReaderBackgroundStyle.plain,
+    );
+
+    final backgroundToneName = json['backgroundTone']?.toString();
+    final backgroundTone = ReaderBackgroundTone.values.firstWhere(
+      (item) => item.name == backgroundToneName,
+      orElse: () => ReaderBackgroundTone.surface,
     );
 
     final fontWeightName = json['fontWeightLevel']?.toString();
@@ -149,6 +168,7 @@ class ReaderSettings {
       themeMode: mode,
       pageTurnMode: pageTurnMode,
       backgroundStyle: backgroundStyle,
+      backgroundTone: backgroundTone,
       pageTurnStepRatio:
           _asDouble(json['pageTurnStepRatio'])?.clamp(0.6, 1.0) ?? 0.88,
       fontWeightLevel: fontWeightLevel,

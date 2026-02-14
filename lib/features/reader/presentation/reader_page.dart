@@ -127,7 +127,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
 
   @override
   Widget build(BuildContext context) {
-    final colors = _resolveThemeColors(_effectiveReaderThemeMode());
+    final colors = _resolveThemeColors(_effectiveReaderThemeMode(), _settings);
 
     return Scaffold(
       backgroundColor: colors.background,
@@ -181,10 +181,13 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
         image: backgroundImage,
       ),
       ReaderBackgroundStyle.warm => BoxDecoration(
-        gradient: const LinearGradient(
+        gradient: LinearGradient(
           begin: Alignment.topCenter,
           end: Alignment.bottomCenter,
-          colors: [Color(0xFFF9F1DE), Color(0xFFF3E2C5)],
+          colors: [
+            _shiftLightness(colors.background, 0.03),
+            _shiftLightness(colors.background, -0.02),
+          ],
         ),
         image: backgroundImage,
       ),
@@ -1018,7 +1021,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
     }
 
     final style = _paragraphTextStyle(
-      _resolveThemeColors(_settings.themeMode),
+      _resolveThemeColors(_effectiveReaderThemeMode(), _settings),
     ).copyWith(color: Colors.black);
     final textScaler = MediaQuery.textScalerOf(context);
 
@@ -2795,6 +2798,63 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
                             const Divider(height: 1),
                             _buildSettingLine(
                               context: context,
+                              label: '色调',
+                              child: SingleChildScrollView(
+                                scrollDirection: Axis.horizontal,
+                                child: Row(
+                                  children: [
+                                    _buildBackgroundToneDot(
+                                      draft: draft,
+                                      tone: ReaderBackgroundTone.surface,
+                                      onChanged: (next) {
+                                        setModalState(() {
+                                          draft = next;
+                                        });
+                                      },
+                                    ),
+                                    _buildBackgroundToneDot(
+                                      draft: draft,
+                                      tone: ReaderBackgroundTone.containerLow,
+                                      onChanged: (next) {
+                                        setModalState(() {
+                                          draft = next;
+                                        });
+                                      },
+                                    ),
+                                    _buildBackgroundToneDot(
+                                      draft: draft,
+                                      tone: ReaderBackgroundTone.container,
+                                      onChanged: (next) {
+                                        setModalState(() {
+                                          draft = next;
+                                        });
+                                      },
+                                    ),
+                                    _buildBackgroundToneDot(
+                                      draft: draft,
+                                      tone: ReaderBackgroundTone.containerHigh,
+                                      onChanged: (next) {
+                                        setModalState(() {
+                                          draft = next;
+                                        });
+                                      },
+                                    ),
+                                    _buildBackgroundToneDot(
+                                      draft: draft,
+                                      tone: ReaderBackgroundTone.containerHighest,
+                                      onChanged: (next) {
+                                        setModalState(() {
+                                          draft = next;
+                                        });
+                                      },
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ),
+                            const Divider(height: 1),
+                            _buildSettingLine(
+                              context: context,
                               label: '背景',
                               child: SingleChildScrollView(
                                 scrollDirection: Axis.horizontal,
@@ -3151,6 +3211,43 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
     );
   }
 
+
+  Widget _buildBackgroundToneDot({
+    required ReaderSettings draft,
+    required ReaderBackgroundTone tone,
+    required ValueChanged<ReaderSettings> onChanged,
+  }) {
+    final effectiveMode =
+        Theme.of(context).brightness == Brightness.dark
+            ? ReaderThemeMode.dark
+            : (draft.themeMode == ReaderThemeMode.sepia
+                ? ReaderThemeMode.sepia
+                : ReaderThemeMode.light);
+
+    final preview = draft.copyWith(backgroundTone: tone);
+    final previewColors = _resolveThemeColors(effectiveMode, preview);
+    final selected = draft.backgroundTone == tone;
+
+    return GestureDetector(
+      onTap: () => onChanged(preview),
+      child: Container(
+        width: 26,
+        height: 26,
+        margin: const EdgeInsets.only(right: 8),
+        decoration: BoxDecoration(
+          color: previewColors.background,
+          shape: BoxShape.circle,
+          border: Border.all(
+            color: selected
+                ? Theme.of(context).colorScheme.primary
+                : Theme.of(context).colorScheme.outlineVariant,
+            width: selected ? 2 : 1,
+          ),
+        ),
+      ),
+    );
+  }
+
   Widget _buildBackgroundTile({
     required String label,
     required bool selected,
@@ -3370,29 +3467,58 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
     );
   }
 
-  _ReaderThemeColors _resolveThemeColors(ReaderThemeMode mode) {
-    return switch (mode) {
-      ReaderThemeMode.light => const _ReaderThemeColors(
-        background: Color(0xFFFDFDFD),
-        text: Color(0xFF111827),
-        meta: Color(0xFF6B7280),
-        divider: Color(0xFFE5E7EB),
-        overlay: Color(0xFFF7F7F7),
-      ),
-      ReaderThemeMode.sepia => const _ReaderThemeColors(
-        background: Color(0xFFF7EEDC),
-        text: Color(0xFF3F2E1F),
-        meta: Color(0xFF6E563D),
-        divider: Color(0xFFE2D2B4),
-        overlay: Color(0xFFF0E3C7),
-      ),
-      ReaderThemeMode.dark => const _ReaderThemeColors(
-        background: Color(0xFF1E1F24),
-        text: Color(0xFFE5E7EB),
-        meta: Color(0xFF9CA3AF),
-        divider: Color(0xFF3F4450),
-        overlay: Color(0xFF2A2C33),
-      ),
+  _ReaderThemeColors _resolveThemeColors(
+    ReaderThemeMode mode,
+    ReaderSettings settings,
+  ) {
+    final scheme = Theme.of(context).colorScheme;
+
+    final baseBackground = _backgroundForTone(scheme, settings.backgroundTone);
+    final baseOverlay = _overlayForTone(scheme, settings.backgroundTone);
+
+    var background = baseBackground;
+    var overlay = baseOverlay;
+    var textColor = scheme.onSurface;
+    var metaColor = scheme.onSurfaceVariant;
+    final dividerColor = scheme.outlineVariant.withValues(alpha: 0.6);
+
+    if (mode == ReaderThemeMode.sepia &&
+        Theme.of(context).brightness != Brightness.dark) {
+      const targetBackground = Color(0xFFF7EEDC);
+      const targetOverlay = Color(0xFFF0E3C7);
+      background = Color.lerp(baseBackground, targetBackground, 0.72) ??
+          targetBackground;
+      overlay = Color.lerp(baseOverlay, targetOverlay, 0.72) ?? targetOverlay;
+      textColor = const Color(0xFF3F2E1F);
+      metaColor = const Color(0xFF6E563D);
+    }
+
+    return _ReaderThemeColors(
+      background: background,
+      text: textColor,
+      meta: metaColor,
+      divider: dividerColor,
+      overlay: overlay,
+    );
+  }
+
+  Color _backgroundForTone(ColorScheme scheme, ReaderBackgroundTone tone) {
+    return switch (tone) {
+      ReaderBackgroundTone.surface => scheme.surface,
+      ReaderBackgroundTone.containerLow => scheme.surfaceContainerLow,
+      ReaderBackgroundTone.container => scheme.surfaceContainer,
+      ReaderBackgroundTone.containerHigh => scheme.surfaceContainerHigh,
+      ReaderBackgroundTone.containerHighest => scheme.surfaceContainerHighest,
+    };
+  }
+
+  Color _overlayForTone(ColorScheme scheme, ReaderBackgroundTone tone) {
+    return switch (tone) {
+      ReaderBackgroundTone.surface => scheme.surfaceContainerLow,
+      ReaderBackgroundTone.containerLow => scheme.surfaceContainer,
+      ReaderBackgroundTone.container => scheme.surfaceContainerHigh,
+      ReaderBackgroundTone.containerHigh => scheme.surfaceContainerHighest,
+      ReaderBackgroundTone.containerHighest => scheme.surfaceContainerHighest,
     };
   }
 

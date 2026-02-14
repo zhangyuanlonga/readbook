@@ -24,6 +24,7 @@ class ReaderPreferencesService {
   static const String _themeModeKey = 'reader.settings.themeMode';
   static const String _pageTurnModeKey = 'reader.settings.pageTurnMode';
   static const String _backgroundStyleKey = 'reader.settings.backgroundStyle';
+  static const String _backgroundToneKey = 'reader.settings.backgroundTone';
   static const String _pageTurnStepRatioKey =
       'reader.settings.pageTurnStepRatio';
   static const String _fontWeightLevelKey = 'reader.settings.fontWeightLevel';
@@ -54,6 +55,12 @@ class ReaderPreferencesService {
       orElse: () => ReaderBackgroundStyle.plain,
     );
 
+    final backgroundToneName = prefs.getString(_backgroundToneKey);
+    final backgroundTone = ReaderBackgroundTone.values.firstWhere(
+      (item) => item.name == backgroundToneName,
+      orElse: () => ReaderBackgroundTone.surface,
+    );
+
     final fontWeightName = prefs.getString(_fontWeightLevelKey);
     final fontWeightLevel = ReaderFontWeightLevel.values.firstWhere(
       (item) => item.name == fontWeightName,
@@ -80,6 +87,7 @@ class ReaderPreferencesService {
       themeMode: mode,
       pageTurnMode: pageTurnMode,
       backgroundStyle: backgroundStyle,
+      backgroundTone: backgroundTone,
       pageTurnStepRatio: (prefs.getDouble(_pageTurnStepRatioKey) ?? 0.88).clamp(
         0.6,
         1.0,
@@ -102,6 +110,7 @@ class ReaderPreferencesService {
     await prefs.setString(_themeModeKey, settings.themeMode.name);
     await prefs.setString(_pageTurnModeKey, settings.pageTurnMode.name);
     await prefs.setString(_backgroundStyleKey, settings.backgroundStyle.name);
+    await prefs.setString(_backgroundToneKey, settings.backgroundTone.name);
     await prefs.setDouble(_pageTurnStepRatioKey, settings.pageTurnStepRatio);
     await prefs.setString(_fontWeightLevelKey, settings.fontWeightLevel.name);
     await prefs.setString(

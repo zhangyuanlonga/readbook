@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../app/theme/app_theme_provider.dart';
 import '../../../app/theme/app_theme_seed_provider.dart';
+import '../../../app/theme/app_dynamic_color_provider.dart';
 
 class MinePage extends ConsumerWidget {
   const MinePage({super.key});
@@ -11,6 +12,7 @@ class MinePage extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final colorScheme = Theme.of(context).colorScheme;
     final themeMode = ref.watch(appThemeModeProvider);
+    final dynamicColorEnabled = ref.watch(appDynamicColorEnabledProvider);
 
     return Scaffold(
       appBar: AppBar(title: const Text('我的')),
@@ -63,6 +65,24 @@ class MinePage extends ConsumerWidget {
                   subtitle: Text(_themeModeLabel(themeMode)),
                   trailing: const Icon(Icons.chevron_right_rounded),
                   onTap: () => _showThemeModeSheet(context: context, ref: ref),
+                ),
+                const Divider(height: 1),
+                ListTile(
+                  leading: const Icon(Icons.auto_awesome_outlined),
+                  title: const Text('动态取色（Android 12+）'),
+                  subtitle: Text(
+                    dynamicColorEnabled
+                        ? '已开启：优先使用系统 Monet 主题（不支持时回退到主题颜色）。'
+                        : '已关闭：使用下方主题颜色。',
+                  ),
+                  trailing: Switch.adaptive(
+                    value: dynamicColorEnabled,
+                    onChanged: (value) async {
+                      await ref
+                          .read(appDynamicColorEnabledProvider.notifier)
+                          .setEnabled(value);
+                    },
+                  ),
                 ),
                 const Divider(height: 1),
                 const _SeedColorTile(),
