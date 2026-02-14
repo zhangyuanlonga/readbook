@@ -1555,6 +1555,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
   Future<void> _bootstrap() async {
     try {
       _settings = await _preferencesService.loadSettings();
+      _settings = _settings.copyWith(pageTurnMode: ReaderPageTurnMode.tap);
 
       final progress = await _preferencesService.loadProgress(widget.bookId);
       _bootstrapProgress = progress;
@@ -2584,7 +2585,6 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
     if (draft.pageAnimationStyle == ReaderPageAnimationStyle.simulation) {
       draft = draft.copyWith(pageAnimationStyle: ReaderPageAnimationStyle.curl);
     }
-    var showMore = false;
 
     final result = await showModalBottomSheet<ReaderSettings>(
       context: context,
@@ -2973,120 +2973,29 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
                                     children: [
                                       OutlinedButton(
                                         onPressed: () async {
-                                          final value =
-                                              await _showSingleSliderSheet(
-                                                title: '间距设置',
-                                                min: 12,
-                                                max: 36,
-                                                divisions: 12,
-                                                initialValue:
-                                                    draft.horizontalPadding,
-                                                valueFormatter:
-                                                    (value) => value
-                                                        .toStringAsFixed(0),
-                                              );
-                                          if (value == null) {
+                                          final result =
+                                              await _showSpacingSheet(
+                                            initialLineHeight: draft.lineHeight,
+                                            initialHorizontalPadding: draft.horizontalPadding,
+                                            initialParagraphSpacing: draft.paragraphSpacing,
+                                            initialParagraphIndent: draft.paragraphIndent,
+                                          );
+                                          if (result == null) {
                                             return;
                                           }
                                           setModalState(() {
                                             draft = draft.copyWith(
-                                              horizontalPadding: value,
+                                              horizontalPadding: result.horizontalPadding,
+                                              lineHeight: result.lineHeight,
+                                              paragraphSpacing: result.paragraphSpacing,
+                                              paragraphIndent: result.paragraphIndent,
                                             );
                                           });
                                         },
                                         child: const Text('间距设置'),
                                       ),
-                                      OutlinedButton(
-                                        onPressed: () async {
-                                          final value =
-                                              await _showSingleSliderSheet(
-                                                title: '行距设置',
-                                                min: 1.2,
-                                                max: 2.2,
-                                                divisions: 10,
-                                                initialValue: draft.lineHeight,
-                                                valueFormatter:
-                                                    (value) => value
-                                                        .toStringAsFixed(1),
-                                              );
-                                          if (value == null) {
-                                            return;
-                                          }
-                                          setModalState(() {
-                                            draft = draft.copyWith(
-                                              lineHeight: value,
-                                            );
-                                          });
-                                        },
-                                        child: const Text('行距设置'),
-                                      ),
-                                      TextButton(
-                                        onPressed: () {
-                                          setModalState(() {
-                                            showMore = !showMore;
-                                          });
-                                        },
-                                        child: Text(showMore ? '收起' : '更多'),
-                                      ),
                                     ],
                                   ),
-                                  if (showMore) ...[
-                                    const SizedBox(height: 8),
-                                    _buildSliderSettingItem(
-                                      context: context,
-                                      label: '段落间距',
-                                      valueText: draft.paragraphSpacing
-                                          .toStringAsFixed(0),
-                                      min: 0,
-                                      max: 28,
-                                      divisions: 14,
-                                      value: draft.paragraphSpacing,
-                                      onChanged: (value) {
-                                        setModalState(() {
-                                          draft = draft.copyWith(
-                                            paragraphSpacing: value,
-                                          );
-                                        });
-                                      },
-                                    ),
-                                    _buildSliderSettingItem(
-                                      context: context,
-                                      label: '首行缩进',
-                                      valueText: draft.paragraphIndent
-                                          .toStringAsFixed(0),
-                                      min: 0,
-                                      max: 8,
-                                      divisions: 8,
-                                      value: draft.paragraphIndent,
-                                      onChanged: (value) {
-                                        setModalState(() {
-                                          draft = draft.copyWith(
-                                            paragraphIndent: value,
-                                          );
-                                        });
-                                      },
-                                    ),
-                                    SegmentedButton<ReaderPageTurnMode>(
-                                      segments: const [
-                                        ButtonSegment(
-                                          value: ReaderPageTurnMode.tap,
-                                          label: Text('点击翻页'),
-                                        ),
-                                        ButtonSegment(
-                                          value: ReaderPageTurnMode.scroll,
-                                          label: Text('滚动阅读'),
-                                        ),
-                                      ],
-                                      selected: {draft.pageTurnMode},
-                                      onSelectionChanged: (selection) {
-                                        setModalState(() {
-                                          draft = draft.copyWith(
-                                            pageTurnMode: selection.first,
-                                          );
-                                        });
-                                      },
-                                    ),
-                                  ],
                                 ],
                               ),
                             ),
@@ -3100,7 +3009,6 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
                             onPressed: () {
                               setModalState(() {
                                 draft = const ReaderSettings();
-                                showMore = false;
                               });
                             },
                             child: const Text('恢复默认'),
@@ -3141,10 +3049,13 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
             ? result.copyWith(pageAnimationStyle: ReaderPageAnimationStyle.curl)
             : result;
 
+    final appliedResult =
+        normalizedResult.copyWith(pageTurnMode: ReaderPageTurnMode.tap);
+
     setState(() {
-      _settings = normalizedResult;
+      _settings = appliedResult;
     });
-    await _preferencesService.saveSettings(normalizedResult);
+    await _preferencesService.saveSettings(appliedResult);
   }
 
   Widget _buildSettingLine({
@@ -3388,59 +3299,226 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
       ReaderFontWeightLevel.medium => '字体: 粗',
     };
   }
-
-  Future<double?> _showSingleSliderSheet({
-    required String title,
-    required double min,
-    required double max,
-    required int divisions,
-    required double initialValue,
-    required String Function(double value) valueFormatter,
+  Future<_ReaderSpacingSheetResult?> _showSpacingSheet({
+    required double initialLineHeight,
+    required double initialHorizontalPadding,
+    required double initialParagraphSpacing,
+    required double initialParagraphIndent,
   }) async {
-    var draft = initialValue;
-    return showModalBottomSheet<double>(
+    const lineOptions = <_ReaderSpacingOption>[
+      _ReaderSpacingOption('小', 1.3),
+      _ReaderSpacingOption('较小', 1.5),
+      _ReaderSpacingOption('适中', 1.7),
+      _ReaderSpacingOption('大', 2.0),
+    ];
+
+    const paddingOptions = <_ReaderSpacingOption>[
+      _ReaderSpacingOption('小', 12),
+      _ReaderSpacingOption('适中', 18),
+      _ReaderSpacingOption('较大', 24),
+      _ReaderSpacingOption('大', 30),
+    ];
+
+
+    const paragraphOptions = <_ReaderSpacingOption>[
+      _ReaderSpacingOption('小', 8),
+      _ReaderSpacingOption('较小', 10),
+      _ReaderSpacingOption('适中', 14),
+      _ReaderSpacingOption('大', 20),
+    ];
+
+    const indentOptions = <_ReaderSpacingOption>[
+      _ReaderSpacingOption('无', 0),
+      _ReaderSpacingOption('小', 2),
+      _ReaderSpacingOption('适中', 4),
+      _ReaderSpacingOption('大', 6),
+    ];
+
+    double lineHeight = initialLineHeight;
+    double horizontalPadding = initialHorizontalPadding;
+    double paragraphSpacing = initialParagraphSpacing;
+    double paragraphIndent = initialParagraphIndent;
+
+    String resolveLabel(List<_ReaderSpacingOption> options, double value) {
+      const epsilon = 0.06;
+      for (final option in options) {
+        if ((option.value - value).abs() < epsilon) {
+          return option.label;
+        }
+      }
+      return '自定义';
+    }
+
+    return showModalBottomSheet<_ReaderSpacingSheetResult>(
       context: context,
       showDragHandle: true,
+      useSafeArea: true,
       builder: (context) {
         return StatefulBuilder(
           builder: (context, setModalState) {
+            final currentLineLabel = resolveLabel(lineOptions, lineHeight);
+            final currentPaddingLabel =
+                resolveLabel(paddingOptions, horizontalPadding);
+
+            final currentParagraphLabel =
+                resolveLabel(paragraphOptions, paragraphSpacing);
+            final currentIndentLabel =
+                resolveLabel(indentOptions, paragraphIndent);
+
             return SafeArea(
               child: Padding(
                 padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
+                child: SizedBox(
+                  height: MediaQuery.sizeOf(context).height * 0.72,
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
                     Text(
-                      title,
+                      '间距设置',
                       style: Theme.of(context).textTheme.titleMedium?.copyWith(
                         fontWeight: FontWeight.w700,
                       ),
                     ),
-                    const SizedBox(height: 8),
+                    const SizedBox(height: 6),
                     Text(
-                      valueFormatter(draft),
-                      style: Theme.of(context).textTheme.bodyMedium,
-                    ),
-                    Slider(
-                      min: min,
-                      max: max,
-                      divisions: divisions,
-                      value: draft,
-                      onChanged: (value) {
-                        setModalState(() {
-                          draft = value;
-                        });
-                      },
-                    ),
-                    Align(
-                      alignment: Alignment.centerRight,
-                      child: FilledButton(
-                        onPressed: () => Navigator.of(context).pop(draft),
-                        child: const Text('应用'),
+                      '当前：行间距 $currentLineLabel / 页面边距 $currentPaddingLabel / 段落 $currentParagraphLabel / 缩进 $currentIndentLabel',
+                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                        color: Theme.of(context).colorScheme.onSurfaceVariant,
                       ),
                     ),
+                    const SizedBox(height: 8),
+                    Expanded(
+                      child: ListView(
+                        children: [
+                          const SizedBox(height: 16),
+                    Text(
+                      '行间距',
+                      style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    Wrap(
+                      spacing: 8,
+                      runSpacing: 8,
+                      children: [
+                        for (final option in lineOptions)
+                          ChoiceChip(
+                            label: Text(option.label),
+                            selected: (option.value - lineHeight).abs() < 0.06,
+                            onSelected: (_) {
+                              setModalState(() {
+                                lineHeight = option.value;
+                              });
+                            },
+                          ),
+                      ],
+                    ),
+                    const SizedBox(height: 16),
+                    Text(
+                      '页面边距',
+                      style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    Wrap(
+                      spacing: 8,
+                      runSpacing: 8,
+                      children: [
+                        for (final option in paddingOptions)
+                          ChoiceChip(
+                            label: Text(option.label),
+                            selected:
+                                (option.value - horizontalPadding).abs() < 0.6,
+                            onSelected: (_) {
+                              setModalState(() {
+                                horizontalPadding = option.value;
+                              });
+                            },
+                          ),
+                      ],
+                    ),
+
+                    const SizedBox(height: 16),
+                    Text(
+                      '段落间距',
+                      style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    Wrap(
+                      spacing: 8,
+                      runSpacing: 8,
+                      children: [
+                        for (final option in paragraphOptions)
+                          ChoiceChip(
+                            label: Text(option.label),
+                            selected:
+                                (option.value - paragraphSpacing).abs() < 0.6,
+                            onSelected: (_) {
+                              setModalState(() {
+                                paragraphSpacing = option.value;
+                              });
+                            },
+                          ),
+                      ],
+                    ),
+                    const SizedBox(height: 16),
+                    Text(
+                      '首行缩进',
+                      style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    Wrap(
+                      spacing: 8,
+                      runSpacing: 8,
+                      children: [
+                        for (final option in indentOptions)
+                          ChoiceChip(
+                            label: Text(option.label),
+                            selected:
+                                (option.value - paragraphIndent).abs() < 0.6,
+                            onSelected: (_) {
+                              setModalState(() {
+                                paragraphIndent = option.value;
+                              });
+                            },
+                          ),
+                      ],
+                    ),
+                          const SizedBox(height: 16),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    Row(
+                      children: [
+                        TextButton(
+                          onPressed: () => Navigator.of(context).pop(),
+                          child: const Text('取消'),
+                        ),
+                        const Spacer(),
+                        FilledButton(
+                          onPressed: () {
+                            Navigator.of(context).pop(
+                              _ReaderSpacingSheetResult(
+                                lineHeight: lineHeight,
+                                horizontalPadding: horizontalPadding,
+                                paragraphSpacing: paragraphSpacing,
+                                paragraphIndent: paragraphIndent,
+                              ),
+                            );
+                          },
+                          child: const Text('应用'),
+                        ),
+                      ],
+                    ),
                   ],
+                ),
                 ),
               ),
             );
@@ -3449,6 +3527,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
       },
     );
   }
+
 
   String _pageAnimationLabel(ReaderPageAnimationStyle style) {
     return switch (style) {
@@ -3461,52 +3540,6 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
       ReaderPageAnimationStyle.none => '无动画',
     };
   }
-
-  Widget _buildSliderSettingItem({
-    required BuildContext context,
-    required String label,
-    required String valueText,
-    required double min,
-    required double max,
-    int? divisions,
-    required double value,
-    required ValueChanged<double> onChanged,
-  }) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Row(
-          children: [
-            Expanded(
-              child: Text(label, style: Theme.of(context).textTheme.bodyMedium),
-            ),
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-              decoration: BoxDecoration(
-                color: Theme.of(context).colorScheme.primaryContainer,
-                borderRadius: BorderRadius.circular(999),
-              ),
-              child: Text(
-                valueText,
-                style: TextStyle(
-                  color: Theme.of(context).colorScheme.onPrimaryContainer,
-                  fontSize: 12,
-                ),
-              ),
-            ),
-          ],
-        ),
-        Slider(
-          min: min,
-          max: max,
-          divisions: divisions,
-          value: value,
-          onChanged: onChanged,
-        ),
-      ],
-    );
-  }
-
   _ReaderThemeColors _resolveThemeColors(
     ReaderThemeMode mode,
     ReaderSettings settings,
@@ -3567,6 +3600,30 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
     final shifted = (hsl.lightness + amount).clamp(0.0, 1.0);
     return hsl.withLightness(shifted).toColor();
   }
+}
+
+
+
+
+class _ReaderSpacingSheetResult {
+  const _ReaderSpacingSheetResult({
+    required this.lineHeight,
+    required this.horizontalPadding,
+    required this.paragraphSpacing,
+    required this.paragraphIndent,
+  });
+
+  final double lineHeight;
+  final double horizontalPadding;
+  final double paragraphSpacing;
+  final double paragraphIndent;
+}
+
+class _ReaderSpacingOption {
+  const _ReaderSpacingOption(this.label, this.value);
+
+  final String label;
+  final double value;
 }
 
 class _PagedSlice {
