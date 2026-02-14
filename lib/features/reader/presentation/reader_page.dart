@@ -2799,7 +2799,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
                             _buildSettingLine(
                               context: context,
                               label: '背景层级',
-                              labelWidth: 72,
+                              labelWidth: 92,
                               helpText: '背景层级用于在当前主题色板中切换阅读背景的明暗层级（surface / surfaceContainer*）。它不会改变文字颜色，只是让背景更亮/更灰/更厚重，暗色主题同样生效。',
                               child: SingleChildScrollView(
                                 scrollDirection: Axis.horizontal,
@@ -3169,6 +3169,8 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
                   Expanded(
                     child: Text(
                       label,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
                       style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                         color: Theme.of(context).colorScheme.onSurfaceVariant,
                       ),

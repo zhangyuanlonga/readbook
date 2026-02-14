@@ -184,6 +184,7 @@ class _SeedColorTile extends ConsumerWidget {
     _SeedColorOption('青绿', Color(0xFF2E7D32)),
     _SeedColorOption('海蓝', Color(0xFF1565C0)),
     _SeedColorOption('经典紫', Color(0xFF6750A4)),
+    _SeedColorOption('纯白', Color(0xFFFFFFFF)),
   ];
 
   @override
