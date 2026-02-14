@@ -152,7 +152,7 @@ class _ErrorCenterPageState extends State<ErrorCenterPage> {
   Color _levelColor(BuildContext context, AppLogLevel level) {
     return switch (level) {
       AppLogLevel.info => Theme.of(context).colorScheme.primary,
-      AppLogLevel.warn => const Color(0xFFB45309),
+      AppLogLevel.warn => Theme.of(context).colorScheme.tertiary,
       AppLogLevel.error => Theme.of(context).colorScheme.error,
     };
   }

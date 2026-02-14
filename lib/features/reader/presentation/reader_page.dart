@@ -127,7 +127,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
 
   @override
   Widget build(BuildContext context) {
-    final colors = _resolveThemeColors(_settings.themeMode);
+    final colors = _resolveThemeColors(_effectiveReaderThemeMode());
 
     return Scaffold(
       backgroundColor: colors.background,
@@ -377,6 +377,17 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
         );
       },
     );
+  }
+
+  ReaderThemeMode _effectiveReaderThemeMode() {
+    final appBrightness = Theme.of(context).brightness;
+    if (appBrightness == Brightness.dark) {
+      return ReaderThemeMode.dark;
+    }
+
+    return _settings.themeMode == ReaderThemeMode.sepia
+        ? ReaderThemeMode.sepia
+        : ReaderThemeMode.light;
   }
 
   ReaderPageAnimationStyle _effectivePageAnimationStyle() {
@@ -1360,12 +1371,10 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
   }
 
   Widget _buildBottomOverlay(_ReaderThemeColors colors) {
-    final dayNightLabel =
-        _settings.themeMode == ReaderThemeMode.dark ? '日间' : '夜间';
+    final isNight = Theme.of(context).brightness == Brightness.dark;
+    final dayNightLabel = isNight ? '日间' : '夜间';
     final dayNightIcon =
-        _settings.themeMode == ReaderThemeMode.dark
-            ? Icons.light_mode_outlined
-            : Icons.dark_mode_outlined;
+        isNight ? Icons.light_mode_outlined : Icons.dark_mode_outlined;
 
     return Positioned(
       left: 0,
@@ -2509,27 +2518,12 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
   }
 
   Future<void> _toggleDayNight() async {
-    final nextMode =
-        _settings.themeMode == ReaderThemeMode.dark
-            ? ReaderThemeMode.light
-            : ReaderThemeMode.dark;
-    final updated = _settings.copyWith(themeMode: nextMode);
+    final isNight = Theme.of(context).brightness == Brightness.dark;
+    final nextThemeMode = isNight ? ThemeMode.light : ThemeMode.dark;
 
-    setState(() {
-      _settings = updated;
-    });
+    await ref.read(appThemeModeProvider.notifier).setThemeMode(nextThemeMode);
 
-    unawaited(
-      ref
-          .read(appThemeModeProvider.notifier)
-          .setThemeMode(
-            nextMode == ReaderThemeMode.dark ? ThemeMode.dark : ThemeMode.light,
-          ),
-    );
-
-    await _preferencesService.saveSettings(updated);
-
-    _showMessage(nextMode == ReaderThemeMode.dark ? '已切换夜间模式。' : '已切换日间模式。');
+    _showMessage(isNight ? '已切换日间模式。' : '已切换夜间模式。');
   }
 
   int? _resolveCurrentIndex(List<Chapter> chapters) {
