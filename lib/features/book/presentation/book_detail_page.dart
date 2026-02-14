@@ -210,78 +210,94 @@ class _BookDetailPageState extends State<BookDetailPage> {
                           ],
                         ),
                         const SizedBox(height: 12),
-                        Row(
-                          children: [
-                            Expanded(
-                              child: FilledButton(
-                                onPressed:
-                                    result.chapters.isEmpty
-                                        ? null
-                                        : () =>
-                                            _openChapter(result.chapters.first),
-                                child: Row(
-                                  mainAxisSize: MainAxisSize.max,
-                                  children: [
-                                    const Icon(
-                                      Icons.chrome_reader_mode_outlined,
-                                      size: 18,
-                                    ),
-                                    const SizedBox(width: 8),
-                                    const Expanded(
-                                      child: Align(
-                                        alignment: Alignment.center,
-                                        child: Text(
-                                          '开始阅读',
-                                          maxLines: 1,
-                                          overflow: TextOverflow.ellipsis,
+                        LayoutBuilder(
+                          builder: (context, constraints) {
+                            final availableWidth = constraints.maxWidth;
+                            final perButtonWidth =
+                                (availableWidth - 10).clamp(0.0, 2000.0) / 2;
+                            final useShortLabels = perButtonWidth < 170;
+
+                            final readLabel = useShortLabels ? '阅读' : '开始阅读';
+                            final shelfLabel =
+                                useShortLabels
+                                    ? (_isInBookshelf ? '移出' : '加入')
+                                    : (_isInBookshelf ? '移出书架' : '加入书架');
+
+                            return Row(
+                              children: [
+                                Expanded(
+                                  child: FilledButton(
+                                    onPressed:
+                                        result.chapters.isEmpty
+                                            ? null
+                                            : () => _openChapter(
+                                              result.chapters.first,
+                                            ),
+                                    child: Row(
+                                      mainAxisSize: MainAxisSize.max,
+                                      children: [
+                                        const Icon(
+                                          Icons.chrome_reader_mode_outlined,
+                                          size: 18,
                                         ),
-                                      ),
+                                        const SizedBox(width: 8),
+                                        Expanded(
+                                          child: Align(
+                                            alignment: Alignment.center,
+                                            child: Text(
+                                              readLabel,
+                                              maxLines: 1,
+                                              overflow: TextOverflow.ellipsis,
+                                            ),
+                                          ),
+                                        ),
+                                      ],
                                     ),
-                                  ],
+                                  ),
                                 ),
-                              ),
-                            ),
-                            const SizedBox(width: 10),
-                            Expanded(
-                              child: OutlinedButton(
-                                onPressed:
-                                    _isShelfActionLoading
-                                        ? null
-                                        : _toggleBookshelf,
-                                child: Row(
-                                  mainAxisSize: MainAxisSize.max,
-                                  children: [
-                                    if (_isShelfActionLoading)
-                                      const SizedBox(
-                                        width: 16,
-                                        height: 16,
-                                        child: CircularProgressIndicator(
-                                          strokeWidth: 2,
+                                const SizedBox(width: 10),
+                                Expanded(
+                                  child: OutlinedButton(
+                                    onPressed:
+                                        _isShelfActionLoading
+                                            ? null
+                                            : _toggleBookshelf,
+                                    child: Row(
+                                      mainAxisSize: MainAxisSize.max,
+                                      children: [
+                                        if (_isShelfActionLoading)
+                                          const SizedBox(
+                                            width: 16,
+                                            height: 16,
+                                            child: CircularProgressIndicator(
+                                              strokeWidth: 2,
+                                            ),
+                                          )
+                                        else
+                                          Icon(
+                                            _isInBookshelf
+                                                ? Icons.bookmark_remove_outlined
+                                                : Icons.bookmark_add_outlined,
+                                            size: 18,
+                                          ),
+                                        const SizedBox(width: 8),
+                                        Expanded(
+                                          child: Align(
+                                            alignment: Alignment.center,
+                                            child: Text(
+                                              shelfLabel,
+                                              maxLines: 1,
+                                              overflow: TextOverflow.ellipsis,
+                                            ),
+                                          ),
                                         ),
-                                      )
-                                    else
-                                      Icon(
-                                        _isInBookshelf
-                                            ? Icons.bookmark_remove_outlined
-                                            : Icons.bookmark_add_outlined,
-                                        size: 18,
-                                      ),
-                                    const SizedBox(width: 8),
-                                    Expanded(
-                                      child: Align(
-                                        alignment: Alignment.center,
-                                        child: Text(
-                                          _isInBookshelf ? '移出书架' : '加入书架',
-                                          maxLines: 1,
-                                          overflow: TextOverflow.ellipsis,
-                                        ),
-                                      ),
+                                      ],
                                     ),
-                                  ],
+                                  ),
                                 ),
-                              ),
-                            ),
-                          ],
+                              ],
+                            );
+                          },
                         ),
                       ],
                     ),
