@@ -8,6 +8,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:page_curl_effect/page_curl_effect.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../../app/layout/app_spacing.dart';
+
 import '../../../core/errors/app_exception.dart';
 import '../../../core/errors/error_codes.dart';
 import '../../../domain/entities/bookshelf_book.dart';
@@ -97,8 +99,12 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
 
   static const double _kPinnedHeaderTopPadding = 6;
   static const double _kPinnedHeaderHeight = 40;
-  static const double _kPinnedHeaderTotalHeight =
-      _kPinnedHeaderTopPadding + _kPinnedHeaderHeight;
+
+  double _pinnedHeaderTotalHeight(BuildContext context) {
+    return MediaQuery.viewPaddingOf(context).top +
+        _kPinnedHeaderTopPadding +
+        _kPinnedHeaderHeight;
+  }
 
   @override
   void initState() {
@@ -137,31 +143,35 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
     return Scaffold(
       backgroundColor: colors.background,
       body: SafeArea(
-        child: Stack(
-          children: [
-            Positioned.fill(child: _buildBackgroundLayer(colors)),
-            Positioned.fill(child: _buildReaderContent(colors)),
-            if (_settings.brightness < 0.99)
-              Positioned.fill(
-                child: IgnorePointer(
-                  child: ColoredBox(
-                    color: Colors.black.withValues(
-                      alpha: (1 - _settings.brightness) * 0.6,
+        top: false,
+        child: ClipRect(
+          child: Stack(
+            clipBehavior: Clip.hardEdge,
+            children: [
+              Positioned.fill(child: _buildBackgroundLayer(colors)),
+              Positioned.fill(child: _buildReaderContent(colors)),
+              if (_settings.brightness < 0.99)
+                Positioned.fill(
+                  child: IgnorePointer(
+                    child: ColoredBox(
+                      color: Colors.black.withValues(
+                        alpha: (1 - _settings.brightness) * 0.6,
+                      ),
                     ),
                   ),
                 ),
-              ),
-            if (_showOverlayControls)
-              Positioned.fill(
-                child: GestureDetector(
-                  behavior: HitTestBehavior.opaque,
-                  onTap: _hideOverlayControls,
-                  child: const ColoredBox(color: Color(0x28000000)),
+              if (_showOverlayControls)
+                Positioned.fill(
+                  child: GestureDetector(
+                    behavior: HitTestBehavior.opaque,
+                    onTap: _hideOverlayControls,
+                    child: const ColoredBox(color: Color(0x28000000)),
+                  ),
                 ),
-              ),
-            _buildTopOverlay(colors),
-            _buildBottomOverlay(colors),
-          ],
+              _buildTopOverlay(colors),
+              _buildBottomOverlay(colors),
+            ],
+          ),
         ),
       ),
     );
@@ -265,7 +275,9 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
     return ColoredBox(
       color: colors.background,
       child: Padding(
-        padding: const EdgeInsets.only(top: _kPinnedHeaderTopPadding),
+        padding: EdgeInsets.only(
+          top: MediaQuery.viewPaddingOf(context).top + _kPinnedHeaderTopPadding,
+        ),
         child: SizedBox(
           height: _kPinnedHeaderHeight,
           child: Padding(
@@ -425,18 +437,12 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
           18,
         );
 
-        final maxWidth = (constraints.maxWidth - contentPadding.horizontal).clamp(
-          0.0,
-          2000.0,
-        );
-        final maxHeight =
-            (constraints.maxHeight -
-                    _kPinnedHeaderTotalHeight -
-                    contentPadding.vertical)
-                .clamp(
-          0.0,
-          4000.0,
-        );
+        final maxWidth = (constraints.maxWidth - contentPadding.horizontal)
+            .clamp(0.0, 2000.0);
+        final maxHeight = (constraints.maxHeight -
+                _pinnedHeaderTotalHeight(context) -
+                contentPadding.vertical)
+            .clamp(0.0, 4000.0);
 
         WidgetsBinding.instance.addPostFrameCallback((_) {
           _ensurePagination(maxWidth: maxWidth, maxHeight: maxHeight);
@@ -1333,91 +1339,94 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
       top: 0,
       left: 0,
       right: 0,
-      child: IgnorePointer(
-        ignoring: !_showOverlayControls,
-        child: AnimatedSlide(
-          duration: const Duration(milliseconds: 160),
-          curve: Curves.easeOutCubic,
-          offset: _showOverlayControls ? Offset.zero : const Offset(0, -1),
-          child: AnimatedOpacity(
+      child: SafeArea(
+        bottom: false,
+        child: IgnorePointer(
+          ignoring: !_showOverlayControls,
+          child: AnimatedSlide(
             duration: const Duration(milliseconds: 160),
-            opacity: _showOverlayControls ? 1 : 0,
-            child: DecoratedBox(
-              decoration: BoxDecoration(
-                color: colors.overlay.withValues(alpha: 0.96),
-                border: Border(
-                  bottom: BorderSide(
-                    color: colors.divider.withValues(alpha: 0.82),
+            curve: Curves.easeOutCubic,
+            offset: _showOverlayControls ? Offset.zero : const Offset(0, -1),
+            child: AnimatedOpacity(
+              duration: const Duration(milliseconds: 160),
+              opacity: _showOverlayControls ? 1 : 0,
+              child: DecoratedBox(
+                decoration: BoxDecoration(
+                  color: colors.overlay.withValues(alpha: 0.96),
+                  border: Border(
+                    bottom: BorderSide(
+                      color: colors.divider.withValues(alpha: 0.82),
+                    ),
                   ),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withValues(alpha: 0.08),
+                      blurRadius: 12,
+                      offset: const Offset(0, 4),
+                    ),
+                  ],
                 ),
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.black.withValues(alpha: 0.08),
-                    blurRadius: 12,
-                    offset: const Offset(0, 4),
-                  ),
-                ],
-              ),
-              child: SizedBox(
-                height: 56,
-                child: Padding(
-                  padding: const EdgeInsets.fromLTRB(8, 6, 8, 6),
-                  child: Row(
-                    children: [
-                      _buildTopActionButton(
-                        icon: Icons.arrow_back_ios_new,
-                        tooltip: '返回',
-                        onPressed: () => Navigator.of(context).maybePop(),
-                        colors: colors,
-                      ),
-                      const SizedBox(width: 8),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            Text(
-                              chapterTitle,
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              style: TextStyle(
-                                color: colors.text,
-                                fontWeight: FontWeight.w600,
-                              ),
-                            ),
-                            const SizedBox(height: 1),
-                            Text(
-                              _chapterProgressLabel(),
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              style: TextStyle(
-                                color: colors.meta,
-                                fontSize: 11,
-                              ),
-                            ),
-                          ],
+                child: SizedBox(
+                  height: 56,
+                  child: Padding(
+                    padding: const EdgeInsets.fromLTRB(8, 6, 8, 6),
+                    child: Row(
+                      children: [
+                        _buildTopActionButton(
+                          icon: Icons.arrow_back_ios_new,
+                          tooltip: '返回',
+                          onPressed: () => Navigator.of(context).maybePop(),
+                          colors: colors,
                         ),
-                      ),
-                      const SizedBox(width: 8),
-                      _buildTopActionButton(
-                        icon:
-                            _isInBookshelf
-                                ? Icons.bookmark_added
-                                : Icons.bookmark_add_outlined,
-                        tooltip: _isInBookshelf ? '移出书架' : '加入书架',
-                        onPressed:
-                            _isShelfActionLoading ? null : _toggleBookshelf,
-                        loading: _isShelfActionLoading,
-                        colors: colors,
-                      ),
-                      const SizedBox(width: 4),
-                      _buildTopActionButton(
-                        icon: Icons.info_outline,
-                        tooltip: '查看详情',
-                        onPressed: _openDetailPage,
-                        colors: colors,
-                      ),
-                    ],
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              Text(
+                                chapterTitle,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: TextStyle(
+                                  color: colors.text,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                              const SizedBox(height: 1),
+                              Text(
+                                _chapterProgressLabel(),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: TextStyle(
+                                  color: colors.meta,
+                                  fontSize: 11,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        _buildTopActionButton(
+                          icon:
+                              _isInBookshelf
+                                  ? Icons.bookmark_added
+                                  : Icons.bookmark_add_outlined,
+                          tooltip: _isInBookshelf ? '移出书架' : '加入书架',
+                          onPressed:
+                              _isShelfActionLoading ? null : _toggleBookshelf,
+                          loading: _isShelfActionLoading,
+                          colors: colors,
+                        ),
+                        const SizedBox(width: 4),
+                        _buildTopActionButton(
+                          icon: Icons.info_outline,
+                          tooltip: '查看详情',
+                          onPressed: _openDetailPage,
+                          colors: colors,
+                        ),
+                      ],
+                    ),
                   ),
                 ),
               ),
@@ -2245,208 +2254,216 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
             final searchEntries = _buildFullTextSearchEntries(keyword);
             final isSearching = keyword.isNotEmpty;
 
-            return FractionallySizedBox(
-              heightFactor: 0.86,
-              child: Column(
-                children: [
-                  Padding(
-                    padding: const EdgeInsets.fromLTRB(18, 6, 18, 8),
-                    child: Row(
-                      children: [
-                        Expanded(
-                          child: Text(
-                            '目录（${_chapters.length} 章）',
-                            style: textTheme.titleMedium?.copyWith(
-                              fontWeight: FontWeight.w700,
-                            ),
-                          ),
-                        ),
-                        if (currentIndex != null)
-                          FilledButton.tonalIcon(
-                            onPressed: () {
-                              final target =
-                                  ((currentIndex - 2).clamp(
-                                            0,
-                                            _chapters.length - 1,
-                                          ) *
-                                          itemExtent)
-                                      .toDouble();
-                              scrollController.animateTo(
-                                target,
-                                duration: const Duration(milliseconds: 180),
-                                curve: Curves.easeOutCubic,
-                              );
-                            },
-                            icon: const Icon(
-                              Icons.my_location_outlined,
-                              size: 18,
-                            ),
-                            label: Text('定位 ${currentIndex + 1}'),
-                          ),
-                      ],
-                    ),
-                  ),
-                  Padding(
-                    padding: const EdgeInsets.fromLTRB(16, 2, 16, 10),
-                    child: TextField(
-                      controller: searchController,
-                      onChanged: (_) => setModalState(() {}),
-                      decoration: InputDecoration(
-                        isDense: true,
-                        hintText: '搜索全文中的句子、章节、角色名',
-                        prefixIcon: const Icon(Icons.search, size: 20),
-                        border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(14),
-                        ),
-                      ),
-                    ),
-                  ),
-                  Divider(
-                    height: 1,
-                    color: colorScheme.outlineVariant.withValues(alpha: 0.7),
-                  ),
-                  if (isSearching && searchEntries.isEmpty)
-                    Expanded(
-                      child: Center(
-                        child: Text(
-                          '未找到匹配内容',
-                          style: textTheme.bodyMedium?.copyWith(
-                            color: colorScheme.onSurfaceVariant,
-                          ),
-                        ),
-                      ),
-                    )
-                  else if (isSearching)
-                    Expanded(
-                      child: ListView.separated(
-                        itemCount: searchEntries.length,
-                        separatorBuilder:
-                            (_, __) => Divider(
-                              height: 1,
-                              color: colorScheme.outlineVariant.withValues(
-                                alpha: 0.35,
-                              ),
-                            ),
-                        itemBuilder: (context, index) {
-                          final entry = searchEntries[index];
+            final keyboardInset = MediaQuery.viewInsetsOf(context).bottom;
 
-                          return ListTile(
-                            leading: Icon(
-                              entry.isContent
-                                  ? Icons.article_outlined
-                                  : Icons.list_alt_outlined,
-                              color: colorScheme.primary,
-                            ),
-                            title: Text(
-                              entry.title,
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              style: textTheme.bodyLarge?.copyWith(
-                                fontWeight: FontWeight.w600,
-                              ),
-                            ),
-                            subtitle: Text(
-                              entry.subtitle,
-                              maxLines: 2,
-                              overflow: TextOverflow.ellipsis,
-                              style: textTheme.bodySmall?.copyWith(
-                                color: colorScheme.onSurfaceVariant,
-                              ),
-                            ),
-                            trailing: Text(
-                              entry.isContent ? '正文' : '目录',
-                              style: textTheme.labelMedium?.copyWith(
-                                color: colorScheme.primary,
+            return AnimatedPadding(
+              duration: const Duration(milliseconds: 180),
+              curve: Curves.easeOutCubic,
+              padding: EdgeInsets.only(bottom: keyboardInset),
+              child: FractionallySizedBox(
+                heightFactor: 0.86,
+                child: Column(
+                  children: [
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(18, 6, 18, 8),
+                      child: Row(
+                        children: [
+                          Expanded(
+                            child: Text(
+                              '目录（${_chapters.length} 章）',
+                              style: textTheme.titleMedium?.copyWith(
                                 fontWeight: FontWeight.w700,
                               ),
                             ),
-                            onTap: () {
-                              selectedScrollRatio = entry.scrollRatio;
-                              Navigator.of(context).pop(entry.chapterIndex);
-                            },
-                          );
-                        },
-                      ),
-                    )
-                  else
-                    Expanded(
-                      child: ListView.builder(
-                        controller: scrollController,
-                        itemExtent: itemExtent,
-                        itemCount: _chapters.length,
-                        itemBuilder: (context, index) {
-                          final chapter = _chapters[index];
-                          final selected = index == currentIndex;
-                          final showDivider = index < _chapters.length - 1;
-
-                          return Material(
-                            color:
-                                selected
-                                    ? colorScheme.secondaryContainer.withValues(
-                                      alpha: 0.5,
-                                    )
-                                    : Colors.transparent,
-                            child: InkWell(
-                              onTap: () => Navigator.of(context).pop(index),
-                              child: Container(
-                                padding: const EdgeInsets.symmetric(
-                                  horizontal: 16,
-                                ),
-                                decoration: BoxDecoration(
-                                  border:
-                                      showDivider
-                                          ? Border(
-                                            bottom: BorderSide(
-                                              color: colorScheme.outlineVariant
-                                                  .withValues(alpha: 0.35),
-                                            ),
-                                          )
-                                          : null,
-                                ),
-                                child: Row(
-                                  children: [
-                                    Expanded(
-                                      child: Column(
-                                        mainAxisAlignment:
-                                            MainAxisAlignment.center,
-                                        crossAxisAlignment:
-                                            CrossAxisAlignment.start,
-                                        children: [
-                                          Text(
-                                            chapter.title,
-                                            maxLines: 1,
-                                            overflow: TextOverflow.ellipsis,
-                                            style: textTheme.bodyLarge
-                                                ?.copyWith(
-                                                  fontWeight:
-                                                      selected
-                                                          ? FontWeight.w700
-                                                          : FontWeight.w500,
-                                                  color:
-                                                      selected
-                                                          ? colorScheme.primary
-                                                          : colorScheme
-                                                              .onSurface,
-                                                ),
-                                          ),
-                                        ],
-                                      ),
-                                    ),
-                                    if (selected)
-                                      Icon(
-                                        Icons.play_circle_fill_rounded,
-                                        size: 20,
-                                        color: colorScheme.primary,
-                                      ),
-                                  ],
-                                ),
+                          ),
+                          if (currentIndex != null)
+                            FilledButton.tonalIcon(
+                              onPressed: () {
+                                final target =
+                                    ((currentIndex - 2).clamp(
+                                              0,
+                                              _chapters.length - 1,
+                                            ) *
+                                            itemExtent)
+                                        .toDouble();
+                                scrollController.animateTo(
+                                  target,
+                                  duration: const Duration(milliseconds: 180),
+                                  curve: Curves.easeOutCubic,
+                                );
+                              },
+                              icon: const Icon(
+                                Icons.my_location_outlined,
+                                size: 18,
                               ),
+                              label: Text('定位 ${currentIndex + 1}'),
                             ),
-                          );
-                        },
+                        ],
                       ),
                     ),
-                ],
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(16, 2, 16, 10),
+                      child: TextField(
+                        controller: searchController,
+                        onChanged: (_) => setModalState(() {}),
+                        decoration: InputDecoration(
+                          isDense: true,
+                          hintText: '搜索全文中的句子、章节、角色名',
+                          prefixIcon: const Icon(Icons.search, size: 20),
+                          border: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(14),
+                          ),
+                        ),
+                      ),
+                    ),
+                    Divider(
+                      height: 1,
+                      color: colorScheme.outlineVariant.withValues(alpha: 0.7),
+                    ),
+                    if (isSearching && searchEntries.isEmpty)
+                      Expanded(
+                        child: Center(
+                          child: Text(
+                            '未找到匹配内容',
+                            style: textTheme.bodyMedium?.copyWith(
+                              color: colorScheme.onSurfaceVariant,
+                            ),
+                          ),
+                        ),
+                      )
+                    else if (isSearching)
+                      Expanded(
+                        child: ListView.separated(
+                          itemCount: searchEntries.length,
+                          separatorBuilder:
+                              (_, __) => Divider(
+                                height: 1,
+                                color: colorScheme.outlineVariant.withValues(
+                                  alpha: 0.35,
+                                ),
+                              ),
+                          itemBuilder: (context, index) {
+                            final entry = searchEntries[index];
+
+                            return ListTile(
+                              leading: Icon(
+                                entry.isContent
+                                    ? Icons.article_outlined
+                                    : Icons.list_alt_outlined,
+                                color: colorScheme.primary,
+                              ),
+                              title: Text(
+                                entry.title,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: textTheme.bodyLarge?.copyWith(
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                              subtitle: Text(
+                                entry.subtitle,
+                                maxLines: 2,
+                                overflow: TextOverflow.ellipsis,
+                                style: textTheme.bodySmall?.copyWith(
+                                  color: colorScheme.onSurfaceVariant,
+                                ),
+                              ),
+                              trailing: Text(
+                                entry.isContent ? '正文' : '目录',
+                                style: textTheme.labelMedium?.copyWith(
+                                  color: colorScheme.primary,
+                                  fontWeight: FontWeight.w700,
+                                ),
+                              ),
+                              onTap: () {
+                                selectedScrollRatio = entry.scrollRatio;
+                                Navigator.of(context).pop(entry.chapterIndex);
+                              },
+                            );
+                          },
+                        ),
+                      )
+                    else
+                      Expanded(
+                        child: ListView.builder(
+                          controller: scrollController,
+                          itemExtent: itemExtent,
+                          itemCount: _chapters.length,
+                          itemBuilder: (context, index) {
+                            final chapter = _chapters[index];
+                            final selected = index == currentIndex;
+                            final showDivider = index < _chapters.length - 1;
+
+                            return Material(
+                              color:
+                                  selected
+                                      ? colorScheme.secondaryContainer
+                                          .withValues(alpha: 0.5)
+                                      : Colors.transparent,
+                              child: InkWell(
+                                onTap: () => Navigator.of(context).pop(index),
+                                child: Container(
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 16,
+                                  ),
+                                  decoration: BoxDecoration(
+                                    border:
+                                        showDivider
+                                            ? Border(
+                                              bottom: BorderSide(
+                                                color: colorScheme
+                                                    .outlineVariant
+                                                    .withValues(alpha: 0.35),
+                                              ),
+                                            )
+                                            : null,
+                                  ),
+                                  child: Row(
+                                    children: [
+                                      Expanded(
+                                        child: Column(
+                                          mainAxisAlignment:
+                                              MainAxisAlignment.center,
+                                          crossAxisAlignment:
+                                              CrossAxisAlignment.start,
+                                          children: [
+                                            Text(
+                                              chapter.title,
+                                              maxLines: 1,
+                                              overflow: TextOverflow.ellipsis,
+                                              style: textTheme.bodyLarge
+                                                  ?.copyWith(
+                                                    fontWeight:
+                                                        selected
+                                                            ? FontWeight.w700
+                                                            : FontWeight.w500,
+                                                    color:
+                                                        selected
+                                                            ? colorScheme
+                                                                .primary
+                                                            : colorScheme
+                                                                .onSurface,
+                                                  ),
+                                            ),
+                                          ],
+                                        ),
+                                      ),
+                                      if (selected)
+                                        Icon(
+                                          Icons.play_circle_fill_rounded,
+                                          size: 20,
+                                          color: colorScheme.primary,
+                                        ),
+                                    ],
+                                  ),
+                                ),
+                              ),
+                            );
+                          },
+                        ),
+                      ),
+                  ],
+                ),
               ),
             );
           },
@@ -2654,14 +2671,9 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
 
             return SafeArea(
               child: FractionallySizedBox(
-                heightFactor: 0.58,
+                heightFactor: 0.6,
                 child: Padding(
-                  padding: EdgeInsets.fromLTRB(
-                    16,
-                    8,
-                    16,
-                    16 + MediaQuery.viewInsetsOf(context).bottom,
-                  ),
+                  padding: AppSpacing.modalSheetPadding(context),
                   child: Column(
                     children: [
                       Align(
@@ -3066,7 +3078,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
                           ],
                         ),
                       ),
-                      const SizedBox(height: 10),
+                      const SizedBox(height: 8),
                       Row(
                         children: [
                           OutlinedButton(
@@ -3131,14 +3143,14 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
     String? helpText,
   }) {
     return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 8),
+      padding: const EdgeInsets.symmetric(vertical: 6),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           SizedBox(
             width: labelWidth,
             child: Padding(
-              padding: const EdgeInsets.only(top: 10),
+              padding: const EdgeInsets.only(top: 8),
               child: Row(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
@@ -3185,7 +3197,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
               ),
             ),
           ),
-          const SizedBox(width: 10),
+          const SizedBox(width: 8),
           Expanded(child: child),
         ],
       ),

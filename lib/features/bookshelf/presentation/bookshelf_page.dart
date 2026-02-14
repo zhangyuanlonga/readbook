@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../../app/layout/app_spacing.dart';
+
 import '../../../domain/entities/bookshelf_book.dart';
 import '../../../domain/entities/reading_progress.dart';
 import '../application/bookshelf_service.dart';
@@ -36,6 +38,8 @@ class _BookshelfPageState extends State<BookshelfPage> {
   @override
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
+    final horizontal = AppSpacing.pageHorizontal(context);
+    final bottomSafe = MediaQuery.viewPaddingOf(context).bottom;
 
     return Scaffold(
       appBar: AppBar(
@@ -73,7 +77,12 @@ class _BookshelfPageState extends State<BookshelfPage> {
         child: RefreshIndicator(
           onRefresh: _loadBookshelf,
           child: ListView(
-            padding: const EdgeInsets.all(16),
+            padding: EdgeInsets.fromLTRB(
+              horizontal,
+              16,
+              horizontal,
+              16 + bottomSafe,
+            ),
             children: [
               _buildOverviewCard(),
               const SizedBox(height: 10),
@@ -235,8 +244,8 @@ class _BookshelfPageState extends State<BookshelfPage> {
       shrinkWrap: true,
       physics: const NeverScrollableScrollPhysics(),
       itemCount: _books.length,
-      gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
-        maxCrossAxisExtent: 170,
+      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+        crossAxisCount: 2,
         crossAxisSpacing: 10,
         mainAxisSpacing: 10,
         childAspectRatio: 0.72,

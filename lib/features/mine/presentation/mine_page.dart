@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../app/layout/app_spacing.dart';
+
 import '../../../app/theme/app_theme_provider.dart';
 import '../../../app/theme/app_theme_seed_provider.dart';
 import '../../../app/theme/app_dynamic_color_provider.dart';
@@ -11,13 +13,20 @@ class MinePage extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final colorScheme = Theme.of(context).colorScheme;
+    final horizontal = AppSpacing.pageHorizontal(context);
+    final bottomSafe = MediaQuery.viewPaddingOf(context).bottom;
     final themeMode = ref.watch(appThemeModeProvider);
     final dynamicColorEnabled = ref.watch(appDynamicColorEnabledProvider);
 
     return Scaffold(
       appBar: AppBar(title: const Text('我的')),
       body: ListView(
-        padding: const EdgeInsets.all(16),
+        padding: EdgeInsets.fromLTRB(
+          horizontal,
+          16,
+          horizontal,
+          16 + bottomSafe,
+        ),
         children: [
           Card(
             child: Padding(

@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:html/parser.dart' as html_parser;
 
+import '../../../app/layout/app_spacing.dart';
+
 import '../../../core/errors/app_exception.dart';
 import '../../../core/errors/error_codes.dart';
 import '../../../domain/entities/bookshelf_book.dart';
@@ -47,6 +49,8 @@ class _BookDetailPageState extends State<BookDetailPage> {
   @override
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
+    final horizontal = AppSpacing.pageHorizontal(context);
+    final bottomSafe = MediaQuery.viewPaddingOf(context).bottom;
 
     return Scaffold(
       appBar: AppBar(
@@ -70,7 +74,12 @@ class _BookDetailPageState extends State<BookDetailPage> {
           ),
         ),
         child: ListView(
-          padding: const EdgeInsets.all(16),
+          padding: EdgeInsets.fromLTRB(
+            horizontal,
+            16,
+            horizontal,
+            16 + bottomSafe,
+          ),
           children: [
             if (_isMissingParams)
               Card(
@@ -201,41 +210,76 @@ class _BookDetailPageState extends State<BookDetailPage> {
                           ],
                         ),
                         const SizedBox(height: 12),
-                        Wrap(
-                          spacing: 8,
-                          runSpacing: 8,
+                        Row(
                           children: [
-                            FilledButton.icon(
-                              onPressed:
-                                  result.chapters.isEmpty
-                                      ? null
-                                      : () =>
-                                          _openChapter(result.chapters.first),
-                              icon: const Icon(
-                                Icons.chrome_reader_mode_outlined,
+                            Expanded(
+                              child: FilledButton(
+                                onPressed:
+                                    result.chapters.isEmpty
+                                        ? null
+                                        : () =>
+                                            _openChapter(result.chapters.first),
+                                child: Row(
+                                  mainAxisSize: MainAxisSize.max,
+                                  children: [
+                                    const Icon(
+                                      Icons.chrome_reader_mode_outlined,
+                                      size: 18,
+                                    ),
+                                    const SizedBox(width: 8),
+                                    const Expanded(
+                                      child: Align(
+                                        alignment: Alignment.center,
+                                        child: Text(
+                                          '开始阅读',
+                                          maxLines: 1,
+                                          overflow: TextOverflow.ellipsis,
+                                        ),
+                                      ),
+                                    ),
+                                  ],
+                                ),
                               ),
-                              label: const Text('开始阅读'),
                             ),
-                            OutlinedButton.icon(
-                              onPressed:
-                                  _isShelfActionLoading
-                                      ? null
-                                      : _toggleBookshelf,
-                              icon:
-                                  _isShelfActionLoading
-                                      ? const SizedBox(
+                            const SizedBox(width: 10),
+                            Expanded(
+                              child: OutlinedButton(
+                                onPressed:
+                                    _isShelfActionLoading
+                                        ? null
+                                        : _toggleBookshelf,
+                                child: Row(
+                                  mainAxisSize: MainAxisSize.max,
+                                  children: [
+                                    if (_isShelfActionLoading)
+                                      const SizedBox(
                                         width: 16,
                                         height: 16,
                                         child: CircularProgressIndicator(
                                           strokeWidth: 2,
                                         ),
                                       )
-                                      : Icon(
+                                    else
+                                      Icon(
                                         _isInBookshelf
                                             ? Icons.bookmark_remove_outlined
                                             : Icons.bookmark_add_outlined,
+                                        size: 18,
                                       ),
-                              label: Text(_isInBookshelf ? '移出书架' : '加入书架'),
+                                    const SizedBox(width: 8),
+                                    Expanded(
+                                      child: Align(
+                                        alignment: Alignment.center,
+                                        child: Text(
+                                          _isInBookshelf ? '移出书架' : '加入书架',
+                                          maxLines: 1,
+                                          overflow: TextOverflow.ellipsis,
+                                        ),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
                             ),
                           ],
                         ),

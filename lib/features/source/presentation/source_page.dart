@@ -2,6 +2,8 @@ import 'package:file_selector/file_selector.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
+import '../../../app/layout/app_layout.dart';
+import '../../../app/layout/app_spacing.dart';
 import '../../../core/errors/app_exception.dart';
 import '../../../core/errors/error_codes.dart';
 import '../../../core/errors/error_stage.dart';
@@ -49,6 +51,8 @@ class _SourcePageState extends State<SourcePage> {
   @override
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
+    final horizontal = AppSpacing.pageHorizontal(context);
+    final bottomSafe = MediaQuery.viewPaddingOf(context).bottom;
 
     return Scaffold(
       appBar: AppBar(
@@ -162,7 +166,12 @@ class _SourcePageState extends State<SourcePage> {
             final enabledCount = sources.where((item) => item.enabled).length;
 
             return ListView(
-              padding: const EdgeInsets.all(16),
+              padding: EdgeInsets.fromLTRB(
+                horizontal,
+                16,
+                horizontal,
+                16 + bottomSafe,
+              ),
               children: [
                 _buildOverviewCard(
                   totalCount: sources.length,
@@ -731,11 +740,15 @@ class _SourcePageState extends State<SourcePage> {
 
     return showDialog<bool>(
       context: context,
-      builder: (context) {
+      builder: (dialogContext) {
+        final maxWidth = AppLayout.dialogMaxWidth(dialogContext, maxWidth: 620);
+
         return AlertDialog(
+          insetPadding: AppSpacing.dialogInsetPadding(dialogContext),
+          scrollable: true,
           title: Text(title),
-          content: SizedBox(
-            width: 620,
+          content: ConstrainedBox(
+            constraints: BoxConstraints(maxWidth: maxWidth),
             child: SingleChildScrollView(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -749,7 +762,7 @@ class _SourcePageState extends State<SourcePage> {
                   const SizedBox(height: 10),
                   Text(
                     '失败明细（含条目和行号）',
-                    style: Theme.of(context).textTheme.titleSmall,
+                    style: Theme.of(dialogContext).textTheme.titleSmall,
                   ),
                   const SizedBox(height: 6),
                   ...issueLines.map(
@@ -768,13 +781,13 @@ class _SourcePageState extends State<SourcePage> {
           ),
           actions: [
             TextButton(
-              onPressed: () => Navigator.of(context).pop(false),
+              onPressed: () => Navigator.of(dialogContext).pop(false),
               child: const Text('取消'),
             ),
             FilledButton.tonal(
               onPressed:
                   report.validCount > 0
-                      ? () => Navigator.of(context).pop(true)
+                      ? () => Navigator.of(dialogContext).pop(true)
                       : null,
               child: const Text('仅导入可用书源'),
             ),
@@ -1019,11 +1032,14 @@ class _SourcePageState extends State<SourcePage> {
 
     return showDialog<void>(
       context: context,
-      builder: (context) {
+      builder: (dialogContext) {
+        final maxWidth = AppLayout.dialogMaxWidth(dialogContext);
+
         return AlertDialog(
+          insetPadding: AppSpacing.dialogInsetPadding(dialogContext),
           title: Text('连通性测试 - ${report.sourceName}'),
-          content: SizedBox(
-            width: 560,
+          content: ConstrainedBox(
+            constraints: BoxConstraints(maxWidth: maxWidth),
             child: SingleChildScrollView(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -1069,7 +1085,7 @@ class _SourcePageState extends State<SourcePage> {
           ),
           actions: [
             FilledButton(
-              onPressed: () => Navigator.of(context).pop(),
+              onPressed: () => Navigator.of(dialogContext).pop(),
               child: const Text('关闭'),
             ),
           ],
@@ -1133,32 +1149,45 @@ class _SourcePageState extends State<SourcePage> {
 
     final result = await showDialog<String>(
       context: context,
-      builder: (context) {
-        return AlertDialog(
-          title: const Text('粘贴 JSON 内容'),
-          content: SizedBox(
-            width: 560,
-            child: TextField(
-              controller: controller,
-              minLines: 10,
-              maxLines: 16,
-              autofocus: false,
-              decoration: const InputDecoration(
-                hintText: '{...} 或 [{...}]',
-                border: OutlineInputBorder(),
+      builder: (dialogContext) {
+        final maxWidth = AppLayout.dialogMaxWidth(dialogContext);
+        final keyboardInset = AppLayout.keyboardInset(dialogContext);
+
+        return AnimatedPadding(
+          duration: const Duration(milliseconds: 180),
+          curve: Curves.easeOutCubic,
+          padding: EdgeInsets.only(bottom: keyboardInset),
+          child: AlertDialog(
+            insetPadding: AppSpacing.dialogInsetPadding(dialogContext),
+            scrollable: true,
+            title: const Text('粘贴 JSON 内容'),
+            content: ConstrainedBox(
+              constraints: BoxConstraints(maxWidth: maxWidth),
+              child: TextField(
+                controller: controller,
+                minLines: 10,
+                maxLines: 16,
+                keyboardType: TextInputType.multiline,
+                textInputAction: TextInputAction.newline,
+                autofocus: false,
+                decoration: const InputDecoration(
+                  hintText: '{...} 或 [{...}]',
+                  border: OutlineInputBorder(),
+                ),
               ),
             ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.of(dialogContext).pop(),
+                child: const Text('取消'),
+              ),
+              FilledButton(
+                onPressed:
+                    () => Navigator.of(dialogContext).pop(controller.text),
+                child: const Text('导入'),
+              ),
+            ],
           ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.of(context).pop(),
-              child: const Text('取消'),
-            ),
-            FilledButton(
-              onPressed: () => Navigator.of(context).pop(controller.text),
-              child: const Text('导入'),
-            ),
-          ],
         );
       },
     );
@@ -1172,32 +1201,43 @@ class _SourcePageState extends State<SourcePage> {
 
     final result = await showDialog<String>(
       context: context,
-      builder: (context) {
-        return AlertDialog(
-          title: const Text('编辑备注'),
-          content: SizedBox(
-            width: 560,
-            child: TextField(
-              controller: controller,
-              minLines: 2,
-              maxLines: 4,
-              autofocus: true,
-              decoration: const InputDecoration(
-                hintText: '输入备注，留空可清空备注',
-                border: OutlineInputBorder(),
+      builder: (dialogContext) {
+        final maxWidth = AppLayout.dialogMaxWidth(dialogContext);
+        final keyboardInset = AppLayout.keyboardInset(dialogContext);
+
+        return AnimatedPadding(
+          duration: const Duration(milliseconds: 180),
+          curve: Curves.easeOutCubic,
+          padding: EdgeInsets.only(bottom: keyboardInset),
+          child: AlertDialog(
+            insetPadding: AppSpacing.dialogInsetPadding(dialogContext),
+            scrollable: true,
+            title: const Text('编辑备注'),
+            content: ConstrainedBox(
+              constraints: BoxConstraints(maxWidth: maxWidth),
+              child: TextField(
+                controller: controller,
+                minLines: 2,
+                maxLines: 4,
+                autofocus: true,
+                decoration: const InputDecoration(
+                  hintText: '输入备注，留空可清空备注',
+                  border: OutlineInputBorder(),
+                ),
               ),
             ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.of(dialogContext).pop(),
+                child: const Text('取消'),
+              ),
+              FilledButton(
+                onPressed:
+                    () => Navigator.of(dialogContext).pop(controller.text),
+                child: const Text('保存'),
+              ),
+            ],
           ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.of(context).pop(),
-              child: const Text('取消'),
-            ),
-            FilledButton(
-              onPressed: () => Navigator.of(context).pop(controller.text),
-              child: const Text('保存'),
-            ),
-          ],
         );
       },
     );
@@ -1213,17 +1253,18 @@ class _SourcePageState extends State<SourcePage> {
   }) {
     return showDialog<bool>(
       context: context,
-      builder: (context) {
+      builder: (dialogContext) {
         return AlertDialog(
+          insetPadding: AppSpacing.dialogInsetPadding(dialogContext),
           title: Text(title),
           content: Text(content),
           actions: [
             TextButton(
-              onPressed: () => Navigator.of(context).pop(false),
+              onPressed: () => Navigator.of(dialogContext).pop(false),
               child: const Text('取消'),
             ),
             FilledButton.tonal(
-              onPressed: () => Navigator.of(context).pop(true),
+              onPressed: () => Navigator.of(dialogContext).pop(true),
               child: Text(confirmText),
             ),
           ],
