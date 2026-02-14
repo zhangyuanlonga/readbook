@@ -2798,7 +2798,9 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
                             const Divider(height: 1),
                             _buildSettingLine(
                               context: context,
-                              label: '色调',
+                              label: '背景层级',
+                              labelWidth: 72,
+                              helpText: '背景层级用于在当前主题色板中切换阅读背景的明暗层级（surface / surfaceContainer*）。它不会改变文字颜色，只是让背景更亮/更灰/更厚重，暗色主题同样生效。',
                               child: SingleChildScrollView(
                                 scrollDirection: Axis.horizontal,
                                 child: Row(
@@ -3149,6 +3151,8 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
     required BuildContext context,
     required String label,
     required Widget child,
+    double labelWidth = 42,
+    String? helpText,
   }) {
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 8),
@@ -3156,14 +3160,48 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           SizedBox(
-            width: 42,
+            width: labelWidth,
             child: Padding(
               padding: const EdgeInsets.only(top: 10),
-              child: Text(
-                label,
-                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                  color: Theme.of(context).colorScheme.onSurfaceVariant,
-                ),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Expanded(
+                    child: Text(
+                      label,
+                      style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                        color: Theme.of(context).colorScheme.onSurfaceVariant,
+                      ),
+                    ),
+                  ),
+                  if (helpText != null)
+                    Padding(
+                      padding: const EdgeInsets.only(left: 4, top: 1),
+                      child: InkWell(
+                        borderRadius: BorderRadius.circular(999),
+                        onTap: () {
+                          showDialog<void>(
+                            context: context,
+                            builder: (context) => AlertDialog(
+                              title: Text(label),
+                              content: Text(helpText),
+                              actions: [
+                                TextButton(
+                                  onPressed: () => Navigator.of(context).pop(),
+                                  child: const Text('知道了'),
+                                ),
+                              ],
+                            ),
+                          );
+                        },
+                        child: Icon(
+                          Icons.help_outline_rounded,
+                          size: 16,
+                          color: Theme.of(context).colorScheme.onSurfaceVariant,
+                        ),
+                      ),
+                    ),
+                ],
               ),
             ),
           ),
