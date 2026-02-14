@@ -6,7 +6,15 @@ enum ReaderBackgroundStyle { plain, paper, warm }
 
 enum ReaderFontWeightLevel { light, regular, medium }
 
-enum ReaderPageAnimationStyle { simulation, cover, translate, vertical, none }
+enum ReaderPageAnimationStyle {
+  curl,
+  fade,
+  simulation,
+  cover,
+  translate,
+  vertical,
+  none,
+}
 
 class ReaderSettings {
   const ReaderSettings({
@@ -21,7 +29,7 @@ class ReaderSettings {
     this.backgroundStyle = ReaderBackgroundStyle.plain,
     this.pageTurnStepRatio = 0.88,
     this.fontWeightLevel = ReaderFontWeightLevel.regular,
-    this.pageAnimationStyle = ReaderPageAnimationStyle.simulation,
+    this.pageAnimationStyle = ReaderPageAnimationStyle.curl,
     this.backgroundImageBase64,
   });
 
@@ -119,10 +127,14 @@ class ReaderSettings {
     );
 
     final animationName = json['pageAnimationStyle']?.toString();
-    final pageAnimationStyle = ReaderPageAnimationStyle.values.firstWhere(
+    final parsedAnimationStyle = ReaderPageAnimationStyle.values.firstWhere(
       (item) => item.name == animationName,
-      orElse: () => ReaderPageAnimationStyle.simulation,
+      orElse: () => ReaderPageAnimationStyle.curl,
     );
+    final pageAnimationStyle =
+        parsedAnimationStyle == ReaderPageAnimationStyle.simulation
+            ? ReaderPageAnimationStyle.curl
+            : parsedAnimationStyle;
 
     final backgroundImageBase64 =
         json['backgroundImageBase64']?.toString().trim();

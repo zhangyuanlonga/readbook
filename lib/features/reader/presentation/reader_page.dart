@@ -4,6 +4,8 @@ import 'dart:typed_data';
 
 import 'package:file_selector/file_selector.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:page_curl_effect/page_curl_effect.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../core/errors/app_exception.dart';
@@ -11,13 +13,14 @@ import '../../../core/errors/error_codes.dart';
 import '../../../domain/entities/bookshelf_book.dart';
 import '../../../domain/entities/chapter.dart';
 import '../../../domain/entities/reader_settings.dart';
+import '../../../app/theme/app_theme_provider.dart';
 import '../../../domain/entities/reading_progress.dart';
 import '../../book/application/book_detail_service.dart';
 import '../../bookshelf/application/bookshelf_service.dart';
 import '../application/chapter_content_service.dart';
 import '../application/reader_preferences_service.dart';
 
-class ReaderPage extends StatefulWidget {
+class ReaderPage extends ConsumerStatefulWidget {
   const ReaderPage({
     super.key,
     required this.bookId,
@@ -38,20 +41,17 @@ class ReaderPage extends StatefulWidget {
   final int? chapterIndex;
 
   @override
-  State<ReaderPage> createState() => _ReaderPageState();
+  ConsumerState<ReaderPage> createState() => _ReaderPageState();
 }
 
-class _ReaderPageState extends State<ReaderPage>
-    with SingleTickerProviderStateMixin {
+class _ReaderPageState extends ConsumerState<ReaderPage>
+    with TickerProviderStateMixin {
   final BookDetailService _detailService = BookDetailService();
   final ChapterContentService _contentService = ChapterContentService();
   final ReaderPreferencesService _preferencesService =
       ReaderPreferencesService();
   final BookshelfService _bookshelfService = BookshelfService();
   final ScrollController _scrollController = ScrollController();
-  late final AnimationController _pageTurnFxController;
-
-  int _pageTurnDirection = 0;
 
   late String _chapterId;
   String? _chapterUrl;
@@ -79,7 +79,21 @@ class _ReaderPageState extends State<ReaderPage>
   Timer? _progressDebounceTimer;
   String? _cachedBackgroundImageKey;
   MemoryImage? _cachedBackgroundImage;
-  double _horizontalDragOffset = 0;
+  List<List<_PagedSlice>> _pagedPages = const [];
+  int _currentPageIndex = 0;
+  int _pageSwitchDirection = 1;
+  bool _isPaginatingPages = false;
+  String? _paginationSignature;
+  int _paginationTaskId = 0;
+  double? _pendingPageRestoreRatio;
+  PageCurlController? _pageCurlController;
+  Size? _pageCurlPaperSize;
+  bool _isCurlAutoTurning = false;
+  late final AnimationController _curlAutoTurnController;
+  double _curlAutoStartX = 0;
+  double _curlAutoEndX = 0;
+  double _curlAutoY = 0;
+  int _curlAutoDirection = 1;
 
   @override
   void initState() {
@@ -90,10 +104,12 @@ class _ReaderPageState extends State<ReaderPage>
     _sourceId = widget.sourceId?.trim();
     _detailUrl = widget.detailUrl?.trim();
     _currentIndex = widget.chapterIndex;
-    _pageTurnFxController = AnimationController(
+    _curlAutoTurnController = AnimationController(
       vsync: this,
-      duration: const Duration(milliseconds: 220),
+      duration: const Duration(milliseconds: 320),
     );
+    _curlAutoTurnController.addListener(_onCurlAutoTurnTick);
+    _curlAutoTurnController.addStatusListener(_onCurlAutoTurnStatus);
     _scrollController.addListener(_onScrollChanged);
 
     _bootstrap();
@@ -104,7 +120,8 @@ class _ReaderPageState extends State<ReaderPage>
     _progressDebounceTimer?.cancel();
     _scrollController.removeListener(_onScrollChanged);
     _scrollController.dispose();
-    _pageTurnFxController.dispose();
+    _pageCurlController?.dispose();
+    _curlAutoTurnController.dispose();
     super.dispose();
   }
 
@@ -137,7 +154,6 @@ class _ReaderPageState extends State<ReaderPage>
                   child: const ColoredBox(color: Color(0x28000000)),
                 ),
               ),
-            _buildPageTurnEffect(colors),
             _buildTopOverlay(colors),
             _buildBottomOverlay(colors),
           ],
@@ -315,7 +331,12 @@ class _ReaderPageState extends State<ReaderPage>
       );
     }
 
-    return _buildTapAwareBody(child: _buildReaderList(colors));
+    return _buildTapAwareBody(
+      child:
+          _settings.pageTurnMode == ReaderPageTurnMode.tap
+              ? _buildPagedReader(colors)
+              : _buildReaderList(colors),
+    );
   }
 
   Widget _buildReaderList(_ReaderThemeColors colors) {
@@ -356,6 +377,791 @@ class _ReaderPageState extends State<ReaderPage>
         );
       },
     );
+  }
+
+  ReaderPageAnimationStyle _effectivePageAnimationStyle() {
+    final style = _settings.pageAnimationStyle;
+    return style == ReaderPageAnimationStyle.simulation
+        ? ReaderPageAnimationStyle.curl
+        : style;
+  }
+
+  Widget _buildPagedReader(_ReaderThemeColors colors) {
+    final paragraphs =
+        _paragraphs.isEmpty ? <String>[_content.trim()] : _paragraphs;
+
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final padding = EdgeInsets.fromLTRB(
+          _settings.horizontalPadding,
+          18,
+          _settings.horizontalPadding,
+          18,
+        );
+
+        final maxWidth = (constraints.maxWidth - padding.horizontal).clamp(
+          0.0,
+          2000.0,
+        );
+        final maxHeight = (constraints.maxHeight - padding.vertical).clamp(
+          0.0,
+          4000.0,
+        );
+
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          _ensurePagination(maxWidth: maxWidth, maxHeight: maxHeight);
+        });
+
+        if (_isPaginatingPages || _pagedPages.isEmpty) {
+          return Padding(
+            padding: padding,
+            child: _buildReaderStateCard(
+              colors: colors,
+              title: "正在分页",
+              message:
+                  paragraphs.length <= 1
+                      ? "正在为你生成阅读页面..."
+                      : "正在生成 ${paragraphs.length} 段正文的分页...",
+              icon: const SizedBox(
+                width: 18,
+                height: 18,
+                child: CircularProgressIndicator(strokeWidth: 2),
+              ),
+            ),
+          );
+        }
+
+        final pageCount = _pagedPages.length;
+        final safeIndex = _currentPageIndex.clamp(0, pageCount - 1);
+        final pagedSize = constraints.biggest;
+        _pageCurlPaperSize = pagedSize;
+
+        final animationStyle = _effectivePageAnimationStyle();
+
+        if (animationStyle == ReaderPageAnimationStyle.curl) {
+          final controller = _ensurePageCurlController(
+            paperSize: pagedSize,
+            pageCount: pageCount,
+            initialIndex: safeIndex,
+          );
+
+          return Stack(
+            children: [
+              Positioned.fill(
+                child: PageCurlEffect(
+                  pageCurlController: controller,
+                  pageBuilder: (context, index) {
+                    return _buildCurlPageWidget(
+                      colors: colors,
+                      pageIndex: index,
+                      pageSize: pagedSize,
+                      padding: padding,
+                    );
+                  },
+                  onForwardComplete: () => _onCurlDragComplete(forward: true),
+                  onBackwardComplete: () => _onCurlDragComplete(forward: false),
+                ),
+              ),
+              Positioned(
+                right: 12,
+                bottom: 12,
+                child: _buildPageIndexBadge(
+                  colors: colors,
+                  index: safeIndex,
+                  total: pageCount,
+                ),
+              ),
+            ],
+          );
+        }
+
+        final pageChild = KeyedSubtree(
+          key: ValueKey<int>(safeIndex),
+          child: _buildPagedPageContainer(
+            colors: colors,
+            pageIndex: safeIndex,
+            pageSize: pagedSize,
+            padding: padding,
+          ),
+        );
+
+        if (animationStyle == ReaderPageAnimationStyle.none) {
+          return Stack(
+            children: [
+              Positioned.fill(child: pageChild),
+              Positioned(
+                right: 12,
+                bottom: 12,
+                child: _buildPageIndexBadge(
+                  colors: colors,
+                  index: safeIndex,
+                  total: pageCount,
+                ),
+              ),
+            ],
+          );
+        }
+
+        Widget transitionBuilder(Widget child, Animation<double> animation) {
+          final curved = CurvedAnimation(
+            parent: animation,
+            curve: Curves.easeOutCubic,
+            reverseCurve: Curves.easeInCubic,
+          );
+          final direction = _pageSwitchDirection.toDouble().clamp(-1.0, 1.0);
+
+          switch (animationStyle) {
+            case ReaderPageAnimationStyle.cover:
+              if (animation.status == AnimationStatus.reverse) {
+                return child;
+              }
+              return SlideTransition(
+                position: Tween<Offset>(
+                  begin: Offset(direction, 0),
+                  end: Offset.zero,
+                ).animate(curved),
+                child: child,
+              );
+            case ReaderPageAnimationStyle.translate:
+              final begin =
+                  animation.status == AnimationStatus.reverse
+                      ? Offset(-direction, 0)
+                      : Offset(direction, 0);
+              return SlideTransition(
+                position: Tween<Offset>(
+                  begin: begin,
+                  end: Offset.zero,
+                ).animate(curved),
+                child: child,
+              );
+            case ReaderPageAnimationStyle.vertical:
+              final begin =
+                  animation.status == AnimationStatus.reverse
+                      ? Offset(0, -direction)
+                      : Offset(0, direction);
+              return SlideTransition(
+                position: Tween<Offset>(
+                  begin: begin,
+                  end: Offset.zero,
+                ).animate(curved),
+                child: child,
+              );
+            case ReaderPageAnimationStyle.fade:
+              return FadeTransition(opacity: curved, child: child);
+            case ReaderPageAnimationStyle.simulation:
+            case ReaderPageAnimationStyle.curl:
+            case ReaderPageAnimationStyle.none:
+              return FadeTransition(opacity: curved, child: child);
+          }
+        }
+
+        return Stack(
+          children: [
+            Positioned.fill(
+              child: ClipRect(
+                child: AnimatedSwitcher(
+                  duration: const Duration(milliseconds: 220),
+                  switchInCurve: Curves.easeOutCubic,
+                  switchOutCurve: Curves.easeInCubic,
+                  layoutBuilder: (currentChild, previousChildren) {
+                    return Stack(
+                      fit: StackFit.expand,
+                      children: [
+                        ...previousChildren,
+                        if (currentChild != null) currentChild,
+                      ],
+                    );
+                  },
+                  transitionBuilder: transitionBuilder,
+                  child: pageChild,
+                ),
+              ),
+            ),
+            Positioned(
+              right: 12,
+              bottom: 12,
+              child: _buildPageIndexBadge(
+                colors: colors,
+                index: safeIndex,
+                total: pageCount,
+              ),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  Widget _buildPagedPageContainer({
+    required _ReaderThemeColors colors,
+    required int pageIndex,
+    required Size pageSize,
+    required EdgeInsets padding,
+  }) {
+    final pages = _pagedPages;
+    if (pageIndex < 0 || pageIndex >= pages.length) {
+      return const SizedBox.shrink();
+    }
+
+    return SizedBox(
+      width: pageSize.width,
+      height: pageSize.height,
+      child: ColoredBox(
+        color: colors.background,
+        child: Padding(
+          padding: padding,
+          child: _buildPagedPage(colors: colors, page: pages[pageIndex]),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildPagedPage({
+    required _ReaderThemeColors colors,
+    required List<_PagedSlice> page,
+  }) {
+    if (page.isEmpty) {
+      return const SizedBox.shrink();
+    }
+
+    return Align(
+      alignment: Alignment.topLeft,
+      child: SingleChildScrollView(
+        physics: const NeverScrollableScrollPhysics(),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            for (var index = 0; index < page.length; index++)
+              Padding(
+                padding: EdgeInsets.only(
+                  bottom:
+                      index == page.length - 1 ? 0 : _settings.paragraphSpacing,
+                ),
+                child: _buildPagedSliceContent(
+                  slice: page[index],
+                  colors: colors,
+                ),
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildPagedSliceContent({
+    required _PagedSlice slice,
+    required _ReaderThemeColors colors,
+  }) {
+    final paragraphs =
+        _paragraphs.isEmpty ? <String>[_content.trim()] : _paragraphs;
+    if (slice.paragraphIndex < 0 || slice.paragraphIndex >= paragraphs.length) {
+      return const SizedBox.shrink();
+    }
+
+    final paragraph = paragraphs[slice.paragraphIndex];
+    final rawText = paragraph.substring(slice.start, slice.end);
+    final displayText =
+        slice.start == 0 ? _applyParagraphIndent(rawText) : rawText;
+
+    return Text(displayText, style: _paragraphTextStyle(colors));
+  }
+
+  Widget _buildPageIndexBadge({
+    required _ReaderThemeColors colors,
+    required int index,
+    required int total,
+  }) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+      decoration: BoxDecoration(
+        color: colors.overlay.withValues(alpha: 0.72),
+        borderRadius: BorderRadius.circular(999),
+        border: Border.all(color: colors.divider.withValues(alpha: 0.7)),
+      ),
+      child: Text(
+        '${index + 1}/$total',
+        style: TextStyle(color: colors.meta, fontSize: 12),
+      ),
+    );
+  }
+
+  PageCurlController _ensurePageCurlController({
+    required Size paperSize,
+    required int pageCount,
+    required int initialIndex,
+  }) {
+    final safeIndex = initialIndex.clamp(0, pageCount - 1);
+    final existing = _pageCurlController;
+
+    final needsNewController =
+        existing == null ||
+        existing.paperSize != paperSize ||
+        existing.numberOfPage != pageCount;
+
+    if (needsNewController) {
+      existing?.dispose();
+      final controller = PageCurlController(
+        paperSize,
+        pageCurlIndex: safeIndex,
+        numberOfPage: pageCount,
+      );
+      _pageCurlController = controller;
+      _pageCurlPaperSize = paperSize;
+      return controller;
+    }
+
+    if (existing.pageCurlIndex != safeIndex) {
+      existing.pageCurlIndex = safeIndex;
+    }
+    _pageCurlPaperSize = paperSize;
+    return existing;
+  }
+
+  Widget _buildCurlPageWidget({
+    required _ReaderThemeColors colors,
+    required int pageIndex,
+    required Size pageSize,
+    required EdgeInsets padding,
+  }) {
+    final pages = _pagedPages;
+    if (pageIndex < 0 || pageIndex >= pages.length) {
+      return const SizedBox.shrink();
+    }
+
+    return SizedBox(
+      width: pageSize.width,
+      height: pageSize.height,
+      child: ColoredBox(
+        color: colors.background,
+        child: Padding(
+          padding: padding,
+          child: _buildPagedPage(colors: colors, page: pages[pageIndex]),
+        ),
+      ),
+    );
+  }
+
+  void _onCurlDragComplete({required bool forward}) {
+    if (!mounted) {
+      return;
+    }
+
+    final controller = _pageCurlController;
+    if (controller == null) {
+      return;
+    }
+
+    final nextIndex = controller.pageCurlIndex.clamp(0, _pagedPages.length - 1);
+
+    setState(() {
+      _currentPageIndex = nextIndex;
+    });
+    _scheduleProgressSave();
+  }
+
+  void _onCurlAutoTurnTick() {
+    if (!_isCurlAutoTurning) {
+      return;
+    }
+
+    final controller = _pageCurlController;
+    final size = _pageCurlPaperSize;
+    if (controller == null || size == null) {
+      return;
+    }
+    final t = Curves.easeOutCubic.transform(_curlAutoTurnController.value);
+    final x = _curlAutoStartX + (_curlAutoEndX - _curlAutoStartX) * t;
+
+    try {
+      controller.onAutoPanUpdate(Offset(x, _curlAutoY));
+    } catch (error, stackTrace) {
+      _abortCurlAutoTurn(
+        controller: controller,
+        error: error,
+        stackTrace: stackTrace,
+      );
+    }
+  }
+
+  void _onCurlAutoTurnStatus(AnimationStatus status) {
+    if (status != AnimationStatus.completed || !_isCurlAutoTurning) {
+      return;
+    }
+
+    final controller = _pageCurlController;
+    if (controller == null || !mounted) {
+      _isCurlAutoTurning = false;
+      return;
+    }
+
+    controller.reset();
+    if (_curlAutoDirection > 0) {
+      controller.onForwardComplete();
+    } else {
+      controller.onBackwardComplete();
+    }
+
+    final pageCount = _pagedPages.length;
+    final nextIndex = controller.pageCurlIndex.clamp(0, pageCount - 1);
+
+    setState(() {
+      _isCurlAutoTurning = false;
+      _currentPageIndex = nextIndex;
+    });
+    _scheduleProgressSave();
+  }
+
+  void _abortCurlAutoTurn({
+    required PageCurlController controller,
+    required Object error,
+    StackTrace? stackTrace,
+  }) {
+    if (!_isCurlAutoTurning) {
+      return;
+    }
+
+    debugPrint("Page curl auto turn failed: ");
+    if (stackTrace != null) {
+      debugPrint("");
+    }
+
+    _curlAutoTurnController.stop();
+    controller.reset();
+
+    final pages = _pagedPages;
+    final nextIndex = (_currentPageIndex + _curlAutoDirection).clamp(
+      0,
+      pages.isEmpty ? 0 : pages.length - 1,
+    );
+
+    if (pages.isNotEmpty) {
+      controller.pageCurlIndex = nextIndex;
+    }
+
+    if (!mounted) {
+      _isCurlAutoTurning = false;
+      _currentPageIndex = nextIndex;
+      return;
+    }
+
+    setState(() {
+      _isCurlAutoTurning = false;
+      _currentPageIndex = nextIndex;
+    });
+    _scheduleProgressSave();
+  }
+
+  Future<void> _autoTurnCurlPage(int direction) async {
+    if (_isCurlAutoTurning) {
+      return;
+    }
+
+    final pages = _pagedPages;
+    if (pages.isEmpty) {
+      return;
+    }
+
+    final size = _pageCurlPaperSize;
+    if (size == null) {
+      setState(() {
+        _currentPageIndex = (_currentPageIndex + direction).clamp(
+          0,
+          pages.length - 1,
+        );
+      });
+      _scheduleProgressSave();
+      return;
+    }
+
+    final currentIndex = _currentPageIndex.clamp(0, pages.length - 1);
+    if (direction < 0 && currentIndex <= 0) {
+      final index = _currentIndex;
+      if (index == null || index <= 0) {
+        _showMessage('已经是第一章。');
+        return;
+      }
+      await _jumpTo(index - 1, initialScrollRatio: 1);
+      return;
+    }
+
+    if (direction > 0 && currentIndex >= pages.length - 1) {
+      final index = _currentIndex;
+      if (index == null || index >= _chapters.length - 1) {
+        _showMessage('已经是最后一章。');
+        return;
+      }
+      await _jumpTo(index + 1, initialScrollRatio: 0);
+      return;
+    }
+
+    final controller = _ensurePageCurlController(
+      paperSize: size,
+      pageCount: pages.length,
+      initialIndex: currentIndex,
+    );
+
+    controller.reset();
+    controller.pageCurlIndex = currentIndex;
+
+    _curlAutoDirection = direction;
+
+    final safeEdgePadding = (size.width * 0.05).clamp(28.0, 60.0).toDouble();
+    _curlAutoY = (size.height * 0.5).clamp(24.0, size.height - 24.0).toDouble();
+    _curlAutoStartX =
+        direction > 0 ? size.width - safeEdgePadding : safeEdgePadding;
+    _curlAutoEndX = direction > 0 ? -size.width : size.width;
+
+    setState(() {
+      _isCurlAutoTurning = true;
+    });
+
+    _curlAutoTurnController.forward(from: 0);
+  }
+
+  void _ensurePagination({
+    required double maxWidth,
+    required double maxHeight,
+  }) {
+    if (!mounted) {
+      return;
+    }
+
+    if (_settings.pageTurnMode != ReaderPageTurnMode.tap) {
+      return;
+    }
+
+    final normalizedWidth = maxWidth.clamp(0.0, 2000.0);
+    final normalizedHeight = maxHeight.clamp(0.0, 4000.0);
+
+    if (normalizedWidth < 20 || normalizedHeight < 40) {
+      return;
+    }
+
+    final signature = _buildPaginationSignature(
+      maxWidth: normalizedWidth,
+      maxHeight: normalizedHeight,
+    );
+
+    if (signature == _paginationSignature &&
+        _pagedPages.isNotEmpty &&
+        !_isPaginatingPages) {
+      return;
+    }
+
+    if (signature == _paginationSignature && _isPaginatingPages) {
+      return;
+    }
+
+    _paginationSignature = signature;
+    final taskId = ++_paginationTaskId;
+
+    setState(() {
+      _isPaginatingPages = true;
+      _pagedPages = const [];
+      _currentPageIndex = 0;
+    });
+
+    unawaited(
+      _paginateCurrentChapter(
+        taskId: taskId,
+        maxWidth: normalizedWidth,
+        maxHeight: normalizedHeight,
+      ),
+    );
+  }
+
+  String _buildPaginationSignature({
+    required double maxWidth,
+    required double maxHeight,
+  }) {
+    return [
+      _chapterId,
+      maxWidth.toStringAsFixed(1),
+      maxHeight.toStringAsFixed(1),
+      _settings.fontSize.toStringAsFixed(1),
+      _settings.lineHeight.toStringAsFixed(2),
+      _settings.horizontalPadding.toStringAsFixed(1),
+      _settings.paragraphSpacing.toStringAsFixed(1),
+      _settings.paragraphIndent.toStringAsFixed(1),
+      _settings.fontWeightLevel.name,
+    ].join('|');
+  }
+
+  Future<void> _paginateCurrentChapter({
+    required int taskId,
+    required double maxWidth,
+    required double maxHeight,
+  }) async {
+    final paragraphs =
+        _paragraphs.isEmpty ? <String>[_content.trim()] : _paragraphs;
+
+    if (paragraphs.isEmpty || paragraphs.first.trim().isEmpty) {
+      if (!mounted || taskId != _paginationTaskId) {
+        return;
+      }
+      setState(() {
+        _isPaginatingPages = false;
+        _pagedPages = const [];
+      });
+      return;
+    }
+
+    final style = _paragraphTextStyle(
+      _resolveThemeColors(_settings.themeMode),
+    ).copyWith(color: Colors.black);
+    final textScaler = MediaQuery.textScalerOf(context);
+
+    final painter = TextPainter(
+      textDirection: TextDirection.ltr,
+      textAlign: TextAlign.start,
+      textScaler: textScaler,
+    );
+
+    double measureHeight(String text) {
+      painter.text = TextSpan(text: text, style: style);
+      painter.layout(maxWidth: maxWidth);
+      return painter.height;
+    }
+
+    int resolveFitLength(String paragraph, int start, double availableHeight) {
+      if (availableHeight <= 0) {
+        return 0;
+      }
+
+      final prefix = start == 0 ? ' ' * _settings.paragraphIndent.round() : '';
+      final remaining = paragraph.substring(start);
+      final displayText = prefix + remaining;
+
+      painter.text = TextSpan(text: displayText, style: style);
+      painter.layout(maxWidth: maxWidth);
+
+      if (painter.height <= availableHeight) {
+        return remaining.length;
+      }
+
+      final offset =
+          painter
+              .getPositionForOffset(
+                Offset(
+                  (maxWidth - 1).clamp(0.0, maxWidth),
+                  (availableHeight - 1).clamp(0.0, availableHeight),
+                ),
+              )
+              .offset;
+      final fit = (offset - prefix.length).clamp(0, remaining.length);
+      return fit;
+    }
+
+    final pages = <List<_PagedSlice>>[];
+    var currentPage = <_PagedSlice>[];
+    var remainingHeight = maxHeight;
+
+    for (
+      var paragraphIndex = 0;
+      paragraphIndex < paragraphs.length;
+      paragraphIndex++
+    ) {
+      if (!mounted || taskId != _paginationTaskId) {
+        return;
+      }
+
+      final paragraph = paragraphs[paragraphIndex];
+      if (paragraph.trim().isEmpty) {
+        continue;
+      }
+
+      var offset = 0;
+      while (offset < paragraph.length) {
+        if (!mounted || taskId != _paginationTaskId) {
+          return;
+        }
+
+        if (currentPage.isNotEmpty) {
+          if (remainingHeight <= _settings.paragraphSpacing) {
+            pages.add(currentPage);
+            currentPage = <_PagedSlice>[];
+            remainingHeight = maxHeight;
+            continue;
+          }
+          remainingHeight -= _settings.paragraphSpacing;
+        }
+
+        final fitLen = resolveFitLength(paragraph, offset, remainingHeight);
+        if (fitLen <= 0) {
+          if (currentPage.isNotEmpty) {
+            pages.add(currentPage);
+            currentPage = <_PagedSlice>[];
+            remainingHeight = maxHeight;
+            continue;
+          }
+
+          final forced = (paragraph.length - offset).clamp(1, 1);
+          final end = offset + forced;
+          final text = paragraph.substring(offset, end);
+          remainingHeight -= measureHeight(
+            offset == 0 ? _applyParagraphIndent(text) : text,
+          );
+          currentPage.add(
+            _PagedSlice(
+              paragraphIndex: paragraphIndex,
+              start: offset,
+              end: end,
+            ),
+          );
+          offset = end;
+          pages.add(currentPage);
+          currentPage = <_PagedSlice>[];
+          remainingHeight = maxHeight;
+          continue;
+        }
+
+        final end = (offset + fitLen).clamp(0, paragraph.length);
+        final segment = paragraph.substring(offset, end);
+        remainingHeight -= measureHeight(
+          offset == 0 ? _applyParagraphIndent(segment) : segment,
+        );
+        currentPage.add(
+          _PagedSlice(paragraphIndex: paragraphIndex, start: offset, end: end),
+        );
+
+        offset = end;
+
+        if (offset < paragraph.length) {
+          pages.add(currentPage);
+          currentPage = <_PagedSlice>[];
+          remainingHeight = maxHeight;
+        }
+      }
+
+      if (paragraphIndex % 8 == 0) {
+        await Future<void>.delayed(Duration.zero);
+      }
+    }
+
+    if (currentPage.isNotEmpty) {
+      pages.add(currentPage);
+    }
+
+    if (!mounted || taskId != _paginationTaskId) {
+      return;
+    }
+
+    var targetIndex = 0;
+    final pendingRatio = _pendingPageRestoreRatio;
+    if (pendingRatio != null && pages.isNotEmpty) {
+      targetIndex = (pendingRatio.clamp(0.0, 1.0) * (pages.length - 1))
+          .round()
+          .clamp(0, pages.length - 1);
+    }
+
+    setState(() {
+      _isPaginatingPages = false;
+      _pagedPages = pages;
+      _pendingPageRestoreRatio = null;
+      _currentPageIndex = targetIndex;
+    });
+
+    _scheduleProgressSave();
   }
 
   Widget _buildReaderStateCard({
@@ -404,25 +1210,6 @@ class _ReaderPageState extends State<ReaderPage>
           onTapUp:
               (details) =>
                   _onReaderTap(details.localPosition, constraints.biggest),
-          onHorizontalDragStart:
-              _settings.pageTurnMode == ReaderPageTurnMode.tap
-                  ? (_) => _horizontalDragOffset = 0
-                  : null,
-          onHorizontalDragUpdate:
-              _settings.pageTurnMode == ReaderPageTurnMode.tap
-                  ? (details) {
-                    _horizontalDragOffset += details.primaryDelta ?? 0;
-                  }
-                  : null,
-          onHorizontalDragCancel:
-              _settings.pageTurnMode == ReaderPageTurnMode.tap
-                  ? () => _horizontalDragOffset = 0
-                  : null,
-          onHorizontalDragEnd:
-              _settings.pageTurnMode == ReaderPageTurnMode.tap
-                  ? (details) =>
-                      _onHorizontalDragEnd(details, constraints.biggest.height)
-                  : null,
           child: child,
         );
       },
@@ -467,151 +1254,6 @@ class _ReaderPageState extends State<ReaderPage>
         .map((paragraph) => paragraph.trim())
         .where((paragraph) => paragraph.isNotEmpty)
         .toList(growable: false);
-  }
-
-  Widget _buildPageTurnEffect(_ReaderThemeColors colors) {
-    return Positioned.fill(
-      child: IgnorePointer(
-        child: AnimatedBuilder(
-          animation: _pageTurnFxController,
-          builder: (context, child) {
-            if (_pageTurnDirection == 0 ||
-                _settings.pageAnimationStyle == ReaderPageAnimationStyle.none) {
-              return const SizedBox.shrink();
-            }
-
-            final progress = Curves.easeOut.transform(
-              _pageTurnFxController.value,
-            );
-            final style = _settings.pageAnimationStyle;
-
-            if (style == ReaderPageAnimationStyle.vertical) {
-              final heightFactor = (progress * 0.34).clamp(0.0, 0.34);
-              final gradient =
-                  _pageTurnDirection > 0
-                      ? const LinearGradient(
-                        begin: Alignment.bottomCenter,
-                        end: Alignment.topCenter,
-                        colors: [Color(0x24000000), Color(0x00000000)],
-                      )
-                      : const LinearGradient(
-                        begin: Alignment.topCenter,
-                        end: Alignment.bottomCenter,
-                        colors: [Color(0x24000000), Color(0x00000000)],
-                      );
-              final alignment =
-                  _pageTurnDirection > 0
-                      ? Alignment.bottomCenter
-                      : Alignment.topCenter;
-
-              return Align(
-                alignment: alignment,
-                child: FractionallySizedBox(
-                  widthFactor: 1,
-                  heightFactor: heightFactor,
-                  child: DecoratedBox(
-                    decoration: BoxDecoration(
-                      gradient: gradient,
-                      border: Border(
-                        top:
-                            _pageTurnDirection < 0
-                                ? BorderSide(
-                                  color: colors.divider.withValues(alpha: 0.35),
-                                )
-                                : BorderSide.none,
-                        bottom:
-                            _pageTurnDirection > 0
-                                ? BorderSide(
-                                  color: colors.divider.withValues(alpha: 0.35),
-                                )
-                                : BorderSide.none,
-                      ),
-                    ),
-                  ),
-                ),
-              );
-            }
-
-            final config = switch (style) {
-              ReaderPageAnimationStyle.simulation => (0.34, 0x1A, true),
-              ReaderPageAnimationStyle.cover => (0.58, 0x32, false),
-              ReaderPageAnimationStyle.translate => (0.26, 0x16, true),
-              ReaderPageAnimationStyle.vertical ||
-              ReaderPageAnimationStyle.none => (0.0, 0x00, false),
-            };
-
-            final widthFactor = (progress * config.$1).clamp(0.0, config.$1);
-            final color = Color(config.$2 << 24);
-            final gradient =
-                _pageTurnDirection > 0
-                    ? LinearGradient(
-                      begin: Alignment.centerRight,
-                      end: Alignment.centerLeft,
-                      colors: [color, const Color(0x00000000)],
-                    )
-                    : LinearGradient(
-                      begin: Alignment.centerLeft,
-                      end: Alignment.centerRight,
-                      colors: [color, const Color(0x00000000)],
-                    );
-
-            final align =
-                _pageTurnDirection > 0
-                    ? Alignment.centerRight
-                    : Alignment.centerLeft;
-
-            return Align(
-              alignment: align,
-              child: FractionallySizedBox(
-                widthFactor: widthFactor,
-                heightFactor: 1,
-                child: DecoratedBox(
-                  decoration: BoxDecoration(
-                    gradient: gradient,
-                    border:
-                        config.$3
-                            ? Border(
-                              left:
-                                  _pageTurnDirection > 0
-                                      ? BorderSide(
-                                        color: colors.divider.withValues(
-                                          alpha: 0.35,
-                                        ),
-                                      )
-                                      : BorderSide.none,
-                              right:
-                                  _pageTurnDirection < 0
-                                      ? BorderSide(
-                                        color: colors.divider.withValues(
-                                          alpha: 0.35,
-                                        ),
-                                      )
-                                      : BorderSide.none,
-                            )
-                            : null,
-                  ),
-                ),
-              ),
-            );
-          },
-        ),
-      ),
-    );
-  }
-
-  Future<void> _playPageTurnEffect(int direction) async {
-    if (_settings.pageAnimationStyle == ReaderPageAnimationStyle.none) {
-      return;
-    }
-
-    _pageTurnDirection = direction;
-    await _pageTurnFxController.forward(from: 0);
-    if (!mounted) {
-      return;
-    }
-    setState(() {
-      _pageTurnDirection = 0;
-    });
   }
 
   Widget _buildTopOverlay(_ReaderThemeColors colors) {
@@ -987,6 +1629,10 @@ class _ReaderPageState extends State<ReaderPage>
   void _setContent(String content) {
     _content = content;
     _paragraphs = _splitParagraphs(content);
+    _pagedPages = const [];
+    _currentPageIndex = 0;
+    _paginationSignature = null;
+    _isPaginatingPages = false;
   }
 
   double? _consumeBootstrapScrollRatio() {
@@ -1009,12 +1655,34 @@ class _ReaderPageState extends State<ReaderPage>
   }
 
   void _restoreScrollPosition(double ratio) {
+    final normalized = ratio.clamp(0.0, 1.0);
+
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!mounted || !_scrollController.hasClients) {
+      if (!mounted) {
         return;
       }
 
-      final normalized = ratio.clamp(0.0, 1.0);
+      if (_settings.pageTurnMode == ReaderPageTurnMode.tap) {
+        final pages = _pagedPages;
+        if (pages.isEmpty) {
+          _pendingPageRestoreRatio = normalized;
+          return;
+        }
+
+        final targetIndex = (normalized * (pages.length - 1)).round().clamp(
+          0,
+          pages.length - 1,
+        );
+        setState(() {
+          _currentPageIndex = targetIndex;
+        });
+        return;
+      }
+
+      if (!_scrollController.hasClients) {
+        return;
+      }
+
       final maxExtent = _scrollController.position.maxScrollExtent;
       if (maxExtent <= 0) {
         _scrollController.jumpTo(0);
@@ -1026,6 +1694,9 @@ class _ReaderPageState extends State<ReaderPage>
   }
 
   void _onScrollChanged() {
+    if (_settings.pageTurnMode == ReaderPageTurnMode.tap) {
+      return;
+    }
     if (_isBootstrapping || _isLoadingContent || _errorText != null) {
       return;
     }
@@ -1044,6 +1715,14 @@ class _ReaderPageState extends State<ReaderPage>
   }
 
   double _currentScrollRatio() {
+    if (_settings.pageTurnMode == ReaderPageTurnMode.tap) {
+      final pages = _pagedPages;
+      if (pages.length <= 1) {
+        return 0;
+      }
+      return (_currentPageIndex / (pages.length - 1)).clamp(0.0, 1.0);
+    }
+
     if (!_scrollController.hasClients) {
       return 0;
     }
@@ -1105,11 +1784,13 @@ class _ReaderPageState extends State<ReaderPage>
         return false;
       }
 
+      final targetRatio = initialScrollRatio?.clamp(0.0, 1.0) ?? 0.0;
+
       setState(() {
         _setContent(contentResult.content);
+        _pendingPageRestoreRatio = targetRatio;
       });
 
-      final targetRatio = initialScrollRatio?.clamp(0.0, 1.0) ?? 0.0;
       _restoreScrollPosition(targetRatio);
 
       await _saveProgress();
@@ -1298,136 +1979,80 @@ class _ReaderPageState extends State<ReaderPage>
   }
 
   Future<void> _goToPreviousPage(double viewportHeight) async {
-    if (!_scrollController.hasClients || viewportHeight <= 0) {
-      _goToPreviousChapter();
+    if (_settings.pageTurnMode != ReaderPageTurnMode.tap) {
       return;
     }
 
-    final position = _scrollController.position;
-    if (position.pixels <= 24) {
-      _goToPreviousChapter();
+    final animationStyle = _effectivePageAnimationStyle();
+    if (animationStyle == ReaderPageAnimationStyle.curl) {
+      await _autoTurnCurlPage(-1);
       return;
     }
 
-    final pageDelta = _resolvePageTurnDelta(viewportHeight);
-    final target =
-        (position.pixels - pageDelta)
-            .clamp(0, position.maxScrollExtent)
-            .toDouble();
+    if (_isPaginatingPages) {
+      return;
+    }
 
-    await _performPageTurnTo(target: target, direction: -1);
+    final pages = _pagedPages;
+    if (pages.isEmpty) {
+      return;
+    }
+
+    if (_currentPageIndex <= 0) {
+      final index = _currentIndex;
+      if (index == null || index <= 0) {
+        _showMessage('已经是第一章。');
+        return;
+      }
+      await _jumpTo(index - 1, initialScrollRatio: 1);
+      return;
+    }
+
+    setState(() {
+      _pageSwitchDirection = -1;
+      _currentPageIndex -= 1;
+    });
+    _scheduleProgressSave();
   }
 
   Future<void> _goToNextPage(double viewportHeight) async {
-    if (!_scrollController.hasClients || viewportHeight <= 0) {
-      _goToNextChapter();
+    if (_settings.pageTurnMode != ReaderPageTurnMode.tap) {
       return;
     }
 
-    final position = _scrollController.position;
-    if (position.maxScrollExtent - position.pixels <= 24) {
-      _goToNextChapter();
+    final animationStyle = _effectivePageAnimationStyle();
+    if (animationStyle == ReaderPageAnimationStyle.curl) {
+      await _autoTurnCurlPage(1);
       return;
     }
 
-    final pageDelta = _resolvePageTurnDelta(viewportHeight);
-    final target =
-        (position.pixels + pageDelta)
-            .clamp(0, position.maxScrollExtent)
-            .toDouble();
-
-    await _performPageTurnTo(target: target, direction: 1);
-  }
-
-  double _resolvePageTurnDelta(double viewportHeight) {
-    final baseStep = viewportHeight * _settings.pageTurnStepRatio;
-    final estimatedLineHeight = _settings.fontSize * _settings.lineHeight;
-    final overlap = (estimatedLineHeight * 2.2 + _settings.paragraphSpacing)
-        .clamp(20.0, viewportHeight * 0.22);
-
-    final minStep = (baseStep * 0.68).clamp(40.0, viewportHeight).toDouble();
-    final maxStep =
-        (viewportHeight - 8).clamp(minStep, viewportHeight).toDouble();
-
-    return (baseStep - overlap).clamp(minStep, maxStep).toDouble();
-  }
-
-  Future<void> _performPageTurnTo({
-    required double target,
-    required int direction,
-  }) async {
-    if (!_scrollController.hasClients) {
+    if (_isPaginatingPages) {
       return;
     }
 
-    final style = _settings.pageAnimationStyle;
-
-    switch (style) {
-      case ReaderPageAnimationStyle.none:
-        _scrollController.jumpTo(target);
-        return;
-      case ReaderPageAnimationStyle.cover:
-        await _playPageTurnEffect(direction);
-        if (!_scrollController.hasClients) {
-          return;
-        }
-        _scrollController.jumpTo(target);
-        return;
-      case ReaderPageAnimationStyle.simulation:
-        await _playPageTurnEffect(direction);
-        if (!_scrollController.hasClients) {
-          return;
-        }
-        await _scrollController.animateTo(
-          target,
-          duration: const Duration(milliseconds: 240),
-          curve: Curves.easeOutCubic,
-        );
-        return;
-      case ReaderPageAnimationStyle.translate:
-        await _playPageTurnEffect(direction);
-        if (!_scrollController.hasClients) {
-          return;
-        }
-        await _scrollController.animateTo(
-          target,
-          duration: const Duration(milliseconds: 180),
-          curve: Curves.linearToEaseOut,
-        );
-        return;
-      case ReaderPageAnimationStyle.vertical:
-        await _playPageTurnEffect(direction);
-        if (!_scrollController.hasClients) {
-          return;
-        }
-        await _scrollController.animateTo(
-          target,
-          duration: const Duration(milliseconds: 220),
-          curve: Curves.easeInOutCubic,
-        );
-        return;
-    }
-  }
-
-  void _goToPreviousChapter() {
-    final index = _currentIndex;
-    if (index == null || index <= 0) {
-      _showMessage('已经是第一章。');
+    final pages = _pagedPages;
+    if (pages.isEmpty) {
       return;
     }
-    unawaited(_jumpTo(index - 1));
-  }
 
-  void _goToNextChapter() {
-    final index = _currentIndex;
-    if (index == null || index >= _chapters.length - 1) {
-      _showMessage('已经是最后一章。');
+    if (_currentPageIndex >= pages.length - 1) {
+      final index = _currentIndex;
+      if (index == null || index >= _chapters.length - 1) {
+        _showMessage('已经是最后一章。');
+        return;
+      }
+      await _jumpTo(index + 1, initialScrollRatio: 0);
       return;
     }
-    unawaited(_jumpTo(index + 1));
+
+    setState(() {
+      _pageSwitchDirection = 1;
+      _currentPageIndex += 1;
+    });
+    _scheduleProgressSave();
   }
 
-  Future<void> _jumpTo(int index) async {
+  Future<void> _jumpTo(int index, {double? initialScrollRatio}) async {
     final chapter = _chapters[index];
 
     final previousChapterId = _chapterId;
@@ -1444,7 +2069,9 @@ class _ReaderPageState extends State<ReaderPage>
       _errorText = null;
     });
 
-    final success = await _loadCurrentChapter(initialScrollRatio: 0);
+    final success = await _loadCurrentChapter(
+      initialScrollRatio: initialScrollRatio ?? 0,
+    );
     if (success || !mounted) {
       return;
     }
@@ -1459,34 +2086,6 @@ class _ReaderPageState extends State<ReaderPage>
     });
 
     _showChapterSwitchFailedSnackbar(index);
-  }
-
-  void _onHorizontalDragEnd(DragEndDetails details, double viewportHeight) {
-    final velocity = details.primaryVelocity ?? 0;
-    final offset = _horizontalDragOffset;
-    _horizontalDragOffset = 0;
-
-    if (_showOverlayControls) {
-      _hideOverlayControls();
-      return;
-    }
-
-    const minDistance = 42.0;
-    const minVelocity = 320.0;
-    final passedDistance = offset.abs() >= minDistance;
-    final passedVelocity = velocity.abs() >= minVelocity;
-    if (!passedDistance && !passedVelocity) {
-      return;
-    }
-
-    if (offset < 0 || velocity < -minVelocity) {
-      unawaited(_goToNextPage(viewportHeight));
-      return;
-    }
-
-    if (offset > 0 || velocity > minVelocity) {
-      unawaited(_goToPreviousPage(viewportHeight));
-    }
   }
 
   void _onReaderTap(Offset localPosition, Size size) {
@@ -1919,6 +2518,15 @@ class _ReaderPageState extends State<ReaderPage>
     setState(() {
       _settings = updated;
     });
+
+    unawaited(
+      ref
+          .read(appThemeModeProvider.notifier)
+          .setThemeMode(
+            nextMode == ReaderThemeMode.dark ? ThemeMode.dark : ThemeMode.light,
+          ),
+    );
+
     await _preferencesService.saveSettings(updated);
 
     _showMessage(nextMode == ReaderThemeMode.dark ? '已切换夜间模式。' : '已切换日间模式。');
@@ -1976,6 +2584,9 @@ class _ReaderPageState extends State<ReaderPage>
     }
 
     var draft = _settings;
+    if (draft.pageAnimationStyle == ReaderPageAnimationStyle.simulation) {
+      draft = draft.copyWith(pageAnimationStyle: ReaderPageAnimationStyle.curl);
+    }
     var showMore = false;
 
     final result = await showModalBottomSheet<ReaderSettings>(
@@ -2259,7 +2870,14 @@ class _ReaderPageState extends State<ReaderPage>
                               child: SingleChildScrollView(
                                 scrollDirection: Axis.horizontal,
                                 child: Row(
-                                  children: ReaderPageAnimationStyle.values
+                                  children: const [
+                                        ReaderPageAnimationStyle.curl,
+                                        ReaderPageAnimationStyle.cover,
+                                        ReaderPageAnimationStyle.translate,
+                                        ReaderPageAnimationStyle.vertical,
+                                        ReaderPageAnimationStyle.fade,
+                                        ReaderPageAnimationStyle.none,
+                                      ]
                                       .map(
                                         (style) => Padding(
                                           padding: const EdgeInsets.only(
@@ -2412,25 +3030,6 @@ class _ReaderPageState extends State<ReaderPage>
                                         });
                                       },
                                     ),
-                                    if (draft.pageTurnMode ==
-                                        ReaderPageTurnMode.tap)
-                                      _buildSliderSettingItem(
-                                        context: context,
-                                        label: '翻页步进',
-                                        valueText:
-                                            '${(draft.pageTurnStepRatio * 100).toStringAsFixed(0)}%',
-                                        min: 0.6,
-                                        max: 1,
-                                        divisions: 8,
-                                        value: draft.pageTurnStepRatio,
-                                        onChanged: (value) {
-                                          setModalState(() {
-                                            draft = draft.copyWith(
-                                              pageTurnStepRatio: value,
-                                            );
-                                          });
-                                        },
-                                      ),
                                   ],
                                 ],
                               ),
@@ -2481,10 +3080,15 @@ class _ReaderPageState extends State<ReaderPage>
       return;
     }
 
+    final normalizedResult =
+        result.pageAnimationStyle == ReaderPageAnimationStyle.simulation
+            ? result.copyWith(pageAnimationStyle: ReaderPageAnimationStyle.curl)
+            : result;
+
     setState(() {
-      _settings = result;
+      _settings = normalizedResult;
     });
-    await _preferencesService.saveSettings(result);
+    await _preferencesService.saveSettings(normalizedResult);
   }
 
   Widget _buildSettingLine({
@@ -2717,6 +3321,8 @@ class _ReaderPageState extends State<ReaderPage>
 
   String _pageAnimationLabel(ReaderPageAnimationStyle style) {
     return switch (style) {
+      ReaderPageAnimationStyle.curl => '卷页',
+      ReaderPageAnimationStyle.fade => '淡入淡出',
       ReaderPageAnimationStyle.simulation => '仿真',
       ReaderPageAnimationStyle.cover => '覆盖',
       ReaderPageAnimationStyle.translate => '平移',
@@ -2801,6 +3407,18 @@ class _ReaderPageState extends State<ReaderPage>
     final shifted = (hsl.lightness + amount).clamp(0.0, 1.0);
     return hsl.withLightness(shifted).toColor();
   }
+}
+
+class _PagedSlice {
+  const _PagedSlice({
+    required this.paragraphIndex,
+    required this.start,
+    required this.end,
+  });
+
+  final int paragraphIndex;
+  final int start;
+  final int end;
 }
 
 class _CatalogSearchEntry {

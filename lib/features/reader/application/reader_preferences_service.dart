@@ -61,10 +61,14 @@ class ReaderPreferencesService {
     );
 
     final animationName = prefs.getString(_pageAnimationStyleKey);
-    final pageAnimationStyle = ReaderPageAnimationStyle.values.firstWhere(
+    final parsedAnimationStyle = ReaderPageAnimationStyle.values.firstWhere(
       (item) => item.name == animationName,
-      orElse: () => ReaderPageAnimationStyle.simulation,
+      orElse: () => ReaderPageAnimationStyle.curl,
     );
+    final pageAnimationStyle =
+        parsedAnimationStyle == ReaderPageAnimationStyle.simulation
+            ? ReaderPageAnimationStyle.curl
+            : parsedAnimationStyle;
 
     return ReaderSettings(
       fontSize: prefs.getDouble(_fontSizeKey) ?? 18,
