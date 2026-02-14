@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 
 import '../../../app/layout/app_spacing.dart';
 
@@ -95,6 +96,14 @@ class MinePage extends ConsumerWidget {
                 ),
                 const Divider(height: 1),
                 const _SeedColorTile(),
+                const Divider(height: 1),
+                ListTile(
+                  leading: const Icon(Icons.cloud_outlined),
+                  title: const Text('缓存管理'),
+                  subtitle: const Text('清理已缓存章节，后续会扩展漫画缓存。'),
+                  trailing: const Icon(Icons.chevron_right_rounded),
+                  onTap: () => context.push('/cache'),
+                ),
                 const Divider(height: 1),
                 const ListTile(
                   leading: Icon(Icons.construction_rounded),

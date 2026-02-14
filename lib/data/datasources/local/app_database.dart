@@ -48,6 +48,20 @@ class ChapterCaches extends Table {
   Set<Column<Object>> get primaryKey => {cacheKey};
 }
 
+class ChapterCacheBookSummary {
+  const ChapterCacheBookSummary({
+    required this.bookId,
+    required this.sourceId,
+    required this.cachedCount,
+    required this.updatedAt,
+  });
+
+  final String bookId;
+  final String sourceId;
+  final int cachedCount;
+  final DateTime updatedAt;
+}
+
 @DriftDatabase(tables: [Sources, ChapterCaches])
 class AppDatabase extends _$AppDatabase {
   AppDatabase({QueryExecutor? executor}) : super(executor ?? _openConnection());
@@ -234,6 +248,107 @@ class AppDatabase extends _$AppDatabase {
         .map((row) => row.read(chapterCaches.cacheKey))
         .whereType<String>()
         .toSet();
+  }
+
+  int _decodeCount(Object? value) {
+    if (value is int) {
+      return value;
+    }
+    if (value is BigInt) {
+      return value.toInt();
+    }
+    if (value is num) {
+      return value.toInt();
+    }
+    if (value is String) {
+      return int.tryParse(value.trim()) ?? 0;
+    }
+    return 0;
+  }
+
+  DateTime _decodeDateTime(Object? value) {
+    if (value is DateTime) {
+      return value;
+    }
+    if (value is int) {
+      return DateTime.fromMillisecondsSinceEpoch(value);
+    }
+    if (value is num) {
+      return DateTime.fromMillisecondsSinceEpoch(value.toInt());
+    }
+    if (value is String) {
+      final parsed = int.tryParse(value.trim());
+      if (parsed != null) {
+        return DateTime.fromMillisecondsSinceEpoch(parsed);
+      }
+    }
+    return DateTime.fromMillisecondsSinceEpoch(0);
+  }
+
+  Future<List<ChapterCacheBookSummary>> listCachedBooks() async {
+    const sql =
+        'SELECT book_id AS bookId, source_id AS sourceId, '
+        'COUNT(*) AS cachedCount, MAX(updated_at) AS updatedAt '
+        'FROM chapter_caches '
+        'GROUP BY book_id, source_id '
+        'ORDER BY updatedAt DESC';
+
+    final rows = await customSelect(sql, readsFrom: {chapterCaches}).get();
+
+    return rows
+        .map(
+          (row) => ChapterCacheBookSummary(
+            bookId: (row.data['bookId'] ?? '').toString(),
+            sourceId: (row.data['sourceId'] ?? '').toString(),
+            cachedCount: _decodeCount(row.data['cachedCount']),
+            updatedAt: _decodeDateTime(row.data['updatedAt']),
+          ),
+        )
+        .where((item) => item.bookId.trim().isNotEmpty)
+        .toList(growable: false);
+  }
+
+  Stream<List<ChapterCacheBookSummary>> watchCachedBooks() {
+    const sql =
+        'SELECT book_id AS bookId, source_id AS sourceId, '
+        'COUNT(*) AS cachedCount, MAX(updated_at) AS updatedAt '
+        'FROM chapter_caches '
+        'GROUP BY book_id, source_id '
+        'ORDER BY updatedAt DESC';
+
+    return customSelect(sql, readsFrom: {chapterCaches}).watch().map(
+      (rows) => rows
+          .map(
+            (row) => ChapterCacheBookSummary(
+              bookId: (row.data['bookId'] ?? '').toString(),
+              sourceId: (row.data['sourceId'] ?? '').toString(),
+              cachedCount: _decodeCount(row.data['cachedCount']),
+              updatedAt: _decodeDateTime(row.data['updatedAt']),
+            ),
+          )
+          .where((item) => item.bookId.trim().isNotEmpty)
+          .toList(growable: false),
+    );
+  }
+
+  Future<void> deleteChapterCachesByBookId(String bookId) {
+    final normalized = bookId.trim();
+    if (normalized.isEmpty) {
+      return Future.value();
+    }
+
+    return (delete(chapterCaches)
+      ..where((table) => table.bookId.equals(normalized))).go();
+  }
+
+  Future<void> clearChapterCaches() => delete(chapterCaches).go();
+
+  Future<int> getTotalCachedChapterCount() async {
+    final countExpression = chapterCaches.cacheKey.count();
+    final query = selectOnly(chapterCaches)..addColumns([countExpression]);
+
+    final row = await query.getSingle();
+    return row.read(countExpression) ?? 0;
   }
 
   SourceDefinition _mapRowToSource(Source row) {

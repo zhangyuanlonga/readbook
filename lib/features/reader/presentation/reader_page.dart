@@ -13,6 +13,7 @@ import '../../../app/layout/app_spacing.dart';
 
 import '../../../core/errors/app_exception.dart';
 import '../../../core/errors/error_codes.dart';
+import '../../../data/datasources/local/app_database.dart';
 import '../../../domain/entities/bookshelf_book.dart';
 import '../../../domain/entities/chapter.dart';
 import '../../../domain/entities/reader_settings.dart';
@@ -75,6 +76,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
   bool _isLoadingContent = false;
   bool _showOverlayControls = false;
   bool _isInBookshelf = false;
+  bool _isCurrentChapterCached = false;
   bool _isShelfActionLoading = false;
   String? _errorText;
   String _content = '';
@@ -1438,8 +1440,11 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
                         ),
                         const SizedBox(width: 8),
                         _buildTopActionButton(
-                          icon: Icons.cloud_download_outlined,
-                          tooltip: '缓存章节',
+                          icon:
+                              _isCurrentChapterCached
+                                  ? Icons.cloud_done_rounded
+                                  : Icons.cloud_download_outlined,
+                          tooltip: _isCurrentChapterCached ? '已缓存' : '缓存章节',
                           onPressed: _openChapterCache,
                           colors: colors,
                         ),
@@ -1901,6 +1906,15 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
         chapterTitle: _chapterTitle,
       );
 
+      var isCached = contentResult.fromCache;
+      final cacheKey = '$sourceId|$chapterUrl';
+      try {
+        final persisted = await AppDatabase.instance.getChapterCache(cacheKey);
+        isCached = persisted != null;
+      } catch (_) {
+        // ignore
+      }
+
       if (!mounted) {
         return false;
       }
@@ -1908,6 +1922,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
       final targetRatio = initialScrollRatio?.clamp(0.0, 1.0) ?? 0.0;
 
       setState(() {
+        _isCurrentChapterCached = isCached;
         _setContent(contentResult.content);
         _pendingPageRestoreRatio = targetRatio;
       });
