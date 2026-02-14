@@ -24,14 +24,38 @@ void main() {
     });
 
     test('normalizes escaped line breaks from json content', () {
-      const raw = '第一段\r\n\r\n第二段\n第三段';
+      const raw = '第一段\\r\\n\\r\\n第二段\\n第三段';
 
       final cleaned = cleaner.clean(raw);
 
       expect(cleaned, contains('第一段'));
       expect(cleaned, contains('第二段'));
       expect(cleaned, contains('第三段'));
-      expect(cleaned, isNot(contains(r'\r\n')));
+      expect(cleaned, isNot(contains(r'\\r\\n')));
+    });
+
+    test('filters zero-width and replacement characters', () {
+      const raw = '一\uFEFF二\u200B三\uFFFD四';
+
+      final cleaned = cleaner.clean(raw);
+
+      expect(cleaned, '一二三四');
+    });
+
+    test('keeps html paragraph semantics', () {
+      const raw = '<p>第一段</p><p>第二段</p>';
+
+      final cleaned = cleaner.clean(raw);
+
+      expect(cleaned, '第一段\n\n第二段');
+    });
+
+    test('merges short lines into paragraphs when no explicit breaks', () {
+      const raw = '第一句。\n第二句。\n第三句。';
+
+      final cleaned = cleaner.clean(raw);
+
+      expect(cleaned, '第一句。第二句。第三句。');
     });
 
     test('returns empty when source has no readable text', () {

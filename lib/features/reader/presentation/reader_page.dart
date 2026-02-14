@@ -95,6 +95,11 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
   double _curlAutoY = 0;
   int _curlAutoDirection = 1;
 
+  static const double _kPinnedHeaderTopPadding = 6;
+  static const double _kPinnedHeaderHeight = 40;
+  static const double _kPinnedHeaderTotalHeight =
+      _kPinnedHeaderTopPadding + _kPinnedHeaderHeight;
+
   @override
   void initState() {
     super.initState();
@@ -243,10 +248,11 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
   }
 
   Widget _buildReaderContent(_ReaderThemeColors colors) {
+    final isPaged = _settings.pageTurnMode == ReaderPageTurnMode.tap;
+
     return Column(
       children: [
-        const SizedBox(height: 6),
-        _buildPinnedChapterHeader(colors),
+        if (!isPaged) _buildPinnedChapterHeader(colors),
         Expanded(child: _buildBody(colors)),
       ],
     );
@@ -256,37 +262,43 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
     final chapterTitle =
         _chapterTitle?.isNotEmpty == true ? _chapterTitle! : '未命名章节';
 
-    return SizedBox(
-      height: 40,
+    return ColoredBox(
+      color: colors.background,
       child: Padding(
-        padding: const EdgeInsets.only(left: 6, right: 12),
-        child: Row(
-          children: [
-            IconButton(
-              onPressed: () => Navigator.of(context).maybePop(),
-              tooltip: '返回',
-              visualDensity: VisualDensity.compact,
-              style: IconButton.styleFrom(
-                foregroundColor: colors.text,
-                backgroundColor: Colors.transparent,
-                splashFactory: InkRipple.splashFactory,
-              ),
-              icon: const Icon(Icons.chevron_left_rounded, size: 22),
-            ),
-            const SizedBox(width: 4),
-            Expanded(
-              child: Text(
-                chapterTitle,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: TextStyle(
-                  color: colors.text,
-                  fontSize: 14,
-                  fontWeight: FontWeight.w600,
+        padding: const EdgeInsets.only(top: _kPinnedHeaderTopPadding),
+        child: SizedBox(
+          height: _kPinnedHeaderHeight,
+          child: Padding(
+            padding: const EdgeInsets.only(left: 6, right: 12),
+            child: Row(
+              children: [
+                IconButton(
+                  onPressed: () => Navigator.of(context).maybePop(),
+                  tooltip: '返回',
+                  visualDensity: VisualDensity.compact,
+                  style: IconButton.styleFrom(
+                    foregroundColor: colors.text,
+                    backgroundColor: Colors.transparent,
+                    splashFactory: InkRipple.splashFactory,
+                  ),
+                  icon: const Icon(Icons.chevron_left_rounded, size: 22),
                 ),
-              ),
+                const SizedBox(width: 4),
+                Expanded(
+                  child: Text(
+                    chapterTitle,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      color: colors.text,
+                      fontSize: 14,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ),
+              ],
             ),
-          ],
+          ),
         ),
       ),
     );
@@ -406,18 +418,22 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
 
     return LayoutBuilder(
       builder: (context, constraints) {
-        final padding = EdgeInsets.fromLTRB(
+        final contentPadding = EdgeInsets.fromLTRB(
           _settings.horizontalPadding,
           18,
           _settings.horizontalPadding,
           18,
         );
 
-        final maxWidth = (constraints.maxWidth - padding.horizontal).clamp(
+        final maxWidth = (constraints.maxWidth - contentPadding.horizontal).clamp(
           0.0,
           2000.0,
         );
-        final maxHeight = (constraints.maxHeight - padding.vertical).clamp(
+        final maxHeight =
+            (constraints.maxHeight -
+                    _kPinnedHeaderTotalHeight -
+                    contentPadding.vertical)
+                .clamp(
           0.0,
           4000.0,
         );
@@ -427,21 +443,28 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
         });
 
         if (_isPaginatingPages || _pagedPages.isEmpty) {
-          return Padding(
-            padding: padding,
-            child: _buildReaderStateCard(
-              colors: colors,
-              title: "正在分页",
-              message:
-                  paragraphs.length <= 1
-                      ? "正在为你生成阅读页面..."
-                      : "正在生成 ${paragraphs.length} 段正文的分页...",
-              icon: const SizedBox(
-                width: 18,
-                height: 18,
-                child: CircularProgressIndicator(strokeWidth: 2),
+          return Column(
+            children: [
+              _buildPinnedChapterHeader(colors),
+              Expanded(
+                child: Padding(
+                  padding: contentPadding,
+                  child: _buildReaderStateCard(
+                    colors: colors,
+                    title: "正在分页",
+                    message:
+                        paragraphs.length <= 1
+                            ? "正在为你生成阅读页面..."
+                            : "正在生成 ${paragraphs.length} 段正文的分页...",
+                    icon: const SizedBox(
+                      width: 18,
+                      height: 18,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    ),
+                  ),
+                ),
               ),
-            ),
+            ],
           );
         }
 
@@ -469,22 +492,23 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
                       colors: colors,
                       pageIndex: index,
                       pageSize: pagedSize,
-                      padding: padding,
+                      padding: contentPadding,
                     );
                   },
                   onForwardComplete: () => _onCurlDragComplete(forward: true),
                   onBackwardComplete: () => _onCurlDragComplete(forward: false),
                 ),
               ),
-              Positioned(
-                right: 12,
-                bottom: 12,
-                child: _buildPageIndexBadge(
-                  colors: colors,
-                  index: safeIndex,
-                  total: pageCount,
+              if (pageCount > 1)
+                Positioned(
+                  right: 12,
+                  bottom: 12,
+                  child: _buildPageIndexBadge(
+                    colors: colors,
+                    index: safeIndex,
+                    total: pageCount,
+                  ),
                 ),
-              ),
             ],
           );
         }
@@ -495,7 +519,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
             colors: colors,
             pageIndex: safeIndex,
             pageSize: pagedSize,
-            padding: padding,
+            padding: contentPadding,
           ),
         );
 
@@ -591,15 +615,16 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
                 ),
               ),
             ),
-            Positioned(
-              right: 12,
-              bottom: 12,
-              child: _buildPageIndexBadge(
-                colors: colors,
-                index: safeIndex,
-                total: pageCount,
+            if (pageCount > 1)
+              Positioned(
+                right: 12,
+                bottom: 12,
+                child: _buildPageIndexBadge(
+                  colors: colors,
+                  index: safeIndex,
+                  total: pageCount,
+                ),
               ),
-            ),
           ],
         );
       },
@@ -622,9 +647,16 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
       height: pageSize.height,
       child: ColoredBox(
         color: colors.background,
-        child: Padding(
-          padding: padding,
-          child: _buildPagedPage(colors: colors, page: pages[pageIndex]),
+        child: Column(
+          children: [
+            _buildPinnedChapterHeader(colors),
+            Expanded(
+              child: Padding(
+                padding: padding,
+                child: _buildPagedPage(colors: colors, page: pages[pageIndex]),
+              ),
+            ),
+          ],
         ),
       ),
     );
@@ -747,9 +779,16 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
       height: pageSize.height,
       child: ColoredBox(
         color: colors.background,
-        child: Padding(
-          padding: padding,
-          child: _buildPagedPage(colors: colors, page: pages[pageIndex]),
+        child: Column(
+          children: [
+            _buildPinnedChapterHeader(colors),
+            Expanded(
+              child: Padding(
+                padding: padding,
+                child: _buildPagedPage(colors: colors, page: pages[pageIndex]),
+              ),
+            ),
+          ],
         ),
       ),
     );
@@ -1053,12 +1092,28 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
         return remaining.length;
       }
 
+      final lines = painter.computeLineMetrics();
+      double? lastLineBottom;
+
+      for (final line in lines) {
+        final bottom = line.baseline + line.descent;
+        if (bottom <= availableHeight) {
+          lastLineBottom = bottom;
+          continue;
+        }
+        break;
+      }
+
+      if (lastLineBottom == null) {
+        return 0;
+      }
+
       final offset =
           painter
               .getPositionForOffset(
                 Offset(
                   (maxWidth - 1).clamp(0.0, maxWidth),
-                  (availableHeight - 1).clamp(0.0, availableHeight),
+                  (lastLineBottom - 0.1).clamp(0.0, availableHeight),
                 ),
               )
               .offset;
@@ -2800,7 +2855,8 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
                               context: context,
                               label: '背景层级',
                               labelWidth: 92,
-                              helpText: '背景层级用于在当前主题色板中切换阅读背景的明暗层级（surface / surfaceContainer*）。它不会改变文字颜色，只是让背景更亮/更灰/更厚重，暗色主题同样生效。',
+                              helpText:
+                                  '背景层级用于在当前主题色板中切换阅读背景的明暗层级（surface / surfaceContainer*）。它不会改变文字颜色，只是让背景更亮/更灰/更厚重，暗色主题同样生效。',
                               child: SingleChildScrollView(
                                 scrollDirection: Axis.horizontal,
                                 child: Row(
@@ -2843,7 +2899,8 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
                                     ),
                                     _buildBackgroundToneDot(
                                       draft: draft,
-                                      tone: ReaderBackgroundTone.containerHighest,
+                                      tone:
+                                          ReaderBackgroundTone.containerHighest,
                                       onChanged: (next) {
                                         setModalState(() {
                                           draft = next;
@@ -2975,20 +3032,27 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
                                         onPressed: () async {
                                           final result =
                                               await _showSpacingSheet(
-                                            initialLineHeight: draft.lineHeight,
-                                            initialHorizontalPadding: draft.horizontalPadding,
-                                            initialParagraphSpacing: draft.paragraphSpacing,
-                                            initialParagraphIndent: draft.paragraphIndent,
-                                          );
+                                                initialLineHeight:
+                                                    draft.lineHeight,
+                                                initialHorizontalPadding:
+                                                    draft.horizontalPadding,
+                                                initialParagraphSpacing:
+                                                    draft.paragraphSpacing,
+                                                initialParagraphIndent:
+                                                    draft.paragraphIndent,
+                                              );
                                           if (result == null) {
                                             return;
                                           }
                                           setModalState(() {
                                             draft = draft.copyWith(
-                                              horizontalPadding: result.horizontalPadding,
+                                              horizontalPadding:
+                                                  result.horizontalPadding,
                                               lineHeight: result.lineHeight,
-                                              paragraphSpacing: result.paragraphSpacing,
-                                              paragraphIndent: result.paragraphIndent,
+                                              paragraphSpacing:
+                                                  result.paragraphSpacing,
+                                              paragraphIndent:
+                                                  result.paragraphIndent,
                                             );
                                           });
                                         },
@@ -3049,8 +3113,9 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
             ? result.copyWith(pageAnimationStyle: ReaderPageAnimationStyle.curl)
             : result;
 
-    final appliedResult =
-        normalizedResult.copyWith(pageTurnMode: ReaderPageTurnMode.tap);
+    final appliedResult = normalizedResult.copyWith(
+      pageTurnMode: ReaderPageTurnMode.tap,
+    );
 
     setState(() {
       _settings = appliedResult;
@@ -3095,16 +3160,18 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
                         onTap: () {
                           showDialog<void>(
                             context: context,
-                            builder: (context) => AlertDialog(
-                              title: Text(label),
-                              content: Text(helpText),
-                              actions: [
-                                TextButton(
-                                  onPressed: () => Navigator.of(context).pop(),
-                                  child: const Text('知道了'),
+                            builder:
+                                (context) => AlertDialog(
+                                  title: Text(label),
+                                  content: Text(helpText),
+                                  actions: [
+                                    TextButton(
+                                      onPressed:
+                                          () => Navigator.of(context).pop(),
+                                      child: const Text('知道了'),
+                                    ),
+                                  ],
                                 ),
-                              ],
-                            ),
                           );
                         },
                         child: Icon(
@@ -3162,7 +3229,6 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
     );
   }
 
-
   Widget _buildBackgroundToneDot({
     required ReaderSettings draft,
     required ReaderBackgroundTone tone,
@@ -3189,9 +3255,10 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
           color: previewColors.background,
           shape: BoxShape.circle,
           border: Border.all(
-            color: selected
-                ? Theme.of(context).colorScheme.primary
-                : Theme.of(context).colorScheme.outlineVariant,
+            color:
+                selected
+                    ? Theme.of(context).colorScheme.primary
+                    : Theme.of(context).colorScheme.outlineVariant,
             width: selected ? 2 : 1,
           ),
         ),
@@ -3214,7 +3281,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
 
     return Container(
       width: 58,
-      height: 40,
+      height: _kPinnedHeaderHeight,
       alignment: Alignment.center,
       decoration: BoxDecoration(
         color: Theme.of(context).colorScheme.surfaceContainerHighest,
@@ -3299,6 +3366,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
       ReaderFontWeightLevel.medium => '字体: 粗',
     };
   }
+
   Future<_ReaderSpacingSheetResult?> _showSpacingSheet({
     required double initialLineHeight,
     required double initialHorizontalPadding,
@@ -3318,7 +3386,6 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
       _ReaderSpacingOption('较大', 24),
       _ReaderSpacingOption('大', 30),
     ];
-
 
     const paragraphOptions = <_ReaderSpacingOption>[
       _ReaderSpacingOption('小', 8),
@@ -3357,13 +3424,19 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
         return StatefulBuilder(
           builder: (context, setModalState) {
             final currentLineLabel = resolveLabel(lineOptions, lineHeight);
-            final currentPaddingLabel =
-                resolveLabel(paddingOptions, horizontalPadding);
+            final currentPaddingLabel = resolveLabel(
+              paddingOptions,
+              horizontalPadding,
+            );
 
-            final currentParagraphLabel =
-                resolveLabel(paragraphOptions, paragraphSpacing);
-            final currentIndentLabel =
-                resolveLabel(indentOptions, paragraphIndent);
+            final currentParagraphLabel = resolveLabel(
+              paragraphOptions,
+              paragraphSpacing,
+            );
+            final currentIndentLabel = resolveLabel(
+              indentOptions,
+              paragraphIndent,
+            );
 
             return SafeArea(
               child: Padding(
@@ -3373,152 +3446,154 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                    Text(
-                      '间距设置',
-                      style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                        fontWeight: FontWeight.w700,
+                      Text(
+                        '间距设置',
+                        style: Theme.of(context).textTheme.titleMedium
+                            ?.copyWith(fontWeight: FontWeight.w700),
                       ),
-                    ),
-                    const SizedBox(height: 6),
-                    Text(
-                      '当前：行间距 $currentLineLabel / 页面边距 $currentPaddingLabel / 段落 $currentParagraphLabel / 缩进 $currentIndentLabel',
-                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                        color: Theme.of(context).colorScheme.onSurfaceVariant,
+                      const SizedBox(height: 6),
+                      Text(
+                        '当前：行间距 $currentLineLabel / 页面边距 $currentPaddingLabel / 段落 $currentParagraphLabel / 缩进 $currentIndentLabel',
+                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                          color: Theme.of(context).colorScheme.onSurfaceVariant,
+                        ),
                       ),
-                    ),
-                    const SizedBox(height: 8),
-                    Expanded(
-                      child: ListView(
-                        children: [
-                          const SizedBox(height: 16),
-                    Text(
-                      '行间距',
-                      style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                        fontWeight: FontWeight.w700,
-                      ),
-                    ),
-                    const SizedBox(height: 8),
-                    Wrap(
-                      spacing: 8,
-                      runSpacing: 8,
-                      children: [
-                        for (final option in lineOptions)
-                          ChoiceChip(
-                            label: Text(option.label),
-                            selected: (option.value - lineHeight).abs() < 0.06,
-                            onSelected: (_) {
-                              setModalState(() {
-                                lineHeight = option.value;
-                              });
-                            },
-                          ),
-                      ],
-                    ),
-                    const SizedBox(height: 16),
-                    Text(
-                      '页面边距',
-                      style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                        fontWeight: FontWeight.w700,
-                      ),
-                    ),
-                    const SizedBox(height: 8),
-                    Wrap(
-                      spacing: 8,
-                      runSpacing: 8,
-                      children: [
-                        for (final option in paddingOptions)
-                          ChoiceChip(
-                            label: Text(option.label),
-                            selected:
-                                (option.value - horizontalPadding).abs() < 0.6,
-                            onSelected: (_) {
-                              setModalState(() {
-                                horizontalPadding = option.value;
-                              });
-                            },
-                          ),
-                      ],
-                    ),
+                      const SizedBox(height: 8),
+                      Expanded(
+                        child: ListView(
+                          children: [
+                            const SizedBox(height: 16),
+                            Text(
+                              '行间距',
+                              style: Theme.of(context).textTheme.titleSmall
+                                  ?.copyWith(fontWeight: FontWeight.w700),
+                            ),
+                            const SizedBox(height: 8),
+                            Wrap(
+                              spacing: 8,
+                              runSpacing: 8,
+                              children: [
+                                for (final option in lineOptions)
+                                  ChoiceChip(
+                                    label: Text(option.label),
+                                    selected:
+                                        (option.value - lineHeight).abs() <
+                                        0.06,
+                                    onSelected: (_) {
+                                      setModalState(() {
+                                        lineHeight = option.value;
+                                      });
+                                    },
+                                  ),
+                              ],
+                            ),
+                            const SizedBox(height: 16),
+                            Text(
+                              '页面边距',
+                              style: Theme.of(context).textTheme.titleSmall
+                                  ?.copyWith(fontWeight: FontWeight.w700),
+                            ),
+                            const SizedBox(height: 8),
+                            Wrap(
+                              spacing: 8,
+                              runSpacing: 8,
+                              children: [
+                                for (final option in paddingOptions)
+                                  ChoiceChip(
+                                    label: Text(option.label),
+                                    selected:
+                                        (option.value - horizontalPadding)
+                                            .abs() <
+                                        0.6,
+                                    onSelected: (_) {
+                                      setModalState(() {
+                                        horizontalPadding = option.value;
+                                      });
+                                    },
+                                  ),
+                              ],
+                            ),
 
-                    const SizedBox(height: 16),
-                    Text(
-                      '段落间距',
-                      style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                        fontWeight: FontWeight.w700,
+                            const SizedBox(height: 16),
+                            Text(
+                              '段落间距',
+                              style: Theme.of(context).textTheme.titleSmall
+                                  ?.copyWith(fontWeight: FontWeight.w700),
+                            ),
+                            const SizedBox(height: 8),
+                            Wrap(
+                              spacing: 8,
+                              runSpacing: 8,
+                              children: [
+                                for (final option in paragraphOptions)
+                                  ChoiceChip(
+                                    label: Text(option.label),
+                                    selected:
+                                        (option.value - paragraphSpacing)
+                                            .abs() <
+                                        0.6,
+                                    onSelected: (_) {
+                                      setModalState(() {
+                                        paragraphSpacing = option.value;
+                                      });
+                                    },
+                                  ),
+                              ],
+                            ),
+                            const SizedBox(height: 16),
+                            Text(
+                              '首行缩进',
+                              style: Theme.of(context).textTheme.titleSmall
+                                  ?.copyWith(fontWeight: FontWeight.w700),
+                            ),
+                            const SizedBox(height: 8),
+                            Wrap(
+                              spacing: 8,
+                              runSpacing: 8,
+                              children: [
+                                for (final option in indentOptions)
+                                  ChoiceChip(
+                                    label: Text(option.label),
+                                    selected:
+                                        (option.value - paragraphIndent).abs() <
+                                        0.6,
+                                    onSelected: (_) {
+                                      setModalState(() {
+                                        paragraphIndent = option.value;
+                                      });
+                                    },
+                                  ),
+                              ],
+                            ),
+                            const SizedBox(height: 16),
+                          ],
+                        ),
                       ),
-                    ),
-                    const SizedBox(height: 8),
-                    Wrap(
-                      spacing: 8,
-                      runSpacing: 8,
-                      children: [
-                        for (final option in paragraphOptions)
-                          ChoiceChip(
-                            label: Text(option.label),
-                            selected:
-                                (option.value - paragraphSpacing).abs() < 0.6,
-                            onSelected: (_) {
-                              setModalState(() {
-                                paragraphSpacing = option.value;
-                              });
-                            },
+                      const SizedBox(height: 12),
+                      Row(
+                        children: [
+                          TextButton(
+                            onPressed: () => Navigator.of(context).pop(),
+                            child: const Text('取消'),
                           ),
-                      ],
-                    ),
-                    const SizedBox(height: 16),
-                    Text(
-                      '首行缩进',
-                      style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                        fontWeight: FontWeight.w700,
-                      ),
-                    ),
-                    const SizedBox(height: 8),
-                    Wrap(
-                      spacing: 8,
-                      runSpacing: 8,
-                      children: [
-                        for (final option in indentOptions)
-                          ChoiceChip(
-                            label: Text(option.label),
-                            selected:
-                                (option.value - paragraphIndent).abs() < 0.6,
-                            onSelected: (_) {
-                              setModalState(() {
-                                paragraphIndent = option.value;
-                              });
+                          const Spacer(),
+                          FilledButton(
+                            onPressed: () {
+                              Navigator.of(context).pop(
+                                _ReaderSpacingSheetResult(
+                                  lineHeight: lineHeight,
+                                  horizontalPadding: horizontalPadding,
+                                  paragraphSpacing: paragraphSpacing,
+                                  paragraphIndent: paragraphIndent,
+                                ),
+                              );
                             },
+                            child: const Text('应用'),
                           ),
-                      ],
-                    ),
-                          const SizedBox(height: 16),
                         ],
                       ),
-                    ),
-                    const SizedBox(height: 12),
-                    Row(
-                      children: [
-                        TextButton(
-                          onPressed: () => Navigator.of(context).pop(),
-                          child: const Text('取消'),
-                        ),
-                        const Spacer(),
-                        FilledButton(
-                          onPressed: () {
-                            Navigator.of(context).pop(
-                              _ReaderSpacingSheetResult(
-                                lineHeight: lineHeight,
-                                horizontalPadding: horizontalPadding,
-                                paragraphSpacing: paragraphSpacing,
-                                paragraphIndent: paragraphIndent,
-                              ),
-                            );
-                          },
-                          child: const Text('应用'),
-                        ),
-                      ],
-                    ),
-                  ],
-                ),
+                    ],
+                  ),
                 ),
               ),
             );
@@ -3527,7 +3602,6 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
       },
     );
   }
-
 
   String _pageAnimationLabel(ReaderPageAnimationStyle style) {
     return switch (style) {
@@ -3540,6 +3614,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
       ReaderPageAnimationStyle.none => '无动画',
     };
   }
+
   _ReaderThemeColors _resolveThemeColors(
     ReaderThemeMode mode,
     ReaderSettings settings,
@@ -3559,7 +3634,8 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
         Theme.of(context).brightness != Brightness.dark) {
       const targetBackground = Color(0xFFF7EEDC);
       const targetOverlay = Color(0xFFF0E3C7);
-      background = Color.lerp(baseBackground, targetBackground, 0.72) ??
+      background =
+          Color.lerp(baseBackground, targetBackground, 0.72) ??
           targetBackground;
       overlay = Color.lerp(baseOverlay, targetOverlay, 0.72) ?? targetOverlay;
       textColor = const Color(0xFF3F2E1F);
@@ -3601,9 +3677,6 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
     return hsl.withLightness(shifted).toColor();
   }
 }
-
-
-
 
 class _ReaderSpacingSheetResult {
   const _ReaderSpacingSheetResult({
