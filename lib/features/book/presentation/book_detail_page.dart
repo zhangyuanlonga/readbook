@@ -6,9 +6,11 @@ import '../../../app/layout/app_spacing.dart';
 
 import '../../../core/errors/app_exception.dart';
 import '../../../core/errors/error_codes.dart';
+import '../../../data/datasources/local/app_database.dart';
 import '../../../domain/entities/bookshelf_book.dart';
 import '../../../domain/entities/chapter.dart';
 import '../../bookshelf/application/bookshelf_service.dart';
+import '../../reader/presentation/chapter_cache_sheets.dart';
 import '../application/book_detail_service.dart';
 
 class BookDetailPage extends StatefulWidget {
@@ -142,6 +144,8 @@ class _BookDetailPageState extends State<BookDetailPage> {
                 const SizedBox(height: 12),
                 _buildLatestChapterCard(_resolveLatestChapter(_result!)!),
               ],
+              const SizedBox(height: 12),
+              _buildCacheCard(_result!),
               const SizedBox(height: 12),
               _buildChapterSection(_result!),
             ],
@@ -442,6 +446,94 @@ class _BookDetailPageState extends State<BookDetailPage> {
           ),
         ),
       ),
+    );
+  }
+
+  Widget _buildCacheCard(BookDetailLoadResult result) {
+    final totalChapters = result.chapters.length;
+    final colorScheme = Theme.of(context).colorScheme;
+
+    if (widget.sourceId == null || widget.sourceId!.trim().isEmpty) {
+      return const SizedBox.shrink();
+    }
+
+    final sourceId = widget.sourceId!.trim();
+
+    return StreamBuilder<int>(
+      stream: AppDatabase.instance.watchCachedChapterCount(widget.bookId),
+      builder: (context, snapshot) {
+        final cached = snapshot.data ?? 0;
+        final cappedCached = cached.clamp(0, totalChapters);
+        final isAllCached = totalChapters > 0 && cappedCached >= totalChapters;
+
+        final icon =
+            isAllCached
+                ? Icons.cloud_done_rounded
+                : Icons.cloud_download_outlined;
+
+        return Card(
+          color: colorScheme.surfaceContainerHigh,
+          child: InkWell(
+            borderRadius: BorderRadius.circular(20),
+            onTap:
+                totalChapters == 0
+                    ? null
+                    : () {
+                      final startIndex = 0;
+                      final endIndex =
+                          totalChapters > 0
+                              ? (startIndex + 49).clamp(0, totalChapters - 1)
+                              : 0;
+
+                      showChapterCacheFlow(
+                        context: context,
+                        bookId: widget.bookId,
+                        sourceId: sourceId,
+                        chapters: result.chapters,
+                        initialStartIndex: startIndex,
+                        initialEndIndex: endIndex,
+                        entryPoint: ChapterCacheEntryPoint.detail,
+                        bookTitle: result.detail.title,
+                      );
+                    },
+            child: Padding(
+              padding: const EdgeInsets.all(14),
+              child: Row(
+                children: [
+                  Icon(icon, color: colorScheme.primary),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          '缓存',
+                          style: Theme.of(
+                            context,
+                          ).textTheme.labelMedium?.copyWith(
+                            color: colorScheme.primary,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          '缓存: $cappedCached/$totalChapters',
+                          style: Theme.of(context).textTheme.bodyMedium,
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  Icon(
+                    Icons.chevron_right_rounded,
+                    color: colorScheme.onSurfaceVariant,
+                  ),
+                ],
+              ),
+            ),
+          ),
+        );
+      },
     );
   }
 

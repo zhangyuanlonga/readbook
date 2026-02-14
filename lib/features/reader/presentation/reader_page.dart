@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:math';
 import 'dart:typed_data';
 
 import 'package:file_selector/file_selector.dart';
@@ -21,6 +22,7 @@ import '../../book/application/book_detail_service.dart';
 import '../../bookshelf/application/bookshelf_service.dart';
 import '../application/chapter_content_service.dart';
 import '../application/reader_preferences_service.dart';
+import 'chapter_cache_sheets.dart';
 
 class ReaderPage extends ConsumerStatefulWidget {
   const ReaderPage({
@@ -1331,6 +1333,34 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
         .toList(growable: false);
   }
 
+  Future<void> _openChapterCache() async {
+    final sourceId = _sourceId;
+    if (sourceId == null || sourceId.isEmpty || _chapters.isEmpty) {
+      if (!mounted) {
+        return;
+      }
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('缺少目录信息，无法缓存。')));
+      return;
+    }
+
+    final total = _chapters.length;
+    final startIndex = (_currentIndex ?? 0).clamp(0, max(0, total - 1)).toInt();
+    final endIndex = min(total - 1, startIndex + 49);
+
+    await showChapterCacheFlow(
+      context: context,
+      bookId: widget.bookId,
+      sourceId: sourceId,
+      chapters: _chapters,
+      initialStartIndex: startIndex,
+      initialEndIndex: endIndex,
+      entryPoint: ChapterCacheEntryPoint.reader,
+      bookTitle: _bookTitle,
+    );
+  }
+
   Widget _buildTopOverlay(_ReaderThemeColors colors) {
     final chapterTitle =
         _chapterTitle?.isNotEmpty == true ? _chapterTitle! : '阅读';
@@ -1407,6 +1437,13 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
                           ),
                         ),
                         const SizedBox(width: 8),
+                        _buildTopActionButton(
+                          icon: Icons.cloud_download_outlined,
+                          tooltip: '缓存章节',
+                          onPressed: _openChapterCache,
+                          colors: colors,
+                        ),
+                        const SizedBox(width: 4),
                         _buildTopActionButton(
                           icon:
                               _isInBookshelf
@@ -1852,9 +1889,16 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
     });
 
     try {
+      final resolvedIndex =
+          _currentIndex ??
+          _chapters.indexWhere((chapter) => chapter.chapterUrl == chapterUrl);
+
       final contentResult = await _contentService.load(
         sourceId: sourceId,
         chapterUrl: chapterUrl,
+        bookId: widget.bookId,
+        chapterIndex: resolvedIndex >= 0 ? resolvedIndex : null,
+        chapterTitle: _chapterTitle,
       );
 
       if (!mounted) {

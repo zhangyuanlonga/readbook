@@ -24,14 +24,17 @@ class ChapterContentResult {
 
 class ChapterContentService {
   ChapterContentService({
+    AppDatabase? database,
     SourceRepository? sourceRepository,
     AppHttpClient? httpClient,
     RuleEngine? ruleEngine,
     ContentTextCleaner? cleaner,
     AppLogger? logger,
     UrlTemplateResolver? urlTemplateResolver,
-  }) : _sourceRepository =
-           sourceRepository ?? SourceRepositoryImpl(AppDatabase.instance),
+  }) : _database = database ?? AppDatabase.instance,
+       _sourceRepository =
+           sourceRepository ??
+           SourceRepositoryImpl(database ?? AppDatabase.instance),
        _httpClient = httpClient ?? AppHttpClient(),
        _ruleEngine = ruleEngine ?? RuleEngine(),
        _cleaner = cleaner ?? const ContentTextCleaner(),
@@ -39,6 +42,7 @@ class ChapterContentService {
        _urlTemplateResolver =
            urlTemplateResolver ?? const UrlTemplateResolver();
 
+  final AppDatabase _database;
   final SourceRepository _sourceRepository;
   final AppHttpClient _httpClient;
   final RuleEngine _ruleEngine;
@@ -51,6 +55,9 @@ class ChapterContentService {
   Future<ChapterContentResult> load({
     required String sourceId,
     required String chapterUrl,
+    String? bookId,
+    int? chapterIndex,
+    String? chapterTitle,
   }) async {
     final normalizedSourceId = sourceId.trim();
     final normalizedChapterUrl = chapterUrl.trim();
@@ -67,6 +74,24 @@ class ChapterContentService {
     final cached = _chapterCache[cacheKey];
     if (cached != null) {
       return ChapterContentResult(content: cached, fromCache: true);
+    }
+
+    try {
+      final persisted = await _database.getChapterCache(cacheKey);
+      final persistedContent = persisted?.content.trim() ?? '';
+      if (persistedContent.isNotEmpty) {
+        _chapterCache[cacheKey] = persistedContent;
+        return ChapterContentResult(content: persistedContent, fromCache: true);
+      }
+    } catch (error) {
+      _logger.warn(
+        'Chapter cache lookup failed',
+        context: {
+          'sourceId': normalizedSourceId,
+          'chapterUrl': normalizedChapterUrl,
+          'error': error.toString(),
+        },
+      );
     }
 
     final source = await _findSource(normalizedSourceId);
@@ -186,6 +211,31 @@ class ChapterContentService {
     }
 
     _chapterCache[cacheKey] = cleaned;
+
+    final normalizedBookId = bookId?.trim() ?? '';
+    if (normalizedBookId.isNotEmpty && chapterIndex != null) {
+      try {
+        await _database.upsertChapterCache(
+          cacheKey: cacheKey,
+          bookId: normalizedBookId,
+          sourceId: normalizedSourceId,
+          chapterIndex: chapterIndex,
+          chapterTitle: chapterTitle,
+          chapterUrl: normalizedChapterUrl,
+          content: cleaned,
+        );
+      } catch (error) {
+        _logger.warn(
+          'Chapter cache persist failed',
+          context: {
+            'sourceId': normalizedSourceId,
+            'chapterUrl': normalizedChapterUrl,
+            'bookId': normalizedBookId,
+            'error': error.toString(),
+          },
+        );
+      }
+    }
 
     return ChapterContentResult(content: cleaned, fromCache: false);
   }

@@ -30,14 +30,46 @@ class Sources extends Table {
   Set<Column<Object>> get primaryKey => {id};
 }
 
-@DriftDatabase(tables: [Sources])
+class ChapterCaches extends Table {
+  TextColumn get cacheKey => text()();
+  TextColumn get bookId => text()();
+  TextColumn get sourceId => text()();
+  IntColumn get chapterIndex => integer()();
+  TextColumn get chapterTitle => text().nullable()();
+  TextColumn get chapterUrl => text()();
+  TextColumn get content => text()();
+  DateTimeColumn get createdAt => dateTime().withDefault(currentDateAndTime)();
+  DateTimeColumn get updatedAt => dateTime().withDefault(currentDateAndTime)();
+
+  @override
+  String get tableName => 'chapter_caches';
+
+  @override
+  Set<Column<Object>> get primaryKey => {cacheKey};
+}
+
+@DriftDatabase(tables: [Sources, ChapterCaches])
 class AppDatabase extends _$AppDatabase {
   AppDatabase({QueryExecutor? executor}) : super(executor ?? _openConnection());
 
   static final AppDatabase instance = AppDatabase();
 
   @override
-  int get schemaVersion => 1;
+  int get schemaVersion => 2;
+
+  @override
+  MigrationStrategy get migration {
+    return MigrationStrategy(
+      onCreate: (migrator) async {
+        await migrator.createAll();
+      },
+      onUpgrade: (migrator, from, to) async {
+        if (from < 2) {
+          await migrator.createTable(chapterCaches);
+        }
+      },
+    );
+  }
 
   Future<List<SourceDefinition>> getAllSources() async {
     final rows =
@@ -98,6 +130,111 @@ class AppDatabase extends _$AppDatabase {
   }
 
   Future<void> clearSources() => delete(sources).go();
+
+  Future<ChapterCache?> getChapterCache(String cacheKey) {
+    final normalizedKey = cacheKey.trim();
+    if (normalizedKey.isEmpty) {
+      return Future.value(null);
+    }
+
+    return (select(chapterCaches)..where(
+      (table) => table.cacheKey.equals(normalizedKey),
+    )).getSingleOrNull();
+  }
+
+  Future<void> upsertChapterCache({
+    required String cacheKey,
+    required String bookId,
+    required String sourceId,
+    required int chapterIndex,
+    required String chapterUrl,
+    required String content,
+    String? chapterTitle,
+  }) async {
+    final normalizedKey = cacheKey.trim();
+    final normalizedBookId = bookId.trim();
+    final normalizedSourceId = sourceId.trim();
+    final normalizedUrl = chapterUrl.trim();
+
+    if (normalizedKey.isEmpty ||
+        normalizedBookId.isEmpty ||
+        normalizedSourceId.isEmpty ||
+        normalizedUrl.isEmpty ||
+        content.trim().isEmpty) {
+      return;
+    }
+
+    final now = DateTime.now();
+    final normalizedTitle = chapterTitle?.trim();
+
+    await into(chapterCaches).insert(
+      ChapterCachesCompanion(
+        cacheKey: Value(normalizedKey),
+        bookId: Value(normalizedBookId),
+        sourceId: Value(normalizedSourceId),
+        chapterIndex: Value(chapterIndex),
+        chapterTitle: Value(
+          normalizedTitle == null || normalizedTitle.isEmpty
+              ? null
+              : normalizedTitle,
+        ),
+        chapterUrl: Value(normalizedUrl),
+        content: Value(content),
+        createdAt: Value(now),
+        updatedAt: Value(now),
+      ),
+      mode: InsertMode.insertOrReplace,
+    );
+  }
+
+  Future<int> getCachedChapterCount(String bookId) async {
+    final normalized = bookId.trim();
+    if (normalized.isEmpty) {
+      return 0;
+    }
+
+    final countExpression = chapterCaches.cacheKey.count();
+    final query =
+        selectOnly(chapterCaches)
+          ..addColumns([countExpression])
+          ..where(chapterCaches.bookId.equals(normalized));
+
+    final row = await query.getSingle();
+    return row.read(countExpression) ?? 0;
+  }
+
+  Stream<int> watchCachedChapterCount(String bookId) {
+    final normalized = bookId.trim();
+    if (normalized.isEmpty) {
+      return const Stream<int>.empty();
+    }
+
+    final countExpression = chapterCaches.cacheKey.count();
+    final query =
+        selectOnly(chapterCaches)
+          ..addColumns([countExpression])
+          ..where(chapterCaches.bookId.equals(normalized));
+
+    return query.watchSingle().map((row) => row.read(countExpression) ?? 0);
+  }
+
+  Future<Set<String>> getCachedChapterCacheKeysForBook(String bookId) async {
+    final normalized = bookId.trim();
+    if (normalized.isEmpty) {
+      return <String>{};
+    }
+
+    final query =
+        selectOnly(chapterCaches)
+          ..addColumns([chapterCaches.cacheKey])
+          ..where(chapterCaches.bookId.equals(normalized));
+
+    final rows = await query.get();
+    return rows
+        .map((row) => row.read(chapterCaches.cacheKey))
+        .whereType<String>()
+        .toSet();
+  }
 
   SourceDefinition _mapRowToSource(Source row) {
     final rules = _decodeMap(row.rulesJson);

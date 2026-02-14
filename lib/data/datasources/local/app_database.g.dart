@@ -771,15 +771,598 @@ class SourcesCompanion extends UpdateCompanion<Source> {
   }
 }
 
+class $ChapterCachesTable extends ChapterCaches
+    with TableInfo<$ChapterCachesTable, ChapterCache> {
+  @override
+  final GeneratedDatabase attachedDatabase;
+  final String? _alias;
+  $ChapterCachesTable(this.attachedDatabase, [this._alias]);
+  static const VerificationMeta _cacheKeyMeta = const VerificationMeta(
+    'cacheKey',
+  );
+  @override
+  late final GeneratedColumn<String> cacheKey = GeneratedColumn<String>(
+    'cache_key',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _bookIdMeta = const VerificationMeta('bookId');
+  @override
+  late final GeneratedColumn<String> bookId = GeneratedColumn<String>(
+    'book_id',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _sourceIdMeta = const VerificationMeta(
+    'sourceId',
+  );
+  @override
+  late final GeneratedColumn<String> sourceId = GeneratedColumn<String>(
+    'source_id',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _chapterIndexMeta = const VerificationMeta(
+    'chapterIndex',
+  );
+  @override
+  late final GeneratedColumn<int> chapterIndex = GeneratedColumn<int>(
+    'chapter_index',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _chapterTitleMeta = const VerificationMeta(
+    'chapterTitle',
+  );
+  @override
+  late final GeneratedColumn<String> chapterTitle = GeneratedColumn<String>(
+    'chapter_title',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _chapterUrlMeta = const VerificationMeta(
+    'chapterUrl',
+  );
+  @override
+  late final GeneratedColumn<String> chapterUrl = GeneratedColumn<String>(
+    'chapter_url',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _contentMeta = const VerificationMeta(
+    'content',
+  );
+  @override
+  late final GeneratedColumn<String> content = GeneratedColumn<String>(
+    'content',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _createdAtMeta = const VerificationMeta(
+    'createdAt',
+  );
+  @override
+  late final GeneratedColumn<DateTime> createdAt = GeneratedColumn<DateTime>(
+    'created_at',
+    aliasedName,
+    false,
+    type: DriftSqlType.dateTime,
+    requiredDuringInsert: false,
+    defaultValue: currentDateAndTime,
+  );
+  static const VerificationMeta _updatedAtMeta = const VerificationMeta(
+    'updatedAt',
+  );
+  @override
+  late final GeneratedColumn<DateTime> updatedAt = GeneratedColumn<DateTime>(
+    'updated_at',
+    aliasedName,
+    false,
+    type: DriftSqlType.dateTime,
+    requiredDuringInsert: false,
+    defaultValue: currentDateAndTime,
+  );
+  @override
+  List<GeneratedColumn> get $columns => [
+    cacheKey,
+    bookId,
+    sourceId,
+    chapterIndex,
+    chapterTitle,
+    chapterUrl,
+    content,
+    createdAt,
+    updatedAt,
+  ];
+  @override
+  String get aliasedName => _alias ?? actualTableName;
+  @override
+  String get actualTableName => $name;
+  static const String $name = 'chapter_caches';
+  @override
+  VerificationContext validateIntegrity(
+    Insertable<ChapterCache> instance, {
+    bool isInserting = false,
+  }) {
+    final context = VerificationContext();
+    final data = instance.toColumns(true);
+    if (data.containsKey('cache_key')) {
+      context.handle(
+        _cacheKeyMeta,
+        cacheKey.isAcceptableOrUnknown(data['cache_key']!, _cacheKeyMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_cacheKeyMeta);
+    }
+    if (data.containsKey('book_id')) {
+      context.handle(
+        _bookIdMeta,
+        bookId.isAcceptableOrUnknown(data['book_id']!, _bookIdMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_bookIdMeta);
+    }
+    if (data.containsKey('source_id')) {
+      context.handle(
+        _sourceIdMeta,
+        sourceId.isAcceptableOrUnknown(data['source_id']!, _sourceIdMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_sourceIdMeta);
+    }
+    if (data.containsKey('chapter_index')) {
+      context.handle(
+        _chapterIndexMeta,
+        chapterIndex.isAcceptableOrUnknown(
+          data['chapter_index']!,
+          _chapterIndexMeta,
+        ),
+      );
+    } else if (isInserting) {
+      context.missing(_chapterIndexMeta);
+    }
+    if (data.containsKey('chapter_title')) {
+      context.handle(
+        _chapterTitleMeta,
+        chapterTitle.isAcceptableOrUnknown(
+          data['chapter_title']!,
+          _chapterTitleMeta,
+        ),
+      );
+    }
+    if (data.containsKey('chapter_url')) {
+      context.handle(
+        _chapterUrlMeta,
+        chapterUrl.isAcceptableOrUnknown(data['chapter_url']!, _chapterUrlMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_chapterUrlMeta);
+    }
+    if (data.containsKey('content')) {
+      context.handle(
+        _contentMeta,
+        content.isAcceptableOrUnknown(data['content']!, _contentMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_contentMeta);
+    }
+    if (data.containsKey('created_at')) {
+      context.handle(
+        _createdAtMeta,
+        createdAt.isAcceptableOrUnknown(data['created_at']!, _createdAtMeta),
+      );
+    }
+    if (data.containsKey('updated_at')) {
+      context.handle(
+        _updatedAtMeta,
+        updatedAt.isAcceptableOrUnknown(data['updated_at']!, _updatedAtMeta),
+      );
+    }
+    return context;
+  }
+
+  @override
+  Set<GeneratedColumn> get $primaryKey => {cacheKey};
+  @override
+  ChapterCache map(Map<String, dynamic> data, {String? tablePrefix}) {
+    final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
+    return ChapterCache(
+      cacheKey:
+          attachedDatabase.typeMapping.read(
+            DriftSqlType.string,
+            data['${effectivePrefix}cache_key'],
+          )!,
+      bookId:
+          attachedDatabase.typeMapping.read(
+            DriftSqlType.string,
+            data['${effectivePrefix}book_id'],
+          )!,
+      sourceId:
+          attachedDatabase.typeMapping.read(
+            DriftSqlType.string,
+            data['${effectivePrefix}source_id'],
+          )!,
+      chapterIndex:
+          attachedDatabase.typeMapping.read(
+            DriftSqlType.int,
+            data['${effectivePrefix}chapter_index'],
+          )!,
+      chapterTitle: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}chapter_title'],
+      ),
+      chapterUrl:
+          attachedDatabase.typeMapping.read(
+            DriftSqlType.string,
+            data['${effectivePrefix}chapter_url'],
+          )!,
+      content:
+          attachedDatabase.typeMapping.read(
+            DriftSqlType.string,
+            data['${effectivePrefix}content'],
+          )!,
+      createdAt:
+          attachedDatabase.typeMapping.read(
+            DriftSqlType.dateTime,
+            data['${effectivePrefix}created_at'],
+          )!,
+      updatedAt:
+          attachedDatabase.typeMapping.read(
+            DriftSqlType.dateTime,
+            data['${effectivePrefix}updated_at'],
+          )!,
+    );
+  }
+
+  @override
+  $ChapterCachesTable createAlias(String alias) {
+    return $ChapterCachesTable(attachedDatabase, alias);
+  }
+}
+
+class ChapterCache extends DataClass implements Insertable<ChapterCache> {
+  final String cacheKey;
+  final String bookId;
+  final String sourceId;
+  final int chapterIndex;
+  final String? chapterTitle;
+  final String chapterUrl;
+  final String content;
+  final DateTime createdAt;
+  final DateTime updatedAt;
+  const ChapterCache({
+    required this.cacheKey,
+    required this.bookId,
+    required this.sourceId,
+    required this.chapterIndex,
+    this.chapterTitle,
+    required this.chapterUrl,
+    required this.content,
+    required this.createdAt,
+    required this.updatedAt,
+  });
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    map['cache_key'] = Variable<String>(cacheKey);
+    map['book_id'] = Variable<String>(bookId);
+    map['source_id'] = Variable<String>(sourceId);
+    map['chapter_index'] = Variable<int>(chapterIndex);
+    if (!nullToAbsent || chapterTitle != null) {
+      map['chapter_title'] = Variable<String>(chapterTitle);
+    }
+    map['chapter_url'] = Variable<String>(chapterUrl);
+    map['content'] = Variable<String>(content);
+    map['created_at'] = Variable<DateTime>(createdAt);
+    map['updated_at'] = Variable<DateTime>(updatedAt);
+    return map;
+  }
+
+  ChapterCachesCompanion toCompanion(bool nullToAbsent) {
+    return ChapterCachesCompanion(
+      cacheKey: Value(cacheKey),
+      bookId: Value(bookId),
+      sourceId: Value(sourceId),
+      chapterIndex: Value(chapterIndex),
+      chapterTitle:
+          chapterTitle == null && nullToAbsent
+              ? const Value.absent()
+              : Value(chapterTitle),
+      chapterUrl: Value(chapterUrl),
+      content: Value(content),
+      createdAt: Value(createdAt),
+      updatedAt: Value(updatedAt),
+    );
+  }
+
+  factory ChapterCache.fromJson(
+    Map<String, dynamic> json, {
+    ValueSerializer? serializer,
+  }) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return ChapterCache(
+      cacheKey: serializer.fromJson<String>(json['cacheKey']),
+      bookId: serializer.fromJson<String>(json['bookId']),
+      sourceId: serializer.fromJson<String>(json['sourceId']),
+      chapterIndex: serializer.fromJson<int>(json['chapterIndex']),
+      chapterTitle: serializer.fromJson<String?>(json['chapterTitle']),
+      chapterUrl: serializer.fromJson<String>(json['chapterUrl']),
+      content: serializer.fromJson<String>(json['content']),
+      createdAt: serializer.fromJson<DateTime>(json['createdAt']),
+      updatedAt: serializer.fromJson<DateTime>(json['updatedAt']),
+    );
+  }
+  @override
+  Map<String, dynamic> toJson({ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return <String, dynamic>{
+      'cacheKey': serializer.toJson<String>(cacheKey),
+      'bookId': serializer.toJson<String>(bookId),
+      'sourceId': serializer.toJson<String>(sourceId),
+      'chapterIndex': serializer.toJson<int>(chapterIndex),
+      'chapterTitle': serializer.toJson<String?>(chapterTitle),
+      'chapterUrl': serializer.toJson<String>(chapterUrl),
+      'content': serializer.toJson<String>(content),
+      'createdAt': serializer.toJson<DateTime>(createdAt),
+      'updatedAt': serializer.toJson<DateTime>(updatedAt),
+    };
+  }
+
+  ChapterCache copyWith({
+    String? cacheKey,
+    String? bookId,
+    String? sourceId,
+    int? chapterIndex,
+    Value<String?> chapterTitle = const Value.absent(),
+    String? chapterUrl,
+    String? content,
+    DateTime? createdAt,
+    DateTime? updatedAt,
+  }) => ChapterCache(
+    cacheKey: cacheKey ?? this.cacheKey,
+    bookId: bookId ?? this.bookId,
+    sourceId: sourceId ?? this.sourceId,
+    chapterIndex: chapterIndex ?? this.chapterIndex,
+    chapterTitle: chapterTitle.present ? chapterTitle.value : this.chapterTitle,
+    chapterUrl: chapterUrl ?? this.chapterUrl,
+    content: content ?? this.content,
+    createdAt: createdAt ?? this.createdAt,
+    updatedAt: updatedAt ?? this.updatedAt,
+  );
+  ChapterCache copyWithCompanion(ChapterCachesCompanion data) {
+    return ChapterCache(
+      cacheKey: data.cacheKey.present ? data.cacheKey.value : this.cacheKey,
+      bookId: data.bookId.present ? data.bookId.value : this.bookId,
+      sourceId: data.sourceId.present ? data.sourceId.value : this.sourceId,
+      chapterIndex:
+          data.chapterIndex.present
+              ? data.chapterIndex.value
+              : this.chapterIndex,
+      chapterTitle:
+          data.chapterTitle.present
+              ? data.chapterTitle.value
+              : this.chapterTitle,
+      chapterUrl:
+          data.chapterUrl.present ? data.chapterUrl.value : this.chapterUrl,
+      content: data.content.present ? data.content.value : this.content,
+      createdAt: data.createdAt.present ? data.createdAt.value : this.createdAt,
+      updatedAt: data.updatedAt.present ? data.updatedAt.value : this.updatedAt,
+    );
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('ChapterCache(')
+          ..write('cacheKey: $cacheKey, ')
+          ..write('bookId: $bookId, ')
+          ..write('sourceId: $sourceId, ')
+          ..write('chapterIndex: $chapterIndex, ')
+          ..write('chapterTitle: $chapterTitle, ')
+          ..write('chapterUrl: $chapterUrl, ')
+          ..write('content: $content, ')
+          ..write('createdAt: $createdAt, ')
+          ..write('updatedAt: $updatedAt')
+          ..write(')'))
+        .toString();
+  }
+
+  @override
+  int get hashCode => Object.hash(
+    cacheKey,
+    bookId,
+    sourceId,
+    chapterIndex,
+    chapterTitle,
+    chapterUrl,
+    content,
+    createdAt,
+    updatedAt,
+  );
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is ChapterCache &&
+          other.cacheKey == this.cacheKey &&
+          other.bookId == this.bookId &&
+          other.sourceId == this.sourceId &&
+          other.chapterIndex == this.chapterIndex &&
+          other.chapterTitle == this.chapterTitle &&
+          other.chapterUrl == this.chapterUrl &&
+          other.content == this.content &&
+          other.createdAt == this.createdAt &&
+          other.updatedAt == this.updatedAt);
+}
+
+class ChapterCachesCompanion extends UpdateCompanion<ChapterCache> {
+  final Value<String> cacheKey;
+  final Value<String> bookId;
+  final Value<String> sourceId;
+  final Value<int> chapterIndex;
+  final Value<String?> chapterTitle;
+  final Value<String> chapterUrl;
+  final Value<String> content;
+  final Value<DateTime> createdAt;
+  final Value<DateTime> updatedAt;
+  final Value<int> rowid;
+  const ChapterCachesCompanion({
+    this.cacheKey = const Value.absent(),
+    this.bookId = const Value.absent(),
+    this.sourceId = const Value.absent(),
+    this.chapterIndex = const Value.absent(),
+    this.chapterTitle = const Value.absent(),
+    this.chapterUrl = const Value.absent(),
+    this.content = const Value.absent(),
+    this.createdAt = const Value.absent(),
+    this.updatedAt = const Value.absent(),
+    this.rowid = const Value.absent(),
+  });
+  ChapterCachesCompanion.insert({
+    required String cacheKey,
+    required String bookId,
+    required String sourceId,
+    required int chapterIndex,
+    this.chapterTitle = const Value.absent(),
+    required String chapterUrl,
+    required String content,
+    this.createdAt = const Value.absent(),
+    this.updatedAt = const Value.absent(),
+    this.rowid = const Value.absent(),
+  }) : cacheKey = Value(cacheKey),
+       bookId = Value(bookId),
+       sourceId = Value(sourceId),
+       chapterIndex = Value(chapterIndex),
+       chapterUrl = Value(chapterUrl),
+       content = Value(content);
+  static Insertable<ChapterCache> custom({
+    Expression<String>? cacheKey,
+    Expression<String>? bookId,
+    Expression<String>? sourceId,
+    Expression<int>? chapterIndex,
+    Expression<String>? chapterTitle,
+    Expression<String>? chapterUrl,
+    Expression<String>? content,
+    Expression<DateTime>? createdAt,
+    Expression<DateTime>? updatedAt,
+    Expression<int>? rowid,
+  }) {
+    return RawValuesInsertable({
+      if (cacheKey != null) 'cache_key': cacheKey,
+      if (bookId != null) 'book_id': bookId,
+      if (sourceId != null) 'source_id': sourceId,
+      if (chapterIndex != null) 'chapter_index': chapterIndex,
+      if (chapterTitle != null) 'chapter_title': chapterTitle,
+      if (chapterUrl != null) 'chapter_url': chapterUrl,
+      if (content != null) 'content': content,
+      if (createdAt != null) 'created_at': createdAt,
+      if (updatedAt != null) 'updated_at': updatedAt,
+      if (rowid != null) 'rowid': rowid,
+    });
+  }
+
+  ChapterCachesCompanion copyWith({
+    Value<String>? cacheKey,
+    Value<String>? bookId,
+    Value<String>? sourceId,
+    Value<int>? chapterIndex,
+    Value<String?>? chapterTitle,
+    Value<String>? chapterUrl,
+    Value<String>? content,
+    Value<DateTime>? createdAt,
+    Value<DateTime>? updatedAt,
+    Value<int>? rowid,
+  }) {
+    return ChapterCachesCompanion(
+      cacheKey: cacheKey ?? this.cacheKey,
+      bookId: bookId ?? this.bookId,
+      sourceId: sourceId ?? this.sourceId,
+      chapterIndex: chapterIndex ?? this.chapterIndex,
+      chapterTitle: chapterTitle ?? this.chapterTitle,
+      chapterUrl: chapterUrl ?? this.chapterUrl,
+      content: content ?? this.content,
+      createdAt: createdAt ?? this.createdAt,
+      updatedAt: updatedAt ?? this.updatedAt,
+      rowid: rowid ?? this.rowid,
+    );
+  }
+
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    if (cacheKey.present) {
+      map['cache_key'] = Variable<String>(cacheKey.value);
+    }
+    if (bookId.present) {
+      map['book_id'] = Variable<String>(bookId.value);
+    }
+    if (sourceId.present) {
+      map['source_id'] = Variable<String>(sourceId.value);
+    }
+    if (chapterIndex.present) {
+      map['chapter_index'] = Variable<int>(chapterIndex.value);
+    }
+    if (chapterTitle.present) {
+      map['chapter_title'] = Variable<String>(chapterTitle.value);
+    }
+    if (chapterUrl.present) {
+      map['chapter_url'] = Variable<String>(chapterUrl.value);
+    }
+    if (content.present) {
+      map['content'] = Variable<String>(content.value);
+    }
+    if (createdAt.present) {
+      map['created_at'] = Variable<DateTime>(createdAt.value);
+    }
+    if (updatedAt.present) {
+      map['updated_at'] = Variable<DateTime>(updatedAt.value);
+    }
+    if (rowid.present) {
+      map['rowid'] = Variable<int>(rowid.value);
+    }
+    return map;
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('ChapterCachesCompanion(')
+          ..write('cacheKey: $cacheKey, ')
+          ..write('bookId: $bookId, ')
+          ..write('sourceId: $sourceId, ')
+          ..write('chapterIndex: $chapterIndex, ')
+          ..write('chapterTitle: $chapterTitle, ')
+          ..write('chapterUrl: $chapterUrl, ')
+          ..write('content: $content, ')
+          ..write('createdAt: $createdAt, ')
+          ..write('updatedAt: $updatedAt, ')
+          ..write('rowid: $rowid')
+          ..write(')'))
+        .toString();
+  }
+}
+
 abstract class _$AppDatabase extends GeneratedDatabase {
   _$AppDatabase(QueryExecutor e) : super(e);
   $AppDatabaseManager get managers => $AppDatabaseManager(this);
   late final $SourcesTable sources = $SourcesTable(this);
+  late final $ChapterCachesTable chapterCaches = $ChapterCachesTable(this);
   @override
   Iterable<TableInfo<Table, Object?>> get allTables =>
       allSchemaEntities.whereType<TableInfo<Table, Object?>>();
   @override
-  List<DatabaseSchemaEntity> get allSchemaEntities => [sources];
+  List<DatabaseSchemaEntity> get allSchemaEntities => [sources, chapterCaches];
 }
 
 typedef $$SourcesTableCreateCompanionBuilder =
@@ -1141,10 +1724,305 @@ typedef $$SourcesTableProcessedTableManager =
       Source,
       PrefetchHooks Function()
     >;
+typedef $$ChapterCachesTableCreateCompanionBuilder =
+    ChapterCachesCompanion Function({
+      required String cacheKey,
+      required String bookId,
+      required String sourceId,
+      required int chapterIndex,
+      Value<String?> chapterTitle,
+      required String chapterUrl,
+      required String content,
+      Value<DateTime> createdAt,
+      Value<DateTime> updatedAt,
+      Value<int> rowid,
+    });
+typedef $$ChapterCachesTableUpdateCompanionBuilder =
+    ChapterCachesCompanion Function({
+      Value<String> cacheKey,
+      Value<String> bookId,
+      Value<String> sourceId,
+      Value<int> chapterIndex,
+      Value<String?> chapterTitle,
+      Value<String> chapterUrl,
+      Value<String> content,
+      Value<DateTime> createdAt,
+      Value<DateTime> updatedAt,
+      Value<int> rowid,
+    });
+
+class $$ChapterCachesTableFilterComposer
+    extends Composer<_$AppDatabase, $ChapterCachesTable> {
+  $$ChapterCachesTableFilterComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnFilters<String> get cacheKey => $composableBuilder(
+    column: $table.cacheKey,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get bookId => $composableBuilder(
+    column: $table.bookId,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get sourceId => $composableBuilder(
+    column: $table.sourceId,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get chapterIndex => $composableBuilder(
+    column: $table.chapterIndex,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get chapterTitle => $composableBuilder(
+    column: $table.chapterTitle,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get chapterUrl => $composableBuilder(
+    column: $table.chapterUrl,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get content => $composableBuilder(
+    column: $table.content,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<DateTime> get createdAt => $composableBuilder(
+    column: $table.createdAt,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<DateTime> get updatedAt => $composableBuilder(
+    column: $table.updatedAt,
+    builder: (column) => ColumnFilters(column),
+  );
+}
+
+class $$ChapterCachesTableOrderingComposer
+    extends Composer<_$AppDatabase, $ChapterCachesTable> {
+  $$ChapterCachesTableOrderingComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnOrderings<String> get cacheKey => $composableBuilder(
+    column: $table.cacheKey,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get bookId => $composableBuilder(
+    column: $table.bookId,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get sourceId => $composableBuilder(
+    column: $table.sourceId,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get chapterIndex => $composableBuilder(
+    column: $table.chapterIndex,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get chapterTitle => $composableBuilder(
+    column: $table.chapterTitle,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get chapterUrl => $composableBuilder(
+    column: $table.chapterUrl,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get content => $composableBuilder(
+    column: $table.content,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<DateTime> get createdAt => $composableBuilder(
+    column: $table.createdAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<DateTime> get updatedAt => $composableBuilder(
+    column: $table.updatedAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+}
+
+class $$ChapterCachesTableAnnotationComposer
+    extends Composer<_$AppDatabase, $ChapterCachesTable> {
+  $$ChapterCachesTableAnnotationComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  GeneratedColumn<String> get cacheKey =>
+      $composableBuilder(column: $table.cacheKey, builder: (column) => column);
+
+  GeneratedColumn<String> get bookId =>
+      $composableBuilder(column: $table.bookId, builder: (column) => column);
+
+  GeneratedColumn<String> get sourceId =>
+      $composableBuilder(column: $table.sourceId, builder: (column) => column);
+
+  GeneratedColumn<int> get chapterIndex => $composableBuilder(
+    column: $table.chapterIndex,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get chapterTitle => $composableBuilder(
+    column: $table.chapterTitle,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get chapterUrl => $composableBuilder(
+    column: $table.chapterUrl,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get content =>
+      $composableBuilder(column: $table.content, builder: (column) => column);
+
+  GeneratedColumn<DateTime> get createdAt =>
+      $composableBuilder(column: $table.createdAt, builder: (column) => column);
+
+  GeneratedColumn<DateTime> get updatedAt =>
+      $composableBuilder(column: $table.updatedAt, builder: (column) => column);
+}
+
+class $$ChapterCachesTableTableManager
+    extends
+        RootTableManager<
+          _$AppDatabase,
+          $ChapterCachesTable,
+          ChapterCache,
+          $$ChapterCachesTableFilterComposer,
+          $$ChapterCachesTableOrderingComposer,
+          $$ChapterCachesTableAnnotationComposer,
+          $$ChapterCachesTableCreateCompanionBuilder,
+          $$ChapterCachesTableUpdateCompanionBuilder,
+          (
+            ChapterCache,
+            BaseReferences<_$AppDatabase, $ChapterCachesTable, ChapterCache>,
+          ),
+          ChapterCache,
+          PrefetchHooks Function()
+        > {
+  $$ChapterCachesTableTableManager(_$AppDatabase db, $ChapterCachesTable table)
+    : super(
+        TableManagerState(
+          db: db,
+          table: table,
+          createFilteringComposer:
+              () => $$ChapterCachesTableFilterComposer($db: db, $table: table),
+          createOrderingComposer:
+              () =>
+                  $$ChapterCachesTableOrderingComposer($db: db, $table: table),
+          createComputedFieldComposer:
+              () => $$ChapterCachesTableAnnotationComposer(
+                $db: db,
+                $table: table,
+              ),
+          updateCompanionCallback:
+              ({
+                Value<String> cacheKey = const Value.absent(),
+                Value<String> bookId = const Value.absent(),
+                Value<String> sourceId = const Value.absent(),
+                Value<int> chapterIndex = const Value.absent(),
+                Value<String?> chapterTitle = const Value.absent(),
+                Value<String> chapterUrl = const Value.absent(),
+                Value<String> content = const Value.absent(),
+                Value<DateTime> createdAt = const Value.absent(),
+                Value<DateTime> updatedAt = const Value.absent(),
+                Value<int> rowid = const Value.absent(),
+              }) => ChapterCachesCompanion(
+                cacheKey: cacheKey,
+                bookId: bookId,
+                sourceId: sourceId,
+                chapterIndex: chapterIndex,
+                chapterTitle: chapterTitle,
+                chapterUrl: chapterUrl,
+                content: content,
+                createdAt: createdAt,
+                updatedAt: updatedAt,
+                rowid: rowid,
+              ),
+          createCompanionCallback:
+              ({
+                required String cacheKey,
+                required String bookId,
+                required String sourceId,
+                required int chapterIndex,
+                Value<String?> chapterTitle = const Value.absent(),
+                required String chapterUrl,
+                required String content,
+                Value<DateTime> createdAt = const Value.absent(),
+                Value<DateTime> updatedAt = const Value.absent(),
+                Value<int> rowid = const Value.absent(),
+              }) => ChapterCachesCompanion.insert(
+                cacheKey: cacheKey,
+                bookId: bookId,
+                sourceId: sourceId,
+                chapterIndex: chapterIndex,
+                chapterTitle: chapterTitle,
+                chapterUrl: chapterUrl,
+                content: content,
+                createdAt: createdAt,
+                updatedAt: updatedAt,
+                rowid: rowid,
+              ),
+          withReferenceMapper:
+              (p0) =>
+                  p0
+                      .map(
+                        (e) => (
+                          e.readTable(table),
+                          BaseReferences(db, table, e),
+                        ),
+                      )
+                      .toList(),
+          prefetchHooksCallback: null,
+        ),
+      );
+}
+
+typedef $$ChapterCachesTableProcessedTableManager =
+    ProcessedTableManager<
+      _$AppDatabase,
+      $ChapterCachesTable,
+      ChapterCache,
+      $$ChapterCachesTableFilterComposer,
+      $$ChapterCachesTableOrderingComposer,
+      $$ChapterCachesTableAnnotationComposer,
+      $$ChapterCachesTableCreateCompanionBuilder,
+      $$ChapterCachesTableUpdateCompanionBuilder,
+      (
+        ChapterCache,
+        BaseReferences<_$AppDatabase, $ChapterCachesTable, ChapterCache>,
+      ),
+      ChapterCache,
+      PrefetchHooks Function()
+    >;
 
 class $AppDatabaseManager {
   final _$AppDatabase _db;
   $AppDatabaseManager(this._db);
   $$SourcesTableTableManager get sources =>
       $$SourcesTableTableManager(_db, _db.sources);
+  $$ChapterCachesTableTableManager get chapterCaches =>
+      $$ChapterCachesTableTableManager(_db, _db.chapterCaches);
 }
