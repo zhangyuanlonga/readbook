@@ -234,6 +234,7 @@ class _SourcePageState extends State<SourcePage> {
     final colorScheme = Theme.of(context).colorScheme;
     final horizontal = AppSpacing.pageHorizontal(context);
     final bottomSafe = MediaQuery.viewPaddingOf(context).bottom;
+    final isSearchActive = _showSearchBar || _searchKeyword.isNotEmpty;
 
     return Scaffold(
       appBar: AppBar(
@@ -270,15 +271,18 @@ class _SourcePageState extends State<SourcePage> {
               icon: const Icon(Icons.delete_outline),
             ),
           ] else ...[
-            IconButton(
-              onPressed: _toggleSearchBar,
-              tooltip: _showSearchBar ? '收起搜索' : '搜索书源',
-              icon: Icon(
-                _showSearchBar
-                    ? Icons.search_off_rounded
-                    : Icons.search_rounded,
+            if (isSearchActive)
+              IconButton.filledTonal(
+                onPressed: _toggleSearchBar,
+                tooltip: '收起搜索',
+                icon: const Icon(Icons.search_off_rounded),
+              )
+            else
+              IconButton(
+                onPressed: _toggleSearchBar,
+                tooltip: '搜索书源',
+                icon: const Icon(Icons.search_rounded),
               ),
-            ),
             if (_isImporting)
               const Padding(
                 padding: EdgeInsets.only(right: 16),
@@ -349,8 +353,7 @@ class _SourcePageState extends State<SourcePage> {
     final showErrorCard = _listErrorText != null && _visibleSources.isEmpty;
     final showLoadingCard = _isInitialLoading;
 
-    final headerCount =
-        1 + (showSearchPanel ? 1 : 0) + (_isSelectionMode ? 1 : 0);
+    final headerCount = 2 + (_isSelectionMode ? 1 : 0);
     final listCount =
         showLoadingCard || showErrorCard || showEmpty
             ? 1
@@ -362,10 +365,9 @@ class _SourcePageState extends State<SourcePage> {
         _visibleSources.isNotEmpty;
     final itemCount = headerCount + listCount + (showFooter ? 1 : 0);
 
-    final searchPanelIndex = showSearchPanel ? 1 : -1;
-    final selectionIndex =
-        _isSelectionMode ? 1 + (showSearchPanel ? 1 : 0) : -1;
-    final listStartIndex = headerCount;
+    final searchPanelIndex = 1;
+    final selectionIndex = _isSelectionMode ? 2 : -1;
+    final listStartIndex = _isSelectionMode ? 3 : 2;
 
     return ListView.builder(
       controller: _scrollController,
@@ -381,10 +383,7 @@ class _SourcePageState extends State<SourcePage> {
         }
 
         if (index == searchPanelIndex) {
-          return Padding(
-            padding: const EdgeInsets.only(top: 10),
-            child: _buildSearchPanel(),
-          );
+          return _buildSearchPanelSlot(showSearchPanel: showSearchPanel);
         }
 
         if (index == selectionIndex) {
@@ -440,6 +439,32 @@ class _SourcePageState extends State<SourcePage> {
 
         return const SizedBox.shrink();
       },
+    );
+  }
+
+  Widget _buildSearchPanelSlot({required bool showSearchPanel}) {
+    return AnimatedSwitcher(
+      duration: const Duration(milliseconds: 220),
+      switchInCurve: Curves.easeOutCubic,
+      switchOutCurve: Curves.easeInCubic,
+      transitionBuilder: (child, animation) {
+        return FadeTransition(
+          opacity: animation,
+          child: SizeTransition(
+            sizeFactor: animation,
+            axisAlignment: -1,
+            child: child,
+          ),
+        );
+      },
+      child:
+          showSearchPanel
+              ? Padding(
+                key: const ValueKey('search_panel_visible'),
+                padding: const EdgeInsets.only(top: 10),
+                child: _buildSearchPanel(),
+              )
+              : const SizedBox.shrink(key: ValueKey('search_panel_hidden')),
     );
   }
 
