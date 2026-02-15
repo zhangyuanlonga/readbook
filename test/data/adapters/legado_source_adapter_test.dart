@@ -1,3 +1,6 @@
+import 'dart:convert';
+import 'dart:io';
+
 import 'package:flutter_appread/core/errors/app_exception.dart';
 import 'package:flutter_appread/core/errors/error_codes.dart';
 import 'package:flutter_appread/data/adapters/legado_source_adapter.dart';
@@ -146,6 +149,33 @@ void main() {
       expect(source.rules.detailRule, isNull);
       expect(source.rules.tocInitRule, '/toc/init');
       expect(source.rules.contentInitRule, '/content/init');
+    });
+
+    test('downgrades inline-js manga rules to static fallback rules', () {
+      final payload =
+          jsonDecode(File('1771173829.json').readAsStringSync())
+              as List<dynamic>;
+      final raw = LegadoSourceRaw.fromJson(
+        Map<String, dynamic>.from(payload.first as Map),
+      );
+
+      final source = adapter.adapt(raw);
+
+      expect(source.sourceType, 2);
+      expect(source.rules.searchRule, '/search?keyword={{key}}');
+      expect(source.rules.searchDetailUrlRule, 'a@href');
+      expect(source.rules.detailRule, '.detail-main-info-title@html');
+      expect(source.rules.detailTitleRule, '.detail-main-info-title@text');
+      expect(
+        source.rules.detailAuthorRule,
+        '.detail-main-info-author:nth-child(3)@text',
+      );
+      expect(source.rules.detailIntroRule, 'p.detail-desc@text');
+      expect(source.rules.detailTocUrlRule, '.detail-list-1 li a@href');
+      expect(source.rules.tocListRule, '.detail-list-1 li@html');
+      expect(source.rules.tocTitleRule, 'a@text');
+      expect(source.rules.tocChapterUrlRule, 'a@href');
+      expect(source.rules.contentRule, '.view-main-1.readForm img@src');
     });
 
     test('falls back to searchUrl when ruleSearch is missing', () {

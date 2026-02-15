@@ -15,6 +15,7 @@ import '../../../data/repositories/source_repository_impl.dart';
 import '../../../domain/entities/source_definition.dart';
 import '../../../domain/repositories/source_repository.dart';
 import '../../search/application/search_service.dart';
+import '../application/source_capability_analyzer.dart';
 import '../application/source_import_service.dart';
 
 class SourcePage extends StatefulWidget {
@@ -817,6 +818,10 @@ class _SourcePageState extends State<SourcePage> {
                       spacing: 6,
                       runSpacing: 6,
                       children: [
+                        _buildSourceMetaChip(
+                          '类型',
+                          source.isMangaSource ? '漫画' : '小说',
+                        ),
                         _buildSourceMetaChip('分组', source.group ?? '未分组'),
                         _buildSourceMetaChip('状态', statusText),
                         _buildSourceMetaChip('测试', checkedAtText),
@@ -1011,6 +1016,7 @@ class _SourcePageState extends State<SourcePage> {
                     message: error.briefMessage,
                   ),
                 ],
+                compatibilityHints: const [],
                 totalCount: 0,
               ),
             );
@@ -1025,6 +1031,7 @@ class _SourcePageState extends State<SourcePage> {
                   message: '读取内置文件失败，请确认已在 pubspec.yaml 注册资源。',
                 ),
               ],
+              compatibilityHints: const [],
               totalCount: 0,
             ),
           );
@@ -1066,13 +1073,15 @@ class _SourcePageState extends State<SourcePage> {
     SourceImportPreviewReport report, {
     required String actionLabel,
   }) async {
-    if (report.totalCount == 0 && !report.hasIssues) {
+    if (report.totalCount == 0 &&
+        !report.hasIssues &&
+        !report.hasCompatibilityHints) {
       _showMessage('$actionLabel未发现可处理书源。');
       return;
     }
 
     var shouldImport = true;
-    if (report.hasIssues) {
+    if (report.hasIssues || report.hasCompatibilityHints) {
       shouldImport =
           await _showImportPreviewDialog(report, title: '$actionLabel预校验结果') ??
           false;
@@ -1090,13 +1099,20 @@ class _SourcePageState extends State<SourcePage> {
     await _repository.upsertAll(report.validSources);
     await _reloadSourceList(reset: true);
 
-    if (report.invalidCount == 0) {
+    if (report.invalidCount == 0 && report.compatibilityHintCount == 0) {
       _showMessage('$actionLabel成功：共 ${report.validCount} 条。');
       return;
     }
 
+    if (report.invalidCount == 0 && report.compatibilityHintCount > 0) {
+      _showMessage(
+        '$actionLabel完成：成功 ${report.validCount} 条，兼容提示 ${report.compatibilityHintCount} 条。',
+      );
+      return;
+    }
+
     _showMessage(
-      '$actionLabel完成：成功 ${report.validCount} 条，失败 ${report.invalidCount} 条。',
+      '$actionLabel完成：成功 ${report.validCount} 条，失败 ${report.invalidCount} 条，兼容提示 ${report.compatibilityHintCount} 条。',
     );
   }
 
@@ -1109,6 +1125,9 @@ class _SourcePageState extends State<SourcePage> {
       issues: report.issues
           .map((issue) => issue.withSourceLabel(sourceLabel))
           .toList(growable: false),
+      compatibilityHints: report.compatibilityHints
+          .map((hint) => hint.withSourceLabel(sourceLabel))
+          .toList(growable: false),
       totalCount: report.totalCount,
     );
   }
@@ -1118,17 +1137,20 @@ class _SourcePageState extends State<SourcePage> {
   ) {
     final validSources = <SourceDefinition>[];
     final issues = <SourceImportIssue>[];
+    final compatibilityHints = <SourceCompatibilityHint>[];
     var totalCount = 0;
 
     for (final report in reports) {
       validSources.addAll(report.validSources);
       issues.addAll(report.issues);
+      compatibilityHints.addAll(report.compatibilityHints);
       totalCount += report.totalCount;
     }
 
     return SourceImportPreviewReport(
       validSources: List.unmodifiable(validSources),
       issues: List.unmodifiable(issues),
+      compatibilityHints: List.unmodifiable(compatibilityHints),
       totalCount: totalCount,
     );
   }
@@ -1163,6 +1185,28 @@ class _SourcePageState extends State<SourcePage> {
                   Text('可导入：${report.validCount}'),
                   const SizedBox(height: 4),
                   Text('失败：${report.invalidCount}'),
+                  const SizedBox(height: 4),
+                  Text('兼容提示：${report.compatibilityHintCount}'),
+                  if (report.hasCompatibilityHints) ...[
+                    const SizedBox(height: 10),
+                    Text(
+                      '兼容提示（非阻断，可继续导入）',
+                      style: Theme.of(dialogContext).textTheme.titleSmall,
+                    ),
+                    const SizedBox(height: 6),
+                    ...report.compatibilityHints
+                        .take(40)
+                        .map(
+                          (hint) => Padding(
+                            padding: const EdgeInsets.only(bottom: 4),
+                            child: SelectableText(hint.toDisplayText()),
+                          ),
+                        ),
+                    if (report.compatibilityHintCount > 40)
+                      Text(
+                        '... 其余 ${report.compatibilityHintCount - 40} 条兼容提示请查看日志',
+                      ),
+                  ],
                   const SizedBox(height: 10),
                   Text(
                     '失败明细（含条目和行号）',
@@ -1431,6 +1475,7 @@ class _SourcePageState extends State<SourcePage> {
         return;
       }
 
+      final capability = SourceCapabilityAnalyzer.fromSource(latestSource);
       final report = await _searchService
           .testSingleSource(
             source: latestSource,
@@ -1462,7 +1507,7 @@ class _SourcePageState extends State<SourcePage> {
         return;
       }
 
-      await _showConnectivityResultDialog(report);
+      await _showConnectivityResultDialog(report, capability: capability);
       await _reloadSourceList(reset: false);
     } finally {
       if (mounted) {
@@ -1478,8 +1523,9 @@ class _SourcePageState extends State<SourcePage> {
   }
 
   Future<void> _showConnectivityResultDialog(
-    SourceConnectivityTestReport report,
-  ) {
+    SourceConnectivityTestReport report, {
+    SourceCapabilityProfile? capability,
+  }) {
     final error = report.error;
     final isSuccess = report.isSuccess;
 
@@ -1517,6 +1563,17 @@ class _SourcePageState extends State<SourcePage> {
                       report.requestUrl!.isNotEmpty) ...[
                     const SizedBox(height: 4),
                     SelectableText('请求地址: ${report.requestUrl}'),
+                  ],
+                  if (capability != null) ...[
+                    const SizedBox(height: 8),
+                    Text('能力检查: ${capability.compatibilityLabel}'),
+                    if (capability.reasons.isNotEmpty)
+                      ...capability.reasons.map(
+                        (reason) => Padding(
+                          padding: const EdgeInsets.only(top: 4),
+                          child: Text('- $reason'),
+                        ),
+                      ),
                   ],
                   const SizedBox(height: 8),
                   if (isSuccess)

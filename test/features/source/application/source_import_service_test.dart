@@ -1,8 +1,10 @@
+import 'dart:convert';
 import 'dart:io';
 
 import 'package:charset/charset.dart';
 import 'package:flutter_appread/core/result/result.dart';
 import 'package:flutter_appread/domain/entities/source_definition.dart';
+import 'package:flutter_appread/features/source/application/source_capability_analyzer.dart';
 import 'package:flutter_appread/features/source/application/source_import_service.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -33,6 +35,53 @@ void main() {
       expect(result, isA<Success<List<SourceDefinition>>>());
       final data = (result as Success<List<SourceDefinition>>).data;
       expect(data.map((e) => e.name), ['源A', '源B']);
+    });
+
+    test('captures sourceType from imported payload', () {
+      const jsonText =
+          '{"bookSourceName":"漫画源","bookSourceUrl":"https://comic.example.com","bookSourceType":2,"searchUrl":"/search?key={{key}}"}';
+
+      final result = service.importFromText(jsonText);
+
+      expect(result, isA<Success<List<SourceDefinition>>>());
+      final data = (result as Success<List<SourceDefinition>>).data;
+      expect(data, hasLength(1));
+      expect(data.first.sourceType, 2);
+      expect(data.first.isMangaSource, isTrue);
+    });
+
+    test('reports compatibility hints for js reload manga source', () {
+      final file = File('manhua.json');
+      final payload =
+          file.existsSync()
+              ? file.readAsStringSync()
+              : jsonEncode([
+                {
+                  'bookSourceName': '漫画源',
+                  'bookSourceUrl': 'https://comic.example.com',
+                  'bookSourceType': 2,
+                  'searchUrl': '<js>Reload("https://example.com")</js>',
+                  'ruleContent': {
+                    'content': '<js>result</js>',
+                    'imageStyle': 'FULL',
+                  },
+                },
+              ]);
+
+      final result = service.previewFromText(payload);
+
+      expect(result, isA<Success<SourceImportPreviewReport>>());
+      final report = (result as Success<SourceImportPreviewReport>).data;
+      expect(report.validCount, greaterThanOrEqualTo(1));
+      expect(report.compatibilityHintCount, greaterThan(0));
+      final hint = report.compatibilityHints.first;
+      expect(hint.level, SourceCompatibilityLevel.unsupported);
+      expect(
+        hint.reasons.any(
+          (item) => item.contains('Reload') || item.contains('漫画'),
+        ),
+        isTrue,
+      );
     });
 
     test('returns failure on invalid json', () {

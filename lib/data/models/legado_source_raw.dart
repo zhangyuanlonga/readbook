@@ -1,8 +1,7 @@
 import 'dart:convert';
 
 class LegadoSourceRaw {
-  LegadoSourceRaw._(Map<String, dynamic> rawData)
-      : rawData = _copyMap(rawData);
+  LegadoSourceRaw._(Map<String, dynamic> rawData) : rawData = _copyMap(rawData);
 
   final Map<String, dynamic> rawData;
 
@@ -23,6 +22,7 @@ class LegadoSourceRaw {
   String? get sourceGroup => _readString('bookSourceGroup');
   String? get sourceComment => _readString('bookSourceComment');
   String? get searchUrl => _readString('searchUrl');
+  int? get sourceType => _readInt('bookSourceType');
 
   bool get enabled => _readBool('enabled') ?? true;
 
@@ -34,6 +34,20 @@ class LegadoSourceRaw {
       return null;
     }
     return value.toString().trim();
+  }
+
+  int? _readInt(String key) {
+    final value = rawData[key];
+    if (value is int) {
+      return value;
+    }
+    if (value is num) {
+      return value.toInt();
+    }
+    if (value is String) {
+      return int.tryParse(value.trim());
+    }
+    return null;
   }
 
   bool? _readBool(String key) {

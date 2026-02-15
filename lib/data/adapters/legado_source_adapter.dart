@@ -54,6 +54,99 @@ class LegadoSourceAdapter {
         _pickRuleFromMap(contentRuleMap, ['init']);
     final contentInitRule = _splitInitRule(contentInitCandidate).requestRule;
 
+    var adaptedRules = SourceRuleSet(
+      searchRule: searchRule,
+      searchInitRule: searchInitRule,
+      searchListRule:
+          _pickRule(raw.rawData, ['ruleSearchList', 'searchListRule']) ??
+          _pickRuleFromMap(searchRuleMap, ['bookList', 'list']),
+      searchTitleRule:
+          _pickRule(raw.rawData, ['ruleSearchName', 'searchTitleRule']) ??
+          _pickRuleFromMap(searchRuleMap, ['name', 'title', 'bookName']),
+      searchDetailUrlRule:
+          _pickRule(raw.rawData, [
+            'ruleSearchBookUrl',
+            'ruleSearchDetailUrl',
+            'searchDetailUrlRule',
+          ]) ??
+          _pickRuleFromMap(searchRuleMap, ['bookUrl', 'detailUrl', 'url']),
+      searchAuthorRule:
+          _pickRule(raw.rawData, ['ruleSearchAuthor', 'searchAuthorRule']) ??
+          _pickRuleFromMap(searchRuleMap, ['author']),
+      searchIntroRule:
+          _pickRule(raw.rawData, ['ruleSearchIntro', 'searchIntroRule']) ??
+          _pickRuleFromMap(searchRuleMap, ['intro', 'desc', 'description']),
+      searchCoverUrlRule:
+          _pickRule(raw.rawData, [
+            'ruleSearchCoverUrl',
+            'searchCoverUrlRule',
+          ]) ??
+          _pickRuleFromMap(searchRuleMap, [
+            'coverUrl',
+            'cover',
+            'img',
+            'bookCover',
+          ]),
+      searchLatestChapterRule:
+          _pickRule(raw.rawData, [
+            'ruleSearchLastChapter',
+            'searchLatestChapterRule',
+          ]) ??
+          _pickRuleFromMap(searchRuleMap, ['lastChapter', 'latestChapter']),
+      detailRule:
+          detailRuleMap == null
+              ? _pickRule(raw.rawData, ['ruleBookInfo'])
+              : detailInitSplit.parseRule,
+      detailInitRule: detailInitSplit.requestRule,
+      detailTitleRule:
+          _pickRule(raw.rawData, ['ruleBookName', 'detailTitleRule']) ??
+          _pickRuleFromMap(detailRuleMap, ['name', 'title', 'bookName']),
+      detailAuthorRule:
+          _pickRule(raw.rawData, ['ruleBookAuthor', 'detailAuthorRule']) ??
+          _pickRuleFromMap(detailRuleMap, ['author']),
+      detailIntroRule:
+          _pickRule(raw.rawData, ['ruleBookIntro', 'detailIntroRule']) ??
+          _pickRuleFromMap(detailRuleMap, ['intro', 'description', 'desc']),
+      detailCoverUrlRule:
+          _pickRule(raw.rawData, ['ruleCoverUrl', 'detailCoverUrlRule']) ??
+          _pickRuleFromMap(detailRuleMap, ['coverUrl', 'cover', 'bookCover']),
+      detailTocUrlRule:
+          _pickRule(raw.rawData, ['ruleTocUrl', 'detailTocUrlRule']) ??
+          _pickRuleFromMap(detailRuleMap, [
+            'tocUrl',
+            'catalogUrl',
+            'chapterUrl',
+          ]),
+      tocRule:
+          tocRuleMap == null
+              ? _pickRule(raw.rawData, ['ruleToc'])
+              : tocInitSplit.parseRule,
+      tocInitRule: tocInitSplit.requestRule,
+      tocListRule:
+          _pickRule(raw.rawData, ['ruleChapterList', 'tocListRule']) ??
+          _pickRuleFromMap(tocRuleMap, ['chapterList', 'list']),
+      tocTitleRule:
+          _pickRule(raw.rawData, ['ruleChapterName', 'tocTitleRule']) ??
+          _pickRuleFromMap(tocRuleMap, ['chapterName', 'title', 'name']),
+      tocChapterUrlRule:
+          _pickRule(raw.rawData, ['ruleChapterUrl', 'tocChapterUrlRule']) ??
+          _pickRuleFromMap(tocRuleMap, ['chapterUrl', 'url', 'link']),
+      tocReversed:
+          _pickBool(raw.rawData, ['reverseToc', 'tocReverse']) ??
+          _pickBoolFromMap(tocRuleMap, ['reverse', 'isReverse', 'isDesc']) ??
+          false,
+      contentRule:
+          _pickRule(raw.rawData, ['ruleContent']) ??
+          _pickRuleFromMap(contentRuleMap, ['content', 'text', 'body']),
+      contentInitRule: contentInitRule,
+    );
+
+    adaptedRules = _applyInlineJsMangaFallback(
+      rawData: raw.rawData,
+      sourceType: raw.sourceType ?? 0,
+      rules: adaptedRules,
+    );
+
     return SourceDefinition(
       id: _buildId(
         name: name,
@@ -64,95 +157,333 @@ class LegadoSourceAdapter {
       baseUrl: baseUrl,
       group: _emptyToNull(_normalizeText(raw.sourceGroup)),
       enabled: raw.enabled,
+      sourceType: raw.sourceType ?? 0,
       comment: _emptyToNull(_normalizeText(raw.sourceComment)),
       headers: _parseHeaders(raw.rawData['header']),
-      rules: SourceRuleSet(
-        searchRule: searchRule,
-        searchInitRule: searchInitRule,
-        searchListRule:
-            _pickRule(raw.rawData, ['ruleSearchList', 'searchListRule']) ??
-            _pickRuleFromMap(searchRuleMap, ['bookList', 'list']),
-        searchTitleRule:
-            _pickRule(raw.rawData, ['ruleSearchName', 'searchTitleRule']) ??
-            _pickRuleFromMap(searchRuleMap, ['name', 'title', 'bookName']),
-        searchDetailUrlRule:
-            _pickRule(raw.rawData, [
-              'ruleSearchBookUrl',
-              'ruleSearchDetailUrl',
-              'searchDetailUrlRule',
-            ]) ??
-            _pickRuleFromMap(searchRuleMap, ['bookUrl', 'detailUrl', 'url']),
-        searchAuthorRule:
-            _pickRule(raw.rawData, ['ruleSearchAuthor', 'searchAuthorRule']) ??
-            _pickRuleFromMap(searchRuleMap, ['author']),
-        searchIntroRule:
-            _pickRule(raw.rawData, ['ruleSearchIntro', 'searchIntroRule']) ??
-            _pickRuleFromMap(searchRuleMap, ['intro', 'desc', 'description']),
-        searchCoverUrlRule:
-            _pickRule(raw.rawData, [
-              'ruleSearchCoverUrl',
-              'searchCoverUrlRule',
-            ]) ??
-            _pickRuleFromMap(searchRuleMap, [
-              'coverUrl',
-              'cover',
-              'img',
-              'bookCover',
-            ]),
-        searchLatestChapterRule:
-            _pickRule(raw.rawData, [
-              'ruleSearchLastChapter',
-              'searchLatestChapterRule',
-            ]) ??
-            _pickRuleFromMap(searchRuleMap, ['lastChapter', 'latestChapter']),
-        detailRule:
-            detailRuleMap == null
-                ? _pickRule(raw.rawData, ['ruleBookInfo'])
-                : detailInitSplit.parseRule,
-        detailInitRule: detailInitSplit.requestRule,
-        detailTitleRule:
-            _pickRule(raw.rawData, ['ruleBookName', 'detailTitleRule']) ??
-            _pickRuleFromMap(detailRuleMap, ['name', 'title', 'bookName']),
-        detailAuthorRule:
-            _pickRule(raw.rawData, ['ruleBookAuthor', 'detailAuthorRule']) ??
-            _pickRuleFromMap(detailRuleMap, ['author']),
-        detailIntroRule:
-            _pickRule(raw.rawData, ['ruleBookIntro', 'detailIntroRule']) ??
-            _pickRuleFromMap(detailRuleMap, ['intro', 'description', 'desc']),
-        detailCoverUrlRule:
-            _pickRule(raw.rawData, ['ruleCoverUrl', 'detailCoverUrlRule']) ??
-            _pickRuleFromMap(detailRuleMap, ['coverUrl', 'cover', 'bookCover']),
-        detailTocUrlRule:
-            _pickRule(raw.rawData, ['ruleTocUrl', 'detailTocUrlRule']) ??
-            _pickRuleFromMap(detailRuleMap, [
-              'tocUrl',
-              'catalogUrl',
-              'chapterUrl',
-            ]),
-        tocRule:
-            tocRuleMap == null
-                ? _pickRule(raw.rawData, ['ruleToc'])
-                : tocInitSplit.parseRule,
-        tocInitRule: tocInitSplit.requestRule,
-        tocListRule:
-            _pickRule(raw.rawData, ['ruleChapterList', 'tocListRule']) ??
-            _pickRuleFromMap(tocRuleMap, ['chapterList', 'list']),
-        tocTitleRule:
-            _pickRule(raw.rawData, ['ruleChapterName', 'tocTitleRule']) ??
-            _pickRuleFromMap(tocRuleMap, ['chapterName', 'title', 'name']),
-        tocChapterUrlRule:
-            _pickRule(raw.rawData, ['ruleChapterUrl', 'tocChapterUrlRule']) ??
-            _pickRuleFromMap(tocRuleMap, ['chapterUrl', 'url', 'link']),
-        tocReversed:
-            _pickBool(raw.rawData, ['reverseToc', 'tocReverse']) ??
-            _pickBoolFromMap(tocRuleMap, ['reverse', 'isReverse', 'isDesc']) ??
-            false,
-        contentRule:
-            _pickRule(raw.rawData, ['ruleContent']) ??
-            _pickRuleFromMap(contentRuleMap, ['content', 'text', 'body']),
-        contentInitRule: contentInitRule,
-      ),
+      rules: adaptedRules,
     );
+  }
+
+  SourceRuleSet _applyInlineJsMangaFallback({
+    required Map<String, dynamic> rawData,
+    required int sourceType,
+    required SourceRuleSet rules,
+  }) {
+    if (sourceType != 2) {
+      return rules;
+    }
+
+    if (_containsReload(rawData)) {
+      return rules;
+    }
+
+    var next = rules;
+
+    final resolvedSearchRule = _resolveSearchRuleFromInlineJs(next.searchRule);
+    if (resolvedSearchRule != null) {
+      next = next.copyWith(searchRule: resolvedSearchRule);
+    }
+
+    if (_containsInvalidNumericClassSelector(next.searchDetailUrlRule)) {
+      next = next.copyWith(searchDetailUrlRule: 'a@href');
+    }
+
+    final detailRuleMap = _extractMap(rawData['ruleBookInfo']);
+    final detailInitRaw = _extractInlineJsBody(
+      _pickRuleFromMap(detailRuleMap, ['init']),
+    );
+    final detailInitScript = _decodePackedJs(detailInitRaw) ?? detailInitRaw;
+
+    if (detailInitScript != null &&
+        (_looksLikeJavaScriptRule(next.detailRule) ||
+            _isSimpleRuleToken(next.detailTitleRule, const {'name', 'title'}) ||
+            _isSimpleRuleToken(next.detailAuthorRule, const {'author'}) ||
+            _isSimpleRuleToken(next.detailIntroRule, const {'intro'}) ||
+            _isSimpleRuleToken(next.detailCoverUrlRule, const {'cover'}) ||
+            _isSimpleRuleToken(next.detailTocUrlRule, const {
+              'url',
+              'tocUrl',
+            }))) {
+      final titleSelector = _extractBookInfoSelector(detailInitScript, 'name');
+      final authorSelector = _extractBookInfoSelector(
+        detailInitScript,
+        'author',
+      );
+      final introSelector = _extractBookInfoSelector(detailInitScript, 'intro');
+      final coverSelector = _extractBookInfoSelector(detailInitScript, 'cover');
+
+      next = next.copyWith(
+        detailRule: '.detail-main-info-title@html',
+        detailTitleRule:
+            titleSelector != null
+                ? '$titleSelector@text'
+                : next.detailTitleRule,
+        detailAuthorRule:
+            authorSelector != null
+                ? '$authorSelector@text'
+                : next.detailAuthorRule,
+        detailIntroRule:
+            introSelector != null
+                ? '$introSelector@text'
+                : next.detailIntroRule,
+        detailCoverUrlRule:
+            coverSelector != null
+                ? '$coverSelector@data-original'
+                : next.detailCoverUrlRule,
+        detailTocUrlRule:
+            _isSimpleRuleToken(next.detailTocUrlRule, const {'url', 'tocUrl'})
+                ? '.detail-list-1 li a@href'
+                : next.detailTocUrlRule,
+      );
+    }
+
+    final tocRuleMap = _extractMap(rawData['ruleToc']);
+    final tocListRaw = _extractInlineJsBody(
+      _pickRuleFromMap(tocRuleMap, ['chapterList']),
+    );
+    final tocListScript = _decodePackedJs(tocListRaw) ?? tocListRaw;
+    if (tocListScript != null && _looksLikeJavaScriptRule(next.tocListRule)) {
+      final selector = _extractJavaGetElementsSelector(tocListScript);
+      if (selector != null) {
+        final listSelector =
+            selector.endsWith(' a')
+                ? selector.substring(0, selector.length - 2).trim()
+                : selector;
+        next = next.copyWith(
+          tocRule: null,
+          tocListRule: '$listSelector@html',
+          tocTitleRule: 'a@text',
+          tocChapterUrlRule: 'a@href',
+        );
+      }
+    }
+
+    final contentRuleMap = _extractMap(rawData['ruleContent']);
+    final contentRaw = _extractInlineJsBody(
+      _pickRuleFromMap(contentRuleMap, ['content']),
+    );
+    final contentScript = _decodePackedJs(contentRaw) ?? contentRaw;
+    if (contentScript != null && _looksLikeJavaScriptRule(next.contentRule)) {
+      final selector = _extractJavaGetElementsSelector(contentScript);
+      if (selector != null) {
+        next = next.copyWith(contentRule: '$selector@src');
+      }
+    }
+
+    return next;
+  }
+
+  bool _containsReload(Map<String, dynamic> payload) {
+    final values = <String>[];
+    _collectStrings(payload, values);
+    return values.any(
+      (value) => RegExp(r'reload\s*\(', caseSensitive: false).hasMatch(value),
+    );
+  }
+
+  void _collectStrings(dynamic value, List<String> output) {
+    if (value == null) {
+      return;
+    }
+
+    if (value is String) {
+      final normalized = value.trim();
+      if (normalized.isNotEmpty) {
+        output.add(normalized);
+      }
+      return;
+    }
+
+    if (value is Map) {
+      for (final entry in value.entries) {
+        _collectStrings(entry.key, output);
+        _collectStrings(entry.value, output);
+      }
+      return;
+    }
+
+    if (value is Iterable) {
+      for (final item in value) {
+        _collectStrings(item, output);
+      }
+      return;
+    }
+  }
+
+  bool _looksLikeJavaScriptRule(String? expression) {
+    final text = expression?.trim();
+    if (text == null || text.isEmpty) {
+      return false;
+    }
+
+    final normalized = text.toLowerCase();
+    return normalized.contains('<js>') ||
+        normalized.contains('js:') ||
+        normalized.contains('eval(') ||
+        normalized.contains('java.');
+  }
+
+  bool _isSimpleRuleToken(String? expression, Set<String> candidates) {
+    final text = expression?.trim();
+    if (text == null || text.isEmpty) {
+      return false;
+    }
+
+    if (text.contains('@') || text.contains('.') || text.contains('/')) {
+      return false;
+    }
+
+    return candidates.contains(text);
+  }
+
+  bool _containsInvalidNumericClassSelector(String? expression) {
+    final text = expression?.trim();
+    if (text == null || text.isEmpty || !text.contains('@')) {
+      return false;
+    }
+
+    final selector = text.split('@').first.trim();
+    return RegExp(r'\.[0-9]').hasMatch(selector);
+  }
+
+  String? _resolveSearchRuleFromInlineJs(String? rawRule) {
+    if (!_looksLikeJavaScriptRule(rawRule)) {
+      return null;
+    }
+
+    final script = _extractInlineJsBody(rawRule);
+    final decoded = _decodePackedJs(script) ?? script;
+    if (decoded == null || decoded.isEmpty) {
+      return null;
+    }
+
+    final match = RegExp(
+      r'"((?:https?://|/)[^"\n]*\{\{key\}\}[^"\n]*)"',
+    ).firstMatch(decoded);
+    final matchedUrl = match?.group(1)?.trim();
+    if (matchedUrl == null || matchedUrl.isEmpty) {
+      return null;
+    }
+
+    return matchedUrl;
+  }
+
+  String? _extractInlineJsBody(String? expression) {
+    final text = expression?.trim();
+    if (text == null || text.isEmpty) {
+      return null;
+    }
+
+    if (text.startsWith('<js>') && text.endsWith('</js>')) {
+      return text.substring(4, text.length - 5).trim();
+    }
+
+    return text;
+  }
+
+  String? _decodePackedJs(String? script) {
+    final source = script?.trim();
+    if (source == null || source.isEmpty) {
+      return null;
+    }
+
+    final match = RegExp(
+      r"eval\(function\(p,a,c,k,e,r\)\{[\s\S]*?\}\('([\s\S]*?)',\s*(\d+),\s*(\d+),\s*'([\s\S]*?)'\.split\('\|'\),\s*0,\s*\{\}\)\)",
+    ).firstMatch(source);
+
+    if (match == null) {
+      return null;
+    }
+
+    final payloadLiteral = match.group(1);
+    final radix = int.tryParse(match.group(2) ?? '');
+    final count = int.tryParse(match.group(3) ?? '');
+    final dictionaryLiteral = match.group(4);
+
+    if (payloadLiteral == null ||
+        radix == null ||
+        count == null ||
+        dictionaryLiteral == null) {
+      return null;
+    }
+
+    final payload = _decodeSingleQuotedLiteral(payloadLiteral);
+    final dictionary = _decodeSingleQuotedLiteral(dictionaryLiteral).split('|');
+
+    final tokenTable =
+        '0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ';
+
+    String toToken(int value) {
+      if (value == 0) {
+        return '0';
+      }
+
+      var current = value;
+      final buffer = StringBuffer();
+      while (current > 0) {
+        final index = current % radix;
+        final char =
+            index < tokenTable.length
+                ? tokenTable[index]
+                : String.fromCharCode(index + 29);
+        buffer.write(char);
+        current = current ~/ radix;
+      }
+
+      return buffer.toString().split('').reversed.join();
+    }
+
+    var output = payload;
+    for (var index = count - 1; index >= 0; index -= 1) {
+      if (index >= dictionary.length) {
+        continue;
+      }
+      final value = dictionary[index];
+      if (value.isEmpty) {
+        continue;
+      }
+
+      final token = toToken(index);
+      output = output.replaceAllMapped(
+        RegExp('\\b${RegExp.escape(token)}\\b'),
+        (_) => value,
+      );
+    }
+
+    return output;
+  }
+
+  String _decodeSingleQuotedLiteral(String source) {
+    final escaped = source
+        .replaceAll(r'\', r'\\')
+        .replaceAll('"', r'\"')
+        .replaceAll(r"\'", "'");
+
+    try {
+      final decoded = jsonDecode('"$escaped"');
+      if (decoded is String) {
+        return decoded;
+      }
+    } on FormatException {
+      return source;
+    }
+
+    return source;
+  }
+
+  String? _extractBookInfoSelector(String script, String field) {
+    final pattern =
+        '${RegExp.escape(field)}'
+        r'\s*:\s*(?:"<br>"\s*\+\s*)?[\$][24]\("([^"\n]+)"\)';
+    final match = RegExp(pattern).firstMatch(script);
+    return match?.group(1)?.trim();
+  }
+
+  String? _extractJavaGetElementsSelector(String script) {
+    final match = RegExp(
+      r'java\.getElements\("([^"\n]+)"\)',
+    ).firstMatch(script);
+    return match?.group(1)?.trim();
   }
 
   _InitRuleSplit _splitInitRule(String? rawRule) {
@@ -169,13 +500,14 @@ class LegadoSourceAdapter {
   }
 
   bool _looksLikeRequestRule(String text) {
-    if (text.contains(',{')) {
+    final normalized = text.trim();
+    if (RegExp(r'^(?:https?://|/|\{\{)[^\n]*,\s*\{').hasMatch(normalized)) {
       return true;
     }
-    if (text.startsWith('http://') || text.startsWith('https://')) {
+    if (normalized.startsWith('http://') || normalized.startsWith('https://')) {
       return true;
     }
-    if (text.startsWith('/')) {
+    if (normalized.startsWith('/')) {
       return true;
     }
     return false;

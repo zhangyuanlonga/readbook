@@ -11,6 +11,8 @@ void main() {
       );
 
       expect(source.enabled, isTrue);
+      expect(source.sourceType, 0);
+      expect(source.isMangaSource, isFalse);
       expect(source.group, isNull);
       expect(source.headers, isEmpty);
       expect(source.lastCheckStatus, SourceHealthStatus.unknown);
@@ -26,6 +28,7 @@ void main() {
         baseUrl: 'https://example.com',
         group: 'group-a',
         enabled: false,
+        sourceType: 2,
         rules: const SourceRuleSet(
           searchRule: '.book-list',
           searchInitRule: '/search/init',
@@ -55,6 +58,8 @@ void main() {
       expect(restored.baseUrl, source.baseUrl);
       expect(restored.group, source.group);
       expect(restored.enabled, isFalse);
+      expect(restored.sourceType, 2);
+      expect(restored.isMangaSource, isTrue);
       expect(restored.rules.contentRule, '#content');
       expect(restored.rules.contentInitRule, '/content/init');
       expect(restored.rules.searchInitRule, '/search/init');

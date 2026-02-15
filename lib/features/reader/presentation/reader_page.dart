@@ -81,6 +81,8 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
   String? _errorText;
   String _content = '';
   List<String> _paragraphs = const [];
+  List<String> _chapterImageUrls = const [];
+  final Map<String, int> _mangaImageRetryNonce = <String, int>{};
   ReadingProgress? _bootstrapProgress;
   Timer? _progressDebounceTimer;
   String? _cachedBackgroundImageKey;
@@ -103,6 +105,11 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
 
   static const double _kPinnedHeaderTopPadding = 6;
   static const double _kPinnedHeaderHeight = 40;
+
+  bool _isTapPaginationEnabled() {
+    return _settings.pageTurnMode == ReaderPageTurnMode.tap &&
+        _chapterImageUrls.isEmpty;
+  }
 
   double _pinnedHeaderTotalHeight(BuildContext context) {
     return MediaQuery.viewPaddingOf(context).top +
@@ -262,7 +269,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
   }
 
   Widget _buildReaderContent(_ReaderThemeColors colors) {
-    final isPaged = _settings.pageTurnMode == ReaderPageTurnMode.tap;
+    final isPaged = _isTapPaginationEnabled();
 
     return Column(
       children: [
@@ -351,7 +358,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
       );
     }
 
-    if (_content.trim().isEmpty) {
+    if (_content.trim().isEmpty && _chapterImageUrls.isEmpty) {
       return _buildTapAwareBody(
         child: _buildReaderStateCard(
           colors: colors,
@@ -364,7 +371,9 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
 
     return _buildTapAwareBody(
       child:
-          _settings.pageTurnMode == ReaderPageTurnMode.tap
+          _chapterImageUrls.isNotEmpty
+              ? _buildMangaReader(colors)
+              : _isTapPaginationEnabled()
               ? _buildPagedReader(colors)
               : _buildReaderList(colors),
     );
@@ -403,6 +412,90 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
             child: Text(
               _applyParagraphIndent(paragraph),
               style: _paragraphTextStyle(colors),
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  String _buildMangaImageUrl(String imageUrl, int retryNonce) {
+    if (retryNonce <= 0 || imageUrl.startsWith('data:image/')) {
+      return imageUrl;
+    }
+
+    final uri = Uri.tryParse(imageUrl);
+    if (uri == null) {
+      return imageUrl;
+    }
+
+    final updatedParameters = Map<String, String>.from(uri.queryParameters)
+      ..['retry'] = '$retryNonce';
+    return uri.replace(queryParameters: updatedParameters).toString();
+  }
+
+  Widget _buildMangaReader(_ReaderThemeColors colors) {
+    return ListView.separated(
+      key: ValueKey('manga_$_chapterId'),
+      controller: _scrollController,
+      cacheExtent: 2000,
+      padding: EdgeInsets.fromLTRB(
+        _settings.horizontalPadding,
+        12,
+        _settings.horizontalPadding,
+        96,
+      ),
+      itemCount: _chapterImageUrls.length,
+      separatorBuilder: (_, __) => const SizedBox(height: 10),
+      itemBuilder: (context, index) {
+        final imageUrl = _chapterImageUrls[index];
+        final retryNonce = _mangaImageRetryNonce[imageUrl] ?? 0;
+        final requestUrl = _buildMangaImageUrl(imageUrl, retryNonce);
+
+        return ClipRRect(
+          borderRadius: BorderRadius.circular(12),
+          child: ColoredBox(
+            color: colors.overlay,
+            child: Image.network(
+              requestUrl,
+              fit: BoxFit.fitWidth,
+              frameBuilder: (context, child, frame, wasSynchronouslyLoaded) {
+                if (wasSynchronouslyLoaded || frame != null) {
+                  return child;
+                }
+
+                return AspectRatio(
+                  aspectRatio: 3 / 4,
+                  child: Center(
+                    child: CircularProgressIndicator(
+                      strokeWidth: 2,
+                      color: colors.meta,
+                    ),
+                  ),
+                );
+              },
+              errorBuilder: (context, error, stackTrace) {
+                return AspectRatio(
+                  aspectRatio: 3 / 4,
+                  child: InkWell(
+                    onTap: () {
+                      setState(() {
+                        _mangaImageRetryNonce[imageUrl] = retryNonce + 1;
+                      });
+                    },
+                    child: Center(
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 12),
+                        child: Text(
+                          '图片加载失败，点击重试',
+                          textAlign: TextAlign.center,
+                          style: TextStyle(color: colors.meta),
+                        ),
+                      ),
+                    ),
+                  ),
+                );
+              },
             ),
           ),
         );
@@ -989,7 +1082,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
       return;
     }
 
-    if (_settings.pageTurnMode != ReaderPageTurnMode.tap) {
+    if (!_isTapPaginationEnabled()) {
       return;
     }
 
@@ -1745,8 +1838,10 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
     };
   }
 
-  void _setContent(String content) {
+  void _setContent(String content, {List<String> imageUrls = const []}) {
     _content = content;
+    _chapterImageUrls = List.unmodifiable(imageUrls);
+    _mangaImageRetryNonce.clear();
     _paragraphs = _splitParagraphs(content);
     _pagedPages = const [];
     _currentPageIndex = 0;
@@ -1781,7 +1876,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
         return;
       }
 
-      if (_settings.pageTurnMode == ReaderPageTurnMode.tap) {
+      if (_isTapPaginationEnabled()) {
         final pages = _pagedPages;
         if (pages.isEmpty) {
           _pendingPageRestoreRatio = normalized;
@@ -1813,13 +1908,14 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
   }
 
   void _onScrollChanged() {
-    if (_settings.pageTurnMode == ReaderPageTurnMode.tap) {
+    if (_isTapPaginationEnabled()) {
       return;
     }
     if (_isBootstrapping || _isLoadingContent || _errorText != null) {
       return;
     }
-    if (_content.trim().isEmpty || _currentIndex == null) {
+    if ((_content.trim().isEmpty && _chapterImageUrls.isEmpty) ||
+        _currentIndex == null) {
       return;
     }
 
@@ -1834,7 +1930,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
   }
 
   double _currentScrollRatio() {
-    if (_settings.pageTurnMode == ReaderPageTurnMode.tap) {
+    if (_isTapPaginationEnabled()) {
       final pages = _pagedPages;
       if (pages.length <= 1) {
         return 0;
@@ -1923,7 +2019,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
 
       setState(() {
         _isCurrentChapterCached = isCached;
-        _setContent(contentResult.content);
+        _setContent(contentResult.content, imageUrls: contentResult.imageUrls);
         _pendingPageRestoreRatio = targetRatio;
       });
 
@@ -2115,7 +2211,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
   }
 
   Future<void> _goToPreviousPage(double viewportHeight) async {
-    if (_settings.pageTurnMode != ReaderPageTurnMode.tap) {
+    if (!_isTapPaginationEnabled()) {
       return;
     }
 
@@ -2152,7 +2248,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
   }
 
   Future<void> _goToNextPage(double viewportHeight) async {
-    if (_settings.pageTurnMode != ReaderPageTurnMode.tap) {
+    if (!_isTapPaginationEnabled()) {
       return;
     }
 
@@ -2196,6 +2292,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
     final previousChapterTitle = _chapterTitle;
     final previousIndex = _currentIndex;
     final previousContent = _content;
+    final previousImageUrls = _chapterImageUrls;
 
     setState(() {
       _currentIndex = index;
@@ -2217,7 +2314,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
       _chapterUrl = previousChapterUrl;
       _chapterTitle = previousChapterTitle;
       _currentIndex = previousIndex;
-      _setContent(previousContent);
+      _setContent(previousContent, imageUrls: previousImageUrls);
       _errorText = null;
     });
 
@@ -2248,7 +2345,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
       return;
     }
 
-    if (_settings.pageTurnMode != ReaderPageTurnMode.tap) {
+    if (!_isTapPaginationEnabled()) {
       return;
     }
 
@@ -2727,6 +2824,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
             final customBackgroundPreview = _tryDecodeBase64(
               draft.backgroundImageBase64,
             );
+            final isMangaChapter = _chapterImageUrls.isNotEmpty;
 
             return SafeArea(
               child: FractionallySizedBox(
@@ -2791,76 +2889,84 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
                                 ],
                               ),
                             ),
-                            const Divider(height: 1),
-                            _buildSettingLine(
-                              context: context,
-                              label: '字号',
-                              child: Row(
-                                children: [
-                                  IconButton.filledTonal(
-                                    visualDensity: VisualDensity.compact,
-                                    onPressed: () {
-                                      final next =
-                                          (draft.fontSize - 1)
-                                              .clamp(14, 30)
-                                              .toDouble();
-                                      setModalState(() {
-                                        draft = draft.copyWith(fontSize: next);
-                                      });
-                                    },
-                                    icon: const Icon(Icons.remove),
-                                  ),
-                                  SizedBox(
-                                    width: 40,
-                                    child: Center(
-                                      child: Text(
-                                        draft.fontSize.toStringAsFixed(0),
-                                      ),
-                                    ),
-                                  ),
-                                  IconButton.filledTonal(
-                                    visualDensity: VisualDensity.compact,
-                                    onPressed: () {
-                                      final next =
-                                          (draft.fontSize + 1)
-                                              .clamp(14, 30)
-                                              .toDouble();
-                                      setModalState(() {
-                                        draft = draft.copyWith(fontSize: next);
-                                      });
-                                    },
-                                    icon: const Icon(Icons.add),
-                                  ),
-                                  const SizedBox(width: 8),
-                                  Expanded(
-                                    child: OutlinedButton.icon(
+                            if (!isMangaChapter) ...[
+                              const Divider(height: 1),
+                              _buildSettingLine(
+                                context: context,
+                                label: '字号',
+                                child: Row(
+                                  children: [
+                                    IconButton.filledTonal(
+                                      visualDensity: VisualDensity.compact,
                                       onPressed: () {
+                                        final next =
+                                            (draft.fontSize - 1)
+                                                .clamp(14, 30)
+                                                .toDouble();
                                         setModalState(() {
                                           draft = draft.copyWith(
-                                            fontWeightLevel: switch (draft
-                                                .fontWeightLevel) {
-                                              ReaderFontWeightLevel.light =>
-                                                ReaderFontWeightLevel.regular,
-                                              ReaderFontWeightLevel.regular =>
-                                                ReaderFontWeightLevel.medium,
-                                              ReaderFontWeightLevel.medium =>
-                                                ReaderFontWeightLevel.light,
-                                            },
+                                            fontSize: next,
                                           );
                                         });
                                       },
-                                      icon: const Icon(
-                                        Icons.font_download_outlined,
-                                        size: 16,
-                                      ),
-                                      label: Text(
-                                        _fontWeightLabel(draft.fontWeightLevel),
+                                      icon: const Icon(Icons.remove),
+                                    ),
+                                    SizedBox(
+                                      width: 40,
+                                      child: Center(
+                                        child: Text(
+                                          draft.fontSize.toStringAsFixed(0),
+                                        ),
                                       ),
                                     ),
-                                  ),
-                                ],
+                                    IconButton.filledTonal(
+                                      visualDensity: VisualDensity.compact,
+                                      onPressed: () {
+                                        final next =
+                                            (draft.fontSize + 1)
+                                                .clamp(14, 30)
+                                                .toDouble();
+                                        setModalState(() {
+                                          draft = draft.copyWith(
+                                            fontSize: next,
+                                          );
+                                        });
+                                      },
+                                      icon: const Icon(Icons.add),
+                                    ),
+                                    const SizedBox(width: 8),
+                                    Expanded(
+                                      child: OutlinedButton.icon(
+                                        onPressed: () {
+                                          setModalState(() {
+                                            draft = draft.copyWith(
+                                              fontWeightLevel: switch (draft
+                                                  .fontWeightLevel) {
+                                                ReaderFontWeightLevel.light =>
+                                                  ReaderFontWeightLevel.regular,
+                                                ReaderFontWeightLevel.regular =>
+                                                  ReaderFontWeightLevel.medium,
+                                                ReaderFontWeightLevel.medium =>
+                                                  ReaderFontWeightLevel.light,
+                                              },
+                                            );
+                                          });
+                                        },
+                                        icon: const Icon(
+                                          Icons.font_download_outlined,
+                                          size: 16,
+                                        ),
+                                        label: Text(
+                                          _fontWeightLabel(
+                                            draft.fontWeightLevel,
+                                          ),
+                                        ),
+                                      ),
+                                    ),
+                                  ],
+                                ),
                               ),
-                            ),
+                            ],
                             const Divider(height: 1),
                             _buildSettingLine(
                               context: context,
@@ -3092,47 +3198,68 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
                             _buildSettingLine(
                               context: context,
                               label: '其他',
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Wrap(
-                                    spacing: 8,
-                                    runSpacing: 8,
-                                    children: [
-                                      OutlinedButton(
-                                        onPressed: () async {
-                                          final result =
-                                              await _showSpacingSheet(
-                                                initialLineHeight:
-                                                    draft.lineHeight,
-                                                initialHorizontalPadding:
-                                                    draft.horizontalPadding,
-                                                initialParagraphSpacing:
-                                                    draft.paragraphSpacing,
-                                                initialParagraphIndent:
-                                                    draft.paragraphIndent,
-                                              );
-                                          if (result == null) {
-                                            return;
-                                          }
-                                          setModalState(() {
-                                            draft = draft.copyWith(
-                                              horizontalPadding:
-                                                  result.horizontalPadding,
-                                              lineHeight: result.lineHeight,
-                                              paragraphSpacing:
-                                                  result.paragraphSpacing,
-                                              paragraphIndent:
-                                                  result.paragraphIndent,
-                                            );
-                                          });
-                                        },
-                                        child: const Text('间距设置'),
+                              child:
+                                  isMangaChapter
+                                      ? Text(
+                                        '漫画模式下已关闭字号、间距与缩进设置。',
+                                        style: Theme.of(
+                                          context,
+                                        ).textTheme.bodySmall?.copyWith(
+                                          color:
+                                              Theme.of(
+                                                context,
+                                              ).colorScheme.onSurfaceVariant,
+                                        ),
+                                      )
+                                      : Column(
+                                        crossAxisAlignment:
+                                            CrossAxisAlignment.start,
+                                        children: [
+                                          Wrap(
+                                            spacing: 8,
+                                            runSpacing: 8,
+                                            children: [
+                                              OutlinedButton(
+                                                onPressed: () async {
+                                                  final result =
+                                                      await _showSpacingSheet(
+                                                        initialLineHeight:
+                                                            draft.lineHeight,
+                                                        initialHorizontalPadding:
+                                                            draft
+                                                                .horizontalPadding,
+                                                        initialParagraphSpacing:
+                                                            draft
+                                                                .paragraphSpacing,
+                                                        initialParagraphIndent:
+                                                            draft
+                                                                .paragraphIndent,
+                                                      );
+                                                  if (result == null) {
+                                                    return;
+                                                  }
+                                                  setModalState(() {
+                                                    draft = draft.copyWith(
+                                                      horizontalPadding:
+                                                          result
+                                                              .horizontalPadding,
+                                                      lineHeight:
+                                                          result.lineHeight,
+                                                      paragraphSpacing:
+                                                          result
+                                                              .paragraphSpacing,
+                                                      paragraphIndent:
+                                                          result
+                                                              .paragraphIndent,
+                                                    );
+                                                  });
+                                                },
+                                                child: const Text('间距设置'),
+                                              ),
+                                            ],
+                                          ),
+                                        ],
                                       ),
-                                    ],
-                                  ),
-                                ],
-                              ),
                             ),
                           ],
                         ),

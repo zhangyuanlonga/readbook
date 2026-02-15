@@ -152,6 +152,99 @@ $baseUrl/content, {
       },
     );
 
+    test('parses image chapter content and returns image urls', () async {
+      final server = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
+      var hitCount = 0;
+      server.listen((request) async {
+        hitCount++;
+        request.response
+          ..statusCode = 200
+          ..write('''
+            <div class="manga">
+              <img src="/images/1.jpg" />
+              <img src="https://cdn.example.com/2.png" />
+            </div>
+          ''');
+        await request.response.close();
+      });
+
+      final baseUrl = 'http://${server.address.host}:${server.port}';
+      final repository = _FakeSourceRepository([
+        SourceDefinition(
+          id: 'm1',
+          name: '漫画源',
+          baseUrl: baseUrl,
+          sourceType: 2,
+          rules: const SourceRuleSet(contentRule: '.manga img@src'),
+        ),
+      ]);
+
+      final service = ChapterContentService(sourceRepository: repository);
+
+      final first = await service.load(
+        sourceId: 'm1',
+        chapterUrl: '$baseUrl/chapter-1',
+      );
+      final second = await service.load(
+        sourceId: 'm1',
+        chapterUrl: '$baseUrl/chapter-1',
+      );
+
+      expect(first.isImageContent, isTrue);
+      expect(first.imageUrls, hasLength(2));
+      expect(first.imageUrls.first, '$baseUrl/images/1.jpg');
+      expect(first.imageUrls.last, 'https://cdn.example.com/2.png');
+      expect(first.fromCache, isFalse);
+      expect(second.isImageContent, isTrue);
+      expect(second.imageUrls, hasLength(2));
+      expect(second.fromCache, isTrue);
+      expect(hitCount, 1);
+
+      await server.close(force: true);
+    });
+
+    test(
+      'falls back to response image extraction for lazy image attributes',
+      () async {
+        final server = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
+        server.listen((request) async {
+          request.response
+            ..statusCode = 200
+            ..write('''
+            <div class="manga">
+              <img data-original="/images/1.jpg" />
+              <img data-src="https://cdn.example.com/2.webp" />
+            </div>
+          ''');
+          await request.response.close();
+        });
+
+        final baseUrl = 'http://${server.address.host}:${server.port}';
+        final repository = _FakeSourceRepository([
+          SourceDefinition(
+            id: 'm2',
+            name: '漫画懒加载源',
+            baseUrl: baseUrl,
+            sourceType: 2,
+            rules: const SourceRuleSet(contentRule: '.manga img@src'),
+          ),
+        ]);
+
+        final service = ChapterContentService(sourceRepository: repository);
+        final result = await service.load(
+          sourceId: 'm2',
+          chapterUrl: '$baseUrl/chapter-1',
+        );
+
+        expect(result.isImageContent, isTrue);
+        expect(result.imageUrls, hasLength(2));
+        expect(result.imageUrls.first, '$baseUrl/images/1.jpg');
+        expect(result.imageUrls.last, 'https://cdn.example.com/2.webp');
+
+        await server.close(force: true);
+      },
+    );
+
     test('throws when content rule is missing', () async {
       final repository = _FakeSourceRepository([
         SourceDefinition(id: 's1', name: '源A', baseUrl: 'https://example.com'),

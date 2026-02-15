@@ -58,6 +58,8 @@ class SearchExecutionReport {
 
 typedef SearchProgressCallback = void Function(SearchExecutionReport report);
 
+enum SearchContentMode { novel, manga }
+
 class SearchCancellationToken {
   bool _cancelled = false;
 
@@ -125,6 +127,7 @@ class SearchService {
     int pageSize = 20,
     SearchCancellationToken? cancellationToken,
     SearchProgressCallback? onProgress,
+    SearchContentMode contentMode = SearchContentMode.novel,
   }) async {
     final normalizedKeyword = keyword.trim();
     if (normalizedKeyword.isEmpty) {
@@ -137,12 +140,16 @@ class SearchService {
 
     final allSources = await _sourceRepository.getAll();
     final enabledSources = allSources
-        .where((source) => source.enabled)
+        .where(
+          (source) =>
+              source.enabled && _matchesContentMode(source, contentMode),
+        )
         .toList(growable: false);
 
     if (enabledSources.isEmpty) {
-      throw const UnknownSourceException(
-        briefMessage: '没有可用书源，请先在书源页导入并启用书源。',
+      final modeLabel = contentMode == SearchContentMode.manga ? '漫画' : '小说';
+      throw UnknownSourceException(
+        briefMessage: '没有可用$modeLabel书源，请先在书源页导入并启用对应书源。',
         stage: ErrorStage.search,
       );
     }
@@ -157,6 +164,7 @@ class SearchService {
         'page': page,
         'pageSize': pageSize,
         'concurrency': concurrency,
+        'contentMode': contentMode.name,
       },
     );
 
@@ -841,6 +849,13 @@ class SearchService {
 
     walk(source, '');
     return result;
+  }
+
+  bool _matchesContentMode(SourceDefinition source, SearchContentMode mode) {
+    return switch (mode) {
+      SearchContentMode.novel => !source.isMangaSource,
+      SearchContentMode.manga => source.isMangaSource,
+    };
   }
 
   String _toUserReadableMessage(AppException error) {

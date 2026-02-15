@@ -31,6 +31,7 @@ void main() {
           name: '晴天漫画',
           baseUrl: 'https://comic.example.com',
           enabled: false,
+          sourceType: 2,
           group: '漫画',
           comment: '备用',
           rules: const SourceRuleSet(searchRule: '/search?key={{key}}'),
@@ -77,6 +78,15 @@ void main() {
       );
       expect(byName, hasLength(1));
       expect(byName.first.id, 's_a');
+
+      final manga = await database.querySourceListItems(
+        limit: 10,
+        offset: 0,
+        keyword: '漫画',
+      );
+      expect(manga, hasLength(1));
+      expect(manga.first.sourceType, 2);
+      expect(manga.first.isMangaSource, isTrue);
     });
   });
 }

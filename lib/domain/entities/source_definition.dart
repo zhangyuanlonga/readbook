@@ -209,6 +209,7 @@ class SourceDefinition {
     required this.baseUrl,
     this.group,
     this.enabled = true,
+    this.sourceType = 0,
     this.rules = const SourceRuleSet(),
     Map<String, String> headers = const {},
     this.lastCheckStatus = SourceHealthStatus.unknown,
@@ -222,6 +223,7 @@ class SourceDefinition {
   final String baseUrl;
   final String? group;
   final bool enabled;
+  final int sourceType;
   final SourceRuleSet rules;
   final Map<String, String> headers;
   final SourceHealthStatus lastCheckStatus;
@@ -229,12 +231,15 @@ class SourceDefinition {
   final String? lastCheckMessage;
   final String? comment;
 
+  bool get isMangaSource => sourceType == 2;
+
   SourceDefinition copyWith({
     String? id,
     String? name,
     String? baseUrl,
     String? group,
     bool? enabled,
+    int? sourceType,
     SourceRuleSet? rules,
     Map<String, String>? headers,
     SourceHealthStatus? lastCheckStatus,
@@ -251,6 +256,7 @@ class SourceDefinition {
       baseUrl: baseUrl ?? this.baseUrl,
       group: group ?? this.group,
       enabled: enabled ?? this.enabled,
+      sourceType: sourceType ?? this.sourceType,
       rules: rules ?? this.rules,
       headers: headers ?? this.headers,
       lastCheckStatus: lastCheckStatus ?? this.lastCheckStatus,
@@ -271,6 +277,7 @@ class SourceDefinition {
       'baseUrl': baseUrl,
       'group': group,
       'enabled': enabled,
+      'sourceType': sourceType,
       'rules': rules.toJson(),
       'headers': headers,
       'lastCheckStatus': lastCheckStatus.name,
@@ -290,6 +297,7 @@ class SourceDefinition {
       baseUrl: _requiredString(json, 'baseUrl'),
       group: _nullableString(json['group']),
       enabled: _asBool(json['enabled']) ?? true,
+      sourceType: _asInt(json['sourceType']) ?? 0,
       rules:
           rulesJson is Map<String, dynamic>
               ? SourceRuleSet.fromJson(rulesJson)
@@ -341,6 +349,19 @@ class SourceDefinition {
       if (normalized == 'false' || normalized == '0') {
         return false;
       }
+    }
+    return null;
+  }
+
+  static int? _asInt(Object? value) {
+    if (value is int) {
+      return value;
+    }
+    if (value is num) {
+      return value.toInt();
+    }
+    if (value is String) {
+      return int.tryParse(value.trim());
     }
     return null;
   }

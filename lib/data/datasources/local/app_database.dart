@@ -56,6 +56,7 @@ class SourceListItem {
     required this.group,
     required this.enabled,
     required this.comment,
+    required this.sourceType,
     required this.lastCheckStatus,
     required this.lastCheckedAt,
   });
@@ -66,8 +67,11 @@ class SourceListItem {
   final String? group;
   final bool enabled;
   final String? comment;
+  final int sourceType;
   final SourceHealthStatus lastCheckStatus;
   final DateTime? lastCheckedAt;
+
+  bool get isMangaSource => sourceType == 2;
 }
 
 class ChapterCacheBookSummary {
@@ -129,7 +133,7 @@ class AppDatabase extends _$AppDatabase {
   Stream<List<SourceListItem>> watchSourceListItems() {
     const sql =
         'SELECT id, name, base_url AS baseUrl, "group" AS sourceGroup, '
-        'enabled, comment, health_status AS healthStatus, '
+        'enabled, comment, raw_json AS rawJson, health_status AS healthStatus, '
         'last_checked_at AS lastCheckedAt '
         'FROM sources '
         'ORDER BY sourceGroup COLLATE NOCASE ASC, name COLLATE NOCASE ASC';
@@ -151,7 +155,7 @@ class AppDatabase extends _$AppDatabase {
     final rows =
         await customSelect(
           'SELECT id, name, base_url AS baseUrl, "group" AS sourceGroup, '
-          'enabled, comment, health_status AS healthStatus, '
+          'enabled, comment, raw_json AS rawJson, health_status AS healthStatus, '
           'last_checked_at AS lastCheckedAt '
           'FROM sources '
           '${filter.whereClause} '
@@ -484,6 +488,7 @@ class AppDatabase extends _$AppDatabase {
       baseUrl: row.baseUrl,
       group: row.group,
       enabled: row.enabled,
+      sourceType: _decodeInt(raw['sourceType']) ?? 0,
       comment: row.comment,
       headers: headers,
       rules: SourceRuleSet.fromJson(rules),
@@ -523,11 +528,25 @@ class AppDatabase extends _$AppDatabase {
       group: _nullableString(row.data['sourceGroup']),
       enabled: _decodeBool(row.data['enabled']),
       comment: _nullableString(row.data['comment']),
+      sourceType: _decodeSourceType(row.data['rawJson']),
       lastCheckStatus: _decodeSourceHealthStatus(
         row.data['healthStatus']?.toString(),
       ),
       lastCheckedAt: _decodeNullableDateTime(row.data['lastCheckedAt']),
     );
+  }
+
+  int _decodeSourceType(Object? value) {
+    if (value is String) {
+      final normalized = value.trim();
+      if (normalized.isEmpty) {
+        return 0;
+      }
+      final raw = _decodeMap(normalized);
+      return _decodeInt(raw['sourceType']) ?? 0;
+    }
+
+    return 0;
   }
 
   _SourceListSqlFilter _buildSourceListSqlFilter({
@@ -558,6 +577,19 @@ class AppDatabase extends _$AppDatabase {
 
     final whereClause = clauses.isEmpty ? '' : 'WHERE ${clauses.join(' AND ')}';
     return _SourceListSqlFilter(whereClause: whereClause, variables: variables);
+  }
+
+  int? _decodeInt(Object? value) {
+    if (value is int) {
+      return value;
+    }
+    if (value is num) {
+      return value.toInt();
+    }
+    if (value is String) {
+      return int.tryParse(value.trim());
+    }
+    return null;
   }
 
   bool _decodeBool(Object? value) {

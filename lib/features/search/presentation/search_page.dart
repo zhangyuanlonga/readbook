@@ -29,6 +29,7 @@ class _SearchPageState extends State<SearchPage> {
   SearchExecutionReport? _report;
   SearchCancellationToken? _activeSearchToken;
   int _searchSessionId = 0;
+  SearchContentMode _searchContentMode = SearchContentMode.novel;
 
   @override
   void initState() {
@@ -110,12 +111,48 @@ class _SearchPageState extends State<SearchPage> {
 
   Widget _buildSearchInputCard() {
     final colorScheme = Theme.of(context).colorScheme;
+    final isMangaMode = _searchContentMode == SearchContentMode.manga;
+    final hintText = isMangaMode ? '输入漫画名或作者，例如：一人之下' : '输入书名或作者，例如：凡人修仙传';
 
     return Card(
       child: Padding(
         padding: const EdgeInsets.all(14),
         child: Column(
           children: [
+            Align(
+              alignment: Alignment.centerLeft,
+              child: SegmentedButton<SearchContentMode>(
+                segments: const [
+                  ButtonSegment<SearchContentMode>(
+                    value: SearchContentMode.novel,
+                    icon: Icon(Icons.menu_book_rounded),
+                    label: Text('搜索小说'),
+                  ),
+                  ButtonSegment<SearchContentMode>(
+                    value: SearchContentMode.manga,
+                    icon: Icon(Icons.auto_stories_rounded),
+                    label: Text('搜索漫画'),
+                  ),
+                ],
+                selected: <SearchContentMode>{_searchContentMode},
+                showSelectedIcon: false,
+                onSelectionChanged:
+                    _isSearching
+                        ? null
+                        : (selection) {
+                          final mode =
+                              selection.isEmpty ? null : selection.first;
+                          if (mode == null || mode == _searchContentMode) {
+                            return;
+                          }
+                          setState(() {
+                            _searchContentMode = mode;
+                            _report = null;
+                          });
+                        },
+              ),
+            ),
+            const SizedBox(height: 10),
             Container(
               decoration: BoxDecoration(
                 borderRadius: BorderRadius.circular(14),
@@ -125,12 +162,12 @@ class _SearchPageState extends State<SearchPage> {
                 controller: _keywordController,
                 textInputAction: TextInputAction.search,
                 onSubmitted: (_) => _runSearch(),
-                decoration: const InputDecoration(
-                  hintText: '输入书名或作者，例如：凡人修仙传',
+                decoration: InputDecoration(
+                  hintText: hintText,
                   border: InputBorder.none,
                   filled: false,
-                  prefixIcon: Icon(Icons.search),
-                  contentPadding: EdgeInsets.symmetric(
+                  prefixIcon: const Icon(Icons.search),
+                  contentPadding: const EdgeInsets.symmetric(
                     horizontal: 14,
                     vertical: 10,
                   ),
@@ -217,6 +254,10 @@ class _SearchPageState extends State<SearchPage> {
       runSpacing: 8,
       children: [
         _buildSummaryChip('关键词', report.keyword),
+        _buildSummaryChip(
+          '类型',
+          _searchContentMode == SearchContentMode.manga ? '漫画' : '小说',
+        ),
         _buildSummaryChip('结果', '${report.books.length} 本'),
         _buildSummaryChip(
           '成功源',
@@ -617,6 +658,7 @@ class _SearchPageState extends State<SearchPage> {
     try {
       final report = await _searchService.search(
         keyword: keyword,
+        contentMode: _searchContentMode,
         cancellationToken: token,
         onProgress: (progress) {
           if (!mounted || token.isCancelled || sessionId != _searchSessionId) {

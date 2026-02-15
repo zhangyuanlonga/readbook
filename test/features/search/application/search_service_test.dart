@@ -10,6 +10,62 @@ import 'package:flutter_test/flutter_test.dart';
 
 void main() {
   group('SearchService', () {
+    test('filters sources by content mode (novel/manga)', () async {
+      final repository = _FakeSourceRepository([
+        SourceDefinition(
+          id: 'novel_1',
+          name: '小说源',
+          baseUrl: 'https://novel.example.com',
+          sourceType: 0,
+          enabled: false,
+          rules: const SourceRuleSet(
+            searchRule: '/search?key={{key}}',
+            searchListRule: '.result@html',
+            searchTitleRule: '.title@text',
+            searchDetailUrlRule: '.title@href',
+          ),
+        ),
+        SourceDefinition(
+          id: 'manga_1',
+          name: '漫画源',
+          baseUrl: 'https://comic.example.com',
+          sourceType: 2,
+          enabled: false,
+          rules: const SourceRuleSet(
+            searchRule: '/search?key={{key}}',
+            searchListRule: '.result@html',
+            searchTitleRule: '.title@text',
+            searchDetailUrlRule: '.title@href',
+          ),
+        ),
+      ]);
+
+      final service = SearchService(sourceRepository: repository);
+
+      expect(
+        () =>
+            service.search(keyword: '凡人', contentMode: SearchContentMode.manga),
+        throwsA(
+          isA<AppException>().having(
+            (error) => error.briefMessage,
+            'briefMessage',
+            contains('漫画书源'),
+          ),
+        ),
+      );
+
+      expect(
+        () =>
+            service.search(keyword: '凡人', contentMode: SearchContentMode.novel),
+        throwsA(
+          isA<AppException>().having(
+            (error) => error.briefMessage,
+            'briefMessage',
+            contains('小说书源'),
+          ),
+        ),
+      );
+    });
     test('searches enabled sources and keeps per-source failures', () async {
       final server = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
       server.listen((request) async {

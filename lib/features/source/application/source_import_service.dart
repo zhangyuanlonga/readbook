@@ -13,6 +13,7 @@ import '../../../core/result/result.dart';
 import '../../../data/adapters/legado_source_adapter.dart';
 import '../../../data/models/legado_source_raw.dart';
 import '../../../domain/entities/source_definition.dart';
+import 'source_capability_analyzer.dart';
 import 'source_validator.dart';
 
 class SourceImportIssue {
@@ -53,20 +54,75 @@ class SourceImportIssue {
   }
 }
 
+class SourceCompatibilityHint {
+  const SourceCompatibilityHint({
+    required this.level,
+    required this.label,
+    required this.reasons,
+    this.index,
+    this.line,
+    this.sourceName,
+    this.sourceLabel,
+  });
+
+  final int? index;
+  final int? line;
+  final String? sourceName;
+  final String? sourceLabel;
+  final SourceCompatibilityLevel level;
+  final String label;
+  final List<String> reasons;
+
+  String toDisplayText() {
+    final parts = <String>[];
+    if (sourceLabel != null && sourceLabel!.trim().isNotEmpty) {
+      parts.add('[$sourceLabel]');
+    }
+    if (index != null) {
+      parts.add('第 $index 条');
+    }
+    if (line != null) {
+      parts.add('行 $line');
+    }
+    if (sourceName != null && sourceName!.trim().isNotEmpty) {
+      parts.add('《$sourceName》');
+    }
+
+    final reasonText = reasons.isEmpty ? '' : '：${reasons.join('；')}';
+    return '${parts.join(' | ')} | 兼容性：$label$reasonText';
+  }
+
+  SourceCompatibilityHint withSourceLabel(String label) {
+    return SourceCompatibilityHint(
+      index: index,
+      line: line,
+      sourceName: sourceName,
+      sourceLabel: label,
+      level: level,
+      label: this.label,
+      reasons: reasons,
+    );
+  }
+}
+
 class SourceImportPreviewReport {
   const SourceImportPreviewReport({
     required this.validSources,
     required this.issues,
+    required this.compatibilityHints,
     required this.totalCount,
   });
 
   final List<SourceDefinition> validSources;
   final List<SourceImportIssue> issues;
+  final List<SourceCompatibilityHint> compatibilityHints;
   final int totalCount;
 
   int get validCount => validSources.length;
   int get invalidCount => issues.length;
   bool get hasIssues => issues.isNotEmpty;
+  int get compatibilityHintCount => compatibilityHints.length;
+  bool get hasCompatibilityHints => compatibilityHints.isNotEmpty;
 }
 
 class SourceImportService {
@@ -102,6 +158,7 @@ class SourceImportService {
 
       final validSources = <SourceDefinition>[];
       final issues = <SourceImportIssue>[];
+      final compatibilityHints = <SourceCompatibilityHint>[];
 
       for (final entry in entries) {
         final rawItem = entry.item;
@@ -123,6 +180,20 @@ class SourceImportService {
           final source = _adapter.adapt(raw);
           _validator.validate(source, index: entry.index);
           validSources.add(source);
+
+          final capability = SourceCapabilityAnalyzer.fromRawMap(raw.rawData);
+          if (capability.compatibilityLevel != SourceCompatibilityLevel.full) {
+            compatibilityHints.add(
+              SourceCompatibilityHint(
+                index: entry.index,
+                line: lineByIndex[entry.zeroBasedIndex],
+                sourceName: source.name,
+                level: capability.compatibilityLevel,
+                label: capability.compatibilityLabel,
+                reasons: List.unmodifiable(capability.reasons),
+              ),
+            );
+          }
         } on AppException catch (error) {
           issues.add(
             SourceImportIssue(
@@ -146,6 +217,7 @@ class SourceImportService {
         SourceImportPreviewReport(
           validSources: List.unmodifiable(validSources),
           issues: List.unmodifiable(issues),
+          compatibilityHints: List.unmodifiable(compatibilityHints),
           totalCount: entries.length,
         ),
       );
@@ -317,10 +389,60 @@ class SourceImportService {
         }
       }
 
+      final hintsPayload = payload['compatibilityHints'];
+      final compatibilityHints = <SourceCompatibilityHint>[];
+      if (hintsPayload is List) {
+        for (final item in hintsPayload) {
+          if (item is Map) {
+            final normalized = item.map(
+              (key, value) => MapEntry(key.toString(), value),
+            );
+            final index = (normalized['index'] as num?)?.toInt();
+            final line = (normalized['line'] as num?)?.toInt();
+            final sourceName = normalized['sourceName']?.toString().trim();
+            final sourceLabel = normalized['sourceLabel']?.toString().trim();
+            final label = normalized['label']?.toString().trim() ?? '兼容性待确认';
+            final levelName = normalized['level']?.toString();
+            final reasonsPayload = normalized['reasons'];
+            final reasons = <String>[];
+            if (reasonsPayload is List) {
+              for (final reason in reasonsPayload) {
+                final text = reason?.toString().trim() ?? '';
+                if (text.isNotEmpty) {
+                  reasons.add(text);
+                }
+              }
+            }
+
+            compatibilityHints.add(
+              SourceCompatibilityHint(
+                index: index,
+                line: line,
+                sourceName:
+                    sourceName == null || sourceName.isEmpty
+                        ? null
+                        : sourceName,
+                sourceLabel:
+                    sourceLabel == null || sourceLabel.isEmpty
+                        ? null
+                        : sourceLabel,
+                level: SourceCompatibilityLevel.values.firstWhere(
+                  (item) => item.name == levelName,
+                  orElse: () => SourceCompatibilityLevel.partial,
+                ),
+                label: label,
+                reasons: List.unmodifiable(reasons),
+              ),
+            );
+          }
+        }
+      }
+
       return Success(
         SourceImportPreviewReport(
           validSources: List.unmodifiable(validSources),
           issues: List.unmodifiable(issues),
+          compatibilityHints: List.unmodifiable(compatibilityHints),
           totalCount: totalCount,
         ),
       );
@@ -562,6 +684,9 @@ Map<String, Object?> _buildPreviewPayloadInIsolate(String jsonText) {
       'issues': report.issues
           .map(_convertIssueToPayload)
           .toList(growable: false),
+      'compatibilityHints': report.compatibilityHints
+          .map(_convertHintToPayload)
+          .toList(growable: false),
     };
   }
 
@@ -596,4 +721,16 @@ class _RawEntry {
   final int index;
   final int zeroBasedIndex;
   final Object? item;
+}
+
+Map<String, Object?> _convertHintToPayload(SourceCompatibilityHint hint) {
+  return {
+    'index': hint.index,
+    'line': hint.line,
+    'sourceName': hint.sourceName,
+    'sourceLabel': hint.sourceLabel,
+    'level': hint.level.name,
+    'label': hint.label,
+    'reasons': hint.reasons,
+  };
 }
