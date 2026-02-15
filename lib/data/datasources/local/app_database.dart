@@ -48,6 +48,28 @@ class ChapterCaches extends Table {
   Set<Column<Object>> get primaryKey => {cacheKey};
 }
 
+class SourceListItem {
+  const SourceListItem({
+    required this.id,
+    required this.name,
+    required this.baseUrl,
+    required this.group,
+    required this.enabled,
+    required this.comment,
+    required this.lastCheckStatus,
+    required this.lastCheckedAt,
+  });
+
+  final String id;
+  final String name;
+  final String baseUrl;
+  final String? group;
+  final bool enabled;
+  final String? comment;
+  final SourceHealthStatus lastCheckStatus;
+  final DateTime? lastCheckedAt;
+}
+
 class ChapterCacheBookSummary {
   const ChapterCacheBookSummary({
     required this.bookId,
@@ -102,6 +124,99 @@ class AppDatabase extends _$AppDatabase {
     return query.watch().map(
       (rows) => rows.map(_mapRowToSource).toList(growable: false),
     );
+  }
+
+  Stream<List<SourceListItem>> watchSourceListItems() {
+    const sql =
+        'SELECT id, name, base_url AS baseUrl, "group" AS sourceGroup, '
+        'enabled, comment, health_status AS healthStatus, '
+        'last_checked_at AS lastCheckedAt '
+        'FROM sources '
+        'ORDER BY sourceGroup COLLATE NOCASE ASC, name COLLATE NOCASE ASC';
+
+    return customSelect(sql, readsFrom: {sources}).watch().map(
+      (rows) => rows.map(_mapSourceListItem).toList(growable: false),
+    );
+  }
+
+  Future<List<SourceListItem>> querySourceListItems({
+    required int limit,
+    required int offset,
+    String keyword = '',
+  }) async {
+    final safeLimit = limit < 1 ? 1 : limit;
+    final safeOffset = offset < 0 ? 0 : offset;
+    final filter = _buildSourceListSqlFilter(keyword: keyword);
+
+    final rows =
+        await customSelect(
+          'SELECT id, name, base_url AS baseUrl, "group" AS sourceGroup, '
+          'enabled, comment, health_status AS healthStatus, '
+          'last_checked_at AS lastCheckedAt '
+          'FROM sources '
+          '${filter.whereClause} '
+          'ORDER BY sourceGroup COLLATE NOCASE ASC, name COLLATE NOCASE ASC '
+          'LIMIT ? OFFSET ?',
+          variables: <Variable<Object>>[
+            ...filter.variables,
+            Variable<int>(safeLimit),
+            Variable<int>(safeOffset),
+          ],
+          readsFrom: {sources},
+        ).get();
+
+    return rows.map(_mapSourceListItem).toList(growable: false);
+  }
+
+  Future<int> countSourceListItems({
+    String keyword = '',
+    bool? enabledOnly,
+  }) async {
+    final filter = _buildSourceListSqlFilter(
+      keyword: keyword,
+      enabledOnly: enabledOnly,
+    );
+
+    final row =
+        await customSelect(
+          'SELECT COUNT(*) AS totalCount '
+          'FROM sources '
+          '${filter.whereClause}',
+          variables: filter.variables,
+          readsFrom: {sources},
+        ).getSingle();
+
+    final value = row.data['totalCount'];
+    if (value is int) {
+      return value;
+    }
+    if (value is BigInt) {
+      return value.toInt();
+    }
+    if (value is num) {
+      return value.toInt();
+    }
+    if (value is String) {
+      return int.tryParse(value.trim()) ?? 0;
+    }
+    return 0;
+  }
+
+  Future<SourceDefinition?> getSourceById(String sourceId) async {
+    final normalized = sourceId.trim();
+    if (normalized.isEmpty) {
+      return null;
+    }
+
+    final row =
+        await (select(sources)
+          ..where((table) => table.id.equals(normalized))).getSingleOrNull();
+
+    if (row == null) {
+      return null;
+    }
+
+    return _mapRowToSource(row);
   }
 
   Future<void> upsertSources(List<SourceDefinition> items) async {
@@ -400,6 +515,106 @@ class AppDatabase extends _$AppDatabase {
     );
   }
 
+  SourceListItem _mapSourceListItem(QueryRow row) {
+    return SourceListItem(
+      id: (row.data['id'] ?? '').toString(),
+      name: (row.data['name'] ?? '').toString(),
+      baseUrl: (row.data['baseUrl'] ?? '').toString(),
+      group: _nullableString(row.data['sourceGroup']),
+      enabled: _decodeBool(row.data['enabled']),
+      comment: _nullableString(row.data['comment']),
+      lastCheckStatus: _decodeSourceHealthStatus(
+        row.data['healthStatus']?.toString(),
+      ),
+      lastCheckedAt: _decodeNullableDateTime(row.data['lastCheckedAt']),
+    );
+  }
+
+  _SourceListSqlFilter _buildSourceListSqlFilter({
+    required String keyword,
+    bool? enabledOnly,
+  }) {
+    final clauses = <String>[];
+    final variables = <Variable<Object>>[];
+
+    final normalizedKeyword = keyword.trim().toLowerCase();
+    if (normalizedKeyword.isNotEmpty) {
+      final pattern = '%$normalizedKeyword%';
+      const keywordClause =
+          "(LOWER(name) LIKE ? "
+          "OR LOWER(base_url) LIKE ? "
+          "OR LOWER(COALESCE(\"group\", '')) LIKE ? "
+          "OR LOWER(COALESCE(comment, '')) LIKE ?)";
+      clauses.add(keywordClause);
+      for (var i = 0; i < 4; i++) {
+        variables.add(Variable<String>(pattern));
+      }
+    }
+
+    if (enabledOnly != null) {
+      clauses.add('enabled = ?');
+      variables.add(Variable<int>(enabledOnly ? 1 : 0));
+    }
+
+    final whereClause = clauses.isEmpty ? '' : 'WHERE ${clauses.join(' AND ')}';
+    return _SourceListSqlFilter(whereClause: whereClause, variables: variables);
+  }
+
+  bool _decodeBool(Object? value) {
+    if (value is bool) {
+      return value;
+    }
+    if (value is int) {
+      return value != 0;
+    }
+    if (value is num) {
+      return value != 0;
+    }
+    if (value is String) {
+      final normalized = value.trim().toLowerCase();
+      return normalized == '1' || normalized == 'true';
+    }
+    return false;
+  }
+
+  DateTime? _decodeNullableDateTime(Object? value) {
+    if (value == null) {
+      return null;
+    }
+    if (value is DateTime) {
+      return value;
+    }
+    if (value is int) {
+      return DateTime.fromMillisecondsSinceEpoch(value);
+    }
+    if (value is num) {
+      return DateTime.fromMillisecondsSinceEpoch(value.toInt());
+    }
+    if (value is String) {
+      final normalized = value.trim();
+      if (normalized.isEmpty) {
+        return null;
+      }
+      final parsedDateTime = DateTime.tryParse(normalized);
+      if (parsedDateTime != null) {
+        return parsedDateTime;
+      }
+      final parsedEpoch = int.tryParse(normalized);
+      if (parsedEpoch != null) {
+        return DateTime.fromMillisecondsSinceEpoch(parsedEpoch);
+      }
+    }
+    return null;
+  }
+
+  SourceHealthStatus _decodeSourceHealthStatus(String? rawStatus) {
+    final normalized = rawStatus?.trim();
+    return SourceHealthStatus.values.firstWhere(
+      (item) => item.name == normalized,
+      orElse: () => SourceHealthStatus.unknown,
+    );
+  }
+
   String? _nullableString(Object? value) {
     if (value == null) {
       return null;
@@ -444,4 +659,14 @@ QueryExecutor _openConnection() {
     final file = File(p.join(databaseDir.path, 'appread_sources.db'));
     return NativeDatabase(file);
   });
+}
+
+class _SourceListSqlFilter {
+  const _SourceListSqlFilter({
+    required this.whereClause,
+    required this.variables,
+  });
+
+  final String whereClause;
+  final List<Variable<Object>> variables;
 }

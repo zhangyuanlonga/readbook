@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:file_selector/file_selector.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -38,14 +39,194 @@ class _SourcePageState extends State<SourcePage> {
   final Set<String> _changingEnabledSourceIds = <String>{};
   final Set<String> _deletingSourceIds = <String>{};
   final Set<String> _selectedSourceIds = <String>{};
-  List<SourceDefinition> _visibleSources = const <SourceDefinition>[];
+  List<SourceListItem> _visibleSources = const <SourceListItem>[];
+  final TextEditingController _searchController = TextEditingController();
+  final FocusNode _searchFocusNode = FocusNode();
+  final ScrollController _scrollController = ScrollController();
+  Timer? _searchDebounce;
+  String _searchKeyword = '';
+  bool _showSearchBar = false;
+  bool _isPageLoading = false;
+  bool _isInitialLoading = true;
+  bool _hasMorePages = true;
+  String? _listErrorText;
+  int _nextOffset = 0;
+  int _totalCount = 0;
+  int _enabledCount = 0;
+  int _totalImportedCount = 0;
+  int _queryTicket = 0;
 
+  static const int _kPageSize = 120;
   static const String _defaultConnectivityKeyword = '凡人修仙传';
 
   @override
   void initState() {
     super.initState();
     _searchService = SearchService(sourceRepository: _repository);
+    _searchController.addListener(_onSearchInputChanged);
+    _scrollController.addListener(_onSourceListScroll);
+    unawaited(_reloadSourceList(reset: true));
+  }
+
+  @override
+  void dispose() {
+    _searchDebounce?.cancel();
+    _scrollController.removeListener(_onSourceListScroll);
+    _scrollController.dispose();
+    _searchController.removeListener(_onSearchInputChanged);
+    _searchController.dispose();
+    _searchFocusNode.dispose();
+    super.dispose();
+  }
+
+  void _onSourceListScroll() {
+    if (!_scrollController.hasClients) {
+      return;
+    }
+
+    final position = _scrollController.position;
+    if (position.pixels + 360 >= position.maxScrollExtent) {
+      unawaited(_loadNextPage());
+    }
+  }
+
+  Future<void> _reloadSourceList({required bool reset}) async {
+    final keyword = _searchKeyword.trim();
+    final ticket = ++_queryTicket;
+    final refreshLimit =
+        reset
+            ? _kPageSize
+            : (_nextOffset > _kPageSize ? _nextOffset : _kPageSize);
+
+    if (reset) {
+      setState(() {
+        _isInitialLoading = true;
+        _isPageLoading = true;
+        _listErrorText = null;
+        _hasMorePages = true;
+        _nextOffset = 0;
+        _visibleSources = const <SourceListItem>[];
+      });
+    } else {
+      setState(() {
+        _isPageLoading = true;
+      });
+    }
+
+    try {
+      final pageFuture = AppDatabase.instance.querySourceListItems(
+        offset: 0,
+        limit: refreshLimit,
+        keyword: keyword,
+      );
+      final totalFuture = AppDatabase.instance.countSourceListItems(
+        keyword: keyword,
+      );
+      final enabledFuture = AppDatabase.instance.countSourceListItems(
+        keyword: keyword,
+        enabledOnly: true,
+      );
+      final importedFuture = AppDatabase.instance.countSourceListItems();
+
+      final page = await pageFuture;
+      final total = await totalFuture;
+      final enabled = await enabledFuture;
+      final imported = await importedFuture;
+
+      if (!mounted || ticket != _queryTicket) {
+        return;
+      }
+
+      setState(() {
+        _visibleSources = page;
+        _totalCount = total;
+        _enabledCount = enabled.clamp(0, total);
+        _totalImportedCount = imported;
+        _nextOffset = page.length;
+        _hasMorePages = page.length < total;
+        _isInitialLoading = false;
+        _isPageLoading = false;
+        _listErrorText = null;
+      });
+
+      _syncSelectionWithVisibleSources();
+    } catch (error) {
+      if (!mounted || ticket != _queryTicket) {
+        return;
+      }
+      setState(() {
+        _isInitialLoading = false;
+        _isPageLoading = false;
+        _listErrorText = '加载书源失败：$error';
+      });
+    }
+  }
+
+  Future<void> _loadNextPage() async {
+    if (_isInitialLoading || _isPageLoading || !_hasMorePages) {
+      return;
+    }
+
+    final keyword = _searchKeyword.trim();
+    final ticket = _queryTicket;
+
+    setState(() {
+      _isPageLoading = true;
+    });
+
+    try {
+      final page = await AppDatabase.instance.querySourceListItems(
+        offset: _nextOffset,
+        limit: _kPageSize,
+        keyword: keyword,
+      );
+
+      if (!mounted || ticket != _queryTicket) {
+        return;
+      }
+
+      setState(() {
+        _visibleSources = [..._visibleSources, ...page];
+        _nextOffset += page.length;
+        _hasMorePages = _nextOffset < _totalCount;
+        _isPageLoading = false;
+      });
+    } catch (_) {
+      if (!mounted || ticket != _queryTicket) {
+        return;
+      }
+      setState(() {
+        _isPageLoading = false;
+      });
+    }
+  }
+
+  void _syncSelectionWithVisibleSources() {
+    if (!_isSelectionMode) {
+      return;
+    }
+
+    final visibleIds = _visibleSources.map((item) => item.id).toSet();
+    final nextSelected =
+        _selectedSourceIds.where((id) => visibleIds.contains(id)).toSet();
+
+    final needUpdate =
+        nextSelected.length != _selectedSourceIds.length ||
+        (_visibleSources.isEmpty && _isSelectionMode);
+
+    if (!needUpdate || !mounted) {
+      return;
+    }
+
+    setState(() {
+      _selectedSourceIds
+        ..clear()
+        ..addAll(nextSelected);
+      if (_visibleSources.isEmpty) {
+        _isSelectionMode = false;
+        _selectedSourceIds.clear();
+      }
+    });
   }
 
   @override
@@ -88,47 +269,58 @@ class _SourcePageState extends State<SourcePage> {
               tooltip: '删除已选',
               icon: const Icon(Icons.delete_outline),
             ),
-          ] else if (_isImporting)
-            const Padding(
-              padding: EdgeInsets.only(right: 16),
-              child: Center(
-                child: SizedBox(
-                  width: 18,
-                  height: 18,
-                  child: CircularProgressIndicator(strokeWidth: 2),
-                ),
+          ] else ...[
+            IconButton(
+              onPressed: _toggleSearchBar,
+              tooltip: _showSearchBar ? '收起搜索' : '搜索书源',
+              icon: Icon(
+                _showSearchBar
+                    ? Icons.search_off_rounded
+                    : Icons.search_rounded,
               ),
-            )
-          else
-            PopupMenuButton<_ImportAction>(
-              tooltip: '导入书源',
-              icon: const Icon(Icons.add),
-              onSelected: (action) {
-                switch (action) {
-                  case _ImportAction.paste:
-                    _importFromPaste();
-                  case _ImportAction.file:
-                    _importFromFile();
-                  case _ImportAction.batchSample:
-                    _importFromBuiltInBatch();
-                }
-              },
-              itemBuilder:
-                  (context) => const [
-                    PopupMenuItem(
-                      value: _ImportAction.paste,
-                      child: Text('粘贴导入 JSON'),
-                    ),
-                    PopupMenuItem(
-                      value: _ImportAction.file,
-                      child: Text('文件导入'),
-                    ),
-                    PopupMenuItem(
-                      value: _ImportAction.batchSample,
-                      child: Text('批量导入 read/test'),
-                    ),
-                  ],
             ),
+            if (_isImporting)
+              const Padding(
+                padding: EdgeInsets.only(right: 16),
+                child: Center(
+                  child: SizedBox(
+                    width: 18,
+                    height: 18,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  ),
+                ),
+              )
+            else
+              PopupMenuButton<_ImportAction>(
+                tooltip: '导入书源',
+                icon: const Icon(Icons.add),
+                onSelected: (action) {
+                  switch (action) {
+                    case _ImportAction.paste:
+                      _importFromPaste();
+                    case _ImportAction.file:
+                      _importFromFile();
+                    case _ImportAction.batchSample:
+                      _importFromBuiltInBatch();
+                  }
+                },
+                itemBuilder:
+                    (context) => const [
+                      PopupMenuItem(
+                        value: _ImportAction.paste,
+                        child: Text('粘贴导入 JSON'),
+                      ),
+                      PopupMenuItem(
+                        value: _ImportAction.file,
+                        child: Text('文件导入'),
+                      ),
+                      PopupMenuItem(
+                        value: _ImportAction.batchSample,
+                        child: Text('批量导入 read/test'),
+                      ),
+                    ],
+              ),
+          ],
         ],
       ),
       body: DecoratedBox(
@@ -139,56 +331,176 @@ class _SourcePageState extends State<SourcePage> {
             colors: [colorScheme.surface, colorScheme.surfaceContainerLow],
           ),
         ),
-        child: StreamBuilder<List<SourceDefinition>>(
-          stream: _repository.watchAll(),
-          initialData: const [],
-          builder: (context, snapshot) {
-            final sources = snapshot.data ?? const <SourceDefinition>[];
-            _visibleSources = sources;
+        child: _buildSourceListContent(
+          horizontal: horizontal,
+          bottomSafe: bottomSafe,
+        ),
+      ),
+    );
+  }
 
-            if (_isSelectionMode) {
-              final visibleIds = sources.map((item) => item.id).toSet();
-              _selectedSourceIds.removeWhere((id) => !visibleIds.contains(id));
+  Widget _buildSourceListContent({
+    required double horizontal,
+    required double bottomSafe,
+  }) {
+    final hasKeyword = _searchKeyword.trim().isNotEmpty;
+    final showSearchPanel = _showSearchBar || hasKeyword;
+    final showEmpty = !_isInitialLoading && _visibleSources.isEmpty;
+    final showErrorCard = _listErrorText != null && _visibleSources.isEmpty;
+    final showLoadingCard = _isInitialLoading;
 
-              if (sources.isEmpty) {
-                WidgetsBinding.instance.addPostFrameCallback((_) {
-                  if (!mounted || !_isSelectionMode) {
-                    return;
-                  }
-                  setState(() {
-                    _isSelectionMode = false;
-                    _selectedSourceIds.clear();
-                  });
-                });
-              }
-            }
+    final headerCount =
+        1 + (showSearchPanel ? 1 : 0) + (_isSelectionMode ? 1 : 0);
+    final listCount =
+        showLoadingCard || showErrorCard || showEmpty
+            ? 1
+            : _visibleSources.length;
+    final showFooter =
+        !showLoadingCard &&
+        !showErrorCard &&
+        !showEmpty &&
+        _visibleSources.isNotEmpty;
+    final itemCount = headerCount + listCount + (showFooter ? 1 : 0);
 
-            final enabledCount = sources.where((item) => item.enabled).length;
+    final searchPanelIndex = showSearchPanel ? 1 : -1;
+    final selectionIndex =
+        _isSelectionMode ? 1 + (showSearchPanel ? 1 : 0) : -1;
+    final listStartIndex = headerCount;
 
-            return ListView(
-              padding: EdgeInsets.fromLTRB(
-                horizontal,
-                16,
-                horizontal,
-                16 + bottomSafe,
-              ),
-              children: [
-                _buildOverviewCard(
-                  totalCount: sources.length,
-                  enabledCount: enabledCount,
-                ),
-                if (_isSelectionMode) ...[
-                  const SizedBox(height: 10),
-                  _buildSelectionHintCard(),
-                ],
-                const SizedBox(height: 10),
-                if (sources.isEmpty)
-                  _buildEmptySourceCard()
-                else
-                  ...sources.map(_buildSourceCard),
-              ],
+    return ListView.builder(
+      controller: _scrollController,
+      padding: EdgeInsets.fromLTRB(horizontal, 16, horizontal, 16 + bottomSafe),
+      itemCount: itemCount,
+      itemBuilder: (context, index) {
+        if (index == 0) {
+          return _buildOverviewCard(
+            totalCount: _totalCount,
+            enabledCount: _enabledCount,
+            totalImportedCount: _totalImportedCount,
+          );
+        }
+
+        if (index == searchPanelIndex) {
+          return Padding(
+            padding: const EdgeInsets.only(top: 10),
+            child: _buildSearchPanel(),
+          );
+        }
+
+        if (index == selectionIndex) {
+          return Padding(
+            padding: const EdgeInsets.only(top: 10),
+            child: _buildSelectionHintCard(),
+          );
+        }
+
+        final itemListIndex = index - listStartIndex;
+
+        if (_isInitialLoading) {
+          if (itemListIndex == 0) {
+            return const Padding(
+              padding: EdgeInsets.only(top: 10),
+              child: _SourceLoadingCard(),
             );
-          },
+          }
+          return const SizedBox.shrink();
+        }
+
+        if (_listErrorText != null && _visibleSources.isEmpty) {
+          if (itemListIndex == 0) {
+            return Padding(
+              padding: const EdgeInsets.only(top: 10),
+              child: _buildListErrorCard(_listErrorText!),
+            );
+          }
+          return const SizedBox.shrink();
+        }
+
+        if (showEmpty) {
+          if (itemListIndex == 0) {
+            return Padding(
+              padding: const EdgeInsets.only(top: 10),
+              child: _buildEmptySourceCard(hasKeyword: hasKeyword),
+            );
+          }
+          return const SizedBox.shrink();
+        }
+
+        if (itemListIndex >= 0 && itemListIndex < _visibleSources.length) {
+          final source = _visibleSources[itemListIndex];
+          if (itemListIndex >= _visibleSources.length - 8) {
+            unawaited(_loadNextPage());
+          }
+          return _buildSourceCard(source);
+        }
+
+        if (showFooter && itemListIndex == _visibleSources.length) {
+          return _buildPagingFooter();
+        }
+
+        return const SizedBox.shrink();
+      },
+    );
+  }
+
+  Widget _buildPagingFooter() {
+    final colorScheme = Theme.of(context).colorScheme;
+
+    if (_isPageLoading) {
+      return const Padding(
+        padding: EdgeInsets.only(top: 12, bottom: 4),
+        child: Center(
+          child: SizedBox(
+            width: 18,
+            height: 18,
+            child: CircularProgressIndicator(strokeWidth: 2),
+          ),
+        ),
+      );
+    }
+
+    final text = _hasMorePages ? '继续下滑加载更多书源' : '已显示全部书源';
+    return Padding(
+      padding: const EdgeInsets.only(top: 10, bottom: 2),
+      child: Center(
+        child: Text(
+          text,
+          style: Theme.of(
+            context,
+          ).textTheme.bodySmall?.copyWith(color: colorScheme.onSurfaceVariant),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildListErrorCard(String message) {
+    final colorScheme = Theme.of(context).colorScheme;
+
+    return Card(
+      color: colorScheme.errorContainer,
+      child: Padding(
+        padding: const EdgeInsets.all(14),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              '书源列表加载失败',
+              style: TextStyle(
+                color: colorScheme.onErrorContainer,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+            const SizedBox(height: 6),
+            Text(
+              message,
+              style: TextStyle(color: colorScheme.onErrorContainer),
+            ),
+            const SizedBox(height: 10),
+            FilledButton.tonal(
+              onPressed: () => unawaited(_reloadSourceList(reset: true)),
+              child: const Text('重试'),
+            ),
+          ],
         ),
       ),
     );
@@ -197,6 +509,7 @@ class _SourcePageState extends State<SourcePage> {
   Widget _buildOverviewCard({
     required int totalCount,
     required int enabledCount,
+    required int totalImportedCount,
   }) {
     final disabledCount = (totalCount - enabledCount).clamp(0, totalCount);
     final colorScheme = Theme.of(context).colorScheme;
@@ -224,10 +537,86 @@ class _SourcePageState extends State<SourcePage> {
               spacing: 8,
               runSpacing: 8,
               children: [
-                _buildOverviewChip('总数', '$totalCount'),
+                _buildOverviewChip('当前结果', '$totalCount'),
                 _buildOverviewChip('启用', '$enabledCount'),
                 _buildOverviewChip('停用', '$disabledCount'),
+                _buildOverviewChip('已导入', '$totalImportedCount'),
               ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildSearchPanel() {
+    final colorScheme = Theme.of(context).colorScheme;
+
+    final helperText =
+        _searchKeyword.isEmpty ? '输入名称、域名、分组或备注进行筛选' : '匹配 $_totalCount 条书源';
+
+    return Card(
+      margin: EdgeInsets.zero,
+      child: Padding(
+        padding: const EdgeInsets.all(14),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Icon(Icons.search_rounded, color: colorScheme.primary),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    '书源搜索',
+                    style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                ),
+                IconButton(
+                  tooltip: '收起搜索',
+                  onPressed: _toggleSearchBar,
+                  icon: const Icon(Icons.expand_less_rounded),
+                ),
+              ],
+            ),
+            const SizedBox(height: 8),
+            Container(
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(14),
+                border: Border.all(color: colorScheme.outline),
+              ),
+              child: TextField(
+                controller: _searchController,
+                focusNode: _searchFocusNode,
+                textInputAction: TextInputAction.search,
+                decoration: InputDecoration(
+                  hintText: '例如：3A小说 / aaawz.cc / 小说',
+                  border: InputBorder.none,
+                  filled: false,
+                  prefixIcon: const Icon(Icons.search),
+                  contentPadding: const EdgeInsets.symmetric(
+                    horizontal: 14,
+                    vertical: 10,
+                  ),
+                  suffixIcon:
+                      _searchKeyword.isEmpty
+                          ? null
+                          : IconButton(
+                            tooltip: '清空关键词',
+                            onPressed: () => _searchController.clear(),
+                            icon: const Icon(Icons.close_rounded),
+                          ),
+                ),
+              ),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              helperText,
+              style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                color: colorScheme.onSurfaceVariant,
+              ),
             ),
           ],
         ),
@@ -254,7 +643,7 @@ class _SourcePageState extends State<SourcePage> {
     );
   }
 
-  Widget _buildEmptySourceCard() {
+  Widget _buildEmptySourceCard({required bool hasKeyword}) {
     final colorScheme = Theme.of(context).colorScheme;
 
     return Card(
@@ -269,14 +658,14 @@ class _SourcePageState extends State<SourcePage> {
             ),
             const SizedBox(height: 10),
             Text(
-              '当前没有书源',
+              hasKeyword ? '未匹配到书源' : '当前没有书源',
               style: Theme.of(
                 context,
               ).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w700),
             ),
             const SizedBox(height: 6),
             Text(
-              '点击右上角 + 开始导入。',
+              hasKeyword ? '换个关键词试试。' : '点击右上角 + 开始导入。',
               style: Theme.of(context).textTheme.bodySmall?.copyWith(
                 color: colorScheme.onSurfaceVariant,
               ),
@@ -322,14 +711,13 @@ class _SourcePageState extends State<SourcePage> {
     );
   }
 
-  Widget _buildSourceCard(SourceDefinition source) {
+  Widget _buildSourceCard(SourceListItem source) {
     final statusText = _healthStatusText(source.lastCheckStatus);
     final checkedAtText = _formatDateTime(source.lastCheckedAt);
     final isTesting = _testingSourceIds.contains(source.id);
     final isChangingEnabled = _changingEnabledSourceIds.contains(source.id);
     final isDeleting = _deletingSourceIds.contains(source.id);
     final selected = _selectedSourceIds.contains(source.id);
-    final lastCheckMessage = source.lastCheckMessage?.trim();
     final isActionLocked = _isBatchDeleting || isDeleting;
     final colorScheme = Theme.of(context).colorScheme;
 
@@ -409,16 +797,6 @@ class _SourcePageState extends State<SourcePage> {
                         _buildSourceMetaChip('测试', checkedAtText),
                       ],
                     ),
-                    if (lastCheckMessage != null &&
-                        lastCheckMessage.isNotEmpty) ...[
-                      const SizedBox(height: 6),
-                      Text(
-                        '测试摘要：$lastCheckMessage',
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: Theme.of(context).textTheme.bodySmall,
-                      ),
-                    ],
                     if (source.comment != null &&
                         source.comment!.trim().isNotEmpty) ...[
                       const SizedBox(height: 6),
@@ -511,7 +889,7 @@ class _SourcePageState extends State<SourcePage> {
 
   void _handleSourceAction({
     required _SourceAction action,
-    required SourceDefinition source,
+    required SourceListItem source,
     required bool isTesting,
   }) {
     switch (action) {
@@ -685,6 +1063,7 @@ class _SourcePageState extends State<SourcePage> {
     }
 
     await _repository.upsertAll(report.validSources);
+    await _reloadSourceList(reset: true);
 
     if (report.invalidCount == 0) {
       _showMessage('$actionLabel成功：共 ${report.validCount} 条。');
@@ -821,6 +1200,51 @@ class _SourcePageState extends State<SourcePage> {
     });
   }
 
+  void _toggleSearchBar() {
+    if (_showSearchBar || _searchKeyword.isNotEmpty) {
+      _searchDebounce?.cancel();
+      _searchFocusNode.unfocus();
+      _searchController.clear();
+      setState(() {
+        _showSearchBar = false;
+        _searchKeyword = '';
+      });
+      unawaited(_reloadSourceList(reset: true));
+      return;
+    }
+
+    setState(() {
+      _showSearchBar = true;
+    });
+
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) {
+        return;
+      }
+      _searchFocusNode.requestFocus();
+    });
+  }
+
+  void _onSearchInputChanged() {
+    _searchDebounce?.cancel();
+    _searchDebounce = Timer(const Duration(milliseconds: 280), () {
+      if (!mounted) {
+        return;
+      }
+
+      final keyword = _searchController.text.trim();
+      if (keyword == _searchKeyword) {
+        return;
+      }
+
+      setState(() {
+        _searchKeyword = keyword;
+      });
+
+      unawaited(_reloadSourceList(reset: true));
+    });
+  }
+
   void _selectAllVisibleSources() {
     setState(() {
       _selectedSourceIds
@@ -877,6 +1301,7 @@ class _SourcePageState extends State<SourcePage> {
         _isSelectionMode = false;
       });
 
+      await _reloadSourceList(reset: true);
       _showMessage('已删除 $total 条书源。');
     } catch (_) {
       _showMessage('批量删除失败，请稍后重试。');
@@ -900,6 +1325,7 @@ class _SourcePageState extends State<SourcePage> {
 
     try {
       await _repository.setEnabled(sourceId: sourceId, enabled: enabled);
+      await _reloadSourceList(reset: false);
     } catch (_) {
       _showMessage('更新书源状态失败，请重试。');
     } finally {
@@ -932,6 +1358,7 @@ class _SourcePageState extends State<SourcePage> {
 
     try {
       await _repository.deleteById(sourceId);
+      await _reloadSourceList(reset: true);
       _showMessage('已删除书源。');
     } catch (_) {
       _showMessage('删除书源失败，请重试。');
@@ -944,7 +1371,7 @@ class _SourcePageState extends State<SourcePage> {
     }
   }
 
-  Future<void> _editComment(SourceDefinition source) async {
+  Future<void> _editComment(SourceListItem source) async {
     final input = await _showCommentDialog(source.comment);
     if (!mounted || input == null) {
       return;
@@ -960,11 +1387,12 @@ class _SourcePageState extends State<SourcePage> {
     await _repository.upsertAll([
       latestSource.copyWith(comment: trimmed, clearComment: trimmed.isEmpty),
     ]);
+    await _reloadSourceList(reset: false);
 
     _showMessage(trimmed.isEmpty ? '备注已清空。' : '备注已更新。');
   }
 
-  Future<void> _runConnectivityTest(SourceDefinition source) async {
+  Future<void> _runConnectivityTest(SourceListItem source) async {
     final keyword = _defaultConnectivityKeyword;
 
     setState(() {
@@ -972,7 +1400,12 @@ class _SourcePageState extends State<SourcePage> {
     });
 
     try {
-      final latestSource = await _getSourceById(source.id) ?? source;
+      final latestSource = await _getSourceById(source.id);
+      if (latestSource == null) {
+        _showMessage('书源不存在，无法测试。');
+        return;
+      }
+
       final report = await _searchService
           .testSingleSource(
             source: latestSource,
@@ -1005,6 +1438,7 @@ class _SourcePageState extends State<SourcePage> {
       }
 
       await _showConnectivityResultDialog(report);
+      await _reloadSourceList(reset: false);
     } finally {
       if (mounted) {
         setState(() {
@@ -1014,14 +1448,8 @@ class _SourcePageState extends State<SourcePage> {
     }
   }
 
-  Future<SourceDefinition?> _getSourceById(String sourceId) async {
-    final sources = await _repository.getAll();
-    for (final source in sources) {
-      if (source.id == sourceId) {
-        return source;
-      }
-    }
-    return null;
+  Future<SourceDefinition?> _getSourceById(String sourceId) {
+    return AppDatabase.instance.getSourceById(sourceId);
   }
 
   Future<void> _showConnectivityResultDialog(
@@ -1270,6 +1698,35 @@ class _SourcePageState extends State<SourcePage> {
           ],
         );
       },
+    );
+  }
+}
+
+class _SourceLoadingCard extends StatelessWidget {
+  const _SourceLoadingCard();
+
+  @override
+  Widget build(BuildContext context) {
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Row(
+          children: [
+            const SizedBox(
+              width: 18,
+              height: 18,
+              child: CircularProgressIndicator(strokeWidth: 2),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Text(
+                '正在加载书源列表...',
+                style: Theme.of(context).textTheme.bodyMedium,
+              ),
+            ),
+          ],
+        ),
+      ),
     );
   }
 }
