@@ -18,11 +18,11 @@ class SourceCapabilityProfile {
   bool get isManga => sourceType == 2;
 
   SourceCompatibilityLevel get compatibilityLevel {
-    if (isManga && (usesJs || usesReload)) {
+    if (usesReload) {
       return SourceCompatibilityLevel.unsupported;
     }
 
-    if (isManga || usesJs || usesReload || imageContent) {
+    if (usesJs) {
       return SourceCompatibilityLevel.partial;
     }
 
@@ -40,17 +40,11 @@ class SourceCapabilityProfile {
   List<String> get reasons {
     final output = <String>[];
 
-    if (isManga) {
-      output.add('当前版本优先支持小说链路，漫画链路仍在建设中。');
+    if (usesReload) {
+      output.add('规则依赖 Reload(...) 远程脚本，当前版本暂不支持。');
     }
     if (usesJs) {
-      output.add('规则包含 JS 表达式（<js>/js:），当前未完整支持。');
-    }
-    if (usesReload) {
-      output.add('规则依赖 Reload(...) 远程脚本，当前未支持。');
-    }
-    if (imageContent) {
-      output.add('正文为图片流（imageStyle/FULL），需要漫画阅读模式支持。');
+      output.add('规则包含 JS 表达式（<js>/js:），当前为部分兼容，请优先做连通性测试。');
     }
 
     return output;

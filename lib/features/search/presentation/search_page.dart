@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:html/parser.dart' as html_parser;
@@ -8,6 +10,7 @@ import '../../../core/errors/app_exception.dart';
 import '../../../data/datasources/local/app_database.dart';
 import '../../../data/repositories/source_repository_impl.dart';
 import '../../../domain/entities/book.dart';
+import '../../../domain/entities/source_definition.dart';
 import '../../../domain/repositories/source_repository.dart';
 import '../application/search_service.dart';
 
@@ -26,15 +29,19 @@ class _SearchPageState extends State<SearchPage> {
   late final SearchService _searchService;
 
   bool _isSearching = false;
+  bool _isLoadingSourceFilters = false;
   SearchExecutionReport? _report;
   SearchCancellationToken? _activeSearchToken;
   int _searchSessionId = 0;
   SearchContentMode _searchContentMode = SearchContentMode.novel;
+  List<SourceDefinition> _filterableSources = const [];
+  Set<String> _selectedSourceIds = <String>{};
 
   @override
   void initState() {
     super.initState();
     _searchService = SearchService(sourceRepository: _sourceRepository);
+    unawaited(_refreshSourceFilters());
   }
 
   @override
@@ -149,6 +156,7 @@ class _SearchPageState extends State<SearchPage> {
                             _searchContentMode = mode;
                             _report = null;
                           });
+                          unawaited(_refreshSourceFilters());
                         },
               ),
             ),
@@ -174,6 +182,8 @@ class _SearchPageState extends State<SearchPage> {
                 ),
               ),
             ),
+            const SizedBox(height: 10),
+            _buildSourceFilterRow(),
             const SizedBox(height: 10),
             Row(
               children: [
@@ -204,6 +214,293 @@ class _SearchPageState extends State<SearchPage> {
         ),
       ),
     );
+  }
+
+  Widget _buildSourceFilterRow() {
+    final allCount = _filterableSources.length;
+    final selectedCount = _selectedSourceIds.length;
+
+    final summaryText =
+        allCount == 0
+            ? '当前类型没有可选书源'
+            : selectedCount == 0
+            ? '书源: 全部 ($allCount)'
+            : '书源: 指定 $selectedCount / $allCount';
+
+    return Container(
+      padding: const EdgeInsets.fromLTRB(10, 8, 8, 8),
+      decoration: BoxDecoration(
+        color: Theme.of(context).colorScheme.surfaceContainerLow,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: Theme.of(context).colorScheme.outlineVariant),
+      ),
+      child: Row(
+        children: [
+          Expanded(
+            child: Text(
+              summaryText,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                color: Theme.of(context).colorScheme.onSurfaceVariant,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ),
+          if (_isLoadingSourceFilters)
+            const SizedBox(
+              width: 20,
+              height: 20,
+              child: Padding(
+                padding: EdgeInsets.all(2),
+                child: CircularProgressIndicator(strokeWidth: 2),
+              ),
+            )
+          else ...[
+            if (_selectedSourceIds.isNotEmpty)
+              IconButton(
+                tooltip: '清空筛选',
+                visualDensity: VisualDensity.compact,
+                onPressed:
+                    _isSearching
+                        ? null
+                        : () {
+                          setState(() {
+                            _selectedSourceIds = <String>{};
+                            _report = null;
+                          });
+                        },
+                icon: const Icon(Icons.clear_rounded, size: 18),
+              ),
+            TextButton.icon(
+              onPressed:
+                  (_isSearching || allCount == 0)
+                      ? null
+                      : () => unawaited(_showSourceFilterSheet()),
+              icon: const Icon(Icons.filter_list_rounded, size: 18),
+              label: const Text('指定书源'),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  Future<void> _refreshSourceFilters() async {
+    if (!mounted) {
+      return;
+    }
+
+    setState(() {
+      _isLoadingSourceFilters = true;
+    });
+
+    try {
+      final all = await _sourceRepository.getAll();
+      final filtered = all
+        .where(
+          (source) =>
+              source.enabled &&
+              ((_searchContentMode == SearchContentMode.manga &&
+                      source.isMangaSource) ||
+                  (_searchContentMode == SearchContentMode.novel &&
+                      !source.isMangaSource)),
+        )
+        .toList(growable: false)..sort((a, b) => a.name.compareTo(b.name));
+
+      if (!mounted) {
+        return;
+      }
+
+      setState(() {
+        _filterableSources = List.unmodifiable(filtered);
+        _selectedSourceIds =
+            _selectedSourceIds
+                .where((id) => filtered.any((item) => item.id == id))
+                .toSet();
+      });
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isLoadingSourceFilters = false;
+        });
+      }
+    }
+  }
+
+  Future<void> _showSourceFilterSheet() async {
+    if (_filterableSources.isEmpty) {
+      _showMessage('当前类型没有可用书源。');
+      return;
+    }
+
+    final initialSelected = <String>{..._selectedSourceIds};
+    final keywordController = TextEditingController();
+
+    final selected = await showModalBottomSheet<Set<String>>(
+      context: context,
+      isScrollControlled: true,
+      showDragHandle: true,
+      useSafeArea: true,
+      builder: (context) {
+        var draftSelected = <String>{...initialSelected};
+
+        return StatefulBuilder(
+          builder: (context, setModalState) {
+            final keyword = keywordController.text.trim().toLowerCase();
+            final visibleSources = _filterableSources
+                .where((source) {
+                  if (keyword.isEmpty) {
+                    return true;
+                  }
+                  return source.name.toLowerCase().contains(keyword) ||
+                      source.baseUrl.toLowerCase().contains(keyword);
+                })
+                .toList(growable: false);
+
+            return FractionallySizedBox(
+              heightFactor: 0.85,
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(16, 6, 16, 16),
+                child: Column(
+                  children: [
+                    Align(
+                      alignment: Alignment.centerLeft,
+                      child: Text(
+                        '指定书源',
+                        style: Theme.of(context).textTheme.titleMedium
+                            ?.copyWith(fontWeight: FontWeight.w700),
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    TextField(
+                      controller: keywordController,
+                      onChanged: (_) => setModalState(() {}),
+                      decoration: InputDecoration(
+                        isDense: true,
+                        hintText: '搜索书源名称或域名',
+                        prefixIcon: const Icon(Icons.search, size: 18),
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    Row(
+                      children: [
+                        TextButton(
+                          onPressed: () {
+                            setModalState(() {
+                              draftSelected = <String>{};
+                            });
+                          },
+                          child: const Text('全部书源'),
+                        ),
+                        const SizedBox(width: 8),
+                        TextButton(
+                          onPressed: () {
+                            setModalState(() {
+                              draftSelected =
+                                  _filterableSources
+                                      .map((item) => item.id)
+                                      .toSet();
+                            });
+                          },
+                          child: const Text('全选'),
+                        ),
+                        const Spacer(),
+                        Text(
+                          draftSelected.isEmpty
+                              ? '当前：全部'
+                              : '当前：${draftSelected.length} 个',
+                          style: Theme.of(
+                            context,
+                          ).textTheme.bodySmall?.copyWith(
+                            color:
+                                Theme.of(context).colorScheme.onSurfaceVariant,
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 4),
+                    Expanded(
+                      child:
+                          visibleSources.isEmpty
+                              ? Center(
+                                child: Text(
+                                  '未匹配到书源',
+                                  style: Theme.of(context).textTheme.bodyMedium,
+                                ),
+                              )
+                              : ListView.builder(
+                                itemCount: visibleSources.length,
+                                itemBuilder: (context, index) {
+                                  final source = visibleSources[index];
+                                  final selected = draftSelected.contains(
+                                    source.id,
+                                  );
+                                  return CheckboxListTile(
+                                    value: selected,
+                                    dense: true,
+                                    controlAffinity:
+                                        ListTileControlAffinity.leading,
+                                    title: Text(
+                                      source.name,
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                    ),
+                                    subtitle: Text(
+                                      source.baseUrl,
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                    ),
+                                    onChanged: (value) {
+                                      setModalState(() {
+                                        if (value ?? false) {
+                                          draftSelected.add(source.id);
+                                        } else {
+                                          draftSelected.remove(source.id);
+                                        }
+                                      });
+                                    },
+                                  );
+                                },
+                              ),
+                    ),
+                    const SizedBox(height: 8),
+                    Row(
+                      children: [
+                        TextButton(
+                          onPressed: () => Navigator.of(context).pop(),
+                          child: const Text('取消'),
+                        ),
+                        const Spacer(),
+                        FilledButton(
+                          onPressed:
+                              () => Navigator.of(context).pop(draftSelected),
+                          child: const Text('应用筛选'),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+            );
+          },
+        );
+      },
+    );
+
+    keywordController.dispose();
+
+    if (!mounted || selected == null) {
+      return;
+    }
+
+    setState(() {
+      _selectedSourceIds = selected;
+      _report = null;
+    });
   }
 
   Widget _buildProgressCard() {
@@ -263,6 +560,7 @@ class _SearchPageState extends State<SearchPage> {
           '成功源',
           '${report.successSourceCount}/${report.sourceCount}',
         ),
+        _buildSummaryChip('筛选', _selectedSourceIds.isEmpty ? '全部书源' : '指定书源'),
         if (report.failedSourceCount > 0)
           _buildSummaryChip('失败源', '${report.failedSourceCount}'),
       ],
@@ -659,6 +957,10 @@ class _SearchPageState extends State<SearchPage> {
       final report = await _searchService.search(
         keyword: keyword,
         contentMode: _searchContentMode,
+        sourceIds:
+            _selectedSourceIds.isEmpty
+                ? null
+                : _selectedSourceIds.toList(growable: false),
         cancellationToken: token,
         onProgress: (progress) {
           if (!mounted || token.isCancelled || sessionId != _searchSessionId) {

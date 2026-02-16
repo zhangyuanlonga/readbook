@@ -128,6 +128,7 @@ class SearchService {
     SearchCancellationToken? cancellationToken,
     SearchProgressCallback? onProgress,
     SearchContentMode contentMode = SearchContentMode.novel,
+    List<String>? sourceIds,
   }) async {
     final normalizedKeyword = keyword.trim();
     if (normalizedKeyword.isEmpty) {
@@ -139,14 +140,31 @@ class SearchService {
     }
 
     final allSources = await _sourceRepository.getAll();
-    final enabledSources = allSources
+    var enabledSources = allSources
         .where(
           (source) =>
               source.enabled && _matchesContentMode(source, contentMode),
         )
         .toList(growable: false);
 
+    final sourceIdSet =
+        sourceIds
+            ?.map((item) => item.trim())
+            .where((item) => item.isNotEmpty)
+            .toSet();
+    if (sourceIdSet != null && sourceIdSet.isNotEmpty) {
+      enabledSources = enabledSources
+          .where((source) => sourceIdSet.contains(source.id))
+          .toList(growable: false);
+    }
+
     if (enabledSources.isEmpty) {
+      if (sourceIdSet != null && sourceIdSet.isNotEmpty) {
+        throw UnknownSourceException(
+          briefMessage: '没有可用已选书源，请调整筛选条件或启用书源。',
+          stage: ErrorStage.search,
+        );
+      }
       final modeLabel = contentMode == SearchContentMode.manga ? '漫画' : '小说';
       throw UnknownSourceException(
         briefMessage: '没有可用$modeLabel书源，请先在书源页导入并启用对应书源。',
@@ -165,6 +183,7 @@ class SearchService {
         'pageSize': pageSize,
         'concurrency': concurrency,
         'contentMode': contentMode.name,
+        'selectedSourceCount': sourceIdSet?.length ?? 0,
       },
     );
 

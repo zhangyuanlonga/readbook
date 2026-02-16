@@ -50,6 +50,27 @@ void main() {
       expect(data.first.isMangaSource, isTrue);
     });
 
+    test('does not report compatibility hints for js-free manga source', () {
+      const payload = '''
+[
+  {
+    "bookSourceName": "漫画源",
+    "bookSourceUrl": "https://comic.example.com",
+    "bookSourceType": 2,
+    "searchUrl": "/search?key={{key}}",
+    "ruleContent": {"content": ".manga img@src", "imageStyle": "FULL"}
+  }
+]
+''';
+
+      final result = service.previewFromText(payload);
+
+      expect(result, isA<Success<SourceImportPreviewReport>>());
+      final report = (result as Success<SourceImportPreviewReport>).data;
+      expect(report.validCount, 1);
+      expect(report.compatibilityHintCount, 0);
+    });
+
     test('reports compatibility hints for js reload manga source', () {
       final file = File('manhua.json');
       final payload =

@@ -66,6 +66,69 @@ void main() {
         ),
       );
     });
+
+    test('supports searching with specified source ids', () async {
+      final server = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
+      server.listen((request) async {
+        if (request.uri.path == '/s1') {
+          request.response
+            ..statusCode = 200
+            ..write('''
+              <div class="item"><a class="title" href="/book/1">A书</a></div>
+            ''');
+        } else if (request.uri.path == '/s2') {
+          request.response
+            ..statusCode = 200
+            ..write('''
+              <div class="item"><a class="title" href="/book/2">B书</a></div>
+            ''');
+        } else {
+          request.response
+            ..statusCode = 200
+            ..write('<div class="empty">no data</div>');
+        }
+        await request.response.close();
+      });
+
+      final baseUrl = 'http://${server.address.host}:${server.port}';
+      final repository = _FakeSourceRepository([
+        SourceDefinition(
+          id: 's1',
+          name: '源1',
+          baseUrl: baseUrl,
+          rules: const SourceRuleSet(
+            searchRule: '/s1?key={{key}}',
+            searchListRule: '.item@html',
+            searchTitleRule: '.title@text',
+            searchDetailUrlRule: '.title@href',
+          ),
+        ),
+        SourceDefinition(
+          id: 's2',
+          name: '源2',
+          baseUrl: baseUrl,
+          rules: const SourceRuleSet(
+            searchRule: '/s2?key={{key}}',
+            searchListRule: '.item@html',
+            searchTitleRule: '.title@text',
+            searchDetailUrlRule: '.title@href',
+          ),
+        ),
+      ]);
+
+      final service = SearchService(sourceRepository: repository);
+      final report = await service.search(
+        keyword: '凡人',
+        sourceIds: const ['s2'],
+      );
+
+      expect(report.sourceCount, 1);
+      expect(report.books, hasLength(1));
+      expect(report.books.first.title, 'B书');
+
+      await server.close(force: true);
+    });
+
     test('searches enabled sources and keeps per-source failures', () async {
       final server = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
       server.listen((request) async {
