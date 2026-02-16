@@ -105,6 +105,14 @@ class MinePage extends ConsumerWidget {
                   onTap: () => context.push('/cache'),
                 ),
                 const Divider(height: 1),
+                ListTile(
+                  leading: const Icon(Icons.warning_amber_outlined),
+                  title: const Text('阅读异常中心'),
+                  subtitle: const Text('查看最近阅读失败章节并一键重试。'),
+                  trailing: const Icon(Icons.chevron_right_rounded),
+                  onTap: () => context.push('/reader-errors'),
+                ),
+                const Divider(height: 1),
                 const ListTile(
                   leading: Icon(Icons.construction_rounded),
                   title: Text('更多功能规划中'),

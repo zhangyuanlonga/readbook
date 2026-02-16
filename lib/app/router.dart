@@ -6,6 +6,7 @@ import '../features/bookshelf/presentation/bookshelf_page.dart';
 import '../features/mine/presentation/mine_page.dart';
 import '../features/mine/presentation/cache_management_page.dart';
 import '../features/reader/presentation/reader_page.dart';
+import '../features/reader/presentation/reader_error_center_page.dart';
 import '../features/search/presentation/search_page.dart';
 import '../features/source/presentation/source_page.dart';
 import 'shell_scaffold.dart';
@@ -42,6 +43,11 @@ final GoRouter appRouter = GoRouter(
       path: '/cache',
       name: 'cache',
       builder: (context, state) => const CacheManagementPage(),
+    ),
+    GoRoute(
+      path: '/reader-errors',
+      name: 'reader-errors',
+      builder: (context, state) => const ReaderErrorCenterPage(),
     ),
     GoRoute(
       path: '/search',

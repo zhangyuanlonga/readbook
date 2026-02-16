@@ -272,6 +272,62 @@ $baseUrl/book/1/toc, {
       },
     );
 
+    test('skips invalid chapter urls during toc parsing', () async {
+      final server = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
+      server.listen((request) async {
+        if (request.uri.path == '/book/1') {
+          request.response
+            ..statusCode = 200
+            ..write('<a class="toc" href="/book/1/toc">目录</a>');
+        } else if (request.uri.path == '/book/1/toc') {
+          request.response
+            ..statusCode = 200
+            ..write('''
+              <div class="chapter"><a class="link" href="javascript:void(0)">无效1</a></div>
+              <div class="chapter"><a class="link" href="#jump">无效2</a></div>
+              <div class="chapter"><a class="link" href="mailto:test@example.com">无效3</a></div>
+              <div class="chapter"><a class="link" href="/valid-1">有效1</a></div>
+              <div class="chapter"><a class="link" href="//cdn.example.com/valid-2">有效2</a></div>
+            ''');
+        } else {
+          request.response
+            ..statusCode = 404
+            ..write('not found');
+        }
+        await request.response.close();
+      });
+
+      final baseUrl = 'http://${server.address.host}:${server.port}';
+      final repository = _FakeSourceRepository([
+        SourceDefinition(
+          id: 's_url_clean',
+          name: 'URL清洗源',
+          baseUrl: baseUrl,
+          rules: const SourceRuleSet(
+            detailTocUrlRule: '.toc@href',
+            tocListRule: '.chapter@html',
+            tocTitleRule: '.link@text',
+            tocChapterUrlRule: '.link@href',
+          ),
+        ),
+      ]);
+
+      final service = BookDetailService(sourceRepository: repository);
+      final result = await service.load(
+        sourceId: 's_url_clean',
+        bookId: 'book_clean_1',
+        detailUrl: '$baseUrl/book/1',
+      );
+
+      expect(result.chapters, hasLength(2));
+      expect(result.chapters.first.title, '有效1');
+      expect(result.chapters.first.chapterUrl, '$baseUrl/valid-1');
+      expect(result.chapters.last.title, '有效2');
+      expect(result.chapters.last.chapterUrl, 'http://cdn.example.com/valid-2');
+
+      await server.close(force: true);
+    });
+
     test('throws when toc rule is missing', () async {
       final repository = _FakeSourceRepository([
         SourceDefinition(

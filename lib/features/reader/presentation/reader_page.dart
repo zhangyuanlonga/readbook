@@ -23,6 +23,7 @@ import '../../book/application/book_detail_service.dart';
 import '../../bookshelf/application/bookshelf_service.dart';
 import '../application/chapter_content_service.dart';
 import '../application/reader_preferences_service.dart';
+import '../application/reader_error_center_service.dart';
 import 'chapter_cache_sheets.dart';
 
 class ReaderPage extends ConsumerStatefulWidget {
@@ -55,8 +56,11 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
   final ChapterContentService _contentService = ChapterContentService();
   final ReaderPreferencesService _preferencesService =
       ReaderPreferencesService();
+  final ReaderErrorCenterService _readerErrorCenterService =
+      ReaderErrorCenterService.instance;
   final BookshelfService _bookshelfService = BookshelfService();
   final ScrollController _scrollController = ScrollController();
+  final PageController _mangaPageController = PageController();
 
   late String _chapterId;
   String? _chapterUrl;
@@ -82,7 +86,14 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
   String _content = '';
   List<String> _paragraphs = const [];
   List<String> _chapterImageUrls = const [];
+  Map<String, String> _chapterImageHeaders = const {};
   final Map<String, int> _mangaImageRetryNonce = <String, int>{};
+  final Map<int, TransformationController> _mangaTransformControllers =
+      <int, TransformationController>{};
+  final Map<int, TapDownDetails> _mangaDoubleTapDetails =
+      <int, TapDownDetails>{};
+  final Set<int> _mangaZoomedPageIndexes = <int>{};
+  int _mangaPageIndex = 0;
   ReadingProgress? _bootstrapProgress;
   Timer? _progressDebounceTimer;
   String? _cachedBackgroundImageKey;
@@ -109,6 +120,15 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
   bool _isTapPaginationEnabled() {
     return _settings.pageTurnMode == ReaderPageTurnMode.tap &&
         _chapterImageUrls.isEmpty;
+  }
+
+  bool get _isMangaChapter => _chapterImageUrls.isNotEmpty;
+
+  bool get _isMangaPagedMode {
+    if (!_isMangaChapter) {
+      return false;
+    }
+    return _settings.mangaReadMode != ReaderMangaReadMode.continuous;
   }
 
   double _pinnedHeaderTotalHeight(BuildContext context) {
@@ -142,6 +162,8 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
     _progressDebounceTimer?.cancel();
     _scrollController.removeListener(_onScrollChanged);
     _scrollController.dispose();
+    _mangaPageController.dispose();
+    _disposeMangaTransformControllers();
     _pageCurlController?.dispose();
     _curlAutoTurnController.dispose();
     super.dispose();
@@ -435,30 +457,133 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
   }
 
   Widget _buildMangaReader(_ReaderThemeColors colors) {
+    return switch (_settings.mangaReadMode) {
+      ReaderMangaReadMode.continuous => _buildMangaContinuousReader(colors),
+      ReaderMangaReadMode.paged => _buildMangaPagedReader(
+        colors,
+        axis: Axis.vertical,
+      ),
+      ReaderMangaReadMode.horizontal => _buildMangaPagedReader(
+        colors,
+        axis: Axis.horizontal,
+      ),
+    };
+  }
+
+  Widget _buildMangaContinuousReader(_ReaderThemeColors colors) {
+    final horizontalPadding = _settings.mangaImagePadding;
+
     return ListView.separated(
       key: ValueKey('manga_$_chapterId'),
       controller: _scrollController,
-      cacheExtent: 2000,
+      cacheExtent: _resolveMangaCacheExtent(),
       padding: EdgeInsets.fromLTRB(
-        _settings.horizontalPadding,
+        horizontalPadding,
         12,
-        _settings.horizontalPadding,
+        horizontalPadding,
         96,
       ),
       itemCount: _chapterImageUrls.length,
-      separatorBuilder: (_, __) => const SizedBox(height: 10),
+      separatorBuilder:
+          (_, __) => SizedBox(height: _settings.mangaImageSpacing),
       itemBuilder: (context, index) {
-        final imageUrl = _chapterImageUrls[index];
-        final retryNonce = _mangaImageRetryNonce[imageUrl] ?? 0;
-        final requestUrl = _buildMangaImageUrl(imageUrl, retryNonce);
+        return _buildMangaImageCard(colors: colors, index: index);
+      },
+    );
+  }
 
-        return ClipRRect(
-          borderRadius: BorderRadius.circular(12),
-          child: ColoredBox(
-            color: colors.overlay,
+  Widget _buildMangaPagedReader(
+    _ReaderThemeColors colors, {
+    required Axis axis,
+  }) {
+    final pageCount = _chapterImageUrls.length;
+    if (pageCount == 0) {
+      return const SizedBox.shrink();
+    }
+
+    final currentIndex = _mangaPageIndex.clamp(0, pageCount - 1);
+    final physics =
+        _mangaZoomedPageIndexes.contains(currentIndex)
+            ? const NeverScrollableScrollPhysics()
+            : const PageScrollPhysics();
+
+    return Stack(
+      children: [
+        Padding(
+          padding: const EdgeInsets.only(bottom: 94),
+          child: PageView.builder(
+            key: ValueKey(
+              'manga_${_chapterId}_${_settings.mangaReadMode.name}',
+            ),
+            controller: _mangaPageController,
+            scrollDirection: axis,
+            physics: physics,
+            itemCount: pageCount,
+            onPageChanged: (index) {
+              if (!mounted) {
+                return;
+              }
+              setState(() {
+                _mangaPageIndex = index;
+              });
+              _scheduleProgressSave();
+            },
+            itemBuilder: (context, index) {
+              return Padding(
+                padding: EdgeInsets.fromLTRB(
+                  _settings.mangaImagePadding,
+                  12,
+                  _settings.mangaImagePadding,
+                  6,
+                ),
+                child: _buildMangaImageCard(colors: colors, index: index),
+              );
+            },
+          ),
+        ),
+        Positioned(
+          right: 12,
+          bottom: 12,
+          child: _buildPageIndexBadge(
+            colors: colors,
+            index: currentIndex,
+            total: pageCount,
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildMangaImageCard({
+    required _ReaderThemeColors colors,
+    required int index,
+  }) {
+    final imageUrl = _chapterImageUrls[index];
+    final retryNonce = _mangaImageRetryNonce[imageUrl] ?? 0;
+    final requestUrl = _buildMangaImageUrl(imageUrl, retryNonce);
+    final transformController = _ensureMangaTransformController(index);
+
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(12),
+      child: ColoredBox(
+        color: colors.overlay,
+        child: GestureDetector(
+          onDoubleTapDown: (details) {
+            _mangaDoubleTapDetails[index] = details;
+          },
+          onDoubleTap: () => _toggleMangaZoom(index),
+          child: InteractiveViewer(
+            transformationController: transformController,
+            minScale: 1,
+            maxScale: 4,
+            panEnabled: true,
+            onInteractionEnd: (_) => _syncMangaZoomState(index),
             child: Image.network(
               requestUrl,
+              headers:
+                  _chapterImageHeaders.isEmpty ? null : _chapterImageHeaders,
               fit: BoxFit.fitWidth,
+              filterQuality: _resolveMangaFilterQuality(),
               frameBuilder: (context, child, frame, wasSynchronouslyLoaded) {
                 if (wasSynchronouslyLoaded || frame != null) {
                   return child;
@@ -498,9 +623,25 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
               },
             ),
           ),
-        );
-      },
+        ),
+      ),
     );
+  }
+
+  double _resolveMangaCacheExtent() {
+    return switch (_settings.mangaLoadStrategy) {
+      ReaderMangaLoadStrategy.balanced => 1800,
+      ReaderMangaLoadStrategy.smooth => 3200,
+      ReaderMangaLoadStrategy.saveData => 900,
+    };
+  }
+
+  FilterQuality _resolveMangaFilterQuality() {
+    return switch (_settings.mangaLoadStrategy) {
+      ReaderMangaLoadStrategy.balanced => FilterQuality.medium,
+      ReaderMangaLoadStrategy.smooth => FilterQuality.high,
+      ReaderMangaLoadStrategy.saveData => FilterQuality.low,
+    };
   }
 
   ReaderThemeMode _effectiveReaderThemeMode() {
@@ -1382,6 +1523,10 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
           onTapUp:
               (details) =>
                   _onReaderTap(details.localPosition, constraints.biggest),
+          onLongPress:
+              _isMangaChapter
+                  ? () => unawaited(_openMangaPositionSheet())
+                  : null,
           child: child,
         );
       },
@@ -1577,6 +1722,8 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
     final dayNightLabel = isNight ? '日间' : '夜间';
     final dayNightIcon =
         isNight ? Icons.light_mode_outlined : Icons.dark_mode_outlined;
+    final middleLabel = _isMangaChapter ? '定位' : dayNightLabel;
+    final middleIcon = _isMangaChapter ? Icons.gps_fixed_rounded : dayNightIcon;
 
     return Positioned(
       left: 0,
@@ -1626,11 +1773,15 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
                           ),
                           Expanded(
                             child: _buildToolbarAction(
-                              icon: dayNightIcon,
-                              label: dayNightLabel,
-                              onTap: _toggleDayNight,
+                              icon: middleIcon,
+                              label: middleLabel,
+                              onTap:
+                                  _isMangaChapter
+                                      ? _openMangaPositionSheet
+                                      : _toggleDayNight,
                               colors: colors,
                               active:
+                                  !_isMangaChapter &&
                                   _settings.themeMode == ReaderThemeMode.dark,
                             ),
                           ),
@@ -1807,15 +1958,19 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
       if (!mounted) {
         return;
       }
+      final readableError = _toUserReadableError(error);
+      _recordReaderFailure(message: readableError, errorCode: error.code);
       setState(() {
-        _errorText = _toUserReadableError(error);
+        _errorText = readableError;
       });
     } catch (_) {
       if (!mounted) {
         return;
       }
+      const fallbackError = '阅读器初始化失败。';
+      _recordReaderFailure(message: fallbackError);
       setState(() {
-        _errorText = '阅读器初始化失败。';
+        _errorText = fallbackError;
       });
     } finally {
       if (mounted) {
@@ -1827,26 +1982,114 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
   }
 
   String _toUserReadableError(AppException error) {
+    final message = error.briefMessage;
+
     return switch (error.code) {
+      ErrorCode.network when message.contains('状态码：403') =>
+        '章节被源站拦截（403），请在书源配置 Referer/Origin/User-Agent 后重试。',
+      ErrorCode.network when message.contains('状态码：404') =>
+        '章节地址已失效（404），请刷新目录后重试。',
+      ErrorCode.network when message.contains('超时') => '请求超时，请稍后重试或切换书源。',
       ErrorCode.network => '网络请求失败，请检查网络或更换书源。',
+      ErrorCode.validation
+          when message.contains('正文规则') || message.contains('ruleContent') =>
+        '书源缺少正文规则（ruleContent），无法读取该章节。',
       ErrorCode.validation => '书源规则配置不完整，无法继续阅读。',
       ErrorCode.ruleParse => '书源规则语法错误，正文解析失败。',
+      ErrorCode.ruleMatchEmpty when message.contains('解析为空') =>
+        '正文规则未命中，当前章节暂无可读内容。',
       ErrorCode.ruleMatchEmpty => '当前章节没有可读取内容，请切换章节或书源。',
-      ErrorCode.decode => '正文解析失败，可能是编码或格式不兼容。',
+      ErrorCode.decode => '正文解析失败，可能是编码或数据格式不兼容。',
       ErrorCode.unknownSource => '书源不存在或已被删除。',
       ErrorCode.unknown => '加载失败，请稍后重试。',
     };
   }
 
-  void _setContent(String content, {List<String> imageUrls = const []}) {
+  void _setContent(
+    String content, {
+    List<String> imageUrls = const [],
+    Map<String, String> imageHeaders = const {},
+  }) {
+    _disposeMangaTransformControllers();
     _content = content;
     _chapterImageUrls = List.unmodifiable(imageUrls);
+    _chapterImageHeaders = Map.unmodifiable(imageHeaders);
     _mangaImageRetryNonce.clear();
+    _mangaPageIndex = 0;
+    if (_mangaPageController.hasClients) {
+      _mangaPageController.jumpToPage(0);
+    }
     _paragraphs = _splitParagraphs(content);
     _pagedPages = const [];
     _currentPageIndex = 0;
     _paginationSignature = null;
     _isPaginatingPages = false;
+  }
+
+  void _disposeMangaTransformControllers() {
+    for (final controller in _mangaTransformControllers.values) {
+      controller.dispose();
+    }
+    _mangaTransformControllers.clear();
+    _mangaDoubleTapDetails.clear();
+    _mangaZoomedPageIndexes.clear();
+  }
+
+  TransformationController _ensureMangaTransformController(int index) {
+    return _mangaTransformControllers.putIfAbsent(
+      index,
+      () => TransformationController(),
+    );
+  }
+
+  void _syncMangaZoomState(int index) {
+    final controller = _mangaTransformControllers[index];
+    if (controller == null) {
+      return;
+    }
+    final scale = controller.value.getMaxScaleOnAxis();
+    final zoomed = scale > 1.02;
+
+    if (zoomed == _mangaZoomedPageIndexes.contains(index)) {
+      return;
+    }
+
+    setState(() {
+      if (zoomed) {
+        _mangaZoomedPageIndexes.add(index);
+      } else {
+        _mangaZoomedPageIndexes.remove(index);
+      }
+    });
+  }
+
+  void _toggleMangaZoom(int index) {
+    final controller = _ensureMangaTransformController(index);
+    final currentScale = controller.value.getMaxScaleOnAxis();
+
+    if (currentScale > 1.02) {
+      controller.value = Matrix4.identity();
+      setState(() {
+        _mangaZoomedPageIndexes.remove(index);
+      });
+      return;
+    }
+
+    final tapDetails = _mangaDoubleTapDetails[index];
+    final tapPoint = tapDetails?.localPosition ?? const Offset(80, 120);
+    const zoomScale = 2.1;
+
+    controller.value =
+        Matrix4.identity()
+          ..translate(
+            -tapPoint.dx * (zoomScale - 1),
+            -tapPoint.dy * (zoomScale - 1),
+          )
+          ..scale(zoomScale);
+
+    setState(() {
+      _mangaZoomedPageIndexes.add(index);
+    });
   }
 
   double? _consumeBootstrapScrollRatio() {
@@ -1889,6 +2132,25 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
         );
         setState(() {
           _currentPageIndex = targetIndex;
+        });
+        return;
+      }
+
+      if (_isMangaPagedMode) {
+        final total = _chapterImageUrls.length;
+        if (total <= 1) {
+          setState(() {
+            _mangaPageIndex = 0;
+          });
+          return;
+        }
+
+        final target = (normalized * (total - 1)).round().clamp(0, total - 1);
+        if (_mangaPageController.hasClients) {
+          _mangaPageController.jumpToPage(target);
+        }
+        setState(() {
+          _mangaPageIndex = target;
         });
         return;
       }
@@ -1936,6 +2198,14 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
         return 0;
       }
       return (_currentPageIndex / (pages.length - 1)).clamp(0.0, 1.0);
+    }
+
+    if (_isMangaPagedMode) {
+      final total = _chapterImageUrls.length;
+      if (total <= 1) {
+        return 0;
+      }
+      return (_mangaPageIndex / (total - 1)).clamp(0.0, 1.0);
     }
 
     if (!_scrollController.hasClients) {
@@ -2019,7 +2289,11 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
 
       setState(() {
         _isCurrentChapterCached = isCached;
-        _setContent(contentResult.content, imageUrls: contentResult.imageUrls);
+        _setContent(
+          contentResult.content,
+          imageUrls: contentResult.imageUrls,
+          imageHeaders: contentResult.imageHeaders,
+        );
         _pendingPageRestoreRatio = targetRatio;
       });
 
@@ -2032,16 +2306,20 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
       if (!mounted) {
         return false;
       }
+      final readableError = _toUserReadableError(error);
+      _recordReaderFailure(message: readableError, errorCode: error.code);
       setState(() {
-        _errorText = _toUserReadableError(error);
+        _errorText = readableError;
       });
       return false;
     } catch (_) {
       if (!mounted) {
         return false;
       }
+      const fallbackError = '加载正文失败。';
+      _recordReaderFailure(message: fallbackError);
       setState(() {
-        _errorText = '加载正文失败。';
+        _errorText = fallbackError;
       });
       return false;
     } finally {
@@ -2293,6 +2571,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
     final previousIndex = _currentIndex;
     final previousContent = _content;
     final previousImageUrls = _chapterImageUrls;
+    final previousImageHeaders = _chapterImageHeaders;
 
     setState(() {
       _currentIndex = index;
@@ -2314,7 +2593,11 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
       _chapterUrl = previousChapterUrl;
       _chapterTitle = previousChapterTitle;
       _currentIndex = previousIndex;
-      _setContent(previousContent, imageUrls: previousImageUrls);
+      _setContent(
+        previousContent,
+        imageUrls: previousImageUrls,
+        imageHeaders: previousImageHeaders,
+      );
       _errorText = null;
     });
 
@@ -2371,6 +2654,93 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
 
   Future<void> _openCatalogSheetFromOverlay() async {
     await _showCatalogSheet();
+  }
+
+  Future<void> _openMangaPositionSheet() async {
+    if (!_isMangaChapter) {
+      return;
+    }
+
+    final total = _chapterImageUrls.length;
+    if (total <= 1 && !_scrollController.hasClients) {
+      return;
+    }
+
+    final isPagedMode = _isMangaPagedMode;
+    double draftRatio = _currentScrollRatio();
+
+    final selectedRatio = await showModalBottomSheet<double>(
+      context: context,
+      showDragHandle: true,
+      useSafeArea: true,
+      builder: (context) {
+        return StatefulBuilder(
+          builder: (context, setModalState) {
+            final progressLabel = '${(draftRatio * 100).round()}%';
+            final chapterLabel =
+                isPagedMode
+                    ? '第 ${(_mangaPageIndex + 1).clamp(1, total)} / $total 张'
+                    : '长图进度定位';
+
+            return Padding(
+              padding: const EdgeInsets.fromLTRB(18, 8, 18, 18),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    '长图定位',
+                    style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                  const SizedBox(height: 6),
+                  Text(
+                    '$chapterLabel · $progressLabel',
+                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                      color: Theme.of(context).colorScheme.onSurfaceVariant,
+                    ),
+                  ),
+                  const SizedBox(height: 10),
+                  Slider(
+                    min: 0,
+                    max: 1,
+                    divisions: 100,
+                    value: draftRatio,
+                    onChanged: (value) {
+                      setModalState(() {
+                        draftRatio = value;
+                      });
+                    },
+                  ),
+                  const SizedBox(height: 8),
+                  Row(
+                    children: [
+                      TextButton(
+                        onPressed: () => Navigator.of(context).pop(),
+                        child: const Text('取消'),
+                      ),
+                      const Spacer(),
+                      FilledButton(
+                        onPressed: () => Navigator.of(context).pop(draftRatio),
+                        child: const Text('跳转'),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            );
+          },
+        );
+      },
+    );
+
+    if (!mounted || selectedRatio == null) {
+      return;
+    }
+
+    _restoreScrollPosition(selectedRatio);
+    _scheduleProgressSave();
   }
 
   Future<void> _showCatalogSheet() async {
@@ -2803,6 +3173,20 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
     ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(text)));
   }
 
+  void _recordReaderFailure({required String message, ErrorCode? errorCode}) {
+    _readerErrorCenterService.addFailure(
+      bookId: widget.bookId,
+      chapterId: _chapterId,
+      chapterTitle: _chapterTitle ?? '',
+      message: message,
+      bookTitle: _bookTitle,
+      sourceId: _sourceId,
+      detailUrl: _detailUrl,
+      chapterUrl: _chapterUrl,
+      errorCode: errorCode,
+    );
+  }
+
   Future<void> _showSettingsSheet() async {
     final shouldRestoreOverlay = _showOverlayControls;
     if (shouldRestoreOverlay) {
@@ -3200,16 +3584,238 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
                               label: '其他',
                               child:
                                   isMangaChapter
-                                      ? Text(
-                                        '漫画模式下已关闭字号、间距与缩进设置。',
-                                        style: Theme.of(
-                                          context,
-                                        ).textTheme.bodySmall?.copyWith(
-                                          color:
-                                              Theme.of(
-                                                context,
-                                              ).colorScheme.onSurfaceVariant,
-                                        ),
+                                      ? Column(
+                                        crossAxisAlignment:
+                                            CrossAxisAlignment.start,
+                                        children: [
+                                          Wrap(
+                                            spacing: 8,
+                                            runSpacing: 8,
+                                            children: ReaderMangaReadMode.values
+                                                .map(
+                                                  (mode) => ChoiceChip(
+                                                    label: Text(
+                                                      _mangaReadModeLabel(mode),
+                                                    ),
+                                                    selected:
+                                                        draft.mangaReadMode ==
+                                                        mode,
+                                                    onSelected: (_) {
+                                                      setModalState(() {
+                                                        draft = draft.copyWith(
+                                                          mangaReadMode: mode,
+                                                        );
+                                                      });
+                                                    },
+                                                  ),
+                                                )
+                                                .toList(growable: false),
+                                          ),
+                                          const SizedBox(height: 10),
+                                          Text(
+                                            '留白',
+                                            style: Theme.of(
+                                              context,
+                                            ).textTheme.labelMedium?.copyWith(
+                                              color:
+                                                  Theme.of(context)
+                                                      .colorScheme
+                                                      .onSurfaceVariant,
+                                            ),
+                                          ),
+                                          const SizedBox(height: 6),
+                                          Wrap(
+                                            spacing: 8,
+                                            runSpacing: 8,
+                                            children: const [
+                                                  0.0,
+                                                  4.0,
+                                                  8.0,
+                                                  12.0,
+                                                  16.0,
+                                                ]
+                                                .map(
+                                                  (value) => ChoiceChip(
+                                                    label: Text(
+                                                      '${value.toInt()}',
+                                                    ),
+                                                    selected:
+                                                        (draft.mangaImagePadding -
+                                                                value)
+                                                            .abs() <
+                                                        0.2,
+                                                    onSelected: (_) {
+                                                      setModalState(() {
+                                                        draft = draft.copyWith(
+                                                          mangaImagePadding:
+                                                              value,
+                                                        );
+                                                      });
+                                                    },
+                                                  ),
+                                                )
+                                                .toList(growable: false),
+                                          ),
+                                          const SizedBox(height: 10),
+                                          Text(
+                                            '图间距',
+                                            style: Theme.of(
+                                              context,
+                                            ).textTheme.labelMedium?.copyWith(
+                                              color:
+                                                  Theme.of(context)
+                                                      .colorScheme
+                                                      .onSurfaceVariant,
+                                            ),
+                                          ),
+                                          const SizedBox(height: 6),
+                                          Wrap(
+                                            spacing: 8,
+                                            runSpacing: 8,
+                                            children: const [
+                                                  0.0,
+                                                  6.0,
+                                                  10.0,
+                                                  14.0,
+                                                  18.0,
+                                                ]
+                                                .map(
+                                                  (value) => ChoiceChip(
+                                                    label: Text(
+                                                      '${value.toInt()}',
+                                                    ),
+                                                    selected:
+                                                        (draft.mangaImageSpacing -
+                                                                value)
+                                                            .abs() <
+                                                        0.2,
+                                                    onSelected: (_) {
+                                                      setModalState(() {
+                                                        draft = draft.copyWith(
+                                                          mangaImageSpacing:
+                                                              value,
+                                                        );
+                                                      });
+                                                    },
+                                                  ),
+                                                )
+                                                .toList(growable: false),
+                                          ),
+                                          const SizedBox(height: 10),
+                                          Text(
+                                            '背景',
+                                            style: Theme.of(
+                                              context,
+                                            ).textTheme.labelMedium?.copyWith(
+                                              color:
+                                                  Theme.of(context)
+                                                      .colorScheme
+                                                      .onSurfaceVariant,
+                                            ),
+                                          ),
+                                          const SizedBox(height: 6),
+                                          Wrap(
+                                            spacing: 8,
+                                            runSpacing: 8,
+                                            children: [
+                                              ChoiceChip(
+                                                label: const Text('日间'),
+                                                selected:
+                                                    draft.themeMode ==
+                                                        ReaderThemeMode.light &&
+                                                    draft.backgroundStyle ==
+                                                        ReaderBackgroundStyle
+                                                            .plain,
+                                                onSelected: (_) {
+                                                  setModalState(() {
+                                                    draft = draft.copyWith(
+                                                      themeMode:
+                                                          ReaderThemeMode.light,
+                                                      backgroundStyle:
+                                                          ReaderBackgroundStyle
+                                                              .plain,
+                                                    );
+                                                  });
+                                                },
+                                              ),
+                                              ChoiceChip(
+                                                label: const Text('护眼'),
+                                                selected:
+                                                    draft.themeMode ==
+                                                    ReaderThemeMode.sepia,
+                                                onSelected: (_) {
+                                                  setModalState(() {
+                                                    draft = draft.copyWith(
+                                                      themeMode:
+                                                          ReaderThemeMode.sepia,
+                                                      backgroundStyle:
+                                                          ReaderBackgroundStyle
+                                                              .warm,
+                                                    );
+                                                  });
+                                                },
+                                              ),
+                                              ChoiceChip(
+                                                label: const Text('夜间'),
+                                                selected:
+                                                    draft.themeMode ==
+                                                    ReaderThemeMode.dark,
+                                                onSelected: (_) {
+                                                  setModalState(() {
+                                                    draft = draft.copyWith(
+                                                      themeMode:
+                                                          ReaderThemeMode.dark,
+                                                      backgroundStyle:
+                                                          ReaderBackgroundStyle
+                                                              .plain,
+                                                    );
+                                                  });
+                                                },
+                                              ),
+                                            ],
+                                          ),
+                                          const SizedBox(height: 10),
+                                          Text(
+                                            '加载策略',
+                                            style: Theme.of(
+                                              context,
+                                            ).textTheme.labelMedium?.copyWith(
+                                              color:
+                                                  Theme.of(context)
+                                                      .colorScheme
+                                                      .onSurfaceVariant,
+                                            ),
+                                          ),
+                                          const SizedBox(height: 6),
+                                          Wrap(
+                                            spacing: 8,
+                                            runSpacing: 8,
+                                            children: ReaderMangaLoadStrategy
+                                                .values
+                                                .map(
+                                                  (strategy) => ChoiceChip(
+                                                    label: Text(
+                                                      _mangaLoadStrategyLabel(
+                                                        strategy,
+                                                      ),
+                                                    ),
+                                                    selected:
+                                                        draft
+                                                            .mangaLoadStrategy ==
+                                                        strategy,
+                                                    onSelected: (_) {
+                                                      setModalState(() {
+                                                        draft = draft.copyWith(
+                                                          mangaLoadStrategy:
+                                                              strategy,
+                                                        );
+                                                      });
+                                                    },
+                                                  ),
+                                                )
+                                                .toList(growable: false),
+                                          ),
+                                        ],
                                       )
                                       : Column(
                                         crossAxisAlignment:
@@ -3799,6 +4405,22 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
         );
       },
     );
+  }
+
+  String _mangaReadModeLabel(ReaderMangaReadMode mode) {
+    return switch (mode) {
+      ReaderMangaReadMode.continuous => '连续长图',
+      ReaderMangaReadMode.paged => '分页图',
+      ReaderMangaReadMode.horizontal => '横向翻页',
+    };
+  }
+
+  String _mangaLoadStrategyLabel(ReaderMangaLoadStrategy strategy) {
+    return switch (strategy) {
+      ReaderMangaLoadStrategy.balanced => '平衡',
+      ReaderMangaLoadStrategy.smooth => '流畅优先',
+      ReaderMangaLoadStrategy.saveData => '省流量',
+    };
   }
 
   String _pageAnimationLabel(ReaderPageAnimationStyle style) {

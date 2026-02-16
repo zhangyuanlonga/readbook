@@ -245,6 +245,104 @@ $baseUrl/content, {
       },
     );
 
+    test(
+      'extracts manga images from lazy attrs srcset background and embedded json',
+      () async {
+        final server = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
+        server.listen((request) async {
+          request.response
+            ..statusCode = 200
+            ..write('''
+            <div class="manga">
+              <img data-lazy="/images/lazy.jpg" />
+              <img data-echo="https://cdn.example.com/echo.png" />
+              <img srcset="/images/srcset-1.jpg 1x, /images/srcset-2.jpg 2x" />
+              <div style="background-image:url('/images/bg.webp')"></div>
+              <script>
+                window.__DATA__ = {"images":["/images/json-1.jpg","https://cdn.example.com/json-2.jpeg"]};
+              </script>
+            </div>
+          ''');
+          await request.response.close();
+        });
+
+        final baseUrl = 'http://${server.address.host}:${server.port}';
+        final repository = _FakeSourceRepository([
+          SourceDefinition(
+            id: 'm3',
+            name: '漫画扩展规则源',
+            baseUrl: baseUrl,
+            sourceType: 2,
+            rules: const SourceRuleSet(contentRule: '.manga img@src'),
+          ),
+        ]);
+
+        final service = ChapterContentService(sourceRepository: repository);
+        final result = await service.load(
+          sourceId: 'm3',
+          chapterUrl: '$baseUrl/chapter-1',
+        );
+
+        expect(result.isImageContent, isTrue);
+        expect(result.imageUrls, contains('$baseUrl/images/lazy.jpg'));
+        expect(result.imageUrls, contains('https://cdn.example.com/echo.png'));
+        expect(result.imageUrls, contains('$baseUrl/images/srcset-1.jpg'));
+        expect(result.imageUrls, contains('$baseUrl/images/bg.webp'));
+        expect(result.imageUrls, contains('$baseUrl/images/json-1.jpg'));
+        expect(
+          result.imageUrls,
+          contains('https://cdn.example.com/json-2.jpeg'),
+        );
+
+        await server.close(force: true);
+      },
+    );
+
+    test('returns anti-hotlink image headers and keeps them in cache', () async {
+      final server = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
+      server.listen((request) async {
+        request.response
+          ..statusCode = 200
+          ..write('<img src="/images/1.jpg" />');
+        await request.response.close();
+      });
+
+      final baseUrl = 'http://${server.address.host}:${server.port}';
+      final repository = _FakeSourceRepository([
+        SourceDefinition(
+          id: 'm4',
+          name: '防盗链源',
+          baseUrl: baseUrl,
+          sourceType: 2,
+          headers: const {'User-Agent': 'source-agent'},
+          rules: const SourceRuleSet(contentRule: '.manga img@src'),
+        ),
+      ]);
+
+      final service = ChapterContentService(sourceRepository: repository);
+
+      final first = await service.load(
+        sourceId: 'm4',
+        chapterUrl:
+            '$baseUrl/chapter-1,{"headers":{"Referer":"$baseUrl/custom-ref","User-Agent":"reader-agent"}}',
+      );
+      final second = await service.load(
+        sourceId: 'm4',
+        chapterUrl:
+            '$baseUrl/chapter-1,{"headers":{"Referer":"$baseUrl/custom-ref","User-Agent":"reader-agent"}}',
+      );
+
+      expect(first.isImageContent, isTrue);
+      expect(first.imageHeaders['User-Agent'], 'reader-agent');
+      expect(first.imageHeaders['Referer'], '$baseUrl/custom-ref');
+      expect(first.imageHeaders['Origin'], baseUrl);
+      expect(second.fromCache, isTrue);
+      expect(second.imageHeaders['User-Agent'], 'reader-agent');
+      expect(second.imageHeaders['Referer'], '$baseUrl/custom-ref');
+
+      await server.close(force: true);
+    });
+
     test('throws when content rule is missing', () async {
       final repository = _FakeSourceRepository([
         SourceDefinition(id: 's1', name: '源A', baseUrl: 'https://example.com'),

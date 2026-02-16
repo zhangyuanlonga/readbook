@@ -556,18 +556,18 @@ class BookDetailService {
     }
 
     final requestSplit = _splitRequestOptions(text);
-    final urlPart = requestSplit?.urlTemplate ?? text;
+    final rawUrlPart = requestSplit?.urlTemplate ?? text;
+    final urlPart = _normalizeCandidateUrl(rawUrlPart);
+    if (urlPart == null || _isInvalidChapterUrl(urlPart)) {
+      return null;
+    }
 
-    final parsed = Uri.tryParse(urlPart);
-    String resolvedUrl;
-    if (parsed != null && parsed.hasScheme) {
-      resolvedUrl = urlPart;
-    } else {
-      final pageUri = Uri.tryParse(pageUrl);
-      if (pageUri == null || !pageUri.hasScheme) {
-        return null;
-      }
-      resolvedUrl = pageUri.resolve(urlPart).toString();
+    final resolvedUrl = _resolveAbsoluteHttpUrl(
+      pageUrl: pageUrl,
+      rawUrl: urlPart,
+    );
+    if (resolvedUrl == null) {
+      return null;
     }
 
     if (requestSplit == null) {
@@ -575,6 +575,77 @@ class BookDetailService {
     }
 
     return '$resolvedUrl,${requestSplit.optionsText}';
+  }
+
+  String? _normalizeCandidateUrl(String rawUrl) {
+    var normalized = rawUrl.trim();
+    if (normalized.isEmpty) {
+      return null;
+    }
+
+    if ((normalized.startsWith('"') && normalized.endsWith('"')) ||
+        (normalized.startsWith("'") && normalized.endsWith("'"))) {
+      normalized = normalized.substring(1, normalized.length - 1).trim();
+    }
+
+    return normalized.isEmpty ? null : normalized;
+  }
+
+  bool _isInvalidChapterUrl(String url) {
+    final lower = url.toLowerCase();
+    if (lower.startsWith('javascript:') ||
+        lower.startsWith('about:blank') ||
+        lower.startsWith('data:') ||
+        lower.startsWith('mailto:') ||
+        lower == '#' ||
+        lower.startsWith('#')) {
+      return true;
+    }
+
+    return false;
+  }
+
+  String? _resolveAbsoluteHttpUrl({
+    required String pageUrl,
+    required String rawUrl,
+  }) {
+    Uri? parsed = Uri.tryParse(rawUrl);
+
+    if (parsed == null) {
+      final encoded = Uri.encodeFull(rawUrl);
+      parsed = Uri.tryParse(encoded);
+      if (parsed == null) {
+        return null;
+      }
+    }
+
+    if (parsed.hasScheme) {
+      final scheme = parsed.scheme.toLowerCase();
+      if (scheme != 'http' && scheme != 'https') {
+        return null;
+      }
+      return parsed.toString();
+    }
+
+    final pageUri = Uri.tryParse(pageUrl);
+    if (pageUri == null || !pageUri.hasScheme) {
+      return null;
+    }
+
+    if (rawUrl.startsWith('//')) {
+      return '${pageUri.scheme}:$rawUrl';
+    }
+
+    try {
+      final resolved = pageUri.resolveUri(parsed);
+      final scheme = resolved.scheme.toLowerCase();
+      if (scheme != 'http' && scheme != 'https') {
+        return null;
+      }
+      return resolved.toString();
+    } on FormatException {
+      return null;
+    }
   }
 
   String? _resolveDetailRule(String? initRule, String? fieldRule) {

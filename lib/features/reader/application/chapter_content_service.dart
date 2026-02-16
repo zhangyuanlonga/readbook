@@ -20,11 +20,13 @@ class ChapterContentResult {
     required this.content,
     required this.fromCache,
     this.imageUrls = const [],
+    this.imageHeaders = const {},
   });
 
   final String content;
   final bool fromCache;
   final List<String> imageUrls;
+  final Map<String, String> imageHeaders;
 
   bool get isImageContent => imageUrls.isNotEmpty;
 }
@@ -86,6 +88,7 @@ class ChapterContentService {
         content: decoded.content,
         fromCache: true,
         imageUrls: decoded.imageUrls,
+        imageHeaders: decoded.imageHeaders,
       );
     }
 
@@ -99,6 +102,7 @@ class ChapterContentService {
           content: decoded.content,
           fromCache: true,
           imageUrls: decoded.imageUrls,
+          imageHeaders: decoded.imageHeaders,
         );
       }
     } catch (error) {
@@ -212,6 +216,12 @@ class ChapterContentService {
       source: source,
       chapterUrl: normalizedChapterUrl,
     );
+    final imageHeaders = _buildImageRequestHeaders(
+      source: source,
+      chapterUrl: normalizedChapterUrl,
+      requestUrl: requestUrl,
+      requestHeaders: requestHeaders,
+    );
 
     if (extractedSegments.isEmpty && imageUrls.isEmpty) {
       throw RuleMatchEmptyException(
@@ -224,7 +234,10 @@ class ChapterContentService {
     final normalizedBookId = bookId?.trim() ?? '';
 
     if (imageUrls.isNotEmpty) {
-      final payload = _encodeImageCachePayload(imageUrls);
+      final payload = _encodeImageCachePayload(
+        imageUrls,
+        imageHeaders: imageHeaders,
+      );
       _chapterCache[cacheKey] = payload;
 
       if (normalizedBookId.isNotEmpty && chapterIndex != null) {
@@ -255,6 +268,7 @@ class ChapterContentService {
         content: '',
         fromCache: false,
         imageUrls: imageUrls,
+        imageHeaders: imageHeaders,
       );
     }
 
@@ -800,17 +814,8 @@ class ChapterContentService {
         continue;
       }
 
-      if (trimmed.startsWith('[')) {
-        try {
-          final decoded = jsonDecode(trimmed);
-          if (decoded is List) {
-            for (final item in decoded) {
-              addUrl(item?.toString());
-            }
-          }
-        } on FormatException {
-          // keep regex fallback
-        }
+      if (_looksLikeJsonPayload(trimmed)) {
+        _extractImageUrlsFromJsonBlob(trimmed, addUrl);
       }
 
       for (final match in _extractImageUrlRegex(trimmed)) {
@@ -822,6 +827,10 @@ class ChapterContentService {
       return List.unmodifiable(urls);
     }
 
+    if (_looksLikeJsonPayload(responseBody)) {
+      _extractImageUrlsFromJsonBlob(responseBody, addUrl);
+    }
+
     for (final match in _extractImageUrlRegex(responseBody)) {
       addUrl(match);
     }
@@ -830,16 +839,61 @@ class ChapterContentService {
   }
 
   Iterable<String> _extractImageUrlRegex(String source) sync* {
+    const imageExt = '(?:jpg|jpeg|png|webp|gif|bmp|avif)';
+
+    final imageAttrPattern = RegExp(
+      "<img[^>]+(?:src|data-src|data-original|data-lazy|data-echo)\\s*=\\s*['\"]([^'\"]+)['\"]",
+      caseSensitive: false,
+    );
+    for (final match in imageAttrPattern.allMatches(source)) {
+      final value = match.group(1)?.trim();
+      if (value != null && value.isNotEmpty) {
+        yield value;
+      }
+    }
+
+    final srcsetPattern = RegExp(
+      "<img[^>]+srcset\\s*=\\s*['\"]([^'\"]+)['\"]",
+      caseSensitive: false,
+    );
+    for (final match in srcsetPattern.allMatches(source)) {
+      final srcset = match.group(1)?.trim();
+      if (srcset == null || srcset.isEmpty) {
+        continue;
+      }
+      for (final candidate in _extractFromSrcset(srcset)) {
+        yield candidate;
+      }
+    }
+
+    final styleBackgroundPattern = RegExp(
+      "background-image\\s*:\\s*url\\(([^)]+)\\)",
+      caseSensitive: false,
+    );
+    for (final match in styleBackgroundPattern.allMatches(source)) {
+      final value = match.group(1)?.trim();
+      if (value != null && value.isNotEmpty) {
+        yield value;
+      }
+    }
+
     final patterns = <RegExp>[
       RegExp(
-        "<img[^>]+(?:src|data-src|data-original)\\s*=\\s*['\"]([^'\"]+)['\"]",
+        "https?://[^\\s'\"]+\\.(?:$imageExt)(?:\\?[^\\s'\"]*)?",
         caseSensitive: false,
       ),
       RegExp(
-        "https?://[^\\s'\"]+\\.(?:jpg|jpeg|png|webp|gif)",
+        "//[^\\s'\"]+\\.(?:$imageExt)(?:\\?[^\\s'\"]*)?",
         caseSensitive: false,
       ),
-      RegExp("//[^\\s'\"]+\\.(?:jpg|jpeg|png|webp|gif)", caseSensitive: false),
+      RegExp(
+        "['\"]((?:\\/|/)[^'\"]+\\.(?:$imageExt)(?:\\?[^'\"]*)?)['\"]",
+        caseSensitive: false,
+      ),
+      RegExp(
+        "['\"]((?:https?:)?\\/\\/[^'\"]+\\.(?:$imageExt)(?:\\?[^'\"]*)?)['\"]",
+        caseSensitive: false,
+      ),
     ];
 
     for (final pattern in patterns) {
@@ -853,6 +907,89 @@ class ChapterContentService {
     }
   }
 
+  Iterable<String> _extractFromSrcset(String srcset) sync* {
+    final candidates = srcset.split(',');
+    for (final candidate in candidates) {
+      final normalized = candidate.trim();
+      if (normalized.isEmpty) {
+        continue;
+      }
+
+      final pieces = normalized.split(RegExp(r'\s+'));
+      if (pieces.isNotEmpty && pieces.first.trim().isNotEmpty) {
+        yield pieces.first.trim();
+      }
+    }
+  }
+
+  bool _looksLikeJsonPayload(String source) {
+    final trimmed = source.trimLeft();
+    return trimmed.startsWith('{') || trimmed.startsWith('[');
+  }
+
+  void _extractImageUrlsFromJsonBlob(
+    String source,
+    void Function(String? value) addUrl,
+  ) {
+    final decoded = _tryDecodeJson(source);
+    if (decoded != null) {
+      _collectImageUrlsFromJsonValue(decoded, addUrl);
+      return;
+    }
+
+    final embeddedPayloadPatterns = <RegExp>[RegExp(r'([\[{][\s\S]*[\]}])')];
+
+    for (final pattern in embeddedPayloadPatterns) {
+      for (final match in pattern.allMatches(source)) {
+        final candidate = match.group(1)?.trim();
+        if (candidate == null || candidate.isEmpty) {
+          continue;
+        }
+        final embedded = _tryDecodeJson(candidate);
+        if (embedded != null) {
+          _collectImageUrlsFromJsonValue(embedded, addUrl);
+        }
+      }
+    }
+  }
+
+  void _collectImageUrlsFromJsonValue(
+    dynamic value,
+    void Function(String? value) addUrl,
+  ) {
+    if (value == null) {
+      return;
+    }
+
+    if (value is List) {
+      for (final item in value) {
+        _collectImageUrlsFromJsonValue(item, addUrl);
+      }
+      return;
+    }
+
+    if (value is Map) {
+      for (final item in value.values) {
+        _collectImageUrlsFromJsonValue(item, addUrl);
+      }
+      return;
+    }
+
+    final text = value.toString().trim();
+    if (text.isEmpty) {
+      return;
+    }
+
+    if (_looksLikeImageUrl(text)) {
+      addUrl(text);
+      return;
+    }
+
+    for (final match in _extractImageUrlRegex(text)) {
+      addUrl(match);
+    }
+  }
+
   bool _looksLikeImageUrl(String value) {
     final normalized = value.toLowerCase();
     if (normalized.startsWith('data:image/')) {
@@ -863,7 +1000,9 @@ class ChapterContentService {
         normalized.contains('.jpeg') ||
         normalized.contains('.png') ||
         normalized.contains('.webp') ||
-        normalized.contains('.gif');
+        normalized.contains('.gif') ||
+        normalized.contains('.bmp') ||
+        normalized.contains('.avif');
   }
 
   String? _normalizeImageUrl(
@@ -871,39 +1010,174 @@ class ChapterContentService {
     required String baseUrl,
     required String chapterUrl,
   }) {
-    final trimmed = value?.trim();
-    if (trimmed == null || trimmed.isEmpty) {
+    final normalized = _normalizeImageCandidate(value);
+    if (normalized == null) {
       return null;
     }
 
-    if (trimmed.startsWith('data:image/')) {
-      return trimmed;
+    if (normalized.startsWith('data:image/')) {
+      return normalized;
     }
 
-    final uri = Uri.tryParse(trimmed);
+    final uri = Uri.tryParse(normalized);
     if (uri != null && uri.hasScheme) {
-      return uri.toString();
+      final scheme = uri.scheme.toLowerCase();
+      if (scheme == 'http' || scheme == 'https') {
+        return uri.toString();
+      }
+      return null;
     }
 
-    if (trimmed.startsWith('//')) {
-      return 'https:$trimmed';
+    if (normalized.startsWith('//')) {
+      return 'https:$normalized';
     }
 
-    final chapterUri = Uri.tryParse(chapterUrl);
+    final chapterRequest = _splitRequestOptions(chapterUrl);
+    final chapterTemplate = chapterRequest?.urlTemplate ?? chapterUrl;
+    final chapterUri = Uri.tryParse(chapterTemplate);
     if (chapterUri != null && chapterUri.hasScheme) {
-      return chapterUri.resolve(trimmed).toString();
+      return chapterUri.resolve(normalized).toString();
     }
 
     final baseUri = Uri.tryParse(baseUrl);
     if (baseUri != null && baseUri.hasScheme) {
-      return baseUri.resolve(trimmed).toString();
+      return baseUri.resolve(normalized).toString();
     }
 
     return null;
   }
 
-  String _encodeImageCachePayload(List<String> imageUrls) {
-    return '$_imageCachePrefix${jsonEncode(imageUrls)}';
+  String? _normalizeImageCandidate(String? value) {
+    var normalized = value?.trim();
+    if (normalized == null || normalized.isEmpty) {
+      return null;
+    }
+
+    normalized = normalized.replaceAll(r'\/', '/').replaceAll('&amp;', '&');
+
+    if (normalized.startsWith('url(') && normalized.endsWith(')')) {
+      normalized = normalized.substring(4, normalized.length - 1).trim();
+    }
+
+    if ((normalized.startsWith('"') && normalized.endsWith('"')) ||
+        (normalized.startsWith("'") && normalized.endsWith("'"))) {
+      normalized = normalized.substring(1, normalized.length - 1).trim();
+    }
+
+    if (normalized.isEmpty ||
+        normalized.startsWith('javascript:') ||
+        normalized.startsWith('about:blank') ||
+        normalized == '#') {
+      return null;
+    }
+
+    final srcsetParts = normalized.split(RegExp(r'\s+'));
+    if (srcsetParts.length > 1 && _looksLikeImageUrl(srcsetParts.first)) {
+      normalized = srcsetParts.first;
+    }
+
+    return normalized;
+  }
+
+  Map<String, String> _buildImageRequestHeaders({
+    required SourceDefinition source,
+    required String chapterUrl,
+    required String requestUrl,
+    required Map<String, String> requestHeaders,
+  }) {
+    final mergedHeaders = <String, String>{
+      ...source.headers,
+      ...requestHeaders,
+    };
+
+    final referer =
+        _sanitizeHeaderUrl(_readHeaderIgnoreCase(mergedHeaders, 'referer')) ??
+        _sanitizeHeaderUrl(requestUrl) ??
+        _sanitizeHeaderUrl(chapterUrl) ??
+        _sanitizeHeaderUrl(source.baseUrl);
+
+    final origin =
+        _sanitizeOrigin(_readHeaderIgnoreCase(mergedHeaders, 'origin')) ??
+        _deriveOrigin(referer) ??
+        _deriveOrigin(source.baseUrl);
+
+    final userAgent =
+        _readHeaderIgnoreCase(mergedHeaders, 'user-agent')?.trim() ??
+        'flutter_appread/0.1';
+
+    final imageHeaders = <String, String>{'User-Agent': userAgent};
+    if (referer != null) {
+      imageHeaders['Referer'] = referer;
+    }
+    if (origin != null) {
+      imageHeaders['Origin'] = origin;
+    }
+
+    return imageHeaders;
+  }
+
+  String? _readHeaderIgnoreCase(Map<String, String> headers, String key) {
+    for (final entry in headers.entries) {
+      if (entry.key.toLowerCase() == key.toLowerCase()) {
+        final value = entry.value.trim();
+        if (value.isNotEmpty) {
+          return value;
+        }
+      }
+    }
+    return null;
+  }
+
+  String? _sanitizeHeaderUrl(String? value) {
+    final normalized = value?.trim();
+    if (normalized == null || normalized.isEmpty) {
+      return null;
+    }
+
+    final requestSpec = _splitRequestOptions(normalized);
+    final urlPart = requestSpec?.urlTemplate.trim() ?? normalized;
+
+    final uri = Uri.tryParse(urlPart);
+    if (uri == null || !uri.hasScheme) {
+      return null;
+    }
+
+    final scheme = uri.scheme.toLowerCase();
+    if (scheme != 'http' && scheme != 'https') {
+      return null;
+    }
+
+    return uri.toString();
+  }
+
+  String? _sanitizeOrigin(String? value) {
+    final uriValue = _sanitizeHeaderUrl(value);
+    return _deriveOrigin(uriValue);
+  }
+
+  String? _deriveOrigin(String? value) {
+    final uri = Uri.tryParse(value ?? '');
+    if (uri == null || !uri.hasScheme || uri.host.isEmpty) {
+      return null;
+    }
+
+    final scheme = uri.scheme.toLowerCase();
+    if (scheme != 'http' && scheme != 'https') {
+      return null;
+    }
+
+    return uri.origin;
+  }
+
+  String _encodeImageCachePayload(
+    List<String> imageUrls, {
+    Map<String, String> imageHeaders = const {},
+  }) {
+    final payload = <String, dynamic>{
+      'imageUrls': imageUrls,
+      'imageHeaders': imageHeaders,
+    };
+    return '$_imageCachePrefix${jsonEncode(payload)}';
   }
 
   _DecodedChapterCache _decodeCachedPayload(String payload) {
@@ -921,6 +1195,37 @@ class ChapterContentService {
             .where((item) => item.isNotEmpty)
             .toList(growable: false);
         return _DecodedChapterCache(content: '', imageUrls: urls);
+      }
+
+      if (decoded is Map) {
+        final urls =
+            (decoded['imageUrls'] as List?)
+                ?.map((item) => item?.toString().trim() ?? '')
+                .where((item) => item.isNotEmpty)
+                .toList(growable: false) ??
+            const <String>[];
+        final headers =
+            (decoded['imageHeaders'] as Map?)
+                ?.map(
+                  (key, value) =>
+                      MapEntry(key.toString(), value?.toString().trim() ?? ''),
+                )
+                .map((key, value) => MapEntry(key.trim(), value.trim()))
+                .entries
+                .where(
+                  (entry) => entry.key.isNotEmpty && entry.value.isNotEmpty,
+                )
+                .fold<Map<String, String>>(
+                  <String, String>{},
+                  (result, entry) => result..[entry.key] = entry.value,
+                ) ??
+            const <String, String>{};
+
+        return _DecodedChapterCache(
+          content: '',
+          imageUrls: urls,
+          imageHeaders: headers,
+        );
       }
     } on FormatException {
       return _DecodedChapterCache(content: trimmed);
@@ -1234,10 +1539,12 @@ class _DecodedChapterCache {
   const _DecodedChapterCache({
     required this.content,
     this.imageUrls = const [],
+    this.imageHeaders = const {},
   });
 
   final String content;
   final List<String> imageUrls;
+  final Map<String, String> imageHeaders;
 }
 
 class _RequestRuleSplit {

@@ -32,6 +32,13 @@ class ReaderPreferencesService {
       'reader.settings.pageAnimationStyle';
   static const String _backgroundImageBase64Key =
       'reader.settings.backgroundImageBase64';
+  static const String _mangaReadModeKey = 'reader.settings.mangaReadMode';
+  static const String _mangaImageSpacingKey =
+      'reader.settings.mangaImageSpacing';
+  static const String _mangaImagePaddingKey =
+      'reader.settings.mangaImagePadding';
+  static const String _mangaLoadStrategyKey =
+      'reader.settings.mangaLoadStrategy';
   static const String _progressPrefix = 'reader.progress.';
 
   Future<ReaderSettings> loadSettings() async {
@@ -77,6 +84,18 @@ class ReaderPreferencesService {
             ? ReaderPageAnimationStyle.curl
             : parsedAnimationStyle;
 
+    final mangaReadModeName = prefs.getString(_mangaReadModeKey);
+    final mangaReadMode = ReaderMangaReadMode.values.firstWhere(
+      (item) => item.name == mangaReadModeName,
+      orElse: () => ReaderMangaReadMode.continuous,
+    );
+
+    final mangaLoadStrategyName = prefs.getString(_mangaLoadStrategyKey);
+    final mangaLoadStrategy = ReaderMangaLoadStrategy.values.firstWhere(
+      (item) => item.name == mangaLoadStrategyName,
+      orElse: () => ReaderMangaLoadStrategy.balanced,
+    );
+
     return ReaderSettings(
       fontSize: prefs.getDouble(_fontSizeKey) ?? 18,
       lineHeight: prefs.getDouble(_lineHeightKey) ?? 1.7,
@@ -95,6 +114,16 @@ class ReaderPreferencesService {
       fontWeightLevel: fontWeightLevel,
       pageAnimationStyle: pageAnimationStyle,
       backgroundImageBase64: prefs.getString(_backgroundImageBase64Key),
+      mangaReadMode: mangaReadMode,
+      mangaImageSpacing: (prefs.getDouble(_mangaImageSpacingKey) ?? 10).clamp(
+        0,
+        24,
+      ),
+      mangaImagePadding: (prefs.getDouble(_mangaImagePaddingKey) ?? 8).clamp(
+        0,
+        24,
+      ),
+      mangaLoadStrategy: mangaLoadStrategy,
     );
   }
 
@@ -116,6 +145,13 @@ class ReaderPreferencesService {
     await prefs.setString(
       _pageAnimationStyleKey,
       settings.pageAnimationStyle.name,
+    );
+    await prefs.setString(_mangaReadModeKey, settings.mangaReadMode.name);
+    await prefs.setDouble(_mangaImageSpacingKey, settings.mangaImageSpacing);
+    await prefs.setDouble(_mangaImagePaddingKey, settings.mangaImagePadding);
+    await prefs.setString(
+      _mangaLoadStrategyKey,
+      settings.mangaLoadStrategy.name,
     );
     final backgroundImageBase64 = settings.backgroundImageBase64;
     if (backgroundImageBase64 == null || backgroundImageBase64.isEmpty) {

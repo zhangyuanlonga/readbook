@@ -24,6 +24,10 @@ enum ReaderPageAnimationStyle {
   none,
 }
 
+enum ReaderMangaReadMode { continuous, paged, horizontal }
+
+enum ReaderMangaLoadStrategy { balanced, smooth, saveData }
+
 class ReaderSettings {
   const ReaderSettings({
     this.fontSize = 18,
@@ -40,6 +44,10 @@ class ReaderSettings {
     this.fontWeightLevel = ReaderFontWeightLevel.regular,
     this.pageAnimationStyle = ReaderPageAnimationStyle.curl,
     this.backgroundImageBase64,
+    this.mangaReadMode = ReaderMangaReadMode.continuous,
+    this.mangaImageSpacing = 10,
+    this.mangaImagePadding = 8,
+    this.mangaLoadStrategy = ReaderMangaLoadStrategy.balanced,
   });
 
   final double fontSize;
@@ -56,6 +64,10 @@ class ReaderSettings {
   final ReaderFontWeightLevel fontWeightLevel;
   final ReaderPageAnimationStyle pageAnimationStyle;
   final String? backgroundImageBase64;
+  final ReaderMangaReadMode mangaReadMode;
+  final double mangaImageSpacing;
+  final double mangaImagePadding;
+  final ReaderMangaLoadStrategy mangaLoadStrategy;
 
   ReaderSettings copyWith({
     double? fontSize,
@@ -72,6 +84,10 @@ class ReaderSettings {
     ReaderFontWeightLevel? fontWeightLevel,
     ReaderPageAnimationStyle? pageAnimationStyle,
     String? backgroundImageBase64,
+    ReaderMangaReadMode? mangaReadMode,
+    double? mangaImageSpacing,
+    double? mangaImagePadding,
+    ReaderMangaLoadStrategy? mangaLoadStrategy,
     bool clearBackgroundImage = false,
   }) {
     return ReaderSettings(
@@ -92,6 +108,10 @@ class ReaderSettings {
           clearBackgroundImage
               ? null
               : backgroundImageBase64 ?? this.backgroundImageBase64,
+      mangaReadMode: mangaReadMode ?? this.mangaReadMode,
+      mangaImageSpacing: mangaImageSpacing ?? this.mangaImageSpacing,
+      mangaImagePadding: mangaImagePadding ?? this.mangaImagePadding,
+      mangaLoadStrategy: mangaLoadStrategy ?? this.mangaLoadStrategy,
     );
   }
 
@@ -111,6 +131,10 @@ class ReaderSettings {
       'fontWeightLevel': fontWeightLevel.name,
       'pageAnimationStyle': pageAnimationStyle.name,
       'backgroundImageBase64': backgroundImageBase64,
+      'mangaReadMode': mangaReadMode.name,
+      'mangaImageSpacing': mangaImageSpacing,
+      'mangaImagePadding': mangaImagePadding,
+      'mangaLoadStrategy': mangaLoadStrategy.name,
     };
   }
 
@@ -155,6 +179,18 @@ class ReaderSettings {
             ? ReaderPageAnimationStyle.curl
             : parsedAnimationStyle;
 
+    final mangaReadModeName = json['mangaReadMode']?.toString();
+    final mangaReadMode = ReaderMangaReadMode.values.firstWhere(
+      (item) => item.name == mangaReadModeName,
+      orElse: () => ReaderMangaReadMode.continuous,
+    );
+
+    final mangaLoadStrategyName = json['mangaLoadStrategy']?.toString();
+    final mangaLoadStrategy = ReaderMangaLoadStrategy.values.firstWhere(
+      (item) => item.name == mangaLoadStrategyName,
+      orElse: () => ReaderMangaLoadStrategy.balanced,
+    );
+
     final backgroundImageBase64 =
         json['backgroundImageBase64']?.toString().trim();
 
@@ -177,6 +213,12 @@ class ReaderSettings {
           backgroundImageBase64 == null || backgroundImageBase64.isEmpty
               ? null
               : backgroundImageBase64,
+      mangaReadMode: mangaReadMode,
+      mangaImageSpacing:
+          _asDouble(json['mangaImageSpacing'])?.clamp(0.0, 24.0) ?? 10,
+      mangaImagePadding:
+          _asDouble(json['mangaImagePadding'])?.clamp(0.0, 24.0) ?? 8,
+      mangaLoadStrategy: mangaLoadStrategy,
     );
   }
 

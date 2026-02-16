@@ -26,6 +26,10 @@ void main() {
         fontWeightLevel: ReaderFontWeightLevel.medium,
         pageAnimationStyle: ReaderPageAnimationStyle.cover,
         backgroundImageBase64: 'dGVzdF9iZw==',
+        mangaReadMode: ReaderMangaReadMode.horizontal,
+        mangaImageSpacing: 14,
+        mangaImagePadding: 12,
+        mangaLoadStrategy: ReaderMangaLoadStrategy.saveData,
       );
 
       await service.saveSettings(settings);
@@ -44,6 +48,10 @@ void main() {
       expect(restored.fontWeightLevel, ReaderFontWeightLevel.medium);
       expect(restored.pageAnimationStyle, ReaderPageAnimationStyle.cover);
       expect(restored.backgroundImageBase64, 'dGVzdF9iZw==');
+      expect(restored.mangaReadMode, ReaderMangaReadMode.horizontal);
+      expect(restored.mangaImageSpacing, 14);
+      expect(restored.mangaImagePadding, 12);
+      expect(restored.mangaLoadStrategy, ReaderMangaLoadStrategy.saveData);
     });
 
     test('saves and loads reading progress', () async {
