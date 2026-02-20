@@ -1,4 +1,6 @@
 import 'dart:async';
+import 'dart:convert';
+import 'package:dio/dio.dart';
 import 'package:file_selector/file_selector.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -303,6 +305,8 @@ class _SourcePageState extends State<SourcePage> {
                   switch (action) {
                     case _ImportAction.paste:
                       _importFromPaste();
+                    case _ImportAction.url:
+                      _importFromUrl();
                     case _ImportAction.file:
                       _importFromFile();
                     case _ImportAction.batchSample:
@@ -314,6 +318,10 @@ class _SourcePageState extends State<SourcePage> {
                       PopupMenuItem(
                         value: _ImportAction.paste,
                         child: Text('粘贴导入 JSON'),
+                      ),
+                      PopupMenuItem(
+                        value: _ImportAction.url,
+                        child: Text('链接导入'),
                       ),
                       PopupMenuItem(
                         value: _ImportAction.file,
@@ -955,6 +963,86 @@ class _SourcePageState extends State<SourcePage> {
     }
 
     await _importSingleText(content: text, sourceLabel: '粘贴内容');
+  }
+
+  Future<void> _importFromUrl() async {
+    final input = await _showUrlImportDialog();
+    if (!mounted || input == null) {
+      return;
+    }
+
+    final rawUrl = input.trim();
+    if (rawUrl.isEmpty) {
+      _showMessage('链接不能为空。');
+      return;
+    }
+
+    final uri = Uri.tryParse(rawUrl);
+    final scheme = uri?.scheme.toLowerCase();
+    final isHttpScheme = scheme == 'http' || scheme == 'https';
+    if (uri == null || uri.host.isEmpty || !isHttpScheme) {
+      _showMessage('链接格式无效，请输入 http/https 开头的 JSON 地址。');
+      return;
+    }
+
+    _setImporting(true);
+    String? content;
+    try {
+      final response = await Dio(
+        BaseOptions(
+          responseType: ResponseType.bytes,
+          connectTimeout: const Duration(seconds: 12),
+          receiveTimeout: const Duration(seconds: 20),
+          sendTimeout: const Duration(seconds: 12),
+          followRedirects: true,
+          maxRedirects: 5,
+          validateStatus:
+              (status) => status != null && status >= 200 && status < 400,
+          headers: const {'Accept': 'application/json,text/plain,*/*'},
+        ),
+      ).getUri(uri);
+
+      final payload = response.data;
+      final bytes =
+          payload is List<int>
+              ? payload
+              : payload is String
+              ? utf8.encode(payload)
+              : const <int>[];
+
+      if (bytes.isEmpty) {
+        _showMessage('链接导入失败：响应内容为空。');
+        return;
+      }
+
+      content = _importService.decodeSourceBytes(bytes);
+      if (content.trim().isEmpty) {
+        _showMessage('链接导入失败：未解析到有效 JSON 内容。');
+        return;
+      }
+    } on DioException catch (error) {
+      final statusCode = error.response?.statusCode;
+      if (statusCode != null) {
+        _showMessage('链接导入失败：HTTP $statusCode。');
+        return;
+      }
+
+      final message = error.message?.trim();
+      _showMessage(
+        '链接导入失败：${message == null || message.isEmpty ? '网络请求异常' : message}',
+      );
+      return;
+    } catch (error) {
+      _showMessage('链接导入失败：$error');
+      return;
+    } finally {
+      _setImporting(false);
+    }
+
+    final sourceLabel =
+        uri.pathSegments.isNotEmpty ? uri.pathSegments.last : uri.host;
+
+    await _importSingleText(content: content, sourceLabel: sourceLabel);
   }
 
   Future<void> _importFromFile() async {
@@ -1706,6 +1794,58 @@ class _SourcePageState extends State<SourcePage> {
     return result;
   }
 
+  Future<String?> _showUrlImportDialog() async {
+    final controller = TextEditingController(
+      text: 'https://www.yck.email/yuedu/shuyuan/json/id/6930.json',
+    );
+
+    final result = await showDialog<String>(
+      context: context,
+      builder: (dialogContext) {
+        final maxWidth = AppLayout.dialogMaxWidth(dialogContext);
+        final keyboardInset = AppLayout.keyboardInset(dialogContext);
+
+        return AnimatedPadding(
+          duration: const Duration(milliseconds: 180),
+          curve: Curves.easeOutCubic,
+          padding: EdgeInsets.only(bottom: keyboardInset),
+          child: AlertDialog(
+            insetPadding: AppSpacing.dialogInsetPadding(dialogContext),
+            scrollable: true,
+            title: const Text('链接导入书源'),
+            content: ConstrainedBox(
+              constraints: BoxConstraints(maxWidth: maxWidth),
+              child: TextField(
+                controller: controller,
+                autofocus: true,
+                keyboardType: TextInputType.url,
+                textInputAction: TextInputAction.done,
+                decoration: const InputDecoration(
+                  hintText: 'https://example.com/source.json',
+                  border: OutlineInputBorder(),
+                ),
+              ),
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.of(dialogContext).pop(),
+                child: const Text('取消'),
+              ),
+              FilledButton(
+                onPressed:
+                    () => Navigator.of(dialogContext).pop(controller.text),
+                child: const Text('导入'),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+
+    controller.dispose();
+    return result;
+  }
+
   Future<String?> _showCommentDialog(String? initialValue) async {
     final controller = TextEditingController(text: initialValue ?? '');
 
@@ -1813,6 +1953,6 @@ class _SourceLoadingCard extends StatelessWidget {
   }
 }
 
-enum _ImportAction { paste, file, batchSample }
+enum _ImportAction { paste, url, file, batchSample }
 
 enum _SourceAction { test, editComment, delete }

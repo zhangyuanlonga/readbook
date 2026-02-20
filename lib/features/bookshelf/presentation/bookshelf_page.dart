@@ -240,17 +240,38 @@ class _BookshelfPageState extends State<BookshelfPage> {
   }
 
   Widget _buildBookGrid() {
-    return GridView.builder(
-      shrinkWrap: true,
-      physics: const NeverScrollableScrollPhysics(),
-      itemCount: _books.length,
-      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-        crossAxisCount: 2,
-        crossAxisSpacing: 10,
-        mainAxisSpacing: 10,
-        childAspectRatio: 0.72,
-      ),
-      itemBuilder: (context, index) => _buildGridCard(_books[index]),
+    const spacing = 10.0;
+
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final width = constraints.maxWidth;
+
+        var crossAxisCount = 3;
+        if (width < 440) {
+          crossAxisCount = 2;
+        } else if (width >= 1320) {
+          crossAxisCount = 5;
+        } else if (width >= 980) {
+          crossAxisCount = 4;
+        }
+
+        final itemWidth =
+            (width - spacing * (crossAxisCount - 1)) / crossAxisCount;
+        final itemHeight = itemWidth * 1.4 + 46;
+
+        return GridView.builder(
+          shrinkWrap: true,
+          physics: const NeverScrollableScrollPhysics(),
+          itemCount: _books.length,
+          gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+            crossAxisCount: crossAxisCount,
+            crossAxisSpacing: spacing,
+            mainAxisSpacing: spacing,
+            childAspectRatio: itemWidth / itemHeight,
+          ),
+          itemBuilder: (context, index) => _buildGridCard(_books[index]),
+        );
+      },
     );
   }
 
@@ -269,35 +290,54 @@ class _BookshelfPageState extends State<BookshelfPage> {
                   await _openFromBookshelf(book, progress: progress);
                 },
         child: Padding(
-          padding: const EdgeInsets.all(8),
+          padding: const EdgeInsets.fromLTRB(8, 8, 8, 10),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              _buildCover(book.coverUrl, width: double.infinity, height: 104),
-              const SizedBox(height: 8),
-              Text(
-                book.title,
-                maxLines: 2,
-                overflow: TextOverflow.ellipsis,
-                style: Theme.of(
-                  context,
-                ).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w700),
-              ),
-              if (book.author != null && book.author!.isNotEmpty)
-                Padding(
-                  padding: const EdgeInsets.only(top: 4),
-                  child: Text(
-                    book.author!,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                      color: colorScheme.onSurfaceVariant,
-                    ),
+              Expanded(
+                child: AspectRatio(
+                  aspectRatio: 3 / 4,
+                  child: _buildCover(
+                    book.coverUrl,
+                    width: double.infinity,
+                    height: double.infinity,
                   ),
                 ),
+              ),
+              const SizedBox(height: 8),
+              Row(
+                children: [
+                  Expanded(
+                    flex: 7,
+                    child: Text(
+                      book.title,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                  ),
+                  if (book.author != null && book.author!.isNotEmpty) ...[
+                    const SizedBox(width: 8),
+                    Expanded(
+                      flex: 4,
+                      child: Text(
+                        book.author!,
+                        maxLines: 1,
+                        textAlign: TextAlign.right,
+                        overflow: TextOverflow.ellipsis,
+                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                          color: colorScheme.onSurfaceVariant,
+                        ),
+                      ),
+                    ),
+                  ],
+                ],
+              ),
               if (isOpening)
                 Padding(
-                  padding: const EdgeInsets.only(top: 6),
+                  padding: const EdgeInsets.only(top: 5),
                   child: Row(
                     children: [
                       const SizedBox(
