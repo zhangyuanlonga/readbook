@@ -1,31 +1,82 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
-class ShellScaffold extends StatelessWidget {
+class ShellScaffold extends StatefulWidget {
   const ShellScaffold({super.key, required this.location, required this.child});
 
   final String location;
   final Widget child;
 
+  @override
+  State<ShellScaffold> createState() => _ShellScaffoldState();
+}
+
+class _ShellScaffoldState extends State<ShellScaffold> {
   static const double _kSwipeVelocityThreshold = 420;
+
+  late int _currentIndex;
+  bool _isForward = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _currentIndex = _locationIndex(widget.location);
+  }
+
+  @override
+  void didUpdateWidget(covariant ShellScaffold oldWidget) {
+    super.didUpdateWidget(oldWidget);
+
+    final nextIndex = _locationIndex(widget.location);
+    if (nextIndex == _currentIndex) {
+      return;
+    }
+
+    _isForward = nextIndex > _currentIndex;
+    _currentIndex = nextIndex;
+  }
 
   @override
   Widget build(BuildContext context) {
-    final currentIndex = _currentIndex(location);
-
     return Scaffold(
       body: GestureDetector(
         behavior: HitTestBehavior.translucent,
         onHorizontalDragEnd:
             (details) => _onHorizontalDragEnd(
               context,
-              currentIndex: currentIndex,
+              currentIndex: _currentIndex,
               details: details,
             ),
-        child: child,
+        child: AnimatedSwitcher(
+          duration: const Duration(milliseconds: 220),
+          switchInCurve: Curves.easeOutCubic,
+          switchOutCurve: Curves.easeInCubic,
+          transitionBuilder: (child, animation) {
+            final isIncoming = child.key == ValueKey<int>(_currentIndex);
+            final beginX =
+                isIncoming
+                    ? (_isForward ? 0.16 : -0.16)
+                    : (_isForward ? -0.1 : 0.1);
+            final position = Tween<Offset>(
+              begin: Offset(beginX, 0),
+              end: Offset.zero,
+            ).animate(animation);
+
+            return ClipRect(
+              child: SlideTransition(
+                position: position,
+                child: FadeTransition(opacity: animation, child: child),
+              ),
+            );
+          },
+          child: KeyedSubtree(
+            key: ValueKey<int>(_currentIndex),
+            child: widget.child,
+          ),
+        ),
       ),
       bottomNavigationBar: NavigationBar(
-        selectedIndex: currentIndex,
+        selectedIndex: _currentIndex,
         onDestinationSelected: (index) {
           _goToIndex(context, index);
         },
@@ -69,6 +120,10 @@ class ShellScaffold extends StatelessWidget {
   }
 
   void _goToIndex(BuildContext context, int index) {
+    if (index == _currentIndex) {
+      return;
+    }
+
     switch (index) {
       case 0:
         context.go('/bookshelf');
@@ -82,7 +137,7 @@ class ShellScaffold extends StatelessWidget {
     }
   }
 
-  int _currentIndex(String currentLocation) {
+  int _locationIndex(String currentLocation) {
     if (currentLocation.startsWith('/source')) {
       return 1;
     }
