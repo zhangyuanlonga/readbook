@@ -56,64 +56,76 @@ class _SearchPageState extends State<SearchPage> {
     final colorScheme = Theme.of(context).colorScheme;
     final horizontal = AppSpacing.pageHorizontal(context);
     final bottomSafe = MediaQuery.viewPaddingOf(context).bottom;
+    final canPopRoute = context.canPop();
 
-    return Scaffold(
-      appBar: AppBar(
-        leading: IconButton(
-          onPressed: () {
-            if (context.canPop()) {
-              context.pop();
-              return;
-            }
-            context.go('/bookshelf');
-          },
-          tooltip: '返回',
-          icon: const Icon(Icons.arrow_back),
-        ),
-        title: const Text('搜索'),
-      ),
-      body: DecoratedBox(
-        decoration: BoxDecoration(
-          gradient: LinearGradient(
-            begin: Alignment.topCenter,
-            end: Alignment.bottomCenter,
-            colors: [colorScheme.surface, colorScheme.surfaceContainerLow],
+    return PopScope<void>(
+      canPop: canPopRoute,
+      onPopInvokedWithResult: (didPop, _) {
+        if (didPop || !mounted) {
+          return;
+        }
+        context.go('/bookshelf');
+      },
+      child: Scaffold(
+        appBar: AppBar(
+          leading: IconButton(
+            onPressed: _handleBackNavigation,
+            tooltip: '返回',
+            icon: const Icon(Icons.arrow_back),
           ),
+          title: const Text('搜索'),
         ),
-        child: ListView(
-          padding: EdgeInsets.fromLTRB(
-            horizontal,
-            12,
-            horizontal,
-            16 + bottomSafe,
+        body: DecoratedBox(
+          decoration: BoxDecoration(
+            gradient: LinearGradient(
+              begin: Alignment.topCenter,
+              end: Alignment.bottomCenter,
+              colors: [colorScheme.surface, colorScheme.surfaceContainerLow],
+            ),
           ),
-          children: [
-            _buildSearchInputCard(),
-            const SizedBox(height: 12),
-            if (_isSearching || _report != null) _buildProgressCard(),
-            if (_report != null) ...[
+          child: ListView(
+            padding: EdgeInsets.fromLTRB(
+              horizontal,
+              12,
+              horizontal,
+              16 + bottomSafe,
+            ),
+            children: [
+              _buildSearchInputCard(),
               const SizedBox(height: 12),
-              _buildReportSummary(_report!),
-              if (_report!.failures.isNotEmpty) ...[
+              if (_isSearching || _report != null) _buildProgressCard(),
+              if (_report != null) ...[
                 const SizedBox(height: 12),
-                _buildFailureBanner(_report!),
-              ],
-              const SizedBox(height: 12),
-              _buildResultList(_report!),
-            ] else if (!_isSearching)
-              Card(
-                child: Padding(
-                  padding: const EdgeInsets.all(16),
-                  child: Text(
-                    '输入关键词后开始搜索。',
-                    style: Theme.of(context).textTheme.bodyMedium,
+                _buildReportSummary(_report!),
+                if (_report!.failures.isNotEmpty) ...[
+                  const SizedBox(height: 12),
+                  _buildFailureBanner(_report!),
+                ],
+                const SizedBox(height: 12),
+                _buildResultList(_report!),
+              ] else if (!_isSearching)
+                Card(
+                  child: Padding(
+                    padding: const EdgeInsets.all(16),
+                    child: Text(
+                      '输入关键词后开始搜索。',
+                      style: Theme.of(context).textTheme.bodyMedium,
+                    ),
                   ),
                 ),
-              ),
-          ],
+            ],
+          ),
         ),
       ),
     );
+  }
+
+  void _handleBackNavigation() {
+    if (context.canPop()) {
+      context.pop();
+      return;
+    }
+    context.go('/bookshelf');
   }
 
   Widget _buildSearchInputCard() {

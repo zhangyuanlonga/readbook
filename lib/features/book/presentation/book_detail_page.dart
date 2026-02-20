@@ -53,106 +53,129 @@ class _BookDetailPageState extends State<BookDetailPage> {
     final colorScheme = Theme.of(context).colorScheme;
     final horizontal = AppSpacing.pageHorizontal(context);
     final bottomSafe = MediaQuery.viewPaddingOf(context).bottom;
+    final canPopRoute = context.canPop();
 
-    return Scaffold(
-      appBar: AppBar(
-        title: Text(
-          widget.title?.trim().isNotEmpty == true ? widget.title! : '书籍详情',
-        ),
-        actions: [
-          IconButton(
-            onPressed: _isLoading ? null : () => _load(forceRefresh: true),
-            tooltip: '刷新目录',
-            icon: const Icon(Icons.refresh),
+    return PopScope<void>(
+      canPop: canPopRoute,
+      onPopInvokedWithResult: (didPop, _) {
+        if (didPop || !mounted) {
+          return;
+        }
+        context.go('/bookshelf');
+      },
+      child: Scaffold(
+        appBar: AppBar(
+          leading: IconButton(
+            onPressed: _handleBackNavigation,
+            tooltip: '返回',
+            icon: const Icon(Icons.arrow_back),
           ),
-        ],
-      ),
-      body: DecoratedBox(
-        decoration: BoxDecoration(
-          gradient: LinearGradient(
-            begin: Alignment.topCenter,
-            end: Alignment.bottomCenter,
-            colors: [colorScheme.surface, colorScheme.surfaceContainerLow],
+          title: Text(
+            widget.title?.trim().isNotEmpty == true ? widget.title! : '书籍详情',
           ),
-        ),
-        child: ListView(
-          padding: EdgeInsets.fromLTRB(
-            horizontal,
-            16,
-            horizontal,
-            16 + bottomSafe,
-          ),
-          children: [
-            if (_isMissingParams)
-              Card(
-                child: Padding(
-                  padding: const EdgeInsets.all(16),
-                  child: Text(
-                    '缺少 sourceId/detailUrl，无法加载详情。请从搜索结果进入。bookId=${widget.bookId}',
-                  ),
-                ),
-              )
-            else if (_isLoading)
-              const Card(
-                child: Padding(
-                  padding: EdgeInsets.all(16),
-                  child: Row(
-                    children: [
-                      SizedBox(
-                        width: 18,
-                        height: 18,
-                        child: CircularProgressIndicator(strokeWidth: 2),
-                      ),
-                      SizedBox(width: 12),
-                      Expanded(child: Text('正在加载详情和目录...')),
-                    ],
-                  ),
-                ),
-              )
-            else if (_errorText != null)
-              Card(
-                color: colorScheme.errorContainer,
-                child: Padding(
-                  padding: const EdgeInsets.all(16),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        '加载失败',
-                        style: TextStyle(
-                          color: colorScheme.onErrorContainer,
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
-                      const SizedBox(height: 8),
-                      Text(
-                        _errorText!,
-                        style: TextStyle(color: colorScheme.onErrorContainer),
-                      ),
-                      const SizedBox(height: 10),
-                      FilledButton.tonal(
-                        onPressed: _load,
-                        child: const Text('重试'),
-                      ),
-                    ],
-                  ),
-                ),
-              )
-            else if (_result != null) ...[
-              _buildDetailCard(_result!),
-              if (_resolveLatestChapter(_result!) != null) ...[
-                const SizedBox(height: 12),
-                _buildLatestChapterCard(_resolveLatestChapter(_result!)!),
-              ],
-              const SizedBox(height: 12),
-              _buildCacheCard(_result!),
-              const SizedBox(height: 12),
-              _buildChapterSection(_result!),
-            ],
+          actions: [
+            IconButton(
+              onPressed: _isLoading ? null : () => _load(forceRefresh: true),
+              tooltip: '刷新目录',
+              icon: const Icon(Icons.refresh),
+            ),
           ],
+        ),
+        body: DecoratedBox(
+          decoration: BoxDecoration(
+            gradient: LinearGradient(
+              begin: Alignment.topCenter,
+              end: Alignment.bottomCenter,
+              colors: [colorScheme.surface, colorScheme.surfaceContainerLow],
+            ),
+          ),
+          child: ListView(
+            padding: EdgeInsets.fromLTRB(
+              horizontal,
+              16,
+              horizontal,
+              16 + bottomSafe,
+            ),
+            children: [
+              if (_isMissingParams)
+                Card(
+                  child: Padding(
+                    padding: const EdgeInsets.all(16),
+                    child: Text(
+                      '缺少 sourceId/detailUrl，无法加载详情。请从搜索结果进入。bookId=${widget.bookId}',
+                    ),
+                  ),
+                )
+              else if (_isLoading)
+                const Card(
+                  child: Padding(
+                    padding: EdgeInsets.all(16),
+                    child: Row(
+                      children: [
+                        SizedBox(
+                          width: 18,
+                          height: 18,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        ),
+                        SizedBox(width: 12),
+                        Expanded(child: Text('正在加载详情和目录...')),
+                      ],
+                    ),
+                  ),
+                )
+              else if (_errorText != null)
+                Card(
+                  color: colorScheme.errorContainer,
+                  child: Padding(
+                    padding: const EdgeInsets.all(16),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          '加载失败',
+                          style: TextStyle(
+                            color: colorScheme.onErrorContainer,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                        const SizedBox(height: 8),
+                        Text(
+                          _errorText!,
+                          style: TextStyle(color: colorScheme.onErrorContainer),
+                        ),
+                        const SizedBox(height: 10),
+                        FilledButton.tonal(
+                          onPressed: _load,
+                          child: const Text('重试'),
+                        ),
+                      ],
+                    ),
+                  ),
+                )
+              else if (_result != null) ...[
+                _buildDetailCard(_result!),
+                if (_resolveLatestChapter(_result!) != null) ...[
+                  const SizedBox(height: 12),
+                  _buildLatestChapterCard(_resolveLatestChapter(_result!)!),
+                ],
+                const SizedBox(height: 12),
+                _buildCacheCard(_result!),
+                const SizedBox(height: 12),
+                _buildChapterSection(_result!),
+              ],
+            ],
+          ),
         ),
       ),
     );
+  }
+
+  void _handleBackNavigation() {
+    if (context.canPop()) {
+      context.pop();
+      return;
+    }
+    context.go('/bookshelf');
   }
 
   bool get _isMissingParams {

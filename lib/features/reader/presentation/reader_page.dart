@@ -184,42 +184,60 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
   @override
   Widget build(BuildContext context) {
     final colors = _resolveThemeColors(_effectiveReaderThemeMode(), _settings);
+    final canPopRoute = context.canPop();
 
-    return Scaffold(
-      backgroundColor: colors.background,
-      body: SafeArea(
-        top: false,
-        child: ClipRect(
-          child: Stack(
-            clipBehavior: Clip.hardEdge,
-            children: [
-              Positioned.fill(child: _buildBackgroundLayer(colors)),
-              Positioned.fill(child: _buildReaderContent(colors)),
-              if (_settings.brightness < 0.99)
-                Positioned.fill(
-                  child: IgnorePointer(
-                    child: ColoredBox(
-                      color: Colors.black.withValues(
-                        alpha: (1 - _settings.brightness) * 0.6,
+    return PopScope<void>(
+      canPop: canPopRoute,
+      onPopInvokedWithResult: (didPop, _) {
+        if (didPop || !mounted) {
+          return;
+        }
+        context.go('/bookshelf');
+      },
+      child: Scaffold(
+        backgroundColor: colors.background,
+        body: SafeArea(
+          top: false,
+          child: ClipRect(
+            child: Stack(
+              clipBehavior: Clip.hardEdge,
+              children: [
+                Positioned.fill(child: _buildBackgroundLayer(colors)),
+                Positioned.fill(child: _buildReaderContent(colors)),
+                if (_settings.brightness < 0.99)
+                  Positioned.fill(
+                    child: IgnorePointer(
+                      child: ColoredBox(
+                        color: Colors.black.withValues(
+                          alpha: (1 - _settings.brightness) * 0.6,
+                        ),
                       ),
                     ),
                   ),
-                ),
-              if (_showOverlayControls)
-                Positioned.fill(
-                  child: GestureDetector(
-                    behavior: HitTestBehavior.opaque,
-                    onTap: _hideOverlayControls,
-                    child: const ColoredBox(color: Color(0x28000000)),
+                if (_showOverlayControls)
+                  Positioned.fill(
+                    child: GestureDetector(
+                      behavior: HitTestBehavior.opaque,
+                      onTap: _hideOverlayControls,
+                      child: const ColoredBox(color: Color(0x28000000)),
+                    ),
                   ),
-                ),
-              _buildTopOverlay(colors),
-              _buildBottomOverlay(colors),
-            ],
+                _buildTopOverlay(colors),
+                _buildBottomOverlay(colors),
+              ],
+            ),
           ),
         ),
       ),
     );
+  }
+
+  void _handleBackNavigation() {
+    if (context.canPop()) {
+      context.pop();
+      return;
+    }
+    context.go('/bookshelf');
   }
 
   Widget _buildBackgroundLayer(_ReaderThemeColors colors) {
@@ -330,7 +348,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
             child: Row(
               children: [
                 IconButton(
-                  onPressed: () => Navigator.of(context).maybePop(),
+                  onPressed: _handleBackNavigation,
                   tooltip: '返回',
                   visualDensity: VisualDensity.compact,
                   style: IconButton.styleFrom(
@@ -1670,7 +1688,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
                         _buildTopActionButton(
                           icon: Icons.arrow_back_ios_new,
                           tooltip: '返回',
-                          onPressed: () => Navigator.of(context).maybePop(),
+                          onPressed: _handleBackNavigation,
                           colors: colors,
                         ),
                         const SizedBox(width: 8),

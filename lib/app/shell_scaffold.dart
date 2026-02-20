@@ -7,26 +7,27 @@ class ShellScaffold extends StatelessWidget {
   final String location;
   final Widget child;
 
+  static const double _kSwipeVelocityThreshold = 420;
+
   @override
   Widget build(BuildContext context) {
     final currentIndex = _currentIndex(location);
 
     return Scaffold(
-      body: child,
+      body: GestureDetector(
+        behavior: HitTestBehavior.translucent,
+        onHorizontalDragEnd:
+            (details) => _onHorizontalDragEnd(
+              context,
+              currentIndex: currentIndex,
+              details: details,
+            ),
+        child: child,
+      ),
       bottomNavigationBar: NavigationBar(
         selectedIndex: currentIndex,
         onDestinationSelected: (index) {
-          switch (index) {
-            case 0:
-              context.go('/bookshelf');
-              break;
-            case 1:
-              context.go('/source');
-              break;
-            case 2:
-              context.go('/mine');
-              break;
-          }
+          _goToIndex(context, index);
         },
         destinations: const [
           NavigationDestination(
@@ -41,6 +42,44 @@ class ShellScaffold extends StatelessWidget {
         ],
       ),
     );
+  }
+
+  void _onHorizontalDragEnd(
+    BuildContext context, {
+    required int currentIndex,
+    required DragEndDetails details,
+  }) {
+    final velocity = details.primaryVelocity ?? 0;
+    if (velocity.abs() < _kSwipeVelocityThreshold) {
+      return;
+    }
+
+    if (velocity < 0) {
+      final next = currentIndex + 1;
+      if (next <= 2) {
+        _goToIndex(context, next);
+      }
+      return;
+    }
+
+    final previous = currentIndex - 1;
+    if (previous >= 0) {
+      _goToIndex(context, previous);
+    }
+  }
+
+  void _goToIndex(BuildContext context, int index) {
+    switch (index) {
+      case 0:
+        context.go('/bookshelf');
+        return;
+      case 1:
+        context.go('/source');
+        return;
+      case 2:
+        context.go('/mine');
+        return;
+    }
   }
 
   int _currentIndex(String currentLocation) {

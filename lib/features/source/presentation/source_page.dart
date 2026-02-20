@@ -261,9 +261,12 @@ class _SourcePageState extends State<SourcePage> {
               icon: const Icon(Icons.select_all),
             ),
             IconButton(
-              onPressed: _visibleSources.isEmpty ? null : _invertSelection,
-              tooltip: '反选',
-              icon: const Icon(Icons.flip),
+              onPressed:
+                  _totalImportedCount == 0 || _isBatchDeleting
+                      ? null
+                      : _clearAllSources,
+              tooltip: '清空所有书源',
+              icon: const Icon(Icons.delete_sweep_outlined),
             ),
             IconButton(
               onPressed:
@@ -732,8 +735,8 @@ class _SourcePageState extends State<SourcePage> {
           Expanded(
             child: Text(
               _selectedSourceIds.isEmpty
-                  ? '多选模式：可点击条目进行选择，也可使用顶部全选/反选。'
-                  : '多选模式：已选 ${_selectedSourceIds.length} 项，点击右上角删除。',
+                  ? '多选模式：可点击条目进行选择，也可使用顶部全选/清空所有书源。'
+                  : '多选模式：已选 ${_selectedSourceIds.length} 项，可删除已选或直接清空所有书源。',
               style: Theme.of(context).textTheme.bodySmall?.copyWith(
                 color: colorScheme.onPrimaryContainer,
                 height: 1.35,
@@ -946,23 +949,18 @@ class _SourcePageState extends State<SourcePage> {
   }
 
   Future<void> _importFromPaste() async {
-    try {
-      final clipboardData = await Clipboard.getData(Clipboard.kTextPlain);
-      final clipboardText = clipboardData?.text?.trim() ?? '';
-      if (clipboardText.isNotEmpty) {
-        await _importSingleText(content: clipboardText, sourceLabel: '剪贴板');
-        return;
-      }
-    } on PlatformException {
-      _showMessage('读取剪贴板失败，请手动粘贴 JSON 内容。');
-    }
-
     final text = await _showPasteDialog();
     if (!mounted || text == null) {
       return;
     }
 
-    await _importSingleText(content: text, sourceLabel: '粘贴内容');
+    final content = text.trim();
+    if (content.isEmpty) {
+      _showMessage('请先粘贴 JSON 内容。');
+      return;
+    }
+
+    await _importSingleText(content: content, sourceLabel: '粘贴内容');
   }
 
   Future<void> _importFromUrl() async {
@@ -1410,19 +1408,45 @@ class _SourcePageState extends State<SourcePage> {
     });
   }
 
-  void _invertSelection() {
-    final allIds = _visibleSources.map((source) => source.id).toSet();
+  Future<void> _clearAllSources() async {
+    if (_totalImportedCount == 0 || _isBatchDeleting) {
+      return;
+    }
+
+    final confirmed = await _showConfirmDialog(
+      title: '清空所有书源',
+      content: '将删除全部 $_totalImportedCount 条书源，该操作不可恢复，确认继续吗？',
+      confirmText: '清空',
+    );
+    if (confirmed != true) {
+      return;
+    }
+
     setState(() {
-      final next = <String>{};
-      for (final id in allIds) {
-        if (!_selectedSourceIds.contains(id)) {
-          next.add(id);
-        }
-      }
-      _selectedSourceIds
-        ..clear()
-        ..addAll(next);
+      _isBatchDeleting = true;
     });
+
+    try {
+      await _repository.clear();
+      if (!mounted) {
+        return;
+      }
+
+      setState(() {
+        _isSelectionMode = false;
+        _selectedSourceIds.clear();
+      });
+      await _reloadSourceList(reset: true);
+      _showMessage('已清空全部书源。');
+    } catch (_) {
+      _showMessage('清空书源失败，请重试。');
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isBatchDeleting = false;
+        });
+      }
+    }
   }
 
   Future<void> _deleteSelectedSources() async {

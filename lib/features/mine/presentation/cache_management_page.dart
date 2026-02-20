@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
 
 import '../../../app/layout/app_spacing.dart';
 import '../../../data/datasources/local/app_database.dart';
@@ -31,78 +32,101 @@ class _CacheManagementPageState extends State<CacheManagementPage> {
   Widget build(BuildContext context) {
     final horizontal = AppSpacing.pageHorizontal(context);
     final bottomSafe = MediaQuery.viewPaddingOf(context).bottom;
+    final canPopRoute = context.canPop();
 
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('缓存管理'),
-        actions: [
-          IconButton(
-            onPressed: () {
-              setState(() {
-                // force rebuild; stream will re-emit if DB changed.
-              });
-            },
-            tooltip: '刷新',
-            icon: const Icon(Icons.refresh_rounded),
+    return PopScope<void>(
+      canPop: canPopRoute,
+      onPopInvokedWithResult: (didPop, _) {
+        if (didPop || !mounted) {
+          return;
+        }
+        context.go('/mine');
+      },
+      child: Scaffold(
+        appBar: AppBar(
+          leading: IconButton(
+            onPressed: _handleBackNavigation,
+            tooltip: '返回',
+            icon: const Icon(Icons.arrow_back),
           ),
-        ],
-      ),
-      body: Padding(
-        padding: EdgeInsets.fromLTRB(
-          horizontal,
-          12,
-          horizontal,
-          12 + bottomSafe,
-        ),
-        child: FutureBuilder<Map<String, BookshelfBook>>(
-          future: _bookshelfIndexFuture,
-          builder: (context, snapshot) {
-            final bookshelfIndex =
-                snapshot.data ?? const <String, BookshelfBook>{};
-
-            return StreamBuilder<List<ChapterCacheBookSummary>>(
-              stream: AppDatabase.instance.watchCachedBooks(),
-              builder: (context, summarySnapshot) {
-                final summaries =
-                    summarySnapshot.data ?? const <ChapterCacheBookSummary>[];
-                final totalCachedChapters = summaries.fold<int>(
-                  0,
-                  (sum, item) => sum + item.cachedCount,
-                );
-
-                return Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    _buildHeaderCard(
-                      context,
-                      cachedBookCount: summaries.length,
-                      cachedChapterCount: totalCachedChapters,
-                      canClearAll: summaries.isNotEmpty,
-                      onClearAll: summaries.isEmpty ? null : _confirmClearAll,
-                    ),
-                    const SizedBox(height: 12),
-                    Text(
-                      '小说缓存',
-                      style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                        fontWeight: FontWeight.w700,
-                      ),
-                    ),
-                    const SizedBox(height: 8),
-                    Expanded(
-                      child: _buildCacheList(
-                        context,
-                        summaries: summaries,
-                        bookshelfIndex: bookshelfIndex,
-                      ),
-                    ),
-                  ],
-                );
+          title: const Text('缓存管理'),
+          actions: [
+            IconButton(
+              onPressed: () {
+                setState(() {
+                  // force rebuild; stream will re-emit if DB changed.
+                });
               },
-            );
-          },
+              tooltip: '刷新',
+              icon: const Icon(Icons.refresh_rounded),
+            ),
+          ],
+        ),
+        body: Padding(
+          padding: EdgeInsets.fromLTRB(
+            horizontal,
+            12,
+            horizontal,
+            12 + bottomSafe,
+          ),
+          child: FutureBuilder<Map<String, BookshelfBook>>(
+            future: _bookshelfIndexFuture,
+            builder: (context, snapshot) {
+              final bookshelfIndex =
+                  snapshot.data ?? const <String, BookshelfBook>{};
+
+              return StreamBuilder<List<ChapterCacheBookSummary>>(
+                stream: AppDatabase.instance.watchCachedBooks(),
+                builder: (context, summarySnapshot) {
+                  final summaries =
+                      summarySnapshot.data ?? const <ChapterCacheBookSummary>[];
+                  final totalCachedChapters = summaries.fold<int>(
+                    0,
+                    (sum, item) => sum + item.cachedCount,
+                  );
+
+                  return Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      _buildHeaderCard(
+                        context,
+                        cachedBookCount: summaries.length,
+                        cachedChapterCount: totalCachedChapters,
+                        canClearAll: summaries.isNotEmpty,
+                        onClearAll: summaries.isEmpty ? null : _confirmClearAll,
+                      ),
+                      const SizedBox(height: 12),
+                      Text(
+                        '小说缓存',
+                        style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      Expanded(
+                        child: _buildCacheList(
+                          context,
+                          summaries: summaries,
+                          bookshelfIndex: bookshelfIndex,
+                        ),
+                      ),
+                    ],
+                  );
+                },
+              );
+            },
+          ),
         ),
       ),
     );
+  }
+
+  void _handleBackNavigation() {
+    if (context.canPop()) {
+      context.pop();
+      return;
+    }
+    context.go('/mine');
   }
 
   Widget _buildHeaderCard(
