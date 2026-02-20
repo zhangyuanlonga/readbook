@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import '../../../app/layout/app_spacing.dart';
 
@@ -10,6 +11,10 @@ import '../../../app/theme/app_dynamic_color_provider.dart';
 
 class MinePage extends ConsumerWidget {
   const MinePage({super.key});
+
+  static final Uri _sourceFeedbackUri = Uri.parse(
+    'https://qun.qq.com/universal-share/share?ac=1&authKey=Tabvg05EAafVbER7E8%2BzAQ18yErg2a%2B5PoqQH41t6dbPjcZIfDSnNX%2F4KCAXhzVh&busi_data=eyJncm91cENvZGUiOiIxMDgyODI3MjI0IiwidG9rZW4iOiIzam5tVFQ0cUs1T3VlMytzVk9iOXB1Zk40Q1RaUXJiQytzd2JlZUx3NDhXQTJscy9ZZGE5WW1hQXhPdGFwMHU1IiwidWluIjoiNzgyMDQ1MDExIn0%3D&data=PHNA5IOU4A3ujR5i9rmpWqWn4Qc-L9MNr8ByREa7IfvpXTo1utwnHVIfjkB7Rlk4x3yE9dfMR5_ZjOfsQ9wYcA&svctype=4&tempid=h5_group_info',
+  );
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -111,6 +116,25 @@ class MinePage extends ConsumerWidget {
                   subtitle: const Text('查看最近阅读失败章节并一键重试。'),
                   trailing: const Icon(Icons.chevron_right_rounded),
                   onTap: () => context.push('/reader-errors'),
+                ),
+                const Divider(height: 1),
+                ListTile(
+                  leading: const Icon(Icons.feedback_outlined),
+                  title: const Text('书源问题反馈'),
+                  subtitle: const Text('书源错误或异常时，点击加入反馈群。'),
+                  trailing: const Icon(Icons.chevron_right_rounded),
+                  onTap: () async {
+                    final launched = await launchUrl(
+                      _sourceFeedbackUri,
+                      mode: LaunchMode.externalApplication,
+                    );
+                    if (launched || !context.mounted) {
+                      return;
+                    }
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(content: Text('跳转失败，请稍后重试。')),
+                    );
+                  },
                 ),
                 const Divider(height: 1),
                 const ListTile(

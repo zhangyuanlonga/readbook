@@ -13,6 +13,8 @@ import 'shell_scaffold.dart';
 
 final GlobalKey<NavigatorState> _rootNavigatorKey = GlobalKey<NavigatorState>();
 
+GlobalKey<NavigatorState> get appRootNavigatorKey => _rootNavigatorKey;
+
 final GoRouter appRouter = GoRouter(
   navigatorKey: _rootNavigatorKey,
   initialLocation: '/bookshelf',

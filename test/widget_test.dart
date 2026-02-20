@@ -11,6 +11,12 @@ void main() {
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 200));
 
+    final closeButtonFinder = find.text('我知道了');
+    if (closeButtonFinder.evaluate().isNotEmpty) {
+      await tester.tap(closeButtonFinder);
+      await tester.pumpAndSettle();
+    }
+
     expect(find.text('书架'), findsWidgets);
     expect(find.text('去搜索'), findsOneWidget);
     expect(find.text('书源'), findsOneWidget);
