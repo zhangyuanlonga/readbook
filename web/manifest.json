@@ -1,11 +1,11 @@
 {
-    "name": "flutter_appread",
-    "short_name": "flutter_appread",
+    "name": "源阅",
+    "short_name": "源阅",
     "start_url": ".",
     "display": "standalone",
     "background_color": "#0175C2",
     "theme_color": "#0175C2",
-    "description": "A new Flutter project.",
+    "description": "源阅 - 多源小说与漫画阅读器",
     "orientation": "portrait-primary",
     "prefer_related_applications": false,
     "icons": [

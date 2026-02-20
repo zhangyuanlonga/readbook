@@ -1,0 +1,90 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+# Build an unsigned iOS IPA from a Flutter project.
+# The resulting IPA can be re-signed and installed via tools like all-sign.
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+PROJECT_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
+
+FLUTTER_CMD="${FLUTTER_CMD:-flutter}"
+APP_NAME="${APP_NAME:-Runner}"
+OUTPUT_DIR="${OUTPUT_DIR:-${PROJECT_ROOT}/build/ios/ipa}"
+BUILD_MODE="${BUILD_MODE:-release}"
+SKIP_CLEAN="${SKIP_CLEAN:-0}"
+SKIP_PUB_GET="${SKIP_PUB_GET:-0}"
+SKIP_POD_INSTALL="${SKIP_POD_INSTALL:-0}"
+
+if [[ "${BUILD_MODE}" != "release" && "${BUILD_MODE}" != "profile" ]]; then
+  echo "Error: BUILD_MODE must be 'release' or 'profile'. Current: ${BUILD_MODE}" >&2
+  exit 1
+fi
+
+if ! command -v "${FLUTTER_CMD}" >/dev/null 2>&1; then
+  echo "Error: Flutter command not found: ${FLUTTER_CMD}" >&2
+  exit 1
+fi
+
+if ! command -v zip >/dev/null 2>&1; then
+  echo "Error: zip command is required but not found." >&2
+  exit 1
+fi
+
+echo "==> Project root: ${PROJECT_ROOT}"
+echo "==> Flutter cmd: ${FLUTTER_CMD}"
+echo "==> Build mode : ${BUILD_MODE}"
+echo "==> App name   : ${APP_NAME}"
+echo "==> Output dir : ${OUTPUT_DIR}"
+
+cd "${PROJECT_ROOT}"
+
+if [[ "${SKIP_CLEAN}" != "1" ]]; then
+  echo "==> flutter clean"
+  "${FLUTTER_CMD}" clean
+fi
+
+if [[ "${SKIP_PUB_GET}" != "1" ]]; then
+  echo "==> flutter pub get"
+  "${FLUTTER_CMD}" pub get
+fi
+
+if [[ "${SKIP_POD_INSTALL}" != "1" ]]; then
+  if command -v pod >/dev/null 2>&1; then
+    echo "==> pod install (ios/)"
+    (cd ios && pod install)
+  else
+    echo "==> Warning: CocoaPods (pod) not found, skip pod install"
+  fi
+fi
+
+echo "==> flutter build ios --${BUILD_MODE} --no-codesign"
+"${FLUTTER_CMD}" build ios --"${BUILD_MODE}" --no-codesign
+
+APP_PATH="${PROJECT_ROOT}/build/ios/iphoneos/${APP_NAME}.app"
+if [[ ! -d "${APP_PATH}" ]]; then
+  echo "Error: Built app not found: ${APP_PATH}" >&2
+  echo "Try setting APP_NAME if your app target is not Runner." >&2
+  exit 1
+fi
+
+TIMESTAMP="$(date +%Y%m%d-%H%M%S)"
+IPA_PATH="${OUTPUT_DIR}/${APP_NAME}-nocodesign-${BUILD_MODE}-${TIMESTAMP}.ipa"
+TMP_DIR="${PROJECT_ROOT}/build/ios/ipa/.tmp-${TIMESTAMP}"
+
+mkdir -p "${OUTPUT_DIR}"
+rm -rf "${TMP_DIR}"
+mkdir -p "${TMP_DIR}/Payload"
+cp -R "${APP_PATH}" "${TMP_DIR}/Payload/"
+
+(
+  cd "${TMP_DIR}"
+  zip -qry "${IPA_PATH}" Payload
+)
+
+rm -rf "${TMP_DIR}"
+
+echo ""
+echo "Done. Unsigned IPA generated:"
+echo "${IPA_PATH}"
+echo ""
+echo "Next step: import this IPA into your signing tool and re-sign/install on device."

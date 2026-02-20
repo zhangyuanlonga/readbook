@@ -43,7 +43,7 @@ class App extends ConsumerWidget {
                 : fallbackDarkScheme;
 
         return MaterialApp.router(
-          title: 'Flutter AppRead',
+          title: '源阅',
           theme: AppTheme.build(lightScheme),
           darkTheme: AppTheme.build(darkScheme),
           themeMode: themeMode,
