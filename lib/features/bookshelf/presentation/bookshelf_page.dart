@@ -1,3 +1,6 @@
+import 'dart:convert';
+
+import 'package:file_selector/file_selector.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
@@ -8,6 +11,8 @@ import '../../../domain/entities/reading_progress.dart';
 import '../application/bookshelf_service.dart';
 import '../../reader/application/reader_preferences_service.dart';
 import '../../book/application/book_detail_service.dart';
+
+enum _BookshelfAppBarAction { importLocalBook }
 
 class BookshelfPage extends StatefulWidget {
   const BookshelfPage({super.key});
@@ -28,6 +33,8 @@ class _BookshelfPageState extends State<BookshelfPage> {
       const <String, ReadingProgress>{};
   bool _useGridView = false;
   String? _openingBookId;
+
+  static const String _kLocalBookSourceId = '__local_book__';
 
   @override
   void initState() {
@@ -59,10 +66,26 @@ class _BookshelfPageState extends State<BookshelfPage> {
               _useGridView ? Icons.view_list_rounded : Icons.grid_view_rounded,
             ),
           ),
-          IconButton(
-            onPressed: _isLoading ? null : _loadBookshelf,
-            tooltip: '刷新书架',
-            icon: const Icon(Icons.refresh),
+          PopupMenuButton<_BookshelfAppBarAction>(
+            tooltip: '更多操作',
+            icon: const Icon(Icons.add),
+            onSelected: (action) {
+              switch (action) {
+                case _BookshelfAppBarAction.importLocalBook:
+                  _importLocalBook();
+              }
+            },
+            itemBuilder:
+                (context) => const [
+                  PopupMenuItem<_BookshelfAppBarAction>(
+                    value: _BookshelfAppBarAction.importLocalBook,
+                    child: ListTile(
+                      contentPadding: EdgeInsets.zero,
+                      leading: Icon(Icons.upload_file_outlined),
+                      title: Text('导入本地书籍'),
+                    ),
+                  ),
+                ],
           ),
         ],
       ),
@@ -77,6 +100,7 @@ class _BookshelfPageState extends State<BookshelfPage> {
         child: RefreshIndicator(
           onRefresh: _loadBookshelf,
           child: ListView(
+            physics: const AlwaysScrollableScrollPhysics(),
             padding: EdgeInsets.fromLTRB(
               horizontal,
               16,
@@ -545,7 +569,71 @@ class _BookshelfPageState extends State<BookshelfPage> {
     }
   }
 
+  Future<void> _importLocalBook() async {
+    try {
+      final file = await openFile(
+        acceptedTypeGroups: const [
+          XTypeGroup(label: 'Book Files', extensions: ['txt', 'epub']),
+        ],
+        confirmButtonText: '导入书架',
+      );
+      if (file == null) {
+        return;
+      }
+
+      final filePath = file.path.trim();
+      if (filePath.isEmpty) {
+        _showMessage('选择的文件无效，请重试。');
+        return;
+      }
+
+      final fileId = base64UrlEncode(utf8.encode(filePath));
+      final title = _resolveLocalBookTitle(file.name);
+      final item = BookshelfBook(
+        bookId: 'local_$fileId',
+        sourceId: _kLocalBookSourceId,
+        title: title,
+        detailUrl: 'local://$fileId',
+        addedAt: DateTime.now(),
+        author: '本地导入',
+      );
+
+      await _bookshelfService.upsert(item);
+      await _loadBookshelf();
+      _showMessage('已导入《$title》到书架。');
+    } catch (_) {
+      _showMessage('导入本地书籍失败，请重试。');
+    }
+  }
+
+  String _resolveLocalBookTitle(String fileName) {
+    final trimmed = fileName.trim();
+    if (trimmed.isEmpty) {
+      return '未命名本地书籍';
+    }
+
+    final dotIndex = trimmed.lastIndexOf('.');
+    if (dotIndex <= 0) {
+      return trimmed;
+    }
+
+    return trimmed.substring(0, dotIndex).trim();
+  }
+
+  void _showMessage(String text) {
+    if (!mounted) {
+      return;
+    }
+
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(text)));
+  }
+
   void _openDetail(BookshelfBook book) {
+    if (book.sourceId == _kLocalBookSourceId) {
+      _showMessage('本地书籍详情暂未开放，后续会支持。');
+      return;
+    }
+
     final route =
         Uri(
           path: '/book/${book.bookId}',
@@ -565,6 +653,11 @@ class _BookshelfPageState extends State<BookshelfPage> {
   }) async {
     if (progress != null) {
       _continueReading(progress);
+      return;
+    }
+
+    if (book.sourceId == _kLocalBookSourceId) {
+      _showMessage('本地书籍阅读正在开发中，敬请期待。');
       return;
     }
 
@@ -607,9 +700,7 @@ class _BookshelfPageState extends State<BookshelfPage> {
         return;
       }
       _openDetail(book);
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(const SnackBar(content: Text('暂时无法直达阅读，已为你打开详情页。')));
+      _showMessage('暂时无法直达阅读，已为你打开详情页。');
     } finally {
       if (mounted) {
         setState(() {
@@ -645,8 +736,6 @@ class _BookshelfPageState extends State<BookshelfPage> {
       return;
     }
 
-    ScaffoldMessenger.of(
-      context,
-    ).showSnackBar(const SnackBar(content: Text('已从书架移除。')));
+    _showMessage('已从书架移除。');
   }
 }

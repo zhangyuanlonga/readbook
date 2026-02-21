@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
@@ -16,6 +17,15 @@ class _ShellScaffoldState extends State<ShellScaffold> {
 
   late int _currentIndex;
   bool _isForward = true;
+
+  bool get _enableMobileTabSwipe {
+    if (kIsWeb) {
+      return false;
+    }
+
+    return defaultTargetPlatform == TargetPlatform.android ||
+        defaultTargetPlatform == TargetPlatform.iOS;
+  }
 
   @override
   void initState() {
@@ -38,43 +48,56 @@ class _ShellScaffoldState extends State<ShellScaffold> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      body: GestureDetector(
-        behavior: HitTestBehavior.translucent,
-        onHorizontalDragEnd:
-            (details) => _onHorizontalDragEnd(
-              context,
-              currentIndex: _currentIndex,
-              details: details,
-            ),
-        child: AnimatedSwitcher(
-          duration: const Duration(milliseconds: 220),
-          switchInCurve: Curves.easeOutCubic,
-          switchOutCurve: Curves.easeInCubic,
-          transitionBuilder: (child, animation) {
-            final isIncoming = child.key == ValueKey<int>(_currentIndex);
-            final beginX =
-                isIncoming
-                    ? (_isForward ? 0.16 : -0.16)
-                    : (_isForward ? -0.1 : 0.1);
-            final position = Tween<Offset>(
-              begin: Offset(beginX, 0),
-              end: Offset.zero,
-            ).animate(animation);
+    final switchedChild =
+        _enableMobileTabSwipe
+            ? AnimatedSwitcher(
+              duration: const Duration(milliseconds: 220),
+              switchInCurve: Curves.easeOutCubic,
+              switchOutCurve: Curves.easeInCubic,
+              transitionBuilder: (child, animation) {
+                final isIncoming = child.key == ValueKey<int>(_currentIndex);
+                final beginX =
+                    isIncoming
+                        ? (_isForward ? 0.16 : -0.16)
+                        : (_isForward ? -0.1 : 0.1);
+                final position = Tween<Offset>(
+                  begin: Offset(beginX, 0),
+                  end: Offset.zero,
+                ).animate(animation);
 
-            return ClipRect(
-              child: SlideTransition(
-                position: position,
-                child: FadeTransition(opacity: animation, child: child),
+                return ClipRect(
+                  child: SlideTransition(
+                    position: position,
+                    child: FadeTransition(opacity: animation, child: child),
+                  ),
+                );
+              },
+              child: KeyedSubtree(
+                key: ValueKey<int>(_currentIndex),
+                child: widget.child,
               ),
+            )
+            : KeyedSubtree(
+              key: ValueKey<int>(_currentIndex),
+              child: widget.child,
             );
-          },
-          child: KeyedSubtree(
-            key: ValueKey<int>(_currentIndex),
-            child: widget.child,
-          ),
-        ),
-      ),
+
+    final body =
+        _enableMobileTabSwipe
+            ? GestureDetector(
+              behavior: HitTestBehavior.translucent,
+              onHorizontalDragEnd:
+                  (details) => _onHorizontalDragEnd(
+                    context,
+                    currentIndex: _currentIndex,
+                    details: details,
+                  ),
+              child: switchedChild,
+            )
+            : switchedChild;
+
+    return Scaffold(
+      body: body,
       bottomNavigationBar: NavigationBar(
         selectedIndex: _currentIndex,
         onDestinationSelected: (index) {
