@@ -890,11 +890,6 @@ class _SourcePageState extends State<SourcePage> {
                               child: const Text('连通性测试'),
                             ),
                             PopupMenuItem(
-                              value: _SourceAction.editComment,
-                              enabled: !isActionLocked,
-                              child: const Text('编辑备注'),
-                            ),
-                            PopupMenuItem(
                               value: _SourceAction.delete,
                               enabled: !isActionLocked,
                               child: const Text('删除书源'),
@@ -938,9 +933,6 @@ class _SourcePageState extends State<SourcePage> {
         if (!isTesting) {
           _runConnectivityTest(source);
         }
-        return;
-      case _SourceAction.editComment:
-        _editComment(source);
         return;
       case _SourceAction.delete:
         _deleteSource(source.id);
@@ -1552,27 +1544,6 @@ class _SourcePageState extends State<SourcePage> {
     }
   }
 
-  Future<void> _editComment(SourceListItem source) async {
-    final input = await _showCommentDialog(source.comment);
-    if (!mounted || input == null) {
-      return;
-    }
-
-    final latestSource = await _getSourceById(source.id);
-    if (latestSource == null) {
-      _showMessage('书源不存在，无法更新备注。');
-      return;
-    }
-
-    final trimmed = input.trim();
-    await _repository.upsertAll([
-      latestSource.copyWith(comment: trimmed, clearComment: trimmed.isEmpty),
-    ]);
-    await _reloadSourceList(reset: false);
-
-    _showMessage(trimmed.isEmpty ? '备注已清空。' : '备注已更新。');
-  }
-
   Future<void> _runConnectivityTest(SourceListItem source) async {
     final keyword = _defaultConnectivityKeyword;
 
@@ -1870,56 +1841,6 @@ class _SourcePageState extends State<SourcePage> {
     return result;
   }
 
-  Future<String?> _showCommentDialog(String? initialValue) async {
-    final controller = TextEditingController(text: initialValue ?? '');
-
-    final result = await showDialog<String>(
-      context: context,
-      builder: (dialogContext) {
-        final maxWidth = AppLayout.dialogMaxWidth(dialogContext);
-        final keyboardInset = AppLayout.keyboardInset(dialogContext);
-
-        return AnimatedPadding(
-          duration: const Duration(milliseconds: 180),
-          curve: Curves.easeOutCubic,
-          padding: EdgeInsets.only(bottom: keyboardInset),
-          child: AlertDialog(
-            insetPadding: AppSpacing.dialogInsetPadding(dialogContext),
-            scrollable: true,
-            title: const Text('编辑备注'),
-            content: ConstrainedBox(
-              constraints: BoxConstraints(maxWidth: maxWidth),
-              child: TextField(
-                controller: controller,
-                minLines: 2,
-                maxLines: 4,
-                autofocus: true,
-                decoration: const InputDecoration(
-                  hintText: '输入备注，留空可清空备注',
-                  border: OutlineInputBorder(),
-                ),
-              ),
-            ),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.of(dialogContext).pop(),
-                child: const Text('取消'),
-              ),
-              FilledButton(
-                onPressed:
-                    () => Navigator.of(dialogContext).pop(controller.text),
-                child: const Text('保存'),
-              ),
-            ],
-          ),
-        );
-      },
-    );
-
-    controller.dispose();
-    return result;
-  }
-
   Future<bool?> _showConfirmDialog({
     required String title,
     required String content,
@@ -1979,4 +1900,4 @@ class _SourceLoadingCard extends StatelessWidget {
 
 enum _ImportAction { paste, url, file, batchSample }
 
-enum _SourceAction { test, editComment, delete }
+enum _SourceAction { test, delete }
