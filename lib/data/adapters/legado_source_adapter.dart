@@ -18,10 +18,11 @@ class LegadoSourceAdapter {
       _normalizeText(raw.sourceName),
       'bookSourceName',
     );
-    final baseUrl = _requiredField(
+    final rawBaseUrl = _requiredField(
       _normalizeText(raw.sourceUrl),
       'bookSourceUrl',
     );
+    final baseUrl = _resolveBaseUrl(rawBaseUrl, raw.rawData);
 
     final searchRuleMap = _extractMap(raw.rawData['ruleSearch']);
     final detailRuleMap = _extractMap(raw.rawData['ruleBookInfo']);
@@ -521,6 +522,46 @@ class LegadoSourceAdapter {
     }
 
     return _repairMojibake(normalized);
+  }
+
+  String _resolveBaseUrl(String rawBaseUrl, Map<String, dynamic> rawData) {
+    if (_isHttpUrl(rawBaseUrl)) {
+      return rawBaseUrl;
+    }
+
+    final apiBaseUrl = _extractApiBaseUrl(rawData);
+    if (apiBaseUrl != null) {
+      return apiBaseUrl;
+    }
+
+    return rawBaseUrl;
+  }
+
+  bool _isHttpUrl(String value) {
+    final uri = Uri.tryParse(value.trim());
+    if (uri == null || !uri.hasScheme || uri.host.isEmpty) {
+      return false;
+    }
+
+    final scheme = uri.scheme.toLowerCase();
+    return scheme == 'http' || scheme == 'https';
+  }
+
+  String? _extractApiBaseUrl(Map<String, dynamic> rawData) {
+    final jsLib = _normalizeRuleValue(rawData['jsLib']);
+    if (jsLib == null || jsLib.isEmpty) {
+      return null;
+    }
+
+    final match = RegExp(
+      r'''(?:let|const|var)\s+api\s*=\s*['"](https?://[^'"\s]+)['"]''',
+    ).firstMatch(jsLib);
+    final candidate = match?.group(1)?.trim();
+    if (candidate == null || candidate.isEmpty || !_isHttpUrl(candidate)) {
+      return null;
+    }
+
+    return candidate;
   }
 
   String _repairMojibake(String text) {

@@ -24,6 +24,29 @@ flutter pub get
 flutter run
 ```
 
+## 统一打包（多平台产物集中到一个目录）
+
+新增脚本：`scripts/build_unified_artifacts.sh`，会按平台调用现有打包脚本，并把产物汇总到同一个会话目录，避免手动到处找文件。
+
+默认（`auto`）会根据当前主机自动选择可构建平台：
+- macOS: `android ios macos`
+- Linux: `android linux`
+- Windows: `android windows`
+
+```bash
+# 默认：auto + release
+./scripts/build_unified_artifacts.sh
+
+# 指定平台 + 模式
+./scripts/build_unified_artifacts.sh android,ios,macos release
+
+# 只打 Android APK（按 ABI 拆分）
+ANDROID_TARGET=apk SPLIT_PER_ABI=1 ./scripts/build_unified_artifacts.sh android release
+```
+
+产物默认目录：`build/unified_artifacts/<timestamp>-<mode>/`
+同目录下会生成 `manifest.txt`，方便查看每个平台对应的文件名。
+
 ## 开发检查
 
 ```bash
