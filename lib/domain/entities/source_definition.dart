@@ -26,6 +26,7 @@ class SourceRuleSet {
     this.tocReversed = false,
     this.contentRule,
     this.contentInitRule,
+    this.contentDecryptRule,
   });
 
   final String? searchRule;
@@ -55,6 +56,7 @@ class SourceRuleSet {
 
   final String? contentRule;
   final String? contentInitRule;
+  final String? contentDecryptRule;
 
   SourceRuleSet copyWith({
     String? searchRule,
@@ -81,6 +83,7 @@ class SourceRuleSet {
     bool? tocReversed,
     String? contentRule,
     String? contentInitRule,
+    String? contentDecryptRule,
   }) {
     return SourceRuleSet(
       searchRule: searchRule ?? this.searchRule,
@@ -108,6 +111,7 @@ class SourceRuleSet {
       tocReversed: tocReversed ?? this.tocReversed,
       contentRule: contentRule ?? this.contentRule,
       contentInitRule: contentInitRule ?? this.contentInitRule,
+      contentDecryptRule: contentDecryptRule ?? this.contentDecryptRule,
     );
   }
 
@@ -137,6 +141,7 @@ class SourceRuleSet {
       'tocReversed': tocReversed,
       'contentRule': contentRule,
       'contentInitRule': contentInitRule,
+      'contentDecryptRule': contentDecryptRule,
     };
   }
 
@@ -168,6 +173,7 @@ class SourceRuleSet {
       tocReversed: _asBool(json['tocReversed']) ?? false,
       contentRule: _asNullableString(json['contentRule']),
       contentInitRule: _asNullableString(json['contentInitRule']),
+      contentDecryptRule: _asNullableString(json['contentDecryptRule']),
     );
   }
 

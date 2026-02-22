@@ -8,6 +8,7 @@ import '../../../core/network/http_client.dart';
 import '../../../core/network/request_context.dart';
 import '../../../core/rule_engine/rule_engine.dart';
 import '../../../core/rule_engine/processors/url_template_resolver.dart';
+import '../../../core/source/source_response_processor.dart';
 import '../../../data/datasources/local/app_database.dart';
 import '../../../data/repositories/source_repository_impl.dart';
 import '../../../domain/entities/book_detail.dart';
@@ -22,12 +23,14 @@ class BookDetailLoadResult {
     required this.chapters,
     required this.sourceName,
     required this.tocFromCache,
+    this.tocError,
   });
 
   final BookDetail detail;
   final List<Chapter> chapters;
   final String sourceName;
   final bool tocFromCache;
+  final AppException? tocError;
 }
 
 class BookDetailService {
@@ -37,19 +40,23 @@ class BookDetailService {
     AppLogger? logger,
     RuleEngine? ruleEngine,
     UrlTemplateResolver? urlTemplateResolver,
+    SourceResponseProcessor? responseProcessor,
   }) : _sourceRepository =
            sourceRepository ?? SourceRepositoryImpl(AppDatabase.instance),
        _httpClient = httpClient ?? AppHttpClient(),
        _logger = logger ?? AppLogger.instance,
        _ruleEngine = ruleEngine ?? RuleEngine(),
        _urlTemplateResolver =
-           urlTemplateResolver ?? const UrlTemplateResolver();
+           urlTemplateResolver ?? const UrlTemplateResolver(),
+       _responseProcessor =
+           responseProcessor ?? const SourceResponseProcessor();
 
   final SourceRepository _sourceRepository;
   final AppHttpClient _httpClient;
   final AppLogger _logger;
   final RuleEngine _ruleEngine;
   final UrlTemplateResolver _urlTemplateResolver;
+  final SourceResponseProcessor _responseProcessor;
 
   static final Map<String, List<Chapter>> _tocCache = <String, List<Chapter>>{};
 
@@ -133,6 +140,11 @@ class BookDetailService {
       context: runtimeContext,
     );
 
+    final normalizedDetailHtml =
+        _responseProcessor
+            .process(body: detailHtml, requestUrl: normalizedDetailUrl)
+            .body;
+
     final detailRules = _buildDetailRules(source);
 
     final titleRule = _resolveRuntimeRuleTemplate(
@@ -163,7 +175,7 @@ class BookDetailService {
 
     final title =
         _extractOptionalValue(
-          content: detailHtml,
+          content: normalizedDetailHtml,
           expression: titleRule,
           stage: ErrorStage.detail,
         ) ??
@@ -174,14 +186,14 @@ class BookDetailService {
     final cover = _resolveMaybeUrl(
       pageUrl: normalizedDetailUrl,
       rawUrl: _extractOptionalValue(
-        content: detailHtml,
+        content: normalizedDetailHtml,
         expression: coverRule,
         stage: ErrorStage.detail,
       ),
     );
 
     final extractedTocUrl = _extractOptionalValue(
-      content: detailHtml,
+      content: normalizedDetailHtml,
       expression: tocUrlRule,
       stage: ErrorStage.detail,
     );
@@ -205,12 +217,12 @@ class BookDetailService {
       title: title,
       detailUrl: normalizedDetailUrl,
       author: _extractOptionalValue(
-        content: detailHtml,
+        content: normalizedDetailHtml,
         expression: authorRule,
         stage: ErrorStage.detail,
       ),
       intro: _extractOptionalValue(
-        content: detailHtml,
+        content: normalizedDetailHtml,
         expression: introRule,
         stage: ErrorStage.detail,
       ),
@@ -229,58 +241,101 @@ class BookDetailService {
       );
     }
 
+    var chapters = const <Chapter>[];
+    AppException? tocError;
+
     final tocRules = _buildTocRules(source);
     if (tocRules == null) {
-      throw AppException(
+      tocError = AppException(
         code: ErrorCode.validation,
         stage: ErrorStage.toc,
         sourceId: normalizedSourceId,
         briefMessage: '书源缺少目录规则（chapterList/chapterName/chapterUrl）。',
       );
+    } else {
+      try {
+        chapters = _parseChapters(
+          html: normalizedDetailHtml,
+          pageUrl: normalizedDetailUrl,
+          rules: tocRules,
+          sourceId: normalizedSourceId,
+          bookId: normalizedBookId,
+          context: runtimeContext,
+        );
+
+        if (chapters.isEmpty && tocUrl != normalizedDetailUrl) {
+          final tocHtml = await _fetchHtml(
+            source: source,
+            stage: ErrorStage.toc,
+            url: tocUrl,
+            context: runtimeContext,
+          );
+          final normalizedTocHtml =
+              _responseProcessor
+                  .process(body: tocHtml, requestUrl: tocUrl)
+                  .body;
+          chapters = _parseChapters(
+            html: normalizedTocHtml,
+            pageUrl: tocUrl,
+            rules: tocRules,
+            sourceId: normalizedSourceId,
+            bookId: normalizedBookId,
+            context: runtimeContext,
+          );
+        }
+
+        if (chapters.isEmpty) {
+          throw RuleMatchEmptyException(
+            briefMessage: '目录解析为空，请检查书源规则。',
+            sourceId: normalizedSourceId,
+            stage: ErrorStage.toc,
+            requestUrl: tocUrl,
+          );
+        }
+
+        _tocCache[tocCacheKey] = chapters;
+      } on AppException catch (error) {
+        tocError = error;
+        _logger.warn(
+          'Book toc load failed',
+          context: {
+            'sourceId': normalizedSourceId,
+            'bookId': normalizedBookId,
+            'detailUrl': normalizedDetailUrl,
+            'tocUrl': tocUrl,
+            'code': error.code.name,
+            'stage': error.stage.name,
+          },
+        );
+      } catch (error, stackTrace) {
+        tocError = AppException(
+          code: ErrorCode.unknown,
+          stage: ErrorStage.toc,
+          sourceId: normalizedSourceId,
+          requestUrl: tocUrl,
+          briefMessage: '目录加载失败，请稍后重试。',
+          cause: error,
+          stackTrace: stackTrace,
+        );
+        _logger.warn(
+          'Book toc load failed',
+          context: {
+            'sourceId': normalizedSourceId,
+            'bookId': normalizedBookId,
+            'detailUrl': normalizedDetailUrl,
+            'tocUrl': tocUrl,
+            'error': error.toString(),
+          },
+        );
+      }
     }
-
-    var chapters = _parseChapters(
-      html: detailHtml,
-      pageUrl: normalizedDetailUrl,
-      rules: tocRules,
-      sourceId: normalizedSourceId,
-      bookId: normalizedBookId,
-      context: runtimeContext,
-    );
-
-    if (chapters.isEmpty && tocUrl != normalizedDetailUrl) {
-      final tocHtml = await _fetchHtml(
-        source: source,
-        stage: ErrorStage.toc,
-        url: tocUrl,
-        context: runtimeContext,
-      );
-      chapters = _parseChapters(
-        html: tocHtml,
-        pageUrl: tocUrl,
-        rules: tocRules,
-        sourceId: normalizedSourceId,
-        bookId: normalizedBookId,
-        context: runtimeContext,
-      );
-    }
-
-    if (chapters.isEmpty) {
-      throw RuleMatchEmptyException(
-        briefMessage: '目录解析为空，请检查书源规则。',
-        sourceId: normalizedSourceId,
-        stage: ErrorStage.toc,
-        requestUrl: tocUrl,
-      );
-    }
-
-    _tocCache[tocCacheKey] = chapters;
 
     return BookDetailLoadResult(
       detail: detail,
       chapters: chapters,
       sourceName: source.name,
       tocFromCache: false,
+      tocError: tocError,
     );
   }
 
@@ -658,7 +713,10 @@ class BookDetailService {
       return normalizedField;
     }
 
-    if (!normalizedField.startsWith('json:') || !initRule.startsWith('json:')) {
+    if (!normalizedField.startsWith('json:') ||
+        !initRule.startsWith('json:') ||
+        normalizedField.contains('||') ||
+        initRule.contains('||')) {
       return normalizedField;
     }
 
@@ -676,7 +734,20 @@ class BookDetailService {
       return expression;
     }
 
-    final replaced = expression.replaceAllMapped(
+    var replaced = expression;
+
+    replaced = replaced.replaceAllMapped(
+      RegExp(
+        "\\{\\{\\s*baseUrl\\.replace\\((['\"])(.+?)\\1\\s*,\\s*(['\"])(.+?)\\3\\)\\s*\\}\\}",
+      ),
+      (match) {
+        final from = match.group(2) ?? '';
+        final to = match.group(4) ?? '';
+        return baseUrl.replaceAll(from, to);
+      },
+    );
+
+    replaced = replaced.replaceAllMapped(
       RegExp(r'\{\{\s*baseUrl\.match\(/(.+?)\/\)\[(\d+)\]\s*\}\}'),
       (match) {
         final pattern = match.group(1) ?? '';
@@ -860,7 +931,11 @@ class BookDetailService {
       ),
     );
 
-    final decoded = _tryDecodeJson(response.body);
+    final normalizedInitBody =
+        _responseProcessor
+            .process(body: response.body, requestUrl: requestUrl)
+            .body;
+    final decoded = _tryDecodeJson(normalizedInitBody);
     if (decoded == null) {
       return const {};
     }
@@ -1274,29 +1349,133 @@ class BookDetailService {
       return 'json:\$\n$text';
     }
 
+    final jsonCandidate = _normalizeJsonShorthandExpression(text);
+
     final firstStage = text.split('&&').first.trim();
     if (firstStage.isEmpty || firstStage.startsWith('js:')) {
       return null;
     }
 
     final delimiterIndex = firstStage.lastIndexOf('@');
-    if (delimiterIndex <= 0 || delimiterIndex >= firstStage.length - 1) {
-      return 'html:$firstStage@$fallbackExtractor';
+    final String? htmlCandidate = () {
+      if (delimiterIndex <= 0 || delimiterIndex >= firstStage.length - 1) {
+        return 'html:$firstStage@$fallbackExtractor';
+      }
+
+      final selector = firstStage.substring(0, delimiterIndex).trim();
+      final extractorToken = firstStage.substring(delimiterIndex + 1).trim();
+      if (selector.isEmpty) {
+        return null;
+      }
+
+      final extractor = _normalizeExtractor(
+        extractorToken,
+        fallbackExtractor: fallbackExtractor,
+        preferredAttribute: preferredAttribute,
+      );
+
+      return 'html:$selector@$extractor';
+    }();
+
+    if (jsonCandidate != null) {
+      if (htmlCandidate == null || htmlCandidate == jsonCandidate) {
+        return jsonCandidate;
+      }
+
+      return '$jsonCandidate||$htmlCandidate';
     }
 
-    final selector = firstStage.substring(0, delimiterIndex).trim();
-    final extractorToken = firstStage.substring(delimiterIndex + 1).trim();
-    if (selector.isEmpty) {
+    return htmlCandidate;
+  }
+
+  String? _normalizeJsonShorthandExpression(String expression) {
+    final text = expression.trim();
+    if (text.isEmpty) {
       return null;
     }
 
-    final extractor = _normalizeExtractor(
-      extractorToken,
-      fallbackExtractor: fallbackExtractor,
-      preferredAttribute: preferredAttribute,
-    );
+    if (text.contains('@') || text.startsWith('js:')) {
+      return null;
+    }
 
-    return 'html:$selector@$extractor';
+    final segments = text
+        .split('&&')
+        .map((item) => item.trim())
+        .where((item) => item.isNotEmpty)
+        .toList(growable: false);
+    if (segments.isEmpty) {
+      return null;
+    }
+
+    final normalizedSegments = <String>[];
+    for (final segment in segments) {
+      final normalized = _normalizeJsonShorthandSegment(segment);
+      if (normalized == null) {
+        return null;
+      }
+      normalizedSegments.add(normalized);
+    }
+
+    if (normalizedSegments.length == 1) {
+      return 'json:${normalizedSegments.first}';
+    }
+
+    final template = normalizedSegments
+        .map((segment) => '{{$segment}}')
+        .join(' ');
+    return 'json:\$\n$template';
+  }
+
+  String? _normalizeJsonShorthandSegment(String segment) {
+    final trimmed = segment.trim();
+    if (trimmed.isEmpty) {
+      return null;
+    }
+
+    final replaceIndex = trimmed.indexOf('##');
+    final pathPart =
+        replaceIndex >= 0 ? trimmed.substring(0, replaceIndex) : trimmed;
+    final replacePart =
+        replaceIndex >= 0 ? trimmed.substring(replaceIndex) : '';
+
+    final normalizedPath = _normalizeJsonShorthandPath(pathPart.trim());
+    if (normalizedPath == null) {
+      return null;
+    }
+
+    return '$normalizedPath$replacePart';
+  }
+
+  String? _normalizeJsonShorthandPath(String token) {
+    if (token.isEmpty) {
+      return null;
+    }
+
+    final unescaped =
+        token.startsWith(r'\$') ? token.substring(1).trim() : token;
+
+    if (unescaped == r'$' ||
+        unescaped.startsWith(r'$.') ||
+        unescaped.startsWith(r'$[')) {
+      return unescaped;
+    }
+
+    if (unescaped == '*') {
+      return r'$[*]';
+    }
+
+    if (unescaped.startsWith('[')) {
+      return '\$$unescaped';
+    }
+
+    final isJsonShorthand = RegExp(
+      r'^[a-zA-Z_][a-zA-Z0-9_]*(?:\[[^\]]+\])*(?:\.[a-zA-Z_][a-zA-Z0-9_]*(?:\[[^\]]+\])*)*$',
+    ).hasMatch(unescaped);
+    if (!isJsonShorthand) {
+      return null;
+    }
+
+    return '\$.$unescaped';
   }
 
   String _normalizeExtractor(

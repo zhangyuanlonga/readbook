@@ -8,6 +8,7 @@ import '../../../core/network/http_client.dart';
 import '../../../core/network/request_context.dart';
 import '../../../core/rule_engine/rule_engine.dart';
 import '../../../core/rule_engine/processors/url_template_resolver.dart';
+import '../../../core/source/source_response_processor.dart';
 import '../../../data/datasources/local/app_database.dart';
 import '../../../data/repositories/source_repository_impl.dart';
 import '../../../domain/entities/search_request_context.dart';
@@ -40,6 +41,7 @@ class ChapterContentService {
     ContentTextCleaner? cleaner,
     AppLogger? logger,
     UrlTemplateResolver? urlTemplateResolver,
+    SourceResponseProcessor? responseProcessor,
   }) : _database = database ?? AppDatabase.instance,
        _sourceRepository =
            sourceRepository ??
@@ -49,7 +51,9 @@ class ChapterContentService {
        _cleaner = cleaner ?? const ContentTextCleaner(),
        _logger = logger ?? AppLogger.instance,
        _urlTemplateResolver =
-           urlTemplateResolver ?? const UrlTemplateResolver();
+           urlTemplateResolver ?? const UrlTemplateResolver(),
+       _responseProcessor =
+           responseProcessor ?? const SourceResponseProcessor();
 
   final AppDatabase _database;
   final SourceRepository _sourceRepository;
@@ -58,6 +62,7 @@ class ChapterContentService {
   final ContentTextCleaner _cleaner;
   final AppLogger _logger;
   final UrlTemplateResolver _urlTemplateResolver;
+  final SourceResponseProcessor _responseProcessor;
 
   static final Map<String, String> _chapterCache = <String, String>{};
   static const String _imageCachePrefix = '__appread_image_payload__:';
@@ -117,10 +122,12 @@ class ChapterContentService {
     }
 
     final source = await _findSource(normalizedSourceId);
-    final contentRule = _normalizeRuleExpression(
-      source.rules.contentRule,
-      fallbackExtractor: 'html',
-    );
+    final contentRule =
+        _normalizeRuleExpression(
+          source.rules.contentRule,
+          fallbackExtractor: 'html',
+        ) ??
+        _buildFallbackContentRule(source.rules.contentDecryptRule);
 
     if (contentRule == null) {
       throw AppException(
@@ -199,20 +206,30 @@ class ChapterContentService {
       ),
     );
 
+    final normalizedResponseBody =
+        _responseProcessor
+            .process(
+              body: response.body,
+              requestUrl: requestUrl,
+              fallbackUrl: normalizedChapterUrl,
+              decryptRule: source.rules.contentDecryptRule,
+            )
+            .body;
+
     final contentExpression = _resolveRuntimeRuleTemplate(
       expression: contentRule,
       context: runtimeContext,
     );
 
     final extractedSegments = _executeAllWithFallback(
-      content: response.body,
+      content: normalizedResponseBody,
       expression: contentExpression,
       stage: ErrorStage.content,
     );
 
     final imageUrls = _extractImageUrls(
       extractedSegments: extractedSegments,
-      responseBody: response.body,
+      responseBody: normalizedResponseBody,
       source: source,
       chapterUrl: normalizedChapterUrl,
     );
@@ -593,7 +610,16 @@ class ChapterContentService {
       ),
     );
 
-    final decoded = _tryDecodeJson(response.body);
+    final normalizedInitBody =
+        _responseProcessor
+            .process(
+              body: response.body,
+              requestUrl: requestUrl,
+              fallbackUrl: rawInitRule,
+              decryptRule: source.rules.contentDecryptRule,
+            )
+            .body;
+    final decoded = _tryDecodeJson(normalizedInitBody);
     if (decoded == null) {
       return const {};
     }
@@ -764,6 +790,15 @@ class ChapterContentService {
       return text;
     }
     return value;
+  }
+
+  String? _buildFallbackContentRule(String? decryptRule) {
+    final normalized = decryptRule?.trim() ?? '';
+    if (normalized.isEmpty) {
+      return null;
+    }
+
+    return r'regex:[\s\S]+';
   }
 
   String? _asNullableString(Object? value) {
@@ -1343,10 +1378,24 @@ class ChapterContentService {
     required String expression,
     required SearchRequestContext context,
   }) {
-    final replaced = expression.replaceAllMapped(
+    final baseUrl = context.extraParams['chapterUrl'] ?? '';
+
+    var replaced = expression;
+
+    replaced = replaced.replaceAllMapped(
+      RegExp(
+        "\\{\\{\\s*baseUrl\\.replace\\((['\"])(.+?)\\1\\s*,\\s*(['\"])(.+?)\\3\\)\\s*\\}\\}",
+      ),
+      (match) {
+        final from = match.group(2) ?? '';
+        final to = match.group(4) ?? '';
+        return baseUrl.replaceAll(from, to);
+      },
+    );
+
+    replaced = replaced.replaceAllMapped(
       RegExp(r'\{\{\s*baseUrl\.match\(/(.+?)\/\)\[(\d+)\]\s*\}\}'),
       (match) {
-        final baseUrl = context.extraParams['chapterUrl'] ?? '';
         final pattern = match.group(1) ?? '';
         final groupIndex = int.tryParse(match.group(2) ?? '0') ?? 0;
 
@@ -1468,29 +1517,132 @@ class ChapterContentService {
       return 'json:\$\n$text';
     }
 
+    final jsonCandidate = _normalizeJsonShorthandExpression(text);
+
     final firstStage = text.split('&&').first.trim();
     if (firstStage.isEmpty || firstStage.startsWith('js:')) {
       return null;
     }
 
     final delimiterIndex = firstStage.lastIndexOf('@');
-    if (delimiterIndex <= 0 || delimiterIndex >= firstStage.length - 1) {
-      return 'html:$firstStage@$fallbackExtractor';
+    final String? htmlCandidate = () {
+      if (delimiterIndex <= 0 || delimiterIndex >= firstStage.length - 1) {
+        return 'html:$firstStage@$fallbackExtractor';
+      }
+
+      final selector = firstStage.substring(0, delimiterIndex).trim();
+      final extractorToken = firstStage.substring(delimiterIndex + 1).trim();
+      if (selector.isEmpty) {
+        return null;
+      }
+
+      final extractor = _normalizeExtractor(
+        extractorToken,
+        fallbackExtractor: fallbackExtractor,
+        preferredAttribute: preferredAttribute,
+      );
+
+      return 'html:$selector@$extractor';
+    }();
+
+    if (jsonCandidate != null) {
+      if (htmlCandidate == null || htmlCandidate == jsonCandidate) {
+        return jsonCandidate;
+      }
+      return '$jsonCandidate||$htmlCandidate';
     }
 
-    final selector = firstStage.substring(0, delimiterIndex).trim();
-    final extractorToken = firstStage.substring(delimiterIndex + 1).trim();
-    if (selector.isEmpty) {
+    return htmlCandidate;
+  }
+
+  String? _normalizeJsonShorthandExpression(String expression) {
+    final text = expression.trim();
+    if (text.isEmpty) {
       return null;
     }
 
-    final extractor = _normalizeExtractor(
-      extractorToken,
-      fallbackExtractor: fallbackExtractor,
-      preferredAttribute: preferredAttribute,
-    );
+    if (text.contains('@') || text.startsWith('js:')) {
+      return null;
+    }
 
-    return 'html:$selector@$extractor';
+    final segments = text
+        .split('&&')
+        .map((item) => item.trim())
+        .where((item) => item.isNotEmpty)
+        .toList(growable: false);
+    if (segments.isEmpty) {
+      return null;
+    }
+
+    final normalizedSegments = <String>[];
+    for (final segment in segments) {
+      final normalized = _normalizeJsonShorthandSegment(segment);
+      if (normalized == null) {
+        return null;
+      }
+      normalizedSegments.add(normalized);
+    }
+
+    if (normalizedSegments.length == 1) {
+      return 'json:${normalizedSegments.first}';
+    }
+
+    final template = normalizedSegments
+        .map((segment) => '{{$segment}}')
+        .join(' ');
+    return 'json:\$\n$template';
+  }
+
+  String? _normalizeJsonShorthandSegment(String segment) {
+    final trimmed = segment.trim();
+    if (trimmed.isEmpty) {
+      return null;
+    }
+
+    final replaceIndex = trimmed.indexOf('##');
+    final pathPart =
+        replaceIndex >= 0 ? trimmed.substring(0, replaceIndex) : trimmed;
+    final replacePart =
+        replaceIndex >= 0 ? trimmed.substring(replaceIndex) : '';
+
+    final normalizedPath = _normalizeJsonShorthandPath(pathPart.trim());
+    if (normalizedPath == null) {
+      return null;
+    }
+
+    return '$normalizedPath$replacePart';
+  }
+
+  String? _normalizeJsonShorthandPath(String token) {
+    if (token.isEmpty) {
+      return null;
+    }
+
+    final unescaped =
+        token.startsWith(r'\$') ? token.substring(1).trim() : token;
+
+    if (unescaped == r'$' ||
+        unescaped.startsWith(r'$.') ||
+        unescaped.startsWith(r'$[')) {
+      return unescaped;
+    }
+
+    if (unescaped == '*') {
+      return r'$[*]';
+    }
+
+    if (unescaped.startsWith('[')) {
+      return '\$$unescaped';
+    }
+
+    final isJsonShorthand = RegExp(
+      r'^[a-zA-Z_][a-zA-Z0-9_]*(?:\[[^\]]+\])*(?:\.[a-zA-Z_][a-zA-Z0-9_]*(?:\[[^\]]+\])*)*$',
+    ).hasMatch(unescaped);
+    if (!isJsonShorthand) {
+      return null;
+    }
+
+    return '\$.$unescaped';
   }
 
   String _normalizeExtractor(

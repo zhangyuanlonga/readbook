@@ -1,10 +1,12 @@
 import 'dart:convert';
 import 'dart:io';
+import 'dart:typed_data';
 
 import 'package:flutter_appread/domain/entities/source_definition.dart';
 import 'package:flutter_appread/domain/repositories/source_repository.dart';
 import 'package:flutter_appread/features/reader/application/chapter_content_service.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:pointycastle/export.dart';
 
 void main() {
   group('ChapterContentService', () {
@@ -100,6 +102,87 @@ void main() {
         await server.close(force: true);
       },
     );
+
+    test(
+      'supports legacy compressed json payload with shorthand content rule',
+      () async {
+        final payload =
+            File(
+              'test/fixtures/aaawz_detail_payload_lz_base64.txt',
+            ).readAsStringSync().trim();
+
+        final server = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
+        server.listen((request) async {
+          request.response
+            ..statusCode = 200
+            ..write(payload);
+          await request.response.close();
+        });
+
+        final baseUrl = 'http://${server.address.host}:${server.port}';
+        final repository = _FakeSourceRepository([
+          SourceDefinition(
+            id: 's_legacy_content',
+            name: 'Legacy正文源',
+            baseUrl: baseUrl,
+            rules: const SourceRuleSet(contentRule: 'intro'),
+          ),
+        ]);
+
+        final service = ChapterContentService(sourceRepository: repository);
+        final result = await service.load(
+          sourceId: 's_legacy_content',
+          chapterUrl: '$baseUrl/api-info-13148-35',
+        );
+
+        expect(result.fromCache, isFalse);
+        expect(result.content, contains('校园内少女遭肆虐'));
+        expect(result.content, contains('法律面前不分年纪'));
+
+        await server.close(force: true);
+      },
+    );
+
+    test('decrypts legacy chapter payload via content decrypt rule', () async {
+      const decryptRule =
+          r'{"type":"aes_cbc_pkcs7_iv16_base64_lzbase64","key":"123#2^0@0vm@08.b5%$1[A]1&4115s((","urlContains":"-chapter-"}';
+      final encryptedPayload = _encryptLegacyAesChapterPayload(
+        plainText: '<div class="content">第一段\n\n第二段</div>',
+        key: r'123#2^0@0vm@08.b5%$1[A]1&4115s((',
+      );
+
+      final server = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
+      server.listen((request) async {
+        request.response
+          ..statusCode = 200
+          ..write(encryptedPayload);
+        await request.response.close();
+      });
+
+      final baseUrl = 'http://${server.address.host}:${server.port}';
+      final repository = _FakeSourceRepository([
+        SourceDefinition(
+          id: 's_decrypt',
+          name: '解密正文源',
+          baseUrl: baseUrl,
+          rules: const SourceRuleSet(
+            contentRule: '.content@text',
+            contentDecryptRule: decryptRule,
+          ),
+        ),
+      ]);
+
+      final service = ChapterContentService(sourceRepository: repository);
+      final result = await service.load(
+        sourceId: 's_decrypt',
+        chapterUrl: '$baseUrl/api-chapter-13148-35-10196648',
+      );
+
+      expect(result.content, contains('第一段'));
+      expect(result.content, contains('第二段'));
+
+      await server.close(force: true);
+    });
 
     test(
       'supports content init pre-request context and parse fallback',
@@ -359,6 +442,30 @@ $baseUrl/content, {
       );
     });
   });
+}
+
+String _encryptLegacyAesChapterPayload({
+  required String plainText,
+  required String key,
+}) {
+  final iv = Uint8List.fromList(List<int>.generate(16, (index) => index + 1));
+  final keyBytes = Uint8List.fromList(utf8.encode(key));
+
+  final cipher = PaddedBlockCipherImpl(
+    PKCS7Padding(),
+    CBCBlockCipher(AESEngine()),
+  );
+  cipher.init(
+    true,
+    PaddedBlockCipherParameters<ParametersWithIV<KeyParameter>, Null>(
+      ParametersWithIV<KeyParameter>(KeyParameter(keyBytes), iv),
+      null,
+    ),
+  );
+
+  final encrypted = cipher.process(Uint8List.fromList(utf8.encode(plainText)));
+  final payload = Uint8List.fromList(<int>[...iv, ...encrypted]);
+  return base64.encode(payload);
 }
 
 class _FakeSourceRepository implements SourceRepository {

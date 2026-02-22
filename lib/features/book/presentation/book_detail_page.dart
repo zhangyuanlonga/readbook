@@ -40,6 +40,7 @@ class _BookDetailPageState extends State<BookDetailPage> {
   bool _isShelfActionLoading = false;
   bool _isInBookshelf = false;
   String? _errorText;
+  String? _tocWarningText;
   BookDetailLoadResult? _result;
 
   @override
@@ -160,6 +161,10 @@ class _BookDetailPageState extends State<BookDetailPage> {
                 ],
                 const SizedBox(height: 12),
                 _buildCacheCard(_result!),
+                if (_tocWarningText != null) ...[
+                  const SizedBox(height: 12),
+                  _buildTocWarningCard(_tocWarningText!),
+                ],
                 const SizedBox(height: 12),
                 _buildChapterSection(_result!),
               ],
@@ -691,6 +696,25 @@ class _BookDetailPageState extends State<BookDetailPage> {
                   ),
                 ],
               ),
+            ] else ...[
+              const SizedBox(height: 12),
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 12,
+                  vertical: 14,
+                ),
+                decoration: BoxDecoration(
+                  color: colorScheme.surfaceContainerLow,
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Text(
+                  '目录暂时为空，可点击右上角刷新重试。',
+                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                    color: colorScheme.onSurfaceVariant,
+                  ),
+                ),
+              ),
             ],
             const SizedBox(height: 10),
             ...displayedChapters.asMap().entries.map(
@@ -780,6 +804,7 @@ class _BookDetailPageState extends State<BookDetailPage> {
     setState(() {
       _isLoading = true;
       _errorText = null;
+      _tocWarningText = null;
       if (forceRefresh) {
         _result = null;
       }
@@ -800,6 +825,7 @@ class _BookDetailPageState extends State<BookDetailPage> {
 
       setState(() {
         _result = result;
+        _tocWarningText = _toTocWarningText(result.tocError);
       });
 
       await _refreshBookshelfState(result);
@@ -809,6 +835,7 @@ class _BookDetailPageState extends State<BookDetailPage> {
       }
       setState(() {
         _errorText = _toUserReadableError(error);
+        _tocWarningText = null;
       });
     } catch (_) {
       if (!mounted) {
@@ -816,6 +843,7 @@ class _BookDetailPageState extends State<BookDetailPage> {
       }
       setState(() {
         _errorText = '加载失败，请稍后重试。';
+        _tocWarningText = null;
       });
     } finally {
       if (mounted) {
@@ -836,6 +864,51 @@ class _BookDetailPageState extends State<BookDetailPage> {
       ErrorCode.unknownSource => '书源不存在或已被删除。',
       ErrorCode.unknown => '加载失败，请稍后重试。',
     };
+  }
+
+  String? _toTocWarningText(AppException? error) {
+    if (error == null) {
+      return null;
+    }
+
+    return switch (error.code) {
+      ErrorCode.network => '目录加载失败（网络异常），已展示详情。可稍后刷新目录重试。',
+      ErrorCode.validation => '目录规则不完整，目录暂不可用。',
+      ErrorCode.ruleParse => '目录规则语法错误，目录暂不可用。',
+      ErrorCode.ruleMatchEmpty => '未获取到目录内容，目录暂为空。',
+      ErrorCode.decode => '目录解析失败，目录暂不可用。',
+      ErrorCode.unknownSource => '书源不存在，目录暂不可用。',
+      ErrorCode.unknown => '目录加载失败，目录暂不可用。',
+    };
+  }
+
+  Widget _buildTocWarningCard(String message) {
+    final colorScheme = Theme.of(context).colorScheme;
+
+    return Card(
+      color: colorScheme.tertiaryContainer,
+      child: Padding(
+        padding: const EdgeInsets.all(14),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Icon(
+              Icons.warning_amber_rounded,
+              color: colorScheme.onTertiaryContainer,
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Text(
+                message,
+                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                  color: colorScheme.onTertiaryContainer,
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
   }
 
   Future<void> _refreshBookshelfState(BookDetailLoadResult result) async {

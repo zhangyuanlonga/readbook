@@ -531,6 +531,114 @@ $baseUrl/search?channel=a,b, {
       await server.close(force: true);
     });
 
+    test(
+      'supports legado json shorthand search rules from api payload',
+      () async {
+        final server = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
+        String? observedMethod;
+        String? observedBody;
+
+        server.listen((request) async {
+          observedMethod = request.method;
+          observedBody = await utf8.decoder.bind(request).join();
+
+          request.response
+            ..statusCode = 200
+            ..write('''
+            {
+              "data": {
+                "books": [
+                  {
+                    "articlename": "凡人修仙传",
+                    "author": "忘语",
+                    "tid": 465030,
+                    "siteid": 117,
+                    "lastchapter": "第一章"
+                  }
+                ]
+              }
+            }
+          ''');
+          await request.response.close();
+        });
+
+        final baseUrl = 'http://${server.address.host}:${server.port}';
+        final repository = _FakeSourceRepository([
+          SourceDefinition(
+            id: 's_legado_json',
+            name: 'Legado JSON源',
+            baseUrl: baseUrl,
+            rules: SourceRuleSet(
+              searchRule:
+                  '$baseUrl/api-search,{"method":"POST","body":"keyword={{key}}&page={{page}}&size=10"}',
+              searchListRule: 'data.books',
+              searchTitleRule: 'articlename',
+              searchDetailUrlRule: '/api-info-{{\$.tid}}-{{\$.siteid}}',
+              searchAuthorRule: 'author##<\\/?em>',
+              searchLatestChapterRule: 'lastchapter',
+            ),
+          ),
+        ]);
+
+        final service = SearchService(sourceRepository: repository);
+        final report = await service.search(keyword: '凡人修仙传');
+
+        expect(report.books, hasLength(1));
+        expect(report.books.first.title, '凡人修仙传');
+        expect(report.books.first.author, '忘语');
+        expect(report.books.first.detailUrl, '$baseUrl/api-info-465030-117');
+        expect(observedMethod, 'POST');
+        expect(
+          observedBody,
+          contains('keyword=%E5%87%A1%E4%BA%BA%E4%BF%AE%E4%BB%99%E4%BC%A0'),
+        );
+
+        await server.close(force: true);
+      },
+    );
+
+    test('supports legado lz-base64 search response payload', () async {
+      final encodedPayload =
+          File(
+            'test/fixtures/aaawz_search_payload_lz_base64.txt',
+          ).readAsStringSync().trim();
+
+      final server = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
+      server.listen((request) async {
+        request.response
+          ..statusCode = 200
+          ..write(encodedPayload);
+        await request.response.close();
+      });
+
+      final baseUrl = 'http://${server.address.host}:${server.port}';
+      final repository = _FakeSourceRepository([
+        SourceDefinition(
+          id: 's_lz_payload',
+          name: '压缩响应源',
+          baseUrl: baseUrl,
+          rules: SourceRuleSet(
+            searchRule:
+                '$baseUrl/api-search,{"method":"POST","body":"keyword={{key}}&page={{page}}&size=10"}',
+            searchListRule: 'data.books',
+            searchTitleRule: 'articlename',
+            searchDetailUrlRule: '/api-info-{{\$.tid}}-{{\$.siteid}}',
+            searchAuthorRule: 'author',
+          ),
+        ),
+      ]);
+
+      final service = SearchService(sourceRepository: repository);
+      final report = await service.search(keyword: '凡人');
+
+      expect(report.books, isNotEmpty);
+      expect(report.failures, isEmpty);
+      expect(report.books.first.title, isNotEmpty);
+      expect(report.books.first.detailUrl, contains('/api-info-'));
+
+      await server.close(force: true);
+    });
+
     test('normalizes non-prefixed html rules', () async {
       final server = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
       server.listen((request) async {

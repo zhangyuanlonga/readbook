@@ -216,6 +216,104 @@ void main() {
       expect(source.headers, {'User-Agent': 'appread', 'X-Trace': 'trace-id'});
     });
 
+    test('parses js header object and resolves source.key fallback', () {
+      final raw = LegadoSourceRaw.fromJson({
+        'bookSourceName': '动态Header源',
+        'bookSourceUrl': 'https://example.com',
+        'searchUrl': '/search?key={{key}}',
+        'header': '''
+@js:JSON.stringify({
+  'Accept': 'application/json, text/plain, */*',
+  'origin': source.key,
+  'referer': source.key + '/'
+})
+''',
+      });
+
+      final source = adapter.adapt(raw);
+
+      expect(source.headers['Accept'], 'application/json, text/plain, */*');
+      expect(source.headers['origin'], 'https://example.com');
+      expect(source.headers['referer'], 'https://example.com/');
+    });
+
+    test('extracts legacy chapter decrypt config from loginCheckJs', () {
+      final raw = LegadoSourceRaw.fromJson({
+        'bookSourceName': '3A小说',
+        'bookSourceUrl': 'https://www.aaawz.cc',
+        'ruleContent': {'content': '@js:result'},
+        'loginCheckJs': r'''
+let url = result.url()
+let body = result.body()
+if(url.includes('-chapter-')){
+  let data = java.base64DecodeToByteArray(body)
+  let iv = data.slice(0,16)
+  let x = java.createSymmetricCrypto('AES/CBC/PKCS7Padding',java.strToBytes('123#2^0@0vm@08.b5%$1[A]1&4115s(('), iv)
+  body = x.decryptStr(data.slice(16, data.length))
+}
+Packages.io.legado.app.help.http.StrResponse(url, decompressFromBase64(String(body).replace(/\s/g,'')))
+''',
+      });
+
+      final source = adapter.adapt(raw);
+      final decryptRule = source.rules.contentDecryptRule;
+
+      expect(decryptRule, isNotNull);
+      final decoded = jsonDecode(decryptRule!) as Map<String, dynamic>;
+      expect(decoded['type'], 'aes_cbc_pkcs7_iv16_base64_lzbase64');
+      expect(decoded['key'], r'123#2^0@0vm@08.b5%$1[A]1&4115s((');
+      expect(decoded['urlContains'], '-chapter-');
+    });
+
+    test('extracts lz-base64 decrypt config without aes branch', () {
+      final raw = LegadoSourceRaw.fromJson({
+        'bookSourceName': 'LZ正文源',
+        'bookSourceUrl': 'https://example.com',
+        'ruleContent': {'content': '@js:result'},
+        'loginCheckJs': r'''
+let url = result.url()
+let body = result.body()
+if(url.includes('/api-chapter-')){
+  body = decompressFromBase64(String(body).replace(/\s/g,''))
+}
+Packages.io.legado.app.help.http.StrResponse(url, body)
+''',
+      });
+
+      final source = adapter.adapt(raw);
+      final decryptRule = source.rules.contentDecryptRule;
+
+      expect(decryptRule, isNotNull);
+      final decoded = jsonDecode(decryptRule!) as Map<String, dynamic>;
+      expect(decoded['type'], 'lz_base64');
+      expect(decoded['urlContains'], '/api-chapter-');
+    });
+
+    test('extracts base64 decrypt config when only base64 decode appears', () {
+      final raw = LegadoSourceRaw.fromJson({
+        'bookSourceName': 'Base64正文源',
+        'bookSourceUrl': 'https://example.com',
+        'ruleContent': {'content': '@js:result'},
+        'loginCheckJs': r'''
+let url = result.url()
+let body = result.body()
+if(url.includes('/chapter/')){
+  let data = java.base64DecodeToByteArray(body)
+  body = java.bytesToString(data)
+}
+Packages.io.legado.app.help.http.StrResponse(url, body)
+''',
+      });
+
+      final source = adapter.adapt(raw);
+      final decryptRule = source.rules.contentDecryptRule;
+
+      expect(decryptRule, isNotNull);
+      final decoded = jsonDecode(decryptRule!) as Map<String, dynamic>;
+      expect(decoded['type'], 'base64_utf8');
+      expect(decoded['urlContains'], '/chapter/');
+    });
+
     test('throws validation exception when required fields are missing', () {
       final raw = LegadoSourceRaw.fromJson({
         'bookSourceName': '',

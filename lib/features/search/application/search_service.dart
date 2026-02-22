@@ -9,6 +9,7 @@ import '../../../core/logging/app_logger.dart';
 import '../../../core/network/http_client.dart';
 import '../../../core/network/request_context.dart';
 import '../../../core/rule_engine/processors/url_template_resolver.dart';
+import '../../../core/source/source_response_processor.dart';
 import '../../../data/datasources/local/app_database.dart';
 import '../../../data/repositories/source_repository_impl.dart';
 import '../../../domain/entities/book.dart';
@@ -103,6 +104,7 @@ class SearchService {
     UrlTemplateResolver? urlTemplateResolver,
     SearchResultParser? parser,
     AppLogger? logger,
+    SourceResponseProcessor? responseProcessor,
     int maxConcurrentSources = 4,
   }) : _sourceRepository =
            sourceRepository ?? SourceRepositoryImpl(AppDatabase.instance),
@@ -111,6 +113,8 @@ class SearchService {
            urlTemplateResolver ?? const UrlTemplateResolver(),
        _parser = parser ?? SearchResultParser(),
        _logger = logger ?? AppLogger.instance,
+       _responseProcessor =
+           responseProcessor ?? const SourceResponseProcessor(),
        _maxConcurrentSources = max(1, maxConcurrentSources);
 
   final int _maxConcurrentSources;
@@ -120,6 +124,7 @@ class SearchService {
   final UrlTemplateResolver _urlTemplateResolver;
   final SearchResultParser _parser;
   final AppLogger _logger;
+  final SourceResponseProcessor _responseProcessor;
 
   Future<SearchExecutionReport> search({
     required String keyword,
@@ -628,12 +633,16 @@ class SearchService {
       ),
     );
 
+    final processedResponse = _responseProcessor.process(
+      body: response.body,
+      requestUrl: requestUrl,
+    );
+
     final books =
         validateRules
-            ? _parser.parse(
-              htmlContent: response.body,
-              sourceId: source.id,
-              baseUrl: source.baseUrl,
+            ? _parseSearchBooks(
+              source: source,
+              responseBody: processedResponse.body,
               rules: _buildParseRules(source),
             )
             : const <Book>[];
@@ -643,6 +652,19 @@ class SearchService {
       method: requestSpec.method,
       statusCode: response.statusCode,
       books: books,
+    );
+  }
+
+  List<Book> _parseSearchBooks({
+    required SourceDefinition source,
+    required String responseBody,
+    required SearchParseRules rules,
+  }) {
+    return _parser.parse(
+      htmlContent: responseBody,
+      sourceId: source.id,
+      baseUrl: source.baseUrl,
+      rules: rules,
     );
   }
 
@@ -711,14 +733,20 @@ class SearchService {
       source.rules.searchListRule,
       fallbackExtractor: 'html',
     );
+
+    final listRuleIsJson = listRule?.startsWith('json:') ?? false;
+    final fieldPreferJson = listRuleIsJson;
+
     final titleRule = _normalizeRuleExpression(
       source.rules.searchTitleRule,
       fallbackExtractor: 'text',
+      preferJsonShorthand: fieldPreferJson,
     );
     final detailUrlRule = _normalizeRuleExpression(
       source.rules.searchDetailUrlRule,
       fallbackExtractor: 'attr(href)',
       preferredAttribute: 'href',
+      preferJsonShorthand: fieldPreferJson,
     );
 
     if (listRule == null || titleRule == null || detailUrlRule == null) {
@@ -737,19 +765,23 @@ class SearchService {
       authorRule: _normalizeRuleExpression(
         source.rules.searchAuthorRule,
         fallbackExtractor: 'text',
+        preferJsonShorthand: fieldPreferJson,
       ),
       introRule: _normalizeRuleExpression(
         source.rules.searchIntroRule,
         fallbackExtractor: 'text',
+        preferJsonShorthand: fieldPreferJson,
       ),
       coverUrlRule: _normalizeRuleExpression(
         source.rules.searchCoverUrlRule,
         fallbackExtractor: 'attr(src)',
         preferredAttribute: 'src',
+        preferJsonShorthand: fieldPreferJson,
       ),
       latestChapterRule: _normalizeRuleExpression(
         source.rules.searchLatestChapterRule,
         fallbackExtractor: 'text',
+        preferJsonShorthand: fieldPreferJson,
       ),
     );
   }
@@ -811,7 +843,12 @@ class SearchService {
       ),
     );
 
-    final decoded = _tryDecodeJson(response.body);
+    final normalizedInitBody =
+        _responseProcessor
+            .process(body: response.body, requestUrl: requestUrl)
+            .body;
+
+    final decoded = _tryDecodeJson(normalizedInitBody);
     if (decoded == null) {
       return const {};
     }
@@ -1221,6 +1258,7 @@ class SearchService {
     String? rawRule, {
     required String fallbackExtractor,
     String? preferredAttribute,
+    bool preferJsonShorthand = false,
   }) {
     final text = rawRule?.trim();
     if (text == null || text.isEmpty) {
@@ -1245,29 +1283,137 @@ class SearchService {
       return 'json:\$\n$text';
     }
 
+    final jsonCandidate = _normalizeJsonShorthandExpression(text);
+
+    if (jsonCandidate != null && preferJsonShorthand) {
+      return jsonCandidate;
+    }
+
     final firstStage = text.split('&&').first.trim();
     if (firstStage.isEmpty || firstStage.startsWith('js:')) {
       return null;
     }
 
     final delimiterIndex = firstStage.lastIndexOf('@');
-    if (delimiterIndex <= 0 || delimiterIndex >= firstStage.length - 1) {
-      return 'html:$firstStage@$fallbackExtractor';
+    final String? htmlCandidate = () {
+      if (delimiterIndex <= 0 || delimiterIndex >= firstStage.length - 1) {
+        return 'html:$firstStage@$fallbackExtractor';
+      }
+
+      final selector = firstStage.substring(0, delimiterIndex).trim();
+      final extractorToken = firstStage.substring(delimiterIndex + 1).trim();
+      if (selector.isEmpty) {
+        return null;
+      }
+
+      final extractor = _normalizeExtractor(
+        extractorToken,
+        fallbackExtractor: fallbackExtractor,
+        preferredAttribute: preferredAttribute,
+      );
+
+      return 'html:$selector@$extractor';
+    }();
+
+    if (jsonCandidate != null) {
+      if (htmlCandidate == null || htmlCandidate == jsonCandidate) {
+        return jsonCandidate;
+      }
+
+      return '$jsonCandidate||$htmlCandidate';
     }
 
-    final selector = firstStage.substring(0, delimiterIndex).trim();
-    final extractorToken = firstStage.substring(delimiterIndex + 1).trim();
-    if (selector.isEmpty) {
+    return htmlCandidate;
+  }
+
+  String? _normalizeJsonShorthandExpression(String expression) {
+    final text = expression.trim();
+    if (text.isEmpty) {
       return null;
     }
 
-    final extractor = _normalizeExtractor(
-      extractorToken,
-      fallbackExtractor: fallbackExtractor,
-      preferredAttribute: preferredAttribute,
-    );
+    if (text.contains('@') || text.startsWith('js:')) {
+      return null;
+    }
 
-    return 'html:$selector@$extractor';
+    final segments = text
+        .split('&&')
+        .map((item) => item.trim())
+        .where((item) => item.isNotEmpty)
+        .toList(growable: false);
+    if (segments.isEmpty) {
+      return null;
+    }
+
+    final normalizedSegments = <String>[];
+    for (final segment in segments) {
+      final normalized = _normalizeJsonShorthandSegment(segment);
+      if (normalized == null) {
+        return null;
+      }
+      normalizedSegments.add(normalized);
+    }
+
+    if (normalizedSegments.length == 1) {
+      return 'json:${normalizedSegments.first}';
+    }
+
+    final template = normalizedSegments
+        .map((segment) => '{{$segment}}')
+        .join(' ');
+    return 'json:\$\n$template';
+  }
+
+  String? _normalizeJsonShorthandSegment(String segment) {
+    final trimmed = segment.trim();
+    if (trimmed.isEmpty) {
+      return null;
+    }
+
+    final replaceIndex = trimmed.indexOf('##');
+    final pathPart =
+        replaceIndex >= 0 ? trimmed.substring(0, replaceIndex) : trimmed;
+    final replacePart =
+        replaceIndex >= 0 ? trimmed.substring(replaceIndex) : '';
+
+    final normalizedPath = _normalizeJsonShorthandPath(pathPart.trim());
+    if (normalizedPath == null) {
+      return null;
+    }
+
+    return '$normalizedPath$replacePart';
+  }
+
+  String? _normalizeJsonShorthandPath(String token) {
+    if (token.isEmpty) {
+      return null;
+    }
+
+    final unescaped =
+        token.startsWith(r'\$') ? token.substring(1).trim() : token;
+
+    if (unescaped == r'$' ||
+        unescaped.startsWith(r'$.') ||
+        unescaped.startsWith(r'$[')) {
+      return unescaped;
+    }
+
+    if (unescaped == '*') {
+      return r'$[*]';
+    }
+
+    if (unescaped.startsWith('[')) {
+      return '\$$unescaped';
+    }
+
+    final isJsonShorthand = RegExp(
+      r'^[a-zA-Z_][a-zA-Z0-9_]*(?:\[[^\]]+\])*(?:\.[a-zA-Z_][a-zA-Z0-9_]*(?:\[[^\]]+\])*)*$',
+    ).hasMatch(unescaped);
+    if (!isJsonShorthand) {
+      return null;
+    }
+
+    return '\$.$unescaped';
   }
 
   String _normalizeExtractor(

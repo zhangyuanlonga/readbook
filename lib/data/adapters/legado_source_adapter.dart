@@ -139,6 +139,7 @@ class LegadoSourceAdapter {
           _pickRule(raw.rawData, ['ruleContent']) ??
           _pickRuleFromMap(contentRuleMap, ['content', 'text', 'body']),
       contentInitRule: contentInitRule,
+      contentDecryptRule: _extractLegacyContentDecryptRule(raw.rawData),
     );
 
     adaptedRules = _applyInlineJsMangaFallback(
@@ -159,7 +160,7 @@ class LegadoSourceAdapter {
       enabled: raw.enabled,
       sourceType: raw.sourceType ?? 0,
       comment: _emptyToNull(_normalizeText(raw.sourceComment)),
-      headers: _parseHeaders(raw.rawData['header']),
+      headers: _parseHeaders(raw.rawData['header'], baseUrl: baseUrl),
       rules: adaptedRules,
     );
   }
@@ -678,6 +679,74 @@ class LegadoSourceAdapter {
     return null;
   }
 
+  String? _extractLegacyContentDecryptRule(Map<String, dynamic> rawData) {
+    final loginCheckJs = _normalizeRuleValue(rawData['loginCheckJs']);
+    if (loginCheckJs == null || loginCheckJs.isEmpty) {
+      return null;
+    }
+
+    final jsLib = _normalizeRuleValue(rawData['jsLib']) ?? '';
+
+    final hasAesCipher = RegExp(
+      r'AES\s*/\s*CBC\s*/\s*PKCS7Padding',
+      caseSensitive: false,
+    ).hasMatch(loginCheckJs);
+    final hasBase64Decode = RegExp(
+      r'base64DecodeToByteArray',
+      caseSensitive: false,
+    ).hasMatch(loginCheckJs);
+    final hasLzDecode = RegExp(
+      r'decompressFromBase64',
+      caseSensitive: false,
+    ).hasMatch(loginCheckJs);
+    final hasLzHelper = RegExp(
+      r'function\s+decompressFromBase64',
+      caseSensitive: false,
+    ).hasMatch(jsLib);
+
+    final includeMatch = RegExp(
+      r'''url\.includes\(\s*(['"])(.+?)\1\s*\)''',
+      dotAll: true,
+    ).firstMatch(loginCheckJs);
+    final urlContains = includeMatch?.group(2)?.trim();
+
+    if (hasAesCipher && hasBase64Decode && (hasLzDecode || hasLzHelper)) {
+      final keyMatch = RegExp(
+        r'''java\.strToBytes\(\s*(['"])(.+?)\1\s*\)''',
+        dotAll: true,
+      ).firstMatch(loginCheckJs);
+      final key = keyMatch?.group(2)?.trim() ?? '';
+      if (key.isEmpty) {
+        return null;
+      }
+
+      return jsonEncode({
+        'type': 'aes_cbc_pkcs7_iv16_base64_lzbase64',
+        'key': key,
+        if (urlContains != null && urlContains.isNotEmpty)
+          'urlContains': urlContains,
+      });
+    }
+
+    if (hasLzDecode || hasLzHelper) {
+      return jsonEncode({
+        'type': 'lz_base64',
+        if (urlContains != null && urlContains.isNotEmpty)
+          'urlContains': urlContains,
+      });
+    }
+
+    if (hasBase64Decode) {
+      return jsonEncode({
+        'type': 'base64_utf8',
+        if (urlContains != null && urlContains.isNotEmpty)
+          'urlContains': urlContains,
+      });
+    }
+
+    return null;
+  }
+
   String? _normalizeRuleValue(Object? value) {
     if (value == null || value is Map || value is List) {
       return null;
@@ -712,7 +781,7 @@ class LegadoSourceAdapter {
     return null;
   }
 
-  Map<String, String> _parseHeaders(Object? source) {
+  Map<String, String> _parseHeaders(Object? source, {required String baseUrl}) {
     if (source == null) {
       return const {};
     }
@@ -731,6 +800,11 @@ class LegadoSourceAdapter {
     final text = source.trim();
     if (text.isEmpty) {
       return const {};
+    }
+
+    final jsDynamic = _parseJsHeaderExpression(text, baseUrl: baseUrl);
+    if (jsDynamic != null) {
+      return jsDynamic;
     }
 
     final decoded = _decodeHeaderJson(text);
@@ -765,6 +839,45 @@ class LegadoSourceAdapter {
     return result;
   }
 
+  Map<String, String>? _parseJsHeaderExpression(
+    String source, {
+    required String baseUrl,
+  }) {
+    final normalized = source.trim();
+    if (!normalized.startsWith('@js:')) {
+      return null;
+    }
+
+    final script = normalized.substring(4).trim();
+    if (script.isEmpty) {
+      return const {};
+    }
+
+    final objectMatch = RegExp(r'\{[\s\S]*\}', dotAll: true).firstMatch(script);
+    if (objectMatch == null) {
+      return {'Origin': baseUrl, 'Referer': '$baseUrl/'};
+    }
+
+    final objectText = objectMatch.group(0);
+    if (objectText == null || objectText.trim().isEmpty) {
+      return {'Origin': baseUrl, 'Referer': '$baseUrl/'};
+    }
+
+    final normalizedObjectText = objectText
+        .replaceAll('source.key + "/"', '"$baseUrl/"')
+        .replaceAll("source.key + '/'", '"$baseUrl/"')
+        .replaceAll('source.key+"/"', '"$baseUrl/"')
+        .replaceAll("source.key+'/'", '"$baseUrl/"')
+        .replaceAll('source.key', '"$baseUrl"');
+
+    final parsed = _decodeHeaderJson(normalizedObjectText);
+    if (parsed != null && parsed.isNotEmpty) {
+      return parsed;
+    }
+
+    return {'Origin': baseUrl, 'Referer': '$baseUrl/'};
+  }
+
   Map<String, String>? _decodeHeaderJson(String source) {
     try {
       final decoded = jsonDecode(source);
@@ -776,8 +889,33 @@ class LegadoSourceAdapter {
             MapEntry(key.toString().trim(), value.toString().trim()),
       )..removeWhere((key, value) => key.isEmpty || value.isEmpty);
     } on FormatException {
-      return null;
+      final normalized = _normalizePseudoJson(source);
+      try {
+        final decoded = jsonDecode(normalized);
+        if (decoded is! Map) {
+          return null;
+        }
+        return decoded.map(
+          (key, value) =>
+              MapEntry(key.toString().trim(), value.toString().trim()),
+        )..removeWhere((key, value) => key.isEmpty || value.isEmpty);
+      } on FormatException {
+        return null;
+      }
     }
+  }
+
+  String _normalizePseudoJson(String source) {
+    return source.replaceAllMapped(RegExp(r"'([^'\\]*(?:\\.[^'\\]*)*)'"), (
+      match,
+    ) {
+      final inner = match.group(1) ?? '';
+      final escaped = inner
+          .replaceAll(r'\', r'\\')
+          .replaceAll('"', r'\"')
+          .replaceAll('\n', r'\n');
+      return '"$escaped"';
+    });
   }
 
   String _buildId({

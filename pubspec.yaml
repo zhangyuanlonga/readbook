@@ -49,6 +49,7 @@ dependencies:
   page_curl_effect: ^1.0.2
   dynamic_color: ^1.7.0
   url_launcher: ^6.3.1
+  pointycastle: ^3.9.1
 
 dev_dependencies:
   flutter_test:

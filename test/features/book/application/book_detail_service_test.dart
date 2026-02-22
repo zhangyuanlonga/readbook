@@ -1,6 +1,8 @@
 import 'dart:io';
 
 import 'package:flutter_appread/core/errors/app_exception.dart';
+import 'package:flutter_appread/core/errors/error_codes.dart';
+import 'package:flutter_appread/core/errors/error_stage.dart';
 import 'package:flutter_appread/domain/entities/source_definition.dart';
 import 'package:flutter_appread/domain/repositories/source_repository.dart';
 import 'package:flutter_appread/features/book/application/book_detail_service.dart';
@@ -328,26 +330,179 @@ $baseUrl/book/1/toc, {
       await server.close(force: true);
     });
 
-    test('throws when toc rule is missing', () async {
+    test('returns detail with empty toc when toc rule is missing', () async {
+      final server = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
+      server.listen((request) async {
+        if (request.uri.path == '/book/1') {
+          request.response
+            ..statusCode = 200
+            ..write('<h1 class="title">凡人修仙传</h1>');
+        } else {
+          request.response
+            ..statusCode = 404
+            ..write('not found');
+        }
+        await request.response.close();
+      });
+
+      final baseUrl = 'http://${server.address.host}:${server.port}';
       final repository = _FakeSourceRepository([
         SourceDefinition(
           id: 's1',
           name: '测试源',
-          baseUrl: 'https://example.com',
-          rules: const SourceRuleSet(),
+          baseUrl: baseUrl,
+          rules: const SourceRuleSet(detailTitleRule: '.title'),
         ),
       ]);
 
       final service = BookDetailService(sourceRepository: repository);
 
-      expect(
-        () => service.load(
-          sourceId: 's1',
-          bookId: 'book_1',
-          detailUrl: 'https://example.com/book/1',
-        ),
-        throwsA(isA<AppException>()),
+      final result = await service.load(
+        sourceId: 's1',
+        bookId: 'book_1',
+        detailUrl: '$baseUrl/book/1',
       );
+
+      expect(result.detail.id, 'book_1');
+      expect(result.chapters, isEmpty);
+      expect(result.tocError, isA<AppException>());
+      expect(result.tocError!.stage, ErrorStage.toc);
+      expect(result.tocError!.code, ErrorCode.validation);
+
+      await server.close(force: true);
+    });
+
+    test(
+      'supports legado compressed detail and toc payload with json shorthand rules',
+      () async {
+        final detailPayload =
+            File(
+              'test/fixtures/aaawz_detail_payload_lz_base64.txt',
+            ).readAsStringSync().trim();
+        final tocPayload =
+            File(
+              'test/fixtures/aaawz_toc_payload_lz_base64.txt',
+            ).readAsStringSync().trim();
+
+        final server = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
+        server.listen((request) async {
+          if (request.uri.path == '/api-info-13148-35') {
+            request.response
+              ..statusCode = 200
+              ..write(detailPayload);
+          } else if (request.uri.path == '/api-chapterlist-13148-35') {
+            request.response
+              ..statusCode = 200
+              ..write(tocPayload);
+          } else {
+            request.response
+              ..statusCode = 404
+              ..write('not found');
+          }
+          await request.response.close();
+        });
+
+        final baseUrl = 'http://${server.address.host}:${server.port}';
+        final repository = _FakeSourceRepository([
+          SourceDefinition(
+            id: 's_legacy_aaawz',
+            name: '3A小说',
+            baseUrl: baseUrl,
+            rules: const SourceRuleSet(
+              detailTitleRule: 'articlename',
+              detailAuthorRule: 'author',
+              detailCoverUrlRule: 'imgurl',
+              detailTocUrlRule: r'/api-chapterlist-{{$.tid}}-{{$.siteid}}',
+              tocListRule: '*',
+              tocTitleRule: 'title',
+              tocChapterUrlRule: r"{{baseUrl.replace('list-','-')}}-{{$.cid}}",
+            ),
+          ),
+        ]);
+
+        final service = BookDetailService(sourceRepository: repository);
+        final result = await service.load(
+          sourceId: 's_legacy_aaawz',
+          bookId: 'book_legacy_1',
+          detailUrl: '$baseUrl/api-info-13148-35',
+        );
+
+        expect(result.detail.title, '暗黑校园');
+        expect(result.detail.author, '曼卿');
+        expect(
+          result.detail.coverUrl,
+          'https://easyreadfs.nosdn.127.net/WPIuCpQ_VasdybVQQW-i6g==/8796093025462758042',
+        );
+        expect(result.detail.tocUrl, '$baseUrl/api-chapterlist-13148-35');
+        expect(result.chapters, hasLength(2));
+        expect(result.chapters.first.title, '第1章');
+        expect(
+          result.chapters.first.chapterUrl,
+          '$baseUrl/api-chapter-13148-35-10196648',
+        );
+        expect(result.chapters.last.title, '第2章');
+        expect(
+          result.chapters.last.chapterUrl,
+          '$baseUrl/api-chapter-13148-35-10196649',
+        );
+        expect(result.tocError, isNull);
+
+        await server.close(force: true);
+      },
+    );
+
+    test('returns detail when toc request fails', () async {
+      final server = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
+      server.listen((request) async {
+        if (request.uri.path == '/book/1') {
+          request.response
+            ..statusCode = 200
+            ..write('''
+              <h1 class="title">凡人修仙传</h1>
+              <a class="toc" href="/book/1/toc">目录</a>
+            ''');
+        } else if (request.uri.path == '/book/1/toc') {
+          request.response
+            ..statusCode = 500
+            ..write('server error');
+        } else {
+          request.response
+            ..statusCode = 404
+            ..write('not found');
+        }
+        await request.response.close();
+      });
+
+      final baseUrl = 'http://${server.address.host}:${server.port}';
+      final repository = _FakeSourceRepository([
+        SourceDefinition(
+          id: 's_toc_fail',
+          name: '目录失败源',
+          baseUrl: baseUrl,
+          rules: const SourceRuleSet(
+            detailTitleRule: '.title',
+            detailTocUrlRule: '.toc@href',
+            tocListRule: '.chapter@html',
+            tocTitleRule: '.link@text',
+            tocChapterUrlRule: '.link@href',
+          ),
+        ),
+      ]);
+
+      final service = BookDetailService(sourceRepository: repository);
+
+      final result = await service.load(
+        sourceId: 's_toc_fail',
+        bookId: 'book_1',
+        detailUrl: '$baseUrl/book/1',
+      );
+
+      expect(result.detail.title, '凡人修仙传');
+      expect(result.chapters, isEmpty);
+      expect(result.tocError, isA<AppException>());
+      expect(result.tocError!.stage, ErrorStage.toc);
+
+      await server.close(force: true);
     });
   });
 }
