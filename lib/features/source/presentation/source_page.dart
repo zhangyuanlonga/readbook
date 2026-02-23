@@ -4,6 +4,7 @@ import 'package:dio/dio.dart';
 import 'package:file_selector/file_selector.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:go_router/go_router.dart';
 
 import '../../../app/layout/app_layout.dart';
 import '../../../app/layout/app_spacing.dart';
@@ -289,6 +290,11 @@ class _SourcePageState extends State<SourcePage> {
                 tooltip: '搜索书源',
                 icon: const Icon(Icons.search_rounded),
               ),
+            IconButton(
+              onPressed: _openBatchDiagnostics,
+              tooltip: '批量诊断',
+              icon: const Icon(Icons.fact_check_outlined),
+            ),
             if (_isImporting)
               const Padding(
                 padding: EdgeInsets.only(right: 16),
@@ -938,6 +944,14 @@ class _SourcePageState extends State<SourcePage> {
         _deleteSource(source.id);
         return;
     }
+  }
+
+  void _openBatchDiagnostics() {
+    final visibleSourceIds = _visibleSources
+        .map((source) => source.id)
+        .where((id) => id.trim().isNotEmpty)
+        .toList(growable: false);
+    context.push('/source-diagnostics', extra: visibleSourceIds);
   }
 
   Future<void> _importFromPaste() async {

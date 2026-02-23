@@ -39,10 +39,16 @@ class SearchFailureExportService {
   final SearchExportFallbackDirectoryResolver _fallbackDirectoryResolver;
   final DateTime Function() _now;
 
+  String buildSuggestedFileName({DateTime? now}) {
+    final value = now ?? _now();
+    return 'search_failed_sources_${_formatTimestamp(value)}.json';
+  }
+
   Future<SearchFailureExportResult> exportFailedSources({
     required SearchExecutionReport report,
     required Iterable<SourceDefinition> sources,
     required SearchContentMode contentMode,
+    String? preferredFilePath,
   }) async {
     if (report.failures.isEmpty) {
       throw AppException(
@@ -57,7 +63,7 @@ class SearchFailureExportService {
     };
 
     final now = _now();
-    final fileName = 'search_failed_sources_${_formatTimestamp(now)}.json';
+    final fileName = buildSuggestedFileName(now: now);
 
     final items = report.failures
         .map((failure) {
@@ -105,10 +111,15 @@ class SearchFailureExportService {
     };
 
     final content = const JsonEncoder.withIndent('  ').convert(payload);
-    final filePath = await _writeExportFile(
-      fileName: fileName,
-      content: content,
-    );
+    final normalizedPreferredPath = preferredFilePath?.trim();
+    final filePath =
+        normalizedPreferredPath != null && normalizedPreferredPath.isNotEmpty
+            ? await _writeToSpecificPath(
+              filePath: normalizedPreferredPath,
+              fallbackFileName: fileName,
+              content: content,
+            )
+            : await _writeExportFile(fileName: fileName, content: content);
 
     final missingSourceCount =
         items.where((item) => item['sourceFound'] == false).length;
@@ -118,6 +129,48 @@ class SearchFailureExportService {
       failureCount: report.failures.length,
       missingSourceCount: missingSourceCount,
     );
+  }
+
+  Future<String> _writeToSpecificPath({
+    required String filePath,
+    required String fallbackFileName,
+    required String content,
+  }) async {
+    try {
+      final normalized = _normalizeTargetFilePath(
+        filePath,
+        fallbackFileName: fallbackFileName,
+      );
+      final file = File(normalized);
+      final parent = file.parent;
+      if (!await parent.exists()) {
+        await parent.create(recursive: true);
+      }
+      await file.writeAsString(content, flush: true);
+      return file.path;
+    } catch (error) {
+      throw AppException(
+        code: ErrorCode.unknown,
+        stage: ErrorStage.search,
+        briefMessage: '导出到指定位置失败：$error',
+        cause: error,
+      );
+    }
+  }
+
+  String _normalizeTargetFilePath(
+    String filePath, {
+    required String fallbackFileName,
+  }) {
+    final normalized = filePath.trim();
+    if (normalized.isEmpty) {
+      return fallbackFileName;
+    }
+
+    if (normalized.toLowerCase().endsWith('.json')) {
+      return normalized;
+    }
+    return '$normalized.json';
   }
 
   Future<String> _writeExportFile({

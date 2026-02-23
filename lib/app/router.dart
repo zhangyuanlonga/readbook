@@ -8,6 +8,7 @@ import '../features/mine/presentation/cache_management_page.dart';
 import '../features/reader/presentation/reader_page.dart';
 import '../features/search/presentation/search_page.dart';
 import '../features/source/presentation/source_page.dart';
+import '../features/source/presentation/source_diagnostics_page.dart';
 import 'shell_scaffold.dart';
 
 final GlobalKey<NavigatorState> _rootNavigatorKey = GlobalKey<NavigatorState>();
@@ -49,6 +50,22 @@ final GoRouter appRouter = GoRouter(
       path: '/search',
       name: 'search',
       builder: (context, state) => const SearchPage(),
+    ),
+    GoRoute(
+      path: '/source-diagnostics',
+      name: 'source-diagnostics',
+      builder: (context, state) {
+        final extra = state.extra;
+        final visibleSourceIds =
+            extra is List
+                ? extra
+                    .map((item) => item.toString().trim())
+                    .where((item) => item.isNotEmpty)
+                    .toList(growable: false)
+                : const <String>[];
+
+        return SourceDiagnosticsPage(visibleSourceIds: visibleSourceIds);
+      },
     ),
     GoRoute(
       path: '/book/:bookId',

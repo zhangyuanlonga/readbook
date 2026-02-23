@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:file_selector/file_selector.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:html/parser.dart' as html_parser;
@@ -1059,11 +1060,29 @@ class _SearchPageState extends State<SearchPage> {
     });
 
     try {
+      String? preferredFilePath;
+      try {
+        final saveLocation = await getSaveLocation(
+          suggestedName: _failureExportService.buildSuggestedFileName(),
+          acceptedTypeGroups: const [
+            XTypeGroup(label: 'JSON', extensions: ['json']),
+          ],
+        );
+        if (saveLocation == null) {
+          _showMessage('已取消导出。');
+          return;
+        }
+        preferredFilePath = saveLocation.path;
+      } catch (_) {
+        _showMessage('当前平台暂不支持选择保存位置，已使用默认目录导出。');
+      }
+
       final allSources = await _sourceRepository.getAll();
       final result = await _failureExportService.exportFailedSources(
         report: report,
         sources: allSources,
         contentMode: _searchContentMode,
+        preferredFilePath: preferredFilePath,
       );
 
       if (!mounted) {

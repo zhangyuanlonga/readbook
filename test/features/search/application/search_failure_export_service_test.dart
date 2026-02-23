@@ -151,6 +151,52 @@ void main() {
       },
     );
 
+    test('writes to preferred file path when provided', () async {
+      final tempDir = await Directory.systemTemp.createTemp(
+        'search-export-test',
+      );
+      addTearDown(() async {
+        if (await tempDir.exists()) {
+          await tempDir.delete(recursive: true);
+        }
+      });
+
+      final service = SearchFailureExportService(
+        exportDirectoryResolver: () async => tempDir,
+        fallbackDirectoryResolver: () async => tempDir,
+      );
+
+      final targetFilePath =
+          '${tempDir.path}${Platform.pathSeparator}custom_output${Platform.pathSeparator}failed_sources';
+
+      final report = SearchExecutionReport(
+        keyword: '凡人',
+        sourceCount: 1,
+        successSourceCount: 0,
+        books: const [],
+        failures: const [
+          SourceSearchFailure(
+            sourceId: 'src_1',
+            sourceName: '测试源',
+            message: '搜索阶段：未知错误',
+            code: ErrorCode.unknown,
+            stage: ErrorStage.search,
+          ),
+        ],
+        sourceNames: const {'src_1': '测试源'},
+      );
+
+      final result = await service.exportFailedSources(
+        report: report,
+        sources: const [],
+        contentMode: SearchContentMode.novel,
+        preferredFilePath: targetFilePath,
+      );
+
+      expect(result.filePath, '$targetFilePath.json');
+      expect(File(result.filePath).existsSync(), isTrue);
+    });
+
     test(
       'tracks missing source records when source no longer exists',
       () async {
