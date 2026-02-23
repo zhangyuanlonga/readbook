@@ -41,6 +41,8 @@ void main() {
       expect(source.headers['User-Agent'], 'appread');
       expect(source.headers['Referer'], 'https://example.com');
       expect(source.lastCheckStatus, SourceHealthStatus.unknown);
+      expect(source.originalSource?['bookSourceName'], '测试书源');
+      expect(source.originalSource?['ruleSearch'], '.book-list');
     });
 
     test('maps nested ruleSearch fields', () {
@@ -176,6 +178,33 @@ void main() {
       expect(source.rules.tocTitleRule, 'a@text');
       expect(source.rules.tocChapterUrlRule, 'a@href');
       expect(source.rules.contentRule, '.view-main-1.readForm img@src');
+    });
+
+    test('converts server proxy source to api-compatible rules', () {
+      final payload =
+          jsonDecode(File('番茄四合一.json').readAsStringSync()) as List<dynamic>;
+      final raw = LegadoSourceRaw.fromJson(
+        Map<String, dynamic>.from(payload.first as Map),
+      );
+
+      final source = adapter.adapt(raw);
+
+      expect(source.baseUrl, 'https://fq.vv9v.cn');
+      expect(source.headers['x-sec-token'], '{{sourceToken}}');
+      expect(source.headers['x-android-id'], '{{androidId}}');
+      expect(source.requiresServerTokenAuth, isTrue);
+      expect(
+        source.rules.searchRule,
+        '/{{sourceMode}}/search?keyword={{serverKeyword|encode}}&page={{page}}',
+      );
+      expect(
+        source.rules.searchDetailUrlRule,
+        r'{{$.type}}/info?novelId={{$.book_id}}',
+      );
+      expect(
+        source.rules.contentRule,
+        r'json:$.data.content||json:$.data.url||json:$.data.images[*]',
+      );
     });
 
     test('falls back to searchUrl when ruleSearch is missing', () {

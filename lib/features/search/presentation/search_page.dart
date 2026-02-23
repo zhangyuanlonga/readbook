@@ -12,6 +12,7 @@ import '../../../data/repositories/source_repository_impl.dart';
 import '../../../domain/entities/book.dart';
 import '../../../domain/entities/source_definition.dart';
 import '../../../domain/repositories/source_repository.dart';
+import '../application/search_failure_export_service.dart';
 import '../application/search_service.dart';
 
 class SearchPage extends StatefulWidget {
@@ -27,8 +28,10 @@ class _SearchPageState extends State<SearchPage> {
     AppDatabase.instance,
   );
   late final SearchService _searchService;
+  late final SearchFailureExportService _failureExportService;
 
   bool _isSearching = false;
+  bool _isExportingFailures = false;
   bool _isLoadingSourceFilters = false;
   SearchExecutionReport? _report;
   SearchCancellationToken? _activeSearchToken;
@@ -41,6 +44,7 @@ class _SearchPageState extends State<SearchPage> {
   void initState() {
     super.initState();
     _searchService = SearchService(sourceRepository: _sourceRepository);
+    _failureExportService = SearchFailureExportService();
     unawaited(_refreshSourceFilters());
   }
 
@@ -181,12 +185,24 @@ class _SearchPageState extends State<SearchPage> {
               child: TextField(
                 controller: _keywordController,
                 textInputAction: TextInputAction.search,
+                onChanged: (_) => setState(() {}),
                 onSubmitted: (_) => _runSearch(),
                 decoration: InputDecoration(
                   hintText: hintText,
                   border: InputBorder.none,
                   filled: false,
                   prefixIcon: const Icon(Icons.search),
+                  suffixIcon:
+                      _keywordController.text.isEmpty
+                          ? null
+                          : IconButton(
+                            tooltip: '清空输入',
+                            onPressed: () {
+                              _keywordController.clear();
+                              setState(() {});
+                            },
+                            icon: const Icon(Icons.close_rounded),
+                          ),
                   contentPadding: const EdgeInsets.symmetric(
                     horizontal: 14,
                     vertical: 10,
@@ -202,7 +218,7 @@ class _SearchPageState extends State<SearchPage> {
                 Expanded(
                   child: FilledButton(
                     onPressed: _runSearch,
-                    child: Text(_isSearching ? '取消并重新搜索' : '搜索'),
+                    child: Text(_isSearching ? '取消搜索' : '搜索'),
                   ),
                 ),
                 const SizedBox(width: 8),
@@ -602,8 +618,9 @@ class _SearchPageState extends State<SearchPage> {
     final colorScheme = Theme.of(context).colorScheme;
     final preview = report.failures.take(3).toList(growable: false);
     final canOpenDetail = report.failures.length > 3;
+    final canExport = !_isSearching && !_isExportingFailures;
 
-    final content = Container(
+    return Container(
       width: double.infinity,
       decoration: BoxDecoration(
         color: colorScheme.errorContainer,
@@ -625,7 +642,13 @@ class _SearchPageState extends State<SearchPage> {
                 ),
               ),
               if (canOpenDetail)
-                Icon(Icons.chevron_right, color: colorScheme.onErrorContainer),
+                TextButton(
+                  style: TextButton.styleFrom(
+                    foregroundColor: colorScheme.onErrorContainer,
+                  ),
+                  onPressed: () => _showFailureDetails(report),
+                  child: const Text('查看明细'),
+                ),
             ],
           ),
           const SizedBox(height: 6),
@@ -642,38 +665,33 @@ class _SearchPageState extends State<SearchPage> {
               ),
             ),
           ),
-          if (canOpenDetail)
-            Text(
-              '点击查看全部异常明细',
-              style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                color: colorScheme.onErrorContainer,
-                fontWeight: FontWeight.w600,
-              ),
-            )
-          else if (report.failures.length > preview.length)
-            Text(
-              '其余 ${report.failures.length - preview.length} 条请展开明细查看',
-              style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                color: colorScheme.onErrorContainer,
-              ),
+          const SizedBox(height: 8),
+          TextButton.icon(
+            style: TextButton.styleFrom(
+              foregroundColor: colorScheme.onErrorContainer,
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
             ),
+            onPressed:
+                canExport
+                    ? () => unawaited(_exportFailedSources(report))
+                    : null,
+            icon:
+                _isExportingFailures
+                    ? const SizedBox(
+                      width: 16,
+                      height: 16,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    )
+                    : const Icon(Icons.download_rounded, size: 18),
+            label: Text(_isExportingFailures ? '导出中...' : '导出失败书源'),
+          ),
         ],
       ),
-    );
-
-    if (!canOpenDetail) {
-      return content;
-    }
-
-    return InkWell(
-      borderRadius: BorderRadius.circular(16),
-      onTap: () => _showFailureDetails(report),
-      child: content,
     );
   }
 
   Future<void> _showFailureDetails(SearchExecutionReport report) async {
-    if (!mounted || report.failures.length <= 3) {
+    if (!mounted) {
       return;
     }
 
@@ -944,6 +962,11 @@ class _SearchPageState extends State<SearchPage> {
   }
 
   Future<void> _runSearch() async {
+    if (_isSearching) {
+      _cancelSearch();
+      return;
+    }
+
     final keyword = _keywordController.text.trim();
     if (keyword.isEmpty) {
       _showMessage('请输入关键词。');
@@ -953,10 +976,6 @@ class _SearchPageState extends State<SearchPage> {
     FocusScope.of(context).unfocus();
 
     final sessionId = ++_searchSessionId;
-    if (_isSearching) {
-      _activeSearchToken?.cancel();
-    }
-
     final token = SearchCancellationToken();
     _activeSearchToken = token;
 
@@ -1012,6 +1031,74 @@ class _SearchPageState extends State<SearchPage> {
           if (identical(_activeSearchToken, token)) {
             _activeSearchToken = null;
           }
+        });
+      }
+    }
+  }
+
+  void _cancelSearch() {
+    if (!_isSearching) {
+      return;
+    }
+
+    _activeSearchToken?.cancel();
+    setState(() {
+      _isSearching = false;
+      _activeSearchToken = null;
+    });
+    _showMessage('已取消搜索。');
+  }
+
+  Future<void> _exportFailedSources(SearchExecutionReport report) async {
+    if (_isExportingFailures || report.failures.isEmpty) {
+      return;
+    }
+
+    setState(() {
+      _isExportingFailures = true;
+    });
+
+    try {
+      final allSources = await _sourceRepository.getAll();
+      final result = await _failureExportService.exportFailedSources(
+        report: report,
+        sources: allSources,
+        contentMode: _searchContentMode,
+      );
+
+      if (!mounted) {
+        return;
+      }
+
+      final missingTips =
+          result.missingSourceCount > 0
+              ? '\n其中 ${result.missingSourceCount} 条未匹配到当前本地书源配置。'
+              : '';
+      await showDialog<void>(
+        context: context,
+        builder:
+            (context) => AlertDialog(
+              title: const Text('导出完成'),
+              content: SelectableText(
+                '已导出 ${result.failureCount} 条失败书源。\n'
+                '文件路径：\n${result.filePath}$missingTips',
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.of(context).pop(),
+                  child: const Text('知道了'),
+                ),
+              ],
+            ),
+      );
+    } on AppException catch (error) {
+      _showMessage(error.briefMessage);
+    } catch (error) {
+      _showMessage('导出失败：$error');
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isExportingFailures = false;
         });
       }
     }

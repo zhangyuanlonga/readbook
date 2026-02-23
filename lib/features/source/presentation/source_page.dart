@@ -1158,17 +1158,6 @@ class _SourcePageState extends State<SourcePage> {
       return;
     }
 
-    var shouldImport = true;
-    if (report.hasIssues || report.hasCompatibilityHints) {
-      shouldImport =
-          await _showImportPreviewDialog(report, title: '$actionLabel预校验结果') ??
-          false;
-    }
-
-    if (!shouldImport) {
-      return;
-    }
-
     if (report.validSources.isEmpty) {
       _showMessage('$actionLabel失败：没有可导入书源。');
       return;
@@ -1230,96 +1219,6 @@ class _SourcePageState extends State<SourcePage> {
       issues: List.unmodifiable(issues),
       compatibilityHints: List.unmodifiable(compatibilityHints),
       totalCount: totalCount,
-    );
-  }
-
-  Future<bool?> _showImportPreviewDialog(
-    SourceImportPreviewReport report, {
-    required String title,
-  }) {
-    final issueLines = report.issues
-        .map((issue) => issue.toDisplayText())
-        .take(80)
-        .toList(growable: false);
-
-    return showDialog<bool>(
-      context: context,
-      builder: (dialogContext) {
-        final maxWidth = AppLayout.dialogMaxWidth(dialogContext, maxWidth: 620);
-
-        return AlertDialog(
-          insetPadding: AppSpacing.dialogInsetPadding(dialogContext),
-          scrollable: true,
-          title: Text(title),
-          content: ConstrainedBox(
-            constraints: BoxConstraints(maxWidth: maxWidth),
-            child: SingleChildScrollView(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Text('总条目：${report.totalCount}'),
-                  const SizedBox(height: 4),
-                  Text('可导入：${report.validCount}'),
-                  const SizedBox(height: 4),
-                  Text('失败：${report.invalidCount}'),
-                  const SizedBox(height: 4),
-                  Text('兼容提示：${report.compatibilityHintCount}'),
-                  if (report.hasCompatibilityHints) ...[
-                    const SizedBox(height: 10),
-                    Text(
-                      '兼容提示（非阻断，可继续导入）',
-                      style: Theme.of(dialogContext).textTheme.titleSmall,
-                    ),
-                    const SizedBox(height: 6),
-                    ...report.compatibilityHints
-                        .take(40)
-                        .map(
-                          (hint) => Padding(
-                            padding: const EdgeInsets.only(bottom: 4),
-                            child: SelectableText(hint.toDisplayText()),
-                          ),
-                        ),
-                    if (report.compatibilityHintCount > 40)
-                      Text(
-                        '... 其余 ${report.compatibilityHintCount - 40} 条兼容提示请查看日志',
-                      ),
-                  ],
-                  const SizedBox(height: 10),
-                  Text(
-                    '失败明细（含条目和行号）',
-                    style: Theme.of(dialogContext).textTheme.titleSmall,
-                  ),
-                  const SizedBox(height: 6),
-                  ...issueLines.map(
-                    (line) => Padding(
-                      padding: const EdgeInsets.only(bottom: 4),
-                      child: SelectableText(line),
-                    ),
-                  ),
-                  if (report.issues.length > issueLines.length)
-                    Text(
-                      '... 其余 ${report.issues.length - issueLines.length} 条请查看日志',
-                    ),
-                ],
-              ),
-            ),
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.of(dialogContext).pop(false),
-              child: const Text('取消'),
-            ),
-            FilledButton.tonal(
-              onPressed:
-                  report.validCount > 0
-                      ? () => Navigator.of(dialogContext).pop(true)
-                      : null,
-              child: const Text('仅导入可用书源'),
-            ),
-          ],
-        );
-      },
     );
   }
 

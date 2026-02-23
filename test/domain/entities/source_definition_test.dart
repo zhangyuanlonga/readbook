@@ -13,12 +13,14 @@ void main() {
       expect(source.enabled, isTrue);
       expect(source.sourceType, 0);
       expect(source.isMangaSource, isFalse);
+      expect(source.requiresServerTokenAuth, isFalse);
       expect(source.group, isNull);
       expect(source.headers, isEmpty);
       expect(source.lastCheckStatus, SourceHealthStatus.unknown);
       expect(source.rules.searchRule, isNull);
       expect(source.rules.tocReversed, isFalse);
       expect(source.lastCheckMessage, isNull);
+      expect(source.originalSource, isNull);
     });
 
     test('supports toJson and fromJson roundtrip', () {
@@ -49,6 +51,11 @@ void main() {
         lastCheckedAt: DateTime.parse('2026-01-01T12:00:00.000Z'),
         lastCheckMessage: '连通性测试通过',
         comment: 'sample',
+        originalSource: const {
+          'bookSourceName': 'Legacy Source A',
+          'searchUrl': '/search?key={{key}}',
+          'ruleSearch': {'name': 'a@text'},
+        },
       );
 
       final restored = SourceDefinition.fromJson(source.toJson());
@@ -76,6 +83,19 @@ void main() {
       );
       expect(restored.lastCheckMessage, '连通性测试通过');
       expect(restored.comment, 'sample');
+      expect(restored.originalSource?['bookSourceName'], 'Legacy Source A');
+      expect(restored.originalSource?['searchUrl'], '/search?key={{key}}');
+    });
+
+    test('detects server token auth placeholder from headers', () {
+      final source = SourceDefinition(
+        id: 'source-1',
+        name: 'Server Source',
+        baseUrl: 'https://example.com',
+        headers: const {'x-sec-token': '{{sourceToken}}'},
+      );
+
+      expect(source.requiresServerTokenAuth, isTrue);
     });
 
     test('copyWith can clear nullable fields', () {
@@ -116,5 +136,30 @@ void main() {
       expect(source.headers['User-Agent'], 'A');
       expect(() => source.headers['New'] = 'X', throwsUnsupportedError);
     });
+
+    test(
+      'original source snapshot is immutable and supports clear via copyWith',
+      () {
+        final original = <String, dynamic>{
+          'bookSourceName': '旧源',
+          'ruleSearch': {'name': 'a@text'},
+        };
+
+        final source = SourceDefinition(
+          id: 'source-1',
+          name: 'Source A',
+          baseUrl: 'https://example.com',
+          originalSource: original,
+        );
+
+        original['bookSourceName'] = '被修改';
+
+        expect(source.originalSource?['bookSourceName'], '旧源');
+        expect(() => source.originalSource?['new'] = 1, throwsUnsupportedError);
+
+        final cleared = source.copyWith(clearOriginalSource: true);
+        expect(cleared.originalSource, isNull);
+      },
+    );
   });
 }

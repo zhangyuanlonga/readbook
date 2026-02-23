@@ -495,6 +495,7 @@ class AppDatabase extends _$AppDatabase {
       lastCheckStatus: status,
       lastCheckedAt: row.lastCheckedAt,
       lastCheckMessage: _nullableString(raw['lastCheckMessage']),
+      originalSource: _decodeNullableMap(raw['originalSource']),
     );
   }
 
@@ -645,6 +646,14 @@ class AppDatabase extends _$AppDatabase {
       (item) => item.name == normalized,
       orElse: () => SourceHealthStatus.unknown,
     );
+  }
+
+  Map<String, dynamic>? _decodeNullableMap(Object? value) {
+    if (value is! Map) {
+      return null;
+    }
+
+    return value.map((key, item) => MapEntry(key.toString(), item));
   }
 
   String? _nullableString(Object? value) {

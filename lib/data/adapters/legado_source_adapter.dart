@@ -163,6 +163,7 @@ class LegadoSourceAdapter {
       comment: _emptyToNull(_normalizeText(raw.sourceComment)),
       headers: _parseHeaders(raw.rawData['header'], baseUrl: baseUrl),
       rules: adaptedRules,
+      originalSource: raw.rawData,
     );
   }
 

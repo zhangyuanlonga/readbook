@@ -26,6 +26,7 @@ class SourceSearchFailure {
     required this.code,
     required this.stage,
     this.requestUrl,
+    this.debugMessage,
   });
 
   final String sourceId;
@@ -34,6 +35,7 @@ class SourceSearchFailure {
   final ErrorCode code;
   final ErrorStage stage;
   final String? requestUrl;
+  final String? debugMessage;
 }
 
 class SearchExecutionReport {
@@ -258,6 +260,7 @@ class SearchService {
             code: error.code,
             stage: error.stage,
             requestUrl: error.requestUrl,
+            debugMessage: error.briefMessage,
           );
           failures.add(failure);
 
@@ -280,11 +283,12 @@ class SearchService {
             },
           );
         } catch (error, stackTrace) {
+          final rawDetail = _sanitizeDebugMessage(error.toString());
           final exception = AppException(
             code: ErrorCode.unknown,
             stage: ErrorStage.search,
             sourceId: source.id,
-            briefMessage: '搜索失败：${source.name}',
+            briefMessage: rawDetail.isEmpty ? '搜索失败：${source.name}' : rawDetail,
             cause: error,
             stackTrace: stackTrace,
           );
@@ -296,6 +300,7 @@ class SearchService {
               code: exception.code,
               stage: exception.stage,
               requestUrl: exception.requestUrl,
+              debugMessage: rawDetail.isEmpty ? null : rawDetail,
             ),
           );
 
@@ -916,7 +921,7 @@ class SearchService {
 
   String _toUserReadableMessage(AppException error) {
     final stageText = _stageLabel(error.stage);
-    final detail = error.briefMessage.trim();
+    final detail = _sanitizeDebugMessage(error.briefMessage);
 
     return switch (error.code) {
       ErrorCode.network => '$stageText网络请求失败，请检查书源地址或网络设置。',
@@ -925,8 +930,20 @@ class SearchService {
       ErrorCode.ruleMatchEmpty => '$stageText未匹配到有效结果，请尝试其他书源。',
       ErrorCode.decode => '$stageText响应解析失败，可能编码或格式不兼容。',
       ErrorCode.unknownSource => '书源不存在或已被删除。',
-      ErrorCode.unknown => '$stageText发生未知错误，请稍后重试。',
+      ErrorCode.unknown =>
+        detail.isEmpty ? '$stageText发生未知错误，请稍后重试。' : '$stageText$detail',
     };
+  }
+
+  String _sanitizeDebugMessage(String raw) {
+    final normalized = raw.replaceAll(RegExp(r'\s+'), ' ').trim();
+    if (normalized.isEmpty) {
+      return '';
+    }
+    if (normalized.length <= 180) {
+      return normalized;
+    }
+    return '${normalized.substring(0, 180)}...';
   }
 
   String _stageLabel(ErrorStage stage) {

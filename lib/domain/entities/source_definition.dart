@@ -222,7 +222,9 @@ class SourceDefinition {
     this.lastCheckedAt,
     this.lastCheckMessage,
     this.comment,
-  }) : headers = Map.unmodifiable({...headers});
+    Map<String, dynamic>? originalSource,
+  }) : headers = Map.unmodifiable({...headers}),
+       originalSource = _deepCopyMap(originalSource);
 
   final String id;
   final String name;
@@ -236,8 +238,21 @@ class SourceDefinition {
   final DateTime? lastCheckedAt;
   final String? lastCheckMessage;
   final String? comment;
+  final Map<String, dynamic>? originalSource;
 
   bool get isMangaSource => sourceType == 2;
+
+  bool get requiresServerTokenAuth {
+    if (headers.isEmpty) {
+      return false;
+    }
+
+    return headers.values.any((value) {
+      final normalized = value.trim();
+      return normalized.contains('{{sourceToken}}') ||
+          normalized.contains('{{token}}');
+    });
+  }
 
   SourceDefinition copyWith({
     String? id,
@@ -255,6 +270,8 @@ class SourceDefinition {
     bool clearLastCheckMessage = false,
     String? comment,
     bool clearComment = false,
+    Map<String, dynamic>? originalSource,
+    bool clearOriginalSource = false,
   }) {
     return SourceDefinition(
       id: id ?? this.id,
@@ -273,6 +290,8 @@ class SourceDefinition {
               ? null
               : (lastCheckMessage ?? this.lastCheckMessage),
       comment: clearComment ? null : (comment ?? this.comment),
+      originalSource:
+          clearOriginalSource ? null : (originalSource ?? this.originalSource),
     );
   }
 
@@ -290,6 +309,7 @@ class SourceDefinition {
       'lastCheckedAt': lastCheckedAt?.toIso8601String(),
       'lastCheckMessage': lastCheckMessage,
       'comment': comment,
+      'originalSource': originalSource,
     };
   }
 
@@ -318,6 +338,7 @@ class SourceDefinition {
       lastCheckedAt: _parseDateTime(json['lastCheckedAt']),
       lastCheckMessage: _nullableString(json['lastCheckMessage']),
       comment: _nullableString(json['comment']),
+      originalSource: _deepCopyMap(json['originalSource']),
     );
   }
 
@@ -370,6 +391,30 @@ class SourceDefinition {
       return int.tryParse(value.trim());
     }
     return null;
+  }
+
+  static Map<String, dynamic>? _deepCopyMap(Object? value) {
+    if (value is! Map) {
+      return null;
+    }
+
+    return Map.unmodifiable({
+      for (final entry in value.entries)
+        entry.key.toString(): _deepCopyValue(entry.value),
+    });
+  }
+
+  static dynamic _deepCopyValue(Object? value) {
+    if (value is Map) {
+      return Map.unmodifiable({
+        for (final entry in value.entries)
+          entry.key.toString(): _deepCopyValue(entry.value),
+      });
+    }
+    if (value is List) {
+      return List.unmodifiable(value.map(_deepCopyValue));
+    }
+    return value;
   }
 
   static SourceHealthStatus _parseStatus(Object? value) {

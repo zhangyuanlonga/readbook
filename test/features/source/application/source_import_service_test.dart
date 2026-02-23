@@ -150,6 +150,32 @@ void main() {
       },
     );
 
+    test('preview keeps validation for incomplete source', () {
+      const jsonText =
+          '{"bookSourceName":"源A","bookSourceUrl":"https://a.com"}';
+
+      final result = service.previewFromText(jsonText);
+
+      expect(result, isA<Success<SourceImportPreviewReport>>());
+      final report = (result as Success<SourceImportPreviewReport>).data;
+      expect(report.validCount, 0);
+      expect(report.invalidCount, 1);
+      expect(report.compatibilityHintCount, 0);
+    });
+
+    test('background preview keeps validation for incomplete source', () async {
+      const jsonText =
+          '{"bookSourceName":"源A","bookSourceUrl":"https://a.com"}';
+
+      final result = await service.previewFromTextInBackground(jsonText);
+
+      expect(result, isA<Success<SourceImportPreviewReport>>());
+      final report = (result as Success<SourceImportPreviewReport>).data;
+      expect(report.validCount, 0);
+      expect(report.invalidCount, 1);
+      expect(report.compatibilityHintCount, 0);
+    });
+
     test('decodes gbk source bytes for legacy json files', () {
       final gbk = Charset.getByName('gbk');
       expect(gbk, isNotNull);
