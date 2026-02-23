@@ -8,6 +8,7 @@ import '../../../core/network/http_client.dart';
 import '../../../core/network/request_context.dart';
 import '../../../core/rule_engine/rule_engine.dart';
 import '../../../core/rule_engine/processors/url_template_resolver.dart';
+import '../../../core/rule_engine/processors/legacy_rule_compat.dart';
 import '../../../core/source/source_response_processor.dart';
 import '../../../data/datasources/local/app_database.dart';
 import '../../../data/repositories/source_repository_impl.dart';
@@ -1519,31 +1520,11 @@ class ChapterContentService {
 
     final jsonCandidate = _normalizeJsonShorthandExpression(text);
 
-    final firstStage = text.split('&&').first.trim();
-    if (firstStage.isEmpty || firstStage.startsWith('js:')) {
-      return null;
-    }
-
-    final delimiterIndex = firstStage.lastIndexOf('@');
-    final String? htmlCandidate = () {
-      if (delimiterIndex <= 0 || delimiterIndex >= firstStage.length - 1) {
-        return 'html:$firstStage@$fallbackExtractor';
-      }
-
-      final selector = firstStage.substring(0, delimiterIndex).trim();
-      final extractorToken = firstStage.substring(delimiterIndex + 1).trim();
-      if (selector.isEmpty) {
-        return null;
-      }
-
-      final extractor = _normalizeExtractor(
-        extractorToken,
-        fallbackExtractor: fallbackExtractor,
-        preferredAttribute: preferredAttribute,
-      );
-
-      return 'html:$selector@$extractor';
-    }();
+    final htmlCandidate = LegacyRuleCompat.buildHtmlRuleExpression(
+      expression: text,
+      fallbackExtractor: fallbackExtractor,
+      preferredAttribute: preferredAttribute,
+    );
 
     if (jsonCandidate != null) {
       if (htmlCandidate == null || htmlCandidate == jsonCandidate) {
@@ -1643,37 +1624,6 @@ class ChapterContentService {
     }
 
     return '\$.$unescaped';
-  }
-
-  String _normalizeExtractor(
-    String extractorToken, {
-    required String fallbackExtractor,
-    String? preferredAttribute,
-  }) {
-    final token = extractorToken.trim();
-    if (token.isEmpty) {
-      return fallbackExtractor;
-    }
-
-    if (token == 'text' || token == 'html') {
-      return token;
-    }
-
-    if (token.startsWith('attr(') && token.endsWith(')')) {
-      return token;
-    }
-
-    final attrName = switch (token) {
-      'url' => preferredAttribute ?? 'href',
-      _ => token,
-    };
-
-    final isSimpleAttr = RegExp(r'^[a-zA-Z][a-zA-Z0-9_-]*$').hasMatch(attrName);
-    if (isSimpleAttr) {
-      return 'attr($attrName)';
-    }
-
-    return fallbackExtractor;
   }
 }
 

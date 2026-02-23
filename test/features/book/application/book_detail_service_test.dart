@@ -504,6 +504,59 @@ $baseUrl/book/1/toc, {
 
       await server.close(force: true);
     });
+    test('supports legacy toc title/url rules with bare extractors', () async {
+      final server = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
+      server.listen((request) async {
+        if (request.uri.path == '/book/legacy') {
+          request.response
+            ..statusCode = 200
+            ..write('<a class="toc" href="/book/legacy/toc">目录</a>');
+        } else if (request.uri.path == '/book/legacy/toc') {
+          request.response
+            ..statusCode = 200
+            ..write('''
+              <ul class="catalog-list">
+                <li><a href="/legacy/c1">第一章</a></li>
+                <li><a href="/legacy/c2">第二章</a></li>
+              </ul>
+            ''');
+        } else {
+          request.response
+            ..statusCode = 404
+            ..write('not found');
+        }
+        await request.response.close();
+      });
+
+      final baseUrl = 'http://${server.address.host}:${server.port}';
+      final repository = _FakeSourceRepository([
+        SourceDefinition(
+          id: 's_toc_bare',
+          name: '目录裸提取测试源',
+          baseUrl: baseUrl,
+          rules: const SourceRuleSet(
+            detailTocUrlRule: '.toc@href',
+            tocListRule: '.catalog-list li a@html',
+            tocTitleRule: 'text',
+            tocChapterUrlRule: 'href',
+          ),
+        ),
+      ]);
+
+      final service = BookDetailService(sourceRepository: repository);
+
+      final result = await service.load(
+        sourceId: 's_toc_bare',
+        bookId: 'book_toc_bare',
+        detailUrl: '$baseUrl/book/legacy',
+      );
+
+      expect(result.chapters, hasLength(2));
+      expect(result.chapters.first.title, '第一章');
+      expect(result.chapters.first.chapterUrl, '$baseUrl/legacy/c1');
+
+      await server.close(force: true);
+    });
   });
 }
 

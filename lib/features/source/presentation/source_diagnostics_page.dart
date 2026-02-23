@@ -8,6 +8,7 @@ import 'package:path_provider/path_provider.dart';
 
 import '../../../app/layout/app_spacing.dart';
 import '../../../core/errors/app_exception.dart';
+import '../../../core/errors/error_codes.dart';
 import '../../../data/datasources/local/app_database.dart';
 import '../../../data/repositories/source_repository_impl.dart';
 import '../../../domain/repositories/source_repository.dart';
@@ -23,6 +24,8 @@ class SourceDiagnosticsPage extends StatefulWidget {
 }
 
 enum _BatchScope { visibleEnabled, allEnabled }
+
+enum _ExportPayloadKind { fullReport, groupedFailures }
 
 class _SourceDiagnosticsPageState extends State<SourceDiagnosticsPage> {
   final SourceRepository _sourceRepository = SourceRepositoryImpl(
@@ -432,12 +435,58 @@ class _SourceDiagnosticsPageState extends State<SourceDiagnosticsPage> {
     _showMessage('正在取消诊断，已完成结果可先导出。');
   }
 
-  void _handleExportTap() {
+  Future<void> _handleExportTap() async {
     if (_reports.isEmpty) {
       _showMessage('暂无报告可导出。');
       return;
     }
-    unawaited(_exportReports());
+
+    final kind = await _showExportKindSheet();
+    if (kind == null) {
+      return;
+    }
+
+    switch (kind) {
+      case _ExportPayloadKind.fullReport:
+        unawaited(_exportReports());
+        break;
+      case _ExportPayloadKind.groupedFailures:
+        unawaited(_exportGroupedFailures());
+        break;
+    }
+  }
+
+  Future<_ExportPayloadKind?> _showExportKindSheet() {
+    return showModalBottomSheet<_ExportPayloadKind>(
+      context: context,
+      showDragHandle: true,
+      builder: (context) {
+        return SafeArea(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              ListTile(
+                leading: const Icon(Icons.description_outlined),
+                title: const Text('导出完整报告'),
+                subtitle: const Text('包含每个书源的完整诊断结果与原始源数据'),
+                onTap: () {
+                  Navigator.of(context).pop(_ExportPayloadKind.fullReport);
+                },
+              ),
+              ListTile(
+                leading: const Icon(Icons.category_outlined),
+                title: const Text('按失败类型聚合导出'),
+                subtitle: const Text('按 阶段 + 错误码 + 错误信息 聚合，便于批量修源'),
+                onTap: () {
+                  Navigator.of(context).pop(_ExportPayloadKind.groupedFailures);
+                },
+              ),
+              const SizedBox(height: 6),
+            ],
+          ),
+        );
+      },
+    );
   }
 
   Future<void> _showReportDetail(SourceDiagnosticReport report) {
@@ -514,7 +563,15 @@ class _SourceDiagnosticsPageState extends State<SourceDiagnosticsPage> {
     );
   }
 
-  Future<void> _exportReports() async {
+  Future<void> _exportReports() {
+    return _exportPayload(kind: _ExportPayloadKind.fullReport);
+  }
+
+  Future<void> _exportGroupedFailures() {
+    return _exportPayload(kind: _ExportPayloadKind.groupedFailures);
+  }
+
+  Future<void> _exportPayload({required _ExportPayloadKind kind}) async {
     if (_isExporting) {
       return;
     }
@@ -525,11 +582,24 @@ class _SourceDiagnosticsPageState extends State<SourceDiagnosticsPage> {
       return;
     }
 
+    if (kind == _ExportPayloadKind.groupedFailures) {
+      final hasFailed = reportsSnapshot.any((item) => !item.isSuccess);
+      if (!hasFailed) {
+        _showMessage('当前没有失败书源，无需导出失败聚合。');
+        return;
+      }
+    }
+
     setState(() {
       _isExporting = true;
     });
 
-    final suggestedName = 'source_diagnostics_${_timestampToken()}.json';
+    final suggestedName = switch (kind) {
+      _ExportPayloadKind.fullReport =>
+        'source_diagnostics_${_timestampToken()}.json',
+      _ExportPayloadKind.groupedFailures =>
+        'source_diagnostics_failure_groups_${_timestampToken()}.json',
+    };
 
     try {
       final outputPath = await _resolveExportTargetPath(suggestedName);
@@ -538,29 +608,33 @@ class _SourceDiagnosticsPageState extends State<SourceDiagnosticsPage> {
         return;
       }
 
+      final payload = switch (kind) {
+        _ExportPayloadKind.fullReport => _buildFullExportPayload(
+          reportsSnapshot,
+        ),
+        _ExportPayloadKind.groupedFailures => _buildGroupedFailurePayload(
+          reportsSnapshot,
+        ),
+      };
+
       final file = File(outputPath.trim());
       if (!await file.parent.exists()) {
         await file.parent.create(recursive: true);
       }
 
-      final payload = {
-        'schema': 'flutter_appread.source_diagnostics.v1',
-        'exportedAt': DateTime.now().toIso8601String(),
-        'mode': _mode.name,
-        'keyword': _keywordController.text.trim(),
-        'summary': {
-          'total': reportsSnapshot.length,
-          'success': reportsSnapshot.where((item) => item.isSuccess).length,
-          'failed': reportsSnapshot.where((item) => !item.isSuccess).length,
-        },
-        'reports': reportsSnapshot
-            .map((item) => item.toJson())
-            .toList(growable: false),
-      };
-
       final content = const JsonEncoder.withIndent('  ').convert(payload);
       await file.writeAsString(content, flush: true);
-      _showMessage('导出成功：${file.path}（共 ${reportsSnapshot.length} 条）');
+
+      switch (kind) {
+        case _ExportPayloadKind.fullReport:
+          _showMessage('导出成功：${file.path}（共 ${reportsSnapshot.length} 条）');
+          break;
+        case _ExportPayloadKind.groupedFailures:
+          final groups = payload['groups'];
+          final count = groups is List ? groups.length : 0;
+          _showMessage('导出成功：${file.path}（失败类型 $count 组）');
+          break;
+      }
     } catch (error) {
       _showMessage('导出失败：$error');
     } finally {
@@ -570,6 +644,114 @@ class _SourceDiagnosticsPageState extends State<SourceDiagnosticsPage> {
         });
       }
     }
+  }
+
+  Map<String, dynamic> _buildFullExportPayload(
+    List<SourceDiagnosticReport> reportsSnapshot,
+  ) {
+    return {
+      'schema': 'flutter_appread.source_diagnostics.v1',
+      'exportedAt': DateTime.now().toIso8601String(),
+      'mode': _mode.name,
+      'keyword': _keywordController.text.trim(),
+      'summary': {
+        'total': reportsSnapshot.length,
+        'success': reportsSnapshot.where((item) => item.isSuccess).length,
+        'failed': reportsSnapshot.where((item) => !item.isSuccess).length,
+      },
+      'reports': reportsSnapshot
+          .map((item) => item.toJson())
+          .toList(growable: false),
+    };
+  }
+
+  Map<String, dynamic> _buildGroupedFailurePayload(
+    List<SourceDiagnosticReport> reportsSnapshot,
+  ) {
+    final groups = <String, _FailureGroupAccumulator>{};
+    var failedSourceCount = 0;
+    var failedStageCount = 0;
+
+    for (final report in reportsSnapshot) {
+      final failedStages = report.failedStages;
+      if (failedStages.isEmpty) {
+        continue;
+      }
+
+      failedSourceCount += 1;
+
+      for (final stage in failedStages) {
+        failedStageCount += 1;
+
+        final code = stage.code?.name ?? ErrorCode.unknown.name;
+        final message = _normalizeFailureMessage(stage.message);
+        final key = '${stage.stage.name}|$code|$message';
+        final group = groups.putIfAbsent(
+          key,
+          () => _FailureGroupAccumulator(
+            stage: stage.stage,
+            code: code,
+            message: message,
+          ),
+        );
+
+        group.items.add({
+          'sourceId': report.sourceId,
+          'sourceName': report.sourceName,
+          'mode': report.mode.name,
+          'keyword': report.keyword,
+          'startedAt': report.startedAt.toIso8601String(),
+          'finishedAt': report.finishedAt.toIso8601String(),
+          'durationMs': stage.durationMs,
+          'requestUrl': stage.requestUrl,
+          'sample': {
+            'bookTitle': report.sampleBookTitle,
+            'detailUrl': report.sampleDetailUrl,
+            'chapterTitle': report.sampleChapterTitle,
+            'chapterUrl': report.sampleChapterUrl,
+          },
+          'sourceRaw': report.sourceRaw,
+        });
+      }
+    }
+
+    final sortedGroups = groups.values.toList(growable: false)..sort((a, b) {
+      final count = b.count.compareTo(a.count);
+      if (count != 0) {
+        return count;
+      }
+      final stage = a.stage.name.compareTo(b.stage.name);
+      if (stage != 0) {
+        return stage;
+      }
+      return a.code.compareTo(b.code);
+    });
+
+    return {
+      'schema': 'flutter_appread.source_diagnostics.failure_groups.v1',
+      'exportedAt': DateTime.now().toIso8601String(),
+      'mode': _mode.name,
+      'keyword': _keywordController.text.trim(),
+      'groupBy': ['stage', 'code', 'message'],
+      'summary': {
+        'total': reportsSnapshot.length,
+        'failedSourceCount': failedSourceCount,
+        'failedStageCount': failedStageCount,
+        'failureTypeCount': sortedGroups.length,
+      },
+      'groups': sortedGroups
+          .map((item) => item.toJson())
+          .toList(growable: false),
+    };
+  }
+
+  String _normalizeFailureMessage(String? rawMessage) {
+    final text = rawMessage?.trim() ?? '';
+    if (text.isEmpty) {
+      return '未提供错误信息';
+    }
+
+    return text;
   }
 
   Future<String?> _resolveExportTargetPath(String suggestedName) async {
@@ -665,5 +847,28 @@ class _SourceDiagnosticsPageState extends State<SourceDiagnosticsPage> {
       return;
     }
     ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(text)));
+  }
+}
+
+class _FailureGroupAccumulator {
+  _FailureGroupAccumulator({
+    required this.stage,
+    required this.code,
+    required this.message,
+  });
+
+  final SourceDiagnosticStage stage;
+  final String code;
+  final String message;
+  final List<Map<String, dynamic>> items = <Map<String, dynamic>>[];
+
+  int get count => items.length;
+
+  Map<String, dynamic> toJson() {
+    return {
+      'failureType': {'stage': stage.name, 'code': code, 'message': message},
+      'count': count,
+      'sources': List<Map<String, dynamic>>.unmodifiable(items),
+    };
   }
 }

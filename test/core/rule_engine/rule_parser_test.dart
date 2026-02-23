@@ -16,6 +16,16 @@ void main() {
       expect(rule.extractor.attributeName, 'href');
     });
 
+    test('parses html rule with outerhtml extractor', () {
+      final parsed = parser.parse('html:.book@outerhtml');
+
+      expect(parsed, isA<ParsedHtmlRule>());
+      final rule = parsed as ParsedHtmlRule;
+      expect(rule.selector, '.book');
+      expect(rule.extractor.type, HtmlExtractorType.outerHtml);
+      expect(rule.extractor.attributeName, isNull);
+    });
+
     test('parses regex rule with group and flags', () {
       final parsed = parser.parse(r'regex:book/(\d+)::group=1::flags=im');
 

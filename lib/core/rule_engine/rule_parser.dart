@@ -35,7 +35,7 @@ class ParsedJsonRule extends ParsedRule {
   final String expression;
 }
 
-enum HtmlExtractorType { text, html, attr }
+enum HtmlExtractorType { text, html, outerHtml, attr }
 
 class HtmlExtractor {
   const HtmlExtractor.text()
@@ -44,6 +44,10 @@ class HtmlExtractor {
 
   const HtmlExtractor.html()
     : type = HtmlExtractorType.html,
+      attributeName = null;
+
+  const HtmlExtractor.outerHtml()
+    : type = HtmlExtractorType.outerHtml,
       attributeName = null;
 
   const HtmlExtractor.attr(this.attributeName) : type = HtmlExtractorType.attr;
@@ -103,10 +107,17 @@ class RuleParser {
       );
     }
 
-    if (extractorText == 'html') {
+    if (extractorText == 'html' || extractorText == 'innerhtml') {
       return ParsedHtmlRule(
         selector: selector,
         extractor: const HtmlExtractor.html(),
+      );
+    }
+
+    if (extractorText == 'outerhtml') {
+      return ParsedHtmlRule(
+        selector: selector,
+        extractor: const HtmlExtractor.outerHtml(),
       );
     }
 

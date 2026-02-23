@@ -8,6 +8,7 @@ import '../../../core/network/http_client.dart';
 import '../../../core/network/request_context.dart';
 import '../../../core/rule_engine/rule_engine.dart';
 import '../../../core/rule_engine/processors/url_template_resolver.dart';
+import '../../../core/rule_engine/processors/legacy_rule_compat.dart';
 import '../../../core/source/source_response_processor.dart';
 import '../../../data/datasources/local/app_database.dart';
 import '../../../data/repositories/source_repository_impl.dart';
@@ -442,10 +443,18 @@ class BookDetailService {
   }
 
   _TocParseRules? _buildTocRules(SourceDefinition source) {
-    final listRule = _normalizeRuleExpression(
+    final preferCurrentNodeChunk =
+        _isBareCurrentNodeExtractorRule(source.rules.tocTitleRule) ||
+        _isBareCurrentNodeExtractorRule(source.rules.tocChapterUrlRule);
+
+    var listRule = _normalizeRuleExpression(
       source.rules.tocListRule ?? source.rules.tocRule,
-      fallbackExtractor: 'html',
+      fallbackExtractor: preferCurrentNodeChunk ? 'outerhtml' : 'html',
     );
+    if (preferCurrentNodeChunk) {
+      listRule = _upgradeListRuleToOuterHtml(listRule);
+    }
+
     final titleRule = _normalizeRuleExpression(
       source.rules.tocTitleRule,
       fallbackExtractor: 'text',
@@ -466,6 +475,57 @@ class BookDetailService {
       chapterUrlRule: chapterUrlRule,
       reversed: source.rules.tocReversed,
     );
+  }
+
+  bool _isBareCurrentNodeExtractorRule(String? rawRule) {
+    final text = rawRule?.trim();
+    if (text == null || text.isEmpty) {
+      return false;
+    }
+
+    if (text.startsWith('html:') ||
+        text.startsWith('json:') ||
+        text.startsWith('regex:') ||
+        text.startsWith(r'$') ||
+        text.contains('||') ||
+        text.contains('&&') ||
+        text.contains('@')) {
+      return false;
+    }
+
+    final token = text.split('##').first.trim().toLowerCase();
+    return token == 'text' ||
+        token == 'textnodes' ||
+        token == 'href' ||
+        token == 'url' ||
+        token == 'src' ||
+        token == 'title' ||
+        token == 'alt';
+  }
+
+  String? _upgradeListRuleToOuterHtml(String? expression) {
+    final text = expression?.trim();
+    if (text == null || text.isEmpty) {
+      return text;
+    }
+
+    final upgraded = text
+        .split('||')
+        .map((item) {
+          final candidate = item.trim();
+          if (!candidate.startsWith('html:') || !candidate.endsWith('@html')) {
+            return candidate;
+          }
+          return '${candidate.substring(0, candidate.length - 5)}@outerhtml';
+        })
+        .where((item) => item.isNotEmpty)
+        .toList(growable: false);
+
+    if (upgraded.isEmpty) {
+      return null;
+    }
+
+    return upgraded.join('||');
   }
 
   List<Chapter> _parseChapters({
@@ -1351,31 +1411,11 @@ class BookDetailService {
 
     final jsonCandidate = _normalizeJsonShorthandExpression(text);
 
-    final firstStage = text.split('&&').first.trim();
-    if (firstStage.isEmpty || firstStage.startsWith('js:')) {
-      return null;
-    }
-
-    final delimiterIndex = firstStage.lastIndexOf('@');
-    final String? htmlCandidate = () {
-      if (delimiterIndex <= 0 || delimiterIndex >= firstStage.length - 1) {
-        return 'html:$firstStage@$fallbackExtractor';
-      }
-
-      final selector = firstStage.substring(0, delimiterIndex).trim();
-      final extractorToken = firstStage.substring(delimiterIndex + 1).trim();
-      if (selector.isEmpty) {
-        return null;
-      }
-
-      final extractor = _normalizeExtractor(
-        extractorToken,
-        fallbackExtractor: fallbackExtractor,
-        preferredAttribute: preferredAttribute,
-      );
-
-      return 'html:$selector@$extractor';
-    }();
+    final htmlCandidate = LegacyRuleCompat.buildHtmlRuleExpression(
+      expression: text,
+      fallbackExtractor: fallbackExtractor,
+      preferredAttribute: preferredAttribute,
+    );
 
     if (jsonCandidate != null) {
       if (htmlCandidate == null || htmlCandidate == jsonCandidate) {
@@ -1476,37 +1516,6 @@ class BookDetailService {
     }
 
     return '\$.$unescaped';
-  }
-
-  String _normalizeExtractor(
-    String extractorToken, {
-    required String fallbackExtractor,
-    String? preferredAttribute,
-  }) {
-    final token = extractorToken.trim();
-    if (token.isEmpty) {
-      return fallbackExtractor;
-    }
-
-    if (token == 'text' || token == 'html') {
-      return token;
-    }
-
-    if (token.startsWith('attr(') && token.endsWith(')')) {
-      return token;
-    }
-
-    final attrName = switch (token) {
-      'url' => preferredAttribute ?? 'href',
-      _ => token,
-    };
-
-    final isSimpleAttr = RegExp(r'^[a-zA-Z][a-zA-Z0-9_-]*$').hasMatch(attrName);
-    if (isSimpleAttr) {
-      return 'attr($attrName)';
-    }
-
-    return fallbackExtractor;
   }
 
   String _buildHashId(String prefix, String seed) {

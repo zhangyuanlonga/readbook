@@ -9,6 +9,7 @@ import '../../../core/logging/app_logger.dart';
 import '../../../core/network/http_client.dart';
 import '../../../core/network/request_context.dart';
 import '../../../core/rule_engine/processors/url_template_resolver.dart';
+import '../../../core/rule_engine/processors/legacy_rule_compat.dart';
 import '../../../core/source/source_response_processor.dart';
 import '../../../data/datasources/local/app_database.dart';
 import '../../../data/repositories/source_repository_impl.dart';
@@ -960,10 +961,16 @@ class SearchService {
 
   _SearchRequestSpec _parseRequestSpec(String rawRule) {
     final normalized = rawRule.trim();
+
+    final legacyScriptSpec = _tryParseLegacyScriptRequestSpec(normalized);
+    if (legacyScriptSpec != null) {
+      return legacyScriptSpec;
+    }
+
     final splitResult = _splitRequestOptions(normalized);
     if (splitResult == null) {
       return _SearchRequestSpec(
-        urlTemplate: normalized,
+        urlTemplate: _normalizeLegacyUrlTemplate(normalized),
         method: HttpRequestMethod.get,
       );
     }
@@ -981,12 +988,864 @@ class SearchService {
     final headers = _parseHeaders(options['headers'] ?? options['header']);
 
     return _SearchRequestSpec(
-      urlTemplate: splitResult.urlTemplate,
+      urlTemplate: _normalizeLegacyUrlTemplate(splitResult.urlTemplate),
       method: method,
       bodyTemplate: bodyTemplate,
       contentType: contentType,
       headers: headers,
     );
+  }
+
+  _SearchRequestSpec? _tryParseLegacyScriptRequestSpec(String rawRule) {
+    if (!_looksLikeLegacyScriptRule(rawRule)) {
+      return null;
+    }
+
+    final script = _stripLegacyScriptWrapper(rawRule);
+    if (script.isEmpty) {
+      return null;
+    }
+
+    final variables = _collectLegacyScriptStringVariables(script);
+    final legacyUrl =
+        _extractLegacyJsUrlTemplate(script, variables) ??
+        _extractLegacyUrlTemplate(script);
+    if (legacyUrl == null || legacyUrl.trim().isEmpty) {
+      return null;
+    }
+
+    final options = _extractLegacyJsOptionsMap(script, variables);
+    final methodText = options['method']?.toString().toUpperCase();
+    final method =
+        methodText == 'POST' ? HttpRequestMethod.post : HttpRequestMethod.get;
+
+    final bodyTemplate = _normalizeBodyTemplate(options['body']);
+    final contentType = _asNullableString(
+      options['contentType'] ?? options['content-type'],
+    );
+    final headers = _parseHeaders(options['headers'] ?? options['header']);
+
+    return _SearchRequestSpec(
+      urlTemplate: _normalizeLegacyUrlTemplate(legacyUrl),
+      method: method,
+      bodyTemplate: bodyTemplate,
+      contentType: contentType,
+      headers: headers,
+    );
+  }
+
+  bool _looksLikeLegacyScriptRule(String rule) {
+    final normalized = rule.trim();
+    if (normalized.isEmpty) {
+      return false;
+    }
+
+    return normalized.startsWith('@js:') ||
+        normalized.startsWith('<js>') ||
+        normalized.contains('JSON.stringify(') ||
+        normalized.contains('java.put(') ||
+        normalized.contains(r'${');
+  }
+
+  String _stripLegacyScriptWrapper(String rawRule) {
+    var script = rawRule.trim();
+    if (script.startsWith('@js:')) {
+      script = script.substring(4).trim();
+    }
+
+    if (script.toLowerCase().startsWith('<js>')) {
+      script = script.substring(4).trim();
+    }
+    if (script.toLowerCase().endsWith('</js>')) {
+      script = script.substring(0, script.length - 5).trim();
+    }
+
+    return script;
+  }
+
+  Map<String, String> _collectLegacyScriptStringVariables(String script) {
+    final statements = script
+        .split(RegExp(r'[;\r\n]+'))
+        .map((item) => item.trim())
+        .where((item) => item.isNotEmpty)
+        .toList(growable: false);
+
+    final variables = <String, String>{};
+
+    for (var pass = 0; pass < 3; pass += 1) {
+      var changed = false;
+      for (final statement in statements) {
+        final match = RegExp(
+          r'^(?:var\s+)?([A-Za-z_][A-Za-z0-9_]*)\s*=\s*(.+)$',
+        ).firstMatch(statement);
+        if (match == null) {
+          continue;
+        }
+
+        final name = match.group(1)!;
+        final expression = match.group(2)!.trim();
+        final resolved = _evaluateLegacyConcatExpression(expression, variables);
+        if (resolved == null) {
+          continue;
+        }
+
+        if (variables[name] != resolved) {
+          variables[name] = resolved;
+          changed = true;
+        }
+      }
+
+      if (!changed) {
+        break;
+      }
+    }
+
+    return variables;
+  }
+
+  String? _extractLegacyJsUrlTemplate(
+    String script,
+    Map<String, String> variables,
+  ) {
+    final stringifyIndex = script.indexOf('JSON.stringify(');
+    if (stringifyIndex < 0) {
+      return null;
+    }
+
+    final statementBoundaryCandidates = <int>[
+      script.lastIndexOf(';', stringifyIndex),
+      script.lastIndexOf('\n', stringifyIndex),
+      script.lastIndexOf('\r', stringifyIndex),
+    ];
+    final statementStart = statementBoundaryCandidates.reduce(max) + 1;
+
+    var prefix = script.substring(statementStart, stringifyIndex).trim();
+    if (prefix.isEmpty) {
+      return null;
+    }
+
+    final assignIndex = _findTopLevelAssignmentIndex(prefix);
+    if (assignIndex >= 0) {
+      prefix = prefix.substring(assignIndex + 1).trim();
+    }
+
+    while (prefix.endsWith('+')) {
+      prefix = prefix.substring(0, prefix.length - 1).trimRight();
+    }
+
+    final resolved = _evaluateLegacyConcatExpression(prefix, variables);
+    if (resolved == null || resolved.trim().isEmpty) {
+      return null;
+    }
+
+    return _normalizeLegacyUrlTemplate(resolved);
+  }
+
+  int _findTopLevelAssignmentIndex(String expression) {
+    var depthParen = 0;
+    var depthBrace = 0;
+    var depthBracket = 0;
+    var inString = false;
+    var quote = '';
+    var escaped = false;
+
+    for (var index = 0; index < expression.length; index += 1) {
+      final char = expression[index];
+
+      if (inString) {
+        if (escaped) {
+          escaped = false;
+          continue;
+        }
+        if (char == r'\') {
+          escaped = true;
+          continue;
+        }
+        if (char == quote) {
+          inString = false;
+          quote = '';
+        }
+        continue;
+      }
+
+      if (char == '"' || char == "'" || char == '`') {
+        inString = true;
+        quote = char;
+        continue;
+      }
+
+      if (char == '(') {
+        depthParen += 1;
+        continue;
+      }
+      if (char == ')' && depthParen > 0) {
+        depthParen -= 1;
+        continue;
+      }
+      if (char == '{') {
+        depthBrace += 1;
+        continue;
+      }
+      if (char == '}' && depthBrace > 0) {
+        depthBrace -= 1;
+        continue;
+      }
+      if (char == '[') {
+        depthBracket += 1;
+        continue;
+      }
+      if (char == ']' && depthBracket > 0) {
+        depthBracket -= 1;
+        continue;
+      }
+
+      if (depthParen == 0 &&
+          depthBrace == 0 &&
+          depthBracket == 0 &&
+          char == '=') {
+        final previous = index > 0 ? expression[index - 1] : '';
+        final next = index + 1 < expression.length ? expression[index + 1] : '';
+        if (previous != '=' && previous != '!' && next != '=') {
+          return index;
+        }
+      }
+    }
+
+    return -1;
+  }
+
+  Map<String, dynamic> _extractLegacyJsOptionsMap(
+    String script,
+    Map<String, String> variables,
+  ) {
+    final argument = _extractJsonStringifyArgument(script);
+    if (argument == null || argument.trim().isEmpty) {
+      return const {};
+    }
+
+    final objectText = _resolveLegacyObjectExpression(argument, script);
+    if (objectText == null || objectText.trim().isEmpty) {
+      return const {};
+    }
+
+    return _parseLegacyObjectLiteralToMap(objectText, variables);
+  }
+
+  String? _extractJsonStringifyArgument(String script) {
+    final callIndex = script.indexOf('JSON.stringify(');
+    if (callIndex < 0) {
+      return null;
+    }
+
+    final openIndex = script.indexOf('(', callIndex);
+    if (openIndex < 0) {
+      return null;
+    }
+
+    final closeIndex = _findMatchingBracket(
+      script,
+      openIndex,
+      openChar: '(',
+      closeChar: ')',
+    );
+    if (closeIndex <= openIndex + 1) {
+      return null;
+    }
+
+    return script.substring(openIndex + 1, closeIndex).trim();
+  }
+
+  String? _resolveLegacyObjectExpression(String rawArg, String script) {
+    final argument = rawArg.trim();
+    if (argument.isEmpty) {
+      return null;
+    }
+
+    if (argument.startsWith('{')) {
+      return argument;
+    }
+
+    final variableMatch = RegExp(
+      r'^[A-Za-z_][A-Za-z0-9_]*$',
+    ).firstMatch(argument);
+    if (variableMatch == null) {
+      return null;
+    }
+
+    return _extractAssignedObjectLiteral(script, argument);
+  }
+
+  String? _extractAssignedObjectLiteral(String script, String variableName) {
+    final assignPattern = RegExp(
+      '(?:var\\s+)?${RegExp.escape(variableName)}\\s*=\\s*',
+      multiLine: true,
+    );
+    final match = assignPattern.firstMatch(script);
+    if (match == null) {
+      return null;
+    }
+
+    var openIndex = match.end;
+    while (openIndex < script.length &&
+        RegExp(r'\s').hasMatch(script[openIndex])) {
+      openIndex += 1;
+    }
+
+    if (openIndex >= script.length || script[openIndex] != '{') {
+      return null;
+    }
+
+    final closeIndex = _findMatchingBracket(
+      script,
+      openIndex,
+      openChar: '{',
+      closeChar: '}',
+    );
+    if (closeIndex <= openIndex) {
+      return null;
+    }
+
+    return script.substring(openIndex, closeIndex + 1);
+  }
+
+  Map<String, dynamic> _parseLegacyObjectLiteralToMap(
+    String objectText,
+    Map<String, String> variables,
+  ) {
+    final text = objectText.trim();
+    if (!text.startsWith('{') || !text.endsWith('}')) {
+      return const {};
+    }
+
+    final body = text.substring(1, text.length - 1);
+    final entries = _splitTopLevelByComma(body);
+    final result = <String, dynamic>{};
+
+    for (final rawEntry in entries) {
+      final entry = rawEntry.trim();
+      if (entry.isEmpty) {
+        continue;
+      }
+
+      final colonIndex = _findTopLevelColon(entry);
+      if (colonIndex <= 0 || colonIndex >= entry.length - 1) {
+        continue;
+      }
+
+      final rawKey = entry.substring(0, colonIndex).trim();
+      final key = _normalizeLegacyObjectKey(rawKey);
+      if (key.isEmpty) {
+        continue;
+      }
+
+      final valueExpression = entry.substring(colonIndex + 1).trim();
+      if (valueExpression.isEmpty) {
+        continue;
+      }
+
+      switch (key) {
+        case 'method':
+        case 'contentType':
+        case 'content-type':
+          final value = _evaluateLegacyScriptValue(valueExpression, variables);
+          if (value is String && value.trim().isNotEmpty) {
+            result[key] = value.trim();
+          }
+          break;
+        case 'body':
+          final value = _evaluateLegacyScriptValue(valueExpression, variables);
+          if (value != null) {
+            result[key] = value;
+          }
+          break;
+        case 'headers':
+        case 'header':
+          final resolved = _evaluateLegacyScriptValue(
+            valueExpression,
+            variables,
+          );
+          if (resolved is Map<String, String> && resolved.isNotEmpty) {
+            result[key] = resolved;
+          }
+          break;
+      }
+    }
+
+    return result;
+  }
+
+  List<String> _splitTopLevelByComma(String text) {
+    if (text.trim().isEmpty) {
+      return const [];
+    }
+
+    final items = <String>[];
+    var buffer = StringBuffer();
+    var depthParen = 0;
+    var depthBrace = 0;
+    var depthBracket = 0;
+    var inString = false;
+    var quote = '';
+    var escaped = false;
+
+    for (var index = 0; index < text.length; index += 1) {
+      final char = text[index];
+
+      if (inString) {
+        buffer.write(char);
+        if (escaped) {
+          escaped = false;
+          continue;
+        }
+        if (char == r'\') {
+          escaped = true;
+          continue;
+        }
+        if (char == quote) {
+          inString = false;
+          quote = '';
+        }
+        continue;
+      }
+
+      if (char == '"' || char == "'" || char == '`') {
+        inString = true;
+        quote = char;
+        buffer.write(char);
+        continue;
+      }
+
+      if (char == '(') {
+        depthParen += 1;
+        buffer.write(char);
+        continue;
+      }
+      if (char == ')' && depthParen > 0) {
+        depthParen -= 1;
+        buffer.write(char);
+        continue;
+      }
+      if (char == '{') {
+        depthBrace += 1;
+        buffer.write(char);
+        continue;
+      }
+      if (char == '}' && depthBrace > 0) {
+        depthBrace -= 1;
+        buffer.write(char);
+        continue;
+      }
+      if (char == '[') {
+        depthBracket += 1;
+        buffer.write(char);
+        continue;
+      }
+      if (char == ']' && depthBracket > 0) {
+        depthBracket -= 1;
+        buffer.write(char);
+        continue;
+      }
+
+      if (char == ',' &&
+          depthParen == 0 &&
+          depthBrace == 0 &&
+          depthBracket == 0) {
+        items.add(buffer.toString());
+        buffer = StringBuffer();
+        continue;
+      }
+
+      buffer.write(char);
+    }
+
+    items.add(buffer.toString());
+    return items;
+  }
+
+  int _findTopLevelColon(String entry) {
+    var depthParen = 0;
+    var depthBrace = 0;
+    var depthBracket = 0;
+    var inString = false;
+    var quote = '';
+    var escaped = false;
+
+    for (var index = 0; index < entry.length; index += 1) {
+      final char = entry[index];
+
+      if (inString) {
+        if (escaped) {
+          escaped = false;
+          continue;
+        }
+        if (char == r'\') {
+          escaped = true;
+          continue;
+        }
+        if (char == quote) {
+          inString = false;
+          quote = '';
+        }
+        continue;
+      }
+
+      if (char == '"' || char == "'" || char == '`') {
+        inString = true;
+        quote = char;
+        continue;
+      }
+
+      if (char == '(') {
+        depthParen += 1;
+        continue;
+      }
+      if (char == ')' && depthParen > 0) {
+        depthParen -= 1;
+        continue;
+      }
+      if (char == '{') {
+        depthBrace += 1;
+        continue;
+      }
+      if (char == '}' && depthBrace > 0) {
+        depthBrace -= 1;
+        continue;
+      }
+      if (char == '[') {
+        depthBracket += 1;
+        continue;
+      }
+      if (char == ']' && depthBracket > 0) {
+        depthBracket -= 1;
+        continue;
+      }
+
+      if (char == ':' &&
+          depthParen == 0 &&
+          depthBrace == 0 &&
+          depthBracket == 0) {
+        return index;
+      }
+    }
+
+    return -1;
+  }
+
+  String _normalizeLegacyObjectKey(String rawKey) {
+    final quoted = _unquoteLegacyString(rawKey);
+    if (quoted != null) {
+      return quoted.trim();
+    }
+    return rawKey.trim();
+  }
+
+  dynamic _evaluateLegacyScriptValue(
+    String expression,
+    Map<String, String> variables,
+  ) {
+    final text = expression.trim();
+    if (text.isEmpty) {
+      return null;
+    }
+
+    if (text.startsWith('{') && text.endsWith('}')) {
+      final headerMap = _parseLegacyHeaderObject(text, variables);
+      if (headerMap.isNotEmpty) {
+        return headerMap;
+      }
+    }
+
+    final asString = _evaluateLegacyConcatExpression(text, variables);
+    if (asString != null) {
+      return asString;
+    }
+
+    if (text.startsWith('{') || text.startsWith('[')) {
+      final decoded = _decodeOptionsMap(_normalizePseudoJson(text));
+      if (decoded.isNotEmpty) {
+        return decoded;
+      }
+    }
+
+    final unquoted = _unquoteLegacyString(text);
+    if (unquoted != null) {
+      return unquoted;
+    }
+
+    return null;
+  }
+
+  Map<String, String> _parseLegacyHeaderObject(
+    String objectText,
+    Map<String, String> variables,
+  ) {
+    final text = objectText.trim();
+    if (!text.startsWith('{') || !text.endsWith('}')) {
+      return const {};
+    }
+
+    final body = text.substring(1, text.length - 1);
+    final entries = _splitTopLevelByComma(body);
+    final headers = <String, String>{};
+
+    for (final rawEntry in entries) {
+      final entry = rawEntry.trim();
+      if (entry.isEmpty) {
+        continue;
+      }
+
+      final colonIndex = _findTopLevelColon(entry);
+      if (colonIndex <= 0 || colonIndex >= entry.length - 1) {
+        continue;
+      }
+
+      final key = _normalizeLegacyObjectKey(entry.substring(0, colonIndex));
+      if (key.isEmpty) {
+        continue;
+      }
+
+      final value = _evaluateLegacyScriptValue(
+        entry.substring(colonIndex + 1),
+        variables,
+      );
+      final normalized = value?.toString().trim();
+      if (normalized != null && normalized.isNotEmpty) {
+        headers[key] = normalized;
+      }
+    }
+
+    return headers;
+  }
+
+  String? _evaluateLegacyConcatExpression(
+    String expression,
+    Map<String, String> variables,
+  ) {
+    final text = expression.trim();
+    if (text.isEmpty) {
+      return null;
+    }
+
+    final tokens = _splitLegacyConcatTokens(text);
+    if (tokens.isEmpty) {
+      return null;
+    }
+
+    final resolved = <String>[];
+    for (final token in tokens) {
+      final value = _evaluateLegacyAtomToken(token, variables);
+      if (value == null) {
+        return null;
+      }
+      resolved.add(value);
+    }
+
+    return resolved.join();
+  }
+
+  List<String> _splitLegacyConcatTokens(String expression) {
+    final text = expression.trim();
+    if (text.isEmpty) {
+      return const [];
+    }
+
+    final tokens = <String>[];
+    var buffer = StringBuffer();
+    var depthParen = 0;
+    var inString = false;
+    var quote = '';
+    var escaped = false;
+
+    for (var index = 0; index < text.length; index += 1) {
+      final char = text[index];
+
+      if (inString) {
+        buffer.write(char);
+        if (escaped) {
+          escaped = false;
+          continue;
+        }
+        if (char == r'\') {
+          escaped = true;
+          continue;
+        }
+        if (char == quote) {
+          inString = false;
+          quote = '';
+        }
+        continue;
+      }
+
+      if (char == '"' || char == "'" || char == '`') {
+        inString = true;
+        quote = char;
+        buffer.write(char);
+        continue;
+      }
+
+      if (char == '(') {
+        depthParen += 1;
+        buffer.write(char);
+        continue;
+      }
+      if (char == ')' && depthParen > 0) {
+        depthParen -= 1;
+        buffer.write(char);
+        continue;
+      }
+
+      if (char == '+' && depthParen == 0) {
+        final token = buffer.toString().trim();
+        if (token.isNotEmpty) {
+          tokens.add(token);
+        }
+        buffer = StringBuffer();
+        continue;
+      }
+
+      buffer.write(char);
+    }
+
+    final tail = buffer.toString().trim();
+    if (tail.isNotEmpty) {
+      tokens.add(tail);
+    }
+
+    return tokens;
+  }
+
+  String? _evaluateLegacyAtomToken(
+    String token,
+    Map<String, String> variables,
+  ) {
+    var text = token.trim();
+    if (text.isEmpty) {
+      return '';
+    }
+
+    if (text.endsWith(',')) {
+      text = text.substring(0, text.length - 1).trimRight();
+    }
+
+    final quoted = _unquoteLegacyString(text);
+    if (quoted != null) {
+      return quoted;
+    }
+
+    if (text.startsWith('String(') && text.endsWith(')')) {
+      final inner = text.substring(7, text.length - 1).trim();
+      return _evaluateLegacyAtomToken(inner, variables) ?? variables[inner];
+    }
+
+    if (text == 'source.getKey()' || text == 'source.key') {
+      return '';
+    }
+
+    if (text == 'baseUrl') {
+      return '';
+    }
+
+    if (text == 'key' || text == 'keyword' || text == 'page') {
+      return '{{$text}}';
+    }
+
+    final variableValue = variables[text];
+    if (variableValue != null) {
+      return variableValue;
+    }
+
+    final wrapped =
+        text.startsWith('(') && text.endsWith(')')
+            ? text.substring(1, text.length - 1).trim()
+            : null;
+    if (wrapped != null && wrapped.isNotEmpty && wrapped != text) {
+      return _evaluateLegacyAtomToken(wrapped, variables);
+    }
+
+    return null;
+  }
+
+  String? _unquoteLegacyString(String token) {
+    final text = token.trim();
+    if (text.length < 2) {
+      return null;
+    }
+
+    final quote = text[0];
+    final isQuoted =
+        (quote == '"' || quote == "'" || quote == '`') && text.endsWith(quote);
+    if (!isQuoted) {
+      return null;
+    }
+
+    final value = text.substring(1, text.length - 1);
+    return _normalizeLegacyJsTemplateExpressions(value);
+  }
+
+  String _normalizeLegacyJsTemplateExpressions(String value) {
+    return value.replaceAllMapped(RegExp(r'\$\{([^\}]+)\}'), (match) {
+      final expression = match.group(1)?.trim() ?? '';
+      if (expression.isEmpty) {
+        return '';
+      }
+      return '{{$expression}}';
+    });
+  }
+
+  int _findMatchingBracket(
+    String source,
+    int openIndex, {
+    required String openChar,
+    required String closeChar,
+  }) {
+    if (openIndex < 0 || openIndex >= source.length) {
+      return -1;
+    }
+
+    var depth = 0;
+    var inString = false;
+    var quote = '';
+    var escaped = false;
+
+    for (var index = openIndex; index < source.length; index += 1) {
+      final char = source[index];
+
+      if (inString) {
+        if (escaped) {
+          escaped = false;
+          continue;
+        }
+        if (char == r'\') {
+          escaped = true;
+          continue;
+        }
+        if (char == quote) {
+          inString = false;
+          quote = '';
+        }
+        continue;
+      }
+
+      if (char == '"' || char == "'" || char == '`') {
+        inString = true;
+        quote = char;
+        continue;
+      }
+
+      if (char == openChar) {
+        depth += 1;
+        continue;
+      }
+
+      if (char == closeChar) {
+        depth -= 1;
+        if (depth == 0) {
+          return index;
+        }
+      }
+    }
+
+    return -1;
   }
 
   _RequestRuleSplit? _splitRequestOptions(String normalizedRule) {
@@ -1071,6 +1930,125 @@ class SearchService {
           return index;
         }
       }
+    }
+
+    return null;
+  }
+
+  String _normalizeLegacyUrlTemplate(String template) {
+    final normalized = _normalizeLegacyJsTemplateExpressions(template.trim());
+    if (normalized.isEmpty) {
+      return normalized;
+    }
+
+    if (_looksLikeRequestUrlTemplate(normalized)) {
+      return normalized.endsWith(',')
+          ? normalized.substring(0, normalized.length - 1).trimRight()
+          : normalized;
+    }
+
+    final extracted = _extractLegacyUrlTemplate(normalized);
+    if (extracted == null || extracted.isEmpty) {
+      return normalized;
+    }
+
+    return _normalizeLegacyJsTemplateExpressions(extracted);
+  }
+
+  bool _looksLikeRequestUrlTemplate(String template) {
+    return template.startsWith('http://') ||
+        template.startsWith('https://') ||
+        template.startsWith('/');
+  }
+
+  String? _extractLegacyUrlTemplate(String template) {
+    String? pickHttp(String source) {
+      final direct = RegExp(r"""https?://[^\s"'`<>()]+""").firstMatch(source);
+      if (direct == null) {
+        return null;
+      }
+
+      var value = direct.group(0)?.trim() ?? '';
+      if (value.isEmpty) {
+        return null;
+      }
+
+      while (value.endsWith(')') ||
+          value.endsWith(';') ||
+          value.endsWith(',')) {
+        value = value.substring(0, value.length - 1).trimRight();
+      }
+
+      return value.isEmpty
+          ? null
+          : _normalizeLegacyJsTemplateExpressions(value);
+    }
+
+    String? pickRelative(String source) {
+      final direct = RegExp(
+        r"""/(?:[^\s"'`<>()]|\{\{[^\}]+\}\})+""",
+      ).firstMatch(source);
+      if (direct == null) {
+        return null;
+      }
+
+      var value = direct.group(0)?.trim() ?? '';
+      if (value.isEmpty) {
+        return null;
+      }
+      while (value.endsWith(';') || value.endsWith(',')) {
+        value = value.substring(0, value.length - 1).trimRight();
+      }
+
+      return value.isEmpty
+          ? null
+          : _normalizeLegacyJsTemplateExpressions(value);
+    }
+
+    final javaPutMatch = RegExp(
+      r'''java\.put\([^,]+,\s*[`"']([^`"']+)[`"']\s*\)''',
+      caseSensitive: false,
+    ).firstMatch(template);
+    if (javaPutMatch != null) {
+      final captured = javaPutMatch.group(1)?.trim();
+      if (captured != null && captured.isNotEmpty) {
+        return _normalizeLegacyJsTemplateExpressions(captured);
+      }
+    }
+
+    final lines = template
+        .split(RegExp(r'[\r\n]+'))
+        .map((item) => item.trim())
+        .where((item) => item.isNotEmpty)
+        .toList(growable: false);
+
+    for (final line in lines) {
+      final normalizedLine =
+          line
+              .replaceAll('"', ' ')
+              .replaceAll("'", ' ')
+              .replaceAll('`', ' ')
+              .trim();
+
+      final http = pickHttp(normalizedLine);
+      if (http != null) {
+        return http;
+      }
+
+      final relative = pickRelative(normalizedLine);
+      if (relative != null && relative.toLowerCase().contains('search')) {
+        return relative;
+      }
+    }
+
+    final fromTemplate = pickHttp(template);
+    if (fromTemplate != null) {
+      return fromTemplate;
+    }
+
+    final relative = pickRelative(template);
+    if (relative != null && relative.toLowerCase().contains('search')) {
+      return relative;
     }
 
     return null;
@@ -1306,31 +2284,11 @@ class SearchService {
       return jsonCandidate;
     }
 
-    final firstStage = text.split('&&').first.trim();
-    if (firstStage.isEmpty || firstStage.startsWith('js:')) {
-      return null;
-    }
-
-    final delimiterIndex = firstStage.lastIndexOf('@');
-    final String? htmlCandidate = () {
-      if (delimiterIndex <= 0 || delimiterIndex >= firstStage.length - 1) {
-        return 'html:$firstStage@$fallbackExtractor';
-      }
-
-      final selector = firstStage.substring(0, delimiterIndex).trim();
-      final extractorToken = firstStage.substring(delimiterIndex + 1).trim();
-      if (selector.isEmpty) {
-        return null;
-      }
-
-      final extractor = _normalizeExtractor(
-        extractorToken,
-        fallbackExtractor: fallbackExtractor,
-        preferredAttribute: preferredAttribute,
-      );
-
-      return 'html:$selector@$extractor';
-    }();
+    final htmlCandidate = LegacyRuleCompat.buildHtmlRuleExpression(
+      expression: text,
+      fallbackExtractor: fallbackExtractor,
+      preferredAttribute: preferredAttribute,
+    );
 
     if (jsonCandidate != null) {
       if (htmlCandidate == null || htmlCandidate == jsonCandidate) {
@@ -1431,37 +2389,6 @@ class SearchService {
     }
 
     return '\$.$unescaped';
-  }
-
-  String _normalizeExtractor(
-    String extractorToken, {
-    required String fallbackExtractor,
-    String? preferredAttribute,
-  }) {
-    final token = extractorToken.trim();
-    if (token.isEmpty) {
-      return fallbackExtractor;
-    }
-
-    if (token == 'text' || token == 'html') {
-      return token;
-    }
-
-    if (token.startsWith('attr(') && token.endsWith(')')) {
-      return token;
-    }
-
-    final attrName = switch (token) {
-      'url' => preferredAttribute ?? 'href',
-      _ => token,
-    };
-
-    final isSimpleAttr = RegExp(r'^[a-zA-Z][a-zA-Z0-9_-]*$').hasMatch(attrName);
-    if (isSimpleAttr) {
-      return 'attr($attrName)';
-    }
-
-    return fallbackExtractor;
   }
 }
 

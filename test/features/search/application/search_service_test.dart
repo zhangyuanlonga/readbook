@@ -479,6 +479,264 @@ $baseUrl/search?channel=a,b, {
       },
     );
 
+    test(
+      'supports searchUrl with legacy script prelude before request URL',
+      () async {
+        final server = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
+        String? observedMethod;
+        String? observedBody;
+
+        server.listen((request) async {
+          observedMethod = request.method;
+          observedBody = await utf8.decoder.bind(request).join();
+
+          request.response
+            ..statusCode = 200
+            ..write('''
+            <div class="item">
+              <a class="name" href="/book/legacy">凡人修仙传</a>
+            </div>
+          ''');
+          await request.response.close();
+        });
+
+        final baseUrl = 'http://${server.address.host}:${server.port}';
+        final repository = _FakeSourceRepository([
+          SourceDefinition(
+            id: 's_legacy_prelude',
+            name: 'legacy prelude 源',
+            baseUrl: baseUrl,
+            rules: SourceRuleSet(
+              searchRule: '''
+{{url=source.getKey();
+cookie.removeCookie(url)}}
+$baseUrl/search, {
+  "method": "POST",
+  "body": "keyword={{key}}&page={{page}}"
+}
+''',
+              searchListRule: '.item@html',
+              searchTitleRule: '.name@text',
+              searchDetailUrlRule: '.name@href',
+            ),
+          ),
+        ]);
+
+        final service = SearchService(sourceRepository: repository);
+        final report = await service.search(keyword: '凡人修仙传');
+
+        expect(report.books, hasLength(1));
+        expect(observedMethod, 'POST');
+        expect(
+          observedBody,
+          contains('keyword=%E5%87%A1%E4%BA%BA%E4%BF%AE%E4%BB%99%E4%BC%A0'),
+        );
+        expect(observedBody, contains('page=1'));
+
+        await server.close(force: true);
+      },
+    );
+
+    test('extracts url template from java wrapper expression', () async {
+      final server = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
+      String? observedQuery;
+
+      server.listen((request) async {
+        observedQuery = request.uri.query;
+        request.response
+          ..statusCode = 200
+          ..write('''
+            <div class="item">
+              <a class="name" href="/book/wrapped">凡人修仙传</a>
+            </div>
+          ''');
+        await request.response.close();
+      });
+
+      final baseUrl = 'http://${server.address.host}:${server.port}';
+      final repository = _FakeSourceRepository([
+        SourceDefinition(
+          id: 's_java_wrap',
+          name: 'java 包装源',
+          baseUrl: baseUrl,
+          rules: SourceRuleSet(
+            searchRule: '{{java.put("su",`$baseUrl/search?keyword={{key}}`)}}',
+            searchListRule: '.item@html',
+            searchTitleRule: '.name@text',
+            searchDetailUrlRule: '.name@href',
+          ),
+        ),
+      ]);
+
+      final service = SearchService(sourceRepository: repository);
+      final report = await service.search(keyword: '凡人修仙传');
+
+      expect(report.books, hasLength(1));
+      expect(
+        observedQuery,
+        contains('keyword=%E5%87%A1%E4%BA%BA%E4%BF%AE%E4%BB%99%E4%BC%A0'),
+      );
+
+      await server.close(force: true);
+    });
+
+    test('supports @js searchUrl with JSON.stringify options', () async {
+      final server = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
+      String? observedMethod;
+      String? observedBody;
+
+      server.listen((request) async {
+        observedMethod = request.method;
+        observedBody = await utf8.decoder.bind(request).join();
+
+        request.response
+          ..statusCode = 200
+          ..write('''
+            <div class="item"><a class="name" href="/book/js1">凡人修仙传</a></div>
+          ''');
+        await request.response.close();
+      });
+
+      final baseUrl = 'http://${server.address.host}:${server.port}';
+      final repository = _FakeSourceRepository([
+        SourceDefinition(
+          id: 's_js_stringify',
+          name: 'JS stringify 源',
+          baseUrl: baseUrl,
+          rules: SourceRuleSet(
+            searchRule: '''
+@js:
+var so="/search,"+JSON.stringify({
+  "body": "keyword="+key+"&page="+page,
+  "method": "POST"
+});
+so
+''',
+            searchListRule: '.item@html',
+            searchTitleRule: '.name@text',
+            searchDetailUrlRule: '.name@href',
+          ),
+        ),
+      ]);
+
+      final service = SearchService(sourceRepository: repository);
+      final report = await service.search(keyword: '凡人修仙传');
+
+      expect(report.books, hasLength(1));
+      expect(observedMethod, 'POST');
+      expect(
+        observedBody,
+        contains('keyword=%E5%87%A1%E4%BA%BA%E4%BF%AE%E4%BB%99%E4%BC%A0'),
+      );
+      expect(observedBody, contains('page=1'));
+
+      await server.close(force: true);
+    });
+
+    test('supports @js url + post variable pattern', () async {
+      final server = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
+      String? observedMethod;
+      String? observedBody;
+
+      server.listen((request) async {
+        observedMethod = request.method;
+        observedBody = await utf8.decoder.bind(request).join();
+
+        request.response
+          ..statusCode = 200
+          ..write('''
+            <div class="item"><a class="name" href="/book/js2">凡人修仙传</a></div>
+          ''');
+        await request.response.close();
+      });
+
+      final baseUrl = 'http://${server.address.host}:${server.port}';
+      final repository = _FakeSourceRepository([
+        SourceDefinition(
+          id: 's_js_var_post',
+          name: 'JS var post 源',
+          baseUrl: baseUrl,
+          rules: SourceRuleSet(
+            searchRule: '''
+@js:
+var url=source.getKey();
+var so="/search,";
+var body=`keyword=\${key}&page=\${page}`;
+var post={
+  "body": String(body),
+  "method": "POST"
+};
+url+so+JSON.stringify(post)
+''',
+            searchListRule: '.item@html',
+            searchTitleRule: '.name@text',
+            searchDetailUrlRule: '.name@href',
+          ),
+        ),
+      ]);
+
+      final service = SearchService(sourceRepository: repository);
+      final report = await service.search(keyword: '凡人修仙传');
+
+      expect(report.books, hasLength(1));
+      expect(observedMethod, 'POST');
+      expect(
+        observedBody,
+        contains('keyword=%E5%87%A1%E4%BA%BA%E4%BF%AE%E4%BB%99%E4%BC%A0'),
+      );
+      expect(observedBody, contains('page=1'));
+
+      await server.close(force: true);
+    });
+
+    test(
+      'extracts url template from java wrapper expression with js-style placeholders',
+      () async {
+        final server = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
+        String? observedQuery;
+
+        server.listen((request) async {
+          observedQuery = request.uri.query;
+          request.response
+            ..statusCode = 200
+            ..write('''
+              <div class="item">
+                <a class="name" href="/book/wrapped2">凡人修仙传</a>
+              </div>
+            ''');
+          await request.response.close();
+        });
+
+        final baseUrl = 'http://${server.address.host}:${server.port}';
+        final repository = _FakeSourceRepository([
+          SourceDefinition(
+            id: 's_java_wrap_js_placeholder',
+            name: 'java 包装源 js 占位符',
+            baseUrl: baseUrl,
+            rules: SourceRuleSet(
+              searchRule:
+                  '{{java.put("su",`$baseUrl/search?keyword=\${key}&start=\${page-1}`)}}',
+              searchListRule: '.item@html',
+              searchTitleRule: '.name@text',
+              searchDetailUrlRule: '.name@href',
+            ),
+          ),
+        ]);
+
+        final service = SearchService(sourceRepository: repository);
+        final report = await service.search(keyword: '凡人修仙传');
+
+        expect(report.books, hasLength(1));
+        expect(
+          observedQuery,
+          contains('keyword=%E5%87%A1%E4%BA%BA%E4%BF%AE%E4%BB%99%E4%BC%A0'),
+        );
+        expect(observedQuery, contains('start=0'));
+
+        await server.close(force: true);
+      },
+    );
+
     test('supports json search rules with inline js pipeline', () async {
       final server = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
       server.listen((request) async {
