@@ -182,15 +182,31 @@ class SourceImportService {
           validSources.add(source);
 
           final capability = SourceCapabilityAnalyzer.fromRawMap(raw.rawData);
-          if (capability.compatibilityLevel != SourceCompatibilityLevel.full) {
+          final structuralWarnings = _validator.collectCompatibilityWarnings(
+            source,
+          );
+          final hintReasons = _mergeHintReasons(
+            capability.reasons,
+            structuralWarnings,
+          );
+          final hintLevel =
+              hintReasons.isEmpty
+                  ? capability.compatibilityLevel
+                  : (capability.compatibilityLevel ==
+                      SourceCompatibilityLevel.full)
+                  ? SourceCompatibilityLevel.partial
+                  : capability.compatibilityLevel;
+
+          if (hintLevel != SourceCompatibilityLevel.full ||
+              hintReasons.isNotEmpty) {
             compatibilityHints.add(
               SourceCompatibilityHint(
                 index: entry.index,
                 line: lineByIndex[entry.zeroBasedIndex],
                 sourceName: source.name,
-                level: capability.compatibilityLevel,
-                label: capability.compatibilityLabel,
-                reasons: List.unmodifiable(capability.reasons),
+                level: hintLevel,
+                label: _compatibilityLabelForLevel(hintLevel),
+                reasons: hintReasons,
               ),
             );
           }
@@ -303,6 +319,37 @@ class SourceImportService {
       }
       return Failure(exception);
     }
+  }
+
+  List<String> _mergeHintReasons(
+    List<String> capabilityReasons,
+    List<String> structuralWarnings,
+  ) {
+    final merged = <String>{};
+
+    for (final item in capabilityReasons) {
+      final reason = item.trim();
+      if (reason.isNotEmpty) {
+        merged.add(reason);
+      }
+    }
+
+    for (final item in structuralWarnings) {
+      final reason = item.trim();
+      if (reason.isNotEmpty) {
+        merged.add(reason);
+      }
+    }
+
+    return List.unmodifiable(merged);
+  }
+
+  String _compatibilityLabelForLevel(SourceCompatibilityLevel level) {
+    return switch (level) {
+      SourceCompatibilityLevel.full => '完全兼容',
+      SourceCompatibilityLevel.partial => '部分兼容',
+      SourceCompatibilityLevel.unsupported => '暂不兼容',
+    };
   }
 
   Result<SourceImportPreviewReport> _decodePreviewPayload(

@@ -11,7 +11,6 @@ import '../../../core/errors/app_exception.dart';
 import '../../../data/datasources/local/app_database.dart';
 import '../../../data/repositories/source_repository_impl.dart';
 import '../../../domain/entities/book.dart';
-import '../../../domain/entities/source_definition.dart';
 import '../../../domain/repositories/source_repository.dart';
 import '../application/search_failure_export_service.dart';
 import '../application/search_service.dart';
@@ -31,27 +30,81 @@ class _SearchPageState extends State<SearchPage> {
   late final SearchService _searchService;
   late final SearchFailureExportService _failureExportService;
 
+  static final RegExp _preciseSpaceRegex = RegExp(r'[\u3000\s]+');
+  static final RegExp _htmlTagRegex = RegExp(r'<[^>]+>');
+  static const Set<String> _preciseTitleSeparators = <String>{
+    ' ',
+    '-',
+    '_',
+    '.',
+    '·',
+    ':',
+    '：',
+    '/',
+    '|',
+    '(',
+    '（',
+    '[',
+    '【',
+    '<',
+    '《',
+  };
+  static const Set<String> _preciseLeadingWrappers = <String>{
+    '《',
+    '〈',
+    '<',
+    '「',
+    '『',
+    '【',
+    '[',
+    '(',
+    '（',
+  };
+  static const Set<String> _preciseTrailingWrappers = <String>{
+    '》',
+    '〉',
+    '>',
+    '」',
+    '』',
+    '】',
+    ']',
+    ')',
+    '）',
+  };
+  static const Duration _progressUiThrottleWindow = Duration(milliseconds: 120);
+
   bool _isSearching = false;
   bool _isExportingFailures = false;
-  bool _isLoadingSourceFilters = false;
+  bool _isLoadingSourceCount = false;
   SearchExecutionReport? _report;
+  List<Book> _visibleBooks = const <Book>[];
   SearchCancellationToken? _activeSearchToken;
   int _searchSessionId = 0;
   SearchContentMode _searchContentMode = SearchContentMode.novel;
-  List<SourceDefinition> _filterableSources = const [];
+  bool _isPreciseBookMatch = false;
+  int _availableSourceCount = 0;
   Set<String> _selectedSourceIds = <String>{};
+  SearchExecutionReport? _pendingProgressReport;
+  Timer? _progressUiTimer;
+  DateTime? _lastProgressUiUpdateAt;
 
   @override
   void initState() {
     super.initState();
     _searchService = SearchService(sourceRepository: _sourceRepository);
     _failureExportService = SearchFailureExportService();
-    unawaited(_refreshSourceFilters());
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) {
+        return;
+      }
+      unawaited(_refreshSourceCount());
+    });
   }
 
   @override
   void dispose() {
     _activeSearchToken?.cancel();
+    _clearProgressUiThrottle();
     _keywordController.dispose();
     super.dispose();
   }
@@ -62,6 +115,7 @@ class _SearchPageState extends State<SearchPage> {
     final horizontal = AppSpacing.pageHorizontal(context);
     final bottomSafe = MediaQuery.viewPaddingOf(context).bottom;
     final canPopRoute = context.canPop();
+    final report = _report;
 
     return PopScope<void>(
       canPop: canPopRoute,
@@ -98,16 +152,16 @@ class _SearchPageState extends State<SearchPage> {
             children: [
               _buildSearchInputCard(),
               const SizedBox(height: 12),
-              if (_isSearching || _report != null) _buildProgressCard(),
-              if (_report != null) ...[
+              if (_isSearching || report != null) _buildProgressCard(),
+              if (report != null) ...[
                 const SizedBox(height: 12),
-                _buildReportSummary(_report!),
-                if (_report!.failures.isNotEmpty) ...[
+                _buildReportSummary(report, _visibleBooks.length),
+                if (report.failures.isNotEmpty) ...[
                   const SizedBox(height: 12),
-                  _buildFailureBanner(_report!),
+                  _buildFailureBanner(report),
                 ],
                 const SizedBox(height: 12),
-                _buildResultList(_report!),
+                _buildResultList(report, _visibleBooks),
               ] else if (!_isSearching)
                 Card(
                   child: Padding(
@@ -171,9 +225,10 @@ class _SearchPageState extends State<SearchPage> {
                           }
                           setState(() {
                             _searchContentMode = mode;
-                            _report = null;
+                            _selectedSourceIds = <String>{};
+                            _setReport(null);
                           });
-                          unawaited(_refreshSourceFilters());
+                          unawaited(_refreshSourceCount());
                         },
               ),
             ),
@@ -213,6 +268,8 @@ class _SearchPageState extends State<SearchPage> {
             ),
             const SizedBox(height: 10),
             _buildSourceFilterRow(),
+            const SizedBox(height: 8),
+            _buildPreciseMatchRow(),
             const SizedBox(height: 10),
             Row(
               children: [
@@ -231,7 +288,7 @@ class _SearchPageState extends State<SearchPage> {
                             : () {
                               _keywordController.clear();
                               setState(() {
-                                _report = null;
+                                _setReport(null);
                               });
                             },
                     child: const Text('清空结果'),
@@ -246,15 +303,16 @@ class _SearchPageState extends State<SearchPage> {
   }
 
   Widget _buildSourceFilterRow() {
-    final allCount = _filterableSources.length;
     final selectedCount = _selectedSourceIds.length;
 
     final summaryText =
-        allCount == 0
+        _isLoadingSourceCount && _availableSourceCount == 0
+            ? '书源: 统计中...'
+            : _availableSourceCount == 0
             ? '当前类型没有可选书源'
             : selectedCount == 0
-            ? '书源: 全部 ($allCount)'
-            : '书源: 指定 $selectedCount / $allCount';
+            ? '书源: 全部 ($_availableSourceCount)'
+            : '书源: 指定 $selectedCount / $_availableSourceCount';
 
     return Container(
       padding: const EdgeInsets.fromLTRB(10, 8, 8, 8),
@@ -276,7 +334,7 @@ class _SearchPageState extends State<SearchPage> {
               ),
             ),
           ),
-          if (_isLoadingSourceFilters)
+          if (_isLoadingSourceCount)
             const SizedBox(
               width: 20,
               height: 20,
@@ -296,14 +354,14 @@ class _SearchPageState extends State<SearchPage> {
                         : () {
                           setState(() {
                             _selectedSourceIds = <String>{};
-                            _report = null;
+                            _setReport(null);
                           });
                         },
                 icon: const Icon(Icons.clear_rounded, size: 18),
               ),
             TextButton.icon(
               onPressed:
-                  (_isSearching || allCount == 0)
+                  (_isSearching || _availableSourceCount == 0)
                       ? null
                       : () => unawaited(_showSourceFilterSheet()),
               icon: const Icon(Icons.filter_list_rounded, size: 18),
@@ -315,212 +373,62 @@ class _SearchPageState extends State<SearchPage> {
     );
   }
 
-  Future<void> _refreshSourceFilters() async {
+  Future<void> _refreshSourceCount() async {
     if (!mounted) {
       return;
     }
 
+    final isMangaMode = _searchContentMode == SearchContentMode.manga;
+
     setState(() {
-      _isLoadingSourceFilters = true;
+      _isLoadingSourceCount = true;
     });
 
     try {
-      final all = await _sourceRepository.getAll();
-      final filtered = all
-        .where(
-          (source) =>
-              source.enabled &&
-              ((_searchContentMode == SearchContentMode.manga &&
-                      source.isMangaSource) ||
-                  (_searchContentMode == SearchContentMode.novel &&
-                      !source.isMangaSource)),
-        )
-        .toList(growable: false)..sort((a, b) => a.name.compareTo(b.name));
+      final count = await AppDatabase.instance.countSourceListItems(
+        enabledOnly: true,
+        isMangaSource: isMangaMode,
+      );
 
-      if (!mounted) {
+      if (!mounted ||
+          isMangaMode != (_searchContentMode == SearchContentMode.manga)) {
         return;
       }
 
       setState(() {
-        _filterableSources = List.unmodifiable(filtered);
-        _selectedSourceIds =
-            _selectedSourceIds
-                .where((id) => filtered.any((item) => item.id == id))
-                .toSet();
+        _availableSourceCount = count;
+      });
+    } catch (_) {
+      if (!mounted ||
+          isMangaMode != (_searchContentMode == SearchContentMode.manga)) {
+        return;
+      }
+
+      setState(() {
+        _availableSourceCount = 0;
       });
     } finally {
-      if (mounted) {
+      if (mounted &&
+          isMangaMode == (_searchContentMode == SearchContentMode.manga)) {
         setState(() {
-          _isLoadingSourceFilters = false;
+          _isLoadingSourceCount = false;
         });
       }
     }
   }
 
   Future<void> _showSourceFilterSheet() async {
-    if (_filterableSources.isEmpty) {
-      _showMessage('当前类型没有可用书源。');
-      return;
-    }
-
-    final initialSelected = <String>{..._selectedSourceIds};
-    final keywordController = TextEditingController();
-
     final selected = await showModalBottomSheet<Set<String>>(
       context: context,
       isScrollControlled: true,
       showDragHandle: true,
       useSafeArea: true,
-      builder: (context) {
-        var draftSelected = <String>{...initialSelected};
-
-        return StatefulBuilder(
-          builder: (context, setModalState) {
-            final keyword = keywordController.text.trim().toLowerCase();
-            final visibleSources = _filterableSources
-                .where((source) {
-                  if (keyword.isEmpty) {
-                    return true;
-                  }
-                  return source.name.toLowerCase().contains(keyword) ||
-                      source.baseUrl.toLowerCase().contains(keyword);
-                })
-                .toList(growable: false);
-
-            return FractionallySizedBox(
-              heightFactor: 0.85,
-              child: Padding(
-                padding: const EdgeInsets.fromLTRB(16, 6, 16, 16),
-                child: Column(
-                  children: [
-                    Align(
-                      alignment: Alignment.centerLeft,
-                      child: Text(
-                        '指定书源',
-                        style: Theme.of(context).textTheme.titleMedium
-                            ?.copyWith(fontWeight: FontWeight.w700),
-                      ),
-                    ),
-                    const SizedBox(height: 8),
-                    TextField(
-                      controller: keywordController,
-                      onChanged: (_) => setModalState(() {}),
-                      decoration: InputDecoration(
-                        isDense: true,
-                        hintText: '搜索书源名称或域名',
-                        prefixIcon: const Icon(Icons.search, size: 18),
-                        border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                      ),
-                    ),
-                    const SizedBox(height: 8),
-                    Row(
-                      children: [
-                        TextButton(
-                          onPressed: () {
-                            setModalState(() {
-                              draftSelected = <String>{};
-                            });
-                          },
-                          child: const Text('全部书源'),
-                        ),
-                        const SizedBox(width: 8),
-                        TextButton(
-                          onPressed: () {
-                            setModalState(() {
-                              draftSelected =
-                                  _filterableSources
-                                      .map((item) => item.id)
-                                      .toSet();
-                            });
-                          },
-                          child: const Text('全选'),
-                        ),
-                        const Spacer(),
-                        Text(
-                          draftSelected.isEmpty
-                              ? '当前：全部'
-                              : '当前：${draftSelected.length} 个',
-                          style: Theme.of(
-                            context,
-                          ).textTheme.bodySmall?.copyWith(
-                            color:
-                                Theme.of(context).colorScheme.onSurfaceVariant,
-                          ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 4),
-                    Expanded(
-                      child:
-                          visibleSources.isEmpty
-                              ? Center(
-                                child: Text(
-                                  '未匹配到书源',
-                                  style: Theme.of(context).textTheme.bodyMedium,
-                                ),
-                              )
-                              : ListView.builder(
-                                itemCount: visibleSources.length,
-                                itemBuilder: (context, index) {
-                                  final source = visibleSources[index];
-                                  final selected = draftSelected.contains(
-                                    source.id,
-                                  );
-                                  return CheckboxListTile(
-                                    value: selected,
-                                    dense: true,
-                                    controlAffinity:
-                                        ListTileControlAffinity.leading,
-                                    title: Text(
-                                      source.name,
-                                      maxLines: 1,
-                                      overflow: TextOverflow.ellipsis,
-                                    ),
-                                    subtitle: Text(
-                                      source.baseUrl,
-                                      maxLines: 1,
-                                      overflow: TextOverflow.ellipsis,
-                                    ),
-                                    onChanged: (value) {
-                                      setModalState(() {
-                                        if (value ?? false) {
-                                          draftSelected.add(source.id);
-                                        } else {
-                                          draftSelected.remove(source.id);
-                                        }
-                                      });
-                                    },
-                                  );
-                                },
-                              ),
-                    ),
-                    const SizedBox(height: 8),
-                    Row(
-                      children: [
-                        TextButton(
-                          onPressed: () => Navigator.of(context).pop(),
-                          child: const Text('取消'),
-                        ),
-                        const Spacer(),
-                        FilledButton(
-                          onPressed:
-                              () => Navigator.of(context).pop(draftSelected),
-                          child: const Text('应用筛选'),
-                        ),
-                      ],
-                    ),
-                  ],
-                ),
-              ),
-            );
-          },
-        );
-      },
+      builder:
+          (context) => _SourceFilterSheet(
+            initialSelectedIds: _selectedSourceIds,
+            contentMode: _searchContentMode,
+          ),
     );
-
-    keywordController.dispose();
 
     if (!mounted || selected == null) {
       return;
@@ -528,8 +436,16 @@ class _SearchPageState extends State<SearchPage> {
 
     setState(() {
       _selectedSourceIds = selected;
-      _report = null;
+      _setReport(null);
     });
+  }
+
+  void _setReport(SearchExecutionReport? report) {
+    _report = report;
+    _visibleBooks =
+        report == null
+            ? const <Book>[]
+            : _applyPreciseFilter(report.books, report.keyword);
   }
 
   Widget _buildProgressCard() {
@@ -574,7 +490,66 @@ class _SearchPageState extends State<SearchPage> {
     );
   }
 
-  Widget _buildReportSummary(SearchExecutionReport report) {
+  Widget _buildPreciseMatchRow() {
+    return InkWell(
+      borderRadius: BorderRadius.circular(10),
+      onTap:
+          _isSearching
+              ? null
+              : () {
+                setState(() {
+                  _isPreciseBookMatch = !_isPreciseBookMatch;
+                  _setReport(_report);
+                });
+              },
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 2, vertical: 2),
+        child: Row(
+          children: [
+            Checkbox(
+              value: _isPreciseBookMatch,
+              onChanged:
+                  _isSearching
+                      ? null
+                      : (value) {
+                        setState(() {
+                          _isPreciseBookMatch = value ?? false;
+                          _setReport(_report);
+                        });
+                      },
+              visualDensity: VisualDensity.compact,
+            ),
+            const SizedBox(width: 2),
+            Text(
+              '精准书名匹配',
+              style: Theme.of(
+                context,
+              ).textTheme.bodySmall?.copyWith(fontWeight: FontWeight.w600),
+            ),
+            const SizedBox(width: 6),
+            Expanded(
+              child: Text(
+                '仅展示与关键词同名，或以关键词开头且后接分隔符的结果。',
+                style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                  color: Theme.of(context).colorScheme.onSurfaceVariant,
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildReportSummary(
+    SearchExecutionReport report,
+    int visibleBookCount,
+  ) {
+    final resultText =
+        _isPreciseBookMatch && visibleBookCount != report.books.length
+            ? '$visibleBookCount/${report.books.length} 本'
+            : '$visibleBookCount 本';
+
     return Wrap(
       spacing: 8,
       runSpacing: 8,
@@ -584,12 +559,13 @@ class _SearchPageState extends State<SearchPage> {
           '类型',
           _searchContentMode == SearchContentMode.manga ? '漫画' : '小说',
         ),
-        _buildSummaryChip('结果', '${report.books.length} 本'),
+        _buildSummaryChip('结果', resultText),
         _buildSummaryChip(
           '成功源',
           '${report.successSourceCount}/${report.sourceCount}',
         ),
         _buildSummaryChip('筛选', _selectedSourceIds.isEmpty ? '全部书源' : '指定书源'),
+        _buildSummaryChip('匹配', _isPreciseBookMatch ? '精准' : '默认'),
         if (report.failedSourceCount > 0)
           _buildSummaryChip('失败源', '${report.failedSourceCount}'),
       ],
@@ -752,16 +728,17 @@ class _SearchPageState extends State<SearchPage> {
     );
   }
 
-  Widget _buildResultList(SearchExecutionReport report) {
-    final books = report.books;
+  Widget _buildResultList(SearchExecutionReport report, List<Book> books) {
     if (books.isEmpty) {
+      final emptyTip =
+          _isPreciseBookMatch && report.books.isNotEmpty
+              ? '已开启精准匹配，当前关键词未命中精准书名。'
+              : '暂无可展示结果，请检查书源规则或更换关键词。';
+
       return Card(
         child: Padding(
           padding: const EdgeInsets.all(16),
-          child: Text(
-            '暂无可展示结果，请检查书源规则或更换关键词。',
-            style: Theme.of(context).textTheme.bodyMedium,
-          ),
+          child: Text(emptyTip, style: Theme.of(context).textTheme.bodyMedium),
         ),
       );
     }
@@ -962,6 +939,123 @@ class _SearchPageState extends State<SearchPage> {
     return normalized.isEmpty ? null : normalized;
   }
 
+  List<Book> _applyPreciseFilter(List<Book> books, String keyword) {
+    if (!_isPreciseBookMatch) {
+      return books;
+    }
+
+    final normalizedKeyword = _normalizePreciseText(keyword);
+    if (normalizedKeyword.isEmpty) {
+      return books;
+    }
+
+    return books
+        .where((book) => _isPreciseTitleMatch(book.title, normalizedKeyword))
+        .toList(growable: false);
+  }
+
+  bool _isPreciseTitleMatch(String title, String normalizedKeyword) {
+    final normalizedTitle = _normalizePreciseText(title);
+    if (normalizedTitle.isEmpty) {
+      return false;
+    }
+
+    if (normalizedTitle == normalizedKeyword) {
+      return true;
+    }
+
+    if (!normalizedTitle.startsWith(normalizedKeyword) ||
+        normalizedTitle.length <= normalizedKeyword.length) {
+      return false;
+    }
+
+    final nextChar = normalizedTitle[normalizedKeyword.length];
+    return _preciseTitleSeparators.contains(nextChar);
+  }
+
+  String _normalizePreciseText(String raw) {
+    var normalized = raw.trim().toLowerCase();
+    if (normalized.isEmpty) {
+      return '';
+    }
+
+    if (normalized.contains('<') && normalized.contains('>')) {
+      normalized = normalized.replaceAll(_htmlTagRegex, ' ');
+    }
+
+    normalized = normalized.replaceAll(_preciseSpaceRegex, ' ').trim();
+    return _trimPreciseWrappers(normalized);
+  }
+
+  String _trimPreciseWrappers(String value) {
+    var normalized = value;
+    while (normalized.isNotEmpty &&
+        _preciseLeadingWrappers.contains(normalized[0])) {
+      normalized = normalized.substring(1).trimLeft();
+    }
+
+    while (normalized.isNotEmpty &&
+        _preciseTrailingWrappers.contains(normalized[normalized.length - 1])) {
+      normalized = normalized.substring(0, normalized.length - 1).trimRight();
+    }
+
+    return normalized;
+  }
+
+  void _clearProgressUiThrottle() {
+    _progressUiTimer?.cancel();
+    _progressUiTimer = null;
+    _pendingProgressReport = null;
+    _lastProgressUiUpdateAt = null;
+  }
+
+  void _updateProgressReportThrottled({
+    required SearchExecutionReport report,
+    required SearchCancellationToken token,
+    required int sessionId,
+  }) {
+    final now = DateTime.now();
+    final lastUpdateAt = _lastProgressUiUpdateAt;
+    final shouldFlushNow =
+        lastUpdateAt == null ||
+        now.difference(lastUpdateAt) >= _progressUiThrottleWindow ||
+        report.processedSourceCount >= report.sourceCount;
+
+    if (shouldFlushNow) {
+      _progressUiTimer?.cancel();
+      _progressUiTimer = null;
+      _pendingProgressReport = null;
+      _lastProgressUiUpdateAt = now;
+      setState(() {
+        _setReport(report);
+      });
+      return;
+    }
+
+    _pendingProgressReport = report;
+    if (_progressUiTimer?.isActive ?? false) {
+      return;
+    }
+
+    final delay = _progressUiThrottleWindow - now.difference(lastUpdateAt);
+    _progressUiTimer = Timer(delay, () {
+      _progressUiTimer = null;
+      final pending = _pendingProgressReport;
+      _pendingProgressReport = null;
+      if (pending == null ||
+          !mounted ||
+          token.isCancelled ||
+          sessionId != _searchSessionId) {
+        return;
+      }
+
+      _lastProgressUiUpdateAt = DateTime.now();
+      setState(() {
+        _setReport(pending);
+      });
+    });
+  }
+
   Future<void> _runSearch() async {
     if (_isSearching) {
       _cancelSearch();
@@ -980,9 +1074,10 @@ class _SearchPageState extends State<SearchPage> {
     final token = SearchCancellationToken();
     _activeSearchToken = token;
 
+    _clearProgressUiThrottle();
     setState(() {
       _isSearching = true;
-      _report = null;
+      _setReport(null);
     });
 
     try {
@@ -998,9 +1093,11 @@ class _SearchPageState extends State<SearchPage> {
           if (!mounted || token.isCancelled || sessionId != _searchSessionId) {
             return;
           }
-          setState(() {
-            _report = progress;
-          });
+          _updateProgressReportThrottled(
+            report: progress,
+            token: token,
+            sessionId: sessionId,
+          );
         },
       );
 
@@ -1009,7 +1106,7 @@ class _SearchPageState extends State<SearchPage> {
       }
 
       setState(() {
-        _report = report;
+        _setReport(report);
       });
 
       if (report.books.isEmpty) {
@@ -1026,6 +1123,7 @@ class _SearchPageState extends State<SearchPage> {
       }
       _showMessage('搜索失败，请稍后重试。');
     } finally {
+      _clearProgressUiThrottle();
       if (mounted && sessionId == _searchSessionId) {
         setState(() {
           _isSearching = false;
@@ -1043,6 +1141,7 @@ class _SearchPageState extends State<SearchPage> {
     }
 
     _activeSearchToken?.cancel();
+    _clearProgressUiThrottle();
     setState(() {
       _isSearching = false;
       _activeSearchToken = null;
@@ -1129,5 +1228,301 @@ class _SearchPageState extends State<SearchPage> {
     }
 
     ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(text)));
+  }
+}
+
+class _SourceFilterSheet extends StatefulWidget {
+  const _SourceFilterSheet({
+    required this.initialSelectedIds,
+    required this.contentMode,
+  });
+
+  final Set<String> initialSelectedIds;
+  final SearchContentMode contentMode;
+
+  @override
+  State<_SourceFilterSheet> createState() => _SourceFilterSheetState();
+}
+
+class _SourceFilterSheetState extends State<_SourceFilterSheet> {
+  static const int _kPageSize = 80;
+
+  final TextEditingController _keywordController = TextEditingController();
+  final ScrollController _scrollController = ScrollController();
+
+  Timer? _searchDebounce;
+  late Set<String> _draftSelectedIds;
+  List<SourceListItem> _visibleSources = const <SourceListItem>[];
+  bool _isInitialLoading = true;
+  bool _isPageLoading = false;
+  bool _hasMorePages = true;
+  int _nextOffset = 0;
+  int _totalCount = 0;
+  int _queryTicket = 0;
+  String? _errorText;
+
+  bool get _isMangaMode => widget.contentMode == SearchContentMode.manga;
+
+  @override
+  void initState() {
+    super.initState();
+    _draftSelectedIds = <String>{...widget.initialSelectedIds};
+    _keywordController.addListener(_onKeywordChanged);
+    _scrollController.addListener(_onScroll);
+    unawaited(_reloadSourcePage(reset: true));
+  }
+
+  @override
+  void dispose() {
+    _searchDebounce?.cancel();
+    _keywordController.removeListener(_onKeywordChanged);
+    _keywordController.dispose();
+    _scrollController.removeListener(_onScroll);
+    _scrollController.dispose();
+    super.dispose();
+  }
+
+  void _onKeywordChanged() {
+    _searchDebounce?.cancel();
+    _searchDebounce = Timer(const Duration(milliseconds: 250), () {
+      unawaited(_reloadSourcePage(reset: true));
+    });
+  }
+
+  void _onScroll() {
+    if (!_scrollController.hasClients || _isInitialLoading || _isPageLoading) {
+      return;
+    }
+
+    final position = _scrollController.position;
+    if (position.pixels + 320 >= position.maxScrollExtent) {
+      unawaited(_reloadSourcePage(reset: false));
+    }
+  }
+
+  Future<void> _reloadSourcePage({required bool reset}) async {
+    if (!reset && (!_hasMorePages || _isPageLoading)) {
+      return;
+    }
+
+    final keyword = _keywordController.text.trim();
+    final ticket = reset ? ++_queryTicket : _queryTicket;
+
+    setState(() {
+      _isPageLoading = true;
+      if (reset) {
+        _isInitialLoading = true;
+        _hasMorePages = true;
+        _nextOffset = 0;
+        _totalCount = 0;
+        _visibleSources = const <SourceListItem>[];
+        _errorText = null;
+      }
+    });
+
+    try {
+      final pageFuture = AppDatabase.instance.querySourceListItems(
+        offset: reset ? 0 : _nextOffset,
+        limit: _kPageSize,
+        keyword: keyword,
+        enabledOnly: true,
+        isMangaSource: _isMangaMode,
+      );
+
+      final totalFuture =
+          reset
+              ? AppDatabase.instance.countSourceListItems(
+                keyword: keyword,
+                enabledOnly: true,
+                isMangaSource: _isMangaMode,
+              )
+              : Future<int>.value(_totalCount);
+
+      final page = await pageFuture;
+      final total = await totalFuture;
+
+      if (!mounted || ticket != _queryTicket) {
+        return;
+      }
+
+      setState(() {
+        _totalCount = total;
+        _visibleSources = reset ? page : [..._visibleSources, ...page];
+        _nextOffset = reset ? page.length : (_nextOffset + page.length);
+        _hasMorePages = _nextOffset < _totalCount;
+        _isInitialLoading = false;
+        _isPageLoading = false;
+        _errorText = null;
+      });
+    } catch (error) {
+      if (!mounted || ticket != _queryTicket) {
+        return;
+      }
+
+      setState(() {
+        _isInitialLoading = false;
+        _isPageLoading = false;
+        _errorText = '加载书源失败：$error';
+      });
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return FractionallySizedBox(
+      heightFactor: 0.85,
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(16, 6, 16, 16),
+        child: Column(
+          children: [
+            Align(
+              alignment: Alignment.centerLeft,
+              child: Text(
+                '指定书源',
+                style: Theme.of(
+                  context,
+                ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700),
+              ),
+            ),
+            const SizedBox(height: 8),
+            TextField(
+              controller: _keywordController,
+              decoration: InputDecoration(
+                isDense: true,
+                hintText: '搜索书源名称或域名',
+                prefixIcon: const Icon(Icons.search, size: 18),
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
+              ),
+            ),
+            const SizedBox(height: 8),
+            Row(
+              children: [
+                TextButton(
+                  onPressed: () {
+                    setState(() {
+                      _draftSelectedIds = <String>{};
+                    });
+                  },
+                  child: const Text('全部书源'),
+                ),
+                const SizedBox(width: 8),
+                TextButton(
+                  onPressed: () {
+                    setState(() {
+                      _draftSelectedIds.addAll(
+                        _visibleSources.map((item) => item.id),
+                      );
+                    });
+                  },
+                  child: const Text('全选已加载'),
+                ),
+                const Spacer(),
+                Text(
+                  _draftSelectedIds.isEmpty
+                      ? '当前：全部 ($_totalCount)'
+                      : '当前：${_draftSelectedIds.length} 个',
+                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                    color: Theme.of(context).colorScheme.onSurfaceVariant,
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 4),
+            Expanded(child: _buildBody()),
+            const SizedBox(height: 8),
+            Row(
+              children: [
+                TextButton(
+                  onPressed: () => Navigator.of(context).pop(),
+                  child: const Text('取消'),
+                ),
+                const Spacer(),
+                FilledButton(
+                  onPressed:
+                      () =>
+                          Navigator.of(context).pop(_draftSelectedIds.toSet()),
+                  child: const Text('应用筛选'),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildBody() {
+    if (_isInitialLoading) {
+      return const Center(child: CircularProgressIndicator());
+    }
+
+    if (_errorText != null && _visibleSources.isEmpty) {
+      return Center(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(
+              _errorText!,
+              textAlign: TextAlign.center,
+              style: Theme.of(context).textTheme.bodySmall,
+            ),
+            const SizedBox(height: 8),
+            TextButton(
+              onPressed: () => unawaited(_reloadSourcePage(reset: true)),
+              child: const Text('重试'),
+            ),
+          ],
+        ),
+      );
+    }
+
+    if (_visibleSources.isEmpty) {
+      return Center(
+        child: Text('未匹配到书源', style: Theme.of(context).textTheme.bodyMedium),
+      );
+    }
+
+    final itemCount = _visibleSources.length + (_isPageLoading ? 1 : 0);
+    return ListView.builder(
+      controller: _scrollController,
+      itemCount: itemCount,
+      itemBuilder: (context, index) {
+        if (index >= _visibleSources.length) {
+          return const Padding(
+            padding: EdgeInsets.symmetric(vertical: 10),
+            child: Center(child: CircularProgressIndicator(strokeWidth: 2)),
+          );
+        }
+
+        final source = _visibleSources[index];
+        final selected = _draftSelectedIds.contains(source.id);
+        return CheckboxListTile(
+          value: selected,
+          dense: true,
+          controlAffinity: ListTileControlAffinity.leading,
+          title: Text(
+            source.name,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+          ),
+          subtitle: Text(
+            source.baseUrl,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+          ),
+          onChanged: (value) {
+            setState(() {
+              if (value ?? false) {
+                _draftSelectedIds.add(source.id);
+              } else {
+                _draftSelectedIds.remove(source.id);
+              }
+            });
+          },
+        );
+      },
+    );
   }
 }

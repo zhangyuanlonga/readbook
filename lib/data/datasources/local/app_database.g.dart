@@ -1353,16 +1353,1372 @@ class ChapterCachesCompanion extends UpdateCompanion<ChapterCache> {
   }
 }
 
+class $StoredLocalBooksTable extends StoredLocalBooks
+    with TableInfo<$StoredLocalBooksTable, StoredLocalBook> {
+  @override
+  final GeneratedDatabase attachedDatabase;
+  final String? _alias;
+  $StoredLocalBooksTable(this.attachedDatabase, [this._alias]);
+  static const VerificationMeta _idMeta = const VerificationMeta('id');
+  @override
+  late final GeneratedColumn<String> id = GeneratedColumn<String>(
+    'id',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _titleMeta = const VerificationMeta('title');
+  @override
+  late final GeneratedColumn<String> title = GeneratedColumn<String>(
+    'title',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _formatMeta = const VerificationMeta('format');
+  @override
+  late final GeneratedColumn<String> format = GeneratedColumn<String>(
+    'format',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _storagePathMeta = const VerificationMeta(
+    'storagePath',
+  );
+  @override
+  late final GeneratedColumn<String> storagePath = GeneratedColumn<String>(
+    'storage_path',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _sourcePathMeta = const VerificationMeta(
+    'sourcePath',
+  );
+  @override
+  late final GeneratedColumn<String> sourcePath = GeneratedColumn<String>(
+    'source_path',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _fileSizeMeta = const VerificationMeta(
+    'fileSize',
+  );
+  @override
+  late final GeneratedColumn<int> fileSize = GeneratedColumn<int>(
+    'file_size',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _authorMeta = const VerificationMeta('author');
+  @override
+  late final GeneratedColumn<String> author = GeneratedColumn<String>(
+    'author',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _coverPathMeta = const VerificationMeta(
+    'coverPath',
+  );
+  @override
+  late final GeneratedColumn<String> coverPath = GeneratedColumn<String>(
+    'cover_path',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _indexStatusMeta = const VerificationMeta(
+    'indexStatus',
+  );
+  @override
+  late final GeneratedColumn<String> indexStatus = GeneratedColumn<String>(
+    'index_status',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+    defaultValue: const Constant('pending'),
+  );
+  static const VerificationMeta _chapterCountMeta = const VerificationMeta(
+    'chapterCount',
+  );
+  @override
+  late final GeneratedColumn<int> chapterCount = GeneratedColumn<int>(
+    'chapter_count',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+    defaultValue: const Constant(0),
+  );
+  static const VerificationMeta _lastErrorMeta = const VerificationMeta(
+    'lastError',
+  );
+  @override
+  late final GeneratedColumn<String> lastError = GeneratedColumn<String>(
+    'last_error',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _createdAtMeta = const VerificationMeta(
+    'createdAt',
+  );
+  @override
+  late final GeneratedColumn<DateTime> createdAt = GeneratedColumn<DateTime>(
+    'created_at',
+    aliasedName,
+    false,
+    type: DriftSqlType.dateTime,
+    requiredDuringInsert: false,
+    defaultValue: currentDateAndTime,
+  );
+  static const VerificationMeta _updatedAtMeta = const VerificationMeta(
+    'updatedAt',
+  );
+  @override
+  late final GeneratedColumn<DateTime> updatedAt = GeneratedColumn<DateTime>(
+    'updated_at',
+    aliasedName,
+    false,
+    type: DriftSqlType.dateTime,
+    requiredDuringInsert: false,
+    defaultValue: currentDateAndTime,
+  );
+  @override
+  List<GeneratedColumn> get $columns => [
+    id,
+    title,
+    format,
+    storagePath,
+    sourcePath,
+    fileSize,
+    author,
+    coverPath,
+    indexStatus,
+    chapterCount,
+    lastError,
+    createdAt,
+    updatedAt,
+  ];
+  @override
+  String get aliasedName => _alias ?? actualTableName;
+  @override
+  String get actualTableName => $name;
+  static const String $name = 'local_books';
+  @override
+  VerificationContext validateIntegrity(
+    Insertable<StoredLocalBook> instance, {
+    bool isInserting = false,
+  }) {
+    final context = VerificationContext();
+    final data = instance.toColumns(true);
+    if (data.containsKey('id')) {
+      context.handle(_idMeta, id.isAcceptableOrUnknown(data['id']!, _idMeta));
+    } else if (isInserting) {
+      context.missing(_idMeta);
+    }
+    if (data.containsKey('title')) {
+      context.handle(
+        _titleMeta,
+        title.isAcceptableOrUnknown(data['title']!, _titleMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_titleMeta);
+    }
+    if (data.containsKey('format')) {
+      context.handle(
+        _formatMeta,
+        format.isAcceptableOrUnknown(data['format']!, _formatMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_formatMeta);
+    }
+    if (data.containsKey('storage_path')) {
+      context.handle(
+        _storagePathMeta,
+        storagePath.isAcceptableOrUnknown(
+          data['storage_path']!,
+          _storagePathMeta,
+        ),
+      );
+    } else if (isInserting) {
+      context.missing(_storagePathMeta);
+    }
+    if (data.containsKey('source_path')) {
+      context.handle(
+        _sourcePathMeta,
+        sourcePath.isAcceptableOrUnknown(data['source_path']!, _sourcePathMeta),
+      );
+    }
+    if (data.containsKey('file_size')) {
+      context.handle(
+        _fileSizeMeta,
+        fileSize.isAcceptableOrUnknown(data['file_size']!, _fileSizeMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_fileSizeMeta);
+    }
+    if (data.containsKey('author')) {
+      context.handle(
+        _authorMeta,
+        author.isAcceptableOrUnknown(data['author']!, _authorMeta),
+      );
+    }
+    if (data.containsKey('cover_path')) {
+      context.handle(
+        _coverPathMeta,
+        coverPath.isAcceptableOrUnknown(data['cover_path']!, _coverPathMeta),
+      );
+    }
+    if (data.containsKey('index_status')) {
+      context.handle(
+        _indexStatusMeta,
+        indexStatus.isAcceptableOrUnknown(
+          data['index_status']!,
+          _indexStatusMeta,
+        ),
+      );
+    }
+    if (data.containsKey('chapter_count')) {
+      context.handle(
+        _chapterCountMeta,
+        chapterCount.isAcceptableOrUnknown(
+          data['chapter_count']!,
+          _chapterCountMeta,
+        ),
+      );
+    }
+    if (data.containsKey('last_error')) {
+      context.handle(
+        _lastErrorMeta,
+        lastError.isAcceptableOrUnknown(data['last_error']!, _lastErrorMeta),
+      );
+    }
+    if (data.containsKey('created_at')) {
+      context.handle(
+        _createdAtMeta,
+        createdAt.isAcceptableOrUnknown(data['created_at']!, _createdAtMeta),
+      );
+    }
+    if (data.containsKey('updated_at')) {
+      context.handle(
+        _updatedAtMeta,
+        updatedAt.isAcceptableOrUnknown(data['updated_at']!, _updatedAtMeta),
+      );
+    }
+    return context;
+  }
+
+  @override
+  Set<GeneratedColumn> get $primaryKey => {id};
+  @override
+  StoredLocalBook map(Map<String, dynamic> data, {String? tablePrefix}) {
+    final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
+    return StoredLocalBook(
+      id:
+          attachedDatabase.typeMapping.read(
+            DriftSqlType.string,
+            data['${effectivePrefix}id'],
+          )!,
+      title:
+          attachedDatabase.typeMapping.read(
+            DriftSqlType.string,
+            data['${effectivePrefix}title'],
+          )!,
+      format:
+          attachedDatabase.typeMapping.read(
+            DriftSqlType.string,
+            data['${effectivePrefix}format'],
+          )!,
+      storagePath:
+          attachedDatabase.typeMapping.read(
+            DriftSqlType.string,
+            data['${effectivePrefix}storage_path'],
+          )!,
+      sourcePath: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}source_path'],
+      ),
+      fileSize:
+          attachedDatabase.typeMapping.read(
+            DriftSqlType.int,
+            data['${effectivePrefix}file_size'],
+          )!,
+      author: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}author'],
+      ),
+      coverPath: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}cover_path'],
+      ),
+      indexStatus:
+          attachedDatabase.typeMapping.read(
+            DriftSqlType.string,
+            data['${effectivePrefix}index_status'],
+          )!,
+      chapterCount:
+          attachedDatabase.typeMapping.read(
+            DriftSqlType.int,
+            data['${effectivePrefix}chapter_count'],
+          )!,
+      lastError: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}last_error'],
+      ),
+      createdAt:
+          attachedDatabase.typeMapping.read(
+            DriftSqlType.dateTime,
+            data['${effectivePrefix}created_at'],
+          )!,
+      updatedAt:
+          attachedDatabase.typeMapping.read(
+            DriftSqlType.dateTime,
+            data['${effectivePrefix}updated_at'],
+          )!,
+    );
+  }
+
+  @override
+  $StoredLocalBooksTable createAlias(String alias) {
+    return $StoredLocalBooksTable(attachedDatabase, alias);
+  }
+}
+
+class StoredLocalBook extends DataClass implements Insertable<StoredLocalBook> {
+  final String id;
+  final String title;
+  final String format;
+  final String storagePath;
+  final String? sourcePath;
+  final int fileSize;
+  final String? author;
+  final String? coverPath;
+  final String indexStatus;
+  final int chapterCount;
+  final String? lastError;
+  final DateTime createdAt;
+  final DateTime updatedAt;
+  const StoredLocalBook({
+    required this.id,
+    required this.title,
+    required this.format,
+    required this.storagePath,
+    this.sourcePath,
+    required this.fileSize,
+    this.author,
+    this.coverPath,
+    required this.indexStatus,
+    required this.chapterCount,
+    this.lastError,
+    required this.createdAt,
+    required this.updatedAt,
+  });
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    map['id'] = Variable<String>(id);
+    map['title'] = Variable<String>(title);
+    map['format'] = Variable<String>(format);
+    map['storage_path'] = Variable<String>(storagePath);
+    if (!nullToAbsent || sourcePath != null) {
+      map['source_path'] = Variable<String>(sourcePath);
+    }
+    map['file_size'] = Variable<int>(fileSize);
+    if (!nullToAbsent || author != null) {
+      map['author'] = Variable<String>(author);
+    }
+    if (!nullToAbsent || coverPath != null) {
+      map['cover_path'] = Variable<String>(coverPath);
+    }
+    map['index_status'] = Variable<String>(indexStatus);
+    map['chapter_count'] = Variable<int>(chapterCount);
+    if (!nullToAbsent || lastError != null) {
+      map['last_error'] = Variable<String>(lastError);
+    }
+    map['created_at'] = Variable<DateTime>(createdAt);
+    map['updated_at'] = Variable<DateTime>(updatedAt);
+    return map;
+  }
+
+  StoredLocalBooksCompanion toCompanion(bool nullToAbsent) {
+    return StoredLocalBooksCompanion(
+      id: Value(id),
+      title: Value(title),
+      format: Value(format),
+      storagePath: Value(storagePath),
+      sourcePath:
+          sourcePath == null && nullToAbsent
+              ? const Value.absent()
+              : Value(sourcePath),
+      fileSize: Value(fileSize),
+      author:
+          author == null && nullToAbsent ? const Value.absent() : Value(author),
+      coverPath:
+          coverPath == null && nullToAbsent
+              ? const Value.absent()
+              : Value(coverPath),
+      indexStatus: Value(indexStatus),
+      chapterCount: Value(chapterCount),
+      lastError:
+          lastError == null && nullToAbsent
+              ? const Value.absent()
+              : Value(lastError),
+      createdAt: Value(createdAt),
+      updatedAt: Value(updatedAt),
+    );
+  }
+
+  factory StoredLocalBook.fromJson(
+    Map<String, dynamic> json, {
+    ValueSerializer? serializer,
+  }) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return StoredLocalBook(
+      id: serializer.fromJson<String>(json['id']),
+      title: serializer.fromJson<String>(json['title']),
+      format: serializer.fromJson<String>(json['format']),
+      storagePath: serializer.fromJson<String>(json['storagePath']),
+      sourcePath: serializer.fromJson<String?>(json['sourcePath']),
+      fileSize: serializer.fromJson<int>(json['fileSize']),
+      author: serializer.fromJson<String?>(json['author']),
+      coverPath: serializer.fromJson<String?>(json['coverPath']),
+      indexStatus: serializer.fromJson<String>(json['indexStatus']),
+      chapterCount: serializer.fromJson<int>(json['chapterCount']),
+      lastError: serializer.fromJson<String?>(json['lastError']),
+      createdAt: serializer.fromJson<DateTime>(json['createdAt']),
+      updatedAt: serializer.fromJson<DateTime>(json['updatedAt']),
+    );
+  }
+  @override
+  Map<String, dynamic> toJson({ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return <String, dynamic>{
+      'id': serializer.toJson<String>(id),
+      'title': serializer.toJson<String>(title),
+      'format': serializer.toJson<String>(format),
+      'storagePath': serializer.toJson<String>(storagePath),
+      'sourcePath': serializer.toJson<String?>(sourcePath),
+      'fileSize': serializer.toJson<int>(fileSize),
+      'author': serializer.toJson<String?>(author),
+      'coverPath': serializer.toJson<String?>(coverPath),
+      'indexStatus': serializer.toJson<String>(indexStatus),
+      'chapterCount': serializer.toJson<int>(chapterCount),
+      'lastError': serializer.toJson<String?>(lastError),
+      'createdAt': serializer.toJson<DateTime>(createdAt),
+      'updatedAt': serializer.toJson<DateTime>(updatedAt),
+    };
+  }
+
+  StoredLocalBook copyWith({
+    String? id,
+    String? title,
+    String? format,
+    String? storagePath,
+    Value<String?> sourcePath = const Value.absent(),
+    int? fileSize,
+    Value<String?> author = const Value.absent(),
+    Value<String?> coverPath = const Value.absent(),
+    String? indexStatus,
+    int? chapterCount,
+    Value<String?> lastError = const Value.absent(),
+    DateTime? createdAt,
+    DateTime? updatedAt,
+  }) => StoredLocalBook(
+    id: id ?? this.id,
+    title: title ?? this.title,
+    format: format ?? this.format,
+    storagePath: storagePath ?? this.storagePath,
+    sourcePath: sourcePath.present ? sourcePath.value : this.sourcePath,
+    fileSize: fileSize ?? this.fileSize,
+    author: author.present ? author.value : this.author,
+    coverPath: coverPath.present ? coverPath.value : this.coverPath,
+    indexStatus: indexStatus ?? this.indexStatus,
+    chapterCount: chapterCount ?? this.chapterCount,
+    lastError: lastError.present ? lastError.value : this.lastError,
+    createdAt: createdAt ?? this.createdAt,
+    updatedAt: updatedAt ?? this.updatedAt,
+  );
+  StoredLocalBook copyWithCompanion(StoredLocalBooksCompanion data) {
+    return StoredLocalBook(
+      id: data.id.present ? data.id.value : this.id,
+      title: data.title.present ? data.title.value : this.title,
+      format: data.format.present ? data.format.value : this.format,
+      storagePath:
+          data.storagePath.present ? data.storagePath.value : this.storagePath,
+      sourcePath:
+          data.sourcePath.present ? data.sourcePath.value : this.sourcePath,
+      fileSize: data.fileSize.present ? data.fileSize.value : this.fileSize,
+      author: data.author.present ? data.author.value : this.author,
+      coverPath: data.coverPath.present ? data.coverPath.value : this.coverPath,
+      indexStatus:
+          data.indexStatus.present ? data.indexStatus.value : this.indexStatus,
+      chapterCount:
+          data.chapterCount.present
+              ? data.chapterCount.value
+              : this.chapterCount,
+      lastError: data.lastError.present ? data.lastError.value : this.lastError,
+      createdAt: data.createdAt.present ? data.createdAt.value : this.createdAt,
+      updatedAt: data.updatedAt.present ? data.updatedAt.value : this.updatedAt,
+    );
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('StoredLocalBook(')
+          ..write('id: $id, ')
+          ..write('title: $title, ')
+          ..write('format: $format, ')
+          ..write('storagePath: $storagePath, ')
+          ..write('sourcePath: $sourcePath, ')
+          ..write('fileSize: $fileSize, ')
+          ..write('author: $author, ')
+          ..write('coverPath: $coverPath, ')
+          ..write('indexStatus: $indexStatus, ')
+          ..write('chapterCount: $chapterCount, ')
+          ..write('lastError: $lastError, ')
+          ..write('createdAt: $createdAt, ')
+          ..write('updatedAt: $updatedAt')
+          ..write(')'))
+        .toString();
+  }
+
+  @override
+  int get hashCode => Object.hash(
+    id,
+    title,
+    format,
+    storagePath,
+    sourcePath,
+    fileSize,
+    author,
+    coverPath,
+    indexStatus,
+    chapterCount,
+    lastError,
+    createdAt,
+    updatedAt,
+  );
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is StoredLocalBook &&
+          other.id == this.id &&
+          other.title == this.title &&
+          other.format == this.format &&
+          other.storagePath == this.storagePath &&
+          other.sourcePath == this.sourcePath &&
+          other.fileSize == this.fileSize &&
+          other.author == this.author &&
+          other.coverPath == this.coverPath &&
+          other.indexStatus == this.indexStatus &&
+          other.chapterCount == this.chapterCount &&
+          other.lastError == this.lastError &&
+          other.createdAt == this.createdAt &&
+          other.updatedAt == this.updatedAt);
+}
+
+class StoredLocalBooksCompanion extends UpdateCompanion<StoredLocalBook> {
+  final Value<String> id;
+  final Value<String> title;
+  final Value<String> format;
+  final Value<String> storagePath;
+  final Value<String?> sourcePath;
+  final Value<int> fileSize;
+  final Value<String?> author;
+  final Value<String?> coverPath;
+  final Value<String> indexStatus;
+  final Value<int> chapterCount;
+  final Value<String?> lastError;
+  final Value<DateTime> createdAt;
+  final Value<DateTime> updatedAt;
+  final Value<int> rowid;
+  const StoredLocalBooksCompanion({
+    this.id = const Value.absent(),
+    this.title = const Value.absent(),
+    this.format = const Value.absent(),
+    this.storagePath = const Value.absent(),
+    this.sourcePath = const Value.absent(),
+    this.fileSize = const Value.absent(),
+    this.author = const Value.absent(),
+    this.coverPath = const Value.absent(),
+    this.indexStatus = const Value.absent(),
+    this.chapterCount = const Value.absent(),
+    this.lastError = const Value.absent(),
+    this.createdAt = const Value.absent(),
+    this.updatedAt = const Value.absent(),
+    this.rowid = const Value.absent(),
+  });
+  StoredLocalBooksCompanion.insert({
+    required String id,
+    required String title,
+    required String format,
+    required String storagePath,
+    this.sourcePath = const Value.absent(),
+    required int fileSize,
+    this.author = const Value.absent(),
+    this.coverPath = const Value.absent(),
+    this.indexStatus = const Value.absent(),
+    this.chapterCount = const Value.absent(),
+    this.lastError = const Value.absent(),
+    this.createdAt = const Value.absent(),
+    this.updatedAt = const Value.absent(),
+    this.rowid = const Value.absent(),
+  }) : id = Value(id),
+       title = Value(title),
+       format = Value(format),
+       storagePath = Value(storagePath),
+       fileSize = Value(fileSize);
+  static Insertable<StoredLocalBook> custom({
+    Expression<String>? id,
+    Expression<String>? title,
+    Expression<String>? format,
+    Expression<String>? storagePath,
+    Expression<String>? sourcePath,
+    Expression<int>? fileSize,
+    Expression<String>? author,
+    Expression<String>? coverPath,
+    Expression<String>? indexStatus,
+    Expression<int>? chapterCount,
+    Expression<String>? lastError,
+    Expression<DateTime>? createdAt,
+    Expression<DateTime>? updatedAt,
+    Expression<int>? rowid,
+  }) {
+    return RawValuesInsertable({
+      if (id != null) 'id': id,
+      if (title != null) 'title': title,
+      if (format != null) 'format': format,
+      if (storagePath != null) 'storage_path': storagePath,
+      if (sourcePath != null) 'source_path': sourcePath,
+      if (fileSize != null) 'file_size': fileSize,
+      if (author != null) 'author': author,
+      if (coverPath != null) 'cover_path': coverPath,
+      if (indexStatus != null) 'index_status': indexStatus,
+      if (chapterCount != null) 'chapter_count': chapterCount,
+      if (lastError != null) 'last_error': lastError,
+      if (createdAt != null) 'created_at': createdAt,
+      if (updatedAt != null) 'updated_at': updatedAt,
+      if (rowid != null) 'rowid': rowid,
+    });
+  }
+
+  StoredLocalBooksCompanion copyWith({
+    Value<String>? id,
+    Value<String>? title,
+    Value<String>? format,
+    Value<String>? storagePath,
+    Value<String?>? sourcePath,
+    Value<int>? fileSize,
+    Value<String?>? author,
+    Value<String?>? coverPath,
+    Value<String>? indexStatus,
+    Value<int>? chapterCount,
+    Value<String?>? lastError,
+    Value<DateTime>? createdAt,
+    Value<DateTime>? updatedAt,
+    Value<int>? rowid,
+  }) {
+    return StoredLocalBooksCompanion(
+      id: id ?? this.id,
+      title: title ?? this.title,
+      format: format ?? this.format,
+      storagePath: storagePath ?? this.storagePath,
+      sourcePath: sourcePath ?? this.sourcePath,
+      fileSize: fileSize ?? this.fileSize,
+      author: author ?? this.author,
+      coverPath: coverPath ?? this.coverPath,
+      indexStatus: indexStatus ?? this.indexStatus,
+      chapterCount: chapterCount ?? this.chapterCount,
+      lastError: lastError ?? this.lastError,
+      createdAt: createdAt ?? this.createdAt,
+      updatedAt: updatedAt ?? this.updatedAt,
+      rowid: rowid ?? this.rowid,
+    );
+  }
+
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    if (id.present) {
+      map['id'] = Variable<String>(id.value);
+    }
+    if (title.present) {
+      map['title'] = Variable<String>(title.value);
+    }
+    if (format.present) {
+      map['format'] = Variable<String>(format.value);
+    }
+    if (storagePath.present) {
+      map['storage_path'] = Variable<String>(storagePath.value);
+    }
+    if (sourcePath.present) {
+      map['source_path'] = Variable<String>(sourcePath.value);
+    }
+    if (fileSize.present) {
+      map['file_size'] = Variable<int>(fileSize.value);
+    }
+    if (author.present) {
+      map['author'] = Variable<String>(author.value);
+    }
+    if (coverPath.present) {
+      map['cover_path'] = Variable<String>(coverPath.value);
+    }
+    if (indexStatus.present) {
+      map['index_status'] = Variable<String>(indexStatus.value);
+    }
+    if (chapterCount.present) {
+      map['chapter_count'] = Variable<int>(chapterCount.value);
+    }
+    if (lastError.present) {
+      map['last_error'] = Variable<String>(lastError.value);
+    }
+    if (createdAt.present) {
+      map['created_at'] = Variable<DateTime>(createdAt.value);
+    }
+    if (updatedAt.present) {
+      map['updated_at'] = Variable<DateTime>(updatedAt.value);
+    }
+    if (rowid.present) {
+      map['rowid'] = Variable<int>(rowid.value);
+    }
+    return map;
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('StoredLocalBooksCompanion(')
+          ..write('id: $id, ')
+          ..write('title: $title, ')
+          ..write('format: $format, ')
+          ..write('storagePath: $storagePath, ')
+          ..write('sourcePath: $sourcePath, ')
+          ..write('fileSize: $fileSize, ')
+          ..write('author: $author, ')
+          ..write('coverPath: $coverPath, ')
+          ..write('indexStatus: $indexStatus, ')
+          ..write('chapterCount: $chapterCount, ')
+          ..write('lastError: $lastError, ')
+          ..write('createdAt: $createdAt, ')
+          ..write('updatedAt: $updatedAt, ')
+          ..write('rowid: $rowid')
+          ..write(')'))
+        .toString();
+  }
+}
+
+class $StoredLocalChaptersTable extends StoredLocalChapters
+    with TableInfo<$StoredLocalChaptersTable, StoredLocalChapter> {
+  @override
+  final GeneratedDatabase attachedDatabase;
+  final String? _alias;
+  $StoredLocalChaptersTable(this.attachedDatabase, [this._alias]);
+  static const VerificationMeta _idMeta = const VerificationMeta('id');
+  @override
+  late final GeneratedColumn<String> id = GeneratedColumn<String>(
+    'id',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _bookIdMeta = const VerificationMeta('bookId');
+  @override
+  late final GeneratedColumn<String> bookId = GeneratedColumn<String>(
+    'book_id',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _chapterIndexMeta = const VerificationMeta(
+    'chapterIndex',
+  );
+  @override
+  late final GeneratedColumn<int> chapterIndex = GeneratedColumn<int>(
+    'chapter_index',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _titleMeta = const VerificationMeta('title');
+  @override
+  late final GeneratedColumn<String> title = GeneratedColumn<String>(
+    'title',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _contentMeta = const VerificationMeta(
+    'content',
+  );
+  @override
+  late final GeneratedColumn<String> content = GeneratedColumn<String>(
+    'content',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _startOffsetMeta = const VerificationMeta(
+    'startOffset',
+  );
+  @override
+  late final GeneratedColumn<int> startOffset = GeneratedColumn<int>(
+    'start_offset',
+    aliasedName,
+    true,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _endOffsetMeta = const VerificationMeta(
+    'endOffset',
+  );
+  @override
+  late final GeneratedColumn<int> endOffset = GeneratedColumn<int>(
+    'end_offset',
+    aliasedName,
+    true,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _createdAtMeta = const VerificationMeta(
+    'createdAt',
+  );
+  @override
+  late final GeneratedColumn<DateTime> createdAt = GeneratedColumn<DateTime>(
+    'created_at',
+    aliasedName,
+    false,
+    type: DriftSqlType.dateTime,
+    requiredDuringInsert: false,
+    defaultValue: currentDateAndTime,
+  );
+  static const VerificationMeta _updatedAtMeta = const VerificationMeta(
+    'updatedAt',
+  );
+  @override
+  late final GeneratedColumn<DateTime> updatedAt = GeneratedColumn<DateTime>(
+    'updated_at',
+    aliasedName,
+    false,
+    type: DriftSqlType.dateTime,
+    requiredDuringInsert: false,
+    defaultValue: currentDateAndTime,
+  );
+  @override
+  List<GeneratedColumn> get $columns => [
+    id,
+    bookId,
+    chapterIndex,
+    title,
+    content,
+    startOffset,
+    endOffset,
+    createdAt,
+    updatedAt,
+  ];
+  @override
+  String get aliasedName => _alias ?? actualTableName;
+  @override
+  String get actualTableName => $name;
+  static const String $name = 'local_chapters';
+  @override
+  VerificationContext validateIntegrity(
+    Insertable<StoredLocalChapter> instance, {
+    bool isInserting = false,
+  }) {
+    final context = VerificationContext();
+    final data = instance.toColumns(true);
+    if (data.containsKey('id')) {
+      context.handle(_idMeta, id.isAcceptableOrUnknown(data['id']!, _idMeta));
+    } else if (isInserting) {
+      context.missing(_idMeta);
+    }
+    if (data.containsKey('book_id')) {
+      context.handle(
+        _bookIdMeta,
+        bookId.isAcceptableOrUnknown(data['book_id']!, _bookIdMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_bookIdMeta);
+    }
+    if (data.containsKey('chapter_index')) {
+      context.handle(
+        _chapterIndexMeta,
+        chapterIndex.isAcceptableOrUnknown(
+          data['chapter_index']!,
+          _chapterIndexMeta,
+        ),
+      );
+    } else if (isInserting) {
+      context.missing(_chapterIndexMeta);
+    }
+    if (data.containsKey('title')) {
+      context.handle(
+        _titleMeta,
+        title.isAcceptableOrUnknown(data['title']!, _titleMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_titleMeta);
+    }
+    if (data.containsKey('content')) {
+      context.handle(
+        _contentMeta,
+        content.isAcceptableOrUnknown(data['content']!, _contentMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_contentMeta);
+    }
+    if (data.containsKey('start_offset')) {
+      context.handle(
+        _startOffsetMeta,
+        startOffset.isAcceptableOrUnknown(
+          data['start_offset']!,
+          _startOffsetMeta,
+        ),
+      );
+    }
+    if (data.containsKey('end_offset')) {
+      context.handle(
+        _endOffsetMeta,
+        endOffset.isAcceptableOrUnknown(data['end_offset']!, _endOffsetMeta),
+      );
+    }
+    if (data.containsKey('created_at')) {
+      context.handle(
+        _createdAtMeta,
+        createdAt.isAcceptableOrUnknown(data['created_at']!, _createdAtMeta),
+      );
+    }
+    if (data.containsKey('updated_at')) {
+      context.handle(
+        _updatedAtMeta,
+        updatedAt.isAcceptableOrUnknown(data['updated_at']!, _updatedAtMeta),
+      );
+    }
+    return context;
+  }
+
+  @override
+  Set<GeneratedColumn> get $primaryKey => {id};
+  @override
+  List<Set<GeneratedColumn>> get uniqueKeys => [
+    {bookId, chapterIndex},
+  ];
+  @override
+  StoredLocalChapter map(Map<String, dynamic> data, {String? tablePrefix}) {
+    final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
+    return StoredLocalChapter(
+      id:
+          attachedDatabase.typeMapping.read(
+            DriftSqlType.string,
+            data['${effectivePrefix}id'],
+          )!,
+      bookId:
+          attachedDatabase.typeMapping.read(
+            DriftSqlType.string,
+            data['${effectivePrefix}book_id'],
+          )!,
+      chapterIndex:
+          attachedDatabase.typeMapping.read(
+            DriftSqlType.int,
+            data['${effectivePrefix}chapter_index'],
+          )!,
+      title:
+          attachedDatabase.typeMapping.read(
+            DriftSqlType.string,
+            data['${effectivePrefix}title'],
+          )!,
+      content:
+          attachedDatabase.typeMapping.read(
+            DriftSqlType.string,
+            data['${effectivePrefix}content'],
+          )!,
+      startOffset: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}start_offset'],
+      ),
+      endOffset: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}end_offset'],
+      ),
+      createdAt:
+          attachedDatabase.typeMapping.read(
+            DriftSqlType.dateTime,
+            data['${effectivePrefix}created_at'],
+          )!,
+      updatedAt:
+          attachedDatabase.typeMapping.read(
+            DriftSqlType.dateTime,
+            data['${effectivePrefix}updated_at'],
+          )!,
+    );
+  }
+
+  @override
+  $StoredLocalChaptersTable createAlias(String alias) {
+    return $StoredLocalChaptersTable(attachedDatabase, alias);
+  }
+}
+
+class StoredLocalChapter extends DataClass
+    implements Insertable<StoredLocalChapter> {
+  final String id;
+  final String bookId;
+  final int chapterIndex;
+  final String title;
+  final String content;
+  final int? startOffset;
+  final int? endOffset;
+  final DateTime createdAt;
+  final DateTime updatedAt;
+  const StoredLocalChapter({
+    required this.id,
+    required this.bookId,
+    required this.chapterIndex,
+    required this.title,
+    required this.content,
+    this.startOffset,
+    this.endOffset,
+    required this.createdAt,
+    required this.updatedAt,
+  });
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    map['id'] = Variable<String>(id);
+    map['book_id'] = Variable<String>(bookId);
+    map['chapter_index'] = Variable<int>(chapterIndex);
+    map['title'] = Variable<String>(title);
+    map['content'] = Variable<String>(content);
+    if (!nullToAbsent || startOffset != null) {
+      map['start_offset'] = Variable<int>(startOffset);
+    }
+    if (!nullToAbsent || endOffset != null) {
+      map['end_offset'] = Variable<int>(endOffset);
+    }
+    map['created_at'] = Variable<DateTime>(createdAt);
+    map['updated_at'] = Variable<DateTime>(updatedAt);
+    return map;
+  }
+
+  StoredLocalChaptersCompanion toCompanion(bool nullToAbsent) {
+    return StoredLocalChaptersCompanion(
+      id: Value(id),
+      bookId: Value(bookId),
+      chapterIndex: Value(chapterIndex),
+      title: Value(title),
+      content: Value(content),
+      startOffset:
+          startOffset == null && nullToAbsent
+              ? const Value.absent()
+              : Value(startOffset),
+      endOffset:
+          endOffset == null && nullToAbsent
+              ? const Value.absent()
+              : Value(endOffset),
+      createdAt: Value(createdAt),
+      updatedAt: Value(updatedAt),
+    );
+  }
+
+  factory StoredLocalChapter.fromJson(
+    Map<String, dynamic> json, {
+    ValueSerializer? serializer,
+  }) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return StoredLocalChapter(
+      id: serializer.fromJson<String>(json['id']),
+      bookId: serializer.fromJson<String>(json['bookId']),
+      chapterIndex: serializer.fromJson<int>(json['chapterIndex']),
+      title: serializer.fromJson<String>(json['title']),
+      content: serializer.fromJson<String>(json['content']),
+      startOffset: serializer.fromJson<int?>(json['startOffset']),
+      endOffset: serializer.fromJson<int?>(json['endOffset']),
+      createdAt: serializer.fromJson<DateTime>(json['createdAt']),
+      updatedAt: serializer.fromJson<DateTime>(json['updatedAt']),
+    );
+  }
+  @override
+  Map<String, dynamic> toJson({ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return <String, dynamic>{
+      'id': serializer.toJson<String>(id),
+      'bookId': serializer.toJson<String>(bookId),
+      'chapterIndex': serializer.toJson<int>(chapterIndex),
+      'title': serializer.toJson<String>(title),
+      'content': serializer.toJson<String>(content),
+      'startOffset': serializer.toJson<int?>(startOffset),
+      'endOffset': serializer.toJson<int?>(endOffset),
+      'createdAt': serializer.toJson<DateTime>(createdAt),
+      'updatedAt': serializer.toJson<DateTime>(updatedAt),
+    };
+  }
+
+  StoredLocalChapter copyWith({
+    String? id,
+    String? bookId,
+    int? chapterIndex,
+    String? title,
+    String? content,
+    Value<int?> startOffset = const Value.absent(),
+    Value<int?> endOffset = const Value.absent(),
+    DateTime? createdAt,
+    DateTime? updatedAt,
+  }) => StoredLocalChapter(
+    id: id ?? this.id,
+    bookId: bookId ?? this.bookId,
+    chapterIndex: chapterIndex ?? this.chapterIndex,
+    title: title ?? this.title,
+    content: content ?? this.content,
+    startOffset: startOffset.present ? startOffset.value : this.startOffset,
+    endOffset: endOffset.present ? endOffset.value : this.endOffset,
+    createdAt: createdAt ?? this.createdAt,
+    updatedAt: updatedAt ?? this.updatedAt,
+  );
+  StoredLocalChapter copyWithCompanion(StoredLocalChaptersCompanion data) {
+    return StoredLocalChapter(
+      id: data.id.present ? data.id.value : this.id,
+      bookId: data.bookId.present ? data.bookId.value : this.bookId,
+      chapterIndex:
+          data.chapterIndex.present
+              ? data.chapterIndex.value
+              : this.chapterIndex,
+      title: data.title.present ? data.title.value : this.title,
+      content: data.content.present ? data.content.value : this.content,
+      startOffset:
+          data.startOffset.present ? data.startOffset.value : this.startOffset,
+      endOffset: data.endOffset.present ? data.endOffset.value : this.endOffset,
+      createdAt: data.createdAt.present ? data.createdAt.value : this.createdAt,
+      updatedAt: data.updatedAt.present ? data.updatedAt.value : this.updatedAt,
+    );
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('StoredLocalChapter(')
+          ..write('id: $id, ')
+          ..write('bookId: $bookId, ')
+          ..write('chapterIndex: $chapterIndex, ')
+          ..write('title: $title, ')
+          ..write('content: $content, ')
+          ..write('startOffset: $startOffset, ')
+          ..write('endOffset: $endOffset, ')
+          ..write('createdAt: $createdAt, ')
+          ..write('updatedAt: $updatedAt')
+          ..write(')'))
+        .toString();
+  }
+
+  @override
+  int get hashCode => Object.hash(
+    id,
+    bookId,
+    chapterIndex,
+    title,
+    content,
+    startOffset,
+    endOffset,
+    createdAt,
+    updatedAt,
+  );
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is StoredLocalChapter &&
+          other.id == this.id &&
+          other.bookId == this.bookId &&
+          other.chapterIndex == this.chapterIndex &&
+          other.title == this.title &&
+          other.content == this.content &&
+          other.startOffset == this.startOffset &&
+          other.endOffset == this.endOffset &&
+          other.createdAt == this.createdAt &&
+          other.updatedAt == this.updatedAt);
+}
+
+class StoredLocalChaptersCompanion extends UpdateCompanion<StoredLocalChapter> {
+  final Value<String> id;
+  final Value<String> bookId;
+  final Value<int> chapterIndex;
+  final Value<String> title;
+  final Value<String> content;
+  final Value<int?> startOffset;
+  final Value<int?> endOffset;
+  final Value<DateTime> createdAt;
+  final Value<DateTime> updatedAt;
+  final Value<int> rowid;
+  const StoredLocalChaptersCompanion({
+    this.id = const Value.absent(),
+    this.bookId = const Value.absent(),
+    this.chapterIndex = const Value.absent(),
+    this.title = const Value.absent(),
+    this.content = const Value.absent(),
+    this.startOffset = const Value.absent(),
+    this.endOffset = const Value.absent(),
+    this.createdAt = const Value.absent(),
+    this.updatedAt = const Value.absent(),
+    this.rowid = const Value.absent(),
+  });
+  StoredLocalChaptersCompanion.insert({
+    required String id,
+    required String bookId,
+    required int chapterIndex,
+    required String title,
+    required String content,
+    this.startOffset = const Value.absent(),
+    this.endOffset = const Value.absent(),
+    this.createdAt = const Value.absent(),
+    this.updatedAt = const Value.absent(),
+    this.rowid = const Value.absent(),
+  }) : id = Value(id),
+       bookId = Value(bookId),
+       chapterIndex = Value(chapterIndex),
+       title = Value(title),
+       content = Value(content);
+  static Insertable<StoredLocalChapter> custom({
+    Expression<String>? id,
+    Expression<String>? bookId,
+    Expression<int>? chapterIndex,
+    Expression<String>? title,
+    Expression<String>? content,
+    Expression<int>? startOffset,
+    Expression<int>? endOffset,
+    Expression<DateTime>? createdAt,
+    Expression<DateTime>? updatedAt,
+    Expression<int>? rowid,
+  }) {
+    return RawValuesInsertable({
+      if (id != null) 'id': id,
+      if (bookId != null) 'book_id': bookId,
+      if (chapterIndex != null) 'chapter_index': chapterIndex,
+      if (title != null) 'title': title,
+      if (content != null) 'content': content,
+      if (startOffset != null) 'start_offset': startOffset,
+      if (endOffset != null) 'end_offset': endOffset,
+      if (createdAt != null) 'created_at': createdAt,
+      if (updatedAt != null) 'updated_at': updatedAt,
+      if (rowid != null) 'rowid': rowid,
+    });
+  }
+
+  StoredLocalChaptersCompanion copyWith({
+    Value<String>? id,
+    Value<String>? bookId,
+    Value<int>? chapterIndex,
+    Value<String>? title,
+    Value<String>? content,
+    Value<int?>? startOffset,
+    Value<int?>? endOffset,
+    Value<DateTime>? createdAt,
+    Value<DateTime>? updatedAt,
+    Value<int>? rowid,
+  }) {
+    return StoredLocalChaptersCompanion(
+      id: id ?? this.id,
+      bookId: bookId ?? this.bookId,
+      chapterIndex: chapterIndex ?? this.chapterIndex,
+      title: title ?? this.title,
+      content: content ?? this.content,
+      startOffset: startOffset ?? this.startOffset,
+      endOffset: endOffset ?? this.endOffset,
+      createdAt: createdAt ?? this.createdAt,
+      updatedAt: updatedAt ?? this.updatedAt,
+      rowid: rowid ?? this.rowid,
+    );
+  }
+
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    if (id.present) {
+      map['id'] = Variable<String>(id.value);
+    }
+    if (bookId.present) {
+      map['book_id'] = Variable<String>(bookId.value);
+    }
+    if (chapterIndex.present) {
+      map['chapter_index'] = Variable<int>(chapterIndex.value);
+    }
+    if (title.present) {
+      map['title'] = Variable<String>(title.value);
+    }
+    if (content.present) {
+      map['content'] = Variable<String>(content.value);
+    }
+    if (startOffset.present) {
+      map['start_offset'] = Variable<int>(startOffset.value);
+    }
+    if (endOffset.present) {
+      map['end_offset'] = Variable<int>(endOffset.value);
+    }
+    if (createdAt.present) {
+      map['created_at'] = Variable<DateTime>(createdAt.value);
+    }
+    if (updatedAt.present) {
+      map['updated_at'] = Variable<DateTime>(updatedAt.value);
+    }
+    if (rowid.present) {
+      map['rowid'] = Variable<int>(rowid.value);
+    }
+    return map;
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('StoredLocalChaptersCompanion(')
+          ..write('id: $id, ')
+          ..write('bookId: $bookId, ')
+          ..write('chapterIndex: $chapterIndex, ')
+          ..write('title: $title, ')
+          ..write('content: $content, ')
+          ..write('startOffset: $startOffset, ')
+          ..write('endOffset: $endOffset, ')
+          ..write('createdAt: $createdAt, ')
+          ..write('updatedAt: $updatedAt, ')
+          ..write('rowid: $rowid')
+          ..write(')'))
+        .toString();
+  }
+}
+
 abstract class _$AppDatabase extends GeneratedDatabase {
   _$AppDatabase(QueryExecutor e) : super(e);
   $AppDatabaseManager get managers => $AppDatabaseManager(this);
   late final $SourcesTable sources = $SourcesTable(this);
   late final $ChapterCachesTable chapterCaches = $ChapterCachesTable(this);
+  late final $StoredLocalBooksTable storedLocalBooks = $StoredLocalBooksTable(
+    this,
+  );
+  late final $StoredLocalChaptersTable storedLocalChapters =
+      $StoredLocalChaptersTable(this);
   @override
   Iterable<TableInfo<Table, Object?>> get allTables =>
       allSchemaEntities.whereType<TableInfo<Table, Object?>>();
   @override
-  List<DatabaseSchemaEntity> get allSchemaEntities => [sources, chapterCaches];
+  List<DatabaseSchemaEntity> get allSchemaEntities => [
+    sources,
+    chapterCaches,
+    storedLocalBooks,
+    storedLocalChapters,
+  ];
 }
 
 typedef $$SourcesTableCreateCompanionBuilder =
@@ -2017,6 +3373,692 @@ typedef $$ChapterCachesTableProcessedTableManager =
       ChapterCache,
       PrefetchHooks Function()
     >;
+typedef $$StoredLocalBooksTableCreateCompanionBuilder =
+    StoredLocalBooksCompanion Function({
+      required String id,
+      required String title,
+      required String format,
+      required String storagePath,
+      Value<String?> sourcePath,
+      required int fileSize,
+      Value<String?> author,
+      Value<String?> coverPath,
+      Value<String> indexStatus,
+      Value<int> chapterCount,
+      Value<String?> lastError,
+      Value<DateTime> createdAt,
+      Value<DateTime> updatedAt,
+      Value<int> rowid,
+    });
+typedef $$StoredLocalBooksTableUpdateCompanionBuilder =
+    StoredLocalBooksCompanion Function({
+      Value<String> id,
+      Value<String> title,
+      Value<String> format,
+      Value<String> storagePath,
+      Value<String?> sourcePath,
+      Value<int> fileSize,
+      Value<String?> author,
+      Value<String?> coverPath,
+      Value<String> indexStatus,
+      Value<int> chapterCount,
+      Value<String?> lastError,
+      Value<DateTime> createdAt,
+      Value<DateTime> updatedAt,
+      Value<int> rowid,
+    });
+
+class $$StoredLocalBooksTableFilterComposer
+    extends Composer<_$AppDatabase, $StoredLocalBooksTable> {
+  $$StoredLocalBooksTableFilterComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnFilters<String> get id => $composableBuilder(
+    column: $table.id,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get title => $composableBuilder(
+    column: $table.title,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get format => $composableBuilder(
+    column: $table.format,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get storagePath => $composableBuilder(
+    column: $table.storagePath,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get sourcePath => $composableBuilder(
+    column: $table.sourcePath,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get fileSize => $composableBuilder(
+    column: $table.fileSize,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get author => $composableBuilder(
+    column: $table.author,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get coverPath => $composableBuilder(
+    column: $table.coverPath,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get indexStatus => $composableBuilder(
+    column: $table.indexStatus,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get chapterCount => $composableBuilder(
+    column: $table.chapterCount,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get lastError => $composableBuilder(
+    column: $table.lastError,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<DateTime> get createdAt => $composableBuilder(
+    column: $table.createdAt,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<DateTime> get updatedAt => $composableBuilder(
+    column: $table.updatedAt,
+    builder: (column) => ColumnFilters(column),
+  );
+}
+
+class $$StoredLocalBooksTableOrderingComposer
+    extends Composer<_$AppDatabase, $StoredLocalBooksTable> {
+  $$StoredLocalBooksTableOrderingComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnOrderings<String> get id => $composableBuilder(
+    column: $table.id,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get title => $composableBuilder(
+    column: $table.title,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get format => $composableBuilder(
+    column: $table.format,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get storagePath => $composableBuilder(
+    column: $table.storagePath,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get sourcePath => $composableBuilder(
+    column: $table.sourcePath,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get fileSize => $composableBuilder(
+    column: $table.fileSize,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get author => $composableBuilder(
+    column: $table.author,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get coverPath => $composableBuilder(
+    column: $table.coverPath,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get indexStatus => $composableBuilder(
+    column: $table.indexStatus,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get chapterCount => $composableBuilder(
+    column: $table.chapterCount,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get lastError => $composableBuilder(
+    column: $table.lastError,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<DateTime> get createdAt => $composableBuilder(
+    column: $table.createdAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<DateTime> get updatedAt => $composableBuilder(
+    column: $table.updatedAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+}
+
+class $$StoredLocalBooksTableAnnotationComposer
+    extends Composer<_$AppDatabase, $StoredLocalBooksTable> {
+  $$StoredLocalBooksTableAnnotationComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  GeneratedColumn<String> get id =>
+      $composableBuilder(column: $table.id, builder: (column) => column);
+
+  GeneratedColumn<String> get title =>
+      $composableBuilder(column: $table.title, builder: (column) => column);
+
+  GeneratedColumn<String> get format =>
+      $composableBuilder(column: $table.format, builder: (column) => column);
+
+  GeneratedColumn<String> get storagePath => $composableBuilder(
+    column: $table.storagePath,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get sourcePath => $composableBuilder(
+    column: $table.sourcePath,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<int> get fileSize =>
+      $composableBuilder(column: $table.fileSize, builder: (column) => column);
+
+  GeneratedColumn<String> get author =>
+      $composableBuilder(column: $table.author, builder: (column) => column);
+
+  GeneratedColumn<String> get coverPath =>
+      $composableBuilder(column: $table.coverPath, builder: (column) => column);
+
+  GeneratedColumn<String> get indexStatus => $composableBuilder(
+    column: $table.indexStatus,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<int> get chapterCount => $composableBuilder(
+    column: $table.chapterCount,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get lastError =>
+      $composableBuilder(column: $table.lastError, builder: (column) => column);
+
+  GeneratedColumn<DateTime> get createdAt =>
+      $composableBuilder(column: $table.createdAt, builder: (column) => column);
+
+  GeneratedColumn<DateTime> get updatedAt =>
+      $composableBuilder(column: $table.updatedAt, builder: (column) => column);
+}
+
+class $$StoredLocalBooksTableTableManager
+    extends
+        RootTableManager<
+          _$AppDatabase,
+          $StoredLocalBooksTable,
+          StoredLocalBook,
+          $$StoredLocalBooksTableFilterComposer,
+          $$StoredLocalBooksTableOrderingComposer,
+          $$StoredLocalBooksTableAnnotationComposer,
+          $$StoredLocalBooksTableCreateCompanionBuilder,
+          $$StoredLocalBooksTableUpdateCompanionBuilder,
+          (
+            StoredLocalBook,
+            BaseReferences<
+              _$AppDatabase,
+              $StoredLocalBooksTable,
+              StoredLocalBook
+            >,
+          ),
+          StoredLocalBook,
+          PrefetchHooks Function()
+        > {
+  $$StoredLocalBooksTableTableManager(
+    _$AppDatabase db,
+    $StoredLocalBooksTable table,
+  ) : super(
+        TableManagerState(
+          db: db,
+          table: table,
+          createFilteringComposer:
+              () =>
+                  $$StoredLocalBooksTableFilterComposer($db: db, $table: table),
+          createOrderingComposer:
+              () => $$StoredLocalBooksTableOrderingComposer(
+                $db: db,
+                $table: table,
+              ),
+          createComputedFieldComposer:
+              () => $$StoredLocalBooksTableAnnotationComposer(
+                $db: db,
+                $table: table,
+              ),
+          updateCompanionCallback:
+              ({
+                Value<String> id = const Value.absent(),
+                Value<String> title = const Value.absent(),
+                Value<String> format = const Value.absent(),
+                Value<String> storagePath = const Value.absent(),
+                Value<String?> sourcePath = const Value.absent(),
+                Value<int> fileSize = const Value.absent(),
+                Value<String?> author = const Value.absent(),
+                Value<String?> coverPath = const Value.absent(),
+                Value<String> indexStatus = const Value.absent(),
+                Value<int> chapterCount = const Value.absent(),
+                Value<String?> lastError = const Value.absent(),
+                Value<DateTime> createdAt = const Value.absent(),
+                Value<DateTime> updatedAt = const Value.absent(),
+                Value<int> rowid = const Value.absent(),
+              }) => StoredLocalBooksCompanion(
+                id: id,
+                title: title,
+                format: format,
+                storagePath: storagePath,
+                sourcePath: sourcePath,
+                fileSize: fileSize,
+                author: author,
+                coverPath: coverPath,
+                indexStatus: indexStatus,
+                chapterCount: chapterCount,
+                lastError: lastError,
+                createdAt: createdAt,
+                updatedAt: updatedAt,
+                rowid: rowid,
+              ),
+          createCompanionCallback:
+              ({
+                required String id,
+                required String title,
+                required String format,
+                required String storagePath,
+                Value<String?> sourcePath = const Value.absent(),
+                required int fileSize,
+                Value<String?> author = const Value.absent(),
+                Value<String?> coverPath = const Value.absent(),
+                Value<String> indexStatus = const Value.absent(),
+                Value<int> chapterCount = const Value.absent(),
+                Value<String?> lastError = const Value.absent(),
+                Value<DateTime> createdAt = const Value.absent(),
+                Value<DateTime> updatedAt = const Value.absent(),
+                Value<int> rowid = const Value.absent(),
+              }) => StoredLocalBooksCompanion.insert(
+                id: id,
+                title: title,
+                format: format,
+                storagePath: storagePath,
+                sourcePath: sourcePath,
+                fileSize: fileSize,
+                author: author,
+                coverPath: coverPath,
+                indexStatus: indexStatus,
+                chapterCount: chapterCount,
+                lastError: lastError,
+                createdAt: createdAt,
+                updatedAt: updatedAt,
+                rowid: rowid,
+              ),
+          withReferenceMapper:
+              (p0) =>
+                  p0
+                      .map(
+                        (e) => (
+                          e.readTable(table),
+                          BaseReferences(db, table, e),
+                        ),
+                      )
+                      .toList(),
+          prefetchHooksCallback: null,
+        ),
+      );
+}
+
+typedef $$StoredLocalBooksTableProcessedTableManager =
+    ProcessedTableManager<
+      _$AppDatabase,
+      $StoredLocalBooksTable,
+      StoredLocalBook,
+      $$StoredLocalBooksTableFilterComposer,
+      $$StoredLocalBooksTableOrderingComposer,
+      $$StoredLocalBooksTableAnnotationComposer,
+      $$StoredLocalBooksTableCreateCompanionBuilder,
+      $$StoredLocalBooksTableUpdateCompanionBuilder,
+      (
+        StoredLocalBook,
+        BaseReferences<_$AppDatabase, $StoredLocalBooksTable, StoredLocalBook>,
+      ),
+      StoredLocalBook,
+      PrefetchHooks Function()
+    >;
+typedef $$StoredLocalChaptersTableCreateCompanionBuilder =
+    StoredLocalChaptersCompanion Function({
+      required String id,
+      required String bookId,
+      required int chapterIndex,
+      required String title,
+      required String content,
+      Value<int?> startOffset,
+      Value<int?> endOffset,
+      Value<DateTime> createdAt,
+      Value<DateTime> updatedAt,
+      Value<int> rowid,
+    });
+typedef $$StoredLocalChaptersTableUpdateCompanionBuilder =
+    StoredLocalChaptersCompanion Function({
+      Value<String> id,
+      Value<String> bookId,
+      Value<int> chapterIndex,
+      Value<String> title,
+      Value<String> content,
+      Value<int?> startOffset,
+      Value<int?> endOffset,
+      Value<DateTime> createdAt,
+      Value<DateTime> updatedAt,
+      Value<int> rowid,
+    });
+
+class $$StoredLocalChaptersTableFilterComposer
+    extends Composer<_$AppDatabase, $StoredLocalChaptersTable> {
+  $$StoredLocalChaptersTableFilterComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnFilters<String> get id => $composableBuilder(
+    column: $table.id,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get bookId => $composableBuilder(
+    column: $table.bookId,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get chapterIndex => $composableBuilder(
+    column: $table.chapterIndex,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get title => $composableBuilder(
+    column: $table.title,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get content => $composableBuilder(
+    column: $table.content,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get startOffset => $composableBuilder(
+    column: $table.startOffset,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get endOffset => $composableBuilder(
+    column: $table.endOffset,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<DateTime> get createdAt => $composableBuilder(
+    column: $table.createdAt,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<DateTime> get updatedAt => $composableBuilder(
+    column: $table.updatedAt,
+    builder: (column) => ColumnFilters(column),
+  );
+}
+
+class $$StoredLocalChaptersTableOrderingComposer
+    extends Composer<_$AppDatabase, $StoredLocalChaptersTable> {
+  $$StoredLocalChaptersTableOrderingComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnOrderings<String> get id => $composableBuilder(
+    column: $table.id,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get bookId => $composableBuilder(
+    column: $table.bookId,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get chapterIndex => $composableBuilder(
+    column: $table.chapterIndex,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get title => $composableBuilder(
+    column: $table.title,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get content => $composableBuilder(
+    column: $table.content,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get startOffset => $composableBuilder(
+    column: $table.startOffset,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get endOffset => $composableBuilder(
+    column: $table.endOffset,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<DateTime> get createdAt => $composableBuilder(
+    column: $table.createdAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<DateTime> get updatedAt => $composableBuilder(
+    column: $table.updatedAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+}
+
+class $$StoredLocalChaptersTableAnnotationComposer
+    extends Composer<_$AppDatabase, $StoredLocalChaptersTable> {
+  $$StoredLocalChaptersTableAnnotationComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  GeneratedColumn<String> get id =>
+      $composableBuilder(column: $table.id, builder: (column) => column);
+
+  GeneratedColumn<String> get bookId =>
+      $composableBuilder(column: $table.bookId, builder: (column) => column);
+
+  GeneratedColumn<int> get chapterIndex => $composableBuilder(
+    column: $table.chapterIndex,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get title =>
+      $composableBuilder(column: $table.title, builder: (column) => column);
+
+  GeneratedColumn<String> get content =>
+      $composableBuilder(column: $table.content, builder: (column) => column);
+
+  GeneratedColumn<int> get startOffset => $composableBuilder(
+    column: $table.startOffset,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<int> get endOffset =>
+      $composableBuilder(column: $table.endOffset, builder: (column) => column);
+
+  GeneratedColumn<DateTime> get createdAt =>
+      $composableBuilder(column: $table.createdAt, builder: (column) => column);
+
+  GeneratedColumn<DateTime> get updatedAt =>
+      $composableBuilder(column: $table.updatedAt, builder: (column) => column);
+}
+
+class $$StoredLocalChaptersTableTableManager
+    extends
+        RootTableManager<
+          _$AppDatabase,
+          $StoredLocalChaptersTable,
+          StoredLocalChapter,
+          $$StoredLocalChaptersTableFilterComposer,
+          $$StoredLocalChaptersTableOrderingComposer,
+          $$StoredLocalChaptersTableAnnotationComposer,
+          $$StoredLocalChaptersTableCreateCompanionBuilder,
+          $$StoredLocalChaptersTableUpdateCompanionBuilder,
+          (
+            StoredLocalChapter,
+            BaseReferences<
+              _$AppDatabase,
+              $StoredLocalChaptersTable,
+              StoredLocalChapter
+            >,
+          ),
+          StoredLocalChapter,
+          PrefetchHooks Function()
+        > {
+  $$StoredLocalChaptersTableTableManager(
+    _$AppDatabase db,
+    $StoredLocalChaptersTable table,
+  ) : super(
+        TableManagerState(
+          db: db,
+          table: table,
+          createFilteringComposer:
+              () => $$StoredLocalChaptersTableFilterComposer(
+                $db: db,
+                $table: table,
+              ),
+          createOrderingComposer:
+              () => $$StoredLocalChaptersTableOrderingComposer(
+                $db: db,
+                $table: table,
+              ),
+          createComputedFieldComposer:
+              () => $$StoredLocalChaptersTableAnnotationComposer(
+                $db: db,
+                $table: table,
+              ),
+          updateCompanionCallback:
+              ({
+                Value<String> id = const Value.absent(),
+                Value<String> bookId = const Value.absent(),
+                Value<int> chapterIndex = const Value.absent(),
+                Value<String> title = const Value.absent(),
+                Value<String> content = const Value.absent(),
+                Value<int?> startOffset = const Value.absent(),
+                Value<int?> endOffset = const Value.absent(),
+                Value<DateTime> createdAt = const Value.absent(),
+                Value<DateTime> updatedAt = const Value.absent(),
+                Value<int> rowid = const Value.absent(),
+              }) => StoredLocalChaptersCompanion(
+                id: id,
+                bookId: bookId,
+                chapterIndex: chapterIndex,
+                title: title,
+                content: content,
+                startOffset: startOffset,
+                endOffset: endOffset,
+                createdAt: createdAt,
+                updatedAt: updatedAt,
+                rowid: rowid,
+              ),
+          createCompanionCallback:
+              ({
+                required String id,
+                required String bookId,
+                required int chapterIndex,
+                required String title,
+                required String content,
+                Value<int?> startOffset = const Value.absent(),
+                Value<int?> endOffset = const Value.absent(),
+                Value<DateTime> createdAt = const Value.absent(),
+                Value<DateTime> updatedAt = const Value.absent(),
+                Value<int> rowid = const Value.absent(),
+              }) => StoredLocalChaptersCompanion.insert(
+                id: id,
+                bookId: bookId,
+                chapterIndex: chapterIndex,
+                title: title,
+                content: content,
+                startOffset: startOffset,
+                endOffset: endOffset,
+                createdAt: createdAt,
+                updatedAt: updatedAt,
+                rowid: rowid,
+              ),
+          withReferenceMapper:
+              (p0) =>
+                  p0
+                      .map(
+                        (e) => (
+                          e.readTable(table),
+                          BaseReferences(db, table, e),
+                        ),
+                      )
+                      .toList(),
+          prefetchHooksCallback: null,
+        ),
+      );
+}
+
+typedef $$StoredLocalChaptersTableProcessedTableManager =
+    ProcessedTableManager<
+      _$AppDatabase,
+      $StoredLocalChaptersTable,
+      StoredLocalChapter,
+      $$StoredLocalChaptersTableFilterComposer,
+      $$StoredLocalChaptersTableOrderingComposer,
+      $$StoredLocalChaptersTableAnnotationComposer,
+      $$StoredLocalChaptersTableCreateCompanionBuilder,
+      $$StoredLocalChaptersTableUpdateCompanionBuilder,
+      (
+        StoredLocalChapter,
+        BaseReferences<
+          _$AppDatabase,
+          $StoredLocalChaptersTable,
+          StoredLocalChapter
+        >,
+      ),
+      StoredLocalChapter,
+      PrefetchHooks Function()
+    >;
 
 class $AppDatabaseManager {
   final _$AppDatabase _db;
@@ -2025,4 +4067,8 @@ class $AppDatabaseManager {
       $$SourcesTableTableManager(_db, _db.sources);
   $$ChapterCachesTableTableManager get chapterCaches =>
       $$ChapterCachesTableTableManager(_db, _db.chapterCaches);
+  $$StoredLocalBooksTableTableManager get storedLocalBooks =>
+      $$StoredLocalBooksTableTableManager(_db, _db.storedLocalBooks);
+  $$StoredLocalChaptersTableTableManager get storedLocalChapters =>
+      $$StoredLocalChaptersTableTableManager(_db, _db.storedLocalChapters);
 }

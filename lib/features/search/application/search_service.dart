@@ -424,6 +424,63 @@ class SearchService {
     }
   }
 
+  AppException? validateSearchConfig({
+    required SourceDefinition source,
+    required String keyword,
+    int page = 1,
+    int pageSize = 20,
+  }) {
+    final normalizedKeyword = keyword.trim();
+    if (normalizedKeyword.isEmpty) {
+      return AppException(
+        code: ErrorCode.validation,
+        stage: ErrorStage.search,
+        sourceId: source.id,
+        briefMessage: '测试关键词不能为空。',
+      );
+    }
+
+    final rawSearchRule = source.rules.searchRule?.trim();
+    if (rawSearchRule == null || rawSearchRule.isEmpty) {
+      return AppException(
+        code: ErrorCode.validation,
+        stage: ErrorStage.search,
+        sourceId: source.id,
+        briefMessage: '书源缺少 searchUrl/ruleSearchUrl。',
+      );
+    }
+
+    try {
+      final context = SearchRequestContext(
+        keyword: normalizedKeyword,
+        page: page,
+        pageSize: pageSize,
+        sourceId: source.id,
+      );
+
+      final requestSpec = _parseRequestSpec(rawSearchRule);
+      _urlTemplateResolver.resolve(
+        template: requestSpec.urlTemplate,
+        context: context,
+        baseUrl: source.baseUrl,
+      );
+      _buildParseRules(source);
+
+      return null;
+    } on AppException catch (error) {
+      return error;
+    } catch (error, stackTrace) {
+      return AppException(
+        code: ErrorCode.unknown,
+        stage: ErrorStage.search,
+        sourceId: source.id,
+        briefMessage: '搜索规则静态校验失败：$error',
+        cause: error,
+        stackTrace: stackTrace,
+      );
+    }
+  }
+
   Future<SourceConnectivityTestReport> testSingleSource({
     required SourceDefinition source,
     required String keyword,
@@ -630,6 +687,7 @@ class SearchService {
         method: requestSpec.method,
         body: requestBody,
         contentType: contentType,
+        responseCharset: requestSpec.responseCharset,
         headers: requestHeaders,
         maxRetries: 1,
         connectTimeout: connectTimeout,
@@ -735,10 +793,18 @@ class SearchService {
   }
 
   SearchParseRules _buildParseRules(SourceDefinition source) {
-    final listRule = _normalizeRuleExpression(
+    final preferCurrentNodeChunk =
+        _isBareCurrentNodeExtractorRule(source.rules.searchTitleRule) ||
+        _isBareCurrentNodeExtractorRule(source.rules.searchDetailUrlRule);
+
+    var listRule = _normalizeRuleExpression(
       source.rules.searchListRule,
-      fallbackExtractor: 'html',
+      fallbackExtractor: preferCurrentNodeChunk ? 'outerhtml' : 'html',
     );
+    if (preferCurrentNodeChunk) {
+      listRule = _upgradeListRuleToOuterHtml(listRule);
+    }
+    listRule = _appendListRuleOuterHtmlFallback(listRule);
 
     final listRuleIsJson = listRule?.startsWith('json:') ?? false;
     final fieldPreferJson = listRuleIsJson;
@@ -768,6 +834,7 @@ class SearchService {
       listRule: listRule,
       titleRule: titleRule,
       detailUrlRule: detailUrlRule,
+      rawDetailUrlRule: source.rules.searchDetailUrlRule,
       authorRule: _normalizeRuleExpression(
         source.rules.searchAuthorRule,
         fallbackExtractor: 'text',
@@ -790,6 +857,87 @@ class SearchService {
         preferJsonShorthand: fieldPreferJson,
       ),
     );
+  }
+
+  bool _isBareCurrentNodeExtractorRule(String? rawRule) {
+    final text = rawRule?.trim();
+    if (text == null || text.isEmpty) {
+      return false;
+    }
+
+    if (text.startsWith('html:') ||
+        text.startsWith('json:') ||
+        text.startsWith('regex:') ||
+        text.startsWith(r'$') ||
+        text.contains('||') ||
+        text.contains('&&') ||
+        text.contains('@')) {
+      return false;
+    }
+
+    final token = text.split('##').first.trim().toLowerCase();
+    return token == 'text' ||
+        token == 'textnodes' ||
+        token == 'href' ||
+        token == 'url' ||
+        token == 'src' ||
+        token == 'title' ||
+        token == 'alt' ||
+        token == 'name';
+  }
+
+  String? _upgradeListRuleToOuterHtml(String? expression) {
+    final text = expression?.trim();
+    if (text == null || text.isEmpty) {
+      return text;
+    }
+
+    final upgraded = text
+        .split('||')
+        .map((item) {
+          final candidate = item.trim();
+          if (!candidate.startsWith('html:') || !candidate.endsWith('@html')) {
+            return candidate;
+          }
+          return '${candidate.substring(0, candidate.length - 5)}@outerhtml';
+        })
+        .where((item) => item.isNotEmpty)
+        .toList(growable: false);
+
+    if (upgraded.isEmpty) {
+      return null;
+    }
+
+    return upgraded.join('||');
+  }
+
+  String? _appendListRuleOuterHtmlFallback(String? expression) {
+    final text = expression?.trim();
+    if (text == null || text.isEmpty) {
+      return text;
+    }
+
+    final base = text
+        .split('||')
+        .map((item) => item.trim())
+        .where((item) => item.isNotEmpty)
+        .toList(growable: false);
+    if (base.isEmpty) {
+      return null;
+    }
+
+    final appended = <String>[...base];
+    for (final candidate in base) {
+      if (!candidate.startsWith('html:') || !candidate.endsWith('@html')) {
+        continue;
+      }
+      final outer = '${candidate.substring(0, candidate.length - 5)}@outerhtml';
+      if (!appended.contains(outer)) {
+        appended.add(outer);
+      }
+    }
+
+    return appended.join('||');
   }
 
   Future<Map<String, String>> _loadInitVariables({
@@ -842,6 +990,7 @@ class SearchService {
         method: requestSpec.method,
         body: requestBody,
         contentType: contentType,
+        responseCharset: requestSpec.responseCharset,
         headers: requestHeaders,
         maxRetries: 1,
         stage: stage,
@@ -969,8 +1118,10 @@ class SearchService {
 
     final splitResult = _splitRequestOptions(normalized);
     if (splitResult == null) {
+      final urlTemplate = _normalizeLegacyUrlTemplate(normalized);
+      _ensureResolvedRequestUrlTemplate(urlTemplate);
       return _SearchRequestSpec(
-        urlTemplate: _normalizeLegacyUrlTemplate(normalized),
+        urlTemplate: urlTemplate,
         method: HttpRequestMethod.get,
       );
     }
@@ -984,14 +1135,22 @@ class SearchService {
     final contentType = _asNullableString(
       options['contentType'] ?? options['content-type'],
     );
+    final responseCharset = _asNullableString(
+      options['responseCharset'] ??
+          options['response-charset'] ??
+          options['charset'],
+    );
 
     final headers = _parseHeaders(options['headers'] ?? options['header']);
+    final urlTemplate = _normalizeLegacyUrlTemplate(splitResult.urlTemplate);
+    _ensureResolvedRequestUrlTemplate(urlTemplate);
 
     return _SearchRequestSpec(
-      urlTemplate: _normalizeLegacyUrlTemplate(splitResult.urlTemplate),
+      urlTemplate: urlTemplate,
       method: method,
       bodyTemplate: bodyTemplate,
       contentType: contentType,
+      responseCharset: responseCharset,
       headers: headers,
     );
   }
@@ -1023,13 +1182,22 @@ class SearchService {
     final contentType = _asNullableString(
       options['contentType'] ?? options['content-type'],
     );
+    final responseCharset = _asNullableString(
+      options['responseCharset'] ??
+          options['response-charset'] ??
+          options['charset'],
+    );
     final headers = _parseHeaders(options['headers'] ?? options['header']);
 
+    final urlTemplate = _normalizeLegacyUrlTemplate(legacyUrl);
+    _ensureResolvedRequestUrlTemplate(urlTemplate);
+
     return _SearchRequestSpec(
-      urlTemplate: _normalizeLegacyUrlTemplate(legacyUrl),
+      urlTemplate: urlTemplate,
       method: method,
       bodyTemplate: bodyTemplate,
       contentType: contentType,
+      responseCharset: responseCharset,
       headers: headers,
     );
   }
@@ -1042,9 +1210,49 @@ class SearchService {
 
     return normalized.startsWith('@js:') ||
         normalized.startsWith('<js>') ||
+        normalized.contains('@js:') ||
+        normalized.contains('<js>') ||
         normalized.contains('JSON.stringify(') ||
         normalized.contains('java.put(') ||
         normalized.contains(r'${');
+  }
+
+  void _ensureResolvedRequestUrlTemplate(String template) {
+    final normalized = template.trim();
+    if (normalized.isEmpty) {
+      throw AppException(
+        code: ErrorCode.validation,
+        stage: ErrorStage.search,
+        briefMessage: 'searchUrl 解析失败：URL 为空。',
+      );
+    }
+
+    if (_looksLikeUnresolvedDynamicRequestTemplate(normalized)) {
+      throw AppException(
+        code: ErrorCode.validation,
+        stage: ErrorStage.search,
+        briefMessage: 'searchUrl 为动态 JS 脚本，当前无法静态解析，请改为固定 URL 或模板规则。',
+      );
+    }
+  }
+
+  bool _looksLikeUnresolvedDynamicRequestTemplate(String template) {
+    final normalized = template.trim();
+    if (normalized.isEmpty) {
+      return false;
+    }
+
+    final lower = normalized.toLowerCase();
+    return lower.startsWith('@js:') ||
+        lower.startsWith('<js>') ||
+        lower.contains('\n@js:') ||
+        lower.contains('\r@js:') ||
+        lower.contains('org.jsoup') ||
+        lower.contains('java.ajax(') ||
+        lower.contains('java.connect(') ||
+        lower.contains('eval(') ||
+        lower.contains('source.key') ||
+        lower.contains('source.getkey()');
   }
 
   String _stripLegacyScriptWrapper(String rawRule) {
@@ -1347,6 +1555,9 @@ class SearchService {
         case 'method':
         case 'contentType':
         case 'content-type':
+        case 'charset':
+        case 'responseCharset':
+        case 'response-charset':
           final value = _evaluateLegacyScriptValue(valueExpression, variables);
           if (value is String && value.trim().isNotEmpty) {
             result[key] = value.trim();
@@ -1941,15 +2152,19 @@ class SearchService {
       return normalized;
     }
 
-    if (_looksLikeRequestUrlTemplate(normalized)) {
-      return normalized.endsWith(',')
-          ? normalized.substring(0, normalized.length - 1).trimRight()
-          : normalized;
+    final trimmedRaw =
+        normalized.endsWith(',')
+            ? normalized.substring(0, normalized.length - 1).trimRight()
+            : normalized;
+
+    if (_looksLikeRequestUrlTemplate(trimmedRaw) &&
+        !_containsLegacyScriptSignals(trimmedRaw)) {
+      return trimmedRaw;
     }
 
-    final extracted = _extractLegacyUrlTemplate(normalized);
+    final extracted = _extractLegacyUrlTemplate(trimmedRaw);
     if (extracted == null || extracted.isEmpty) {
-      return normalized;
+      return trimmedRaw;
     }
 
     return _normalizeLegacyJsTemplateExpressions(extracted);
@@ -1959,6 +2174,23 @@ class SearchService {
     return template.startsWith('http://') ||
         template.startsWith('https://') ||
         template.startsWith('/');
+  }
+
+  bool _containsLegacyScriptSignals(String template) {
+    final normalized = template.trim();
+    if (normalized.isEmpty) {
+      return false;
+    }
+
+    final lower = normalized.toLowerCase();
+    return lower.contains('@js:') ||
+        lower.contains('<js>') ||
+        lower.contains('</js>') ||
+        lower.contains('java.') ||
+        lower.contains('org.jsoup') ||
+        lower.contains('eval(') ||
+        normalized.contains('\n') ||
+        normalized.contains('\r');
   }
 
   String? _extractLegacyUrlTemplate(String template) {
@@ -2036,7 +2268,7 @@ class SearchService {
       }
 
       final relative = pickRelative(normalizedLine);
-      if (relative != null && relative.toLowerCase().contains('search')) {
+      if (relative != null && _looksLikeSearchEndpoint(relative)) {
         return relative;
       }
     }
@@ -2047,11 +2279,33 @@ class SearchService {
     }
 
     final relative = pickRelative(template);
-    if (relative != null && relative.toLowerCase().contains('search')) {
+    if (relative != null && _looksLikeSearchEndpoint(relative)) {
       return relative;
     }
 
     return null;
+  }
+
+  bool _looksLikeSearchEndpoint(String value) {
+    final normalized = value.trim().toLowerCase();
+    if (normalized.isEmpty) {
+      return false;
+    }
+
+    if (normalized.contains('search') ||
+        normalized.contains('query') ||
+        normalized.contains('find') ||
+        normalized.contains('keyword=') ||
+        normalized.contains('searchkey=') ||
+        normalized.contains('wd=') ||
+        normalized.contains('q=')) {
+      return true;
+    }
+
+    return normalized.endsWith('.php') ||
+        normalized.endsWith('.asp') ||
+        normalized.endsWith('.aspx') ||
+        normalized.endsWith('.html');
   }
 
   Map<String, String> _parseHeaders(Object? source) {
@@ -2260,32 +2514,35 @@ class SearchService {
       return null;
     }
 
-    if (text.startsWith('html:') ||
-        text.startsWith('regex:') ||
-        text.startsWith('json:')) {
-      return text;
-    }
-
-    if (text.contains('@js:')) {
+    final staticRule = LegacyRuleCompat.extractStaticRuleExpression(text);
+    if (staticRule == null || staticRule.isEmpty) {
       return null;
     }
 
-    if (text.startsWith(r'$.') || text.startsWith(r'$[') || text == r'$') {
-      return 'json:$text';
+    if (staticRule.startsWith('html:') ||
+        staticRule.startsWith('regex:') ||
+        staticRule.startsWith('json:')) {
+      return staticRule;
     }
 
-    if (text.contains(r'{{$.') || text.contains(r'{{ $.')) {
-      return 'json:\$\n$text';
+    if (staticRule.startsWith(r'$.') ||
+        staticRule.startsWith(r'$[') ||
+        staticRule == r'$') {
+      return 'json:$staticRule';
     }
 
-    final jsonCandidate = _normalizeJsonShorthandExpression(text);
+    if (staticRule.contains(r'{{$.') || staticRule.contains(r'{{ $.')) {
+      return 'json:\$\n$staticRule';
+    }
+
+    final jsonCandidate = _normalizeJsonShorthandExpression(staticRule);
 
     if (jsonCandidate != null && preferJsonShorthand) {
       return jsonCandidate;
     }
 
     final htmlCandidate = LegacyRuleCompat.buildHtmlRuleExpression(
-      expression: text,
+      expression: staticRule,
       fallbackExtractor: fallbackExtractor,
       preferredAttribute: preferredAttribute,
     );
@@ -2422,6 +2679,7 @@ class _SearchRequestSpec {
     required this.method,
     this.bodyTemplate,
     this.contentType,
+    this.responseCharset,
     this.headers = const {},
   });
 
@@ -2429,5 +2687,6 @@ class _SearchRequestSpec {
   final HttpRequestMethod method;
   final Object? bodyTemplate;
   final String? contentType;
+  final String? responseCharset;
   final Map<String, String> headers;
 }

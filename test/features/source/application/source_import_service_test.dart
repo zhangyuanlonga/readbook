@@ -14,7 +14,7 @@ void main() {
 
     test('imports single object json', () {
       const jsonText =
-          '{"bookSourceName":"源A","bookSourceUrl":"https://a.com","searchUrl":"/search?key={{key}}"}';
+          '{"bookSourceName":"源A","bookSourceUrl":"https://a.com","searchUrl":"/search?key={{key}}","ruleSearchList":".item@html","ruleSearchName":"a@text","ruleSearchBookUrl":"a@href"}';
 
       final result = service.importFromText(jsonText);
 
@@ -27,8 +27,8 @@ void main() {
 
     test('imports list json', () {
       const jsonText =
-          '[{"bookSourceName":"源A","bookSourceUrl":"https://a.com","searchUrl":"/search?key={{key}}"},'
-          '{"bookSourceName":"源B","bookSourceUrl":"https://b.com","searchUrl":"/search?key={{key}}"}]';
+          '[{"bookSourceName":"源A","bookSourceUrl":"https://a.com","searchUrl":"/search?key={{key}}","ruleSearchList":".item@html","ruleSearchName":"a@text","ruleSearchBookUrl":"a@href"},'
+          '{"bookSourceName":"源B","bookSourceUrl":"https://b.com","searchUrl":"/search?key={{key}}","ruleSearchList":".item@html","ruleSearchName":"a@text","ruleSearchBookUrl":"a@href"}]';
 
       final result = service.importFromText(jsonText);
 
@@ -39,7 +39,7 @@ void main() {
 
     test('captures sourceType from imported payload', () {
       const jsonText =
-          '{"bookSourceName":"漫画源","bookSourceUrl":"https://comic.example.com","bookSourceType":2,"searchUrl":"/search?key={{key}}"}';
+          '{"bookSourceName":"漫画源","bookSourceUrl":"https://comic.example.com","bookSourceType":2,"searchUrl":"/search?key={{key}}","ruleSearchList":".item@html","ruleSearchName":"a@text","ruleSearchBookUrl":"a@href"}';
 
       final result = service.importFromText(jsonText);
 
@@ -58,6 +58,7 @@ void main() {
     "bookSourceUrl": "https://comic.example.com",
     "bookSourceType": 2,
     "searchUrl": "/search?key={{key}}",
+    "ruleSearch": {"bookList": ".item@html", "name": "a@text", "bookUrl": "a@href"},
     "ruleContent": {"content": ".manga img@src", "imageStyle": "FULL"}
   }
 ]
@@ -71,6 +72,33 @@ void main() {
       expect(report.compatibilityHintCount, 0);
     });
 
+    test(
+      'adds structural compatibility hints for missing toc/content rules',
+      () {
+        const payload = '''
+[
+  {
+    "bookSourceName": "结构提示源",
+    "bookSourceUrl": "https://novel.example.com",
+    "searchUrl": "/search?key={{key}}",
+    "ruleSearch": {"bookList": ".item@html", "name": "a@text", "bookUrl": "a@href"}
+  }
+]
+''';
+
+        final result = service.previewFromText(payload);
+
+        expect(result, isA<Success<SourceImportPreviewReport>>());
+        final report = (result as Success<SourceImportPreviewReport>).data;
+        expect(report.validCount, 1);
+        expect(report.compatibilityHintCount, 1);
+        final hint = report.compatibilityHints.first;
+        expect(hint.level, SourceCompatibilityLevel.partial);
+        expect(hint.reasons.any((item) => item.contains('目录规则不完整')), isTrue);
+        expect(hint.reasons.any((item) => item.contains('缺少正文规则')), isTrue);
+      },
+    );
+
     test('reports compatibility hints for js reload manga source', () {
       final file = File('manhua.json');
       final payload =
@@ -82,6 +110,11 @@ void main() {
                   'bookSourceUrl': 'https://comic.example.com',
                   'bookSourceType': 2,
                   'searchUrl': '<js>Reload("https://example.com")</js>',
+                  'ruleSearch': {
+                    'bookList': '.item@html',
+                    'name': 'a@text',
+                    'bookUrl': 'a@href',
+                  },
                   'ruleContent': {
                     'content': '<js>result</js>',
                     'imageStyle': 'FULL',
@@ -113,7 +146,7 @@ void main() {
     test('preview collects valid and invalid entries', () {
       const jsonText = '''
 [
-  {"bookSourceName":"源A","bookSourceUrl":"https://a.com","searchUrl":"/search?key={{key}}"},
+  {"bookSourceName":"源A","bookSourceUrl":"https://a.com","searchUrl":"/search?key={{key}}","ruleSearchList":".item@html","ruleSearchName":"a@text","ruleSearchBookUrl":"a@href"},
   {"bookSourceName":"","bookSourceUrl":"https://b.com","searchUrl":"/search?key={{key}}"},
   "bad-entry"
 ]
@@ -135,7 +168,7 @@ void main() {
       () async {
         const jsonText = '''
 [
-  {"bookSourceName":"源A","bookSourceUrl":"https://a.com","searchUrl":"/search?key={{key}}"},
+  {"bookSourceName":"源A","bookSourceUrl":"https://a.com","searchUrl":"/search?key={{key}}","ruleSearchList":".item@html","ruleSearchName":"a@text","ruleSearchBookUrl":"a@href"},
   {"bookSourceName":"","bookSourceUrl":"https://b.com","searchUrl":"/search?key={{key}}"}
 ]
 ''';
@@ -192,7 +225,7 @@ void main() {
       );
       final file = File('${directory.path}/source.json');
       await file.writeAsString(
-        '{"bookSourceName":"文件源","bookSourceUrl":"https://file.com","searchUrl":"/search?key={{key}}"}',
+        '{"bookSourceName":"文件源","bookSourceUrl":"https://file.com","searchUrl":"/search?key={{key}}","ruleSearchList":".item@html","ruleSearchName":"a@text","ruleSearchBookUrl":"a@href"}',
       );
 
       final result = await service.importFromFilePath(file.path);

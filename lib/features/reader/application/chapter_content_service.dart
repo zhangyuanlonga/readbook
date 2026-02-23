@@ -200,6 +200,7 @@ class ChapterContentService {
         method: requestSpec.method,
         body: requestBody,
         contentType: contentType,
+        responseCharset: requestSpec.responseCharset,
         headers: requestHeaders,
         maxRetries: 1,
         stage: ErrorStage.content,
@@ -410,6 +411,11 @@ class ChapterContentService {
       contentType: _asNullableString(
         options['contentType'] ?? options['content-type'],
       ),
+      responseCharset: _asNullableString(
+        options['responseCharset'] ??
+            options['response-charset'] ??
+            options['charset'],
+      ),
     );
   }
 
@@ -604,6 +610,7 @@ class ChapterContentService {
         method: requestSpec.method,
         body: requestBody,
         contentType: contentType,
+        responseCharset: requestSpec.responseCharset,
         headers: requestHeaders,
         maxRetries: 1,
         stage: ErrorStage.content,
@@ -1500,28 +1507,31 @@ class ChapterContentService {
       return null;
     }
 
-    if (text.startsWith('html:') ||
-        text.startsWith('regex:') ||
-        text.startsWith('json:')) {
-      return text;
-    }
-
-    if (text.contains('@js:')) {
+    final staticRule = LegacyRuleCompat.extractStaticRuleExpression(text);
+    if (staticRule == null || staticRule.isEmpty) {
       return null;
     }
 
-    if (text.startsWith(r'$.') || text.startsWith(r'$[') || text == r'$') {
-      return 'json:$text';
+    if (staticRule.startsWith('html:') ||
+        staticRule.startsWith('regex:') ||
+        staticRule.startsWith('json:')) {
+      return staticRule;
     }
 
-    if (text.contains(r'{{$.') || text.contains(r'{{ $.')) {
-      return 'json:\$\n$text';
+    if (staticRule.startsWith(r'$.') ||
+        staticRule.startsWith(r'$[') ||
+        staticRule == r'$') {
+      return 'json:$staticRule';
     }
 
-    final jsonCandidate = _normalizeJsonShorthandExpression(text);
+    if (staticRule.contains(r'{{$.') || staticRule.contains(r'{{ $.')) {
+      return 'json:\$\n$staticRule';
+    }
+
+    final jsonCandidate = _normalizeJsonShorthandExpression(staticRule);
 
     final htmlCandidate = LegacyRuleCompat.buildHtmlRuleExpression(
-      expression: text,
+      expression: staticRule,
       fallbackExtractor: fallbackExtractor,
       preferredAttribute: preferredAttribute,
     );
@@ -1530,6 +1540,7 @@ class ChapterContentService {
       if (htmlCandidate == null || htmlCandidate == jsonCandidate) {
         return jsonCandidate;
       }
+
       return '$jsonCandidate||$htmlCandidate';
     }
 
@@ -1666,6 +1677,7 @@ class _ContentRequestSpec {
     this.headers = const {},
     this.bodyTemplate,
     this.contentType,
+    this.responseCharset,
   });
 
   final String urlTemplate;
@@ -1673,4 +1685,5 @@ class _ContentRequestSpec {
   final Map<String, String> headers;
   final Object? bodyTemplate;
   final String? contentType;
+  final String? responseCharset;
 }

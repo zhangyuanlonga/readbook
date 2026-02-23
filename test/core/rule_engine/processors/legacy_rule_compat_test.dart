@@ -102,5 +102,31 @@ void main() {
         );
       }
     });
+
+    test('sanitizes @css selector with regex attr and jquery pseudo', () {
+      final selector = LegacyRuleCompat.sanitizeSelector(
+        r'@css:.listmain a[href~=/[^/]+/\d+.htm]:eq(0)[1:3]',
+      );
+
+      expect(selector, '.listmain a[href]:nth-child(1)');
+    });
+
+    test('rule engine supports jquery pseudo selector via compat fallback', () {
+      final engine = RuleEngine();
+      const html = '''
+        <ul class="list">
+          <li>第一章</li>
+          <li>第二章</li>
+          <li>第三章</li>
+        </ul>
+      ''';
+
+      final values = engine.executeAll(
+        content: html,
+        expression: 'html:.list li:eq(1)@text',
+      );
+
+      expect(values, ['第二章']);
+    });
   });
 }

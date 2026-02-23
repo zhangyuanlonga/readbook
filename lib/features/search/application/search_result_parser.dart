@@ -2,6 +2,7 @@ import '../../../core/errors/app_exception.dart';
 import '../../../core/errors/error_codes.dart';
 import '../../../core/errors/error_stage.dart';
 import '../../../core/rule_engine/rule_engine.dart';
+import '../../../core/rule_engine/processors/legacy_link_post_processor.dart';
 import '../../../domain/entities/book.dart';
 
 class SearchParseRules {
@@ -9,6 +10,7 @@ class SearchParseRules {
     required this.listRule,
     required this.titleRule,
     required this.detailUrlRule,
+    this.rawDetailUrlRule,
     this.authorRule,
     this.introRule,
     this.coverUrlRule,
@@ -18,6 +20,7 @@ class SearchParseRules {
   final String listRule;
   final String titleRule;
   final String detailUrlRule;
+  final String? rawDetailUrlRule;
   final String? authorRule;
   final String? introRule;
   final String? coverUrlRule;
@@ -53,13 +56,52 @@ class SearchResultParser {
       );
     }
 
-    final chunks = _executeAllWithFallback(
-      content: htmlContent,
-      expression: rules.listRule,
-      stage: ErrorStage.search,
-    );
-
     final booksById = <String, Book>{};
+
+    final listExpressions = _splitFallbackExpressions(rules.listRule);
+    for (final listExpression in listExpressions) {
+      final chunks = _executeAllSingleExpression(
+        content: htmlContent,
+        expression: listExpression,
+        stage: ErrorStage.search,
+      );
+      if (chunks.isEmpty) {
+        continue;
+      }
+
+      final parsedBooks = _parseBooksFromChunks(
+        chunks: chunks,
+        sourceId: sourceId,
+        baseUri: baseUri,
+        rules: rules,
+      );
+      for (final book in parsedBooks) {
+        booksById[book.id] = book;
+      }
+
+      if (booksById.isNotEmpty) {
+        break;
+      }
+    }
+
+    if (booksById.isEmpty) {
+      throw RuleMatchEmptyException(
+        briefMessage: '搜索结果解析为空，请检查规则是否正确。',
+        sourceId: sourceId,
+        stage: ErrorStage.search,
+      );
+    }
+
+    return booksById.values.toList(growable: false);
+  }
+
+  List<Book> _parseBooksFromChunks({
+    required List<String> chunks,
+    required String sourceId,
+    required Uri baseUri,
+    required SearchParseRules rules,
+  }) {
+    final output = <Book>[];
 
     for (final chunk in chunks) {
       final title = _tryRequired(content: chunk, expression: rules.titleRule);
@@ -72,38 +114,38 @@ class SearchResultParser {
         continue;
       }
 
-      final detailUrl = _resolveUrl(baseUri, detailUrlRaw);
+      final detailUrlValue = LegacyLinkPostProcessor.apply(
+        value: detailUrlRaw,
+        rawRule: rules.rawDetailUrlRule,
+      );
+      if (detailUrlValue.trim().isEmpty) {
+        continue;
+      }
+
+      final detailUrl = _resolveUrl(baseUri, detailUrlValue);
       final coverUrl = _tryOptional(
         content: chunk,
         expression: rules.coverUrlRule,
       );
 
-      final book = Book(
-        id: _buildBookId(sourceId: sourceId, detailUrl: detailUrl),
-        sourceId: sourceId,
-        title: title,
-        detailUrl: detailUrl,
-        author: _tryOptional(content: chunk, expression: rules.authorRule),
-        intro: _tryOptional(content: chunk, expression: rules.introRule),
-        latestChapter: _tryOptional(
-          content: chunk,
-          expression: rules.latestChapterRule,
+      output.add(
+        Book(
+          id: _buildBookId(sourceId: sourceId, detailUrl: detailUrl),
+          sourceId: sourceId,
+          title: title,
+          detailUrl: detailUrl,
+          author: _tryOptional(content: chunk, expression: rules.authorRule),
+          intro: _tryOptional(content: chunk, expression: rules.introRule),
+          latestChapter: _tryOptional(
+            content: chunk,
+            expression: rules.latestChapterRule,
+          ),
+          coverUrl: coverUrl == null ? null : _resolveUrl(baseUri, coverUrl),
         ),
-        coverUrl: coverUrl == null ? null : _resolveUrl(baseUri, coverUrl),
-      );
-
-      booksById[book.id] = book;
-    }
-
-    if (booksById.isEmpty) {
-      throw RuleMatchEmptyException(
-        briefMessage: '搜索结果解析为空，请检查规则是否正确。',
-        sourceId: sourceId,
-        stage: ErrorStage.search,
       );
     }
 
-    return booksById.values.toList(growable: false);
+    return output;
   }
 
   String? _tryRequired({required String content, required String expression}) {
@@ -134,27 +176,20 @@ class SearchResultParser {
     return _tryRequired(content: content, expression: expression);
   }
 
-  List<String> _executeAllWithFallback({
+  List<String> _executeAllSingleExpression({
     required String content,
     required String expression,
     required ErrorStage stage,
   }) {
-    for (final candidate in _splitFallbackExpressions(expression)) {
-      try {
-        final values = _ruleEngine.executeAll(
-          content: content,
-          expression: candidate,
-          stage: stage,
-        );
-        if (values.isNotEmpty) {
-          return values;
-        }
-      } on AppException {
-        continue;
-      }
+    try {
+      return _ruleEngine.executeAll(
+        content: content,
+        expression: expression,
+        stage: stage,
+      );
+    } on AppException {
+      return const [];
     }
-
-    return const [];
   }
 
   List<String> _splitFallbackExpressions(String expression) {

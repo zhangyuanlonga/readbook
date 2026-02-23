@@ -9,6 +9,7 @@ import '../../../core/network/request_context.dart';
 import '../../../core/rule_engine/rule_engine.dart';
 import '../../../core/rule_engine/processors/url_template_resolver.dart';
 import '../../../core/rule_engine/processors/legacy_rule_compat.dart';
+import '../../../core/rule_engine/processors/legacy_link_post_processor.dart';
 import '../../../core/source/source_response_processor.dart';
 import '../../../data/datasources/local/app_database.dart';
 import '../../../data/repositories/source_repository_impl.dart';
@@ -401,6 +402,7 @@ class BookDetailService {
         method: requestSpec.method,
         body: requestBody,
         contentType: contentType,
+        responseCharset: requestSpec.responseCharset,
         headers: requestHeaders,
         maxRetries: 1,
         stage: stage,
@@ -473,6 +475,7 @@ class BookDetailService {
       listRule: listRule,
       titleRule: titleRule,
       chapterUrlRule: chapterUrlRule,
+      rawChapterUrlRule: source.rules.tocChapterUrlRule,
       reversed: source.rules.tocReversed,
     );
   }
@@ -568,9 +571,13 @@ class BookDetailService {
         continue;
       }
 
+      final chapterUrlValue = LegacyLinkPostProcessor.apply(
+        value: chapterUrlRaw,
+        rawRule: rules.rawChapterUrlRule,
+      );
       final chapterUrl = _resolveMaybeUrl(
         pageUrl: pageUrl,
-        rawUrl: chapterUrlRaw,
+        rawUrl: chapterUrlValue,
       );
       if (chapterUrl == null) {
         continue;
@@ -984,6 +991,7 @@ class BookDetailService {
         method: requestSpec.method,
         body: requestBody,
         contentType: contentType,
+        responseCharset: requestSpec.responseCharset,
         headers: requestHeaders,
         maxRetries: 1,
         stage: stage,
@@ -1024,6 +1032,11 @@ class BookDetailService {
       bodyTemplate: _normalizeBodyTemplate(options['body']),
       contentType: _asNullableString(
         options['contentType'] ?? options['content-type'],
+      ),
+      responseCharset: _asNullableString(
+        options['responseCharset'] ??
+            options['response-charset'] ??
+            options['charset'],
       ),
       headers: _parseHeaders(options['headers'] ?? options['header']),
     );
@@ -1391,28 +1404,31 @@ class BookDetailService {
       return null;
     }
 
-    if (text.startsWith('html:') ||
-        text.startsWith('regex:') ||
-        text.startsWith('json:')) {
-      return text;
-    }
-
-    if (text.contains('@js:')) {
+    final staticRule = LegacyRuleCompat.extractStaticRuleExpression(text);
+    if (staticRule == null || staticRule.isEmpty) {
       return null;
     }
 
-    if (text.startsWith(r'$.') || text.startsWith(r'$[') || text == r'$') {
-      return 'json:$text';
+    if (staticRule.startsWith('html:') ||
+        staticRule.startsWith('regex:') ||
+        staticRule.startsWith('json:')) {
+      return staticRule;
     }
 
-    if (text.contains(r'{{$.') || text.contains(r'{{ $.')) {
-      return 'json:\$\n$text';
+    if (staticRule.startsWith(r'$.') ||
+        staticRule.startsWith(r'$[') ||
+        staticRule == r'$') {
+      return 'json:$staticRule';
     }
 
-    final jsonCandidate = _normalizeJsonShorthandExpression(text);
+    if (staticRule.contains(r'{{$.') || staticRule.contains(r'{{ $.')) {
+      return 'json:\$\n$staticRule';
+    }
+
+    final jsonCandidate = _normalizeJsonShorthandExpression(staticRule);
 
     final htmlCandidate = LegacyRuleCompat.buildHtmlRuleExpression(
-      expression: text,
+      expression: staticRule,
       fallbackExtractor: fallbackExtractor,
       preferredAttribute: preferredAttribute,
     );
@@ -1554,6 +1570,7 @@ class _SearchRequestSpec {
     required this.method,
     this.bodyTemplate,
     this.contentType,
+    this.responseCharset,
     this.headers = const {},
   });
 
@@ -1561,6 +1578,7 @@ class _SearchRequestSpec {
   final HttpRequestMethod method;
   final Object? bodyTemplate;
   final String? contentType;
+  final String? responseCharset;
   final Map<String, String> headers;
 }
 
@@ -1587,11 +1605,13 @@ class _TocParseRules {
     required this.listRule,
     required this.titleRule,
     required this.chapterUrlRule,
+    required this.rawChapterUrlRule,
     required this.reversed,
   });
 
   final String listRule;
   final String titleRule;
   final String chapterUrlRule;
+  final String? rawChapterUrlRule;
   final bool reversed;
 }

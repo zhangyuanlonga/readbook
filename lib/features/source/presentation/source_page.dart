@@ -947,11 +947,7 @@ class _SourcePageState extends State<SourcePage> {
   }
 
   void _openBatchDiagnostics() {
-    final visibleSourceIds = _visibleSources
-        .map((source) => source.id)
-        .where((id) => id.trim().isNotEmpty)
-        .toList(growable: false);
-    context.push('/source-diagnostics', extra: visibleSourceIds);
+    context.push('/source-diagnostics');
   }
 
   Future<void> _importFromPaste() async {

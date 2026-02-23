@@ -203,6 +203,16 @@ class SourceDiagnosticsService {
       );
     }
 
+    final staticPrecheck = _buildStaticPrecheckReport(
+      source: source,
+      mode: mode,
+      keyword: normalizedKeyword,
+      startedAt: startedAt,
+    );
+    if (staticPrecheck != null) {
+      return staticPrecheck;
+    }
+
     String? sampleBookTitle;
     String? sampleDetailUrl;
     String? sampleChapterTitle;
@@ -214,6 +224,10 @@ class SourceDiagnosticsService {
         keyword: normalizedKeyword,
         sourceIds: [source.id],
         pageSize: 5,
+        contentMode:
+            source.isMangaSource
+                ? SearchContentMode.manga
+                : SearchContentMode.novel,
       );
 
       if (report.failures.isNotEmpty) {
@@ -510,6 +524,101 @@ class SourceDiagnosticsService {
     await Future.wait(List.generate(workerCount, (_) => worker()));
 
     return List.unmodifiable(reports);
+  }
+
+  SourceDiagnosticReport? _buildStaticPrecheckReport({
+    required SourceDefinition source,
+    required SourceDiagnosticMode mode,
+    required String keyword,
+    required DateTime startedAt,
+  }) {
+    final searchValidation = _searchService.validateSearchConfig(
+      source: source,
+      keyword: keyword,
+      pageSize: 5,
+    );
+    if (searchValidation != null) {
+      return _buildPrecheckFailureReport(
+        source: source,
+        mode: mode,
+        keyword: keyword,
+        startedAt: startedAt,
+        stage: SourceDiagnosticStage.search,
+        message: searchValidation.briefMessage,
+        code: searchValidation.code,
+        requestUrl: searchValidation.requestUrl,
+      );
+    }
+
+    if (mode != SourceDiagnosticMode.fullChainQuick) {
+      return null;
+    }
+
+    final tocRulesMissing =
+        !_hasRuleText(source.rules.tocListRule) ||
+        !_hasRuleText(source.rules.tocTitleRule) ||
+        !_hasRuleText(source.rules.tocChapterUrlRule);
+    if (tocRulesMissing) {
+      return _buildPrecheckFailureReport(
+        source: source,
+        mode: mode,
+        keyword: keyword,
+        startedAt: startedAt,
+        stage: SourceDiagnosticStage.toc,
+        message: '书源缺少目录规则（chapterList/chapterName/chapterUrl）。',
+      );
+    }
+
+    final contentRulesMissing =
+        !_hasRuleText(source.rules.contentRule) &&
+        !_hasRuleText(source.rules.contentDecryptRule);
+    if (contentRulesMissing) {
+      return _buildPrecheckFailureReport(
+        source: source,
+        mode: mode,
+        keyword: keyword,
+        startedAt: startedAt,
+        stage: SourceDiagnosticStage.content,
+        message: '书源缺少正文规则（ruleContent）。',
+      );
+    }
+
+    return null;
+  }
+
+  SourceDiagnosticReport _buildPrecheckFailureReport({
+    required SourceDefinition source,
+    required SourceDiagnosticMode mode,
+    required String keyword,
+    required DateTime startedAt,
+    required SourceDiagnosticStage stage,
+    required String message,
+    ErrorCode code = ErrorCode.validation,
+    String? requestUrl,
+  }) {
+    return SourceDiagnosticReport(
+      sourceId: source.id,
+      sourceName: source.name,
+      mode: mode,
+      keyword: keyword,
+      startedAt: startedAt,
+      finishedAt: DateTime.now(),
+      stages: [
+        SourceDiagnosticStageResult(
+          stage: stage,
+          success: false,
+          durationMs: 0,
+          code: code,
+          message: message,
+          requestUrl: requestUrl,
+        ),
+      ],
+      sourceRaw: source.originalSource,
+    );
+  }
+
+  bool _hasRuleText(String? value) {
+    return value != null && value.trim().isNotEmpty;
   }
 
   Future<SourceDiagnosticStageResult> _probeStage({

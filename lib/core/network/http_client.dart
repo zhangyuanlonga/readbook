@@ -1,3 +1,6 @@
+import 'dart:convert';
+
+import 'package:charset/charset.dart';
 import 'package:dio/dio.dart';
 
 import '../errors/app_exception.dart';
@@ -24,8 +27,11 @@ class AppHttpClient {
     Duration defaultConnectTimeout = const Duration(seconds: 8),
     Duration defaultReceiveTimeout = const Duration(seconds: 12),
     Map<String, String> defaultHeaders = const {
-      'User-Agent': 'flutter_appread/0.1',
-      'Accept': '*/*',
+      'User-Agent':
+          'Mozilla/5.0 (Linux; Android 13; Pixel 7 Build/TQ3A.230901.001) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Mobile Safari/537.36',
+      'Accept':
+          'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+      'Accept-Language': 'zh-CN,zh;q=0.9,en;q=0.8',
     },
   }) : _dio = dio ?? Dio(),
        _logger = logger ?? AppLogger.instance,
@@ -68,10 +74,17 @@ class AppHttpClient {
           );
         }
 
+        final responseHeaders = response.headers.map;
+        final body = _decodeResponseBody(
+          bytes: response.data ?? const <int>[],
+          context: context,
+          headers: responseHeaders,
+        );
+
         return HttpResponsePayload(
           statusCode: statusCode,
-          body: response.data ?? '',
-          headers: response.headers.map,
+          body: body,
+          headers: responseHeaders,
         );
       }
 
@@ -123,13 +136,13 @@ class AppHttpClient {
     );
 
     try {
-      final response = await _dio.request<String>(
+      final response = await _dio.request<List<int>>(
         context.url,
         data: context.body,
         queryParameters: context.queryParameters,
         options: Options(
           method: _methodText(context.method),
-          responseType: ResponseType.plain,
+          responseType: ResponseType.bytes,
           headers: mergedHeaders,
           sendTimeout: context.connectTimeout ?? _defaultConnectTimeout,
           connectTimeout: context.connectTimeout ?? _defaultConnectTimeout,
@@ -141,6 +154,97 @@ class AppHttpClient {
       return _Success(response);
     } on DioException catch (error) {
       return _Failure(error);
+    }
+  }
+
+  String _decodeResponseBody({
+    required List<int> bytes,
+    required RequestContext context,
+    required Map<String, List<String>> headers,
+  }) {
+    if (bytes.isEmpty) {
+      return '';
+    }
+
+    final charsetCandidates = <String>[];
+    final preferredCharset = context.responseCharset?.trim();
+    if (preferredCharset != null && preferredCharset.isNotEmpty) {
+      charsetCandidates.add(preferredCharset);
+    }
+
+    final headerCharset = _extractCharsetFromHeaders(headers);
+    if (headerCharset != null && headerCharset.isNotEmpty) {
+      charsetCandidates.add(headerCharset);
+    }
+
+    for (final candidate in charsetCandidates) {
+      final decoded = _tryDecodeByCharset(bytes, candidate);
+      if (decoded != null) {
+        return decoded;
+      }
+    }
+
+    try {
+      return utf8.decode(bytes, allowMalformed: false);
+    } on FormatException {
+      final gbkDecoded = _tryDecodeByCharset(bytes, 'gbk');
+      if (gbkDecoded != null) {
+        return gbkDecoded;
+      }
+      return utf8.decode(bytes, allowMalformed: true);
+    }
+  }
+
+  String? _extractCharsetFromHeaders(Map<String, List<String>> headers) {
+    for (final entry in headers.entries) {
+      if (entry.key.toLowerCase() != 'content-type') {
+        continue;
+      }
+
+      for (final value in entry.value) {
+        final match = RegExp(
+          "charset\\s*=\\s*[\"']?([a-zA-Z0-9._-]+)",
+          caseSensitive: false,
+        ).firstMatch(value);
+        if (match == null) {
+          continue;
+        }
+
+        final token = match.group(1)?.trim();
+        if (token != null && token.isNotEmpty) {
+          return token;
+        }
+      }
+    }
+
+    return null;
+  }
+
+  String? _tryDecodeByCharset(List<int> bytes, String charsetName) {
+    final normalized = charsetName.trim().toLowerCase();
+    if (normalized.isEmpty) {
+      return null;
+    }
+
+    try {
+      if (normalized == 'utf8' || normalized == 'utf-8') {
+        return utf8.decode(bytes, allowMalformed: false);
+      }
+
+      if (normalized == 'latin1' || normalized == 'iso-8859-1') {
+        return latin1.decode(bytes, allowInvalid: true);
+      }
+
+      final encoding = Charset.getByName(normalized);
+      if (encoding == null) {
+        return null;
+      }
+
+      return encoding.decode(bytes);
+    } on FormatException {
+      return null;
+    } on ArgumentError {
+      return null;
     }
   }
 
@@ -203,7 +307,7 @@ sealed class _ResponseOrError {}
 class _Success extends _ResponseOrError {
   _Success(this.response);
 
-  final Response<String> response;
+  final Response<List<int>> response;
 }
 
 class _Failure extends _ResponseOrError {

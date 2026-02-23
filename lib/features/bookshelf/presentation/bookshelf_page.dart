@@ -1,14 +1,14 @@
-import 'dart:convert';
-
 import 'package:file_selector/file_selector.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../app/layout/app_spacing.dart';
+import '../../../core/errors/app_exception.dart';
 
 import '../../../domain/entities/bookshelf_book.dart';
 import '../../../domain/entities/reading_progress.dart';
 import '../application/bookshelf_service.dart';
+import '../application/local_book_import_service.dart';
 import '../../reader/application/reader_preferences_service.dart';
 import '../../book/application/book_detail_service.dart';
 
@@ -26,6 +26,8 @@ class _BookshelfPageState extends State<BookshelfPage> {
   final ReaderPreferencesService _readerPreferencesService =
       ReaderPreferencesService();
   final BookDetailService _bookDetailService = BookDetailService();
+  final LocalBookImportService _localBookImportService =
+      LocalBookImportService();
 
   bool _isLoading = true;
   List<BookshelfBook> _books = const <BookshelfBook>[];
@@ -34,7 +36,8 @@ class _BookshelfPageState extends State<BookshelfPage> {
   bool _useGridView = false;
   String? _openingBookId;
 
-  static const String _kLocalBookSourceId = '__local_book__';
+  static const String _kLocalBookSourceId =
+      LocalBookImportService.localBookSourceId;
 
   @override
   void initState() {
@@ -587,37 +590,18 @@ class _BookshelfPageState extends State<BookshelfPage> {
         return;
       }
 
-      final fileId = base64UrlEncode(utf8.encode(filePath));
-      final title = _resolveLocalBookTitle(file.name);
-      final item = BookshelfBook(
-        bookId: 'local_$fileId',
-        sourceId: _kLocalBookSourceId,
-        title: title,
-        detailUrl: 'local://$fileId',
-        addedAt: DateTime.now(),
-        author: '本地导入',
+      final result = await _localBookImportService.importFromFile(
+        filePath: filePath,
+        displayName: file.name,
       );
 
-      await _bookshelfService.upsert(item);
       await _loadBookshelf();
-      _showMessage('已导入《$title》到书架。');
+      _showMessage('已导入《${result.localBook.title}》到书架。');
+    } on AppException catch (error) {
+      _showMessage(error.briefMessage);
     } catch (_) {
       _showMessage('导入本地书籍失败，请重试。');
     }
-  }
-
-  String _resolveLocalBookTitle(String fileName) {
-    final trimmed = fileName.trim();
-    if (trimmed.isEmpty) {
-      return '未命名本地书籍';
-    }
-
-    final dotIndex = trimmed.lastIndexOf('.');
-    if (dotIndex <= 0) {
-      return trimmed;
-    }
-
-    return trimmed.substring(0, dotIndex).trim();
   }
 
   void _showMessage(String text) {
@@ -630,7 +614,7 @@ class _BookshelfPageState extends State<BookshelfPage> {
 
   void _openDetail(BookshelfBook book) {
     if (book.sourceId == _kLocalBookSourceId) {
-      _showMessage('本地书籍详情暂未开放，后续会支持。');
+      context.push('/local/book/${book.bookId}');
       return;
     }
 
@@ -657,7 +641,7 @@ class _BookshelfPageState extends State<BookshelfPage> {
     }
 
     if (book.sourceId == _kLocalBookSourceId) {
-      _showMessage('本地书籍阅读正在开发中，敬请期待。');
+      context.push('/local/book/${book.bookId}');
       return;
     }
 
@@ -711,6 +695,11 @@ class _BookshelfPageState extends State<BookshelfPage> {
   }
 
   void _continueReading(ReadingProgress progress) {
+    if (progress.sourceId == _kLocalBookSourceId) {
+      context.push('/local/reader/${progress.bookId}/${progress.chapterId}');
+      return;
+    }
+
     final route =
         Uri(
           path: '/reader/${progress.bookId}/${progress.chapterId}',
@@ -727,10 +716,18 @@ class _BookshelfPageState extends State<BookshelfPage> {
   }
 
   Future<void> _removeBook(BookshelfBook book) async {
-    await _bookshelfService.remove(
-      sourceId: book.sourceId,
-      detailUrl: book.detailUrl,
-    );
+    if (book.sourceId == _kLocalBookSourceId) {
+      await _localBookImportService.removeLocalBook(
+        bookId: book.bookId,
+        detailUrl: book.detailUrl,
+      );
+    } else {
+      await _bookshelfService.remove(
+        sourceId: book.sourceId,
+        detailUrl: book.detailUrl,
+      );
+    }
+
     await _loadBookshelf();
     if (!mounted) {
       return;

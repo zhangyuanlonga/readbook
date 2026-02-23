@@ -11,19 +11,16 @@ import '../../../core/errors/app_exception.dart';
 import '../../../core/errors/error_codes.dart';
 import '../../../data/datasources/local/app_database.dart';
 import '../../../data/repositories/source_repository_impl.dart';
+import '../../../domain/entities/source_definition.dart';
 import '../../../domain/repositories/source_repository.dart';
 import '../application/source_diagnostics_service.dart';
 
 class SourceDiagnosticsPage extends StatefulWidget {
-  const SourceDiagnosticsPage({super.key, this.visibleSourceIds = const []});
-
-  final List<String> visibleSourceIds;
+  const SourceDiagnosticsPage({super.key});
 
   @override
   State<SourceDiagnosticsPage> createState() => _SourceDiagnosticsPageState();
 }
-
-enum _BatchScope { visibleEnabled, allEnabled }
 
 enum _ExportPayloadKind { fullReport, groupedFailures }
 
@@ -38,14 +35,16 @@ class _SourceDiagnosticsPageState extends State<SourceDiagnosticsPage> {
   late final SourceDiagnosticsService _diagnosticsService;
 
   SourceDiagnosticMode _mode = SourceDiagnosticMode.fullChainQuick;
-  _BatchScope _scope = _BatchScope.visibleEnabled;
   double _concurrency = 2;
 
   bool _isRunning = false;
   bool _isExporting = false;
+  bool _isLoadingSourceFilters = false;
   SourceBatchDiagnosticToken? _activeToken;
   SourceBatchDiagnosticProgress? _progress;
   List<SourceDiagnosticReport> _reports = const [];
+  List<SourceDefinition> _filterableSources = const [];
+  Set<String> _selectedSourceIds = <String>{};
 
   @override
   void initState() {
@@ -53,10 +52,7 @@ class _SourceDiagnosticsPageState extends State<SourceDiagnosticsPage> {
     _diagnosticsService = SourceDiagnosticsService(
       sourceRepository: _sourceRepository,
     );
-
-    if (widget.visibleSourceIds.isEmpty) {
-      _scope = _BatchScope.allEnabled;
-    }
+    unawaited(_refreshSourceFilters());
   }
 
   @override
@@ -154,40 +150,7 @@ class _SourceDiagnosticsPageState extends State<SourceDiagnosticsPage> {
                       },
             ),
             const SizedBox(height: 10),
-            SegmentedButton<_BatchScope>(
-              segments: [
-                ButtonSegment<_BatchScope>(
-                  value: _BatchScope.visibleEnabled,
-                  label: Text(
-                    widget.visibleSourceIds.isEmpty ? '当前筛选(不可用)' : '当前筛选',
-                  ),
-                  icon: const Icon(Icons.filter_alt_outlined),
-                ),
-                const ButtonSegment<_BatchScope>(
-                  value: _BatchScope.allEnabled,
-                  label: Text('全部启用'),
-                  icon: Icon(Icons.list_alt_rounded),
-                ),
-              ],
-              selected: <_BatchScope>{_scope},
-              showSelectedIcon: false,
-              onSelectionChanged:
-                  _isRunning
-                      ? null
-                      : (selection) {
-                        if (selection.isEmpty) {
-                          return;
-                        }
-                        if (selection.first == _BatchScope.visibleEnabled &&
-                            widget.visibleSourceIds.isEmpty) {
-                          _showMessage('当前没有可用于“当前筛选”的书源。');
-                          return;
-                        }
-                        setState(() {
-                          _scope = selection.first;
-                        });
-                      },
-            ),
+            _buildSourceFilterRow(),
             const SizedBox(height: 10),
             TextField(
               controller: _keywordController,
@@ -245,6 +208,287 @@ class _SourceDiagnosticsPageState extends State<SourceDiagnosticsPage> {
         ),
       ),
     );
+  }
+
+  Widget _buildSourceFilterRow() {
+    final allCount = _filterableSources.length;
+    final selectedCount = _selectedSourceIds.length;
+
+    final summaryText =
+        allCount == 0
+            ? '当前没有可用启用书源'
+            : selectedCount == 0
+            ? '书源: 全部启用 ($allCount)'
+            : '书源: 指定 $selectedCount / $allCount';
+
+    return Container(
+      padding: const EdgeInsets.fromLTRB(10, 8, 8, 8),
+      decoration: BoxDecoration(
+        color: Theme.of(context).colorScheme.surfaceContainerLow,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: Theme.of(context).colorScheme.outlineVariant),
+      ),
+      child: Row(
+        children: [
+          Expanded(
+            child: Text(
+              summaryText,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                color: Theme.of(context).colorScheme.onSurfaceVariant,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ),
+          if (_isLoadingSourceFilters)
+            const SizedBox(
+              width: 20,
+              height: 20,
+              child: Padding(
+                padding: EdgeInsets.all(2),
+                child: CircularProgressIndicator(strokeWidth: 2),
+              ),
+            )
+          else ...[
+            if (_selectedSourceIds.isNotEmpty)
+              IconButton(
+                tooltip: '清空筛选',
+                visualDensity: VisualDensity.compact,
+                onPressed:
+                    _isRunning
+                        ? null
+                        : () {
+                          setState(() {
+                            _selectedSourceIds = <String>{};
+                            _reports = const [];
+                            _progress = null;
+                          });
+                        },
+                icon: const Icon(Icons.clear_rounded, size: 18),
+              ),
+            TextButton.icon(
+              onPressed:
+                  (_isRunning || allCount == 0)
+                      ? null
+                      : () => unawaited(_showSourceFilterSheet()),
+              icon: const Icon(Icons.filter_list_rounded, size: 18),
+              label: const Text('指定书源'),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  Future<void> _refreshSourceFilters() async {
+    if (!mounted) {
+      return;
+    }
+
+    setState(() {
+      _isLoadingSourceFilters = true;
+    });
+
+    try {
+      final enabled = await _diagnosticsService.loadEnabledSources();
+      enabled.sort((a, b) => a.name.compareTo(b.name));
+
+      if (!mounted) {
+        return;
+      }
+
+      setState(() {
+        _filterableSources = List.unmodifiable(enabled);
+        _selectedSourceIds =
+            _selectedSourceIds
+                .where((id) => enabled.any((item) => item.id == id))
+                .toSet();
+      });
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isLoadingSourceFilters = false;
+        });
+      }
+    }
+  }
+
+  Future<void> _showSourceFilterSheet() async {
+    if (_filterableSources.isEmpty) {
+      _showMessage('当前没有可用启用书源。');
+      return;
+    }
+
+    final initialSelected = <String>{..._selectedSourceIds};
+    final keywordController = TextEditingController();
+
+    final selected = await showModalBottomSheet<Set<String>>(
+      context: context,
+      isScrollControlled: true,
+      showDragHandle: true,
+      useSafeArea: true,
+      builder: (context) {
+        var draftSelected = <String>{...initialSelected};
+
+        return StatefulBuilder(
+          builder: (context, setModalState) {
+            final keyword = keywordController.text.trim().toLowerCase();
+            final visibleSources = _filterableSources
+                .where((source) {
+                  if (keyword.isEmpty) {
+                    return true;
+                  }
+                  return source.name.toLowerCase().contains(keyword) ||
+                      source.baseUrl.toLowerCase().contains(keyword) ||
+                      (source.group ?? '').toLowerCase().contains(keyword);
+                })
+                .toList(growable: false);
+
+            return FractionallySizedBox(
+              heightFactor: 0.85,
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(16, 6, 16, 16),
+                child: Column(
+                  children: [
+                    Align(
+                      alignment: Alignment.centerLeft,
+                      child: Text(
+                        '指定书源',
+                        style: Theme.of(context).textTheme.titleMedium
+                            ?.copyWith(fontWeight: FontWeight.w700),
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    TextField(
+                      controller: keywordController,
+                      onChanged: (_) => setModalState(() {}),
+                      decoration: InputDecoration(
+                        isDense: true,
+                        hintText: '搜索书源名称、域名或分组',
+                        prefixIcon: const Icon(Icons.search, size: 18),
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    Row(
+                      children: [
+                        TextButton(
+                          onPressed: () {
+                            setModalState(() {
+                              draftSelected = <String>{};
+                            });
+                          },
+                          child: const Text('全部启用'),
+                        ),
+                        const SizedBox(width: 8),
+                        TextButton(
+                          onPressed: () {
+                            setModalState(() {
+                              draftSelected =
+                                  _filterableSources
+                                      .map((item) => item.id)
+                                      .toSet();
+                            });
+                          },
+                          child: const Text('全选'),
+                        ),
+                        const Spacer(),
+                        Text(
+                          draftSelected.isEmpty
+                              ? '当前：全部'
+                              : '当前：${draftSelected.length} 个',
+                          style: Theme.of(
+                            context,
+                          ).textTheme.bodySmall?.copyWith(
+                            color:
+                                Theme.of(context).colorScheme.onSurfaceVariant,
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 4),
+                    Expanded(
+                      child:
+                          visibleSources.isEmpty
+                              ? Center(
+                                child: Text(
+                                  '未匹配到书源',
+                                  style: Theme.of(context).textTheme.bodyMedium,
+                                ),
+                              )
+                              : ListView.builder(
+                                itemCount: visibleSources.length,
+                                itemBuilder: (context, index) {
+                                  final source = visibleSources[index];
+                                  final selected = draftSelected.contains(
+                                    source.id,
+                                  );
+                                  return CheckboxListTile(
+                                    value: selected,
+                                    dense: true,
+                                    controlAffinity:
+                                        ListTileControlAffinity.leading,
+                                    title: Text(
+                                      source.name,
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                    ),
+                                    subtitle: Text(
+                                      source.baseUrl,
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                    ),
+                                    onChanged: (value) {
+                                      setModalState(() {
+                                        if (value ?? false) {
+                                          draftSelected.add(source.id);
+                                        } else {
+                                          draftSelected.remove(source.id);
+                                        }
+                                      });
+                                    },
+                                  );
+                                },
+                              ),
+                    ),
+                    const SizedBox(height: 8),
+                    Row(
+                      children: [
+                        TextButton(
+                          onPressed: () => Navigator.of(context).pop(),
+                          child: const Text('取消'),
+                        ),
+                        const Spacer(),
+                        FilledButton(
+                          onPressed:
+                              () => Navigator.of(context).pop(draftSelected),
+                          child: const Text('应用筛选'),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+            );
+          },
+        );
+      },
+    );
+
+    keywordController.dispose();
+
+    if (!mounted || selected == null) {
+      return;
+    }
+
+    setState(() {
+      _selectedSourceIds = selected;
+      _reports = const [];
+      _progress = null;
+    });
   }
 
   Widget _buildProgressCard() {
@@ -349,18 +593,18 @@ class _SourceDiagnosticsPageState extends State<SourceDiagnosticsPage> {
       return;
     }
 
-    final allEnabled = await _diagnosticsService.loadEnabledSources();
-    final visibleSet = widget.visibleSourceIds.toSet();
-
-    final targetSources =
-        _scope == _BatchScope.visibleEnabled
-            ? allEnabled
-                .where((source) => visibleSet.contains(source.id))
-                .toList(growable: false)
-            : allEnabled;
+    final selectedSourceIds = _selectedSourceIds.toList(growable: false);
+    final targetSources = await _diagnosticsService.loadEnabledSources(
+      sourceIds: selectedSourceIds.isEmpty ? null : selectedSourceIds,
+    );
 
     if (targetSources.isEmpty) {
-      _showMessage('没有可用于批量诊断的启用书源。');
+      final text =
+          selectedSourceIds.isEmpty
+              ? '没有可用于批量诊断的启用书源。'
+              : '已选书源中没有可用于批量诊断的启用书源。';
+      _showMessage(text);
+      unawaited(_refreshSourceFilters());
       return;
     }
 

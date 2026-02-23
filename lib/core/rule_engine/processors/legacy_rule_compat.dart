@@ -91,21 +91,86 @@ class LegacyRuleCompat {
     return candidates.join('||');
   }
 
+  static String? extractStaticRuleExpression(String expression) {
+    final normalized = expression.trim();
+    if (normalized.isEmpty) {
+      return null;
+    }
+
+    final candidates = normalized
+        .split('||')
+        .map((item) => item.trim())
+        .where((item) => item.isNotEmpty)
+        .map(_stripScriptDecorations)
+        .whereType<String>()
+        .where((item) => item.isNotEmpty)
+        .toSet()
+        .toList(growable: false);
+
+    if (candidates.isEmpty) {
+      return null;
+    }
+
+    return candidates.join('||');
+  }
+
+  static String? _stripScriptDecorations(String expression) {
+    var value = expression.trim();
+    if (value.isEmpty) {
+      return null;
+    }
+
+    final jsBlockStart = value.toLowerCase().indexOf('<js>');
+    final hasHtmlPrefixBeforeJs =
+        jsBlockStart > 0 && value.substring(0, jsBlockStart).contains('@');
+    if (jsBlockStart == 0 || hasHtmlPrefixBeforeJs) {
+      value =
+          value
+              .replaceAll(
+                RegExp(r'<js>.*?</js>', caseSensitive: false, dotAll: true),
+                ' ',
+              )
+              .trim();
+      value =
+          value
+              .replaceAll(RegExp(r'<js>[\s\S]*$', caseSensitive: false), ' ')
+              .trim();
+    }
+
+    final jsMarker = value.toLowerCase().indexOf('@js:');
+    if (jsMarker >= 0) {
+      final prefix = value.substring(0, jsMarker).trim();
+      if (prefix.isEmpty) {
+        return null;
+      }
+      value = prefix;
+    }
+
+    final cleaned = value.trim();
+    if (cleaned.isEmpty) {
+      return null;
+    }
+
+    return cleaned;
+  }
+
   static String sanitizeSelector(String selector) {
     final value = selector.trim();
     if (value.isEmpty) {
       return value;
     }
 
-    final normalized = value
-        .replaceAll('@', ' ')
-        .replaceAll('&&', ' ')
-        .replaceAll(RegExp(r':nth-child\([^\)]*\)'), '')
-        .replaceAll(RegExp(r':nth-last-child\([^\)]*\)'), '')
-        .replaceAllMapped(
-          RegExp(r'(^|\s)//+'),
-          (match) => match.group(1) ?? '',
-        );
+    final normalized = _normalizeJqueryPseudoSelectors(
+      value
+          .replaceAll('@', ' ')
+          .replaceAll('&&', ' ')
+          .replaceAll(RegExp(r':nth-child\([^\)]*\)'), '')
+          .replaceAll(RegExp(r':nth-last-child\([^\)]*\)'), '')
+          .replaceAllMapped(
+            RegExp(r'(^|\s)//+'),
+            (match) => match.group(1) ?? '',
+          ),
+    );
 
     final cleaned =
         normalized
@@ -125,6 +190,18 @@ class LegacyRuleCompat {
     if (value.isEmpty) {
       return '';
     }
+
+    if (value.startsWith('@css:')) {
+      value = value.substring(5).trim();
+    }
+    if (value.startsWith('css:')) {
+      value = value.substring(4).trim();
+    }
+    if (value.isEmpty) {
+      return '';
+    }
+
+    value = _normalizeCssRegexAttributeSelector(value);
 
     if (_looksLikeExtractorToken(value)) {
       return '';
@@ -212,12 +289,51 @@ class LegacyRuleCompat {
     value =
         value
             .replaceAll(RegExp(r'\[[!?-]?\d+\]'), '')
+            .replaceAll(RegExp(r'\[-?\d+:-?\d*\]'), '')
             .replaceAll(RegExp(r'!\s*-?\d+(?::-?\d+)*'), '')
             .replaceAll(RegExp(r'\.-?\d+\b'), '')
             .replaceAll(RegExp(r'\s+'), ' ')
             .trim();
 
     return value;
+  }
+
+  static String _normalizeJqueryPseudoSelectors(String selector) {
+    return selector
+        .replaceAllMapped(RegExp(r':eq\((\d+)\)'), (match) {
+          final index = int.tryParse(match.group(1) ?? '');
+          if (index == null || index < 0) {
+            return '';
+          }
+          return ':nth-child(${index + 1})';
+        })
+        .replaceAllMapped(RegExp(r':lt\((\d+)\)'), (match) {
+          final index = int.tryParse(match.group(1) ?? '');
+          if (index == null || index <= 0) {
+            return '';
+          }
+          return ':nth-child(-n+$index)';
+        })
+        .replaceAllMapped(RegExp(r':gt\((\d+)\)'), (match) {
+          final index = int.tryParse(match.group(1) ?? '');
+          if (index == null || index < 0) {
+            return '';
+          }
+          return ':nth-child(n+${index + 2})';
+        });
+  }
+
+  static String _normalizeCssRegexAttributeSelector(String selector) {
+    return selector.replaceAllMapped(
+      RegExp(r'\[\s*([a-zA-Z0-9_-]+)\s*~=\s*/.*\]'),
+      (match) {
+        final key = match.group(1)?.trim();
+        if (key == null || key.isEmpty) {
+          return '';
+        }
+        return '[$key]';
+      },
+    );
   }
 
   static bool _looksLikeExtractorToken(String token) {
@@ -237,6 +353,7 @@ class LegacyRuleCompat {
         normalized == 'url' ||
         normalized == 'href' ||
         normalized == 'src' ||
+        normalized == 'onclick' ||
         normalized == 'textnodes' ||
         normalized == 'innerhtml' ||
         normalized == 'outerhtml' ||

@@ -2,9 +2,11 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
 import '../features/book/presentation/book_detail_page.dart';
+import '../features/book/presentation/local_book_detail_page.dart';
 import '../features/bookshelf/presentation/bookshelf_page.dart';
 import '../features/mine/presentation/mine_page.dart';
 import '../features/mine/presentation/cache_management_page.dart';
+import '../features/reader/presentation/local_reader_page.dart';
 import '../features/reader/presentation/reader_page.dart';
 import '../features/search/presentation/search_page.dart';
 import '../features/source/presentation/source_page.dart';
@@ -54,17 +56,25 @@ final GoRouter appRouter = GoRouter(
     GoRoute(
       path: '/source-diagnostics',
       name: 'source-diagnostics',
-      builder: (context, state) {
-        final extra = state.extra;
-        final visibleSourceIds =
-            extra is List
-                ? extra
-                    .map((item) => item.toString().trim())
-                    .where((item) => item.isNotEmpty)
-                    .toList(growable: false)
-                : const <String>[];
+      builder: (context, state) => const SourceDiagnosticsPage(),
+    ),
 
-        return SourceDiagnosticsPage(visibleSourceIds: visibleSourceIds);
+    GoRoute(
+      path: '/local/book/:bookId',
+      name: 'local-book',
+      builder: (context, state) {
+        final bookId = state.pathParameters['bookId'] ?? 'unknown-local-book';
+        return LocalBookDetailPage(bookId: bookId);
+      },
+    ),
+    GoRoute(
+      path: '/local/reader/:bookId/:chapterId',
+      name: 'local-reader',
+      builder: (context, state) {
+        final bookId = state.pathParameters['bookId'] ?? 'unknown-local-book';
+        final chapterId =
+            state.pathParameters['chapterId'] ?? 'unknown-local-chapter';
+        return LocalReaderPage(bookId: bookId, chapterId: chapterId);
       },
     ),
     GoRoute(

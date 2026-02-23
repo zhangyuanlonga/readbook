@@ -1,0 +1,110 @@
+import 'package:drift/native.dart';
+import 'package:flutter_appread/data/datasources/local/app_database.dart';
+import 'package:flutter_appread/domain/entities/local_book.dart';
+import 'package:flutter_appread/domain/entities/local_chapter.dart';
+import 'package:flutter_test/flutter_test.dart';
+
+void main() {
+  group('AppDatabase local books', () {
+    late AppDatabase database;
+
+    setUp(() {
+      database = AppDatabase(executor: NativeDatabase.memory());
+    });
+
+    tearDown(() async {
+      await database.close();
+    });
+
+    test('upsert, query and update local book index state', () async {
+      final now = DateTime.parse('2026-02-23T12:00:00.000Z');
+      await database.upsertLocalBook(
+        LocalBook(
+          id: 'local_1',
+          title: '本地测试书',
+          format: LocalBookFormat.txt,
+          storagePath: '/tmp/local_1.txt',
+          sourcePath: '/input/book.txt',
+          fileSize: 1024,
+          createdAt: now,
+          updatedAt: now,
+        ),
+      );
+
+      final loaded = await database.getLocalBookById('local_1');
+      expect(loaded, isNotNull);
+      expect(loaded!.title, '本地测试书');
+      expect(loaded.indexStatus, LocalBookIndexStatus.pending);
+
+      await database.updateLocalBookIndexState(
+        bookId: 'local_1',
+        status: LocalBookIndexStatus.ready,
+        chapterCount: 18,
+      );
+
+      final updated = await database.getLocalBookById('local_1');
+      expect(updated, isNotNull);
+      expect(updated!.indexStatus, LocalBookIndexStatus.ready);
+      expect(updated.chapterCount, 18);
+    });
+
+    test('replace chapters and delete local book', () async {
+      final now = DateTime.parse('2026-02-23T12:00:00.000Z');
+      await database.upsertLocalBook(
+        LocalBook(
+          id: 'local_2',
+          title: '本地章节书',
+          format: LocalBookFormat.epub,
+          storagePath: '/tmp/local_2.epub',
+          fileSize: 2048,
+          createdAt: now,
+          updatedAt: now,
+        ),
+      );
+
+      await database.replaceLocalChapters(
+        bookId: 'local_2',
+        chapters: [
+          LocalChapter(
+            id: 'c_1',
+            bookId: 'local_2',
+            chapterIndex: 0,
+            title: '第一章',
+            content: '第一章内容',
+            createdAt: now,
+            updatedAt: now,
+            startOffset: 0,
+            endOffset: 100,
+          ),
+          LocalChapter(
+            id: 'c_2',
+            bookId: 'local_2',
+            chapterIndex: 1,
+            title: '第二章',
+            content: '第二章内容',
+            createdAt: now,
+            updatedAt: now,
+            startOffset: 101,
+            endOffset: 200,
+          ),
+        ],
+      );
+
+      final chapters = await database.getLocalChapters('local_2');
+      expect(chapters, hasLength(2));
+      expect(chapters.first.title, '第一章');
+
+      final chapter = await database.getLocalChapterById('c_2');
+      expect(chapter, isNotNull);
+      expect(chapter!.chapterIndex, 1);
+
+      final book = await database.getLocalBookById('local_2');
+      expect(book, isNotNull);
+      expect(book!.chapterCount, 2);
+
+      await database.deleteLocalBook('local_2');
+      expect(await database.getLocalBookById('local_2'), isNull);
+      expect(await database.getLocalChapters('local_2'), isEmpty);
+    });
+  });
+}

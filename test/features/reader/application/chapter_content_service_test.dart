@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'dart:io';
 import 'dart:typed_data';
 
+import 'package:charset/charset.dart';
 import 'package:flutter_appread/domain/entities/source_definition.dart';
 import 'package:flutter_appread/domain/repositories/source_repository.dart';
 import 'package:flutter_appread/features/reader/application/chapter_content_service.dart';
@@ -102,6 +103,60 @@ void main() {
         await server.close(force: true);
       },
     );
+
+    test('supports gbk decoding for content init and chapter requests', () async {
+      final server = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
+      final gbk = Charset.getByName('gbk');
+      expect(gbk, isNotNull);
+      String? observedToken;
+
+      server.listen((request) async {
+        if (request.uri.path == '/content/init') {
+          const payload = '{"token":"token-1"}';
+          request.response
+            ..statusCode = 200
+            ..headers.contentType = ContentType('application', 'json')
+            ..add(gbk!.encode(payload));
+        } else if (request.uri.path == '/content/main') {
+          observedToken = request.headers.value('x-token');
+          const html = '<div class="content">第一段</div>';
+          request.response
+            ..statusCode = 200
+            ..headers.contentType = ContentType('text', 'html')
+            ..add(gbk!.encode(html));
+        } else {
+          request.response
+            ..statusCode = 404
+            ..write('not found');
+        }
+        await request.response.close();
+      });
+
+      final baseUrl = 'http://${server.address.host}:${server.port}';
+      final repository = _FakeSourceRepository([
+        SourceDefinition(
+          id: 's_gbk_content',
+          name: 'GBK正文源',
+          baseUrl: baseUrl,
+          rules: SourceRuleSet(
+            contentInitRule: '$baseUrl/content/init,{"charset":"GBK"}',
+            contentRule: '.content@text',
+          ),
+        ),
+      ]);
+
+      final service = ChapterContentService(sourceRepository: repository);
+      final result = await service.load(
+        sourceId: 's_gbk_content',
+        chapterUrl:
+            '$baseUrl/content/main,{"charset":"GBK","headers":{"x-token":"{{token}}"}}',
+      );
+
+      expect(observedToken, 'token-1');
+      expect(result.content, contains('第一段'));
+
+      await server.close(force: true);
+    });
 
     test(
       'supports legacy compressed json payload with shorthand content rule',

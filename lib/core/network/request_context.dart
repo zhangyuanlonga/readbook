@@ -10,6 +10,7 @@ class RequestContext {
     this.headers = const {},
     this.body,
     this.contentType,
+    this.responseCharset,
     this.connectTimeout,
     this.receiveTimeout,
     this.maxRetries = 0,
@@ -25,6 +26,7 @@ class RequestContext {
   final Map<String, String> headers;
   final Object? body;
   final String? contentType;
+  final String? responseCharset;
   final Duration? connectTimeout;
   final Duration? receiveTimeout;
   final int maxRetries;

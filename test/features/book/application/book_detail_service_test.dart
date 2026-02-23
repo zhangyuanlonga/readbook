@@ -1,5 +1,6 @@
 import 'dart:io';
 
+import 'package:charset/charset.dart';
 import 'package:flutter_appread/core/errors/app_exception.dart';
 import 'package:flutter_appread/core/errors/error_codes.dart';
 import 'package:flutter_appread/core/errors/error_stage.dart';
@@ -73,6 +74,64 @@ void main() {
       expect(result.chapters.first.title, '第2章');
       expect(result.chapters.first.chapterUrl, '$baseUrl/c2');
       expect(result.tocFromCache, isFalse);
+
+      await server.close(force: true);
+    });
+
+    test('supports gbk decoding for detail and toc request specs', () async {
+      final server = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
+      final gbk = Charset.getByName('gbk');
+      expect(gbk, isNotNull);
+
+      server.listen((request) async {
+        if (request.uri.path == '/book/gbk') {
+          final detailHtml = '<h1 class="title">剑来</h1>';
+          request.response
+            ..statusCode = 200
+            ..headers.contentType = ContentType('text', 'html')
+            ..add(gbk!.encode(detailHtml));
+        } else if (request.uri.path == '/book/gbk/toc') {
+          final tocHtml =
+              '<div class="chapter"><a class="link" href="/c1">第一章</a></div>';
+          request.response
+            ..statusCode = 200
+            ..headers.contentType = ContentType('text', 'html')
+            ..add(gbk!.encode(tocHtml));
+        } else {
+          request.response
+            ..statusCode = 404
+            ..write('not found');
+        }
+        await request.response.close();
+      });
+
+      final baseUrl = 'http://${server.address.host}:${server.port}';
+      final repository = _FakeSourceRepository([
+        SourceDefinition(
+          id: 's_gbk_detail',
+          name: 'GBK详情源',
+          baseUrl: baseUrl,
+          rules: SourceRuleSet(
+            detailTitleRule: '.title@text',
+            detailTocUrlRule: '$baseUrl/book/gbk/toc,{"charset":"GBK"}',
+            tocListRule: '.chapter@html',
+            tocTitleRule: '.link@text',
+            tocChapterUrlRule: '.link@href',
+          ),
+        ),
+      ]);
+
+      final service = BookDetailService(sourceRepository: repository);
+      final result = await service.load(
+        sourceId: 's_gbk_detail',
+        bookId: 'book_gbk_detail',
+        detailUrl: '$baseUrl/book/gbk,{"charset":"GBK"}',
+      );
+
+      expect(result.detail.title, '剑来');
+      expect(result.chapters, hasLength(1));
+      expect(result.chapters.first.title, '第一章');
+      expect(result.chapters.first.chapterUrl, '$baseUrl/c1');
 
       await server.close(force: true);
     });
@@ -326,6 +385,57 @@ $baseUrl/book/1/toc, {
       expect(result.chapters.first.chapterUrl, '$baseUrl/valid-1');
       expect(result.chapters.last.title, '有效2');
       expect(result.chapters.last.chapterUrl, 'http://cdn.example.com/valid-2');
+
+      await server.close(force: true);
+    });
+
+    test('supports legacy toc chapterUrl onclick regex and js suffix', () async {
+      final server = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
+      server.listen((request) async {
+        if (request.uri.path == '/book/js') {
+          request.response
+            ..statusCode = 200
+            ..write('<a class="toc" href="/book/js/toc">目录</a>');
+        } else if (request.uri.path == '/book/js/toc') {
+          request.response
+            ..statusCode = 200
+            ..write('''
+              <div class="chapter"><a class="link" onclick="openChapter('/c1')">第1章</a></div>
+            ''');
+        } else {
+          request.response
+            ..statusCode = 404
+            ..write('not found');
+        }
+        await request.response.close();
+      });
+
+      final baseUrl = 'http://${server.address.host}:${server.port}';
+      final repository = _FakeSourceRepository([
+        SourceDefinition(
+          id: 's_toc_js_suffix',
+          name: '目录脚本后缀源',
+          baseUrl: baseUrl,
+          rules: const SourceRuleSet(
+            detailTocUrlRule: '.toc@href',
+            tocListRule: '.chapter@html',
+            tocTitleRule: '.link@text',
+            tocChapterUrlRule:
+                r'.link@onclick##.*\((.*)\).*##$1@js:result+",{"webView":true}"',
+          ),
+        ),
+      ]);
+
+      final service = BookDetailService(sourceRepository: repository);
+      final result = await service.load(
+        sourceId: 's_toc_js_suffix',
+        bookId: 'book_toc_js',
+        detailUrl: '$baseUrl/book/js',
+      );
+
+      expect(result.chapters, hasLength(1));
+      expect(result.chapters.first.title, '第1章');
+      expect(result.chapters.first.chapterUrl, '$baseUrl/c1,{"webView":true}');
 
       await server.close(force: true);
     });

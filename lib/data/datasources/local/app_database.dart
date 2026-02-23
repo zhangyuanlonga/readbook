@@ -6,6 +6,8 @@ import 'package:drift/native.dart';
 import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
 
+import '../../../domain/entities/local_book.dart';
+import '../../../domain/entities/local_chapter.dart';
 import '../../../domain/entities/source_definition.dart';
 
 part 'app_database.g.dart';
@@ -48,6 +50,51 @@ class ChapterCaches extends Table {
   Set<Column<Object>> get primaryKey => {cacheKey};
 }
 
+class StoredLocalBooks extends Table {
+  TextColumn get id => text()();
+  TextColumn get title => text()();
+  TextColumn get format => text()();
+  TextColumn get storagePath => text()();
+  TextColumn get sourcePath => text().nullable()();
+  IntColumn get fileSize => integer()();
+  TextColumn get author => text().nullable()();
+  TextColumn get coverPath => text().nullable()();
+  TextColumn get indexStatus => text().withDefault(const Constant('pending'))();
+  IntColumn get chapterCount => integer().withDefault(const Constant(0))();
+  TextColumn get lastError => text().nullable()();
+  DateTimeColumn get createdAt => dateTime().withDefault(currentDateAndTime)();
+  DateTimeColumn get updatedAt => dateTime().withDefault(currentDateAndTime)();
+
+  @override
+  String get tableName => 'local_books';
+
+  @override
+  Set<Column<Object>> get primaryKey => {id};
+}
+
+class StoredLocalChapters extends Table {
+  TextColumn get id => text()();
+  TextColumn get bookId => text()();
+  IntColumn get chapterIndex => integer()();
+  TextColumn get title => text()();
+  TextColumn get content => text()();
+  IntColumn get startOffset => integer().nullable()();
+  IntColumn get endOffset => integer().nullable()();
+  DateTimeColumn get createdAt => dateTime().withDefault(currentDateAndTime)();
+  DateTimeColumn get updatedAt => dateTime().withDefault(currentDateAndTime)();
+
+  @override
+  String get tableName => 'local_chapters';
+
+  @override
+  Set<Column<Object>> get primaryKey => {id};
+
+  @override
+  List<Set<Column<Object>>> get uniqueKeys => [
+    {bookId, chapterIndex},
+  ];
+}
+
 class SourceListItem {
   const SourceListItem({
     required this.id,
@@ -88,14 +135,16 @@ class ChapterCacheBookSummary {
   final DateTime updatedAt;
 }
 
-@DriftDatabase(tables: [Sources, ChapterCaches])
+@DriftDatabase(
+  tables: [Sources, ChapterCaches, StoredLocalBooks, StoredLocalChapters],
+)
 class AppDatabase extends _$AppDatabase {
   AppDatabase({QueryExecutor? executor}) : super(executor ?? _openConnection());
 
   static final AppDatabase instance = AppDatabase();
 
   @override
-  int get schemaVersion => 2;
+  int get schemaVersion => 3;
 
   @override
   MigrationStrategy get migration {
@@ -106,6 +155,10 @@ class AppDatabase extends _$AppDatabase {
       onUpgrade: (migrator, from, to) async {
         if (from < 2) {
           await migrator.createTable(chapterCaches);
+        }
+        if (from < 3) {
+          await migrator.createTable(storedLocalBooks);
+          await migrator.createTable(storedLocalChapters);
         }
       },
     );
@@ -147,10 +200,16 @@ class AppDatabase extends _$AppDatabase {
     required int limit,
     required int offset,
     String keyword = '',
+    bool? enabledOnly,
+    bool? isMangaSource,
   }) async {
     final safeLimit = limit < 1 ? 1 : limit;
     final safeOffset = offset < 0 ? 0 : offset;
-    final filter = _buildSourceListSqlFilter(keyword: keyword);
+    final filter = _buildSourceListSqlFilter(
+      keyword: keyword,
+      enabledOnly: enabledOnly,
+      isMangaSource: isMangaSource,
+    );
 
     final rows =
         await customSelect(
@@ -175,10 +234,12 @@ class AppDatabase extends _$AppDatabase {
   Future<int> countSourceListItems({
     String keyword = '',
     bool? enabledOnly,
+    bool? isMangaSource,
   }) async {
     final filter = _buildSourceListSqlFilter(
       keyword: keyword,
       enabledOnly: enabledOnly,
+      isMangaSource: isMangaSource,
     );
 
     final row =
@@ -470,6 +531,231 @@ class AppDatabase extends _$AppDatabase {
     return row.read(countExpression) ?? 0;
   }
 
+  Future<void> upsertLocalBook(LocalBook book) async {
+    final normalizedId = book.id.trim();
+    final normalizedTitle = book.title.trim();
+    final normalizedStoragePath = book.storagePath.trim();
+
+    if (normalizedId.isEmpty ||
+        normalizedTitle.isEmpty ||
+        normalizedStoragePath.isEmpty) {
+      return;
+    }
+
+    await into(storedLocalBooks).insert(
+      StoredLocalBooksCompanion(
+        id: Value(normalizedId),
+        title: Value(normalizedTitle),
+        format: Value(book.format.name),
+        storagePath: Value(normalizedStoragePath),
+        sourcePath: Value(_nullableString(book.sourcePath)),
+        fileSize: Value(book.fileSize < 0 ? 0 : book.fileSize),
+        author: Value(_nullableString(book.author)),
+        coverPath: Value(_nullableString(book.coverPath)),
+        indexStatus: Value(book.indexStatus.name),
+        chapterCount: Value(book.chapterCount < 0 ? 0 : book.chapterCount),
+        lastError: Value(_nullableString(book.lastError)),
+        createdAt: Value(book.createdAt),
+        updatedAt: Value(book.updatedAt),
+      ),
+      mode: InsertMode.insertOrReplace,
+    );
+  }
+
+  Future<LocalBook?> getLocalBookById(String bookId) async {
+    final normalized = bookId.trim();
+    if (normalized.isEmpty) {
+      return null;
+    }
+
+    final row =
+        await (select(storedLocalBooks)
+          ..where((table) => table.id.equals(normalized))).getSingleOrNull();
+    if (row == null) {
+      return null;
+    }
+
+    return _mapRowToLocalBook(row);
+  }
+
+  Future<List<LocalBook>> getAllLocalBooks() async {
+    final rows =
+        await (select(storedLocalBooks)
+          ..orderBy([(table) => OrderingTerm.desc(table.updatedAt)])).get();
+    return rows.map(_mapRowToLocalBook).toList(growable: false);
+  }
+
+  Future<void> updateLocalBookIndexState({
+    required String bookId,
+    required LocalBookIndexStatus status,
+    int? chapterCount,
+    String? lastError,
+    bool clearLastError = false,
+  }) async {
+    final normalizedId = bookId.trim();
+    if (normalizedId.isEmpty) {
+      return;
+    }
+
+    final normalizedChapterCount =
+        chapterCount == null ? null : (chapterCount < 0 ? 0 : chapterCount);
+
+    final lastErrorValue =
+        clearLastError
+            ? const Value<String?>(null)
+            : lastError == null
+            ? const Value<String?>.absent()
+            : Value<String?>(_nullableString(lastError));
+
+    await (update(storedLocalBooks)
+      ..where((table) => table.id.equals(normalizedId))).write(
+      StoredLocalBooksCompanion(
+        indexStatus: Value(status.name),
+        chapterCount: Value.absentIfNull(normalizedChapterCount),
+        lastError: lastErrorValue,
+        updatedAt: Value(DateTime.now()),
+      ),
+    );
+  }
+
+  Future<void> replaceLocalChapters({
+    required String bookId,
+    required List<LocalChapter> chapters,
+  }) async {
+    final normalizedBookId = bookId.trim();
+    if (normalizedBookId.isEmpty) {
+      return;
+    }
+
+    await transaction(() async {
+      await (delete(storedLocalChapters)
+        ..where((table) => table.bookId.equals(normalizedBookId))).go();
+
+      if (chapters.isNotEmpty) {
+        await batch((batch) {
+          for (final chapter in chapters) {
+            final normalizedId = chapter.id.trim();
+            final normalizedTitle = chapter.title.trim();
+            final normalizedContent = chapter.content.trim();
+            if (normalizedId.isEmpty ||
+                normalizedTitle.isEmpty ||
+                normalizedContent.isEmpty) {
+              continue;
+            }
+
+            batch.insert(
+              storedLocalChapters,
+              StoredLocalChaptersCompanion(
+                id: Value(normalizedId),
+                bookId: Value(normalizedBookId),
+                chapterIndex: Value(chapter.chapterIndex),
+                title: Value(normalizedTitle),
+                content: Value(chapter.content),
+                startOffset: Value(chapter.startOffset),
+                endOffset: Value(chapter.endOffset),
+                createdAt: Value(chapter.createdAt),
+                updatedAt: Value(chapter.updatedAt),
+              ),
+              mode: InsertMode.insertOrReplace,
+            );
+          }
+        });
+      }
+
+      await (update(storedLocalBooks)
+        ..where((table) => table.id.equals(normalizedBookId))).write(
+        StoredLocalBooksCompanion(
+          chapterCount: Value(chapters.length),
+          updatedAt: Value(DateTime.now()),
+        ),
+      );
+    });
+  }
+
+  Future<List<LocalChapter>> getLocalChapters(String bookId) async {
+    final normalizedBookId = bookId.trim();
+    if (normalizedBookId.isEmpty) {
+      return const <LocalChapter>[];
+    }
+
+    final rows =
+        await (select(storedLocalChapters)
+              ..where((table) => table.bookId.equals(normalizedBookId))
+              ..orderBy([(table) => OrderingTerm.asc(table.chapterIndex)]))
+            .get();
+
+    return rows.map(_mapRowToLocalChapter).toList(growable: false);
+  }
+
+  Future<LocalChapter?> getLocalChapterById(String chapterId) async {
+    final normalizedId = chapterId.trim();
+    if (normalizedId.isEmpty) {
+      return null;
+    }
+
+    final row =
+        await (select(storedLocalChapters)
+          ..where((table) => table.id.equals(normalizedId))).getSingleOrNull();
+
+    if (row == null) {
+      return null;
+    }
+
+    return _mapRowToLocalChapter(row);
+  }
+
+  Future<void> deleteLocalBook(String bookId) async {
+    final normalizedId = bookId.trim();
+    if (normalizedId.isEmpty) {
+      return;
+    }
+
+    await transaction(() async {
+      await (delete(storedLocalChapters)
+        ..where((table) => table.bookId.equals(normalizedId))).go();
+      await (delete(storedLocalBooks)
+        ..where((table) => table.id.equals(normalizedId))).go();
+    });
+  }
+
+  LocalBook _mapRowToLocalBook(StoredLocalBook row) {
+    return LocalBook(
+      id: row.id,
+      title: row.title,
+      format: LocalBookFormat.values.firstWhere(
+        (item) => item.name == row.format,
+        orElse: () => LocalBookFormat.txt,
+      ),
+      storagePath: row.storagePath,
+      fileSize: row.fileSize,
+      createdAt: row.createdAt,
+      updatedAt: row.updatedAt,
+      sourcePath: row.sourcePath,
+      author: row.author,
+      coverPath: row.coverPath,
+      indexStatus: LocalBookIndexStatus.values.firstWhere(
+        (item) => item.name == row.indexStatus,
+        orElse: () => LocalBookIndexStatus.pending,
+      ),
+      chapterCount: row.chapterCount,
+      lastError: row.lastError,
+    );
+  }
+
+  LocalChapter _mapRowToLocalChapter(StoredLocalChapter row) {
+    return LocalChapter(
+      id: row.id,
+      bookId: row.bookId,
+      chapterIndex: row.chapterIndex,
+      title: row.title,
+      content: row.content,
+      createdAt: row.createdAt,
+      updatedAt: row.updatedAt,
+      startOffset: row.startOffset,
+      endOffset: row.endOffset,
+    );
+  }
+
   SourceDefinition _mapRowToSource(Source row) {
     final rules = _decodeMap(row.rulesJson);
     final headers = _decodeMap(
@@ -553,6 +839,7 @@ class AppDatabase extends _$AppDatabase {
   _SourceListSqlFilter _buildSourceListSqlFilter({
     required String keyword,
     bool? enabledOnly,
+    bool? isMangaSource,
   }) {
     final clauses = <String>[];
     final variables = <Variable<Object>>[];
@@ -574,6 +861,13 @@ class AppDatabase extends _$AppDatabase {
     if (enabledOnly != null) {
       clauses.add('enabled = ?');
       variables.add(Variable<int>(enabledOnly ? 1 : 0));
+    }
+
+    if (isMangaSource != null) {
+      const mangaMatcher =
+          "(raw_json LIKE '%\"sourceType\":2,%' "
+          "OR raw_json LIKE '%\"sourceType\":2}%')";
+      clauses.add(isMangaSource ? mangaMatcher : 'NOT $mangaMatcher');
     }
 
     final whereClause = clauses.isEmpty ? '' : 'WHERE ${clauses.join(' AND ')}';

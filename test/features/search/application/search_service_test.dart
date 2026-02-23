@@ -1,7 +1,9 @@
 import 'dart:convert';
 import 'dart:io';
 
+import 'package:charset/charset.dart';
 import 'package:flutter_appread/core/errors/app_exception.dart';
+import 'package:flutter_appread/core/errors/error_codes.dart';
 import 'package:flutter_appread/core/network/http_client.dart';
 import 'package:flutter_appread/domain/entities/source_definition.dart';
 import 'package:flutter_appread/domain/repositories/source_repository.dart';
@@ -66,6 +68,73 @@ void main() {
         ),
       );
     });
+
+    test(
+      'validateSearchConfig reports unresolved dynamic js as validation',
+      () {
+        final service = SearchService(
+          sourceRepository: _FakeSourceRepository([]),
+        );
+        final source = SourceDefinition(
+          id: 'v_dynamic',
+          name: '动态源',
+          baseUrl: 'https://example.com',
+          rules: const SourceRuleSet(
+            searchRule: '''
+@js:
+java.put("key",key)
+eval(String(source.bookSourceComment))
+''',
+            searchListRule: '.item@html',
+            searchTitleRule: '.name@text',
+            searchDetailUrlRule: '.name@href',
+          ),
+        );
+
+        final error = service.validateSearchConfig(
+          source: source,
+          keyword: '凡人',
+        );
+
+        expect(error, isNotNull);
+        expect(error!.code, ErrorCode.validation);
+        expect(error.briefMessage, contains('动态 JS 脚本'));
+      },
+    );
+
+    test(
+      'validateSearchConfig passes when mixed url and js can extract url',
+      () {
+        final service = SearchService(
+          sourceRepository: _FakeSourceRepository([]),
+        );
+        final source = SourceDefinition(
+          id: 'v_mixed',
+          name: '混合源',
+          baseUrl: 'https://example.com',
+          rules: const SourceRuleSet(
+            searchRule: '''
+https://example.com
+@js:
+var url=source.getKey();
+var html = java.ajax(url);
+so = org.jsoup.Jsoup.parse(html).select('form[name=search]').attr('action');
+url+so+"?searchkey={{key}}"
+''',
+            searchListRule: '.item@html',
+            searchTitleRule: '.name@text',
+            searchDetailUrlRule: '.name@href',
+          ),
+        );
+
+        final error = service.validateSearchConfig(
+          source: source,
+          keyword: '凡人',
+        );
+
+        expect(error, isNull);
+      },
+    );
 
     test('supports searching with specified source ids', () async {
       final server = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
@@ -185,6 +254,47 @@ void main() {
       expect(report.successSourceCount, 1);
       expect(report.failedSourceCount, 1);
       expect(report.failures.first.sourceId, 's_fail');
+
+      await server.close(force: true);
+    });
+
+    test('supports gbk search response decoding via charset option', () async {
+      final server = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
+      final gbk = Charset.getByName('gbk');
+      expect(gbk, isNotNull);
+
+      server.listen((request) async {
+        final html =
+            '<div class="item"><a class="name" href="/book/gbk">剑来</a></div>';
+        final bytes = gbk!.encode(html);
+
+        request.response
+          ..statusCode = 200
+          ..headers.contentType = ContentType('text', 'html', charset: 'gbk')
+          ..add(bytes);
+        await request.response.close();
+      });
+
+      final baseUrl = 'http://${server.address.host}:${server.port}';
+      final repository = _FakeSourceRepository([
+        SourceDefinition(
+          id: 's_gbk',
+          name: 'GBK源',
+          baseUrl: baseUrl,
+          rules: SourceRuleSet(
+            searchRule: '$baseUrl/search,{"method":"GET","charset":"GBK"}',
+            searchListRule: '.item@html',
+            searchTitleRule: '.name@text',
+            searchDetailUrlRule: '.name@href',
+          ),
+        ),
+      ]);
+
+      final service = SearchService(sourceRepository: repository);
+      final report = await service.search(keyword: '剑来');
+
+      expect(report.books, hasLength(1));
+      expect(report.books.first.title, '剑来');
 
       await server.close(force: true);
     });
@@ -537,6 +647,224 @@ $baseUrl/search, {
       },
     );
 
+    test('extracts static url from mixed url plus @js search rule', () async {
+      final server = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
+      String? observedPath;
+
+      server.listen((request) async {
+        observedPath = request.uri.path;
+        request.response
+          ..statusCode = 200
+          ..write('''
+            <div class="item">
+              <a class="name" href="/book/mixed">凡人修仙传</a>
+            </div>
+          ''');
+        await request.response.close();
+      });
+
+      final baseUrl = 'http://${server.address.host}:${server.port}';
+      final repository = _FakeSourceRepository([
+        SourceDefinition(
+          id: 's_mixed_js',
+          name: '混合脚本源',
+          baseUrl: baseUrl,
+          rules: SourceRuleSet(
+            searchRule: '''
+$baseUrl
+@js:
+var url=source.getKey();
+var html = java.ajax(url);
+so = org.jsoup.Jsoup.parse(html).select('form[name=search]').attr('action');
+url+so+"?searchkey={{key}}"
+''',
+            searchListRule: '.item@html',
+            searchTitleRule: '.name@text',
+            searchDetailUrlRule: '.name@href',
+          ),
+        ),
+      ]);
+
+      final service = SearchService(sourceRepository: repository);
+      final report = await service.search(keyword: '凡人修仙传');
+
+      expect(report.books, hasLength(1));
+      expect(observedPath, '/');
+
+      await server.close(force: true);
+    });
+
+    test('supports legacy detailUrl @js replace suffix', () async {
+      final server = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
+
+      server.listen((request) async {
+        request.response
+          ..statusCode = 200
+          ..write('''
+            <div class="item">
+              <a class="name" href="/go/123">凡人修仙传</a>
+            </div>
+          ''');
+        await request.response.close();
+      });
+
+      final baseUrl = 'http://${server.address.host}:${server.port}';
+      final repository = _FakeSourceRepository([
+        SourceDefinition(
+          id: 's_detail_url_js_suffix',
+          name: '详情链接脚本后缀源',
+          baseUrl: baseUrl,
+          rules: SourceRuleSet(
+            searchRule: '$baseUrl/search?keyword={{key}}',
+            searchListRule: '.item@html',
+            searchTitleRule: '.name@text',
+            searchDetailUrlRule: '.name@href@js:result.replace("go/", "book_")',
+          ),
+        ),
+      ]);
+
+      final service = SearchService(sourceRepository: repository);
+      final report = await service.search(keyword: '凡人修仙传');
+
+      expect(report.books, hasLength(1));
+      expect(report.books.first.detailUrl, '$baseUrl/book_123');
+
+      await server.close(force: true);
+    });
+
+    test(
+      'falls back to static field rule when @js suffix is present',
+      () async {
+        final server = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
+
+        server.listen((request) async {
+          request.response
+            ..statusCode = 200
+            ..write('''
+            <div class="item">
+              <a class="name" href="/book/static-field">凡人修仙传</a>
+            </div>
+          ''');
+          await request.response.close();
+        });
+
+        final baseUrl = 'http://${server.address.host}:${server.port}';
+        final repository = _FakeSourceRepository([
+          SourceDefinition(
+            id: 's_field_mixed_js',
+            name: '字段混合脚本源',
+            baseUrl: baseUrl,
+            rules: SourceRuleSet(
+              searchRule: '$baseUrl/search?keyword={{key}}',
+              searchListRule: '.item@html',
+              searchTitleRule: '''
+.name@text
+@js:
+result
+''',
+              searchDetailUrlRule: '''
+.name@href
+@js:
+result
+''',
+            ),
+          ),
+        ]);
+
+        final service = SearchService(sourceRepository: repository);
+        final report = await service.search(keyword: '凡人修仙传');
+
+        expect(report.books, hasLength(1));
+        expect(report.books.first.title, '凡人修仙传');
+        expect(report.books.first.detailUrl, '$baseUrl/book/static-field');
+
+        await server.close(force: true);
+      },
+    );
+
+    test(
+      'falls back to static json list rule after js block prelude',
+      () async {
+        final server = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
+
+        server.listen((request) async {
+          request.response
+            ..statusCode = 200
+            ..write('''
+            {
+              "data": {
+                "items": [
+                  {"title": "凡人修仙传", "url": "/book/json-js"}
+                ]
+              }
+            }
+          ''');
+          await request.response.close();
+        });
+
+        final baseUrl = 'http://${server.address.host}:${server.port}';
+        final repository = _FakeSourceRepository([
+          SourceDefinition(
+            id: 's_list_js_prelude',
+            name: '列表脚本前导源',
+            baseUrl: baseUrl,
+            rules: SourceRuleSet(
+              searchRule: '$baseUrl/search',
+              searchListRule: r'''
+<js>
+var payload = JSON.parse(result);
+result = JSON.stringify(payload);
+</js>
+$.data.items[*]
+''',
+              searchTitleRule: r'$.title',
+              searchDetailUrlRule: r'$.url',
+            ),
+          ),
+        ]);
+
+        final service = SearchService(sourceRepository: repository);
+        final report = await service.search(keyword: '凡人修仙传');
+
+        expect(report.books, hasLength(1));
+        expect(report.books.first.title, '凡人修仙传');
+        expect(report.books.first.detailUrl, '$baseUrl/book/json-js');
+
+        await server.close(force: true);
+      },
+    );
+
+    test(
+      'marks unresolved dynamic @js searchUrl as validation failure',
+      () async {
+        final repository = _FakeSourceRepository([
+          SourceDefinition(
+            id: 's_dynamic_js',
+            name: '动态脚本源',
+            baseUrl: 'https://example.com',
+            rules: const SourceRuleSet(
+              searchRule: '''
+@js:
+java.put("key",key)
+eval(String(source.bookSourceComment))
+''',
+              searchListRule: '.item@html',
+              searchTitleRule: '.name@text',
+              searchDetailUrlRule: '.name@href',
+            ),
+          ),
+        ]);
+
+        final service = SearchService(sourceRepository: repository);
+        final report = await service.search(keyword: '凡人修仙传');
+
+        expect(report.books, isEmpty);
+        expect(report.failedSourceCount, 1);
+        expect(report.failures.first.code, ErrorCode.validation);
+        expect(report.failures.first.debugMessage, contains('动态 JS 脚本'));
+      },
+    );
+
     test('extracts url template from java wrapper expression', () async {
       final server = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
       String? observedQuery;
@@ -736,6 +1064,85 @@ url+so+JSON.stringify(post)
         await server.close(force: true);
       },
     );
+
+    test(
+      'supports list outerhtml fallback for root-dependent item selectors',
+      () async {
+        final server = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
+        server.listen((request) async {
+          request.response
+            ..statusCode = 200
+            ..write('''
+            <div class="item">
+              <a class="title" href="/book/root-dependent">凡人修仙传</a>
+            </div>
+          ''');
+          await request.response.close();
+        });
+
+        final baseUrl = 'http://${server.address.host}:${server.port}';
+        final repository = _FakeSourceRepository([
+          SourceDefinition(
+            id: 's_outerhtml_fallback',
+            name: '外层回退源',
+            baseUrl: baseUrl,
+            rules: SourceRuleSet(
+              searchRule: '/search?keyword={{key}}',
+              searchListRule: '.item',
+              searchTitleRule: '.item .title@text',
+              searchDetailUrlRule: '.item .title@href',
+            ),
+          ),
+        ]);
+
+        final service = SearchService(sourceRepository: repository);
+        final report = await service.search(keyword: '凡人修仙传');
+
+        expect(report.books, hasLength(1));
+        expect(report.books.first.title, '凡人修仙传');
+        expect(report.books.first.detailUrl, '$baseUrl/book/root-dependent');
+
+        await server.close(force: true);
+      },
+    );
+
+    test('supports bare title/url extractors on current list node', () async {
+      final server = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
+      server.listen((request) async {
+        request.response
+          ..statusCode = 200
+          ..write('''
+            <div class="item">
+              <ul><li><a href="/book/current-node">凡人修仙传</a></li></ul>
+            </div>
+          ''');
+        await request.response.close();
+      });
+
+      final baseUrl = 'http://${server.address.host}:${server.port}';
+      final repository = _FakeSourceRepository([
+        SourceDefinition(
+          id: 's_current_node',
+          name: '当前节点提取源',
+          baseUrl: baseUrl,
+          rules: SourceRuleSet(
+            searchRule: '/search?keyword={{key}}',
+            searchListRule: '.item li a@html',
+            searchTitleRule: 'text',
+            searchDetailUrlRule: 'href',
+          ),
+        ),
+      ]);
+
+      final service = SearchService(sourceRepository: repository);
+      final report = await service.search(keyword: '凡人修仙传');
+
+      expect(report.books, hasLength(1));
+      expect(report.books.first.title, '凡人修仙传');
+      expect(report.books.first.detailUrl, '$baseUrl/book/current-node');
+
+      await server.close(force: true);
+    });
 
     test('supports json search rules with inline js pipeline', () async {
       final server = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);

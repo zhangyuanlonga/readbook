@@ -84,6 +84,76 @@ class HtmlExecutor {
       // fall through and retry with compatibility selector.
     }
 
+    final legacyIndexed = _queryLegacyIndexedSelector(
+      document: document,
+      selector: selector,
+    );
+    if (legacyIndexed.isNotEmpty) {
+      return legacyIndexed;
+    }
+
+    final fallbackSelector = LegacyRuleCompat.sanitizeSelector(selector);
+    if (fallbackSelector.isEmpty || fallbackSelector == selector) {
+      return const <Element>[];
+    }
+
+    try {
+      return document.querySelectorAll(fallbackSelector);
+    } catch (_) {
+      return const <Element>[];
+    }
+  }
+
+  List<Element> _queryLegacyIndexedSelector({
+    required Document document,
+    required String selector,
+  }) {
+    final match = RegExp(
+      r'^(.*?):(eq|gt|lt)\((\d+)\)\s*$',
+    ).firstMatch(selector.trim());
+    if (match == null) {
+      return const <Element>[];
+    }
+
+    final baseSelector = match.group(1)?.trim() ?? '';
+    final op = match.group(2) ?? '';
+    final index = int.tryParse(match.group(3) ?? '');
+    if (baseSelector.isEmpty || index == null || index < 0) {
+      return const <Element>[];
+    }
+
+    final baseNodes = _queryWithFallbackSelector(document, baseSelector);
+    if (baseNodes.isEmpty) {
+      return const <Element>[];
+    }
+
+    return switch (op) {
+      'eq' =>
+        index < baseNodes.length
+            ? <Element>[baseNodes[index]]
+            : const <Element>[],
+      'gt' =>
+        index + 1 < baseNodes.length
+            ? baseNodes.sublist(index + 1)
+            : const <Element>[],
+      'lt' =>
+        index == 0
+            ? const <Element>[]
+            : baseNodes.take(index).toList(growable: false),
+      _ => const <Element>[],
+    };
+  }
+
+  List<Element> _queryWithFallbackSelector(Document document, String selector) {
+    try {
+      final matched = document.querySelectorAll(selector);
+      if (matched.isNotEmpty) {
+        return matched;
+      }
+    } catch (_) {
+      // continue with sanitized selector
+    }
+
     final fallbackSelector = LegacyRuleCompat.sanitizeSelector(selector);
     if (fallbackSelector.isEmpty || fallbackSelector == selector) {
       return const <Element>[];
