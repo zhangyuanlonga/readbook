@@ -249,83 +249,90 @@ class _BookDetailPageState extends State<BookDetailPage> {
                             final availableWidth = constraints.maxWidth;
                             final perButtonWidth =
                                 (availableWidth - 10).clamp(0.0, 2000.0) / 2;
-                            final useShortLabels = perButtonWidth < 170;
+                            final useShortLabels = perButtonWidth < 180;
+                            final hideActionIcons = perButtonWidth < 148;
 
                             final readLabel = useShortLabels ? '阅读' : '开始阅读';
                             final shelfLabel =
                                 useShortLabels
-                                    ? (_isInBookshelf ? '移出' : '加入')
+                                    ? (_isInBookshelf ? '移出' : '书架')
                                     : (_isInBookshelf ? '移出书架' : '加入书架');
 
                             return Row(
                               children: [
                                 Expanded(
                                   child: FilledButton(
+                                    style: FilledButton.styleFrom(
+                                      padding: const EdgeInsets.symmetric(
+                                        horizontal: 10,
+                                      ),
+                                    ),
                                     onPressed:
                                         result.chapters.isEmpty
                                             ? null
                                             : () => _openChapter(
                                               result.chapters.first,
                                             ),
-                                    child: Row(
-                                      mainAxisSize: MainAxisSize.max,
-                                      children: [
-                                        const Icon(
-                                          Icons.chrome_reader_mode_outlined,
-                                          size: 18,
-                                        ),
-                                        const SizedBox(width: 8),
-                                        Expanded(
-                                          child: Align(
-                                            alignment: Alignment.center,
-                                            child: Text(
-                                              readLabel,
-                                              maxLines: 1,
-                                              overflow: TextOverflow.ellipsis,
+                                    child: FittedBox(
+                                      fit: BoxFit.scaleDown,
+                                      child: Row(
+                                        mainAxisSize: MainAxisSize.min,
+                                        children: [
+                                          if (!hideActionIcons) ...[
+                                            const Icon(
+                                              Icons.chrome_reader_mode_outlined,
+                                              size: 16,
                                             ),
+                                            const SizedBox(width: 4),
+                                          ],
+                                          Text(
+                                            readLabel,
+                                            maxLines: 1,
+                                            softWrap: false,
+                                            overflow: TextOverflow.fade,
                                           ),
-                                        ),
-                                      ],
+                                        ],
+                                      ),
                                     ),
                                   ),
                                 ),
                                 const SizedBox(width: 10),
                                 Expanded(
                                   child: OutlinedButton(
+                                    style: OutlinedButton.styleFrom(
+                                      padding: const EdgeInsets.symmetric(
+                                        horizontal: 10,
+                                      ),
+                                    ),
                                     onPressed:
                                         _isShelfActionLoading
                                             ? null
                                             : _toggleBookshelf,
-                                    child: Row(
-                                      mainAxisSize: MainAxisSize.max,
-                                      children: [
-                                        if (_isShelfActionLoading)
-                                          const SizedBox(
-                                            width: 16,
-                                            height: 16,
-                                            child: CircularProgressIndicator(
-                                              strokeWidth: 2,
+                                    child: FittedBox(
+                                      fit: BoxFit.scaleDown,
+                                      child: Row(
+                                        mainAxisSize: MainAxisSize.min,
+                                        children: [
+                                          if (!_isShelfActionLoading &&
+                                              !hideActionIcons) ...[
+                                            Icon(
+                                              _isInBookshelf
+                                                  ? Icons.bookmark_remove_outlined
+                                                  : Icons.bookmark_add_outlined,
+                                              size: 16,
                                             ),
-                                          )
-                                        else
-                                          Icon(
-                                            _isInBookshelf
-                                                ? Icons.bookmark_remove_outlined
-                                                : Icons.bookmark_add_outlined,
-                                            size: 18,
+                                            const SizedBox(width: 4),
+                                          ],
+                                          Text(
+                                            _isShelfActionLoading
+                                                ? '处理中'
+                                                : shelfLabel,
+                                            maxLines: 1,
+                                            softWrap: false,
+                                            overflow: TextOverflow.fade,
                                           ),
-                                        const SizedBox(width: 8),
-                                        Expanded(
-                                          child: Align(
-                                            alignment: Alignment.center,
-                                            child: Text(
-                                              shelfLabel,
-                                              maxLines: 1,
-                                              overflow: TextOverflow.ellipsis,
-                                            ),
-                                          ),
-                                        ),
-                                      ],
+                                        ],
+                                      ),
                                     ),
                                   ),
                                 ),
@@ -424,8 +431,15 @@ class _BookDetailPageState extends State<BookDetailPage> {
     return intro.isEmpty ? null : intro;
   }
 
+  String _normalizeSingleLineText(String text) {
+    return _normalizeText(text)
+        .replaceAll('\n', ' ')
+        .replaceAll(RegExp(r'\s{2,}'), ' ')
+        .trim();
+  }
+
   Widget _buildLatestChapterCard(Chapter latestChapter) {
-    final latestTitle = _normalizeText(latestChapter.title);
+    final latestTitle = _normalizeSingleLineText(latestChapter.title);
     final colorScheme = Theme.of(context).colorScheme;
 
     return Card(
@@ -460,7 +474,7 @@ class _BookDetailPageState extends State<BookDetailPage> {
                     const SizedBox(height: 4),
                     Text(
                       latestTitle,
-                      maxLines: 2,
+                      maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                       style: Theme.of(context).textTheme.bodyMedium,
                     ),
@@ -794,7 +808,7 @@ class _BookDetailPageState extends State<BookDetailPage> {
                         dense: true,
                         leading: Text('${index + 1}'),
                         title: Text(
-                          chapter.title,
+                          _normalizeSingleLineText(chapter.title),
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
                         ),
@@ -857,7 +871,7 @@ class _BookDetailPageState extends State<BookDetailPage> {
             const SizedBox(width: 6),
             Expanded(
               child: Text(
-                chapter.title,
+                _normalizeSingleLineText(chapter.title),
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
               ),
