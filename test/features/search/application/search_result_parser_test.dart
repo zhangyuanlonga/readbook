@@ -74,6 +74,35 @@ void main() {
       expect(books.first.detailUrl, 'https://example.com/book/1001');
     });
 
+    test('allows invalid baseUrl when result links are absolute', () {
+      const absoluteHtml = '''
+      <div class="result-item">
+        <a class="title" href="https://book.example.com/book/1">剑来</a>
+        <img class="cover" src="https://img.example.com/1.jpg" />
+      </div>
+      <div class="result-item">
+        <a class="title" href="/book/2">相对地址应跳过</a>
+      </div>
+      ''';
+
+      final books = parser.parse(
+        htmlContent: absoluteHtml,
+        sourceId: 'source-a',
+        baseUrl: 'bbnnfgh',
+        rules: const SearchParseRules(
+          listRule: 'html:.result-item@html',
+          titleRule: 'html:.title@text',
+          detailUrlRule: 'html:.title@attr(href)',
+          coverUrlRule: 'html:.cover@attr(src)',
+        ),
+      );
+
+      expect(books, hasLength(1));
+      expect(books.first.title, '剑来');
+      expect(books.first.detailUrl, 'https://book.example.com/book/1');
+      expect(books.first.coverUrl, 'https://img.example.com/1.jpg');
+    });
+
     test('falls back between json/html/regex rules when one fails', () {
       const jsonContent = '{"items":[{"title":"凡人修仙传","url":"/book/1001"}]}';
 

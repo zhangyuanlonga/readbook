@@ -839,6 +839,64 @@ $baseUrl/book/1/toc, {
 
       await server.close(force: true);
     });
+    test(
+      'ignores html-fragment toc url to avoid malformed toc requests',
+      () async {
+        final server = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
+        final requestUris = <String>[];
+
+        server.listen((request) async {
+          requestUris.add(request.uri.toString());
+
+          if (request.uri.path == '/book/html-fragment') {
+            request.response
+              ..statusCode = 200
+              ..write('''
+              <h1 class="title">片段目录链接</h1>
+              <meta property="og:novel:read_url" content="<!doctype html><html><body>bad</body></html>" />
+            ''');
+          } else {
+            request.response
+              ..statusCode = 404
+              ..write('not found');
+          }
+          await request.response.close();
+        });
+
+        final baseUrl = 'http://${server.address.host}:${server.port}';
+        final repository = _FakeSourceRepository([
+          SourceDefinition(
+            id: 's_html_fragment_toc',
+            name: 'HTML片段目录源',
+            baseUrl: baseUrl,
+            rules: const SourceRuleSet(
+              detailTitleRule: '.title@text',
+              detailTocUrlRule: '[property="og:novel:read_url"]@content',
+              tocListRule: '.chapter@html',
+              tocTitleRule: '.link@text',
+              tocChapterUrlRule: '.link@href',
+            ),
+          ),
+        ]);
+
+        final service = BookDetailService(sourceRepository: repository);
+        final result = await service.load(
+          sourceId: 's_html_fragment_toc',
+          bookId: 'book_html_fragment_toc',
+          detailUrl: '$baseUrl/book/html-fragment',
+        );
+
+        expect(result.detail.title, '片段目录链接');
+        expect(result.chapters, isEmpty);
+        expect(
+          requestUris.any((uri) => uri.toLowerCase().contains('%3c')),
+          isFalse,
+        );
+
+        await server.close(force: true);
+      },
+    );
+
     test('supports legacy toc title/url rules with bare extractors', () async {
       final server = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
       server.listen((request) async {

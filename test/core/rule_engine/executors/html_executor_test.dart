@@ -45,5 +45,17 @@ void main() {
         throwsA(isA<RuleMatchEmptyException>()),
       );
     });
+
+    test('supports td/tr selectors for table row fragments', () {
+      const rowFragment =
+          '<tr><td><a href="/book/1">Book A</a></td><td>作者</td></tr>';
+      const rule = ParsedHtmlRule(
+        selector: 'td a',
+        extractor: HtmlExtractor.attr('href'),
+      );
+
+      final values = executor.execute(content: rowFragment, rule: rule);
+      expect(values, ['/book/1']);
+    });
   });
 }

@@ -63,6 +63,20 @@ void main() {
       expect(expression, 'html:#main a@html||html:.recommend.mybook a@html');
     });
 
+    test('treats title and alt as attribute extractors in legacy chains', () {
+      final titleRule = LegacyRuleCompat.buildHtmlRuleExpression(
+        expression: 'tag.a@title',
+        fallbackExtractor: 'text',
+      );
+      final altRule = LegacyRuleCompat.buildHtmlRuleExpression(
+        expression: 'tag.img@alt',
+        fallbackExtractor: 'text',
+      );
+
+      expect(titleRule, 'html:a@attr(title)');
+      expect(altRule, 'html:img@attr(alt)');
+    });
+
     test('sanitizes unsupported selector suffix', () {
       final selector = LegacyRuleCompat.sanitizeSelector(
         '.s2 a.0:nth-child(1)',

@@ -1071,7 +1071,10 @@ class BookDetailService {
     final requestSplit = _splitRequestOptions(text);
     final rawUrlPart = requestSplit?.urlTemplate ?? text;
     final urlPart = _normalizeCandidateUrl(rawUrlPart);
-    if (urlPart == null || _isInvalidChapterUrl(urlPart)) {
+    if (urlPart == null ||
+        _isInvalidChapterUrl(urlPart) ||
+        _looksLikeHtmlFragment(urlPart) ||
+        _looksLikeEncodedHtmlFragment(urlPart)) {
       return null;
     }
 
@@ -1116,6 +1119,42 @@ class BookDetailService {
     }
 
     return false;
+  }
+
+  bool _looksLikeHtmlFragment(String value) {
+    final normalized = value.trimLeft().toLowerCase();
+    if (normalized.isEmpty) {
+      return false;
+    }
+
+    if (normalized.startsWith('<!doctype') ||
+        normalized.startsWith('<html') ||
+        normalized.startsWith('<body') ||
+        normalized.startsWith('<div') ||
+        normalized.startsWith('<p') ||
+        normalized.startsWith('<span') ||
+        normalized.startsWith('<script')) {
+      return true;
+    }
+
+    return RegExp(r'^<[^>]+>').hasMatch(normalized);
+  }
+
+  bool _looksLikeEncodedHtmlFragment(String value) {
+    final normalized = value.trim();
+    if (normalized.isEmpty) {
+      return false;
+    }
+
+    final decoded = Uri.decodeFull(normalized).trimLeft().toLowerCase();
+    if (decoded.isEmpty) {
+      return false;
+    }
+
+    return decoded.startsWith('<') ||
+        decoded.contains('<div') ||
+        decoded.contains('<html') ||
+        decoded.contains('<body');
   }
 
   String? _resolveAbsoluteHttpUrl({

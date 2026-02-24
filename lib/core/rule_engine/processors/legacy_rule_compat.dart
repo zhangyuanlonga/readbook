@@ -353,6 +353,8 @@ class LegacyRuleCompat {
         normalized == 'url' ||
         normalized == 'href' ||
         normalized == 'src' ||
+        normalized == 'title' ||
+        normalized == 'alt' ||
         normalized == 'onclick' ||
         normalized == 'textnodes' ||
         normalized == 'innerhtml' ||

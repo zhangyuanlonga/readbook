@@ -63,14 +63,7 @@ class SearchResultParser {
       );
     }
 
-    final baseUri = Uri.tryParse(baseUrl.trim());
-    if (baseUri == null || !baseUri.hasScheme) {
-      throw AppException(
-        code: ErrorCode.validation,
-        stage: ErrorStage.search,
-        briefMessage: 'baseUrl 非法：$baseUrl',
-      );
-    }
+    final baseUri = _tryParseBaseUri(baseUrl);
 
     final booksById = <String, Book>{};
 
@@ -115,7 +108,7 @@ class SearchResultParser {
   List<Book> _parseBooksFromChunks({
     required List<String> chunks,
     required String sourceId,
-    required Uri baseUri,
+    required Uri? baseUri,
     required SearchParseRules rules,
   }) {
     final output = <Book>[];
@@ -155,6 +148,10 @@ class SearchResultParser {
       }
 
       final detailUrl = _resolveUrl(baseUri, detailUrlValue);
+      if (detailUrl == null) {
+        continue;
+      }
+
       final coverUrl = _tryOptional(
         content: chunk,
         expression: rules.coverUrlRule,
@@ -487,12 +484,39 @@ class SearchResultParser {
         .toList(growable: false);
   }
 
-  String _resolveUrl(Uri baseUri, String url) {
+  Uri? _tryParseBaseUri(String baseUrl) {
+    final parsed = Uri.tryParse(baseUrl.trim());
+    if (parsed == null || !parsed.hasScheme) {
+      return null;
+    }
+
+    final scheme = parsed.scheme.toLowerCase();
+    if (scheme != 'http' && scheme != 'https') {
+      return null;
+    }
+
+    return parsed;
+  }
+
+  String? _resolveUrl(Uri? baseUri, String url) {
     final trimmed = url.trim();
     final parsed = Uri.tryParse(trimmed);
     if (parsed != null && parsed.hasScheme) {
-      return trimmed;
+      final scheme = parsed.scheme.toLowerCase();
+      if (scheme == 'http' || scheme == 'https') {
+        return trimmed;
+      }
+      return null;
     }
+
+    if (baseUri == null) {
+      return null;
+    }
+
+    if (trimmed.startsWith('//')) {
+      return '${baseUri.scheme}:$trimmed';
+    }
+
     return baseUri.resolve(trimmed).toString();
   }
 

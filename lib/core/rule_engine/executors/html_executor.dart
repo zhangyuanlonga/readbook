@@ -26,7 +26,14 @@ class HtmlExecutor {
     }
 
     final document = html_parser.parse(content);
-    final nodes = _queryNodesWithCompat(document, selector);
+    var nodes = _queryNodesWithCompat(document, selector);
+
+    if (nodes.isEmpty &&
+        _shouldRetryWithTableContext(content: content, selector: selector)) {
+      final tableDocument = _parseTableContextDocument(content);
+      nodes = _queryNodesWithCompat(tableDocument, selector);
+    }
+
     if (nodes.isEmpty) {
       throw RuleMatchEmptyException(
         briefMessage: 'HTML 规则未命中：$selector',
@@ -72,6 +79,39 @@ class HtmlExecutor {
     }
 
     return result;
+  }
+
+  bool _shouldRetryWithTableContext({
+    required String content,
+    required String selector,
+  }) {
+    final lowerContent = content.toLowerCase();
+    if (RegExp(r'<\s*(tr|td|th|tbody|thead|tfoot)\b').hasMatch(lowerContent)) {
+      return true;
+    }
+
+    return RegExp(
+      r'(^|[\s>+~])(?:tr|td|th|tbody|thead|tfoot)(?=$|[\s>+~.#[:])',
+      caseSensitive: false,
+    ).hasMatch(selector);
+  }
+
+  Document _parseTableContextDocument(String content) {
+    final lowerContent = content.toLowerCase();
+
+    if (lowerContent.contains('<tbody') ||
+        lowerContent.contains('<thead') ||
+        lowerContent.contains('<tfoot')) {
+      return html_parser.parse('<table>$content</table>');
+    }
+
+    if (lowerContent.contains('<tr') ||
+        lowerContent.contains('<td') ||
+        lowerContent.contains('<th')) {
+      return html_parser.parse('<table><tbody>$content</tbody></table>');
+    }
+
+    return html_parser.parse(content);
   }
 
   List<Element> _queryNodesWithCompat(Document document, String selector) {
