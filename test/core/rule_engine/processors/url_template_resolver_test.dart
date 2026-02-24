@@ -59,6 +59,18 @@ void main() {
       expect(resolved, 'https://example.com/api/search?kw=abc');
     });
 
+    test('keeps html-like fragments unchanged when baseUrl resolve fails', () {
+      final context = SearchRequestContext(keyword: 'abc');
+
+      final resolved = resolver.resolve(
+        template: '<div class="content" id="chaptercontent">',
+        context: context,
+        baseUrl: 'https://example.com',
+      );
+
+      expect(resolved, '<div class="content" id="chaptercontent">');
+    });
+
     test('supports arithmetic offset placeholders', () {
       final context = SearchRequestContext(keyword: '凡人 修仙', page: 3);
 

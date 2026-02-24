@@ -647,6 +647,118 @@ $baseUrl/search, {
       },
     );
 
+    test('supports legacy side-effect prefix with bare endpoint', () async {
+      final server = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
+      String? observedMethod;
+      String? observedPath;
+      String? observedBody;
+
+      server.listen((request) async {
+        observedMethod = request.method;
+        observedPath = request.uri.path;
+        observedBody = await utf8.decoder.bind(request).join();
+
+        request.response
+          ..statusCode = 200
+          ..write(
+            '<div class="item"><a class="name" href="/book/bare-endpoint">凡人修仙传</a></div>',
+          );
+        await request.response.close();
+      });
+
+      final baseUrl = 'http://${server.address.host}:${server.port}';
+      final repository = _FakeSourceRepository([
+        SourceDefinition(
+          id: 's_legacy_bare_endpoint',
+          name: 'legacy bare endpoint 源',
+          baseUrl: baseUrl,
+          rules: SourceRuleSet(
+            searchRule: '''
+{{cookie.removeCookie(source.getKey())}}
+search.html,{
+  "method": "POST",
+  "body": "keyword={{key}}"
+}
+''',
+            searchListRule: '.item@html',
+            searchTitleRule: '.name@text',
+            searchDetailUrlRule: '.name@href',
+          ),
+        ),
+      ]);
+
+      final service = SearchService(sourceRepository: repository);
+      final report = await service.search(keyword: '凡人修仙传');
+
+      expect(report.books, hasLength(1));
+      expect(observedMethod, 'POST');
+      expect(observedPath, '/search.html');
+      expect(
+        observedBody,
+        contains('keyword=%E5%87%A1%E4%BA%BA%E4%BF%AE%E4%BB%99%E4%BC%A0'),
+      );
+
+      await server.close(force: true);
+    });
+
+    test(
+      'falls back to baseUrl for unresolved @js search url with options',
+      () async {
+        final server = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
+        String? observedMethod;
+        String? observedPath;
+        String? observedBody;
+
+        server.listen((request) async {
+          observedMethod = request.method;
+          observedPath = request.uri.path;
+          observedBody = await utf8.decoder.bind(request).join();
+
+          request.response
+            ..statusCode = 200
+            ..write(
+              '<div class="item"><a class="name" href="/book/js-fallback">凡人修仙传</a></div>',
+            );
+          await request.response.close();
+        });
+
+        final baseUrl = 'http://${server.address.host}:${server.port}';
+        final repository = _FakeSourceRepository([
+          SourceDefinition(
+            id: 's_js_base_fallback',
+            name: 'JS fallback 源',
+            baseUrl: baseUrl,
+            rules: SourceRuleSet(
+              searchRule: '''
+@js:
+var action = java.ajax(source.key).match(/action="([^"]+)"/)[1];
+action + "," + JSON.stringify({
+  "body": "keyword=" + key + "&page=" + page,
+  "method": "POST"
+})
+''',
+              searchListRule: '.item@html',
+              searchTitleRule: '.name@text',
+              searchDetailUrlRule: '.name@href',
+            ),
+          ),
+        ]);
+
+        final service = SearchService(sourceRepository: repository);
+        final report = await service.search(keyword: '凡人修仙传');
+
+        expect(report.books, hasLength(1));
+        expect(observedMethod, 'POST');
+        expect(observedPath, '/');
+        expect(
+          observedBody,
+          contains('keyword=%E5%87%A1%E4%BA%BA%E4%BF%AE%E4%BB%99%E4%BC%A0'),
+        );
+
+        await server.close(force: true);
+      },
+    );
+
     test('extracts static url from mixed url plus @js search rule', () async {
       final server = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
       String? observedPath;
@@ -728,6 +840,40 @@ url+so+"?searchkey={{key}}"
 
       expect(report.books, hasLength(1));
       expect(report.books.first.detailUrl, '$baseUrl/book_123');
+
+      await server.close(force: true);
+    });
+
+    test('supports script-only list and detailUrl fallback rules', () async {
+      final server = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
+      server.listen((request) async {
+        request.response
+          ..statusCode = 200
+          ..write('ignored');
+        await request.response.close();
+      });
+
+      final baseUrl = 'http://${server.address.host}:${server.port}';
+      final repository = _FakeSourceRepository([
+        SourceDefinition(
+          id: 's_script_only_fields',
+          name: '脚本字段源',
+          baseUrl: baseUrl,
+          rules: SourceRuleSet(
+            searchRule: '$baseUrl/search?keyword={{key}}',
+            searchListRule: '@js:[{"name":"凡人修仙传","bookId":"123"}]',
+            searchTitleRule: 'name',
+            searchDetailUrlRule: '@js:"/book/{{\$.bookId}}"',
+          ),
+        ),
+      ]);
+
+      final service = SearchService(sourceRepository: repository);
+      final report = await service.search(keyword: '凡人修仙传');
+
+      expect(report.books, hasLength(1));
+      expect(report.books.first.title, '凡人修仙传');
+      expect(report.books.first.detailUrl, '$baseUrl/book/123');
 
       await server.close(force: true);
     });
@@ -1682,6 +1828,127 @@ url+so+JSON.stringify(post)
         await server.close(force: true);
       },
     );
+
+    test('supports @put/@get variable chain in search field rules', () async {
+      final server = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
+      server.listen((request) async {
+        request.response
+          ..statusCode = 200
+          ..write('''
+            <div class="item">
+              <a class="title" data-id="42" href="/book/42">凡人修仙传</a>
+            </div>
+          ''');
+        await request.response.close();
+      });
+
+      final baseUrl = 'http://${server.address.host}:${server.port}';
+      final repository = _FakeSourceRepository([
+        SourceDefinition(
+          id: 's_put_get_search',
+          name: '@put/@get 搜索源',
+          baseUrl: baseUrl,
+          rules: const SourceRuleSet(
+            searchRule: '/search?key={{key}}',
+            searchListRule: '.item@html',
+            searchTitleRule: '.title@text@put:{u:".title@href"}',
+            searchDetailUrlRule: '@get:{u}',
+          ),
+        ),
+      ]);
+
+      final service = SearchService(sourceRepository: repository);
+      final report = await service.search(keyword: '凡人修仙传');
+
+      expect(report.books, hasLength(1));
+      expect(report.books.first.title, '凡人修仙传');
+      expect(report.books.first.detailUrl, '$baseUrl/book/42');
+
+      await server.close(force: true);
+    });
+
+    test('supports xpath-style search rules', () async {
+      final server = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
+      server.listen((request) async {
+        request.response
+          ..statusCode = 200
+          ..write('''
+            <div class="item">
+              <a class="name" href="/book/xpath">雪中悍刀行</a>
+            </div>
+          ''');
+        await request.response.close();
+      });
+
+      final baseUrl = 'http://${server.address.host}:${server.port}';
+      final repository = _FakeSourceRepository([
+        SourceDefinition(
+          id: 's_xpath_search',
+          name: 'XPath搜索源',
+          baseUrl: baseUrl,
+          rules: const SourceRuleSet(
+            searchRule: '/search?key={{key}}',
+            searchListRule: '//div[@class="item"]',
+            searchTitleRule: './/a[@class="name"]/text()',
+            searchDetailUrlRule: './/a[@class="name"]/@href',
+          ),
+        ),
+      ]);
+
+      final service = SearchService(sourceRepository: repository);
+      final report = await service.search(keyword: '雪中悍刀行');
+
+      expect(report.books, hasLength(1));
+      expect(report.books.first.title, '雪中悍刀行');
+      expect(report.books.first.detailUrl, '$baseUrl/book/xpath');
+
+      await server.close(force: true);
+    });
+
+    test('supports mixed init rule request + @put parse', () async {
+      final server = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
+      String? observedToken;
+
+      server.listen((request) async {
+        if (request.uri.path == '/init') {
+          request.response
+            ..statusCode = 200
+            ..write('<meta name="token" content="init-token-1" />');
+        } else {
+          observedToken = request.headers.value('x-token');
+          request.response
+            ..statusCode = 200
+            ..write('''
+              <div class="item"><a class="name" href="/book/1">将夜</a></div>
+            ''');
+        }
+        await request.response.close();
+      });
+
+      final baseUrl = 'http://${server.address.host}:${server.port}';
+      final repository = _FakeSourceRepository([
+        SourceDefinition(
+          id: 's_init_mixed_search',
+          name: 'Init混合搜索源',
+          baseUrl: baseUrl,
+          rules: SourceRuleSet(
+            searchInitRule: '/init\n@put:{tk:"meta[name=token]@content"}',
+            searchRule: '/search?key={{key}},{"headers":{"x-token":"{{tk}}"}}',
+            searchListRule: '.item@html',
+            searchTitleRule: '.name@text',
+            searchDetailUrlRule: '.name@href',
+          ),
+        ),
+      ]);
+
+      final service = SearchService(sourceRepository: repository);
+      final report = await service.search(keyword: '将夜');
+
+      expect(report.books, hasLength(1));
+      expect(observedToken, 'init-token-1');
+
+      await server.close(force: true);
+    });
 
     test('throws when there is no enabled source', () async {
       final repository = _FakeSourceRepository([

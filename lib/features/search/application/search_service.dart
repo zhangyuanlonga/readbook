@@ -8,8 +8,12 @@ import '../../../core/errors/error_stage.dart';
 import '../../../core/logging/app_logger.dart';
 import '../../../core/network/http_client.dart';
 import '../../../core/network/request_context.dart';
+import '../../../core/rule_engine/rule_engine.dart';
 import '../../../core/rule_engine/processors/url_template_resolver.dart';
 import '../../../core/rule_engine/processors/legacy_rule_compat.dart';
+import '../../../core/rule_engine/processors/legacy_xpath_compat.dart';
+import '../../../core/rule_engine/processors/legacy_rule_variable_processor.dart';
+import '../../../core/rule_engine/processors/legacy_script_rule_fallback.dart';
 import '../../../core/source/source_response_processor.dart';
 import '../../../data/datasources/local/app_database.dart';
 import '../../../data/repositories/source_repository_impl.dart';
@@ -106,6 +110,7 @@ class SearchService {
     AppHttpClient? httpClient,
     UrlTemplateResolver? urlTemplateResolver,
     SearchResultParser? parser,
+    RuleEngine? ruleEngine,
     AppLogger? logger,
     SourceResponseProcessor? responseProcessor,
     int maxConcurrentSources = 4,
@@ -115,6 +120,7 @@ class SearchService {
        _urlTemplateResolver =
            urlTemplateResolver ?? const UrlTemplateResolver(),
        _parser = parser ?? SearchResultParser(),
+       _ruleEngine = ruleEngine ?? RuleEngine(),
        _logger = logger ?? AppLogger.instance,
        _responseProcessor =
            responseProcessor ?? const SourceResponseProcessor(),
@@ -126,6 +132,7 @@ class SearchService {
   final AppHttpClient _httpClient;
   final UrlTemplateResolver _urlTemplateResolver;
   final SearchResultParser _parser;
+  final RuleEngine _ruleEngine;
   final AppLogger _logger;
   final SourceResponseProcessor _responseProcessor;
 
@@ -458,7 +465,10 @@ class SearchService {
         sourceId: source.id,
       );
 
-      final requestSpec = _parseRequestSpec(rawSearchRule);
+      final requestSpec = _parseRequestSpec(
+        rawSearchRule,
+        sourceBaseUrl: source.baseUrl,
+      );
       _urlTemplateResolver.resolve(
         template: requestSpec.urlTemplate,
         context: context,
@@ -646,7 +656,10 @@ class SearchService {
               initRule: source.rules.searchInitRule,
             );
 
-    final requestSpec = _parseRequestSpec(rawSearchRule);
+    final requestSpec = _parseRequestSpec(
+      rawSearchRule,
+      sourceBaseUrl: source.baseUrl,
+    );
 
     final requestUrl = _urlTemplateResolver.resolve(
       template: requestSpec.urlTemplate,
@@ -702,12 +715,14 @@ class SearchService {
       requestUrl: requestUrl,
     );
 
+    final parseRules = validateRules ? _buildParseRules(source) : null;
+
     final books =
         validateRules
             ? _parseSearchBooks(
               source: source,
               responseBody: processedResponse.body,
-              rules: _buildParseRules(source),
+              rules: parseRules!,
             )
             : const <Book>[];
 
@@ -805,20 +820,36 @@ class SearchService {
       listRule = _upgradeListRuleToOuterHtml(listRule);
     }
     listRule = _appendListRuleOuterHtmlFallback(listRule);
+    listRule ??= _buildVariableExpressionFallback(source.rules.searchListRule);
+    listRule ??= _buildScriptFallbackExpression(
+      source.rules.searchListRule,
+      list: true,
+    );
 
     final listRuleIsJson = listRule?.startsWith('json:') ?? false;
     final fieldPreferJson = listRuleIsJson;
 
-    final titleRule = _normalizeRuleExpression(
+    var titleRule = _normalizeRuleExpression(
       source.rules.searchTitleRule,
       fallbackExtractor: 'text',
       preferJsonShorthand: fieldPreferJson,
     );
-    final detailUrlRule = _normalizeRuleExpression(
+    titleRule ??= _buildVariableExpressionFallback(
+      source.rules.searchTitleRule,
+    );
+    titleRule ??= _buildScriptFallbackExpression(source.rules.searchTitleRule);
+
+    var detailUrlRule = _normalizeRuleExpression(
       source.rules.searchDetailUrlRule,
       fallbackExtractor: 'attr(href)',
       preferredAttribute: 'href',
       preferJsonShorthand: fieldPreferJson,
+    );
+    detailUrlRule ??= _buildVariableExpressionFallback(
+      source.rules.searchDetailUrlRule,
+    );
+    detailUrlRule ??= _buildScriptFallbackExpression(
+      source.rules.searchDetailUrlRule,
     );
 
     if (listRule == null || titleRule == null || detailUrlRule == null) {
@@ -834,29 +865,58 @@ class SearchService {
       listRule: listRule,
       titleRule: titleRule,
       detailUrlRule: detailUrlRule,
+      rawListRule: source.rules.searchListRule,
+      rawTitleRule: source.rules.searchTitleRule,
       rawDetailUrlRule: source.rules.searchDetailUrlRule,
       authorRule: _normalizeRuleExpression(
         source.rules.searchAuthorRule,
         fallbackExtractor: 'text',
         preferJsonShorthand: fieldPreferJson,
       ),
+      rawAuthorRule: source.rules.searchAuthorRule,
       introRule: _normalizeRuleExpression(
         source.rules.searchIntroRule,
         fallbackExtractor: 'text',
         preferJsonShorthand: fieldPreferJson,
       ),
+      rawIntroRule: source.rules.searchIntroRule,
       coverUrlRule: _normalizeRuleExpression(
         source.rules.searchCoverUrlRule,
         fallbackExtractor: 'attr(src)',
         preferredAttribute: 'src',
         preferJsonShorthand: fieldPreferJson,
       ),
+      rawCoverUrlRule: source.rules.searchCoverUrlRule,
       latestChapterRule: _normalizeRuleExpression(
         source.rules.searchLatestChapterRule,
         fallbackExtractor: 'text',
         preferJsonShorthand: fieldPreferJson,
       ),
+      rawLatestChapterRule: source.rules.searchLatestChapterRule,
     );
+  }
+
+  String? _buildScriptFallbackExpression(String? rawRule, {bool list = false}) {
+    if (!LegacyScriptRuleFallback.isScriptOnlyRule(rawRule)) {
+      return null;
+    }
+
+    return list
+        ? LegacyScriptRuleFallback.listExpression
+        : LegacyScriptRuleFallback.fieldExpression;
+  }
+
+  String? _buildVariableExpressionFallback(String? rawRule) {
+    if (!LegacyRuleVariableProcessor.containsVariableSyntax(rawRule)) {
+      return null;
+    }
+
+    final value = rawRule?.trim();
+    if (value == null || value.isEmpty) {
+      return null;
+    }
+
+    return value;
   }
 
   bool _isBareCurrentNodeExtractorRule(String? rawRule) {
@@ -951,7 +1011,15 @@ class SearchService {
       return const {};
     }
 
-    final requestSpec = _parseRequestSpec(rawInitRule);
+    final initParts = _splitInitRuleParts(rawInitRule);
+    if (initParts.requestRule == null || initParts.requestRule!.isEmpty) {
+      return const {};
+    }
+
+    final requestSpec = _parseRequestSpec(
+      initParts.requestRule!,
+      sourceBaseUrl: source.baseUrl,
+    );
     final requestUrl = _urlTemplateResolver.resolve(
       template: requestSpec.urlTemplate,
       context: context,
@@ -1003,12 +1071,162 @@ class SearchService {
             .process(body: response.body, requestUrl: requestUrl)
             .body;
 
-    final decoded = _tryDecodeJson(normalizedInitBody);
-    if (decoded == null) {
+    final jsonVariables = () {
+      final decoded = _tryDecodeJson(normalizedInitBody);
+      if (decoded == null) {
+        return const <String, String>{};
+      }
+      return _flattenInitVariables(decoded);
+    }();
+
+    final putVariables = _extractInitPutVariables(
+      content: normalizedInitBody,
+      stage: stage,
+      parseRule: initParts.parseRule,
+      context: context,
+    );
+
+    if (jsonVariables.isEmpty && putVariables.isEmpty) {
       return const {};
     }
 
-    return _flattenInitVariables(decoded);
+    return {...jsonVariables, ...putVariables};
+  }
+
+  _InitRuleParts _splitInitRuleParts(String rawInitRule) {
+    final normalized = rawInitRule.trim();
+    if (normalized.isEmpty) {
+      return const _InitRuleParts();
+    }
+
+    final putIndex = normalized.indexOf('@put:');
+    if (putIndex > 0) {
+      final request = normalized.substring(0, putIndex).trim();
+      final parse = normalized.substring(putIndex).trim();
+      if (_looksLikeRequestRule(request)) {
+        return _InitRuleParts(
+          requestRule: request,
+          parseRule: parse.isEmpty ? null : parse,
+        );
+      }
+    }
+
+    if (_looksLikeRequestRule(normalized)) {
+      return _InitRuleParts(requestRule: normalized);
+    }
+
+    return _InitRuleParts(parseRule: normalized);
+  }
+
+  Map<String, String> _extractInitPutVariables({
+    required String content,
+    required ErrorStage stage,
+    required String? parseRule,
+    required SearchRequestContext context,
+  }) {
+    if (!LegacyRuleVariableProcessor.containsVariableSyntax(parseRule)) {
+      return const {};
+    }
+
+    final working = <String, String>{...context.toVariables()};
+    final baseline = Map<String, String>.from(working);
+
+    LegacyRuleVariableProcessor.resolveExpression(
+      expression: parseRule!.trim(),
+      variables: working,
+      resolvePutValue:
+          (valueExpression) => _evaluateInitPutValue(
+            content: content,
+            stage: stage,
+            valueExpression: valueExpression,
+          ),
+    );
+
+    final output = <String, String>{};
+    for (final entry in working.entries) {
+      if (baseline[entry.key] == entry.value) {
+        continue;
+      }
+      if (entry.value.trim().isEmpty) {
+        continue;
+      }
+      output[entry.key] = entry.value;
+    }
+
+    return output;
+  }
+
+  String? _evaluateInitPutValue({
+    required String content,
+    required ErrorStage stage,
+    required String valueExpression,
+  }) {
+    final text = valueExpression.trim();
+    if (text.isEmpty) {
+      return null;
+    }
+
+    final normalizedRule = _normalizeRuleExpression(
+      text,
+      fallbackExtractor: 'text',
+    );
+
+    if (normalizedRule != null) {
+      for (final candidate in _splitFallbackExpressions(normalizedRule)) {
+        try {
+          final value = _ruleEngine.executeFirst(
+            content: content,
+            expression: candidate,
+            stage: stage,
+          );
+          final normalized = value.trim();
+          if (normalized.isNotEmpty) {
+            return normalized;
+          }
+        } on AppException {
+          continue;
+        }
+      }
+    }
+
+    if (_looksLikeRuleExpression(text)) {
+      return null;
+    }
+
+    return text;
+  }
+
+  bool _looksLikeRuleExpression(String expression) {
+    final text = expression.trim();
+    if (text.isEmpty) {
+      return false;
+    }
+
+    if (text.startsWith('html:') ||
+        text.startsWith('json:') ||
+        text.startsWith('regex:') ||
+        text.startsWith('xpath:') ||
+        text.startsWith('@xpath:') ||
+        text.startsWith('js:') ||
+        text.startsWith('@js:') ||
+        text.startsWith(r'$.') ||
+        text.startsWith(r'$[') ||
+        text.startsWith('//')) {
+      return true;
+    }
+
+    return text.contains('@') ||
+        text.contains('##') ||
+        text.contains('||') ||
+        text.contains('&&');
+  }
+
+  List<String> _splitFallbackExpressions(String expression) {
+    return expression
+        .split('||')
+        .map((item) => item.trim())
+        .where((item) => item.isNotEmpty)
+        .toList(growable: false);
   }
 
   dynamic _tryDecodeJson(String source) {
@@ -1108,10 +1326,16 @@ class SearchService {
     };
   }
 
-  _SearchRequestSpec _parseRequestSpec(String rawRule) {
+  _SearchRequestSpec _parseRequestSpec(
+    String rawRule, {
+    String? sourceBaseUrl,
+  }) {
     final normalized = rawRule.trim();
 
-    final legacyScriptSpec = _tryParseLegacyScriptRequestSpec(normalized);
+    final legacyScriptSpec = _tryParseLegacyScriptRequestSpec(
+      normalized,
+      sourceBaseUrl: sourceBaseUrl,
+    );
     if (legacyScriptSpec != null) {
       return legacyScriptSpec;
     }
@@ -1142,7 +1366,12 @@ class SearchService {
     );
 
     final headers = _parseHeaders(options['headers'] ?? options['header']);
-    final urlTemplate = _normalizeLegacyUrlTemplate(splitResult.urlTemplate);
+    var urlTemplate = _normalizeLegacyUrlTemplate(splitResult.urlTemplate);
+    if (_looksLikeUnresolvedDynamicRequestTemplate(urlTemplate) &&
+        _isUsableBaseUrl(sourceBaseUrl) &&
+        options.isNotEmpty) {
+      urlTemplate = sourceBaseUrl!.trim();
+    }
     _ensureResolvedRequestUrlTemplate(urlTemplate);
 
     return _SearchRequestSpec(
@@ -1155,7 +1384,10 @@ class SearchService {
     );
   }
 
-  _SearchRequestSpec? _tryParseLegacyScriptRequestSpec(String rawRule) {
+  _SearchRequestSpec? _tryParseLegacyScriptRequestSpec(
+    String rawRule, {
+    String? sourceBaseUrl,
+  }) {
     if (!_looksLikeLegacyScriptRule(rawRule)) {
       return null;
     }
@@ -1166,14 +1398,21 @@ class SearchService {
     }
 
     final variables = _collectLegacyScriptStringVariables(script);
-    final legacyUrl =
+    var legacyUrl =
         _extractLegacyJsUrlTemplate(script, variables) ??
         _extractLegacyUrlTemplate(script);
+
+    final options = _extractLegacyJsOptionsMap(script, variables);
+    if ((legacyUrl == null || legacyUrl.trim().isEmpty) &&
+        _isUsableBaseUrl(sourceBaseUrl) &&
+        options.isNotEmpty) {
+      legacyUrl = sourceBaseUrl!.trim();
+    }
+
     if (legacyUrl == null || legacyUrl.trim().isEmpty) {
       return null;
     }
 
-    final options = _extractLegacyJsOptionsMap(script, variables);
     final methodText = options['method']?.toString().toUpperCase();
     final method =
         methodText == 'POST' ? HttpRequestMethod.post : HttpRequestMethod.get;
@@ -1189,7 +1428,13 @@ class SearchService {
     );
     final headers = _parseHeaders(options['headers'] ?? options['header']);
 
-    final urlTemplate = _normalizeLegacyUrlTemplate(legacyUrl);
+    var urlTemplate = _normalizeLegacyUrlTemplate(legacyUrl);
+    if (_looksLikeUnresolvedDynamicRequestTemplate(urlTemplate) &&
+        _isUsableBaseUrl(sourceBaseUrl) &&
+        options.isNotEmpty) {
+      urlTemplate = sourceBaseUrl!.trim();
+    }
+
     _ensureResolvedRequestUrlTemplate(urlTemplate);
 
     return _SearchRequestSpec(
@@ -1234,6 +1479,21 @@ class SearchService {
         briefMessage: 'searchUrl 为动态 JS 脚本，当前无法静态解析，请改为固定 URL 或模板规则。',
       );
     }
+  }
+
+  bool _isUsableBaseUrl(String? value) {
+    final text = value?.trim();
+    if (text == null || text.isEmpty) {
+      return false;
+    }
+
+    final uri = Uri.tryParse(text);
+    if (uri == null || !uri.hasScheme || uri.host.isEmpty) {
+      return false;
+    }
+
+    final scheme = uri.scheme.toLowerCase();
+    return scheme == 'http' || scheme == 'https';
   }
 
   bool _looksLikeUnresolvedDynamicRequestTemplate(String template) {
@@ -1996,11 +2256,46 @@ class SearchService {
   String _normalizeLegacyJsTemplateExpressions(String value) {
     return value.replaceAllMapped(RegExp(r'\$\{([^\}]+)\}'), (match) {
       final expression = match.group(1)?.trim() ?? '';
-      if (expression.isEmpty) {
+      final normalized = _normalizeLegacyTemplateTokenExpression(expression);
+      if (normalized == null || normalized.isEmpty) {
         return '';
       }
-      return '{{$expression}}';
+      return '{{$normalized}}';
     });
+  }
+
+  String? _normalizeLegacyTemplateTokenExpression(String expression) {
+    final normalized = expression.trim();
+    if (normalized.isEmpty) {
+      return null;
+    }
+
+    final compact = normalized.replaceAll(RegExp(r'\s+'), '');
+    final lower = compact.toLowerCase();
+
+    if (lower == 'java.encodeuri(key)' ||
+        lower == 'encodeuri(key)' ||
+        lower == 'java.encodeuricomponent(key)' ||
+        lower == 'encodeuricomponent(key)') {
+      return 'key|encode';
+    }
+
+    if (lower == 'java.encodeuri(keyword)' ||
+        lower == 'encodeuri(keyword)' ||
+        lower == 'java.encodeuricomponent(keyword)' ||
+        lower == 'encodeuricomponent(keyword)') {
+      return 'keyword|encode';
+    }
+
+    final parseIntMatch = RegExp(
+      r'^parseint\((page(?:[+-]\d+)?)\)$',
+      caseSensitive: false,
+    ).firstMatch(lower);
+    if (parseIntMatch != null) {
+      return parseIntMatch.group(1);
+    }
+
+    return compact;
   }
 
   int _findMatchingBracket(
@@ -2147,7 +2442,9 @@ class SearchService {
   }
 
   String _normalizeLegacyUrlTemplate(String template) {
-    final normalized = _normalizeLegacyJsTemplateExpressions(template.trim());
+    final preprocessed = _stripLegacySideEffectPrelude(template);
+    final seed = preprocessed.trim().isEmpty ? template : preprocessed;
+    final normalized = _normalizeLegacyJsTemplateExpressions(seed.trim());
     if (normalized.isEmpty) {
       return normalized;
     }
@@ -2170,10 +2467,101 @@ class SearchService {
     return _normalizeLegacyJsTemplateExpressions(extracted);
   }
 
+  String _stripLegacySideEffectPrelude(String template) {
+    var remaining = template.trim();
+    var changed = false;
+
+    while (remaining.startsWith('{{')) {
+      final closeIndex = _findClosingTemplateToken(remaining, 0);
+      if (closeIndex < 0) {
+        break;
+      }
+
+      final block = remaining.substring(2, closeIndex).trim();
+      if (!_looksLikeLegacySideEffectTemplate(block)) {
+        break;
+      }
+
+      remaining = remaining.substring(closeIndex + 2).trimLeft();
+      changed = true;
+    }
+
+    final jsPrefix = RegExp(
+      r'^<js>[\s\S]*?</js>',
+      caseSensitive: false,
+      dotAll: true,
+    );
+    if (jsPrefix.hasMatch(remaining)) {
+      remaining = remaining.replaceFirst(jsPrefix, '').trimLeft();
+      changed = true;
+    }
+
+    return changed ? remaining : template.trim();
+  }
+
+  int _findClosingTemplateToken(String source, int startIndex) {
+    final open = source.indexOf('{{', startIndex);
+    if (open < 0) {
+      return -1;
+    }
+
+    return source.indexOf('}}', open + 2);
+  }
+
+  bool _looksLikeLegacySideEffectTemplate(String block) {
+    final normalized = block.trim();
+    if (normalized.isEmpty) {
+      return false;
+    }
+
+    final lower = normalized.toLowerCase();
+    if (lower.contains('http://') || lower.contains('https://')) {
+      return false;
+    }
+
+    if (RegExp(r'''["'`]\s*/[^"'`]+''').hasMatch(normalized)) {
+      return false;
+    }
+
+    if (lower.contains('source.getkey()') ||
+        lower.contains('source.key') ||
+        lower.contains('source.getvariable()') ||
+        lower.contains('cookie.') ||
+        lower.contains('java.') ||
+        lower.contains('org.jsoup') ||
+        lower.contains('eval(') ||
+        lower.contains('url=')) {
+      return true;
+    }
+
+    return normalized.contains(';');
+  }
+
   bool _looksLikeRequestUrlTemplate(String template) {
     return template.startsWith('http://') ||
         template.startsWith('https://') ||
-        template.startsWith('/');
+        template.startsWith('/') ||
+        _looksLikeSearchEndpoint(template);
+  }
+
+  bool _looksLikeRequestRule(String value) {
+    final text = value.trim();
+    if (text.isEmpty) {
+      return false;
+    }
+
+    if (_splitRequestOptions(text) != null) {
+      return true;
+    }
+
+    if (text.startsWith('//')) {
+      return false;
+    }
+
+    return text.startsWith('http://') ||
+        text.startsWith('https://') ||
+        text.startsWith('/') ||
+        _looksLikeSearchEndpoint(text);
   }
 
   bool _containsLegacyScriptSignals(String template) {
@@ -2195,46 +2583,23 @@ class SearchService {
 
   String? _extractLegacyUrlTemplate(String template) {
     String? pickHttp(String source) {
-      final direct = RegExp(r"""https?://[^\s"'`<>()]+""").firstMatch(source);
+      final direct = RegExp(r'''https?://[^\s"'`<>()]+''').firstMatch(source);
       if (direct == null) {
         return null;
       }
 
-      var value = direct.group(0)?.trim() ?? '';
-      if (value.isEmpty) {
-        return null;
-      }
-
-      while (value.endsWith(')') ||
-          value.endsWith(';') ||
-          value.endsWith(',')) {
-        value = value.substring(0, value.length - 1).trimRight();
-      }
-
-      return value.isEmpty
-          ? null
-          : _normalizeLegacyJsTemplateExpressions(value);
+      return _sanitizeLegacyExtractedUrl(direct.group(0));
     }
 
     String? pickRelative(String source) {
       final direct = RegExp(
-        r"""/(?:[^\s"'`<>()]|\{\{[^\}]+\}\})+""",
+        r'''/(?:[^\s"'`<>()]|\{\{[^\}]+\}\})+''',
       ).firstMatch(source);
       if (direct == null) {
         return null;
       }
 
-      var value = direct.group(0)?.trim() ?? '';
-      if (value.isEmpty) {
-        return null;
-      }
-      while (value.endsWith(';') || value.endsWith(',')) {
-        value = value.substring(0, value.length - 1).trimRight();
-      }
-
-      return value.isEmpty
-          ? null
-          : _normalizeLegacyJsTemplateExpressions(value);
+      return _sanitizeLegacyExtractedUrl(direct.group(0));
     }
 
     final javaPutMatch = RegExp(
@@ -2271,6 +2636,11 @@ class SearchService {
       if (relative != null && _looksLikeSearchEndpoint(relative)) {
         return relative;
       }
+
+      final loose = _extractLooseRelativeSearchEndpoint(normalizedLine);
+      if (loose != null) {
+        return loose;
+      }
     }
 
     final fromTemplate = pickHttp(template);
@@ -2283,7 +2653,41 @@ class SearchService {
       return relative;
     }
 
-    return null;
+    return _extractLooseRelativeSearchEndpoint(template);
+  }
+
+  String? _sanitizeLegacyExtractedUrl(String? value) {
+    var normalized = value?.trim() ?? '';
+    if (normalized.isEmpty) {
+      return null;
+    }
+
+    while (normalized.endsWith(')') ||
+        normalized.endsWith(';') ||
+        normalized.endsWith(',')) {
+      normalized = normalized.substring(0, normalized.length - 1).trimRight();
+    }
+
+    return normalized.isEmpty
+        ? null
+        : _normalizeLegacyJsTemplateExpressions(normalized);
+  }
+
+  String? _extractLooseRelativeSearchEndpoint(String source) {
+    final direct = RegExp(
+      r'''(?:^|[\s=+])([A-Za-z0-9_\-/]+\.(?:php|asp|aspx|html)(?:\?[^\s"'`<>()]*)?)''',
+      caseSensitive: false,
+    ).firstMatch(source);
+    if (direct == null) {
+      return null;
+    }
+
+    final candidate = _sanitizeLegacyExtractedUrl(direct.group(1));
+    if (candidate == null || !_looksLikeSearchEndpoint(candidate)) {
+      return null;
+    }
+
+    return candidate;
   }
 
   bool _looksLikeSearchEndpoint(String value) {
@@ -2525,13 +2929,25 @@ class SearchService {
       return staticRule;
     }
 
+    final xpathCandidate = LegacyXPathCompat.buildRuleExpression(
+      expression: staticRule,
+      fallbackExtractor: fallbackExtractor,
+      preferredAttribute: preferredAttribute,
+    );
+    if (xpathCandidate != null) {
+      return xpathCandidate;
+    }
+
     if (staticRule.startsWith(r'$.') ||
         staticRule.startsWith(r'$[') ||
         staticRule == r'$') {
       return 'json:$staticRule';
     }
 
-    if (staticRule.contains(r'{{$.') || staticRule.contains(r'{{ $.')) {
+    if (staticRule.contains(r'{{$.') ||
+        staticRule.contains(r'{{ $.') ||
+        staticRule.contains(r'{{\$.') ||
+        staticRule.contains(r'{{ \$.')) {
       return 'json:\$\n$staticRule';
     }
 
@@ -2689,4 +3105,11 @@ class _SearchRequestSpec {
   final String? contentType;
   final String? responseCharset;
   final Map<String, String> headers;
+}
+
+class _InitRuleParts {
+  const _InitRuleParts({this.requestRule, this.parseRule});
+
+  final String? requestRule;
+  final String? parseRule;
 }

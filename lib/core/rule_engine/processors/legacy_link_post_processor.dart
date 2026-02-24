@@ -1,3 +1,5 @@
+import 'legacy_script_rule_fallback.dart';
+
 class LegacyLinkPostProcessor {
   const LegacyLinkPostProcessor._();
 
@@ -188,6 +190,14 @@ class LegacyLinkPostProcessor {
         return value.replaceAll(from, to);
       }
       return value;
+    }
+
+    final advanced = LegacyScriptRuleFallback.evaluateFieldValue(
+      content: value,
+      rawRule: '@js:$normalizedScript',
+    );
+    if (advanced != null && advanced.trim().isNotEmpty) {
+      return advanced;
     }
 
     return value;

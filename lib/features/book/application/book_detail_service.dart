@@ -9,7 +9,10 @@ import '../../../core/network/request_context.dart';
 import '../../../core/rule_engine/rule_engine.dart';
 import '../../../core/rule_engine/processors/url_template_resolver.dart';
 import '../../../core/rule_engine/processors/legacy_rule_compat.dart';
+import '../../../core/rule_engine/processors/legacy_rule_variable_processor.dart';
+import '../../../core/rule_engine/processors/legacy_xpath_compat.dart';
 import '../../../core/rule_engine/processors/legacy_link_post_processor.dart';
+import '../../../core/rule_engine/processors/legacy_script_rule_fallback.dart';
 import '../../../core/source/source_response_processor.dart';
 import '../../../data/datasources/local/app_database.dart';
 import '../../../data/repositories/source_repository_impl.dart';
@@ -148,6 +151,7 @@ class BookDetailService {
             .body;
 
     final detailRules = _buildDetailRules(source);
+    final detailVariables = <String, String>{...runtimeContext.extraParams};
 
     final titleRule = _resolveRuntimeRuleTemplate(
       _resolveDetailRule(detailRules.initRule, detailRules.titleRule),
@@ -175,11 +179,23 @@ class BookDetailService {
       context: runtimeContext,
     );
 
+    _extractOptionalValue(
+      content: normalizedDetailHtml,
+      expression: detailRules.initRule,
+      rawRule: detailRules.rawInitRule,
+      stage: ErrorStage.detail,
+      variables: detailVariables,
+      fallbackExtractor: 'html',
+    );
+
     final title =
         _extractOptionalValue(
           content: normalizedDetailHtml,
           expression: titleRule,
+          rawRule: detailRules.rawTitleRule,
           stage: ErrorStage.detail,
+          variables: detailVariables,
+          fallbackExtractor: 'text',
         ) ??
         (fallbackTitle?.trim().isNotEmpty == true
             ? fallbackTitle!.trim()
@@ -190,19 +206,37 @@ class BookDetailService {
       rawUrl: _extractOptionalValue(
         content: normalizedDetailHtml,
         expression: coverRule,
+        rawRule: detailRules.rawCoverUrlRule,
         stage: ErrorStage.detail,
+        variables: detailVariables,
+        fallbackExtractor: 'attr(src)',
+        preferredAttribute: 'src',
       ),
     );
 
     final extractedTocUrl = _extractOptionalValue(
       content: normalizedDetailHtml,
       expression: tocUrlRule,
+      rawRule: detailRules.rawTocUrlRule,
       stage: ErrorStage.detail,
+      variables: detailVariables,
+      fallbackExtractor: 'attr(href)',
+      preferredAttribute: 'href',
     );
+
+    final resolvedTocRuleLiteral =
+        tocUrlRule == null
+            ? null
+            : LegacyRuleVariableProcessor.replaceGetTokens(
+              tocUrlRule,
+              detailVariables,
+            );
 
     final tocCandidate =
         extractedTocUrl ??
-        (_looksLikeRequestRule(tocUrlRule) ? tocUrlRule : null);
+        (_looksLikeRequestRule(resolvedTocRuleLiteral)
+            ? resolvedTocRuleLiteral
+            : null);
 
     var tocUrl = _resolveMaybeUrl(
       pageUrl: normalizedDetailUrl,
@@ -221,12 +255,18 @@ class BookDetailService {
       author: _extractOptionalValue(
         content: normalizedDetailHtml,
         expression: authorRule,
+        rawRule: detailRules.rawAuthorRule,
         stage: ErrorStage.detail,
+        variables: detailVariables,
+        fallbackExtractor: 'text',
       ),
       intro: _extractOptionalValue(
         content: normalizedDetailHtml,
         expression: introRule,
+        rawRule: detailRules.rawIntroRule,
         stage: ErrorStage.detail,
+        variables: detailVariables,
+        fallbackExtractor: 'text',
       ),
       coverUrl: cover,
       tocUrl: tocUrl,
@@ -263,6 +303,7 @@ class BookDetailService {
           sourceId: normalizedSourceId,
           bookId: normalizedBookId,
           context: runtimeContext,
+          seedVariables: detailVariables,
         );
 
         if (chapters.isEmpty && tocUrl != normalizedDetailUrl) {
@@ -283,6 +324,7 @@ class BookDetailService {
             sourceId: normalizedSourceId,
             bookId: normalizedBookId,
             context: runtimeContext,
+            seedVariables: detailVariables,
           );
         }
 
@@ -419,28 +461,34 @@ class BookDetailService {
         source.rules.detailRule,
         fallbackExtractor: 'html',
       ),
+      rawInitRule: source.rules.detailRule,
       titleRule: _normalizeRuleExpression(
         source.rules.detailTitleRule,
         fallbackExtractor: 'text',
       ),
+      rawTitleRule: source.rules.detailTitleRule,
       authorRule: _normalizeRuleExpression(
         source.rules.detailAuthorRule,
         fallbackExtractor: 'text',
       ),
+      rawAuthorRule: source.rules.detailAuthorRule,
       introRule: _normalizeRuleExpression(
         source.rules.detailIntroRule,
         fallbackExtractor: 'text',
       ),
+      rawIntroRule: source.rules.detailIntroRule,
       coverUrlRule: _normalizeRuleExpression(
         source.rules.detailCoverUrlRule,
         fallbackExtractor: 'attr(src)',
         preferredAttribute: 'src',
       ),
+      rawCoverUrlRule: source.rules.detailCoverUrlRule,
       tocUrlRule: _normalizeLinkRuleExpression(
         source.rules.detailTocUrlRule,
         fallbackExtractor: 'attr(href)',
         preferredAttribute: 'href',
       ),
+      rawTocUrlRule: source.rules.detailTocUrlRule,
     );
   }
 
@@ -456,15 +504,31 @@ class BookDetailService {
     if (preferCurrentNodeChunk) {
       listRule = _upgradeListRuleToOuterHtml(listRule);
     }
+    listRule ??= _buildVariableExpressionFallback(
+      source.rules.tocListRule ?? source.rules.tocRule,
+    );
+    listRule ??= _buildScriptFallbackExpression(
+      source.rules.tocListRule ?? source.rules.tocRule,
+      list: true,
+    );
 
-    final titleRule = _normalizeRuleExpression(
+    var titleRule = _normalizeRuleExpression(
       source.rules.tocTitleRule,
       fallbackExtractor: 'text',
     );
-    final chapterUrlRule = _normalizeRuleExpression(
+    titleRule ??= _buildVariableExpressionFallback(source.rules.tocTitleRule);
+    titleRule ??= _buildScriptFallbackExpression(source.rules.tocTitleRule);
+
+    var chapterUrlRule = _normalizeRuleExpression(
       source.rules.tocChapterUrlRule,
       fallbackExtractor: 'attr(href)',
       preferredAttribute: 'href',
+    );
+    chapterUrlRule ??= _buildVariableExpressionFallback(
+      source.rules.tocChapterUrlRule,
+    );
+    chapterUrlRule ??= _buildScriptFallbackExpression(
+      source.rules.tocChapterUrlRule,
     );
 
     if (listRule == null || titleRule == null || chapterUrlRule == null) {
@@ -475,9 +539,34 @@ class BookDetailService {
       listRule: listRule,
       titleRule: titleRule,
       chapterUrlRule: chapterUrlRule,
+      rawListRule: source.rules.tocListRule ?? source.rules.tocRule,
+      rawTitleRule: source.rules.tocTitleRule,
       rawChapterUrlRule: source.rules.tocChapterUrlRule,
       reversed: source.rules.tocReversed,
     );
+  }
+
+  String? _buildScriptFallbackExpression(String? rawRule, {bool list = false}) {
+    if (!LegacyScriptRuleFallback.isScriptOnlyRule(rawRule)) {
+      return null;
+    }
+
+    return list
+        ? LegacyScriptRuleFallback.listExpression
+        : LegacyScriptRuleFallback.fieldExpression;
+  }
+
+  String? _buildVariableExpressionFallback(String? rawRule) {
+    if (!LegacyRuleVariableProcessor.containsVariableSyntax(rawRule)) {
+      return null;
+    }
+
+    final value = rawRule?.trim();
+    if (value == null || value.isEmpty) {
+      return null;
+    }
+
+    return value;
   }
 
   bool _isBareCurrentNodeExtractorRule(String? rawRule) {
@@ -538,11 +627,15 @@ class BookDetailService {
     required String sourceId,
     required String bookId,
     required SearchRequestContext context,
+    required Map<String, String> seedVariables,
   }) {
     final chunks = _tryExecuteAll(
       content: html,
       expression: rules.listRule,
       stage: ErrorStage.toc,
+      rawRule: rules.rawListRule,
+      variables: seedVariables,
+      fallbackExtractor: 'html',
     );
     if (chunks.isEmpty) {
       return const [];
@@ -556,25 +649,36 @@ class BookDetailService {
 
     final dedupe = <String, Chapter>{};
     for (final chunk in chunks) {
+      final variableState = <String, String>{...seedVariables};
       final title = _extractOptionalValue(
         content: chunk,
         expression: rules.titleRule,
         stage: ErrorStage.toc,
+        rawRule: rules.rawTitleRule,
+        variables: variableState,
+        fallbackExtractor: 'text',
       );
       final chapterUrlRaw = _extractOptionalValue(
         content: chunk,
         expression: chapterUrlRule,
         stage: ErrorStage.toc,
+        rawRule: rules.rawChapterUrlRule,
+        variables: variableState,
+        fallbackExtractor: 'attr(href)',
+        preferredAttribute: 'href',
       );
 
       if (title == null || chapterUrlRaw == null) {
         continue;
       }
 
-      final chapterUrlValue = LegacyLinkPostProcessor.apply(
-        value: chapterUrlRaw,
-        rawRule: rules.rawChapterUrlRule,
-      );
+      final chapterUrlValue =
+          rules.chapterUrlRule == LegacyScriptRuleFallback.fieldExpression
+              ? chapterUrlRaw.trim()
+              : LegacyLinkPostProcessor.apply(
+                value: chapterUrlRaw,
+                rawRule: rules.rawChapterUrlRule,
+              );
       final chapterUrl = _resolveMaybeUrl(
         pageUrl: pageUrl,
         rawUrl: chapterUrlValue,
@@ -624,8 +728,56 @@ class BookDetailService {
     required String content,
     required String expression,
     required ErrorStage stage,
+    required String fallbackExtractor,
+    String? preferredAttribute,
+    String? rawRule,
+    Map<String, String>? variables,
   }) {
-    for (final candidate in _splitFallbackExpressions(expression)) {
+    final mutableVariables = variables ?? <String, String>{};
+
+    if (expression == LegacyScriptRuleFallback.listExpression) {
+      return LegacyScriptRuleFallback.evaluateListChunks(
+        content: content,
+        rawRule: rawRule,
+      );
+    }
+
+    final variableAwareRaw =
+        LegacyRuleVariableProcessor.containsVariableSyntax(rawRule)
+            ? rawRule!.trim()
+            : null;
+    if (variableAwareRaw != null) {
+      final resolvedRaw = LegacyRuleVariableProcessor.resolveExpression(
+        expression: variableAwareRaw,
+        variables: mutableVariables,
+        resolvePutValue:
+            (valueExpression) => _evaluatePutValue(
+              content: content,
+              stage: stage,
+              valueExpression: valueExpression,
+              fallbackExtractor: fallbackExtractor,
+              preferredAttribute: preferredAttribute,
+            ),
+      );
+
+      final values = _executeAllRuleLikeExpression(
+        content: content,
+        stage: stage,
+        expression: resolvedRaw,
+        fallbackExtractor: fallbackExtractor,
+        preferredAttribute: preferredAttribute,
+      );
+      if (values.isNotEmpty) {
+        return values;
+      }
+    }
+
+    final resolvedExpression = LegacyRuleVariableProcessor.replaceGetTokens(
+      expression,
+      mutableVariables,
+    );
+
+    for (final candidate in _splitFallbackExpressions(resolvedExpression)) {
       try {
         final values = _ruleEngine.executeAll(
           content: content,
@@ -647,12 +799,175 @@ class BookDetailService {
     required String content,
     required String? expression,
     required ErrorStage stage,
+    required String fallbackExtractor,
+    required Map<String, String> variables,
+    String? preferredAttribute,
+    String? rawRule,
   }) {
+    final variableAwareRaw =
+        LegacyRuleVariableProcessor.containsVariableSyntax(rawRule)
+            ? rawRule!.trim()
+            : null;
+
+    if (variableAwareRaw != null) {
+      final resolvedRaw = LegacyRuleVariableProcessor.resolveExpression(
+        expression: variableAwareRaw,
+        variables: variables,
+        resolvePutValue:
+            (valueExpression) => _evaluatePutValue(
+              content: content,
+              stage: stage,
+              valueExpression: valueExpression,
+              fallbackExtractor: fallbackExtractor,
+              preferredAttribute: preferredAttribute,
+            ),
+      );
+
+      final variableRawValue = _executeRuleLikeExpression(
+        content: content,
+        stage: stage,
+        expression: resolvedRaw,
+        fallbackExtractor: fallbackExtractor,
+        preferredAttribute: preferredAttribute,
+        treatLiteralAsValue: true,
+      );
+      if (variableRawValue != null) {
+        return variableRawValue;
+      }
+    }
+
     if (expression == null || expression.trim().isEmpty) {
+      return LegacyScriptRuleFallback.evaluateFieldValue(
+        content: content,
+        rawRule: rawRule,
+      );
+    }
+
+    final resolvedExpression = LegacyRuleVariableProcessor.replaceGetTokens(
+      expression,
+      variables,
+    );
+
+    if (resolvedExpression == LegacyScriptRuleFallback.fieldExpression) {
+      return LegacyScriptRuleFallback.evaluateFieldValue(
+        content: content,
+        rawRule: rawRule,
+      );
+    }
+
+    for (final candidate in _splitFallbackExpressions(resolvedExpression)) {
+      try {
+        final value = _ruleEngine.executeFirst(
+          content: content,
+          expression: candidate,
+          stage: stage,
+        );
+        final normalized = value.trim();
+        if (normalized.isNotEmpty) {
+          return normalized;
+        }
+      } on AppException {
+        continue;
+      }
+    }
+
+    return LegacyScriptRuleFallback.evaluateFieldValue(
+      content: content,
+      rawRule: rawRule,
+    );
+  }
+
+  String? _evaluatePutValue({
+    required String content,
+    required ErrorStage stage,
+    required String valueExpression,
+    required String fallbackExtractor,
+    String? preferredAttribute,
+  }) {
+    final text = valueExpression.trim();
+    if (text.isEmpty) {
       return null;
     }
 
-    for (final candidate in _splitFallbackExpressions(expression)) {
+    return _executeRuleLikeExpression(
+      content: content,
+      stage: stage,
+      expression: text,
+      fallbackExtractor: fallbackExtractor,
+      preferredAttribute: preferredAttribute,
+      treatLiteralAsValue: true,
+    );
+  }
+
+  List<String> _executeAllRuleLikeExpression({
+    required String content,
+    required ErrorStage stage,
+    required String expression,
+    required String fallbackExtractor,
+    String? preferredAttribute,
+  }) {
+    final text = expression.trim();
+    if (text.isEmpty) {
+      return const [];
+    }
+
+    final normalizedExpression = _normalizeVariableRuleExpression(
+      text,
+      fallbackExtractor: fallbackExtractor,
+      preferredAttribute: preferredAttribute,
+    );
+    if (normalizedExpression == null || normalizedExpression.isEmpty) {
+      return const [];
+    }
+
+    for (final candidate in _splitFallbackExpressions(normalizedExpression)) {
+      try {
+        final values = _ruleEngine.executeAll(
+          content: content,
+          expression: candidate,
+          stage: stage,
+        );
+        if (values.isNotEmpty) {
+          return values;
+        }
+      } on AppException {
+        continue;
+      }
+    }
+
+    return const [];
+  }
+
+  String? _executeRuleLikeExpression({
+    required String content,
+    required ErrorStage stage,
+    required String expression,
+    required String fallbackExtractor,
+    String? preferredAttribute,
+    bool treatLiteralAsValue = false,
+  }) {
+    final text = expression.trim();
+    if (text.isEmpty) {
+      return null;
+    }
+
+    if (treatLiteralAsValue && !_looksLikeRuleExpression(text)) {
+      return text;
+    }
+
+    final normalizedExpression = _normalizeVariableRuleExpression(
+      text,
+      fallbackExtractor: fallbackExtractor,
+      preferredAttribute: preferredAttribute,
+    );
+    if (normalizedExpression == null || normalizedExpression.isEmpty) {
+      if (treatLiteralAsValue && !_looksLikeRuleExpression(text)) {
+        return text;
+      }
+      return null;
+    }
+
+    for (final candidate in _splitFallbackExpressions(normalizedExpression)) {
       try {
         final value = _ruleEngine.executeFirst(
           content: content,
@@ -669,6 +984,82 @@ class BookDetailService {
     }
 
     return null;
+  }
+
+  String? _normalizeVariableRuleExpression(
+    String expression, {
+    required String fallbackExtractor,
+    String? preferredAttribute,
+  }) {
+    final text = expression.trim();
+    if (text.isEmpty) {
+      return null;
+    }
+
+    final staticRule = LegacyRuleCompat.extractStaticRuleExpression(text);
+    if (staticRule == null || staticRule.isEmpty) {
+      return null;
+    }
+
+    if (staticRule.startsWith('html:') ||
+        staticRule.startsWith('regex:') ||
+        staticRule.startsWith('json:')) {
+      return staticRule;
+    }
+
+    final xpathCandidate = LegacyXPathCompat.buildRuleExpression(
+      expression: staticRule,
+      fallbackExtractor: fallbackExtractor,
+      preferredAttribute: preferredAttribute,
+    );
+    if (xpathCandidate != null) {
+      return xpathCandidate;
+    }
+
+    if (staticRule.startsWith('@json:')) {
+      final candidate = staticRule.substring(6).trim();
+      if (candidate.isNotEmpty) {
+        return 'json:$candidate';
+      }
+    }
+
+    if (staticRule.startsWith(r'$.') ||
+        staticRule.startsWith(r'$[') ||
+        staticRule == r'$') {
+      return 'json:$staticRule';
+    }
+
+    return LegacyRuleCompat.buildHtmlRuleExpression(
+      expression: staticRule,
+      fallbackExtractor: fallbackExtractor,
+      preferredAttribute: preferredAttribute,
+    );
+  }
+
+  bool _looksLikeRuleExpression(String expression) {
+    final text = expression.trim();
+    if (text.isEmpty) {
+      return false;
+    }
+
+    if (text.startsWith('html:') ||
+        text.startsWith('json:') ||
+        text.startsWith('regex:') ||
+        text.startsWith('xpath:') ||
+        text.startsWith('@xpath:') ||
+        text.startsWith('js:') ||
+        text.startsWith('@js:') ||
+        text.startsWith(r'$.') ||
+        text.startsWith(r'$[') ||
+        text.startsWith('@json:') ||
+        text.startsWith('//')) {
+      return true;
+    }
+
+    return text.contains('@') ||
+        text.contains('##') ||
+        text.contains('||') ||
+        text.contains('&&');
   }
 
   String? _resolveMaybeUrl({required String pageUrl, required String? rawUrl}) {
@@ -932,6 +1323,10 @@ class BookDetailService {
       return true;
     }
 
+    if (text.startsWith('//')) {
+      return false;
+    }
+
     if (text.startsWith('/')) {
       return true;
     }
@@ -962,7 +1357,12 @@ class BookDetailService {
       return const {};
     }
 
-    final requestSpec = _parseRequestSpec(rawInitRule);
+    final initParts = _splitInitRuleParts(rawInitRule);
+    if (initParts.requestRule == null || initParts.requestRule!.isEmpty) {
+      return const {};
+    }
+
+    final requestSpec = _parseRequestSpec(initParts.requestRule!);
     final requestUrl = _urlTemplateResolver.resolve(
       template: requestSpec.urlTemplate,
       context: context,
@@ -1003,12 +1403,129 @@ class BookDetailService {
         _responseProcessor
             .process(body: response.body, requestUrl: requestUrl)
             .body;
-    final decoded = _tryDecodeJson(normalizedInitBody);
-    if (decoded == null) {
+
+    final jsonVariables = () {
+      final decoded = _tryDecodeJson(normalizedInitBody);
+      if (decoded == null) {
+        return const <String, String>{};
+      }
+      return _flattenInitVariables(decoded);
+    }();
+
+    final putVariables = _extractInitPutVariables(
+      content: normalizedInitBody,
+      stage: stage,
+      parseRule: initParts.parseRule,
+      context: context,
+    );
+
+    if (jsonVariables.isEmpty && putVariables.isEmpty) {
       return const {};
     }
 
-    return _flattenInitVariables(decoded);
+    return {...jsonVariables, ...putVariables};
+  }
+
+  _InitRuleParts _splitInitRuleParts(String rawInitRule) {
+    final normalized = rawInitRule.trim();
+    if (normalized.isEmpty) {
+      return const _InitRuleParts();
+    }
+
+    final putIndex = normalized.indexOf('@put:');
+    if (putIndex > 0) {
+      final request = normalized.substring(0, putIndex).trim();
+      final parse = normalized.substring(putIndex).trim();
+      if (_looksLikeRequestRule(request)) {
+        return _InitRuleParts(
+          requestRule: request,
+          parseRule: parse.isEmpty ? null : parse,
+        );
+      }
+    }
+
+    if (_looksLikeRequestRule(normalized)) {
+      return _InitRuleParts(requestRule: normalized);
+    }
+
+    return _InitRuleParts(parseRule: normalized);
+  }
+
+  Map<String, String> _extractInitPutVariables({
+    required String content,
+    required ErrorStage stage,
+    required String? parseRule,
+    required SearchRequestContext context,
+  }) {
+    if (!LegacyRuleVariableProcessor.containsVariableSyntax(parseRule)) {
+      return const {};
+    }
+
+    final working = <String, String>{...context.toVariables()};
+    final baseline = Map<String, String>.from(working);
+
+    LegacyRuleVariableProcessor.resolveExpression(
+      expression: parseRule!.trim(),
+      variables: working,
+      resolvePutValue:
+          (valueExpression) => _evaluateInitPutValue(
+            content: content,
+            stage: stage,
+            valueExpression: valueExpression,
+          ),
+    );
+
+    final output = <String, String>{};
+    for (final entry in working.entries) {
+      if (baseline[entry.key] == entry.value) {
+        continue;
+      }
+      if (entry.value.trim().isEmpty) {
+        continue;
+      }
+      output[entry.key] = entry.value;
+    }
+
+    return output;
+  }
+
+  String? _evaluateInitPutValue({
+    required String content,
+    required ErrorStage stage,
+    required String valueExpression,
+  }) {
+    final text = valueExpression.trim();
+    if (text.isEmpty) {
+      return null;
+    }
+
+    final normalizedRule = _normalizeRuleExpression(
+      text,
+      fallbackExtractor: 'text',
+    );
+    if (normalizedRule != null) {
+      for (final candidate in _splitFallbackExpressions(normalizedRule)) {
+        try {
+          final value = _ruleEngine.executeFirst(
+            content: content,
+            expression: candidate,
+            stage: stage,
+          );
+          final normalized = value.trim();
+          if (normalized.isNotEmpty) {
+            return normalized;
+          }
+        } on AppException {
+          continue;
+        }
+      }
+    }
+
+    if (_looksLikeRuleExpression(text)) {
+      return null;
+    }
+
+    return text;
   }
 
   _SearchRequestSpec _parseRequestSpec(String rawRule) {
@@ -1381,7 +1898,10 @@ class BookDetailService {
     }
 
     final containsJsonTemplate =
-        text.contains(r'{{$.') || text.contains(r'{{ $.');
+        text.contains(r'{{$.') ||
+        text.contains(r'{{ $.') ||
+        text.contains(r'{{\$.') ||
+        text.contains(r'{{ \$.');
 
     if (_looksLikeRequestRule(text) && !containsJsonTemplate) {
       return text;
@@ -1415,13 +1935,25 @@ class BookDetailService {
       return staticRule;
     }
 
+    final xpathCandidate = LegacyXPathCompat.buildRuleExpression(
+      expression: staticRule,
+      fallbackExtractor: fallbackExtractor,
+      preferredAttribute: preferredAttribute,
+    );
+    if (xpathCandidate != null) {
+      return xpathCandidate;
+    }
+
     if (staticRule.startsWith(r'$.') ||
         staticRule.startsWith(r'$[') ||
         staticRule == r'$') {
       return 'json:$staticRule';
     }
 
-    if (staticRule.contains(r'{{$.') || staticRule.contains(r'{{ $.')) {
+    if (staticRule.contains(r'{{$.') ||
+        staticRule.contains(r'{{ $.') ||
+        staticRule.contains(r'{{\$.') ||
+        staticRule.contains(r'{{ \$.')) {
       return 'json:\$\n$staticRule';
     }
 
@@ -1585,19 +2117,31 @@ class _SearchRequestSpec {
 class _DetailParseRules {
   const _DetailParseRules({
     this.initRule,
+    this.rawInitRule,
     this.titleRule,
+    this.rawTitleRule,
     this.authorRule,
+    this.rawAuthorRule,
     this.introRule,
+    this.rawIntroRule,
     this.coverUrlRule,
+    this.rawCoverUrlRule,
     this.tocUrlRule,
+    this.rawTocUrlRule,
   });
 
   final String? initRule;
+  final String? rawInitRule;
   final String? titleRule;
+  final String? rawTitleRule;
   final String? authorRule;
+  final String? rawAuthorRule;
   final String? introRule;
+  final String? rawIntroRule;
   final String? coverUrlRule;
+  final String? rawCoverUrlRule;
   final String? tocUrlRule;
+  final String? rawTocUrlRule;
 }
 
 class _TocParseRules {
@@ -1605,6 +2149,8 @@ class _TocParseRules {
     required this.listRule,
     required this.titleRule,
     required this.chapterUrlRule,
+    required this.rawListRule,
+    required this.rawTitleRule,
     required this.rawChapterUrlRule,
     required this.reversed,
   });
@@ -1612,6 +2158,15 @@ class _TocParseRules {
   final String listRule;
   final String titleRule;
   final String chapterUrlRule;
+  final String? rawListRule;
+  final String? rawTitleRule;
   final String? rawChapterUrlRule;
   final bool reversed;
+}
+
+class _InitRuleParts {
+  const _InitRuleParts({this.requestRule, this.parseRule});
+
+  final String? requestRule;
+  final String? parseRule;
 }

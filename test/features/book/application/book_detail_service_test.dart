@@ -440,6 +440,57 @@ $baseUrl/book/1/toc, {
       await server.close(force: true);
     });
 
+    test(
+      'supports script-only toc list and chapterUrl fallback rules',
+      () async {
+        final server = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
+        server.listen((request) async {
+          if (request.uri.path == '/book/script') {
+            request.response
+              ..statusCode = 200
+              ..write('<a class="toc" href="/book/script/toc">目录</a>');
+          } else if (request.uri.path == '/book/script/toc') {
+            request.response
+              ..statusCode = 200
+              ..write('ignored');
+          } else {
+            request.response
+              ..statusCode = 404
+              ..write('not found');
+          }
+          await request.response.close();
+        });
+
+        final baseUrl = 'http://${server.address.host}:${server.port}';
+        final repository = _FakeSourceRepository([
+          SourceDefinition(
+            id: 's_toc_script_only',
+            name: '目录脚本字段源',
+            baseUrl: baseUrl,
+            rules: const SourceRuleSet(
+              detailTocUrlRule: '.toc@href',
+              tocListRule: '@js:[{"title":"第1章","cid":"c1"}]',
+              tocTitleRule: 'title',
+              tocChapterUrlRule: '@js:"/chapter/{{\$.cid}}"',
+            ),
+          ),
+        ]);
+
+        final service = BookDetailService(sourceRepository: repository);
+        final result = await service.load(
+          sourceId: 's_toc_script_only',
+          bookId: 'book_toc_script',
+          detailUrl: '$baseUrl/book/script',
+        );
+
+        expect(result.chapters, hasLength(1));
+        expect(result.chapters.first.title, '第1章');
+        expect(result.chapters.first.chapterUrl, '$baseUrl/chapter/c1');
+
+        await server.close(force: true);
+      },
+    );
+
     test('returns detail with empty toc when toc rule is missing', () async {
       final server = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
       server.listen((request) async {
@@ -560,6 +611,180 @@ $baseUrl/book/1/toc, {
         await server.close(force: true);
       },
     );
+
+    test(
+      'supports @put/@get variable chain across detail and toc rules',
+      () async {
+        final server = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
+        server.listen((request) async {
+          if (request.uri.path == '/book/putget') {
+            request.response
+              ..statusCode = 200
+              ..write('''
+              <h1 class="title">变量链路测试</h1>
+              <a class="toc" href="/book/putget/toc">目录</a>
+            ''');
+          } else if (request.uri.path == '/book/putget/toc') {
+            request.response
+              ..statusCode = 200
+              ..write('''
+              <div class="chapter"><a class="link" data-cid="1">第一章</a></div>
+            ''');
+          } else {
+            request.response
+              ..statusCode = 404
+              ..write('not found');
+          }
+          await request.response.close();
+        });
+
+        final baseUrl = 'http://${server.address.host}:${server.port}';
+        final repository = _FakeSourceRepository([
+          SourceDefinition(
+            id: 's_put_get_detail',
+            name: '@put/@get 详情目录源',
+            baseUrl: baseUrl,
+            rules: const SourceRuleSet(
+              detailTitleRule: '.title@text@put:{toc:".toc@href"}',
+              detailTocUrlRule: '@get:{toc}',
+              tocListRule: '.chapter@html',
+              tocTitleRule: '.link@text@put:{cid:".link@data-cid"}',
+              tocChapterUrlRule: '/chapter/@get:{cid}',
+            ),
+          ),
+        ]);
+
+        final service = BookDetailService(sourceRepository: repository);
+        final result = await service.load(
+          sourceId: 's_put_get_detail',
+          bookId: 'book_put_get_detail',
+          detailUrl: '$baseUrl/book/putget',
+        );
+
+        expect(result.detail.title, '变量链路测试');
+        expect(result.detail.tocUrl, '$baseUrl/book/putget/toc');
+        expect(result.chapters, hasLength(1));
+        expect(result.chapters.first.title, '第一章');
+        expect(result.chapters.first.chapterUrl, '$baseUrl/chapter/1');
+
+        await server.close(force: true);
+      },
+    );
+
+    test('supports xpath-style detail and toc rules', () async {
+      final server = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
+      server.listen((request) async {
+        if (request.uri.path == '/book/xpath') {
+          request.response
+            ..statusCode = 200
+            ..write('''
+              <h1 class="title">诛仙</h1>
+              <a class="toc" href="/book/xpath/toc">目录</a>
+            ''');
+        } else if (request.uri.path == '/book/xpath/toc') {
+          request.response
+            ..statusCode = 200
+            ..write('''
+              <ul>
+                <li><a href="/c1">第一章</a></li>
+                <li><a href="/c2">第二章</a></li>
+              </ul>
+            ''');
+        } else {
+          request.response
+            ..statusCode = 404
+            ..write('not found');
+        }
+        await request.response.close();
+      });
+
+      final baseUrl = 'http://${server.address.host}:${server.port}';
+      final repository = _FakeSourceRepository([
+        SourceDefinition(
+          id: 's_xpath_detail',
+          name: 'XPath详情源',
+          baseUrl: baseUrl,
+          rules: const SourceRuleSet(
+            detailTitleRule: '//h1[@class="title"]/text()',
+            detailTocUrlRule: '//a[@class="toc"]/@href',
+            tocListRule: '//li',
+            tocTitleRule: './/a/text()',
+            tocChapterUrlRule: './/a/@href',
+          ),
+        ),
+      ]);
+
+      final service = BookDetailService(sourceRepository: repository);
+      final result = await service.load(
+        sourceId: 's_xpath_detail',
+        bookId: 'book_xpath_detail',
+        detailUrl: '$baseUrl/book/xpath',
+      );
+
+      expect(result.detail.title, '诛仙');
+      expect(result.chapters, hasLength(2));
+      expect(result.chapters.first.chapterUrl, '$baseUrl/c1');
+
+      await server.close(force: true);
+    });
+
+    test('supports mixed detail init request + @put parse variables', () async {
+      final server = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
+      String? observedToken;
+
+      server.listen((request) async {
+        if (request.uri.path == '/init') {
+          request.response
+            ..statusCode = 200
+            ..write('<meta name="token" content="detail-init-token" />');
+        } else if (request.uri.path == '/book/mixed') {
+          request.response
+            ..statusCode = 200
+            ..write('<a class="toc" href="/book/mixed/toc">目录</a>');
+        } else if (request.uri.path == '/book/mixed/toc') {
+          observedToken = request.headers.value('x-token');
+          request.response
+            ..statusCode = 200
+            ..write(
+              '<div class="chapter"><a class="link" href="/c1">第一章</a></div>',
+            );
+        } else {
+          request.response
+            ..statusCode = 404
+            ..write('not found');
+        }
+        await request.response.close();
+      });
+
+      final baseUrl = 'http://${server.address.host}:${server.port}';
+      final repository = _FakeSourceRepository([
+        SourceDefinition(
+          id: 's_init_mixed_detail',
+          name: 'Init混合详情源',
+          baseUrl: baseUrl,
+          rules: SourceRuleSet(
+            detailInitRule: '/init\n@put:{tk:"meta[name=token]@content"}',
+            detailTocUrlRule:
+                '$baseUrl/book/mixed/toc,{"headers":{"x-token":"{{tk}}"}}',
+            tocListRule: '.chapter@html',
+            tocTitleRule: '.link@text',
+            tocChapterUrlRule: '.link@href',
+          ),
+        ),
+      ]);
+
+      final service = BookDetailService(sourceRepository: repository);
+      final result = await service.load(
+        sourceId: 's_init_mixed_detail',
+        bookId: 'book_init_mixed_detail',
+        detailUrl: '$baseUrl/book/mixed',
+      );
+
+      expect(result.chapters, hasLength(1));
+      expect(observedToken, 'detail-init-token');
+
+      await server.close(force: true);
+    });
 
     test('returns detail when toc request fails', () async {
       final server = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);

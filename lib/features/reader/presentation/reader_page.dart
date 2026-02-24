@@ -2837,8 +2837,11 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
         return StatefulBuilder(
           builder: (context, setModalState) {
             final keyword = searchController.text.trim();
-            final searchEntries = _buildFullTextSearchEntries(keyword);
             final isSearching = keyword.isNotEmpty;
+            final searchEntries =
+                isSearching
+                    ? _buildFullTextSearchEntries(keyword)
+                    : const <_CatalogSearchEntry>[];
 
             final keyboardInset = MediaQuery.viewInsetsOf(context).bottom;
             final safeBottom = _bottomSafeInset(context);

@@ -130,9 +130,14 @@ class UrlTemplateResolver {
   }
 
   String _resolveWithBaseUrl(String pathOrUrl, String baseUrl) {
-    final uri = Uri.tryParse(pathOrUrl);
+    final normalized = pathOrUrl.trim();
+    final uri = Uri.tryParse(normalized);
     if (uri != null && uri.hasScheme) {
-      return pathOrUrl;
+      return normalized;
+    }
+
+    if (_looksLikeHtmlFragment(normalized)) {
+      return normalized;
     }
 
     final baseUri = Uri.tryParse(baseUrl);
@@ -144,7 +149,30 @@ class UrlTemplateResolver {
       );
     }
 
-    return baseUri.resolve(pathOrUrl).toString();
+    try {
+      return baseUri.resolve(normalized).toString();
+    } on FormatException {
+      return normalized;
+    }
+  }
+
+  bool _looksLikeHtmlFragment(String value) {
+    final normalized = value.trimLeft().toLowerCase();
+    if (normalized.isEmpty) {
+      return false;
+    }
+
+    if (normalized.startsWith('<!doctype') ||
+        normalized.startsWith('<html') ||
+        normalized.startsWith('<body') ||
+        normalized.startsWith('<div') ||
+        normalized.startsWith('<p') ||
+        normalized.startsWith('<span') ||
+        normalized.startsWith('<script')) {
+      return true;
+    }
+
+    return RegExp(r'^<[^>]+>').hasMatch(normalized);
   }
 }
 

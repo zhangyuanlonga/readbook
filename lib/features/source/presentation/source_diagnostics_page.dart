@@ -11,7 +11,6 @@ import '../../../core/errors/app_exception.dart';
 import '../../../core/errors/error_codes.dart';
 import '../../../data/datasources/local/app_database.dart';
 import '../../../data/repositories/source_repository_impl.dart';
-import '../../../domain/entities/source_definition.dart';
 import '../../../domain/repositories/source_repository.dart';
 import '../application/source_diagnostics_service.dart';
 
@@ -39,11 +38,11 @@ class _SourceDiagnosticsPageState extends State<SourceDiagnosticsPage> {
 
   bool _isRunning = false;
   bool _isExporting = false;
-  bool _isLoadingSourceFilters = false;
+  bool _isLoadingSourceCount = false;
   SourceBatchDiagnosticToken? _activeToken;
   SourceBatchDiagnosticProgress? _progress;
   List<SourceDiagnosticReport> _reports = const [];
-  List<SourceDefinition> _filterableSources = const [];
+  int _availableSourceCount = 0;
   Set<String> _selectedSourceIds = <String>{};
 
   @override
@@ -52,7 +51,7 @@ class _SourceDiagnosticsPageState extends State<SourceDiagnosticsPage> {
     _diagnosticsService = SourceDiagnosticsService(
       sourceRepository: _sourceRepository,
     );
-    unawaited(_refreshSourceFilters());
+    unawaited(_refreshSourceCount());
   }
 
   @override
@@ -85,19 +84,26 @@ class _SourceDiagnosticsPageState extends State<SourceDiagnosticsPage> {
           ),
         ],
       ),
-      body: ListView(
-        padding: EdgeInsets.fromLTRB(
-          horizontal,
-          12,
-          horizontal,
-          16 + bottomSafe,
-        ),
-        children: [
-          _buildConfigCard(),
-          const SizedBox(height: 12),
-          _buildProgressCard(),
-          const SizedBox(height: 12),
-          _buildResultList(),
+      body: CustomScrollView(
+        physics: const AlwaysScrollableScrollPhysics(),
+        slivers: [
+          SliverPadding(
+            padding: EdgeInsets.fromLTRB(horizontal, 12, horizontal, 0),
+            sliver: SliverToBoxAdapter(child: _buildConfigCard()),
+          ),
+          SliverPadding(
+            padding: EdgeInsets.fromLTRB(horizontal, 12, horizontal, 0),
+            sliver: SliverToBoxAdapter(child: _buildProgressCard()),
+          ),
+          SliverPadding(
+            padding: EdgeInsets.fromLTRB(
+              horizontal,
+              12,
+              horizontal,
+              16 + bottomSafe,
+            ),
+            sliver: _buildResultSliver(),
+          ),
         ],
       ),
     );
@@ -211,15 +217,16 @@ class _SourceDiagnosticsPageState extends State<SourceDiagnosticsPage> {
   }
 
   Widget _buildSourceFilterRow() {
-    final allCount = _filterableSources.length;
     final selectedCount = _selectedSourceIds.length;
 
     final summaryText =
-        allCount == 0
+        _isLoadingSourceCount && _availableSourceCount == 0
+            ? '书源: 统计中...'
+            : _availableSourceCount == 0
             ? '当前没有可用启用书源'
             : selectedCount == 0
-            ? '书源: 全部启用 ($allCount)'
-            : '书源: 指定 $selectedCount / $allCount';
+            ? '书源: 全部启用 ($_availableSourceCount)'
+            : '书源: 指定 $selectedCount / $_availableSourceCount';
 
     return Container(
       padding: const EdgeInsets.fromLTRB(10, 8, 8, 8),
@@ -241,7 +248,7 @@ class _SourceDiagnosticsPageState extends State<SourceDiagnosticsPage> {
               ),
             ),
           ),
-          if (_isLoadingSourceFilters)
+          if (_isLoadingSourceCount)
             const SizedBox(
               width: 20,
               height: 20,
@@ -269,7 +276,7 @@ class _SourceDiagnosticsPageState extends State<SourceDiagnosticsPage> {
               ),
             TextButton.icon(
               onPressed:
-                  (_isRunning || allCount == 0)
+                  (_isRunning || _availableSourceCount == 0)
                       ? null
                       : () => unawaited(_showSourceFilterSheet()),
               icon: const Icon(Icons.filter_list_rounded, size: 18),
@@ -281,204 +288,55 @@ class _SourceDiagnosticsPageState extends State<SourceDiagnosticsPage> {
     );
   }
 
-  Future<void> _refreshSourceFilters() async {
+  Future<void> _refreshSourceCount() async {
     if (!mounted) {
       return;
     }
 
     setState(() {
-      _isLoadingSourceFilters = true;
+      _isLoadingSourceCount = true;
     });
 
     try {
-      final enabled = await _diagnosticsService.loadEnabledSources();
-      enabled.sort((a, b) => a.name.compareTo(b.name));
+      final count = await AppDatabase.instance.countSourceListItems(
+        enabledOnly: true,
+      );
 
       if (!mounted) {
         return;
       }
 
       setState(() {
-        _filterableSources = List.unmodifiable(enabled);
-        _selectedSourceIds =
-            _selectedSourceIds
-                .where((id) => enabled.any((item) => item.id == id))
-                .toSet();
+        _availableSourceCount = count;
+      });
+    } catch (_) {
+      if (!mounted) {
+        return;
+      }
+
+      setState(() {
+        _availableSourceCount = 0;
       });
     } finally {
       if (mounted) {
         setState(() {
-          _isLoadingSourceFilters = false;
+          _isLoadingSourceCount = false;
         });
       }
     }
   }
 
   Future<void> _showSourceFilterSheet() async {
-    if (_filterableSources.isEmpty) {
-      _showMessage('当前没有可用启用书源。');
-      return;
-    }
-
-    final initialSelected = <String>{..._selectedSourceIds};
-    final keywordController = TextEditingController();
-
     final selected = await showModalBottomSheet<Set<String>>(
       context: context,
       isScrollControlled: true,
       showDragHandle: true,
       useSafeArea: true,
-      builder: (context) {
-        var draftSelected = <String>{...initialSelected};
-
-        return StatefulBuilder(
-          builder: (context, setModalState) {
-            final keyword = keywordController.text.trim().toLowerCase();
-            final visibleSources = _filterableSources
-                .where((source) {
-                  if (keyword.isEmpty) {
-                    return true;
-                  }
-                  return source.name.toLowerCase().contains(keyword) ||
-                      source.baseUrl.toLowerCase().contains(keyword) ||
-                      (source.group ?? '').toLowerCase().contains(keyword);
-                })
-                .toList(growable: false);
-
-            return FractionallySizedBox(
-              heightFactor: 0.85,
-              child: Padding(
-                padding: const EdgeInsets.fromLTRB(16, 6, 16, 16),
-                child: Column(
-                  children: [
-                    Align(
-                      alignment: Alignment.centerLeft,
-                      child: Text(
-                        '指定书源',
-                        style: Theme.of(context).textTheme.titleMedium
-                            ?.copyWith(fontWeight: FontWeight.w700),
-                      ),
-                    ),
-                    const SizedBox(height: 8),
-                    TextField(
-                      controller: keywordController,
-                      onChanged: (_) => setModalState(() {}),
-                      decoration: InputDecoration(
-                        isDense: true,
-                        hintText: '搜索书源名称、域名或分组',
-                        prefixIcon: const Icon(Icons.search, size: 18),
-                        border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                      ),
-                    ),
-                    const SizedBox(height: 8),
-                    Row(
-                      children: [
-                        TextButton(
-                          onPressed: () {
-                            setModalState(() {
-                              draftSelected = <String>{};
-                            });
-                          },
-                          child: const Text('全部启用'),
-                        ),
-                        const SizedBox(width: 8),
-                        TextButton(
-                          onPressed: () {
-                            setModalState(() {
-                              draftSelected =
-                                  _filterableSources
-                                      .map((item) => item.id)
-                                      .toSet();
-                            });
-                          },
-                          child: const Text('全选'),
-                        ),
-                        const Spacer(),
-                        Text(
-                          draftSelected.isEmpty
-                              ? '当前：全部'
-                              : '当前：${draftSelected.length} 个',
-                          style: Theme.of(
-                            context,
-                          ).textTheme.bodySmall?.copyWith(
-                            color:
-                                Theme.of(context).colorScheme.onSurfaceVariant,
-                          ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 4),
-                    Expanded(
-                      child:
-                          visibleSources.isEmpty
-                              ? Center(
-                                child: Text(
-                                  '未匹配到书源',
-                                  style: Theme.of(context).textTheme.bodyMedium,
-                                ),
-                              )
-                              : ListView.builder(
-                                itemCount: visibleSources.length,
-                                itemBuilder: (context, index) {
-                                  final source = visibleSources[index];
-                                  final selected = draftSelected.contains(
-                                    source.id,
-                                  );
-                                  return CheckboxListTile(
-                                    value: selected,
-                                    dense: true,
-                                    controlAffinity:
-                                        ListTileControlAffinity.leading,
-                                    title: Text(
-                                      source.name,
-                                      maxLines: 1,
-                                      overflow: TextOverflow.ellipsis,
-                                    ),
-                                    subtitle: Text(
-                                      source.baseUrl,
-                                      maxLines: 1,
-                                      overflow: TextOverflow.ellipsis,
-                                    ),
-                                    onChanged: (value) {
-                                      setModalState(() {
-                                        if (value ?? false) {
-                                          draftSelected.add(source.id);
-                                        } else {
-                                          draftSelected.remove(source.id);
-                                        }
-                                      });
-                                    },
-                                  );
-                                },
-                              ),
-                    ),
-                    const SizedBox(height: 8),
-                    Row(
-                      children: [
-                        TextButton(
-                          onPressed: () => Navigator.of(context).pop(),
-                          child: const Text('取消'),
-                        ),
-                        const Spacer(),
-                        FilledButton(
-                          onPressed:
-                              () => Navigator.of(context).pop(draftSelected),
-                          child: const Text('应用筛选'),
-                        ),
-                      ],
-                    ),
-                  ],
-                ),
-              ),
-            );
-          },
-        );
-      },
+      builder:
+          (context) => _DiagnosticsSourceFilterSheet(
+            initialSelectedIds: _selectedSourceIds,
+          ),
     );
-
-    keywordController.dispose();
 
     if (!mounted || selected == null) {
       return;
@@ -537,20 +395,25 @@ class _SourceDiagnosticsPageState extends State<SourceDiagnosticsPage> {
     );
   }
 
-  Widget _buildResultList() {
+  Widget _buildResultSliver() {
     if (_reports.isEmpty) {
-      return Card(
-        child: Padding(
-          padding: const EdgeInsets.all(14),
-          child: Text('暂无诊断结果。', style: Theme.of(context).textTheme.bodyMedium),
+      return SliverToBoxAdapter(
+        child: Card(
+          child: Padding(
+            padding: const EdgeInsets.all(14),
+            child: Text(
+              '暂无诊断结果。',
+              style: Theme.of(context).textTheme.bodyMedium,
+            ),
+          ),
         ),
       );
     }
 
-    return Column(
-      children: _reports
-          .map((report) => _buildReportCard(report))
-          .toList(growable: false),
+    return SliverList(
+      delegate: SliverChildBuilderDelegate((context, index) {
+        return _buildReportCard(_reports[index]);
+      }, childCount: _reports.length),
     );
   }
 
@@ -604,7 +467,7 @@ class _SourceDiagnosticsPageState extends State<SourceDiagnosticsPage> {
               ? '没有可用于批量诊断的启用书源。'
               : '已选书源中没有可用于批量诊断的启用书源。';
       _showMessage(text);
-      unawaited(_refreshSourceFilters());
+      unawaited(_refreshSourceCount());
       return;
     }
 
@@ -1091,6 +954,296 @@ class _SourceDiagnosticsPageState extends State<SourceDiagnosticsPage> {
       return;
     }
     ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(text)));
+  }
+}
+
+class _DiagnosticsSourceFilterSheet extends StatefulWidget {
+  const _DiagnosticsSourceFilterSheet({required this.initialSelectedIds});
+
+  final Set<String> initialSelectedIds;
+
+  @override
+  State<_DiagnosticsSourceFilterSheet> createState() =>
+      _DiagnosticsSourceFilterSheetState();
+}
+
+class _DiagnosticsSourceFilterSheetState
+    extends State<_DiagnosticsSourceFilterSheet> {
+  static const int _kPageSize = 80;
+
+  final TextEditingController _keywordController = TextEditingController();
+  final ScrollController _scrollController = ScrollController();
+
+  Timer? _searchDebounce;
+  late Set<String> _draftSelectedIds;
+  List<SourceListItem> _visibleSources = const <SourceListItem>[];
+  bool _isInitialLoading = true;
+  bool _isPageLoading = false;
+  bool _hasMorePages = true;
+  int _nextOffset = 0;
+  int _totalCount = 0;
+  int _queryTicket = 0;
+  String? _errorText;
+
+  @override
+  void initState() {
+    super.initState();
+    _draftSelectedIds = <String>{...widget.initialSelectedIds};
+    _keywordController.addListener(_onKeywordChanged);
+    _scrollController.addListener(_onScroll);
+    unawaited(_reloadSourcePage(reset: true));
+  }
+
+  @override
+  void dispose() {
+    _searchDebounce?.cancel();
+    _keywordController.removeListener(_onKeywordChanged);
+    _keywordController.dispose();
+    _scrollController.removeListener(_onScroll);
+    _scrollController.dispose();
+    super.dispose();
+  }
+
+  void _onKeywordChanged() {
+    _searchDebounce?.cancel();
+    _searchDebounce = Timer(const Duration(milliseconds: 250), () {
+      unawaited(_reloadSourcePage(reset: true));
+    });
+  }
+
+  void _onScroll() {
+    if (!_scrollController.hasClients || _isInitialLoading || _isPageLoading) {
+      return;
+    }
+
+    final position = _scrollController.position;
+    if (position.pixels + 320 >= position.maxScrollExtent) {
+      unawaited(_reloadSourcePage(reset: false));
+    }
+  }
+
+  Future<void> _reloadSourcePage({required bool reset}) async {
+    if (!reset && (!_hasMorePages || _isPageLoading)) {
+      return;
+    }
+
+    final keyword = _keywordController.text.trim();
+    final ticket = reset ? ++_queryTicket : _queryTicket;
+
+    setState(() {
+      _isPageLoading = true;
+      if (reset) {
+        _isInitialLoading = true;
+        _hasMorePages = true;
+        _nextOffset = 0;
+        _totalCount = 0;
+        _visibleSources = const <SourceListItem>[];
+        _errorText = null;
+      }
+    });
+
+    try {
+      final pageFuture = AppDatabase.instance.querySourceListItems(
+        offset: reset ? 0 : _nextOffset,
+        limit: _kPageSize,
+        keyword: keyword,
+        enabledOnly: true,
+      );
+
+      final totalFuture =
+          reset
+              ? AppDatabase.instance.countSourceListItems(
+                keyword: keyword,
+                enabledOnly: true,
+              )
+              : Future<int>.value(_totalCount);
+
+      final page = await pageFuture;
+      final total = await totalFuture;
+
+      if (!mounted || ticket != _queryTicket) {
+        return;
+      }
+
+      setState(() {
+        _totalCount = total;
+        _visibleSources = reset ? page : [..._visibleSources, ...page];
+        _nextOffset = reset ? page.length : (_nextOffset + page.length);
+        _hasMorePages = _nextOffset < _totalCount;
+        _isInitialLoading = false;
+        _isPageLoading = false;
+        _errorText = null;
+      });
+    } catch (error) {
+      if (!mounted || ticket != _queryTicket) {
+        return;
+      }
+
+      setState(() {
+        _isInitialLoading = false;
+        _isPageLoading = false;
+        _errorText = '加载书源失败：$error';
+      });
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return FractionallySizedBox(
+      heightFactor: 0.85,
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(16, 6, 16, 16),
+        child: Column(
+          children: [
+            Align(
+              alignment: Alignment.centerLeft,
+              child: Text(
+                '指定书源',
+                style: Theme.of(
+                  context,
+                ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700),
+              ),
+            ),
+            const SizedBox(height: 8),
+            TextField(
+              controller: _keywordController,
+              decoration: InputDecoration(
+                isDense: true,
+                hintText: '搜索书源名称或域名',
+                prefixIcon: const Icon(Icons.search, size: 18),
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
+              ),
+            ),
+            const SizedBox(height: 8),
+            Row(
+              children: [
+                TextButton(
+                  onPressed: () {
+                    setState(() {
+                      _draftSelectedIds = <String>{};
+                    });
+                  },
+                  child: const Text('全部启用'),
+                ),
+                const SizedBox(width: 8),
+                TextButton(
+                  onPressed: () {
+                    setState(() {
+                      _draftSelectedIds.addAll(
+                        _visibleSources.map((item) => item.id),
+                      );
+                    });
+                  },
+                  child: const Text('全选已加载'),
+                ),
+                const Spacer(),
+                Text(
+                  _draftSelectedIds.isEmpty
+                      ? '当前：全部启用 ($_totalCount)'
+                      : '当前：${_draftSelectedIds.length} 个',
+                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                    color: Theme.of(context).colorScheme.onSurfaceVariant,
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 4),
+            Expanded(child: _buildBody()),
+            const SizedBox(height: 8),
+            Row(
+              children: [
+                TextButton(
+                  onPressed: () => Navigator.of(context).pop(),
+                  child: const Text('取消'),
+                ),
+                const Spacer(),
+                FilledButton(
+                  onPressed:
+                      () =>
+                          Navigator.of(context).pop(_draftSelectedIds.toSet()),
+                  child: const Text('应用筛选'),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildBody() {
+    if (_isInitialLoading) {
+      return const Center(child: CircularProgressIndicator());
+    }
+
+    if (_errorText != null && _visibleSources.isEmpty) {
+      return Center(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(
+              _errorText!,
+              textAlign: TextAlign.center,
+              style: Theme.of(context).textTheme.bodySmall,
+            ),
+            const SizedBox(height: 8),
+            TextButton(
+              onPressed: () => unawaited(_reloadSourcePage(reset: true)),
+              child: const Text('重试'),
+            ),
+          ],
+        ),
+      );
+    }
+
+    if (_visibleSources.isEmpty) {
+      return Center(
+        child: Text('未匹配到书源', style: Theme.of(context).textTheme.bodyMedium),
+      );
+    }
+
+    final itemCount = _visibleSources.length + (_isPageLoading ? 1 : 0);
+    return ListView.builder(
+      controller: _scrollController,
+      itemCount: itemCount,
+      itemBuilder: (context, index) {
+        if (index >= _visibleSources.length) {
+          return const Padding(
+            padding: EdgeInsets.symmetric(vertical: 10),
+            child: Center(child: CircularProgressIndicator(strokeWidth: 2)),
+          );
+        }
+
+        final source = _visibleSources[index];
+        final selected = _draftSelectedIds.contains(source.id);
+        return CheckboxListTile(
+          value: selected,
+          dense: true,
+          controlAffinity: ListTileControlAffinity.leading,
+          title: Text(
+            source.name,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+          ),
+          subtitle: Text(
+            source.baseUrl,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+          ),
+          onChanged: (value) {
+            setState(() {
+              if (value ?? false) {
+                _draftSelectedIds.add(source.id);
+              } else {
+                _draftSelectedIds.remove(source.id);
+              }
+            });
+          },
+        );
+      },
+    );
   }
 }
 

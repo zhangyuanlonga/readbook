@@ -9,6 +9,10 @@ import '../../../core/network/request_context.dart';
 import '../../../core/rule_engine/rule_engine.dart';
 import '../../../core/rule_engine/processors/url_template_resolver.dart';
 import '../../../core/rule_engine/processors/legacy_rule_compat.dart';
+import '../../../core/rule_engine/processors/legacy_rule_variable_processor.dart';
+import '../../../core/rule_engine/processors/legacy_xpath_compat.dart';
+import '../../../core/rule_engine/processors/legacy_link_post_processor.dart';
+import '../../../core/rule_engine/processors/legacy_script_rule_fallback.dart';
 import '../../../core/source/source_response_processor.dart';
 import '../../../data/datasources/local/app_database.dart';
 import '../../../data/repositories/source_repository_impl.dart';
@@ -123,12 +127,12 @@ class ChapterContentService {
     }
 
     final source = await _findSource(normalizedSourceId);
-    final contentRule =
-        _normalizeRuleExpression(
-          source.rules.contentRule,
-          fallbackExtractor: 'html',
-        ) ??
-        _buildFallbackContentRule(source.rules.contentDecryptRule);
+    var contentRule = _normalizeRuleExpression(
+      source.rules.contentRule,
+      fallbackExtractor: 'html',
+    );
+    contentRule ??= _buildVariableExpressionFallback(source.rules.contentRule);
+    contentRule ??= _buildFallbackContentRule(source.rules.contentDecryptRule);
 
     if (contentRule == null) {
       throw AppException(
@@ -158,13 +162,20 @@ class ChapterContentService {
               extraParams: {...templateContext.extraParams, ...initVariables},
             );
 
-    final requestSpec = _parseChapterRequestSpec(
-      chapterUrl: normalizedChapterUrl,
+    final normalizedChapterRequest = _normalizeChapterRequestInput(
+      normalizedChapterUrl,
     );
-    final requestUrl = _urlTemplateResolver.resolve(
+    final requestSpec = _parseChapterRequestSpec(
+      chapterUrl: normalizedChapterRequest,
+    );
+    final requestUrl = _resolveContentRequestUrl(
+      source: source,
       template: requestSpec.urlTemplate,
       context: runtimeContext,
-      baseUrl: source.baseUrl,
+    );
+    _validateResolvedRequestUrl(
+      requestUrl: requestUrl,
+      sourceId: normalizedSourceId,
     );
 
     final contentType = _resolveContentType(requestSpec);
@@ -218,16 +229,31 @@ class ChapterContentService {
             )
             .body;
 
+    final variableState = <String, String>{...runtimeContext.extraParams};
+
     final contentExpression = _resolveRuntimeRuleTemplate(
       expression: contentRule,
       context: runtimeContext,
     );
-
-    final extractedSegments = _executeAllWithFallback(
+    final resolvedContentExpression = _resolveLegacyVariableExpression(
       content: normalizedResponseBody,
       expression: contentExpression,
+      rawRule: source.rules.contentRule,
       stage: ErrorStage.content,
+      variables: variableState,
+      fallbackExtractor: 'html',
     );
+
+    final extractedSegments =
+        _looksLikeRuleExpression(resolvedContentExpression)
+            ? _executeAllWithFallback(
+              content: normalizedResponseBody,
+              expression: resolvedContentExpression,
+              stage: ErrorStage.content,
+            )
+            : <String>[
+              resolvedContentExpression.trim(),
+            ].where((item) => item.isNotEmpty).toList(growable: false);
 
     final imageUrls = _extractImageUrls(
       extractedSegments: extractedSegments,
@@ -387,6 +413,117 @@ class ChapterContentService {
     );
   }
 
+  String _normalizeChapterRequestInput(String chapterUrl) {
+    final normalized = LegacyLinkPostProcessor.apply(value: chapterUrl);
+    final candidate =
+        normalized.trim().isEmpty ? chapterUrl.trim() : normalized;
+
+    if (LegacyScriptRuleFallback.isScriptOnlyRule(candidate)) {
+      final evaluated = LegacyScriptRuleFallback.evaluateFieldValue(
+        content: '',
+        rawRule: candidate,
+      );
+      if (evaluated != null && evaluated.trim().isNotEmpty) {
+        return evaluated;
+      }
+    }
+
+    return candidate;
+  }
+
+  String _resolveContentRequestUrl({
+    required SourceDefinition source,
+    required String template,
+    required SearchRequestContext context,
+  }) {
+    try {
+      return _urlTemplateResolver.resolve(
+        template: template,
+        context: context,
+        baseUrl: source.baseUrl,
+      );
+    } on AppException catch (error, stackTrace) {
+      throw AppException(
+        code: error.code,
+        stage: ErrorStage.content,
+        sourceId: source.id,
+        briefMessage: error.briefMessage,
+        requestUrl: error.requestUrl,
+        cause: error,
+        stackTrace: stackTrace,
+      );
+    } on FormatException catch (error, stackTrace) {
+      throw AppException(
+        code: ErrorCode.validation,
+        stage: ErrorStage.content,
+        sourceId: source.id,
+        briefMessage: '正文请求地址非法：${template.trim()}',
+        cause: error,
+        stackTrace: stackTrace,
+      );
+    }
+  }
+
+  void _validateResolvedRequestUrl({
+    required String requestUrl,
+    required String sourceId,
+  }) {
+    final normalized = requestUrl.trim();
+    final uri = Uri.tryParse(normalized);
+    final scheme = uri?.scheme.toLowerCase() ?? '';
+
+    final isHttpUrl =
+        uri != null && uri.hasScheme && (scheme == 'http' || scheme == 'https');
+    if (isHttpUrl &&
+        !_looksLikeHtmlFragment(normalized) &&
+        !_looksLikeEncodedHtmlFragment(normalized)) {
+      return;
+    }
+
+    throw AppException(
+      code: ErrorCode.validation,
+      stage: ErrorStage.content,
+      sourceId: sourceId,
+      briefMessage: '正文请求地址非法：$normalized',
+    );
+  }
+
+  bool _looksLikeHtmlFragment(String value) {
+    final normalized = value.trimLeft().toLowerCase();
+    if (normalized.isEmpty) {
+      return false;
+    }
+
+    if (normalized.startsWith('<!doctype') ||
+        normalized.startsWith('<html') ||
+        normalized.startsWith('<body') ||
+        normalized.startsWith('<div') ||
+        normalized.startsWith('<p') ||
+        normalized.startsWith('<span') ||
+        normalized.startsWith('<script')) {
+      return true;
+    }
+
+    return RegExp(r'^<[^>]+>').hasMatch(normalized);
+  }
+
+  bool _looksLikeEncodedHtmlFragment(String value) {
+    final normalized = value.trim();
+    if (normalized.isEmpty) {
+      return false;
+    }
+
+    final decoded = Uri.decodeFull(normalized).trimLeft().toLowerCase();
+    if (decoded.isEmpty) {
+      return false;
+    }
+
+    return decoded.startsWith('<') ||
+        decoded.contains('<div') ||
+        decoded.contains('<html') ||
+        decoded.contains('<body');
+  }
+
   _ContentRequestSpec _parseChapterRequestSpec({required String chapterUrl}) {
     final normalized = chapterUrl.trim();
     final splitResult = _splitRequestOptions(normalized);
@@ -449,6 +586,25 @@ class ChapterContentService {
       urlTemplate: urlTemplate,
       optionsText: optionsText,
     );
+  }
+
+  bool _looksLikeRequestRule(String value) {
+    final text = value.trim();
+    if (text.isEmpty) {
+      return false;
+    }
+
+    if (_splitRequestOptions(text) != null) {
+      return true;
+    }
+
+    if (text.startsWith('//')) {
+      return false;
+    }
+
+    return text.startsWith('http://') ||
+        text.startsWith('https://') ||
+        text.startsWith('/');
   }
 
   int? _findTrailingObjectStart(String value) {
@@ -581,11 +737,18 @@ class ChapterContentService {
       return const {};
     }
 
-    final requestSpec = _parseChapterRequestSpec(chapterUrl: rawInitRule);
-    final requestUrl = _urlTemplateResolver.resolve(
+    final initParts = _splitInitRuleParts(rawInitRule);
+    if (initParts.requestRule == null || initParts.requestRule!.isEmpty) {
+      return const {};
+    }
+
+    final requestSpec = _parseChapterRequestSpec(
+      chapterUrl: initParts.requestRule!,
+    );
+    final requestUrl = _resolveContentRequestUrl(
+      source: source,
       template: requestSpec.urlTemplate,
       context: context,
-      baseUrl: source.baseUrl,
     );
 
     final contentType = _resolveContentType(requestSpec);
@@ -623,16 +786,130 @@ class ChapterContentService {
             .process(
               body: response.body,
               requestUrl: requestUrl,
-              fallbackUrl: rawInitRule,
+              fallbackUrl: initParts.requestRule,
               decryptRule: source.rules.contentDecryptRule,
             )
             .body;
-    final decoded = _tryDecodeJson(normalizedInitBody);
-    if (decoded == null) {
+
+    final jsonVariables = () {
+      final decoded = _tryDecodeJson(normalizedInitBody);
+      if (decoded == null) {
+        return const <String, String>{};
+      }
+      return _flattenInitVariables(decoded);
+    }();
+
+    final putVariables = _extractInitPutVariables(
+      content: normalizedInitBody,
+      parseRule: initParts.parseRule,
+      context: context,
+    );
+
+    if (jsonVariables.isEmpty && putVariables.isEmpty) {
       return const {};
     }
 
-    return _flattenInitVariables(decoded);
+    return {...jsonVariables, ...putVariables};
+  }
+
+  _InitRuleParts _splitInitRuleParts(String rawInitRule) {
+    final normalized = rawInitRule.trim();
+    if (normalized.isEmpty) {
+      return const _InitRuleParts();
+    }
+
+    final putIndex = normalized.indexOf('@put:');
+    if (putIndex > 0) {
+      final request = normalized.substring(0, putIndex).trim();
+      final parse = normalized.substring(putIndex).trim();
+      if (_looksLikeRequestRule(request)) {
+        return _InitRuleParts(
+          requestRule: request,
+          parseRule: parse.isEmpty ? null : parse,
+        );
+      }
+    }
+
+    if (_looksLikeRequestRule(normalized)) {
+      return _InitRuleParts(requestRule: normalized);
+    }
+
+    return _InitRuleParts(parseRule: normalized);
+  }
+
+  Map<String, String> _extractInitPutVariables({
+    required String content,
+    required String? parseRule,
+    required SearchRequestContext context,
+  }) {
+    if (!LegacyRuleVariableProcessor.containsVariableSyntax(parseRule)) {
+      return const {};
+    }
+
+    final working = <String, String>{...context.toVariables()};
+    final baseline = Map<String, String>.from(working);
+
+    LegacyRuleVariableProcessor.resolveExpression(
+      expression: parseRule!.trim(),
+      variables: working,
+      resolvePutValue:
+          (valueExpression) => _evaluateInitPutValue(
+            content: content,
+            valueExpression: valueExpression,
+          ),
+    );
+
+    final output = <String, String>{};
+    for (final entry in working.entries) {
+      if (baseline[entry.key] == entry.value) {
+        continue;
+      }
+      if (entry.value.trim().isEmpty) {
+        continue;
+      }
+      output[entry.key] = entry.value;
+    }
+
+    return output;
+  }
+
+  String? _evaluateInitPutValue({
+    required String content,
+    required String valueExpression,
+  }) {
+    final text = valueExpression.trim();
+    if (text.isEmpty) {
+      return null;
+    }
+
+    final normalizedRule = _normalizeRuleExpression(
+      text,
+      fallbackExtractor: 'text',
+    );
+
+    if (normalizedRule != null) {
+      for (final candidate in _splitFallbackExpressions(normalizedRule)) {
+        try {
+          final value = _ruleEngine.executeFirst(
+            content: content,
+            expression: candidate,
+            stage: ErrorStage.content,
+          );
+          final normalized = value.trim();
+          if (normalized.isNotEmpty) {
+            return normalized;
+          }
+        } on AppException {
+          continue;
+        }
+      }
+    }
+
+    if (_looksLikeRuleExpression(text)) {
+      return null;
+    }
+
+    return text;
   }
 
   dynamic _tryDecodeJson(String source) {
@@ -807,6 +1084,19 @@ class ChapterContentService {
     }
 
     return r'regex:[\s\S]+';
+  }
+
+  String? _buildVariableExpressionFallback(String? rawRule) {
+    if (!LegacyRuleVariableProcessor.containsVariableSyntax(rawRule)) {
+      return null;
+    }
+
+    final value = rawRule?.trim();
+    if (value == null || value.isEmpty) {
+      return null;
+    }
+
+    return value;
   }
 
   String? _asNullableString(Object? value) {
@@ -1318,6 +1608,115 @@ class ChapterContentService {
     return const [];
   }
 
+  String _resolveLegacyVariableExpression({
+    required String content,
+    required String expression,
+    required ErrorStage stage,
+    required Map<String, String> variables,
+    required String fallbackExtractor,
+    String? preferredAttribute,
+    String? rawRule,
+  }) {
+    final variableAwareRaw =
+        LegacyRuleVariableProcessor.containsVariableSyntax(rawRule)
+            ? rawRule!.trim()
+            : null;
+
+    if (variableAwareRaw != null) {
+      final resolvedRaw = LegacyRuleVariableProcessor.resolveExpression(
+        expression: variableAwareRaw,
+        variables: variables,
+        resolvePutValue:
+            (valueExpression) => _evaluateLegacyPutValue(
+              content: content,
+              stage: stage,
+              valueExpression: valueExpression,
+              fallbackExtractor: fallbackExtractor,
+              preferredAttribute: preferredAttribute,
+            ),
+      );
+
+      final rawLiteral = resolvedRaw.trim();
+      if (rawLiteral.isNotEmpty && !_looksLikeRuleExpression(rawLiteral)) {
+        return rawLiteral;
+      }
+
+      final normalizedRaw = _normalizeRuleExpression(
+        resolvedRaw,
+        fallbackExtractor: fallbackExtractor,
+        preferredAttribute: preferredAttribute,
+      );
+      if (normalizedRaw != null && normalizedRaw.trim().isNotEmpty) {
+        return LegacyRuleVariableProcessor.replaceGetTokens(
+          normalizedRaw,
+          variables,
+        );
+      }
+    }
+
+    return LegacyRuleVariableProcessor.replaceGetTokens(expression, variables);
+  }
+
+  String? _evaluateLegacyPutValue({
+    required String content,
+    required ErrorStage stage,
+    required String valueExpression,
+    required String fallbackExtractor,
+    String? preferredAttribute,
+  }) {
+    final normalizedRule = _normalizeRuleExpression(
+      valueExpression,
+      fallbackExtractor: fallbackExtractor,
+      preferredAttribute: preferredAttribute,
+    );
+    if (normalizedRule != null && normalizedRule.trim().isNotEmpty) {
+      final values = _executeAllWithFallback(
+        content: content,
+        expression: normalizedRule,
+        stage: stage,
+      );
+      if (values.isNotEmpty) {
+        return values.first.trim();
+      }
+    }
+
+    final literal = valueExpression.trim();
+    if (literal.isEmpty || _looksLikeRuleExpression(literal)) {
+      return null;
+    }
+    return literal;
+  }
+
+  bool _looksLikeRuleExpression(String expression) {
+    final text = expression.trim();
+    if (text.isEmpty) {
+      return false;
+    }
+
+    if (text.startsWith('html:') ||
+        text.startsWith('json:') ||
+        text.startsWith('regex:') ||
+        text.startsWith('xpath:') ||
+        text.startsWith('@xpath:') ||
+        text.startsWith('js:') ||
+        text.startsWith('@js:') ||
+        text.startsWith(r'$.') ||
+        text.startsWith(r'$[') ||
+        text.startsWith('@json:') ||
+        text.startsWith('//')) {
+      return true;
+    }
+
+    if (text.contains('@') ||
+        text.contains('##') ||
+        text.contains('||') ||
+        text.contains('&&')) {
+      return true;
+    }
+
+    return false;
+  }
+
   String _repairJsonControlCharacters(String source) {
     final buffer = StringBuffer();
     var inString = false;
@@ -1518,13 +1917,25 @@ class ChapterContentService {
       return staticRule;
     }
 
+    final xpathCandidate = LegacyXPathCompat.buildRuleExpression(
+      expression: staticRule,
+      fallbackExtractor: fallbackExtractor,
+      preferredAttribute: preferredAttribute,
+    );
+    if (xpathCandidate != null) {
+      return xpathCandidate;
+    }
+
     if (staticRule.startsWith(r'$.') ||
         staticRule.startsWith(r'$[') ||
         staticRule == r'$') {
       return 'json:$staticRule';
     }
 
-    if (staticRule.contains(r'{{$.') || staticRule.contains(r'{{ $.')) {
+    if (staticRule.contains(r'{{$.') ||
+        staticRule.contains(r'{{ $.') ||
+        staticRule.contains(r'{{\$.') ||
+        staticRule.contains(r'{{ \$.')) {
       return 'json:\$\n$staticRule';
     }
 
@@ -1686,4 +2097,11 @@ class _ContentRequestSpec {
   final Object? bodyTemplate;
   final String? contentType;
   final String? responseCharset;
+}
+
+class _InitRuleParts {
+  const _InitRuleParts({this.requestRule, this.parseRule});
+
+  final String? requestRule;
+  final String? parseRule;
 }

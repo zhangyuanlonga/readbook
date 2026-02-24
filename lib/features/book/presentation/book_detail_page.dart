@@ -35,6 +35,8 @@ class _BookDetailPageState extends State<BookDetailPage> {
   final BookDetailService _service = BookDetailService();
   final BookshelfService _bookshelfService = BookshelfService();
 
+  static const int _tocPreviewLimit = 80;
+
   bool _isLoading = false;
   bool _manualTocReversed = false;
   bool _isShelfActionLoading = false;
@@ -623,6 +625,14 @@ class _BookDetailPageState extends State<BookDetailPage> {
   Widget _buildChapterSection(BookDetailLoadResult result) {
     final displayedChapters = _buildDisplayedChapters(result.chapters);
     final colorScheme = Theme.of(context).colorScheme;
+    final previewCount =
+        displayedChapters.length > _tocPreviewLimit
+            ? _tocPreviewLimit
+            : displayedChapters.length;
+    final previewChapters = displayedChapters
+        .take(previewCount)
+        .toList(growable: false);
+    final hasMoreChapters = displayedChapters.length > previewCount;
 
     return Card(
       child: Padding(
@@ -716,16 +726,91 @@ class _BookDetailPageState extends State<BookDetailPage> {
                 ),
               ),
             ],
-            const SizedBox(height: 10),
-            ...displayedChapters.asMap().entries.map(
-              (entry) => _buildChapterTile(
-                displayIndex: entry.key,
-                chapter: entry.value,
+            if (previewChapters.isNotEmpty) ...[
+              const SizedBox(height: 10),
+              ...previewChapters.asMap().entries.map(
+                (entry) => _buildChapterTile(
+                  displayIndex: entry.key,
+                  chapter: entry.value,
+                  showDivider:
+                      hasMoreChapters || entry.key < previewChapters.length - 1,
+                ),
               ),
-            ),
+              if (hasMoreChapters) ...[
+                const SizedBox(height: 8),
+                OutlinedButton.icon(
+                  onPressed: () => _showAllChaptersSheet(displayedChapters),
+                  icon: const Icon(Icons.unfold_more_rounded),
+                  label: Text('查看全部目录（${displayedChapters.length} 章）'),
+                ),
+              ],
+            ],
           ],
         ),
       ),
+    );
+  }
+
+  Future<void> _showAllChaptersSheet(List<Chapter> chapters) async {
+    if (chapters.isEmpty || !mounted) {
+      return;
+    }
+
+    await showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      useSafeArea: true,
+      showDragHandle: true,
+      builder: (context) {
+        return FractionallySizedBox(
+          heightFactor: 0.88,
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(12, 4, 12, 12),
+            child: Column(
+              children: [
+                Row(
+                  children: [
+                    Expanded(
+                      child: Text(
+                        '全部目录（${chapters.length} 章）',
+                        style: Theme.of(context).textTheme.titleMedium
+                            ?.copyWith(fontWeight: FontWeight.w700),
+                      ),
+                    ),
+                    Text(
+                      _manualTocReversed ? '倒序' : '正序',
+                      style: Theme.of(context).textTheme.labelMedium,
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 8),
+                Expanded(
+                  child: ListView.builder(
+                    itemExtent: 58,
+                    itemCount: chapters.length,
+                    itemBuilder: (context, index) {
+                      final chapter = chapters[index];
+                      return ListTile(
+                        dense: true,
+                        leading: Text('${index + 1}'),
+                        title: Text(
+                          chapter.title,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                        onTap: () {
+                          Navigator.of(context).pop();
+                          _openChapter(chapter);
+                        },
+                      );
+                    },
+                  ),
+                ),
+              ],
+            ),
+          ),
+        );
+      },
     );
   }
 
@@ -740,6 +825,7 @@ class _BookDetailPageState extends State<BookDetailPage> {
   Widget _buildChapterTile({
     required int displayIndex,
     required Chapter chapter,
+    bool showDivider = true,
   }) {
     final colorScheme = Theme.of(context).colorScheme;
 
@@ -749,11 +835,14 @@ class _BookDetailPageState extends State<BookDetailPage> {
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 10),
         decoration: BoxDecoration(
-          border: Border(
-            bottom: BorderSide(
-              color: colorScheme.outlineVariant.withValues(alpha: 0.55),
-            ),
-          ),
+          border:
+              showDivider
+                  ? Border(
+                    bottom: BorderSide(
+                      color: colorScheme.outlineVariant.withValues(alpha: 0.55),
+                    ),
+                  )
+                  : null,
         ),
         child: Row(
           children: [

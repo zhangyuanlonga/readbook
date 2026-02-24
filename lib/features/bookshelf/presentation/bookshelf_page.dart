@@ -102,46 +102,67 @@ class _BookshelfPageState extends State<BookshelfPage> {
         ),
         child: RefreshIndicator(
           onRefresh: _loadBookshelf,
-          child: ListView(
+          child: CustomScrollView(
             physics: const AlwaysScrollableScrollPhysics(),
-            padding: EdgeInsets.fromLTRB(
-              horizontal,
-              16,
-              horizontal,
-              16 + bottomSafe,
-            ),
-            children: [
-              _buildOverviewCard(),
-              const SizedBox(height: 10),
-              _buildActionCard(),
-              const SizedBox(height: 12),
-              if (_isLoading)
-                const Card(
-                  child: Padding(
-                    padding: EdgeInsets.all(16),
-                    child: Row(
-                      children: [
-                        SizedBox(
-                          width: 18,
-                          height: 18,
-                          child: CircularProgressIndicator(strokeWidth: 2),
-                        ),
-                        SizedBox(width: 12),
-                        Expanded(child: Text('正在加载书架...')),
-                      ],
-                    ),
-                  ),
-                )
-              else if (_books.isEmpty)
-                _buildEmptyCard()
-              else if (_useGridView)
-                _buildBookGrid()
-              else
-                ..._books.map(_buildBookCard),
+            slivers: [
+              SliverPadding(
+                padding: EdgeInsets.fromLTRB(horizontal, 16, horizontal, 0),
+                sliver: SliverToBoxAdapter(child: _buildOverviewCard()),
+              ),
+              SliverPadding(
+                padding: EdgeInsets.fromLTRB(horizontal, 10, horizontal, 0),
+                sliver: SliverToBoxAdapter(child: _buildActionCard()),
+              ),
+              SliverPadding(
+                padding: EdgeInsets.fromLTRB(
+                  horizontal,
+                  12,
+                  horizontal,
+                  16 + bottomSafe,
+                ),
+                sliver: _buildBooksContentSliver(horizontal),
+              ),
             ],
           ),
         ),
       ),
+    );
+  }
+
+  Widget _buildBooksContentSliver(double horizontalPadding) {
+    if (_isLoading) {
+      return const SliverToBoxAdapter(
+        child: Card(
+          child: Padding(
+            padding: EdgeInsets.all(16),
+            child: Row(
+              children: [
+                SizedBox(
+                  width: 18,
+                  height: 18,
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                ),
+                SizedBox(width: 12),
+                Expanded(child: Text('正在加载书架...')),
+              ],
+            ),
+          ),
+        ),
+      );
+    }
+
+    if (_books.isEmpty) {
+      return SliverToBoxAdapter(child: _buildEmptyCard());
+    }
+
+    if (_useGridView) {
+      return _buildBookGridSliver(horizontalPadding);
+    }
+
+    return SliverList(
+      delegate: SliverChildBuilderDelegate((context, index) {
+        return _buildBookCard(_books[index]);
+      }, childCount: _books.length),
     );
   }
 
@@ -266,39 +287,33 @@ class _BookshelfPageState extends State<BookshelfPage> {
     );
   }
 
-  Widget _buildBookGrid() {
+  Widget _buildBookGridSliver(double horizontalPadding) {
     const spacing = 10.0;
+    final screenWidth = MediaQuery.sizeOf(context).width;
+    final width = (screenWidth - horizontalPadding * 2).clamp(220.0, 2400.0);
 
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        final width = constraints.maxWidth;
+    var crossAxisCount = 3;
+    if (width < 440) {
+      crossAxisCount = 2;
+    } else if (width >= 1320) {
+      crossAxisCount = 5;
+    } else if (width >= 980) {
+      crossAxisCount = 4;
+    }
 
-        var crossAxisCount = 3;
-        if (width < 440) {
-          crossAxisCount = 2;
-        } else if (width >= 1320) {
-          crossAxisCount = 5;
-        } else if (width >= 980) {
-          crossAxisCount = 4;
-        }
+    final itemWidth = (width - spacing * (crossAxisCount - 1)) / crossAxisCount;
+    final itemHeight = itemWidth * 1.4 + 46;
 
-        final itemWidth =
-            (width - spacing * (crossAxisCount - 1)) / crossAxisCount;
-        final itemHeight = itemWidth * 1.4 + 46;
-
-        return GridView.builder(
-          shrinkWrap: true,
-          physics: const NeverScrollableScrollPhysics(),
-          itemCount: _books.length,
-          gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-            crossAxisCount: crossAxisCount,
-            crossAxisSpacing: spacing,
-            mainAxisSpacing: spacing,
-            childAspectRatio: itemWidth / itemHeight,
-          ),
-          itemBuilder: (context, index) => _buildGridCard(_books[index]),
-        );
-      },
+    return SliverGrid(
+      delegate: SliverChildBuilderDelegate((context, index) {
+        return _buildGridCard(_books[index]);
+      }, childCount: _books.length),
+      gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+        crossAxisCount: crossAxisCount,
+        crossAxisSpacing: spacing,
+        mainAxisSpacing: spacing,
+        childAspectRatio: itemWidth / itemHeight,
+      ),
     );
   }
 

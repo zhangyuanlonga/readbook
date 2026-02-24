@@ -3,6 +3,8 @@ import 'dart:io';
 import 'dart:typed_data';
 
 import 'package:charset/charset.dart';
+import 'package:flutter_appread/core/errors/app_exception.dart';
+import 'package:flutter_appread/core/errors/error_codes.dart';
 import 'package:flutter_appread/domain/entities/source_definition.dart';
 import 'package:flutter_appread/domain/repositories/source_repository.dart';
 import 'package:flutter_appread/features/reader/application/chapter_content_service.dart';
@@ -480,6 +482,182 @@ $baseUrl/content, {
 
       await server.close(force: true);
     });
+
+    test(
+      'supports onclick-like chapter url input for content request',
+      () async {
+        final server = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
+        server.listen((request) async {
+          request.response
+            ..statusCode = 200
+            ..write('<div class="content">第一段</div>');
+          await request.response.close();
+        });
+
+        final baseUrl = 'http://${server.address.host}:${server.port}';
+        final repository = _FakeSourceRepository([
+          SourceDefinition(
+            id: 's_click_content',
+            name: '点击正文源',
+            baseUrl: baseUrl,
+            rules: const SourceRuleSet(contentRule: '.content@text'),
+          ),
+        ]);
+
+        final service = ChapterContentService(sourceRepository: repository);
+        final result = await service.load(
+          sourceId: 's_click_content',
+          chapterUrl: "open('/chapter-1')",
+        );
+
+        expect(result.content, contains('第一段'));
+
+        await server.close(force: true);
+      },
+    );
+
+    test(
+      'throws validation when chapter url looks like html fragment',
+      () async {
+        final repository = _FakeSourceRepository([
+          SourceDefinition(
+            id: 's_html_url',
+            name: '无效链接源',
+            baseUrl: 'https://example.com',
+            rules: const SourceRuleSet(contentRule: '.content@text'),
+          ),
+        ]);
+
+        final service = ChapterContentService(sourceRepository: repository);
+
+        expect(
+          () => service.load(
+            sourceId: 's_html_url',
+            chapterUrl: '<div class="content" id="chaptercontent">',
+          ),
+          throwsA(
+            isA<AppException>()
+                .having((error) => error.code, 'code', ErrorCode.validation)
+                .having(
+                  (error) => error.briefMessage,
+                  'message',
+                  contains('正文请求地址非法'),
+                ),
+          ),
+        );
+      },
+    );
+
+    test('supports @put/@get variable chain in content rule', () async {
+      final server = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
+      server.listen((request) async {
+        request.response
+          ..statusCode = 200
+          ..write('<div class="body">正文变量链路</div>');
+        await request.response.close();
+      });
+
+      final baseUrl = 'http://${server.address.host}:${server.port}';
+      final repository = _FakeSourceRepository([
+        SourceDefinition(
+          id: 's_put_get_content',
+          name: '@put/@get 正文源',
+          baseUrl: baseUrl,
+          rules: const SourceRuleSet(
+            contentRule: '''@put:{ct:".body@text"}
+@get:{ct}''',
+          ),
+        ),
+      ]);
+
+      final service = ChapterContentService(sourceRepository: repository);
+      final result = await service.load(
+        sourceId: 's_put_get_content',
+        chapterUrl: '$baseUrl/chapter-1',
+      );
+
+      expect(result.content, contains('正文变量链路'));
+
+      await server.close(force: true);
+    });
+
+    test('supports xpath-style content rule', () async {
+      final server = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
+      server.listen((request) async {
+        request.response
+          ..statusCode = 200
+          ..write('<div id="chapter">天地玄黄</div>');
+        await request.response.close();
+      });
+
+      final baseUrl = 'http://${server.address.host}:${server.port}';
+      final repository = _FakeSourceRepository([
+        SourceDefinition(
+          id: 's_xpath_content',
+          name: 'XPath正文源',
+          baseUrl: baseUrl,
+          rules: const SourceRuleSet(
+            contentRule: '//div[@id="chapter"]/text()',
+          ),
+        ),
+      ]);
+
+      final service = ChapterContentService(sourceRepository: repository);
+      final result = await service.load(
+        sourceId: 's_xpath_content',
+        chapterUrl: '$baseUrl/chapter-1',
+      );
+
+      expect(result.content, contains('天地玄黄'));
+
+      await server.close(force: true);
+    });
+
+    test(
+      'supports mixed content init request + @put parse variables',
+      () async {
+        final server = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
+        String? observedToken;
+
+        server.listen((request) async {
+          if (request.uri.path == '/init') {
+            request.response
+              ..statusCode = 200
+              ..write('<meta name="token" content="content-init-token" />');
+          } else {
+            observedToken = request.headers.value('x-token');
+            request.response
+              ..statusCode = 200
+              ..write('<div class="content">正文初始化</div>');
+          }
+          await request.response.close();
+        });
+
+        final baseUrl = 'http://${server.address.host}:${server.port}';
+        final repository = _FakeSourceRepository([
+          SourceDefinition(
+            id: 's_init_mixed_content',
+            name: 'Init混合正文源',
+            baseUrl: baseUrl,
+            rules: SourceRuleSet(
+              contentInitRule: '/init\n@put:{tk:"meta[name=token]@content"}',
+              contentRule: '.content@text',
+            ),
+          ),
+        ]);
+
+        final service = ChapterContentService(sourceRepository: repository);
+        final result = await service.load(
+          sourceId: 's_init_mixed_content',
+          chapterUrl: '$baseUrl/chapter-1,{"headers":{"x-token":"{{tk}}"}}',
+        );
+
+        expect(result.content, contains('正文初始化'));
+        expect(observedToken, 'content-init-token');
+
+        await server.close(force: true);
+      },
+    );
 
     test('throws when content rule is missing', () async {
       final repository = _FakeSourceRepository([
