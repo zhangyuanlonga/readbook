@@ -4220,6 +4220,12 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
         label: 'image',
         extensions: ['jpg', 'jpeg', 'png', 'webp'],
         mimeTypes: ['image/jpeg', 'image/png', 'image/webp'],
+        uniformTypeIdentifiers: [
+          'public.image',
+          'public.jpeg',
+          'public.png',
+          'org.webmproject.webp',
+        ],
       );
 
       final file = await openFile(

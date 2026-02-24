@@ -869,7 +869,11 @@ class _SourceDiagnosticsPageState extends State<SourceDiagnosticsPage> {
         suggestedName: suggestedName,
         confirmButtonText: '保存报告',
         acceptedTypeGroups: const [
-          XTypeGroup(label: 'JSON', extensions: ['json']),
+          XTypeGroup(
+            label: 'JSON',
+            extensions: ['json'],
+            uniformTypeIdentifiers: ['public.json'],
+          ),
         ],
       );
       if (saveLocation == null) {

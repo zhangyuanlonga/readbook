@@ -708,7 +708,14 @@ class _BookshelfPageState extends State<BookshelfPage> {
     try {
       final file = await openFile(
         acceptedTypeGroups: const [
-          XTypeGroup(label: 'Book Files', extensions: ['txt', 'epub']),
+          XTypeGroup(
+            label: 'Book Files',
+            extensions: ['txt', 'epub'],
+            uniformTypeIdentifiers: [
+              'public.plain-text',
+              'org.idpf.epub-container',
+            ],
+          ),
         ],
         confirmButtonText: '导入书架',
       );

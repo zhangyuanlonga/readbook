@@ -1075,7 +1075,11 @@ class _SourcePageState extends State<SourcePage> {
     try {
       file = await openFile(
         acceptedTypeGroups: const [
-          XTypeGroup(label: 'JSON', extensions: ['json', 'txt']),
+          XTypeGroup(
+            label: 'JSON',
+            extensions: ['json', 'txt'],
+            uniformTypeIdentifiers: ['public.json', 'public.plain-text'],
+          ),
         ],
         confirmButtonText: '导入书源',
       );
