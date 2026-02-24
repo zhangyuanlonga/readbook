@@ -34,7 +34,7 @@ class _SourcePageState extends State<SourcePage> {
     AppDatabase.instance,
   );
 
-  late final SearchService _searchService;
+  SearchService? _searchService;
 
   bool _isImporting = false;
   bool _isSelectionMode = false;
@@ -60,16 +60,24 @@ class _SourcePageState extends State<SourcePage> {
   int _totalImportedCount = 0;
   int _queryTicket = 0;
 
-  static const int _kPageSize = 120;
+  static const int _kPageSize = 60;
   static const String _defaultConnectivityKeyword = '凡人修仙传';
+  static const Duration _kSourceListLoadTimeout = Duration(seconds: 8);
+
+  SearchService get _searchServiceClient =>
+      _searchService ??= SearchService(sourceRepository: _repository);
 
   @override
   void initState() {
     super.initState();
-    _searchService = SearchService(sourceRepository: _repository);
     _searchController.addListener(_onSearchInputChanged);
     _scrollController.addListener(_onSourceListScroll);
-    unawaited(_reloadSourceList(reset: true));
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) {
+        return;
+      }
+      unawaited(_reloadSourceList(reset: true));
+    });
   }
 
   @override
@@ -123,19 +131,24 @@ class _SourcePageState extends State<SourcePage> {
         limit: refreshLimit,
         keyword: keyword,
       );
-      final totalFuture = AppDatabase.instance.countSourceListItems(
+      final summaryFuture = AppDatabase.instance.summarizeSourceListItems(
         keyword: keyword,
       );
-      final enabledFuture = AppDatabase.instance.countSourceListItems(
-        keyword: keyword,
-        enabledOnly: true,
-      );
-      final importedFuture = AppDatabase.instance.countSourceListItems();
+      final importedFuture =
+          keyword.isEmpty
+              ? Future<int>.value(0)
+              : AppDatabase.instance.countSourceListItems();
 
-      final page = await pageFuture;
-      final total = await totalFuture;
-      final enabled = await enabledFuture;
-      final imported = await importedFuture;
+      final results = await Future.wait<Object>([
+        pageFuture,
+        summaryFuture,
+        importedFuture,
+      ]).timeout(_kSourceListLoadTimeout);
+
+      final page = results[0] as List<SourceListItem>;
+      final summary = results[1] as SourceListCountSummary;
+      final imported =
+          keyword.isEmpty ? summary.totalCount : (results[2] as int);
 
       if (!mounted || ticket != _queryTicket) {
         return;
@@ -143,17 +156,26 @@ class _SourcePageState extends State<SourcePage> {
 
       setState(() {
         _visibleSources = page;
-        _totalCount = total;
-        _enabledCount = enabled.clamp(0, total);
+        _totalCount = summary.totalCount;
+        _enabledCount = summary.enabledCount;
         _totalImportedCount = imported;
         _nextOffset = page.length;
-        _hasMorePages = page.length < total;
+        _hasMorePages = page.length < summary.totalCount;
         _isInitialLoading = false;
         _isPageLoading = false;
         _listErrorText = null;
       });
 
       _syncSelectionWithVisibleSources();
+    } on TimeoutException {
+      if (!mounted || ticket != _queryTicket) {
+        return;
+      }
+      setState(() {
+        _isInitialLoading = false;
+        _isPageLoading = false;
+        _listErrorText = '加载书源超时，请稍后重试。';
+      });
     } catch (error) {
       if (!mounted || ticket != _queryTicket) {
         return;
@@ -179,11 +201,13 @@ class _SourcePageState extends State<SourcePage> {
     });
 
     try {
-      final page = await AppDatabase.instance.querySourceListItems(
-        offset: _nextOffset,
-        limit: _kPageSize,
-        keyword: keyword,
-      );
+      final page = await AppDatabase.instance
+          .querySourceListItems(
+            offset: _nextOffset,
+            limit: _kPageSize,
+            keyword: keyword,
+          )
+          .timeout(_kSourceListLoadTimeout);
 
       if (!mounted || ticket != _queryTicket) {
         return;
@@ -1468,7 +1492,7 @@ class _SourcePageState extends State<SourcePage> {
       }
 
       final capability = SourceCapabilityAnalyzer.fromSource(latestSource);
-      final report = await _searchService
+      final report = await _searchServiceClient
           .testSingleSource(
             source: latestSource,
             keyword: keyword,

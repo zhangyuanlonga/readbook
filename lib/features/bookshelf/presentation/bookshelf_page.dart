@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:file_selector/file_selector.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
@@ -35,14 +37,30 @@ class _BookshelfPageState extends State<BookshelfPage> {
       const <String, ReadingProgress>{};
   bool _useGridView = false;
   String? _openingBookId;
+  String? _loadErrorText;
+  int _loadTicket = 0;
 
   static const String _kLocalBookSourceId =
       LocalBookImportService.localBookSourceId;
+  static const Duration _kBookshelfLoadTimeout = Duration(seconds: 8);
+  static const Duration _kProgressLoadTimeout = Duration(seconds: 2);
+  static const int _kProgressBatchSize = 24;
 
   @override
   void initState() {
     super.initState();
-    _loadBookshelf();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) {
+        return;
+      }
+      unawaited(_loadBookshelf());
+    });
+  }
+
+  @override
+  void dispose() {
+    _loadTicket += 1;
+    super.dispose();
   }
 
   @override
@@ -130,7 +148,7 @@ class _BookshelfPageState extends State<BookshelfPage> {
   }
 
   Widget _buildBooksContentSliver(double horizontalPadding) {
-    if (_isLoading) {
+    if (_isLoading && _books.isEmpty) {
       return const SliverToBoxAdapter(
         child: Card(
           child: Padding(
@@ -148,6 +166,12 @@ class _BookshelfPageState extends State<BookshelfPage> {
             ),
           ),
         ),
+      );
+    }
+
+    if (_books.isEmpty && _loadErrorText != null) {
+      return SliverToBoxAdapter(
+        child: _buildLoadErrorCard(message: _loadErrorText!),
       );
     }
 
@@ -250,6 +274,39 @@ class _BookshelfPageState extends State<BookshelfPage> {
               style: Theme.of(context).textTheme.bodySmall?.copyWith(
                 color: colorScheme.onSurfaceVariant,
               ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildLoadErrorCard({required String message}) {
+    final colorScheme = Theme.of(context).colorScheme;
+
+    return Card(
+      color: colorScheme.errorContainer,
+      child: Padding(
+        padding: const EdgeInsets.all(14),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              '书架加载失败',
+              style: TextStyle(
+                color: colorScheme.onErrorContainer,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+            const SizedBox(height: 6),
+            Text(
+              message,
+              style: TextStyle(color: colorScheme.onErrorContainer),
+            ),
+            const SizedBox(height: 10),
+            FilledButton.tonal(
+              onPressed: () => unawaited(_loadBookshelf()),
+              child: const Text('重试'),
             ),
           ],
         ),
@@ -548,41 +605,101 @@ class _BookshelfPageState extends State<BookshelfPage> {
   }
 
   Future<void> _loadBookshelf() async {
-    setState(() {
-      _isLoading = true;
-    });
+    final ticket = ++_loadTicket;
+
+    if (mounted) {
+      setState(() {
+        _isLoading = true;
+        _loadErrorText = null;
+      });
+    }
 
     try {
-      final books = await _bookshelfService.getAll();
-      final progressEntries = await Future.wait(
-        books.map((book) async {
-          final progress = await _readerPreferencesService.loadProgress(
-            book.bookId,
-          );
-          return MapEntry(book.bookId, progress);
-        }),
+      final books = await _bookshelfService.getAll().timeout(
+        _kBookshelfLoadTimeout,
       );
 
-      final progressMap = <String, ReadingProgress>{};
-      for (final entry in progressEntries) {
-        if (entry.value != null) {
-          progressMap[entry.key] = entry.value!;
-        }
-      }
-
-      if (!mounted) {
+      if (!mounted || ticket != _loadTicket) {
         return;
       }
 
       setState(() {
         _books = books;
-        _progressByBookId = progressMap;
+        _progressByBookId = const <String, ReadingProgress>{};
+        _isLoading = false;
       });
-    } finally {
-      if (mounted) {
-        setState(() {
-          _isLoading = false;
-        });
+
+      if (books.isEmpty) {
+        return;
+      }
+
+      await _loadProgressMapInBatches(books, ticket: ticket);
+    } on TimeoutException {
+      if (!mounted || ticket != _loadTicket) {
+        return;
+      }
+      setState(() {
+        _isLoading = false;
+        _loadErrorText = '加载书架超时，请稍后重试。';
+      });
+    } catch (error) {
+      if (!mounted || ticket != _loadTicket) {
+        return;
+      }
+      setState(() {
+        _isLoading = false;
+        _loadErrorText = '加载书架失败：$error';
+      });
+    }
+  }
+
+  Future<void> _loadProgressMapInBatches(
+    List<BookshelfBook> books, {
+    required int ticket,
+  }) async {
+    final progressMap = <String, ReadingProgress>{};
+
+    for (var start = 0; start < books.length; start += _kProgressBatchSize) {
+      if (!mounted || ticket != _loadTicket) {
+        return;
+      }
+
+      final end =
+          (start + _kProgressBatchSize > books.length)
+              ? books.length
+              : start + _kProgressBatchSize;
+      final batch = books.sublist(start, end);
+
+      final entries = await Future.wait(
+        batch.map((book) async {
+          try {
+            final progress = await _readerPreferencesService
+                .loadProgress(book.bookId)
+                .timeout(_kProgressLoadTimeout);
+            return MapEntry(book.bookId, progress);
+          } catch (_) {
+            return MapEntry<String, ReadingProgress?>(book.bookId, null);
+          }
+        }),
+      );
+
+      if (!mounted || ticket != _loadTicket) {
+        return;
+      }
+
+      for (final entry in entries) {
+        final value = entry.value;
+        if (value != null) {
+          progressMap[entry.key] = value;
+        }
+      }
+
+      setState(() {
+        _progressByBookId = Map<String, ReadingProgress>.from(progressMap);
+      });
+
+      if (end < books.length) {
+        await Future<void>.delayed(Duration.zero);
       }
     }
   }

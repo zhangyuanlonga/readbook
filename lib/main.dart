@@ -3,7 +3,6 @@ import 'package:flutter_appread/app/bootstrap.dart';
 void main() {
   bootstrap();
 }
- 
 
 //  ```bash
 // # 默认：auto + release

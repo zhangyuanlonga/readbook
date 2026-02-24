@@ -1,6 +1,6 @@
 import 'dart:async';
 
-import 'package:file_selector/file_selector.dart';
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:html/parser.dart' as html_parser;
@@ -12,7 +12,6 @@ import '../../../data/datasources/local/app_database.dart';
 import '../../../data/repositories/source_repository_impl.dart';
 import '../../../domain/entities/book.dart';
 import '../../../domain/repositories/source_repository.dart';
-import '../application/search_failure_export_service.dart';
 import '../application/search_service.dart';
 
 class SearchPage extends StatefulWidget {
@@ -28,7 +27,6 @@ class _SearchPageState extends State<SearchPage> {
     AppDatabase.instance,
   );
   late final SearchService _searchService;
-  late final SearchFailureExportService _failureExportService;
 
   static final RegExp _preciseSpaceRegex = RegExp(r'[\u3000\s]+');
   static final RegExp _htmlTagRegex = RegExp(r'<[^>]+>');
@@ -72,9 +70,19 @@ class _SearchPageState extends State<SearchPage> {
     '）',
   };
   static const Duration _progressUiThrottleWindow = Duration(milliseconds: 120);
+  static const Duration _sourceCountLoadTimeout = Duration(seconds: 8);
+  static const Set<PointerDeviceKind> _dragDevices = <PointerDeviceKind>{
+    PointerDeviceKind.touch,
+    PointerDeviceKind.mouse,
+    PointerDeviceKind.trackpad,
+    PointerDeviceKind.stylus,
+    PointerDeviceKind.invertedStylus,
+    PointerDeviceKind.unknown,
+  };
+  static const int _searchResultPageSize = 40;
+  static const int _failurePreviewLimit = 2;
 
   bool _isSearching = false;
-  bool _isExportingFailures = false;
   bool _isLoadingSourceCount = false;
   SearchExecutionReport? _report;
   List<Book> _visibleBooks = const <Book>[];
@@ -84,6 +92,9 @@ class _SearchPageState extends State<SearchPage> {
   bool _isPreciseBookMatch = false;
   int _availableSourceCount = 0;
   Set<String> _selectedSourceIds = <String>{};
+  final ScrollController _pageScrollController = ScrollController();
+  int _renderedResultCount = 0;
+  bool _isAppendingResults = false;
   SearchExecutionReport? _pendingProgressReport;
   Timer? _progressUiTimer;
   DateTime? _lastProgressUiUpdateAt;
@@ -92,7 +103,7 @@ class _SearchPageState extends State<SearchPage> {
   void initState() {
     super.initState();
     _searchService = SearchService(sourceRepository: _sourceRepository);
-    _failureExportService = SearchFailureExportService();
+    _pageScrollController.addListener(_onPageScroll);
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) {
         return;
@@ -105,6 +116,8 @@ class _SearchPageState extends State<SearchPage> {
   void dispose() {
     _activeSearchToken?.cancel();
     _clearProgressUiThrottle();
+    _pageScrollController.removeListener(_onPageScroll);
+    _pageScrollController.dispose();
     _keywordController.dispose();
     super.dispose();
   }
@@ -142,37 +155,43 @@ class _SearchPageState extends State<SearchPage> {
               colors: [colorScheme.surface, colorScheme.surfaceContainerLow],
             ),
           ),
-          child: ListView(
-            padding: EdgeInsets.fromLTRB(
-              horizontal,
-              12,
-              horizontal,
-              16 + bottomSafe,
+          child: ScrollConfiguration(
+            behavior: const MaterialScrollBehavior().copyWith(
+              dragDevices: _dragDevices,
             ),
-            children: [
-              _buildSearchInputCard(),
-              const SizedBox(height: 12),
-              if (_isSearching || report != null) _buildProgressCard(),
-              if (report != null) ...[
+            child: ListView(
+              controller: _pageScrollController,
+              padding: EdgeInsets.fromLTRB(
+                horizontal,
+                12,
+                horizontal,
+                16 + bottomSafe,
+              ),
+              children: [
+                _buildSearchInputCard(),
                 const SizedBox(height: 12),
-                _buildReportSummary(report, _visibleBooks.length),
-                if (report.failures.isNotEmpty) ...[
+                if (_isSearching || report != null) _buildProgressCard(),
+                if (report != null) ...[
                   const SizedBox(height: 12),
-                  _buildFailureBanner(report),
-                ],
-                const SizedBox(height: 12),
-                _buildResultList(report, _visibleBooks),
-              ] else if (!_isSearching)
-                Card(
-                  child: Padding(
-                    padding: const EdgeInsets.all(16),
-                    child: Text(
-                      '输入关键词后开始搜索。',
-                      style: Theme.of(context).textTheme.bodyMedium,
+                  _buildReportSummary(report, _visibleBooks.length),
+                  if (report.failures.isNotEmpty) ...[
+                    const SizedBox(height: 12),
+                    _buildFailureBanner(report),
+                  ],
+                  const SizedBox(height: 12),
+                  _buildResultList(report, _visibleBooks),
+                ] else if (!_isSearching)
+                  Card(
+                    child: Padding(
+                      padding: const EdgeInsets.all(16),
+                      child: Text(
+                        '输入关键词后开始搜索。',
+                        style: Theme.of(context).textTheme.bodyMedium,
+                      ),
                     ),
                   ),
-                ),
-            ],
+              ],
+            ),
           ),
         ),
       ),
@@ -385,10 +404,9 @@ class _SearchPageState extends State<SearchPage> {
     });
 
     try {
-      final count = await AppDatabase.instance.countSourceListItems(
-        enabledOnly: true,
-        isMangaSource: isMangaMode,
-      );
+      final count = await AppDatabase.instance
+          .countSourceListItems(enabledOnly: true, isMangaSource: isMangaMode)
+          .timeout(_sourceCountLoadTimeout);
 
       if (!mounted ||
           isMangaMode != (_searchContentMode == SearchContentMode.manga)) {
@@ -440,12 +458,54 @@ class _SearchPageState extends State<SearchPage> {
     });
   }
 
+  void _onPageScroll() {
+    if (!_pageScrollController.hasClients || _isSearching) {
+      return;
+    }
+
+    final position = _pageScrollController.position;
+    if (position.pixels + 280 < position.maxScrollExtent) {
+      return;
+    }
+
+    _appendMoreRenderedResults();
+  }
+
+  void _appendMoreRenderedResults() {
+    if (_isAppendingResults) {
+      return;
+    }
+
+    final total = _visibleBooks.length;
+    if (total == 0 || _renderedResultCount >= total) {
+      return;
+    }
+
+    _isAppendingResults = true;
+    setState(() {
+      _renderedResultCount = (_renderedResultCount + _searchResultPageSize)
+          .clamp(0, total);
+    });
+    _isAppendingResults = false;
+  }
+
   void _setReport(SearchExecutionReport? report) {
     _report = report;
     _visibleBooks =
         report == null
             ? const <Book>[]
             : _applyPreciseFilter(report.books, report.keyword);
+
+    if (_visibleBooks.isEmpty) {
+      _renderedResultCount = 0;
+      return;
+    }
+
+    final target =
+        _visibleBooks.length > _searchResultPageSize
+            ? _searchResultPageSize
+            : _visibleBooks.length;
+    _renderedResultCount = target;
   }
 
   Widget _buildProgressCard() {
@@ -593,9 +653,10 @@ class _SearchPageState extends State<SearchPage> {
 
   Widget _buildFailureBanner(SearchExecutionReport report) {
     final colorScheme = Theme.of(context).colorScheme;
-    final preview = report.failures.take(3).toList(growable: false);
-    final canOpenDetail = report.failures.length > 3;
-    final canExport = !_isSearching && !_isExportingFailures;
+    final preview = report.failures
+        .take(_failurePreviewLimit)
+        .toList(growable: false);
+    final canOpenDetail = report.failures.length > _failurePreviewLimit;
 
     return Container(
       width: double.infinity,
@@ -641,26 +702,6 @@ class _SearchPageState extends State<SearchPage> {
                 ),
               ),
             ),
-          ),
-          const SizedBox(height: 8),
-          TextButton.icon(
-            style: TextButton.styleFrom(
-              foregroundColor: colorScheme.onErrorContainer,
-              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-            ),
-            onPressed:
-                canExport
-                    ? () => unawaited(_exportFailedSources(report))
-                    : null,
-            icon:
-                _isExportingFailures
-                    ? const SizedBox(
-                      width: 16,
-                      height: 16,
-                      child: CircularProgressIndicator(strokeWidth: 2),
-                    )
-                    : const Icon(Icons.download_rounded, size: 18),
-            label: Text(_isExportingFailures ? '导出中...' : '导出失败书源'),
           ),
         ],
       ),
@@ -743,10 +784,34 @@ class _SearchPageState extends State<SearchPage> {
       );
     }
 
+    final visibleCount = _renderedResultCount.clamp(0, books.length);
+    final visibleBooks = books.take(visibleCount).toList(growable: false);
+    final hasMoreResults = visibleCount < books.length;
+
     return Column(
-      children: books
-          .map((book) => _buildBookCard(book, report.sourceNames))
-          .toList(growable: false),
+      children: [
+        ...visibleBooks.map((book) => _buildBookCard(book, report.sourceNames)),
+        if (hasMoreResults)
+          Padding(
+            padding: const EdgeInsets.only(top: 4),
+            child: Column(
+              children: [
+                Text(
+                  '继续滚动或点击加载更多（$visibleCount/${books.length}）',
+                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                    color: Theme.of(context).colorScheme.onSurfaceVariant,
+                  ),
+                ),
+                const SizedBox(height: 4),
+                OutlinedButton.icon(
+                  onPressed: _appendMoreRenderedResults,
+                  icon: const Icon(Icons.expand_more_rounded),
+                  label: const Text('加载下一批'),
+                ),
+              ],
+            ),
+          ),
+      ],
     );
   }
 
@@ -1149,79 +1214,6 @@ class _SearchPageState extends State<SearchPage> {
     _showMessage('已取消搜索。');
   }
 
-  Future<void> _exportFailedSources(SearchExecutionReport report) async {
-    if (_isExportingFailures || report.failures.isEmpty) {
-      return;
-    }
-
-    setState(() {
-      _isExportingFailures = true;
-    });
-
-    try {
-      String? preferredFilePath;
-      try {
-        final saveLocation = await getSaveLocation(
-          suggestedName: _failureExportService.buildSuggestedFileName(),
-          acceptedTypeGroups: const [
-            XTypeGroup(label: 'JSON', extensions: ['json']),
-          ],
-        );
-        if (saveLocation == null) {
-          _showMessage('已取消导出。');
-          return;
-        }
-        preferredFilePath = saveLocation.path;
-      } catch (_) {
-        _showMessage('当前平台暂不支持选择保存位置，已使用默认目录导出。');
-      }
-
-      final allSources = await _sourceRepository.getAll();
-      final result = await _failureExportService.exportFailedSources(
-        report: report,
-        sources: allSources,
-        contentMode: _searchContentMode,
-        preferredFilePath: preferredFilePath,
-      );
-
-      if (!mounted) {
-        return;
-      }
-
-      final missingTips =
-          result.missingSourceCount > 0
-              ? '\n其中 ${result.missingSourceCount} 条未匹配到当前本地书源配置。'
-              : '';
-      await showDialog<void>(
-        context: context,
-        builder:
-            (context) => AlertDialog(
-              title: const Text('导出完成'),
-              content: SelectableText(
-                '已导出 ${result.failureCount} 条失败书源。\n'
-                '文件路径：\n${result.filePath}$missingTips',
-              ),
-              actions: [
-                TextButton(
-                  onPressed: () => Navigator.of(context).pop(),
-                  child: const Text('知道了'),
-                ),
-              ],
-            ),
-      );
-    } on AppException catch (error) {
-      _showMessage(error.briefMessage);
-    } catch (error) {
-      _showMessage('导出失败：$error');
-    } finally {
-      if (mounted) {
-        setState(() {
-          _isExportingFailures = false;
-        });
-      }
-    }
-  }
-
   void _showMessage(String text) {
     if (!mounted) {
       return;
@@ -1246,6 +1238,7 @@ class _SourceFilterSheet extends StatefulWidget {
 
 class _SourceFilterSheetState extends State<_SourceFilterSheet> {
   static const int _kPageSize = 80;
+  static const Duration _kPageLoadTimeout = Duration(seconds: 8);
 
   final TextEditingController _keywordController = TextEditingController();
   final ScrollController _scrollController = ScrollController();
@@ -1338,8 +1331,8 @@ class _SourceFilterSheetState extends State<_SourceFilterSheet> {
               )
               : Future<int>.value(_totalCount);
 
-      final page = await pageFuture;
-      final total = await totalFuture;
+      final page = await pageFuture.timeout(_kPageLoadTimeout);
+      final total = await totalFuture.timeout(_kPageLoadTimeout);
 
       if (!mounted || ticket != _queryTicket) {
         return;
@@ -1353,6 +1346,16 @@ class _SourceFilterSheetState extends State<_SourceFilterSheet> {
         _isInitialLoading = false;
         _isPageLoading = false;
         _errorText = null;
+      });
+    } on TimeoutException {
+      if (!mounted || ticket != _queryTicket) {
+        return;
+      }
+
+      setState(() {
+        _isInitialLoading = false;
+        _isPageLoading = false;
+        _errorText = '加载书源超时，请稍后重试。';
       });
     } catch (error) {
       if (!mounted || ticket != _queryTicket) {

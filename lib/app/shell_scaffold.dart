@@ -14,9 +14,11 @@ class ShellScaffold extends StatefulWidget {
 
 class _ShellScaffoldState extends State<ShellScaffold> {
   static const double _kSwipeVelocityThreshold = 420;
+  static const bool _kEnableMobileTabSwitchAnimation = false;
 
   late int _currentIndex;
   bool _isForward = true;
+  bool _hasTabSwitched = false;
 
   bool get _enableMobileTabSwipe {
     if (kIsWeb) {
@@ -44,12 +46,18 @@ class _ShellScaffoldState extends State<ShellScaffold> {
 
     _isForward = nextIndex > _currentIndex;
     _currentIndex = nextIndex;
+    _hasTabSwitched = true;
   }
 
   @override
   Widget build(BuildContext context) {
+    final shouldAnimateSwitch =
+        _enableMobileTabSwipe &&
+        _hasTabSwitched &&
+        _kEnableMobileTabSwitchAnimation;
+
     final switchedChild =
-        _enableMobileTabSwipe
+        shouldAnimateSwitch
             ? AnimatedSwitcher(
               duration: const Duration(milliseconds: 220),
               switchInCurve: Curves.easeOutCubic,

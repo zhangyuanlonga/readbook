@@ -95,6 +95,16 @@ class StoredLocalChapters extends Table {
   ];
 }
 
+class SourceListCountSummary {
+  const SourceListCountSummary({
+    required this.totalCount,
+    required this.enabledCount,
+  });
+
+  final int totalCount;
+  final int enabledCount;
+}
+
 class SourceListItem {
   const SourceListItem({
     required this.id,
@@ -146,6 +156,10 @@ class AppDatabase extends _$AppDatabase {
   @override
   int get schemaVersion => 3;
 
+  static const String _mangaSourceMatcherSql =
+      '(raw_json LIKE \'%"sourceType":2,%\' OR '
+      'raw_json LIKE \'%"sourceType":2}%\')';
+
   @override
   MigrationStrategy get migration {
     return MigrationStrategy(
@@ -184,10 +198,11 @@ class AppDatabase extends _$AppDatabase {
   }
 
   Stream<List<SourceListItem>> watchSourceListItems() {
-    const sql =
+    final sql =
         'SELECT id, name, base_url AS baseUrl, "group" AS sourceGroup, '
-        'enabled, comment, raw_json AS rawJson, health_status AS healthStatus, '
-        'last_checked_at AS lastCheckedAt '
+        'enabled, comment, '
+        'CASE WHEN $_mangaSourceMatcherSql THEN 2 ELSE 0 END AS sourceType, '
+        'health_status AS healthStatus, last_checked_at AS lastCheckedAt '
         'FROM sources '
         'ORDER BY sourceGroup COLLATE NOCASE ASC, name COLLATE NOCASE ASC';
 
@@ -214,8 +229,9 @@ class AppDatabase extends _$AppDatabase {
     final rows =
         await customSelect(
           'SELECT id, name, base_url AS baseUrl, "group" AS sourceGroup, '
-          'enabled, comment, raw_json AS rawJson, health_status AS healthStatus, '
-          'last_checked_at AS lastCheckedAt '
+          'enabled, comment, '
+          'CASE WHEN $_mangaSourceMatcherSql THEN 2 ELSE 0 END AS sourceType, '
+          'health_status AS healthStatus, last_checked_at AS lastCheckedAt '
           'FROM sources '
           '${filter.whereClause} '
           'ORDER BY sourceGroup COLLATE NOCASE ASC, name COLLATE NOCASE ASC '
@@ -265,6 +281,34 @@ class AppDatabase extends _$AppDatabase {
       return int.tryParse(value.trim()) ?? 0;
     }
     return 0;
+  }
+
+  Future<SourceListCountSummary> summarizeSourceListItems({
+    String keyword = '',
+    bool? isMangaSource,
+  }) async {
+    final filter = _buildSourceListSqlFilter(
+      keyword: keyword,
+      isMangaSource: isMangaSource,
+    );
+
+    final row =
+        await customSelect(
+          'SELECT COUNT(*) AS totalCount, '
+          'SUM(CASE WHEN enabled = 1 THEN 1 ELSE 0 END) AS enabledCount '
+          'FROM sources '
+          '${filter.whereClause}',
+          variables: filter.variables,
+          readsFrom: {sources},
+        ).getSingle();
+
+    final totalCount = _decodeInt(row.data['totalCount']) ?? 0;
+    final enabledCount = _decodeInt(row.data['enabledCount']) ?? 0;
+
+    return SourceListCountSummary(
+      totalCount: totalCount,
+      enabledCount: enabledCount.clamp(0, totalCount),
+    );
   }
 
   Future<SourceDefinition?> getSourceById(String sourceId) async {
@@ -815,25 +859,12 @@ class AppDatabase extends _$AppDatabase {
       group: _nullableString(row.data['sourceGroup']),
       enabled: _decodeBool(row.data['enabled']),
       comment: _nullableString(row.data['comment']),
-      sourceType: _decodeSourceType(row.data['rawJson']),
+      sourceType: _decodeInt(row.data['sourceType']) ?? 0,
       lastCheckStatus: _decodeSourceHealthStatus(
         row.data['healthStatus']?.toString(),
       ),
       lastCheckedAt: _decodeNullableDateTime(row.data['lastCheckedAt']),
     );
-  }
-
-  int _decodeSourceType(Object? value) {
-    if (value is String) {
-      final normalized = value.trim();
-      if (normalized.isEmpty) {
-        return 0;
-      }
-      final raw = _decodeMap(normalized);
-      return _decodeInt(raw['sourceType']) ?? 0;
-    }
-
-    return 0;
   }
 
   _SourceListSqlFilter _buildSourceListSqlFilter({
@@ -864,10 +895,11 @@ class AppDatabase extends _$AppDatabase {
     }
 
     if (isMangaSource != null) {
-      const mangaMatcher =
-          "(raw_json LIKE '%\"sourceType\":2,%' "
-          "OR raw_json LIKE '%\"sourceType\":2}%')";
-      clauses.add(isMangaSource ? mangaMatcher : 'NOT $mangaMatcher');
+      clauses.add(
+        isMangaSource
+            ? _mangaSourceMatcherSql
+            : 'NOT ($_mangaSourceMatcherSql)',
+      );
     }
 
     final whereClause = clauses.isEmpty ? '' : 'WHERE ${clauses.join(' AND ')}';
@@ -987,12 +1019,12 @@ QueryExecutor _openConnection() {
             : await getApplicationSupportDirectory();
 
     final databaseDir = Directory(p.join(baseDir.path, 'flutter_appread'));
-    if (!databaseDir.existsSync()) {
-      databaseDir.createSync(recursive: true);
+    if (!await databaseDir.exists()) {
+      await databaseDir.create(recursive: true);
     }
 
     final file = File(p.join(databaseDir.path, 'appread_sources.db'));
-    return NativeDatabase(file);
+    return NativeDatabase.createInBackground(file);
   });
 }
 

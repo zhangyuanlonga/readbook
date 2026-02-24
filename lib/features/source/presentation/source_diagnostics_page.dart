@@ -45,6 +45,8 @@ class _SourceDiagnosticsPageState extends State<SourceDiagnosticsPage> {
   int _availableSourceCount = 0;
   Set<String> _selectedSourceIds = <String>{};
 
+  static const Duration _kSourceCountLoadTimeout = Duration(seconds: 8);
+
   @override
   void initState() {
     super.initState();
@@ -298,9 +300,9 @@ class _SourceDiagnosticsPageState extends State<SourceDiagnosticsPage> {
     });
 
     try {
-      final count = await AppDatabase.instance.countSourceListItems(
-        enabledOnly: true,
-      );
+      final count = await AppDatabase.instance
+          .countSourceListItems(enabledOnly: true)
+          .timeout(_kSourceCountLoadTimeout);
 
       if (!mounted) {
         return;
@@ -970,6 +972,7 @@ class _DiagnosticsSourceFilterSheet extends StatefulWidget {
 class _DiagnosticsSourceFilterSheetState
     extends State<_DiagnosticsSourceFilterSheet> {
   static const int _kPageSize = 80;
+  static const Duration _kPageLoadTimeout = Duration(seconds: 8);
 
   final TextEditingController _keywordController = TextEditingController();
   final ScrollController _scrollController = ScrollController();
@@ -1058,8 +1061,8 @@ class _DiagnosticsSourceFilterSheetState
               )
               : Future<int>.value(_totalCount);
 
-      final page = await pageFuture;
-      final total = await totalFuture;
+      final page = await pageFuture.timeout(_kPageLoadTimeout);
+      final total = await totalFuture.timeout(_kPageLoadTimeout);
 
       if (!mounted || ticket != _queryTicket) {
         return;
@@ -1073,6 +1076,16 @@ class _DiagnosticsSourceFilterSheetState
         _isInitialLoading = false;
         _isPageLoading = false;
         _errorText = null;
+      });
+    } on TimeoutException {
+      if (!mounted || ticket != _queryTicket) {
+        return;
+      }
+
+      setState(() {
+        _isInitialLoading = false;
+        _isPageLoading = false;
+        _errorText = '加载书源超时，请稍后重试。';
       });
     } catch (error) {
       if (!mounted || ticket != _queryTicket) {
