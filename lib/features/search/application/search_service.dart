@@ -242,12 +242,6 @@ class SearchService {
             booksById[book.id] = book;
           }
 
-          await _persistSourceHealth(
-            source,
-            SourceHealthStatus.healthy,
-            summary: '搜索成功，命中 ${report.books.length} 条。',
-          );
-
           _logger.info(
             'Search source success',
             context: {
@@ -271,12 +265,6 @@ class SearchService {
             debugMessage: error.briefMessage,
           );
           failures.add(failure);
-
-          await _persistSourceHealth(
-            source,
-            _toHealthStatus(error),
-            summary: _toUserReadableMessage(error),
-          );
 
           _logger.warn(
             'Search source failed',
@@ -310,12 +298,6 @@ class SearchService {
               requestUrl: exception.requestUrl,
               debugMessage: rawDetail.isEmpty ? null : rawDetail,
             ),
-          );
-
-          await _persistSourceHealth(
-            source,
-            SourceHealthStatus.unavailable,
-            summary: _toUserReadableMessage(exception),
           );
 
           _logger.error(

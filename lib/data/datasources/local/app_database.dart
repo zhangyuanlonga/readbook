@@ -546,15 +546,20 @@ class AppDatabase extends _$AppDatabase {
       return value;
     }
     if (value is int) {
-      return DateTime.fromMillisecondsSinceEpoch(value);
+      return _decodeEpochDateTime(value);
     }
     if (value is num) {
-      return DateTime.fromMillisecondsSinceEpoch(value.toInt());
+      return _decodeEpochDateTime(value.toInt());
     }
     if (value is String) {
-      final parsed = int.tryParse(value.trim());
-      if (parsed != null) {
-        return DateTime.fromMillisecondsSinceEpoch(parsed);
+      final normalized = value.trim();
+      final parsedDateTime = DateTime.tryParse(normalized);
+      if (parsedDateTime != null) {
+        return parsedDateTime;
+      }
+      final parsedEpoch = int.tryParse(normalized);
+      if (parsedEpoch != null) {
+        return _decodeEpochDateTime(parsedEpoch);
       }
     }
     return DateTime.fromMillisecondsSinceEpoch(0);
@@ -995,10 +1000,10 @@ class AppDatabase extends _$AppDatabase {
       return value;
     }
     if (value is int) {
-      return DateTime.fromMillisecondsSinceEpoch(value);
+      return _decodeEpochDateTime(value);
     }
     if (value is num) {
-      return DateTime.fromMillisecondsSinceEpoch(value.toInt());
+      return _decodeEpochDateTime(value.toInt());
     }
     if (value is String) {
       final normalized = value.trim();
@@ -1011,10 +1016,24 @@ class AppDatabase extends _$AppDatabase {
       }
       final parsedEpoch = int.tryParse(normalized);
       if (parsedEpoch != null) {
-        return DateTime.fromMillisecondsSinceEpoch(parsedEpoch);
+        return _decodeEpochDateTime(parsedEpoch);
       }
     }
     return null;
+  }
+
+  DateTime _decodeEpochDateTime(int epoch) {
+    final absEpoch = epoch.abs();
+    if (absEpoch >= 1000000000000000) {
+      return DateTime.fromMicrosecondsSinceEpoch(epoch);
+    }
+    if (absEpoch >= 1000000000000) {
+      return DateTime.fromMillisecondsSinceEpoch(epoch);
+    }
+    if (absEpoch >= 1000000000) {
+      return DateTime.fromMillisecondsSinceEpoch(epoch * 1000);
+    }
+    return DateTime.fromMillisecondsSinceEpoch(epoch);
   }
 
   SourceHealthStatus _decodeSourceHealthStatus(String? rawStatus) {

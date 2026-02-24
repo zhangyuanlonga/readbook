@@ -850,7 +850,7 @@ class _SourcePageState extends State<SourcePage> {
   }
 
   Widget _buildSourceCard(SourceListItem source) {
-    final checkedAtText = _formatDateTime(source.lastCheckedAt);
+    final checkedAtText = _buildConnectivityTestTimeText(source);
     final isTesting = _testingSourceIds.contains(source.id);
     final isChangingEnabled = _changingEnabledSourceIds.contains(source.id);
     final isDeleting = _deletingSourceIds.contains(source.id);
@@ -922,7 +922,7 @@ class _SourcePageState extends State<SourcePage> {
                         ),
                         const SizedBox(width: 8),
                         Text(
-                          '上次: $checkedAtText',
+                          '测试时间: $checkedAtText',
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
                           style: Theme.of(
@@ -1887,6 +1887,15 @@ class _SourcePageState extends State<SourcePage> {
       ErrorCode.validation => '规则为空或配置不完整',
       ErrorCode.unknownSource || ErrorCode.unknown => '未知失败',
     };
+  }
+
+  String _buildConnectivityTestTimeText(SourceListItem source) {
+    if (source.lastCheckStatus == SourceHealthStatus.unknown ||
+        source.lastCheckedAt == null) {
+      return '未测试';
+    }
+
+    return _formatDateTime(source.lastCheckedAt);
   }
 
   String _formatDateTime(DateTime? time) {

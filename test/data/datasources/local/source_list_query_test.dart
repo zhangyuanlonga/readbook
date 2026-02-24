@@ -88,5 +88,36 @@ void main() {
       expect(manga.first.sourceType, 2);
       expect(manga.first.isMangaSource, isTrue);
     });
+
+    test(
+      'decodes lastCheckedAt from source list query with correct epoch unit',
+      () async {
+        final checkedAt = DateTime.parse('2026-02-24T08:30:00.000Z');
+
+        await database.upsertSources([
+          SourceDefinition(
+            id: 's_checked',
+            name: '测试时间源',
+            baseUrl: 'https://checked.example.com',
+            enabled: true,
+            lastCheckStatus: SourceHealthStatus.healthy,
+            lastCheckedAt: checkedAt,
+            rules: const SourceRuleSet(searchRule: '/search?key={{key}}'),
+          ),
+        ]);
+
+        final rows = await database.querySourceListItems(limit: 1, offset: 0);
+        expect(rows, hasLength(1));
+        expect(rows.first.lastCheckedAt, isNotNull);
+        expect(rows.first.lastCheckedAt!.year, greaterThan(2020));
+
+        final deltaSeconds =
+            rows.first.lastCheckedAt!
+                .difference(checkedAt.toLocal())
+                .inSeconds
+                .abs();
+        expect(deltaSeconds, lessThanOrEqualTo(1));
+      },
+    );
   });
 }
