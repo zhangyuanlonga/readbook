@@ -67,6 +67,8 @@ if [[ ! -d "${APP_PATH}" ]]; then
   exit 1
 fi
 
+echo "==> iOS intermediate output (.app): ${APP_PATH}"
+
 TIMESTAMP="$(date +%Y%m%d-%H%M%S)"
 IPA_PATH="${OUTPUT_DIR}/${APP_NAME}-nocodesign-${BUILD_MODE}-${TIMESTAMP}.ipa"
 TMP_DIR="${PROJECT_ROOT}/build/ios/ipa/.tmp-${TIMESTAMP}"
@@ -76,6 +78,7 @@ rm -rf "${TMP_DIR}"
 mkdir -p "${TMP_DIR}/Payload"
 cp -R "${APP_PATH}" "${TMP_DIR}/Payload/"
 
+echo "==> Packaging unsigned IPA from Payload/${APP_NAME}.app"
 (
   cd "${TMP_DIR}"
   zip -qry "${IPA_PATH}" Payload
@@ -84,7 +87,8 @@ cp -R "${APP_PATH}" "${TMP_DIR}/Payload/"
 rm -rf "${TMP_DIR}"
 
 echo ""
-echo "Done. Unsigned IPA generated:"
+echo "Done. Unsigned IPA generated (final artifact):"
 echo "${IPA_PATH}"
 echo ""
+echo "Note: Flutter always produces a .app first, then this script packages it into .ipa."
 echo "Next step: import this IPA into your signing tool and re-sign/install on device."

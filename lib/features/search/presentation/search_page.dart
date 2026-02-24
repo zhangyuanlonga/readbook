@@ -260,13 +260,27 @@ class _SearchPageState extends State<SearchPage> {
               child: TextField(
                 controller: _keywordController,
                 textInputAction: TextInputAction.search,
+                textAlignVertical: TextAlignVertical.center,
+                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                  fontSize: 14,
+                  height: 1.2,
+                ),
                 onChanged: (_) => setState(() {}),
                 onSubmitted: (_) => _runSearch(),
                 decoration: InputDecoration(
                   hintText: hintText,
+                  hintStyle: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                    fontSize: 14,
+                    height: 1.2,
+                    color: colorScheme.onSurfaceVariant,
+                  ),
                   border: InputBorder.none,
                   filled: false,
-                  prefixIcon: const Icon(Icons.search),
+                  prefixIcon: const Icon(Icons.search_rounded, size: 20),
+                  prefixIconConstraints: const BoxConstraints(
+                    minWidth: 38,
+                    minHeight: 38,
+                  ),
                   suffixIcon:
                       _keywordController.text.isEmpty
                           ? null
@@ -280,8 +294,8 @@ class _SearchPageState extends State<SearchPage> {
                           ),
                   isDense: true,
                   contentPadding: const EdgeInsets.symmetric(
-                    horizontal: 12,
-                    vertical: 8,
+                    horizontal: 8,
+                    vertical: 9,
                   ),
                 ),
               ),

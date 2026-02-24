@@ -311,6 +311,7 @@ for platform in "${PLATFORMS[@]-}"; do
         "${SCRIPT_DIR}/build_android_artifacts.sh" "${ANDROID_TARGET}" "${BUILD_MODE}"
       ;;
     ios)
+      echo "==> [ios] tip: Flutter first outputs .app, then the script packages final .ipa"
       if [[ "${BUILD_MODE}" == "debug" ]]; then
         echo "==> [ios] skip (unsupported build mode: debug)"
         SKIPPED_PLATFORMS+=("ios")

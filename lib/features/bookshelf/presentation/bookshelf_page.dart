@@ -7,6 +7,7 @@ import 'package:go_router/go_router.dart';
 import '../../../app/layout/app_spacing.dart';
 import '../../../core/errors/app_exception.dart';
 
+import '../../../data/datasources/local/app_database.dart';
 import '../../../domain/entities/bookshelf_book.dart';
 import '../../../domain/entities/reading_progress.dart';
 import '../application/bookshelf_service.dart';
@@ -35,6 +36,7 @@ class _BookshelfPageState extends State<BookshelfPage> {
   List<BookshelfBook> _books = const <BookshelfBook>[];
   Map<String, ReadingProgress> _progressByBookId =
       const <String, ReadingProgress>{};
+  Map<String, String> _latestCachedChapterByBookId = const <String, String>{};
   bool _useGridView = false;
   String? _openingBookId;
   String? _loadErrorText;
@@ -577,10 +579,14 @@ class _BookshelfPageState extends State<BookshelfPage> {
     final titleText = _toSingleLineText(book.title);
     final authorText = _toSingleLineText(book.author ?? '');
     final chapterText = _toSingleLineText(progress?.chapterTitle ?? '');
-    final sourceText = _resolveSourceText(book.sourceId);
-    final secondaryLine = chapterText.isNotEmpty ? '上次: $chapterText' : '未开始阅读';
-    final hasProgress = chapterText.isNotEmpty;
-    final isLocalBook = book.sourceId == _kLocalBookSourceId;
+    final latestChapterText = _toSingleLineText(
+      _latestCachedChapterByBookId[book.bookId] ?? '',
+    );
+    final lastReadLine = chapterText.isNotEmpty ? '上次: $chapterText' : '上次: 未开始阅读';
+    final latestLine =
+        latestChapterText.isNotEmpty
+            ? '最新: $latestChapterText'
+            : '最新: 暂无缓存章节';
 
     return Card(
       margin: const EdgeInsets.only(bottom: 6),
@@ -616,7 +622,7 @@ class _BookshelfPageState extends State<BookshelfPage> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Row(
-                      crossAxisAlignment: CrossAxisAlignment.start,
+                      crossAxisAlignment: CrossAxisAlignment.center,
                       children: [
                         Expanded(
                           child: Text(
@@ -627,14 +633,26 @@ class _BookshelfPageState extends State<BookshelfPage> {
                             overflow: TextOverflow.ellipsis,
                           ),
                         ),
-                        const SizedBox(width: 8),
-                        _buildListStatusChip(
-                          hasProgress: hasProgress,
-                          isLocalBook: isLocalBook,
-                        ),
+                        if (!_isSelectionMode) ...[
+                          const SizedBox(width: 8),
+                          SizedBox(
+                            width: 18,
+                            height: 18,
+                            child:
+                                isOpening
+                                    ? const CircularProgressIndicator(
+                                      strokeWidth: 2,
+                                    )
+                                    : Icon(
+                                      Icons.chevron_right_rounded,
+                                      size: 20,
+                                      color: colorScheme.onSurfaceVariant,
+                                    ),
+                          ),
+                        ],
                       ],
                     ),
-                    const SizedBox(height: 3),
+                    const SizedBox(height: 5),
                     Text(
                       authorText.isNotEmpty ? '作者: $authorText' : '作者: 未知',
                       maxLines: 1,
@@ -643,119 +661,30 @@ class _BookshelfPageState extends State<BookshelfPage> {
                         color: colorScheme.onSurfaceVariant,
                       ),
                     ),
-                    const SizedBox(height: 2),
+                    const SizedBox(height: 4),
                     Text(
-                      secondaryLine,
+                      lastReadLine,
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                       style: Theme.of(context).textTheme.bodySmall,
                     ),
                     const SizedBox(height: 4),
-                    Row(
-                      children: [
-                        Container(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 7,
-                            vertical: 2,
-                          ),
-                          decoration: BoxDecoration(
-                            color: colorScheme.surfaceContainerHigh,
-                            borderRadius: BorderRadius.circular(999),
-                          ),
-                          child: Text(
-                            sourceText,
-                            style: Theme.of(context).textTheme.labelSmall
-                                ?.copyWith(
-                                  color: colorScheme.onSurfaceVariant,
-                                  fontWeight: FontWeight.w600,
-                                ),
-                          ),
-                        ),
-                        const Spacer(),
-                        Text(
-                          _formatDateTime(book.addedAt),
-                          style: Theme.of(context).textTheme.labelSmall
-                              ?.copyWith(color: colorScheme.onSurfaceVariant),
-                        ),
-                      ],
+                    Text(
+                      latestLine,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                        color: colorScheme.onSurfaceVariant,
+                      ),
                     ),
                   ],
                 ),
               ),
-              if (!_isSelectionMode)
-                Padding(
-                  padding: const EdgeInsets.only(left: 8, top: 2),
-                  child:
-                      isOpening
-                          ? const SizedBox(
-                            width: 16,
-                            height: 16,
-                            child: CircularProgressIndicator(strokeWidth: 2),
-                          )
-                          : Icon(
-                            Icons.chevron_right_rounded,
-                            color: colorScheme.onSurfaceVariant,
-                          ),
-                ),
             ],
           ),
         ),
       ),
     );
-  }
-
-  Widget _buildListStatusChip({
-    required bool hasProgress,
-    required bool isLocalBook,
-  }) {
-    final colorScheme = Theme.of(context).colorScheme;
-
-    final String label;
-    final Color background;
-    final Color foreground;
-    final BorderSide? border;
-
-    if (hasProgress) {
-      label = '在读';
-      background = colorScheme.primaryContainer;
-      foreground = colorScheme.onPrimaryContainer;
-      border = null;
-    } else if (isLocalBook) {
-      label = '本地';
-      background = colorScheme.tertiaryContainer;
-      foreground = colorScheme.onTertiaryContainer;
-      border = null;
-    } else {
-      label = '未读';
-      background = colorScheme.surfaceContainerHighest;
-      foreground = colorScheme.onSurfaceVariant;
-      border = BorderSide(
-        color: colorScheme.outlineVariant.withValues(alpha: 0.75),
-      );
-    }
-
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-      decoration: BoxDecoration(
-        color: background,
-        borderRadius: BorderRadius.circular(999),
-        border: border == null ? null : Border.fromBorderSide(border),
-      ),
-      child: Text(
-        label,
-        style: Theme.of(context).textTheme.labelSmall?.copyWith(
-          color: foreground,
-          fontWeight: FontWeight.w700,
-        ),
-      ),
-    );
-  }
-
-  String _resolveSourceText(String sourceId) {
-    if (sourceId == _kLocalBookSourceId) {
-      return '本地导入';
-    }
-    return '网络书源';
   }
 
   String _bookKey(BookshelfBook book) {
@@ -910,15 +839,6 @@ class _BookshelfPageState extends State<BookshelfPage> {
     return text.replaceAll(RegExp(r'\s+'), ' ').trim();
   }
 
-  String _formatDateTime(DateTime value) {
-    final local = value.toLocal();
-    final mm = local.month.toString().padLeft(2, '0');
-    final dd = local.day.toString().padLeft(2, '0');
-    final hh = local.hour.toString().padLeft(2, '0');
-    final min = local.minute.toString().padLeft(2, '0');
-    return '${local.year}-$mm-$dd $hh:$min';
-  }
-
   Widget _buildCover(
     String? coverUrl, {
     double width = 78,
@@ -978,6 +898,7 @@ class _BookshelfPageState extends State<BookshelfPage> {
       setState(() {
         _books = books;
         _progressByBookId = const <String, ReadingProgress>{};
+        _latestCachedChapterByBookId = const <String, String>{};
         _isLoading = false;
       });
       _syncSelectionWithBooks();
@@ -986,6 +907,7 @@ class _BookshelfPageState extends State<BookshelfPage> {
         return;
       }
 
+      await _loadLatestCachedChapterMap(books, ticket: ticket);
       await _loadProgressMapInBatches(books, ticket: ticket);
     } on TimeoutException {
       if (!mounted || ticket != _loadTicket) {
@@ -1004,6 +926,32 @@ class _BookshelfPageState extends State<BookshelfPage> {
         _loadErrorText = '加载书架失败：$error';
       });
     }
+  }
+
+  Future<void> _loadLatestCachedChapterMap(
+    List<BookshelfBook> books, {
+    required int ticket,
+  }) async {
+    final ids = books
+        .map((book) => book.bookId.trim())
+        .where((bookId) => bookId.isNotEmpty)
+        .toSet()
+        .toList(growable: false);
+    if (ids.isEmpty) {
+      return;
+    }
+
+    final latestMap = await AppDatabase.instance.getLatestCachedChapterTitles(
+      ids,
+    );
+
+    if (!mounted || ticket != _loadTicket) {
+      return;
+    }
+
+    setState(() {
+      _latestCachedChapterByBookId = latestMap;
+    });
   }
 
   Future<void> _loadProgressMapInBatches(

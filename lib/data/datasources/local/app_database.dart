@@ -456,6 +456,46 @@ class AppDatabase extends _$AppDatabase {
     return query.watchSingle().map((row) => row.read(countExpression) ?? 0);
   }
 
+  Future<Map<String, String>> getLatestCachedChapterTitles(
+    List<String> bookIds,
+  ) async {
+    final normalizedIds = bookIds
+        .map((bookId) => bookId.trim())
+        .where((bookId) => bookId.isNotEmpty)
+        .toSet()
+        .toList(growable: false);
+    if (normalizedIds.isEmpty) {
+      return <String, String>{};
+    }
+
+    final rows = await (select(chapterCaches)
+          ..where((table) => table.bookId.isIn(normalizedIds))
+          ..orderBy([
+            (table) => OrderingTerm.desc(table.chapterIndex),
+            (table) => OrderingTerm.desc(table.updatedAt),
+          ]))
+        .get();
+
+    final latestByBookId = <String, String>{};
+    for (final row in rows) {
+      if (latestByBookId.containsKey(row.bookId)) {
+        continue;
+      }
+
+      final title = row.chapterTitle?.trim() ?? '';
+      if (title.isEmpty) {
+        continue;
+      }
+
+      latestByBookId[row.bookId] = title;
+      if (latestByBookId.length >= normalizedIds.length) {
+        break;
+      }
+    }
+
+    return latestByBookId;
+  }
+
   Future<Set<String>> getCachedChapterCacheKeysForBook(String bookId) async {
     final normalized = bookId.trim();
     if (normalized.isEmpty) {
