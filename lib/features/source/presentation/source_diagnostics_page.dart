@@ -38,6 +38,7 @@ class _SourceDiagnosticsPageState extends State<SourceDiagnosticsPage> {
 
   bool _isRunning = false;
   bool _isExporting = false;
+  bool _isPurgingInvalidSources = false;
   bool _isLoadingSourceCount = false;
   SourceBatchDiagnosticToken? _activeToken;
   SourceBatchDiagnosticProgress? _progress;
@@ -46,6 +47,10 @@ class _SourceDiagnosticsPageState extends State<SourceDiagnosticsPage> {
   Set<String> _selectedSourceIds = <String>{};
 
   static const Duration _kSourceCountLoadTimeout = Duration(seconds: 8);
+  static final RegExp _kHardInvalidStatusPattern = RegExp(
+    r'(?:(?:状态码)|(?:status\s*code)|(?:statuscode))\s*[:：=]?\s*(404|410)\b',
+    caseSensitive: false,
+  );
 
   @override
   void initState() {
@@ -73,8 +78,26 @@ class _SourceDiagnosticsPageState extends State<SourceDiagnosticsPage> {
         title: const Text('批量诊断'),
         actions: [
           IconButton(
+            tooltip: '清理失效源（404/410）',
+            onPressed:
+                (_isRunning || _isExporting || _isPurgingInvalidSources)
+                    ? null
+                    : () => unawaited(_purgeHardInvalidSources()),
+            icon:
+                _isPurgingInvalidSources
+                    ? const SizedBox(
+                      width: 18,
+                      height: 18,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    )
+                    : const Icon(Icons.delete_sweep_outlined),
+          ),
+          IconButton(
             tooltip: '导出报告',
-            onPressed: _isExporting ? null : _handleExportTap,
+            onPressed:
+                (_isExporting || _isPurgingInvalidSources)
+                    ? null
+                    : _handleExportTap,
             icon:
                 _isExporting
                     ? const SizedBox(
@@ -542,6 +565,143 @@ class _SourceDiagnosticsPageState extends State<SourceDiagnosticsPage> {
 
     _activeToken?.cancel();
     _showMessage('正在取消诊断，已完成结果可先导出。');
+  }
+
+  Future<void> _purgeHardInvalidSources() async {
+    if (_isPurgingInvalidSources) {
+      return;
+    }
+
+    final reportsSnapshot = List<SourceDiagnosticReport>.from(_reports);
+    if (reportsSnapshot.isEmpty) {
+      _showMessage('暂无诊断结果，无法清理失效书源。');
+      return;
+    }
+
+    final candidates = _collectHardInvalidSourceCandidates(reportsSnapshot);
+    if (candidates.isEmpty) {
+      _showMessage('当前结果中没有可清理的失效书源（HTTP 404/410）。');
+      return;
+    }
+
+    final previewNames = candidates
+        .take(5)
+        .map((item) => item.sourceName.trim())
+        .where((item) => item.isNotEmpty)
+        .toList(growable: false);
+    final previewText =
+        previewNames.isEmpty
+            ? ''
+            : '\n示例：${previewNames.join('、')}${candidates.length > previewNames.length ? ' 等' : ''}';
+
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) {
+        return AlertDialog(
+          title: const Text('清理失效书源'),
+          content: Text(
+            '仅清理本次诊断中命中 HTTP 404/410 的书源。\n\n'
+            '预计清理 ${candidates.length} 个书源。$previewText\n\n'
+            '该操作不可恢复，建议先导出报告。',
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(false),
+              child: const Text('取消'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.of(context).pop(true),
+              child: const Text('确认清理'),
+            ),
+          ],
+        );
+      },
+    );
+
+    if (confirmed != true) {
+      return;
+    }
+
+    setState(() {
+      _isPurgingInvalidSources = true;
+    });
+
+    try {
+      final ids = candidates
+          .map((item) => item.sourceId)
+          .where((id) => id.trim().isNotEmpty)
+          .toSet()
+          .toList(growable: false);
+      if (ids.isEmpty) {
+        _showMessage('无有效书源可清理。');
+        return;
+      }
+
+      await _sourceRepository.deleteByIds(ids);
+
+      if (!mounted) {
+        return;
+      }
+
+      final idSet = ids.toSet();
+      setState(() {
+        _reports = reportsSnapshot
+            .where((report) => !idSet.contains(report.sourceId))
+            .toList(growable: false);
+        _selectedSourceIds =
+            _selectedSourceIds.where((id) => !idSet.contains(id)).toSet();
+        _progress = null;
+      });
+
+      await _refreshSourceCount();
+      _showMessage('已清理失效书源 ${ids.length} 个（HTTP 404/410）。');
+    } catch (error) {
+      _showMessage('清理失效书源失败：$error');
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isPurgingInvalidSources = false;
+        });
+      }
+    }
+  }
+
+  List<_HardInvalidSourceCandidate> _collectHardInvalidSourceCandidates(
+    List<SourceDiagnosticReport> reports,
+  ) {
+    final byId = <String, _HardInvalidSourceCandidate>{};
+
+    for (final report in reports) {
+      final isHardInvalid = report.failedStages.any(_isHardInvalidStageFailure);
+      if (!isHardInvalid) {
+        continue;
+      }
+
+      final sourceId = report.sourceId.trim();
+      if (sourceId.isEmpty) {
+        continue;
+      }
+
+      byId[sourceId] = _HardInvalidSourceCandidate(
+        sourceId: sourceId,
+        sourceName: report.sourceName,
+      );
+    }
+
+    return byId.values.toList(growable: false);
+  }
+
+  bool _isHardInvalidStageFailure(SourceDiagnosticStageResult stage) {
+    if (stage.success || stage.code != ErrorCode.network) {
+      return false;
+    }
+
+    final message = stage.message?.trim() ?? '';
+    if (message.isEmpty) {
+      return false;
+    }
+
+    return _kHardInvalidStatusPattern.hasMatch(message);
   }
 
   Future<void> _handleExportTap() async {
@@ -1262,6 +1422,16 @@ class _DiagnosticsSourceFilterSheetState
       },
     );
   }
+}
+
+class _HardInvalidSourceCandidate {
+  const _HardInvalidSourceCandidate({
+    required this.sourceId,
+    required this.sourceName,
+  });
+
+  final String sourceId;
+  final String sourceName;
 }
 
 class _FailureGroupAccumulator {
