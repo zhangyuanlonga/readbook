@@ -6,6 +6,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../data/datasources/local/app_database.dart';
+import 'layout/app_layout.dart';
 import 'router.dart';
 import 'theme/app_dynamic_color_provider.dart';
 import 'theme/app_theme.dart';
@@ -54,8 +55,16 @@ class App extends ConsumerWidget {
           themeAnimationCurve: Curves.easeOutCubic,
           routerConfig: appRouter,
           builder: (context, child) {
-            return _SystemUiOverlayWrapper(
-              child: child ?? const SizedBox.shrink(),
+            final mediaQuery = MediaQuery.of(context);
+            final textScale = AppLayout.clampedTextScaleFactor(context);
+
+            return MediaQuery(
+              data: mediaQuery.copyWith(
+                textScaler: TextScaler.linear(textScale),
+              ),
+              child: _SystemUiOverlayWrapper(
+                child: child ?? const SizedBox.shrink(),
+              ),
             );
           },
         );

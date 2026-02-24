@@ -17,6 +17,22 @@ class AppLayout {
     return screenWidth(context) < 360;
   }
 
+  static double shortestSide(BuildContext context) {
+    final size = MediaQuery.sizeOf(context);
+    return math.min(size.width, size.height);
+  }
+
+  static bool isPhone(BuildContext context) {
+    return shortestSide(context) < 600;
+  }
+
+  static double clampedTextScaleFactor(BuildContext context) {
+    final raw = MediaQuery.textScalerOf(context).scale(1);
+    final minScale = isPhone(context) ? 0.92 : 0.94;
+    final maxScale = isPhone(context) ? 1.06 : 1.12;
+    return raw.clamp(minScale, maxScale).toDouble();
+  }
+
   static EdgeInsets viewPadding(BuildContext context) {
     return MediaQuery.viewPaddingOf(context);
   }

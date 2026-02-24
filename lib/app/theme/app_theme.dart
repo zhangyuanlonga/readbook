@@ -11,6 +11,7 @@ class AppTheme {
       useMaterial3: true,
       colorScheme: colorScheme,
       scaffoldBackgroundColor: colorScheme.surface,
+      visualDensity: const VisualDensity(horizontal: -0.2, vertical: -0.2),
       appBarTheme: AppBarTheme(
         centerTitle: false,
         elevation: 0,
@@ -33,14 +34,14 @@ class AppTheme {
       ),
       filledButtonTheme: FilledButtonThemeData(
         style: FilledButton.styleFrom(
-          minimumSize: const Size(0, 42),
+          minimumSize: const Size(0, 40),
           shape: const StadiumBorder(),
           textStyle: const TextStyle(fontWeight: FontWeight.w600),
         ),
       ),
       outlinedButtonTheme: OutlinedButtonThemeData(
         style: OutlinedButton.styleFrom(
-          minimumSize: const Size(0, 42),
+          minimumSize: const Size(0, 40),
           shape: const StadiumBorder(),
           side: BorderSide(color: colorScheme.outline),
           textStyle: const TextStyle(fontWeight: FontWeight.w600),

@@ -213,7 +213,7 @@ class _SearchPageState extends State<SearchPage> {
 
     return Card(
       child: Padding(
-        padding: const EdgeInsets.all(14),
+        padding: const EdgeInsets.all(10),
         child: Column(
           children: [
             Align(
@@ -223,12 +223,12 @@ class _SearchPageState extends State<SearchPage> {
                   ButtonSegment<SearchContentMode>(
                     value: SearchContentMode.novel,
                     icon: Icon(Icons.menu_book_rounded),
-                    label: Text('搜索小说'),
+                    label: Text('小说'),
                   ),
                   ButtonSegment<SearchContentMode>(
                     value: SearchContentMode.manga,
                     icon: Icon(Icons.auto_stories_rounded),
-                    label: Text('搜索漫画'),
+                    label: Text('漫画'),
                   ),
                 ],
                 selected: <SearchContentMode>{_searchContentMode},
@@ -251,10 +251,10 @@ class _SearchPageState extends State<SearchPage> {
                         },
               ),
             ),
-            const SizedBox(height: 10),
+            const SizedBox(height: 8),
             Container(
               decoration: BoxDecoration(
-                borderRadius: BorderRadius.circular(14),
+                borderRadius: BorderRadius.circular(12),
                 border: Border.all(color: colorScheme.outline),
               ),
               child: TextField(
@@ -278,18 +278,19 @@ class _SearchPageState extends State<SearchPage> {
                             },
                             icon: const Icon(Icons.close_rounded),
                           ),
+                  isDense: true,
                   contentPadding: const EdgeInsets.symmetric(
-                    horizontal: 14,
-                    vertical: 10,
+                    horizontal: 12,
+                    vertical: 8,
                   ),
                 ),
               ),
             ),
-            const SizedBox(height: 10),
+            const SizedBox(height: 8),
             _buildSourceFilterRow(),
             const SizedBox(height: 8),
             _buildPreciseMatchRow(),
-            const SizedBox(height: 10),
+            const SizedBox(height: 8),
             Row(
               children: [
                 Expanded(
@@ -334,7 +335,7 @@ class _SearchPageState extends State<SearchPage> {
             : '书源: 指定 $selectedCount / $_availableSourceCount';
 
     return Container(
-      padding: const EdgeInsets.fromLTRB(10, 8, 8, 8),
+      padding: const EdgeInsets.fromLTRB(10, 6, 6, 6),
       decoration: BoxDecoration(
         color: Theme.of(context).colorScheme.surfaceContainerLow,
         borderRadius: BorderRadius.circular(12),
@@ -379,6 +380,10 @@ class _SearchPageState extends State<SearchPage> {
                 icon: const Icon(Icons.clear_rounded, size: 18),
               ),
             TextButton.icon(
+              style: TextButton.styleFrom(
+                visualDensity: VisualDensity.compact,
+                tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+              ),
               onPressed:
                   (_isSearching || _availableSourceCount == 0)
                       ? null
@@ -523,7 +528,7 @@ class _SearchPageState extends State<SearchPage> {
     return Card(
       color: colorScheme.surfaceContainerHigh,
       child: Padding(
-        padding: const EdgeInsets.all(14),
+        padding: const EdgeInsets.all(12),
         child: Column(
           children: [
             Row(
@@ -538,7 +543,7 @@ class _SearchPageState extends State<SearchPage> {
                 ),
               ],
             ),
-            const SizedBox(height: 8),
+            const SizedBox(height: 6),
             LinearProgressIndicator(
               value: progressValue,
               minHeight: 6,
@@ -581,19 +586,10 @@ class _SearchPageState extends State<SearchPage> {
             ),
             const SizedBox(width: 2),
             Text(
-              '精准书名匹配',
+              '精准书名',
               style: Theme.of(
                 context,
               ).textTheme.bodySmall?.copyWith(fontWeight: FontWeight.w600),
-            ),
-            const SizedBox(width: 6),
-            Expanded(
-              child: Text(
-                '仅展示与关键词同名，或以关键词开头且后接分隔符的结果。',
-                style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                  color: Theme.of(context).colorScheme.onSurfaceVariant,
-                ),
-              ),
             ),
           ],
         ),
@@ -636,14 +632,14 @@ class _SearchPageState extends State<SearchPage> {
     final colorScheme = Theme.of(context).colorScheme;
 
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
       decoration: BoxDecoration(
         color: colorScheme.secondaryContainer,
         borderRadius: BorderRadius.circular(999),
       ),
       child: Text(
         '$label: $value',
-        style: Theme.of(context).textTheme.labelMedium?.copyWith(
+        style: Theme.of(context).textTheme.labelSmall?.copyWith(
           color: colorScheme.onSecondaryContainer,
           fontWeight: FontWeight.w600,
         ),
