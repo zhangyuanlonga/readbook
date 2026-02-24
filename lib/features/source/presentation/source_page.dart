@@ -43,6 +43,7 @@ class _SourcePageState extends State<SourcePage> {
   final Set<String> _changingEnabledSourceIds = <String>{};
   final Set<String> _deletingSourceIds = <String>{};
   final Set<String> _selectedSourceIds = <String>{};
+  final Set<String> _expandedCommentSourceIds = <String>{};
   List<SourceListItem> _visibleSources = const <SourceListItem>[];
   final TextEditingController _searchController = TextEditingController();
   final FocusNode _searchFocusNode = FocusNode();
@@ -58,6 +59,8 @@ class _SourcePageState extends State<SourcePage> {
   int _totalCount = 0;
   int _enabledCount = 0;
   int _totalImportedCount = 0;
+  int _novelCount = 0;
+  int _mangaCount = 0;
   int _queryTicket = 0;
 
   static const int _kPageSize = 60;
@@ -134,21 +137,21 @@ class _SourcePageState extends State<SourcePage> {
       final summaryFuture = AppDatabase.instance.summarizeSourceListItems(
         keyword: keyword,
       );
-      final importedFuture =
+      final overviewSummaryFuture =
           keyword.isEmpty
-              ? Future<int>.value(0)
-              : AppDatabase.instance.countSourceListItems();
+              ? Future<SourceListCountSummary?>.value(null)
+              : AppDatabase.instance.summarizeSourceListItems();
 
-      final results = await Future.wait<Object>([
+      final results = await Future.wait<Object?>([
         pageFuture,
         summaryFuture,
-        importedFuture,
+        overviewSummaryFuture,
       ]).timeout(_kSourceListLoadTimeout);
 
       final page = results[0] as List<SourceListItem>;
       final summary = results[1] as SourceListCountSummary;
-      final imported =
-          keyword.isEmpty ? summary.totalCount : (results[2] as int);
+      final overviewSummary = results[2] as SourceListCountSummary?;
+      final overview = overviewSummary ?? summary;
 
       if (!mounted || ticket != _queryTicket) {
         return;
@@ -157,8 +160,10 @@ class _SourcePageState extends State<SourcePage> {
       setState(() {
         _visibleSources = page;
         _totalCount = summary.totalCount;
-        _enabledCount = summary.enabledCount;
-        _totalImportedCount = imported;
+        _enabledCount = overview.enabledCount;
+        _totalImportedCount = overview.totalCount;
+        _novelCount = overview.novelCount;
+        _mangaCount = overview.mangaCount;
         _nextOffset = page.length;
         _hasMorePages = page.length < summary.totalCount;
         _isInitialLoading = false;
@@ -167,6 +172,7 @@ class _SourcePageState extends State<SourcePage> {
       });
 
       _syncSelectionWithVisibleSources();
+      _syncExpandedCommentsWithVisibleSources();
     } on TimeoutException {
       if (!mounted || ticket != _queryTicket) {
         return;
@@ -257,6 +263,28 @@ class _SourcePageState extends State<SourcePage> {
     });
   }
 
+  void _syncExpandedCommentsWithVisibleSources() {
+    if (_expandedCommentSourceIds.isEmpty) {
+      return;
+    }
+
+    final visibleIds = _visibleSources.map((item) => item.id).toSet();
+    final nextExpanded =
+        _expandedCommentSourceIds
+            .where((id) => visibleIds.contains(id))
+            .toSet();
+
+    if (nextExpanded.length == _expandedCommentSourceIds.length || !mounted) {
+      return;
+    }
+
+    setState(() {
+      _expandedCommentSourceIds
+        ..clear()
+        ..addAll(nextExpanded);
+    });
+  }
+
   @override
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
@@ -278,30 +306,7 @@ class _SourcePageState extends State<SourcePage> {
           _isSelectionMode ? '已选择 ${_selectedSourceIds.length} 项' : '书源',
         ),
         actions: [
-          if (_isSelectionMode) ...[
-            IconButton(
-              onPressed:
-                  _visibleSources.isEmpty ? null : _selectAllVisibleSources,
-              tooltip: '全选',
-              icon: const Icon(Icons.select_all),
-            ),
-            IconButton(
-              onPressed:
-                  _totalImportedCount == 0 || _isBatchDeleting
-                      ? null
-                      : _clearAllSources,
-              tooltip: '清空所有书源',
-              icon: const Icon(Icons.delete_sweep_outlined),
-            ),
-            IconButton(
-              onPressed:
-                  _selectedSourceIds.isEmpty || _isBatchDeleting
-                      ? null
-                      : _deleteSelectedSources,
-              tooltip: '删除已选',
-              icon: const Icon(Icons.delete_outline),
-            ),
-          ] else ...[
+          if (!_isSelectionMode) ...[
             if (isSearchActive)
               IconButton.filledTonal(
                 onPressed: _toggleSearchBar,
@@ -369,6 +374,7 @@ class _SourcePageState extends State<SourcePage> {
           ],
         ],
       ),
+      bottomNavigationBar: _isSelectionMode ? _buildSelectionActionBar() : null,
       body: DecoratedBox(
         decoration: BoxDecoration(
           gradient: LinearGradient(
@@ -395,7 +401,7 @@ class _SourcePageState extends State<SourcePage> {
     final showErrorCard = _listErrorText != null && _visibleSources.isEmpty;
     final showLoadingCard = _isInitialLoading;
 
-    final headerCount = 2 + (_isSelectionMode ? 1 : 0);
+    const headerCount = 2;
     final listCount =
         showLoadingCard || showErrorCard || showEmpty
             ? 1
@@ -407,9 +413,8 @@ class _SourcePageState extends State<SourcePage> {
         _visibleSources.isNotEmpty;
     final itemCount = headerCount + listCount + (showFooter ? 1 : 0);
 
-    final searchPanelIndex = 1;
-    final selectionIndex = _isSelectionMode ? 2 : -1;
-    final listStartIndex = _isSelectionMode ? 3 : 2;
+    const searchPanelIndex = 1;
+    const listStartIndex = 2;
 
     return ListView.builder(
       controller: _scrollController,
@@ -418,21 +423,15 @@ class _SourcePageState extends State<SourcePage> {
       itemBuilder: (context, index) {
         if (index == 0) {
           return _buildOverviewCard(
-            totalCount: _totalCount,
+            totalSourceCount: _totalImportedCount,
             enabledCount: _enabledCount,
-            totalImportedCount: _totalImportedCount,
+            novelCount: _novelCount,
+            mangaCount: _mangaCount,
           );
         }
 
         if (index == searchPanelIndex) {
           return _buildSearchPanelSlot(showSearchPanel: showSearchPanel);
-        }
-
-        if (index == selectionIndex) {
-          return Padding(
-            padding: const EdgeInsets.only(top: 10),
-            child: _buildSelectionHintCard(),
-          );
         }
 
         final itemListIndex = index - listStartIndex;
@@ -450,7 +449,7 @@ class _SourcePageState extends State<SourcePage> {
         if (_listErrorText != null && _visibleSources.isEmpty) {
           if (itemListIndex == 0) {
             return Padding(
-              padding: const EdgeInsets.only(top: 10),
+              padding: const EdgeInsets.only(top: 10, bottom: 10),
               child: _buildListErrorCard(_listErrorText!),
             );
           }
@@ -460,7 +459,7 @@ class _SourcePageState extends State<SourcePage> {
         if (showEmpty) {
           if (itemListIndex == 0) {
             return Padding(
-              padding: const EdgeInsets.only(top: 10),
+              padding: const EdgeInsets.only(top: 10, bottom: 10),
               child: _buildEmptySourceCard(hasKeyword: hasKeyword),
             );
           }
@@ -503,10 +502,64 @@ class _SourcePageState extends State<SourcePage> {
           showSearchPanel
               ? Padding(
                 key: const ValueKey('search_panel_visible'),
-                padding: const EdgeInsets.only(top: 10),
+                padding: const EdgeInsets.only(top: 10, bottom: 10),
                 child: _buildSearchPanel(),
               )
               : const SizedBox.shrink(key: ValueKey('search_panel_hidden')),
+    );
+  }
+
+  Widget _buildSelectionActionBar() {
+    final colorScheme = Theme.of(context).colorScheme;
+
+    return SafeArea(
+      top: false,
+      child: DecoratedBox(
+        decoration: BoxDecoration(
+          color: colorScheme.surface,
+          border: Border(
+            top: BorderSide(
+              color: colorScheme.outlineVariant.withValues(alpha: 0.5),
+            ),
+          ),
+        ),
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(12, 8, 12, 8),
+          child: Row(
+            children: [
+              Expanded(
+                child: OutlinedButton(
+                  onPressed:
+                      _isBatchDeleting || _visibleSources.isEmpty
+                          ? null
+                          : _selectAllVisibleSources,
+                  child: const Text('全选'),
+                ),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: OutlinedButton(
+                  onPressed:
+                      _isBatchDeleting || _totalImportedCount == 0
+                          ? null
+                          : _clearAllSources,
+                  child: const Text('清空全部'),
+                ),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: FilledButton(
+                  onPressed:
+                      _isBatchDeleting || _selectedSourceIds.isEmpty
+                          ? null
+                          : _deleteSelectedSources,
+                  child: const Text('删除'),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
     );
   }
 
@@ -542,8 +595,10 @@ class _SourcePageState extends State<SourcePage> {
 
   Widget _buildListErrorCard(String message) {
     final colorScheme = Theme.of(context).colorScheme;
+    final hasKeyword = _searchKeyword.trim().isNotEmpty;
 
     return Card(
+      shape: _buildOutlinedCardShape(context),
       color: colorScheme.errorContainer,
       child: Padding(
         padding: const EdgeInsets.all(14),
@@ -563,9 +618,22 @@ class _SourcePageState extends State<SourcePage> {
               style: TextStyle(color: colorScheme.onErrorContainer),
             ),
             const SizedBox(height: 10),
-            FilledButton.tonal(
-              onPressed: () => unawaited(_reloadSourceList(reset: true)),
-              child: const Text('重试'),
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: [
+                FilledButton.tonal(
+                  onPressed: () => unawaited(_reloadSourceList(reset: true)),
+                  child: const Text('重试'),
+                ),
+                OutlinedButton(
+                  onPressed:
+                      hasKeyword
+                          ? _clearSourceSearchFilter
+                          : _showImportActionSheet,
+                  child: Text(hasKeyword ? '清空筛选' : '导入书源'),
+                ),
+              ],
             ),
           ],
         ),
@@ -574,14 +642,15 @@ class _SourcePageState extends State<SourcePage> {
   }
 
   Widget _buildOverviewCard({
-    required int totalCount,
+    required int totalSourceCount,
     required int enabledCount,
-    required int totalImportedCount,
+    required int novelCount,
+    required int mangaCount,
   }) {
-    final disabledCount = (totalCount - enabledCount).clamp(0, totalCount);
     final colorScheme = Theme.of(context).colorScheme;
 
     return Card(
+      shape: _buildOutlinedCardShape(context),
       child: Padding(
         padding: const EdgeInsets.all(14),
         child: Column(
@@ -604,10 +673,10 @@ class _SourcePageState extends State<SourcePage> {
               spacing: 8,
               runSpacing: 8,
               children: [
-                _buildOverviewChip('当前结果', '$totalCount'),
+                _buildOverviewChip('书源总数', '$totalSourceCount'),
                 _buildOverviewChip('启用', '$enabledCount'),
-                _buildOverviewChip('停用', '$disabledCount'),
-                _buildOverviewChip('已导入', '$totalImportedCount'),
+                _buildOverviewChip('小说源', '$novelCount'),
+                _buildOverviewChip('漫画源', '$mangaCount'),
               ],
             ),
           ],
@@ -619,10 +688,8 @@ class _SourcePageState extends State<SourcePage> {
   Widget _buildSearchPanel() {
     final colorScheme = Theme.of(context).colorScheme;
 
-    final helperText =
-        _searchKeyword.isEmpty ? '输入名称、域名、分组或备注进行筛选' : '匹配 $_totalCount 条书源';
-
     return Card(
+      shape: _buildOutlinedCardShape(context),
       margin: EdgeInsets.zero,
       child: Padding(
         padding: const EdgeInsets.all(14),
@@ -658,14 +725,35 @@ class _SourcePageState extends State<SourcePage> {
                 controller: _searchController,
                 focusNode: _searchFocusNode,
                 textInputAction: TextInputAction.search,
+                textAlignVertical: TextAlignVertical.center,
+                style: Theme.of(
+                  context,
+                ).textTheme.bodyMedium?.copyWith(fontSize: 13.5, height: 1.25),
                 decoration: InputDecoration(
                   hintText: '例如：3A小说 / aaawz.cc / 小说',
+                  hintStyle: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                    fontSize: 13.5,
+                    height: 1.25,
+                    color: colorScheme.onSurfaceVariant,
+                  ),
                   border: InputBorder.none,
                   filled: false,
-                  prefixIcon: const Icon(Icons.search),
+                  isDense: true,
+                  prefixIcon: const Padding(
+                    padding: EdgeInsetsDirectional.only(start: 12, end: 6),
+                    child: Icon(Icons.search_rounded, size: 18),
+                  ),
+                  prefixIconConstraints: const BoxConstraints(
+                    minWidth: 0,
+                    minHeight: 0,
+                  ),
                   contentPadding: const EdgeInsets.symmetric(
-                    horizontal: 14,
-                    vertical: 10,
+                    horizontal: 10,
+                    vertical: 12,
+                  ),
+                  suffixIconConstraints: const BoxConstraints(
+                    minWidth: 36,
+                    minHeight: 36,
                   ),
                   suffixIcon:
                       _searchKeyword.isEmpty
@@ -673,16 +761,9 @@ class _SourcePageState extends State<SourcePage> {
                           : IconButton(
                             tooltip: '清空关键词',
                             onPressed: () => _searchController.clear(),
-                            icon: const Icon(Icons.close_rounded),
+                            icon: const Icon(Icons.close_rounded, size: 18),
                           ),
                 ),
-              ),
-            ),
-            const SizedBox(height: 8),
-            Text(
-              helperText,
-              style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                color: colorScheme.onSurfaceVariant,
               ),
             ),
           ],
@@ -714,13 +795,14 @@ class _SourcePageState extends State<SourcePage> {
     final colorScheme = Theme.of(context).colorScheme;
 
     return Card(
+      shape: _buildOutlinedCardShape(context),
       child: Padding(
-        padding: const EdgeInsets.all(18),
+        padding: const EdgeInsets.all(16),
         child: Column(
           children: [
             Icon(
               Icons.cloud_upload_outlined,
-              size: 28,
+              size: 26,
               color: colorScheme.primary,
             ),
             const SizedBox(height: 10),
@@ -732,10 +814,34 @@ class _SourcePageState extends State<SourcePage> {
             ),
             const SizedBox(height: 6),
             Text(
-              hasKeyword ? '换个关键词试试。' : '点击右上角 + 开始导入。',
+              hasKeyword ? '可以清空筛选后再查看。' : '点击下方按钮开始导入书源。',
               style: Theme.of(context).textTheme.bodySmall?.copyWith(
                 color: colorScheme.onSurfaceVariant,
               ),
+            ),
+            const SizedBox(height: 10),
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: [
+                FilledButton.icon(
+                  onPressed:
+                      hasKeyword
+                          ? _clearSourceSearchFilter
+                          : _showImportActionSheet,
+                  icon: Icon(
+                    hasKeyword
+                        ? Icons.filter_alt_off_rounded
+                        : Icons.upload_file_rounded,
+                  ),
+                  label: Text(hasKeyword ? '清空筛选' : '导入书源'),
+                ),
+                if (hasKeyword)
+                  OutlinedButton(
+                    onPressed: _showImportActionSheet,
+                    child: const Text('继续导入'),
+                  ),
+              ],
             ),
           ],
         ),
@@ -743,43 +849,7 @@ class _SourcePageState extends State<SourcePage> {
     );
   }
 
-  Widget _buildSelectionHintCard() {
-    final colorScheme = Theme.of(context).colorScheme;
-
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-      decoration: BoxDecoration(
-        color: colorScheme.primaryContainer,
-        borderRadius: BorderRadius.circular(12),
-      ),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Icon(
-            Icons.task_alt_rounded,
-            size: 18,
-            color: colorScheme.onPrimaryContainer,
-          ),
-          const SizedBox(width: 8),
-          Expanded(
-            child: Text(
-              _selectedSourceIds.isEmpty
-                  ? '多选模式：可点击条目进行选择，也可使用顶部全选/清空所有书源。'
-                  : '多选模式：已选 ${_selectedSourceIds.length} 项，可删除已选或直接清空所有书源。',
-              style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                color: colorScheme.onPrimaryContainer,
-                height: 1.35,
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
   Widget _buildSourceCard(SourceListItem source) {
-    final statusText = _healthStatusText(source.lastCheckStatus);
     final checkedAtText = _formatDateTime(source.lastCheckedAt);
     final isTesting = _testingSourceIds.contains(source.id);
     final isChangingEnabled = _changingEnabledSourceIds.contains(source.id);
@@ -787,21 +857,25 @@ class _SourcePageState extends State<SourcePage> {
     final selected = _selectedSourceIds.contains(source.id);
     final isActionLocked = _isBatchDeleting || isDeleting;
     final colorScheme = Theme.of(context).colorScheme;
+    final hasComment = _hasSourceComment(source.comment);
+    final isCommentExpanded = _expandedCommentSourceIds.contains(source.id);
+    final commentText = _trimSourceComment(source.comment);
 
     return Card(
-      margin: const EdgeInsets.only(bottom: 10),
+      margin: const EdgeInsets.only(bottom: 8),
+      shape: _buildOutlinedCardShape(context),
       clipBehavior: Clip.antiAlias,
       child: InkWell(
         onLongPress: () => _startSelectionMode(source.id),
         onTap: _isSelectionMode ? () => _toggleSelected(source.id) : null,
         child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 9),
           child: Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               if (_isSelectionMode)
                 Padding(
-                  padding: const EdgeInsets.only(top: 4, right: 6),
+                  padding: const EdgeInsets.only(top: 2, right: 6),
                   child: Checkbox(
                     value: selected,
                     onChanged: (_) => _toggleSelected(source.id),
@@ -812,6 +886,7 @@ class _SourcePageState extends State<SourcePage> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Row(
+                      crossAxisAlignment: CrossAxisAlignment.center,
                       children: [
                         Expanded(
                           child: Text(
@@ -822,112 +897,101 @@ class _SourcePageState extends State<SourcePage> {
                             overflow: TextOverflow.ellipsis,
                           ),
                         ),
-                        if (source.comment != null &&
-                            source.comment!.trim().isNotEmpty)
-                          Padding(
-                            padding: const EdgeInsets.only(left: 6),
-                            child: Icon(
-                              Icons.sticky_note_2_outlined,
-                              size: 16,
-                              color: colorScheme.onSurfaceVariant,
-                            ),
+                        if (!_isSelectionMode)
+                          _buildSourceTrailingActions(
+                            source: source,
+                            isTesting: isTesting,
+                            isChangingEnabled: isChangingEnabled,
+                            isDeleting: isDeleting,
+                            isActionLocked: isActionLocked,
+                            status: source.lastCheckStatus,
                           ),
                       ],
                     ),
-                    const SizedBox(height: 6),
-                    Container(
-                      width: double.infinity,
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 8,
-                        vertical: 6,
-                      ),
-                      decoration: BoxDecoration(
-                        color: colorScheme.surfaceContainerHighest,
-                        borderRadius: BorderRadius.circular(8),
-                      ),
-                      child: Text(
-                        source.baseUrl,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                          color: colorScheme.onSurfaceVariant,
-                        ),
-                      ),
-                    ),
-                    const SizedBox(height: 8),
-                    Wrap(
-                      spacing: 6,
-                      runSpacing: 6,
+                    const SizedBox(height: 4),
+                    Row(
                       children: [
-                        _buildSourceMetaChip(
-                          '类型',
-                          source.isMangaSource ? '漫画' : '小说',
+                        Expanded(
+                          child: Text(
+                            _buildSourceSecondaryLine(source),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: Theme.of(context).textTheme.bodySmall
+                                ?.copyWith(color: colorScheme.onSurfaceVariant),
+                          ),
                         ),
-                        _buildSourceMetaChip('分组', source.group ?? '未分组'),
-                        _buildSourceMetaChip('状态', statusText),
-                        _buildSourceMetaChip('测试', checkedAtText),
+                        const SizedBox(width: 8),
+                        Text(
+                          '上次: $checkedAtText',
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: Theme.of(
+                            context,
+                          ).textTheme.labelSmall?.copyWith(
+                            color: colorScheme.onSurfaceVariant,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
                       ],
                     ),
-                    if (source.comment != null &&
-                        source.comment!.trim().isNotEmpty) ...[
-                      const SizedBox(height: 6),
-                      Text(
-                        '备注：${source.comment!.trim()}',
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: Theme.of(context).textTheme.bodySmall,
+                    if (hasComment) ...[
+                      const SizedBox(height: 3),
+                      InkWell(
+                        borderRadius: BorderRadius.circular(8),
+                        onTap: () => _toggleCommentExpanded(source.id),
+                        child: Padding(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 4,
+                            vertical: 2,
+                          ),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Icon(
+                                isCommentExpanded
+                                    ? Icons.expand_less_rounded
+                                    : Icons.sticky_note_2_outlined,
+                                size: 15,
+                                color: colorScheme.onSurfaceVariant,
+                              ),
+                              const SizedBox(width: 4),
+                              Text(
+                                isCommentExpanded ? '收起备注' : '展开备注',
+                                style: Theme.of(
+                                  context,
+                                ).textTheme.labelSmall?.copyWith(
+                                  color: colorScheme.onSurfaceVariant,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ],
+                    if (hasComment && isCommentExpanded) ...[
+                      const SizedBox(height: 4),
+                      Container(
+                        width: double.infinity,
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 8,
+                          vertical: 6,
+                        ),
+                        decoration: BoxDecoration(
+                          color: colorScheme.surfaceContainerHighest,
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: Text(
+                          commentText,
+                          maxLines: 3,
+                          overflow: TextOverflow.ellipsis,
+                          style: Theme.of(context).textTheme.bodySmall,
+                        ),
                       ),
                     ],
                   ],
                 ),
               ),
-              if (!_isSelectionMode)
-                Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Switch(
-                      value: source.enabled,
-                      onChanged:
-                          isActionLocked || isChangingEnabled
-                              ? null
-                              : (value) => _setEnabled(source.id, value),
-                    ),
-                    if (isTesting || isChangingEnabled || isDeleting)
-                      const Padding(
-                        padding: EdgeInsets.only(bottom: 4),
-                        child: SizedBox(
-                          width: 16,
-                          height: 16,
-                          child: CircularProgressIndicator(strokeWidth: 2),
-                        ),
-                      ),
-                    PopupMenuButton<_SourceAction>(
-                      tooltip: '更多操作',
-                      icon: const Icon(Icons.more_vert),
-                      onSelected:
-                          isActionLocked
-                              ? null
-                              : (action) => _handleSourceAction(
-                                action: action,
-                                source: source,
-                                isTesting: isTesting,
-                              ),
-                      itemBuilder:
-                          (context) => [
-                            PopupMenuItem(
-                              value: _SourceAction.test,
-                              enabled: !isTesting && !isActionLocked,
-                              child: const Text('连通性测试'),
-                            ),
-                            PopupMenuItem(
-                              value: _SourceAction.delete,
-                              enabled: !isActionLocked,
-                              child: const Text('删除书源'),
-                            ),
-                          ],
-                    ),
-                  ],
-                ),
             ],
           ),
         ),
@@ -935,22 +999,136 @@ class _SourcePageState extends State<SourcePage> {
     );
   }
 
-  Widget _buildSourceMetaChip(String label, String value) {
+  Widget _buildSourceTrailingActions({
+    required SourceListItem source,
+    required bool isTesting,
+    required bool isChangingEnabled,
+    required bool isDeleting,
+    required bool isActionLocked,
+    required SourceHealthStatus status,
+  }) {
+    final showProgress = isTesting || isChangingEnabled || isDeleting;
+
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        _buildHealthStatusDot(status),
+        const SizedBox(width: 6),
+        if (showProgress)
+          const Padding(
+            padding: EdgeInsets.only(right: 4),
+            child: SizedBox(
+              width: 14,
+              height: 14,
+              child: CircularProgressIndicator(strokeWidth: 2),
+            ),
+          ),
+        Transform.scale(
+          scale: 0.82,
+          child: Switch(
+            value: source.enabled,
+            onChanged:
+                isActionLocked || isChangingEnabled
+                    ? null
+                    : (value) => _setEnabled(source.id, value),
+          ),
+        ),
+        PopupMenuButton<_SourceAction>(
+          tooltip: '更多操作',
+          icon: const Icon(Icons.more_vert, size: 20),
+          padding: EdgeInsets.zero,
+          constraints: const BoxConstraints(minWidth: 28, minHeight: 28),
+          onSelected:
+              isActionLocked
+                  ? null
+                  : (action) => _handleSourceAction(
+                    action: action,
+                    source: source,
+                    isTesting: isTesting,
+                  ),
+          itemBuilder:
+              (context) => [
+                PopupMenuItem(
+                  value: _SourceAction.test,
+                  enabled: !isTesting && !isActionLocked,
+                  child: const Text('连通性测试'),
+                ),
+                PopupMenuItem(
+                  value: _SourceAction.delete,
+                  enabled: !isActionLocked,
+                  child: const Text('删除书源'),
+                ),
+              ],
+        ),
+      ],
+    );
+  }
+
+  Widget _buildHealthStatusDot(SourceHealthStatus status) {
     final colorScheme = Theme.of(context).colorScheme;
 
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-      decoration: BoxDecoration(
-        color: colorScheme.surfaceContainerHigh,
-        borderRadius: BorderRadius.circular(999),
+    final color = switch (status) {
+      SourceHealthStatus.healthy => const Color(0xFF2E7D32),
+      SourceHealthStatus.degraded ||
+      SourceHealthStatus.unavailable => colorScheme.error,
+      SourceHealthStatus.unknown => colorScheme.onSurfaceVariant.withValues(
+        alpha: 0.55,
       ),
-      child: Text(
-        '$label: $value',
-        style: Theme.of(
-          context,
-        ).textTheme.labelSmall?.copyWith(color: colorScheme.onSurfaceVariant),
+    };
+
+    final label = switch (status) {
+      SourceHealthStatus.healthy => '可用',
+      SourceHealthStatus.degraded || SourceHealthStatus.unavailable => '异常',
+      SourceHealthStatus.unknown => '未测',
+    };
+
+    return Tooltip(
+      message: '测试状态: $label',
+      child: Container(
+        width: 8,
+        height: 8,
+        decoration: BoxDecoration(color: color, shape: BoxShape.circle),
       ),
     );
+  }
+
+  RoundedRectangleBorder _buildOutlinedCardShape(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+    return RoundedRectangleBorder(
+      borderRadius: BorderRadius.circular(14),
+      side: BorderSide(
+        color: colorScheme.outlineVariant.withValues(alpha: 0.72),
+      ),
+    );
+  }
+
+  String _buildSourceSecondaryLine(SourceListItem source) {
+    final host = _resolveSourceHost(source.baseUrl);
+    final group = (source.group ?? '').trim();
+    final groupText = group.isEmpty ? '未分组' : group;
+    final typeText = source.isMangaSource ? '漫画' : '小说';
+    return '$host · $typeText · $groupText';
+  }
+
+  String _resolveSourceHost(String baseUrl) {
+    final raw = baseUrl.trim();
+    final uri = Uri.tryParse(raw);
+    if (uri == null || uri.host.isEmpty) {
+      return raw.replaceFirst(RegExp(r'^https?://'), '');
+    }
+
+    if (uri.port > 0) {
+      return '${uri.host}:${uri.port}';
+    }
+    return uri.host;
+  }
+
+  bool _hasSourceComment(String? comment) {
+    return comment != null && comment.trim().isNotEmpty;
+  }
+
+  String _trimSourceComment(String? comment) {
+    return (comment ?? '').trim().replaceAll(RegExp(r'\s+'), ' ');
   }
 
   void _handleSourceAction({
@@ -972,6 +1150,51 @@ class _SourcePageState extends State<SourcePage> {
 
   void _openBatchDiagnostics() {
     context.push('/source-diagnostics');
+  }
+
+  Future<void> _showImportActionSheet() async {
+    if (_isImporting) {
+      return;
+    }
+
+    await showModalBottomSheet<void>(
+      context: context,
+      showDragHandle: true,
+      useSafeArea: true,
+      builder: (sheetContext) {
+        return SafeArea(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              ListTile(
+                leading: const Icon(Icons.paste_rounded),
+                title: const Text('粘贴导入 JSON'),
+                onTap: () {
+                  Navigator.of(sheetContext).pop();
+                  _importFromPaste();
+                },
+              ),
+              ListTile(
+                leading: const Icon(Icons.link_rounded),
+                title: const Text('链接导入'),
+                onTap: () {
+                  Navigator.of(sheetContext).pop();
+                  _importFromUrl();
+                },
+              ),
+              ListTile(
+                leading: const Icon(Icons.upload_file_rounded),
+                title: const Text('文件导入'),
+                onTap: () {
+                  Navigator.of(sheetContext).pop();
+                  _importFromFile();
+                },
+              ),
+            ],
+          ),
+        );
+      },
+    );
   }
 
   Future<void> _importFromPaste() async {
@@ -1274,6 +1497,64 @@ class _SourcePageState extends State<SourcePage> {
       } else {
         _selectedSourceIds.add(sourceId);
       }
+
+      if (_selectedSourceIds.isEmpty) {
+        _isSelectionMode = false;
+      }
+    });
+  }
+
+  Future<void> _clearAllSources() async {
+    if (_isBatchDeleting || _totalImportedCount == 0) {
+      return;
+    }
+
+    final confirmed = await _showConfirmDialog(
+      title: '清空全部书源',
+      content: '确认清空全部书源吗？此操作不可恢复。',
+      confirmText: '清空',
+    );
+
+    if (confirmed != true) {
+      return;
+    }
+
+    setState(() {
+      _isBatchDeleting = true;
+    });
+
+    try {
+      await _repository.clear();
+      if (!mounted) {
+        return;
+      }
+
+      setState(() {
+        _selectedSourceIds.clear();
+        _expandedCommentSourceIds.clear();
+        _isSelectionMode = false;
+      });
+
+      await _reloadSourceList(reset: true);
+      _showMessage('已清空全部书源。');
+    } catch (_) {
+      _showMessage('清空书源失败，请稍后重试。');
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isBatchDeleting = false;
+        });
+      }
+    }
+  }
+
+  void _toggleCommentExpanded(String sourceId) {
+    setState(() {
+      if (_expandedCommentSourceIds.contains(sourceId)) {
+        _expandedCommentSourceIds.remove(sourceId);
+      } else {
+        _expandedCommentSourceIds.add(sourceId);
+      }
     });
   }
 
@@ -1284,16 +1565,26 @@ class _SourcePageState extends State<SourcePage> {
     });
   }
 
+  void _clearSourceSearchFilter() {
+    if (!_showSearchBar &&
+        _searchKeyword.isEmpty &&
+        _searchController.text.isEmpty) {
+      return;
+    }
+
+    _searchDebounce?.cancel();
+    _searchFocusNode.unfocus();
+    _searchController.clear();
+    setState(() {
+      _showSearchBar = false;
+      _searchKeyword = '';
+    });
+    unawaited(_reloadSourceList(reset: true));
+  }
+
   void _toggleSearchBar() {
     if (_showSearchBar || _searchKeyword.isNotEmpty) {
-      _searchDebounce?.cancel();
-      _searchFocusNode.unfocus();
-      _searchController.clear();
-      setState(() {
-        _showSearchBar = false;
-        _searchKeyword = '';
-      });
-      unawaited(_reloadSourceList(reset: true));
+      _clearSourceSearchFilter();
       return;
     }
 
@@ -1330,52 +1621,16 @@ class _SourcePageState extends State<SourcePage> {
   }
 
   void _selectAllVisibleSources() {
+    if (_visibleSources.isEmpty || _isBatchDeleting) {
+      return;
+    }
+
     setState(() {
+      _isSelectionMode = true;
       _selectedSourceIds
         ..clear()
         ..addAll(_visibleSources.map((source) => source.id));
     });
-  }
-
-  Future<void> _clearAllSources() async {
-    if (_totalImportedCount == 0 || _isBatchDeleting) {
-      return;
-    }
-
-    final confirmed = await _showConfirmDialog(
-      title: '清空所有书源',
-      content: '将删除全部 $_totalImportedCount 条书源，该操作不可恢复，确认继续吗？',
-      confirmText: '清空',
-    );
-    if (confirmed != true) {
-      return;
-    }
-
-    setState(() {
-      _isBatchDeleting = true;
-    });
-
-    try {
-      await _repository.clear();
-      if (!mounted) {
-        return;
-      }
-
-      setState(() {
-        _isSelectionMode = false;
-        _selectedSourceIds.clear();
-      });
-      await _reloadSourceList(reset: true);
-      _showMessage('已清空全部书源。');
-    } catch (_) {
-      _showMessage('清空书源失败，请重试。');
-    } finally {
-      if (mounted) {
-        setState(() {
-          _isBatchDeleting = false;
-        });
-      }
-    }
   }
 
   Future<void> _deleteSelectedSources() async {
@@ -1631,15 +1886,6 @@ class _SourcePageState extends State<SourcePage> {
       ErrorCode.ruleMatchEmpty => '规则命中为空',
       ErrorCode.validation => '规则为空或配置不完整',
       ErrorCode.unknownSource || ErrorCode.unknown => '未知失败',
-    };
-  }
-
-  String _healthStatusText(SourceHealthStatus status) {
-    return switch (status) {
-      SourceHealthStatus.unknown => '未测试',
-      SourceHealthStatus.healthy => '可用',
-      SourceHealthStatus.degraded => '异常(规则/解析)',
-      SourceHealthStatus.unavailable => '不可用(网络/服务)',
     };
   }
 

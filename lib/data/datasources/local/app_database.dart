@@ -99,10 +99,14 @@ class SourceListCountSummary {
   const SourceListCountSummary({
     required this.totalCount,
     required this.enabledCount,
+    required this.novelCount,
+    required this.mangaCount,
   });
 
   final int totalCount;
   final int enabledCount;
+  final int novelCount;
+  final int mangaCount;
 }
 
 class SourceListItem {
@@ -295,7 +299,8 @@ class AppDatabase extends _$AppDatabase {
     final row =
         await customSelect(
           'SELECT COUNT(*) AS totalCount, '
-          'SUM(CASE WHEN enabled = 1 THEN 1 ELSE 0 END) AS enabledCount '
+          'SUM(CASE WHEN enabled = 1 THEN 1 ELSE 0 END) AS enabledCount, '
+          'SUM(CASE WHEN $_mangaSourceMatcherSql THEN 1 ELSE 0 END) AS mangaCount '
           'FROM sources '
           '${filter.whereClause}',
           variables: filter.variables,
@@ -304,10 +309,15 @@ class AppDatabase extends _$AppDatabase {
 
     final totalCount = _decodeInt(row.data['totalCount']) ?? 0;
     final enabledCount = _decodeInt(row.data['enabledCount']) ?? 0;
+    final mangaCount = _decodeInt(row.data['mangaCount']) ?? 0;
+    final safeMangaCount = mangaCount.clamp(0, totalCount);
+    final novelCount = (totalCount - safeMangaCount).clamp(0, totalCount);
 
     return SourceListCountSummary(
       totalCount: totalCount,
       enabledCount: enabledCount.clamp(0, totalCount),
+      novelCount: novelCount,
+      mangaCount: safeMangaCount,
     );
   }
 
@@ -468,13 +478,14 @@ class AppDatabase extends _$AppDatabase {
       return <String, String>{};
     }
 
-    final rows = await (select(chapterCaches)
-          ..where((table) => table.bookId.isIn(normalizedIds))
-          ..orderBy([
-            (table) => OrderingTerm.desc(table.chapterIndex),
-            (table) => OrderingTerm.desc(table.updatedAt),
-          ]))
-        .get();
+    final rows =
+        await (select(chapterCaches)
+              ..where((table) => table.bookId.isIn(normalizedIds))
+              ..orderBy([
+                (table) => OrderingTerm.desc(table.chapterIndex),
+                (table) => OrderingTerm.desc(table.updatedAt),
+              ]))
+            .get();
 
     final latestByBookId = <String, String>{};
     for (final row in rows) {
