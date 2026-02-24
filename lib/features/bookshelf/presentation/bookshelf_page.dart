@@ -357,7 +357,10 @@ class _BookshelfPageState extends State<BookshelfPage> {
             const SizedBox(width: 10),
             Expanded(
               child: Text(
-                '发现感兴趣的新书并加入书架。',
+                '发现新书并加入书架',
+                maxLines: 1,
+                softWrap: false,
+                overflow: TextOverflow.ellipsis,
                 style: Theme.of(context).textTheme.bodySmall?.copyWith(
                   color: colorScheme.onSurfaceVariant,
                 ),
@@ -376,7 +379,8 @@ class _BookshelfPageState extends State<BookshelfPage> {
   }
 
   Widget _buildBookGridSliver(double horizontalPadding) {
-    const spacing = 8.0;
+    const crossSpacing = 8.0;
+    const mainSpacing = 12.0;
     final screenWidth = MediaQuery.sizeOf(context).width;
     final width = (screenWidth - horizontalPadding * 2).clamp(220.0, 2400.0);
 
@@ -389,8 +393,9 @@ class _BookshelfPageState extends State<BookshelfPage> {
       crossAxisCount = 4;
     }
 
-    final itemWidth = (width - spacing * (crossAxisCount - 1)) / crossAxisCount;
-    final itemHeight = itemWidth * 1.32 + 30;
+    final itemWidth =
+        (width - crossSpacing * (crossAxisCount - 1)) / crossAxisCount;
+    final itemHeight = itemWidth * 1.32 + 52;
 
     return SliverGrid(
       delegate: SliverChildBuilderDelegate((context, index) {
@@ -398,8 +403,8 @@ class _BookshelfPageState extends State<BookshelfPage> {
       }, childCount: _books.length),
       gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
         crossAxisCount: crossAxisCount,
-        crossAxisSpacing: spacing,
-        mainAxisSpacing: spacing,
+        crossAxisSpacing: crossSpacing,
+        mainAxisSpacing: mainSpacing,
         childAspectRatio: itemWidth / itemHeight,
       ),
     );
@@ -407,12 +412,21 @@ class _BookshelfPageState extends State<BookshelfPage> {
 
   Widget _buildGridCard(BookshelfBook book) {
     final progress = _progressByBookId[book.bookId];
+    final colorScheme = Theme.of(context).colorScheme;
     final isOpening = _openingBookId == book.bookId;
     final isSelected = _isBookSelected(book);
+    final titleText = _toSingleLineText(book.title);
+    final authorText = _toSingleLineText(book.author ?? '');
+    final chapterText = _toSingleLineText(progress?.chapterTitle ?? '');
+    final subtitleText =
+        chapterText.isNotEmpty
+            ? '上次: $chapterText'
+            : (authorText.isNotEmpty ? '作者: $authorText' : '未开始阅读');
 
-    return Card(
-      clipBehavior: Clip.antiAlias,
+    return Material(
+      color: Colors.transparent,
       child: InkWell(
+        borderRadius: BorderRadius.circular(14),
         onLongPress: () => _enterSelectionMode(book),
         onTap:
             _isSelectionMode
@@ -422,65 +436,134 @@ class _BookshelfPageState extends State<BookshelfPage> {
                 : () async {
                   await _openFromBookshelf(book, progress: progress);
                 },
-        child: Stack(
-          fit: StackFit.expand,
-          children: [
-            Padding(
-              padding: const EdgeInsets.fromLTRB(6, 6, 6, 6),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Expanded(
-                    child: AspectRatio(
-                      aspectRatio: 3 / 4,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 2),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Expanded(
+                child: Stack(
+                  fit: StackFit.expand,
+                  children: [
+                    Container(
+                      decoration: BoxDecoration(
+                        borderRadius: BorderRadius.circular(14),
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.black.withValues(alpha: 0.06),
+                            blurRadius: 10,
+                            offset: const Offset(0, 4),
+                          ),
+                        ],
+                      ),
                       child: _buildCover(
                         book.coverUrl,
                         width: double.infinity,
                         height: double.infinity,
                       ),
                     ),
-                  ),
-                  const SizedBox(height: 4),
-                  Text(
-                    book.title,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                      fontWeight: FontWeight.w700,
-                    ),
-                  ),
-                  if (isOpening)
-                    Padding(
-                      padding: const EdgeInsets.only(top: 4),
-                      child: Row(
-                        children: [
-                          const SizedBox(
-                            width: 12,
-                            height: 12,
-                            child: CircularProgressIndicator(strokeWidth: 2),
+                    if (isOpening)
+                      Positioned(
+                        left: 6,
+                        right: 6,
+                        bottom: 6,
+                        child: DecoratedBox(
+                          decoration: BoxDecoration(
+                            color: colorScheme.scrim.withValues(alpha: 0.42),
+                            borderRadius: BorderRadius.circular(999),
                           ),
-                          const SizedBox(width: 6),
-                          Text(
-                            '打开中',
-                            style: Theme.of(context).textTheme.labelSmall,
+                          child: const Padding(
+                            padding: EdgeInsets.symmetric(
+                              horizontal: 8,
+                              vertical: 3,
+                            ),
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                SizedBox(
+                                  width: 10,
+                                  height: 10,
+                                  child: CircularProgressIndicator(
+                                    strokeWidth: 1.8,
+                                    color: Colors.white,
+                                  ),
+                                ),
+                                SizedBox(width: 6),
+                                Text(
+                                  '打开中',
+                                  style: TextStyle(
+                                    color: Colors.white,
+                                    fontSize: 11,
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                ),
+                              ],
+                            ),
                           ),
-                        ],
+                        ),
                       ),
-                    ),
-                ],
-              ),
-            ),
-            if (_isSelectionMode)
-              Positioned(
-                top: 6,
-                right: 6,
-                child: Checkbox(
-                  value: isSelected,
-                  onChanged: (_) => _toggleBookSelection(book),
-                  visualDensity: VisualDensity.compact,
+                    if (_isSelectionMode)
+                      Positioned(
+                        top: 6,
+                        right: 6,
+                        child: GestureDetector(
+                          onTap: () => _toggleBookSelection(book),
+                          child: AnimatedContainer(
+                            duration: const Duration(milliseconds: 160),
+                            width: 22,
+                            height: 22,
+                            decoration: BoxDecoration(
+                              color:
+                                  isSelected
+                                      ? colorScheme.primary
+                                      : colorScheme.surface.withValues(
+                                        alpha: 0.9,
+                                      ),
+                              shape: BoxShape.circle,
+                              border: Border.all(
+                                color:
+                                    isSelected
+                                        ? colorScheme.primary
+                                        : colorScheme.outline.withValues(
+                                          alpha: 0.7,
+                                        ),
+                              ),
+                            ),
+                            child: Icon(
+                              Icons.check,
+                              size: 14,
+                              color:
+                                  isSelected
+                                      ? colorScheme.onPrimary
+                                      : colorScheme.onSurfaceVariant,
+                            ),
+                          ),
+                        ),
+                      ),
+                  ],
                 ),
               ),
-          ],
+              const SizedBox(height: 6),
+              Text(
+                titleText,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: Theme.of(context).textTheme.labelMedium?.copyWith(
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+              const SizedBox(height: 1),
+              Text(
+                subtitleText,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                  color: colorScheme.onSurfaceVariant,
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );
@@ -491,9 +574,16 @@ class _BookshelfPageState extends State<BookshelfPage> {
     final colorScheme = Theme.of(context).colorScheme;
     final isOpening = _openingBookId == book.bookId;
     final isSelected = _isBookSelected(book);
+    final titleText = _toSingleLineText(book.title);
+    final authorText = _toSingleLineText(book.author ?? '');
+    final chapterText = _toSingleLineText(progress?.chapterTitle ?? '');
+    final sourceText = _resolveSourceText(book.sourceId);
+    final secondaryLine = chapterText.isNotEmpty ? '上次: $chapterText' : '未开始阅读';
+    final hasProgress = chapterText.isNotEmpty;
+    final isLocalBook = book.sourceId == _kLocalBookSourceId;
 
     return Card(
-      margin: const EdgeInsets.only(bottom: 8),
+      margin: const EdgeInsets.only(bottom: 6),
       clipBehavior: Clip.antiAlias,
       child: InkWell(
         onLongPress: () => _enterSelectionMode(book),
@@ -506,7 +596,7 @@ class _BookshelfPageState extends State<BookshelfPage> {
                   await _openFromBookshelf(book, progress: progress);
                 },
         child: Padding(
-          padding: const EdgeInsets.fromLTRB(10, 10, 10, 10),
+          padding: const EdgeInsets.fromLTRB(10, 8, 10, 8),
           child: Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
@@ -519,53 +609,82 @@ class _BookshelfPageState extends State<BookshelfPage> {
                     visualDensity: VisualDensity.compact,
                   ),
                 ),
-              _buildCover(book.coverUrl, width: 64, height: 92),
+              _buildCover(book.coverUrl, width: 58, height: 84),
               const SizedBox(width: 10),
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
+                    Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Expanded(
+                          child: Text(
+                            titleText,
+                            style: Theme.of(context).textTheme.titleSmall
+                                ?.copyWith(fontWeight: FontWeight.w700),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        _buildListStatusChip(
+                          hasProgress: hasProgress,
+                          isLocalBook: isLocalBook,
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 3),
                     Text(
-                      book.title,
-                      style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                        fontWeight: FontWeight.w700,
-                      ),
+                      authorText.isNotEmpty ? '作者: $authorText' : '作者: 未知',
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
-                    ),
-                    const SizedBox(height: 4),
-                    if (book.author != null && book.author!.isNotEmpty)
-                      Text(
-                        '作者: ${book.author!}',
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                          color: colorScheme.onSurfaceVariant,
-                        ),
-                      ),
-                    const SizedBox(height: 4),
-                    Text(
-                      '收藏: ${_formatDateTime(book.addedAt)}',
                       style: Theme.of(context).textTheme.bodySmall?.copyWith(
                         color: colorScheme.onSurfaceVariant,
                       ),
                     ),
-                    if (progress != null)
-                      Padding(
-                        padding: const EdgeInsets.only(top: 2),
-                        child: Text(
-                          '上次: ${progress.chapterTitle}',
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: Theme.of(context).textTheme.bodySmall,
+                    const SizedBox(height: 2),
+                    Text(
+                      secondaryLine,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: Theme.of(context).textTheme.bodySmall,
+                    ),
+                    const SizedBox(height: 4),
+                    Row(
+                      children: [
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 7,
+                            vertical: 2,
+                          ),
+                          decoration: BoxDecoration(
+                            color: colorScheme.surfaceContainerHigh,
+                            borderRadius: BorderRadius.circular(999),
+                          ),
+                          child: Text(
+                            sourceText,
+                            style: Theme.of(context).textTheme.labelSmall
+                                ?.copyWith(
+                                  color: colorScheme.onSurfaceVariant,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                          ),
                         ),
-                      ),
+                        const Spacer(),
+                        Text(
+                          _formatDateTime(book.addedAt),
+                          style: Theme.of(context).textTheme.labelSmall
+                              ?.copyWith(color: colorScheme.onSurfaceVariant),
+                        ),
+                      ],
+                    ),
                   ],
                 ),
               ),
               if (!_isSelectionMode)
                 Padding(
-                  padding: const EdgeInsets.only(top: 2),
+                  padding: const EdgeInsets.only(left: 8, top: 2),
                   child:
                       isOpening
                           ? const SizedBox(
@@ -583,6 +702,60 @@ class _BookshelfPageState extends State<BookshelfPage> {
         ),
       ),
     );
+  }
+
+  Widget _buildListStatusChip({
+    required bool hasProgress,
+    required bool isLocalBook,
+  }) {
+    final colorScheme = Theme.of(context).colorScheme;
+
+    final String label;
+    final Color background;
+    final Color foreground;
+    final BorderSide? border;
+
+    if (hasProgress) {
+      label = '在读';
+      background = colorScheme.primaryContainer;
+      foreground = colorScheme.onPrimaryContainer;
+      border = null;
+    } else if (isLocalBook) {
+      label = '本地';
+      background = colorScheme.tertiaryContainer;
+      foreground = colorScheme.onTertiaryContainer;
+      border = null;
+    } else {
+      label = '未读';
+      background = colorScheme.surfaceContainerHighest;
+      foreground = colorScheme.onSurfaceVariant;
+      border = BorderSide(
+        color: colorScheme.outlineVariant.withValues(alpha: 0.75),
+      );
+    }
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+      decoration: BoxDecoration(
+        color: background,
+        borderRadius: BorderRadius.circular(999),
+        border: border == null ? null : Border.fromBorderSide(border),
+      ),
+      child: Text(
+        label,
+        style: Theme.of(context).textTheme.labelSmall?.copyWith(
+          color: foreground,
+          fontWeight: FontWeight.w700,
+        ),
+      ),
+    );
+  }
+
+  String _resolveSourceText(String sourceId) {
+    if (sourceId == _kLocalBookSourceId) {
+      return '本地导入';
+    }
+    return '网络书源';
   }
 
   String _bookKey(BookshelfBook book) {
@@ -731,6 +904,10 @@ class _BookshelfPageState extends State<BookshelfPage> {
     });
 
     _showMessage('已删除 $removedCount 本书。');
+  }
+
+  String _toSingleLineText(String text) {
+    return text.replaceAll(RegExp(r'\s+'), ' ').trim();
   }
 
   String _formatDateTime(DateTime value) {

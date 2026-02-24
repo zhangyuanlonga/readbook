@@ -1,6 +1,5 @@
 import 'dart:async';
 
-import 'package:dynamic_color/dynamic_color.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -8,7 +7,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../data/datasources/local/app_database.dart';
 import 'layout/app_layout.dart';
 import 'router.dart';
-import 'theme/app_dynamic_color_provider.dart';
 import 'theme/app_theme.dart';
 import 'theme/app_theme_provider.dart';
 import 'theme/app_theme_seed_provider.dart';
@@ -20,53 +18,38 @@ class App extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final seedColor = ref.watch(appSeedColorProvider);
     final themeMode = ref.watch(appThemeModeProvider);
-    final dynamicColorEnabled = ref.watch(appDynamicColorEnabledProvider);
 
-    return DynamicColorBuilder(
-      builder: (dynamicLightScheme, dynamicDarkScheme) {
-        final fallbackLightScheme = ColorScheme.fromSeed(
-          seedColor: seedColor,
-          dynamicSchemeVariant: DynamicSchemeVariant.tonalSpot,
-          brightness: Brightness.light,
-        );
+    final lightScheme = ColorScheme.fromSeed(
+      seedColor: seedColor,
+      dynamicSchemeVariant: DynamicSchemeVariant.tonalSpot,
+      brightness: Brightness.light,
+    );
 
-        final fallbackDarkScheme = ColorScheme.fromSeed(
-          seedColor: seedColor,
-          dynamicSchemeVariant: DynamicSchemeVariant.tonalSpot,
-          brightness: Brightness.dark,
-        );
+    final darkScheme = ColorScheme.fromSeed(
+      seedColor: seedColor,
+      dynamicSchemeVariant: DynamicSchemeVariant.tonalSpot,
+      brightness: Brightness.dark,
+    );
 
-        final lightScheme =
-            dynamicColorEnabled && dynamicLightScheme != null
-                ? dynamicLightScheme
-                : fallbackLightScheme;
+    return MaterialApp.router(
+      title: '源阅',
+      theme: AppTheme.build(lightScheme),
+      darkTheme: AppTheme.build(darkScheme),
+      themeMode: themeMode,
+      themeAnimationDuration: const Duration(milliseconds: 180),
+      themeAnimationCurve: Curves.easeOutCubic,
+      routerConfig: appRouter,
+      builder: (context, child) {
+        final mediaQuery = MediaQuery.of(context);
+        final textScale = AppLayout.clampedTextScaleFactor(context);
 
-        final darkScheme =
-            dynamicColorEnabled && dynamicDarkScheme != null
-                ? dynamicDarkScheme
-                : fallbackDarkScheme;
-
-        return MaterialApp.router(
-          title: '源阅',
-          theme: AppTheme.build(lightScheme),
-          darkTheme: AppTheme.build(darkScheme),
-          themeMode: themeMode,
-          themeAnimationDuration: const Duration(milliseconds: 180),
-          themeAnimationCurve: Curves.easeOutCubic,
-          routerConfig: appRouter,
-          builder: (context, child) {
-            final mediaQuery = MediaQuery.of(context);
-            final textScale = AppLayout.clampedTextScaleFactor(context);
-
-            return MediaQuery(
-              data: mediaQuery.copyWith(
-                textScaler: TextScaler.linear(textScale),
-              ),
-              child: _SystemUiOverlayWrapper(
-                child: child ?? const SizedBox.shrink(),
-              ),
-            );
-          },
+        return MediaQuery(
+          data: mediaQuery.copyWith(
+            textScaler: TextScaler.linear(textScale),
+          ),
+          child: _SystemUiOverlayWrapper(
+            child: child ?? const SizedBox.shrink(),
+          ),
         );
       },
     );
