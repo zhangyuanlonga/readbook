@@ -799,7 +799,13 @@ class _SearchPageState extends State<SearchPage> {
 
     return Column(
       children: [
-        ...visibleBooks.map((book) => _buildBookCard(book, report.sourceNames)),
+        ...visibleBooks.asMap().entries.map(
+          (entry) => _buildBookCard(
+            entry.value,
+            report.sourceNames,
+            listIndex: entry.key,
+          ),
+        ),
         if (hasMoreResults)
           Padding(
             padding: const EdgeInsets.only(top: 4),
@@ -824,11 +830,16 @@ class _SearchPageState extends State<SearchPage> {
     );
   }
 
-  Widget _buildBookCard(Book book, Map<String, String> sourceNames) {
+  Widget _buildBookCard(
+    Book book,
+    Map<String, String> sourceNames, {
+    required int listIndex,
+  }) {
     final sourceName = sourceNames[book.sourceId] ?? book.sourceId;
     final latestChapter = _normalizeSnippet(book.latestChapter);
     final intro = _normalizeSnippet(book.intro);
     final author = book.author?.trim();
+    final heroTag = _buildBookCoverHeroTag(book: book, listIndex: listIndex);
 
     return Card(
       margin: const EdgeInsets.only(bottom: 10),
@@ -842,6 +853,7 @@ class _SearchPageState extends State<SearchPage> {
                   'sourceId': book.sourceId,
                   'detailUrl': book.detailUrl,
                   'title': book.title,
+                  'heroTag': heroTag,
                 },
               ).toString();
           context.push(route);
@@ -851,7 +863,7 @@ class _SearchPageState extends State<SearchPage> {
           child: Row(
             crossAxisAlignment: CrossAxisAlignment.center,
             children: [
-              _buildCoverPreview(book.coverUrl),
+              _buildCoverPreview(book.coverUrl, heroTag: heroTag),
               const SizedBox(width: 12),
               Expanded(
                 child: Column(
@@ -950,20 +962,27 @@ class _SearchPageState extends State<SearchPage> {
     );
   }
 
-  Widget _buildCoverPreview(String? coverUrl) {
+  String _buildBookCoverHeroTag({required Book book, required int listIndex}) {
+    return 'book_cover_${book.sourceId}_${book.id}_${book.detailUrl.hashCode}_$listIndex';
+  }
+
+  Widget _buildCoverPreview(String? coverUrl, {required String heroTag}) {
     final uri = Uri.tryParse(coverUrl ?? '');
     if (uri == null || !uri.hasScheme) {
-      return _buildCoverFallback();
+      return Hero(tag: heroTag, child: _buildCoverFallback());
     }
 
-    return ClipRRect(
-      borderRadius: BorderRadius.circular(8),
-      child: Image.network(
-        coverUrl!,
-        width: 56,
-        height: 80,
-        fit: BoxFit.cover,
-        errorBuilder: (context, error, stackTrace) => _buildCoverFallback(),
+    return Hero(
+      tag: heroTag,
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(8),
+        child: Image.network(
+          coverUrl!,
+          width: 56,
+          height: 80,
+          fit: BoxFit.cover,
+          errorBuilder: (context, error, stackTrace) => _buildCoverFallback(),
+        ),
       ),
     );
   }

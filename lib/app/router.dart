@@ -85,12 +85,14 @@ final GoRouter appRouter = GoRouter(
         final sourceId = state.uri.queryParameters['sourceId'];
         final detailUrl = state.uri.queryParameters['detailUrl'];
         final title = state.uri.queryParameters['title'];
+        final heroTag = state.uri.queryParameters['heroTag'];
 
         return BookDetailPage(
           bookId: bookId,
           sourceId: sourceId,
           detailUrl: detailUrl,
           title: title,
+          heroTag: heroTag,
         );
       },
     ),

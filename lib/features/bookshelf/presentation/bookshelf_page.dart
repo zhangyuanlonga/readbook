@@ -49,7 +49,13 @@ class _BookshelfPageState extends State<BookshelfPage> {
       LocalBookImportService.localBookSourceId;
   static const Duration _kBookshelfLoadTimeout = Duration(seconds: 8);
   static const Duration _kProgressLoadTimeout = Duration(seconds: 2);
+  static const Duration _kBooksModeSwitchItemDuration = Duration(
+    milliseconds: 320,
+  );
   static const int _kProgressBatchSize = 24;
+  static const int _kBooksModeSwitchStaggerGroup = 8;
+  static const double _kBooksModeSwitchStaggerStep = 0.07;
+  static const double _kBooksModeSwitchCurveSpan = 0.42;
 
   @override
   void initState() {
@@ -218,7 +224,12 @@ class _BookshelfPageState extends State<BookshelfPage> {
 
     return SliverList(
       delegate: SliverChildBuilderDelegate((context, index) {
-        return _buildBookCard(_books[index]);
+        final book = _books[index];
+        return _buildModeSwitchAnimatedBookItem(
+          book: book,
+          index: index,
+          child: _buildBookCard(book),
+        );
       }, childCount: _books.length),
     );
   }
@@ -401,7 +412,12 @@ class _BookshelfPageState extends State<BookshelfPage> {
 
     return SliverGrid(
       delegate: SliverChildBuilderDelegate((context, index) {
-        return _buildGridCard(_books[index]);
+        final book = _books[index];
+        return _buildModeSwitchAnimatedBookItem(
+          book: book,
+          index: index,
+          child: _buildGridCard(book),
+        );
       }, childCount: _books.length),
       gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
         crossAxisCount: crossAxisCount,
@@ -409,6 +425,42 @@ class _BookshelfPageState extends State<BookshelfPage> {
         mainAxisSpacing: mainSpacing,
         childAspectRatio: itemWidth / itemHeight,
       ),
+    );
+  }
+
+  Widget _buildModeSwitchAnimatedBookItem({
+    required BookshelfBook book,
+    required int index,
+    required Widget child,
+  }) {
+    final delay =
+        (index % _kBooksModeSwitchStaggerGroup) * _kBooksModeSwitchStaggerStep;
+    final begin = delay.clamp(0.0, 1 - _kBooksModeSwitchCurveSpan);
+    final end = begin + _kBooksModeSwitchCurveSpan;
+
+    return TweenAnimationBuilder<double>(
+      key: ValueKey<String>(
+        'bookshelf_mode_${_useGridView ? 'grid' : 'list'}_${book.bookId}',
+      ),
+      tween: Tween<double>(begin: 0, end: 1),
+      duration: _kBooksModeSwitchItemDuration,
+      curve: Interval(begin, end, curve: Curves.easeOutCubic),
+      child: child,
+      builder: (context, value, builtChild) {
+        final translateY = (1 - value) * 16;
+        final scale = 0.986 + (0.014 * value);
+        return Opacity(
+          opacity: value,
+          child: Transform.translate(
+            offset: Offset(0, translateY),
+            child: Transform.scale(
+              alignment: Alignment.topCenter,
+              scale: scale,
+              child: builtChild,
+            ),
+          ),
+        );
+      },
     );
   }
 
@@ -550,9 +602,9 @@ class _BookshelfPageState extends State<BookshelfPage> {
                 titleText,
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
-                style: Theme.of(context).textTheme.labelMedium?.copyWith(
-                  fontWeight: FontWeight.w700,
-                ),
+                style: Theme.of(
+                  context,
+                ).textTheme.labelMedium?.copyWith(fontWeight: FontWeight.w700),
               ),
               const SizedBox(height: 1),
               Text(
@@ -582,11 +634,10 @@ class _BookshelfPageState extends State<BookshelfPage> {
     final latestChapterText = _toSingleLineText(
       _latestCachedChapterByBookId[book.bookId] ?? '',
     );
-    final lastReadLine = chapterText.isNotEmpty ? '上次: $chapterText' : '上次: 未开始阅读';
+    final lastReadLine =
+        chapterText.isNotEmpty ? '上次: $chapterText' : '上次: 未开始阅读';
     final latestLine =
-        latestChapterText.isNotEmpty
-            ? '最新: $latestChapterText'
-            : '最新: 暂无缓存章节';
+        latestChapterText.isNotEmpty ? '最新: $latestChapterText' : '最新: 暂无缓存章节';
 
     return Card(
       margin: const EdgeInsets.only(bottom: 6),

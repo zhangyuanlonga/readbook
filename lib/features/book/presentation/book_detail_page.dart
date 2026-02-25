@@ -20,12 +20,14 @@ class BookDetailPage extends StatefulWidget {
     this.sourceId,
     this.detailUrl,
     this.title,
+    this.heroTag,
   });
 
   final String bookId;
   final String? sourceId;
   final String? detailUrl;
   final String? title;
+  final String? heroTag;
 
   @override
   State<BookDetailPage> createState() => _BookDetailPageState();
@@ -196,6 +198,14 @@ class _BookDetailPageState extends State<BookDetailPage> {
     final detail = result.detail;
     final intro = _resolveIntro(detail.intro);
     final colorScheme = Theme.of(context).colorScheme;
+    final heroTag =
+        widget.heroTag?.trim().isNotEmpty == true
+            ? widget.heroTag!.trim()
+            : _buildBookCoverHeroTag(
+              bookId: detail.id,
+              sourceId: detail.sourceId,
+              detailUrl: detail.detailUrl,
+            );
 
     return Card(
       clipBehavior: Clip.antiAlias,
@@ -215,7 +225,7 @@ class _BookDetailPageState extends State<BookDetailPage> {
               Row(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  _buildCoverPreview(detail.coverUrl),
+                  _buildCoverPreview(detail.coverUrl, heroTag: heroTag),
                   const SizedBox(width: 14),
                   Expanded(
                     child: Column(
@@ -357,23 +367,34 @@ class _BookDetailPageState extends State<BookDetailPage> {
     );
   }
 
-  Widget _buildCoverPreview(String? coverUrl) {
+  String _buildBookCoverHeroTag({
+    required String bookId,
+    required String sourceId,
+    required String detailUrl,
+  }) {
+    return 'book_cover_${sourceId.trim()}_${bookId.trim()}_${detailUrl.hashCode}';
+  }
+
+  Widget _buildCoverPreview(String? coverUrl, {required String heroTag}) {
     final uri = Uri.tryParse(coverUrl ?? '');
     if (uri != null && uri.hasScheme) {
-      return ClipRRect(
-        borderRadius: BorderRadius.circular(14),
-        child: Image.network(
-          coverUrl!,
-          width: 96,
-          height: 136,
-          fit: BoxFit.cover,
-          errorBuilder:
-              (context, error, stackTrace) => _buildCoverFallback('封面加载失败'),
+      return Hero(
+        tag: heroTag,
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(14),
+          child: Image.network(
+            coverUrl!,
+            width: 96,
+            height: 136,
+            fit: BoxFit.cover,
+            errorBuilder:
+                (context, error, stackTrace) => _buildCoverFallback('封面加载失败'),
+          ),
         ),
       );
     }
 
-    return _buildCoverFallback('暂无封面');
+    return Hero(tag: heroTag, child: _buildCoverFallback('暂无封面'));
   }
 
   Widget _buildCoverFallback(String text) {

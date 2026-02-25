@@ -68,6 +68,9 @@ class _SourcePageState extends State<SourcePage> {
   static const Duration _kSourceListLoadTimeout = Duration(seconds: 8);
   static const Duration _kSourceCardEntryDuration = Duration(milliseconds: 420);
   static const Duration _kCommentExpandDuration = Duration(milliseconds: 220);
+  static const int _kSourceCardEntryStaggerGroup = 8;
+  static const double _kSourceCardEntryStaggerStep = 0.08;
+  static const double _kSourceCardEntryCurveSpan = 0.4;
 
   SearchService get _searchServiceClient =>
       _searchService ??= SearchService(sourceRepository: _repository);
@@ -858,14 +861,18 @@ class _SourcePageState extends State<SourcePage> {
     required SourceListItem source,
     required int listIndex,
   }) {
-    final delay = (listIndex % 8) * 0.08;
+    final delay =
+        (listIndex % _kSourceCardEntryStaggerGroup) *
+        _kSourceCardEntryStaggerStep;
+    final begin = delay.clamp(0.0, 1 - _kSourceCardEntryCurveSpan);
+    final end = begin + _kSourceCardEntryCurveSpan;
     final card = _buildSourceCard(source);
 
     return TweenAnimationBuilder<double>(
       key: ValueKey<String>('source_entry_${source.id}'),
       tween: Tween<double>(begin: 0, end: 1),
       duration: _kSourceCardEntryDuration,
-      curve: Interval(delay, 1, curve: Curves.easeOutCubic),
+      curve: Interval(begin, end, curve: Curves.easeOutCubic),
       child: card,
       builder: (context, value, child) {
         final translateY = (1 - value) * 18;
