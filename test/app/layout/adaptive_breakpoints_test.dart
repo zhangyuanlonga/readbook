@@ -104,6 +104,26 @@ void main() {
     expect(find.byType(NavigationBar), findsNothing);
     expect(find.byType(NavigationRail), findsOneWidget);
   });
+
+  testWidgets('ShellScaffold bottom navigation keeps discover between tabs', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      const _TestHarness(
+        width: 390,
+        child: ShellScaffold(location: '/discover', child: SizedBox()),
+      ),
+    );
+    await tester.pump();
+
+    final bar = tester.widget<NavigationBar>(find.byType(NavigationBar));
+    final labels = bar.destinations
+        .map((item) => (item as NavigationDestination).label)
+        .toList(growable: false);
+
+    expect(labels, <String>['书架', '发现', '书源', '我的']);
+    expect(bar.selectedIndex, 1);
+  });
 }
 
 Future<void> _pumpShellScaffold(

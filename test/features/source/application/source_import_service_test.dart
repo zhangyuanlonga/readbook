@@ -236,5 +236,25 @@ void main() {
 
       await directory.delete(recursive: true);
     });
+
+    test(
+      'imports local 2026 sample source pack with discover support',
+      () async {
+        final file = File('2026.2.22_傍晚6.53.txt');
+        expect(file.existsSync(), isTrue);
+
+        final content = file.readAsStringSync();
+        final result = await service.previewFromTextInBackground(content);
+
+        expect(result, isA<Success<SourceImportPreviewReport>>());
+        final report = (result as Success<SourceImportPreviewReport>).data;
+        expect(report.totalCount, greaterThan(0));
+        expect(report.validCount, greaterThan(0));
+        expect(
+          report.validSources.where((source) => source.supportsExplore).length,
+          greaterThan(0),
+        );
+      },
+    );
   });
 }

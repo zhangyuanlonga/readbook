@@ -862,11 +862,28 @@ class AppDatabase extends _$AppDatabase {
       row.headersJson,
     ).map((key, value) => MapEntry(key, value.toString()));
     final raw = _decodeMap(row.rawJson);
+    final originalSource = _decodeNullableMap(raw['originalSource']);
 
     final status = SourceHealthStatus.values.firstWhere(
       (item) => item.name == row.healthStatus,
       orElse: () => SourceHealthStatus.unknown,
     );
+
+    final sourceType =
+        _decodeInt(raw['sourceType']) ??
+        _decodeInt(originalSource?['bookSourceType']) ??
+        0;
+
+    final hasExploreEnabled = raw.containsKey('exploreEnabled');
+    final exploreEnabled =
+        hasExploreEnabled
+            ? _decodeBool(raw['exploreEnabled'])
+            : _decodeBool(originalSource?['enabledExplore']);
+
+    final exploreUrl =
+        _nullableString(raw['exploreUrl']) ??
+        _nullableString(originalSource?['exploreUrl']) ??
+        _nullableString(originalSource?['discoverUrl']);
 
     return SourceDefinition(
       id: row.id,
@@ -874,14 +891,16 @@ class AppDatabase extends _$AppDatabase {
       baseUrl: row.baseUrl,
       group: row.group,
       enabled: row.enabled,
-      sourceType: _decodeInt(raw['sourceType']) ?? 0,
+      sourceType: sourceType,
       comment: row.comment,
       headers: headers,
       rules: SourceRuleSet.fromJson(rules),
       lastCheckStatus: status,
       lastCheckedAt: row.lastCheckedAt,
       lastCheckMessage: _nullableString(raw['lastCheckMessage']),
-      originalSource: _decodeNullableMap(raw['originalSource']),
+      exploreEnabled: exploreEnabled,
+      exploreUrl: exploreUrl,
+      originalSource: originalSource,
     );
   }
 

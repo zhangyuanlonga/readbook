@@ -63,5 +63,34 @@ void main() {
       items = await repository.getAll();
       expect(items, isEmpty);
     });
+
+    test('persists discover fields and supportsExplore state', () async {
+      final source = SourceDefinition(
+        id: 'discover_s1',
+        name: '发现源',
+        baseUrl: 'https://discover.example.com',
+        enabled: true,
+        exploreEnabled: true,
+        exploreUrl: '推荐::/discover?page={{page}}',
+        rules: const SourceRuleSet(
+          searchRule: '/search?key={{key}}',
+          exploreListRule: '.item@html',
+          exploreTitleRule: '.name@text',
+          exploreDetailUrlRule: '.name@href',
+        ),
+      );
+
+      await repository.upsertAll(<SourceDefinition>[source]);
+      final items = await repository.getAll();
+
+      expect(items, hasLength(1));
+      final restored = items.first;
+      expect(restored.exploreEnabled, isTrue);
+      expect(restored.exploreUrl, '推荐::/discover?page={{page}}');
+      expect(restored.rules.exploreListRule, '.item@html');
+      expect(restored.rules.exploreTitleRule, '.name@text');
+      expect(restored.rules.exploreDetailUrlRule, '.name@href');
+      expect(restored.supportsExplore, isTrue);
+    });
   });
 }
