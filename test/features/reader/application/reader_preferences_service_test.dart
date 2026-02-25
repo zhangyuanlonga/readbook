@@ -21,6 +21,8 @@ void main() {
         brightness: 0.75,
         themeMode: ReaderThemeMode.sepia,
         pageTurnMode: ReaderPageTurnMode.scroll,
+        autoReadEnabled: true,
+        autoReadSpeed: 66,
         backgroundStyle: ReaderBackgroundStyle.paper,
         pageTurnStepRatio: 0.72,
         fontWeightLevel: ReaderFontWeightLevel.medium,
@@ -43,6 +45,8 @@ void main() {
       expect(restored.brightness, 0.75);
       expect(restored.themeMode, ReaderThemeMode.sepia);
       expect(restored.pageTurnMode, ReaderPageTurnMode.scroll);
+      expect(restored.autoReadEnabled, isTrue);
+      expect(restored.autoReadSpeed, 66);
       expect(restored.backgroundStyle, ReaderBackgroundStyle.paper);
       expect(restored.pageTurnStepRatio, 0.72);
       expect(restored.fontWeightLevel, ReaderFontWeightLevel.medium);

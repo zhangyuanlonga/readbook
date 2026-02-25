@@ -23,6 +23,8 @@ class ReaderPreferencesService {
   static const String _brightnessKey = 'reader.settings.brightness';
   static const String _themeModeKey = 'reader.settings.themeMode';
   static const String _pageTurnModeKey = 'reader.settings.pageTurnMode';
+  static const String _autoReadEnabledKey = 'reader.settings.autoReadEnabled';
+  static const String _autoReadSpeedKey = 'reader.settings.autoReadSpeed';
   static const String _backgroundStyleKey = 'reader.settings.backgroundStyle';
   static const String _backgroundToneKey = 'reader.settings.backgroundTone';
   static const String _pageTurnStepRatioKey =
@@ -101,6 +103,15 @@ class ReaderPreferencesService {
       brightness: (prefs.getDouble(_brightnessKey) ?? 1).clamp(0.2, 1.0),
       themeMode: mode,
       pageTurnMode: pageTurnMode,
+      autoReadEnabled: prefs.getBool(_autoReadEnabledKey) ?? false,
+      autoReadSpeed:
+          (prefs.getDouble(_autoReadSpeedKey) ??
+                  ReaderSettings.defaultAutoReadSpeed)
+              .clamp(
+                ReaderSettings.minAutoReadSpeed,
+                ReaderSettings.maxAutoReadSpeed,
+              )
+              .toDouble(),
       backgroundStyle: backgroundStyle,
       backgroundTone: backgroundTone,
       pageTurnStepRatio: (prefs.getDouble(_pageTurnStepRatioKey) ?? 0.88).clamp(
@@ -134,6 +145,8 @@ class ReaderPreferencesService {
     await prefs.setDouble(_brightnessKey, settings.brightness);
     await prefs.setString(_themeModeKey, settings.themeMode.name);
     await prefs.setString(_pageTurnModeKey, settings.pageTurnMode.name);
+    await prefs.setBool(_autoReadEnabledKey, settings.autoReadEnabled);
+    await prefs.setDouble(_autoReadSpeedKey, settings.autoReadSpeed);
     await prefs.setString(_backgroundStyleKey, settings.backgroundStyle.name);
     await prefs.setString(_backgroundToneKey, settings.backgroundTone.name);
     await prefs.setDouble(_pageTurnStepRatioKey, settings.pageTurnStepRatio);

@@ -1,0 +1,318 @@
+import 'dart:async';
+
+import 'package:flutter/material.dart';
+import 'package:flutter_appread/core/network/request_context.dart';
+import 'package:flutter_appread/domain/entities/book.dart';
+import 'package:flutter_appread/domain/entities/source_definition.dart';
+import 'package:flutter_appread/domain/repositories/source_repository.dart';
+import 'package:flutter_appread/features/discover/application/explore_service.dart';
+import 'package:flutter_appread/features/discover/presentation/discover_page.dart';
+import 'package:flutter_appread/features/search/application/search_service.dart';
+import 'package:flutter_test/flutter_test.dart';
+
+void main() {
+  testWidgets('shows discover source summary when no discover-capable source', (
+    tester,
+  ) async {
+    final service = ExploreService(
+      sourceRepository: _FakeSourceRepository(<SourceDefinition>[
+        SourceDefinition(
+          id: 's1',
+          name: '普通源',
+          baseUrl: 'https://example.com',
+          enabled: true,
+          exploreEnabled: false,
+        ),
+      ]),
+      searchService: _FakeSearchService(),
+    );
+
+    await tester.pumpWidget(
+      _TestHarness(width: 900, child: DiscoverPage(exploreService: service)),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.textContaining('已启用书源：1 · 支持发现：0'), findsOneWidget);
+    expect(find.text('暂无支持发现的已启用书源'), findsOneWidget);
+  });
+
+  testWidgets('loads first discover category and renders books', (
+    tester,
+  ) async {
+    final service = ExploreService(
+      sourceRepository: _FakeSourceRepository(<SourceDefinition>[
+        SourceDefinition(
+          id: 'discover_s1',
+          name: '发现源A',
+          baseUrl: 'https://example.com',
+          enabled: true,
+          exploreEnabled: true,
+          exploreUrl: '推荐::/discover?page={{page}}',
+          rules: const SourceRuleSet(
+            exploreListRule: '.item@html',
+            exploreTitleRule: '.name@text',
+            exploreDetailUrlRule: '.name@href',
+          ),
+        ),
+      ]),
+      searchService: _FakeSearchService(
+        handler: ({
+          required SourceDefinition source,
+          required String keyword,
+          required int page,
+          required int pageSize,
+        }) async {
+          return SingleSourceSearchResult(
+            sourceId: source.id,
+            sourceName: source.name,
+            keyword: keyword,
+            requestUrl: 'https://example.com/discover?page=$page',
+            method: HttpRequestMethod.get,
+            statusCode: 200,
+            books: const <Book>[
+              Book(
+                id: 'b1',
+                sourceId: 'discover_s1',
+                title: '发现测试书籍',
+                detailUrl: 'https://example.com/book/1',
+              ),
+            ],
+          );
+        },
+      ),
+    );
+
+    await tester.pumpWidget(
+      _TestHarness(width: 900, child: DiscoverPage(exploreService: service)),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.textContaining('已启用书源：1 · 支持发现：1'), findsOneWidget);
+    expect(find.text('发现测试书籍'), findsOneWidget);
+  });
+
+  testWidgets('shows category style hint text in side panel', (tester) async {
+    final service = ExploreService(
+      sourceRepository: _FakeSourceRepository(<SourceDefinition>[
+        SourceDefinition(
+          id: 'discover_s2',
+          name: '发现源B',
+          baseUrl: 'https://example.com',
+          enabled: true,
+          exploreEnabled: true,
+          exploreUrl:
+              '[{"title":"推荐","url":"/discover?page={{page}}","style":{"layout_flexBasisPercent":0.25}}]',
+          rules: const SourceRuleSet(
+            exploreListRule: '.item@html',
+            exploreTitleRule: '.name@text',
+            exploreDetailUrlRule: '.name@href',
+          ),
+        ),
+      ]),
+      searchService: _FakeSearchService(),
+    );
+
+    await tester.pumpWidget(
+      _TestHarness(width: 900, child: DiscoverPage(exploreService: service)),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('建议宽度: 25%'), findsOneWidget);
+  });
+
+  testWidgets('marks broken source and allows quick switch to next source', (
+    tester,
+  ) async {
+    final service = ExploreService(
+      sourceRepository: _FakeSourceRepository(<SourceDefinition>[
+        SourceDefinition(
+          id: 'broken_s1',
+          name: 'A异常源',
+          baseUrl: 'https://broken.example.com',
+          enabled: true,
+          exploreEnabled: true,
+          exploreUrl: '{{id|bad}}',
+          rules: const SourceRuleSet(
+            exploreListRule: '.item@html',
+            exploreTitleRule: '.name@text',
+            exploreDetailUrlRule: '.name@href',
+          ),
+        ),
+        SourceDefinition(
+          id: 'ok_s2',
+          name: 'B可用源',
+          baseUrl: 'https://ok.example.com',
+          enabled: true,
+          exploreEnabled: true,
+          exploreUrl: '推荐::/discover?page={{page}}',
+          rules: const SourceRuleSet(
+            exploreListRule: '.item@html',
+            exploreTitleRule: '.name@text',
+            exploreDetailUrlRule: '.name@href',
+          ),
+        ),
+      ]),
+      searchService: _FakeSearchService(),
+    );
+
+    await tester.pumpWidget(
+      _TestHarness(width: 900, child: DiscoverPage(exploreService: service)),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('A异常源'), findsWidgets);
+    expect(find.text('规则异常'), findsWidgets);
+
+    await tester.tap(find.byKey(const Key('discover_next_source')));
+    await tester.pumpAndSettle();
+
+    expect(find.text('B可用源'), findsWidgets);
+  });
+
+  testWidgets('source switch buttons remain usable in narrow rail layout', (
+    tester,
+  ) async {
+    final service = ExploreService(
+      sourceRepository: _FakeSourceRepository(<SourceDefinition>[
+        SourceDefinition(
+          id: 'broken_s1',
+          name: 'A异常源',
+          baseUrl: 'https://broken.example.com',
+          enabled: true,
+          exploreEnabled: true,
+          exploreUrl: '{{id|bad}}',
+          rules: const SourceRuleSet(
+            exploreListRule: '.item@html',
+            exploreTitleRule: '.name@text',
+            exploreDetailUrlRule: '.name@href',
+          ),
+        ),
+        SourceDefinition(
+          id: 'ok_s2',
+          name: 'B可用源',
+          baseUrl: 'https://ok.example.com',
+          enabled: true,
+          exploreEnabled: true,
+          exploreUrl: '推荐::/discover?page={{page}}',
+          rules: const SourceRuleSet(
+            exploreListRule: '.item@html',
+            exploreTitleRule: '.name@text',
+            exploreDetailUrlRule: '.name@href',
+          ),
+        ),
+      ]),
+      searchService: _FakeSearchService(),
+    );
+
+    await tester.pumpWidget(
+      _TestHarness(width: 700, child: DiscoverPage(exploreService: service)),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byKey(const Key('discover_next_source')));
+    await tester.pumpAndSettle();
+
+    expect(find.text('B可用源'), findsWidgets);
+  });
+}
+
+class _TestHarness extends StatelessWidget {
+  const _TestHarness({required this.width, required this.child});
+
+  final double width;
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    return MediaQuery(
+      data: MediaQueryData(size: Size(width, 844)),
+      child: MaterialApp(home: child),
+    );
+  }
+}
+
+class _FakeSearchService extends SearchService {
+  _FakeSearchService({
+    Future<SingleSourceSearchResult> Function({
+      required SourceDefinition source,
+      required String keyword,
+      required int page,
+      required int pageSize,
+    })?
+    handler,
+  }) : _handler = handler,
+       super(
+         sourceRepository: _FakeSourceRepository(const <SourceDefinition>[]),
+       );
+
+  final Future<SingleSourceSearchResult> Function({
+    required SourceDefinition source,
+    required String keyword,
+    required int page,
+    required int pageSize,
+  })?
+  _handler;
+
+  @override
+  Future<SingleSourceSearchResult> searchSingleSource({
+    required SourceDefinition source,
+    required String keyword,
+    int page = 1,
+    int pageSize = 20,
+    bool validateRules = true,
+    bool skipInit = false,
+    Duration? connectTimeout,
+    Duration? receiveTimeout,
+  }) async {
+    final handler = _handler;
+    if (handler != null) {
+      return handler(
+        source: source,
+        keyword: keyword,
+        page: page,
+        pageSize: pageSize,
+      );
+    }
+
+    return SingleSourceSearchResult(
+      sourceId: source.id,
+      sourceName: source.name,
+      keyword: keyword,
+      requestUrl: 'https://example.com/discover?page=$page',
+      method: HttpRequestMethod.get,
+      statusCode: 200,
+      books: const <Book>[],
+    );
+  }
+}
+
+class _FakeSourceRepository implements SourceRepository {
+  _FakeSourceRepository(this.sources);
+
+  final List<SourceDefinition> sources;
+
+  @override
+  Future<void> clear() async {}
+
+  @override
+  Future<void> deleteById(String sourceId) async {}
+
+  @override
+  Future<void> deleteByIds(List<String> sourceIds) async {}
+
+  @override
+  Future<List<SourceDefinition>> getAll() async => sources;
+
+  @override
+  Future<void> setEnabled({
+    required String sourceId,
+    required bool enabled,
+  }) async {}
+
+  @override
+  Future<void> upsertAll(List<SourceDefinition> sources) async {}
+
+  @override
+  Stream<List<SourceDefinition>> watchAll() =>
+      Stream<List<SourceDefinition>>.value(sources);
+}

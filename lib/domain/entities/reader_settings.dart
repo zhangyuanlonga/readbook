@@ -30,6 +30,8 @@ class ReaderSettings {
     this.brightness = 1,
     this.themeMode = ReaderThemeMode.light,
     this.pageTurnMode = ReaderPageTurnMode.tap,
+    this.autoReadEnabled = false,
+    this.autoReadSpeed = defaultAutoReadSpeed,
     this.backgroundStyle = ReaderBackgroundStyle.plain,
     this.backgroundTone = ReaderBackgroundTone.surface,
     this.pageTurnStepRatio = 0.88,
@@ -42,6 +44,10 @@ class ReaderSettings {
     this.mangaLoadStrategy = ReaderMangaLoadStrategy.balanced,
   });
 
+  static const double minAutoReadSpeed = 20;
+  static const double maxAutoReadSpeed = 120;
+  static const double defaultAutoReadSpeed = 48;
+
   final double fontSize;
   final double lineHeight;
   final double horizontalPadding;
@@ -50,6 +56,8 @@ class ReaderSettings {
   final double brightness;
   final ReaderThemeMode themeMode;
   final ReaderPageTurnMode pageTurnMode;
+  final bool autoReadEnabled;
+  final double autoReadSpeed;
   final ReaderBackgroundStyle backgroundStyle;
   final ReaderBackgroundTone backgroundTone;
   final double pageTurnStepRatio;
@@ -70,6 +78,8 @@ class ReaderSettings {
     double? brightness,
     ReaderThemeMode? themeMode,
     ReaderPageTurnMode? pageTurnMode,
+    bool? autoReadEnabled,
+    double? autoReadSpeed,
     ReaderBackgroundStyle? backgroundStyle,
     ReaderBackgroundTone? backgroundTone,
     double? pageTurnStepRatio,
@@ -91,6 +101,11 @@ class ReaderSettings {
       brightness: brightness ?? this.brightness,
       themeMode: themeMode ?? this.themeMode,
       pageTurnMode: pageTurnMode ?? this.pageTurnMode,
+      autoReadEnabled: autoReadEnabled ?? this.autoReadEnabled,
+      autoReadSpeed:
+          (autoReadSpeed ?? this.autoReadSpeed)
+              .clamp(minAutoReadSpeed, maxAutoReadSpeed)
+              .toDouble(),
       backgroundStyle: backgroundStyle ?? this.backgroundStyle,
       backgroundTone: backgroundTone ?? this.backgroundTone,
       pageTurnStepRatio: pageTurnStepRatio ?? this.pageTurnStepRatio,
@@ -117,6 +132,8 @@ class ReaderSettings {
       'brightness': brightness,
       'themeMode': themeMode.name,
       'pageTurnMode': pageTurnMode.name,
+      'autoReadEnabled': autoReadEnabled,
+      'autoReadSpeed': autoReadSpeed,
       'backgroundStyle': backgroundStyle.name,
       'backgroundTone': backgroundTone.name,
       'pageTurnStepRatio': pageTurnStepRatio,
@@ -191,6 +208,11 @@ class ReaderSettings {
       brightness: _asDouble(json['brightness'])?.clamp(0.2, 1.0) ?? 1,
       themeMode: mode,
       pageTurnMode: pageTurnMode,
+      autoReadEnabled: _asBool(json['autoReadEnabled']) ?? false,
+      autoReadSpeed:
+          (_asDouble(json['autoReadSpeed']) ?? defaultAutoReadSpeed)
+              .clamp(minAutoReadSpeed, maxAutoReadSpeed)
+              .toDouble(),
       backgroundStyle: backgroundStyle,
       backgroundTone: backgroundTone,
       pageTurnStepRatio:
@@ -222,6 +244,25 @@ class ReaderSettings {
     }
     if (value is String) {
       return double.tryParse(value.trim());
+    }
+    return null;
+  }
+
+  static bool? _asBool(Object? value) {
+    if (value is bool) {
+      return value;
+    }
+    if (value is num) {
+      return value != 0;
+    }
+    if (value is String) {
+      final normalized = value.trim().toLowerCase();
+      if (normalized == 'true' || normalized == '1') {
+        return true;
+      }
+      if (normalized == 'false' || normalized == '0') {
+        return false;
+      }
     }
     return null;
   }
