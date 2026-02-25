@@ -1,10 +1,10 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:math';
-import 'dart:typed_data';
 
 import 'package:file_selector/file_selector.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:page_curl_effect/page_curl_effect.dart';
 import 'package:go_router/go_router.dart';
@@ -113,9 +113,32 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
   double _curlAutoEndX = 0;
   double _curlAutoY = 0;
   int _curlAutoDirection = 1;
+  final Map<String, Uint8List> _backgroundPresetBytes = <String, Uint8List>{};
+  final Map<String, String> _backgroundPresetBase64 = <String, String>{};
+
+  static const List<_ReaderBackgroundPreset> _backgroundPresets = [
+    _ReaderBackgroundPreset(
+      label: '预设1',
+      assetPath: 'assets/reader/backgrounds/20260224-212555-700782.jpeg',
+    ),
+    _ReaderBackgroundPreset(
+      label: '预设2',
+      assetPath: 'assets/reader/backgrounds/20260224-212555-b91cd8.jpeg',
+    ),
+    _ReaderBackgroundPreset(
+      label: '预设3',
+      assetPath: 'assets/reader/backgrounds/20260224-212555-01b93d.jpeg',
+    ),
+    _ReaderBackgroundPreset(
+      label: '预设4',
+      assetPath: 'assets/reader/backgrounds/Image_1768236174407.jpg',
+    ),
+  ];
 
   static const double _kPinnedHeaderTopPadding = 6;
   static const double _kPinnedHeaderHeight = 40;
+  static const double _kBackgroundTileWidth = 84;
+  static const double _kBackgroundTileHeight = 52;
 
   bool _isTapPaginationEnabled() {
     return _settings.pageTurnMode == ReaderPageTurnMode.tap &&
@@ -241,8 +264,12 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
   }
 
   Widget _buildBackgroundLayer(_ReaderThemeColors colors) {
+    return DecoratedBox(decoration: _buildReaderBackgroundDecoration(colors));
+  }
+
+  BoxDecoration _buildReaderBackgroundDecoration(_ReaderThemeColors colors) {
     final backgroundImage = _resolveBackgroundDecorationImage();
-    final decoration = switch (_settings.backgroundStyle) {
+    return switch (_settings.backgroundStyle) {
       ReaderBackgroundStyle.plain => BoxDecoration(
         color: colors.background,
         image: backgroundImage,
@@ -270,8 +297,6 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
         image: backgroundImage,
       ),
     };
-
-    return DecoratedBox(decoration: decoration);
   }
 
   DecorationImage? _resolveBackgroundDecorationImage() {
@@ -335,44 +360,41 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
     final chapterTitle =
         _chapterTitle?.isNotEmpty == true ? _chapterTitle! : '未命名章节';
 
-    return ColoredBox(
-      color: colors.background,
-      child: Padding(
-        padding: EdgeInsets.only(
-          top: _topSafeInset(context) + _kPinnedHeaderTopPadding,
-        ),
-        child: SizedBox(
-          height: _kPinnedHeaderHeight,
-          child: Padding(
-            padding: const EdgeInsets.only(left: 6, right: 12),
-            child: Row(
-              children: [
-                IconButton(
-                  onPressed: _handleBackNavigation,
-                  tooltip: '返回',
-                  visualDensity: VisualDensity.compact,
-                  style: IconButton.styleFrom(
-                    foregroundColor: colors.text,
-                    backgroundColor: Colors.transparent,
-                    splashFactory: InkRipple.splashFactory,
-                  ),
-                  icon: const Icon(Icons.chevron_left_rounded, size: 22),
+    return Padding(
+      padding: EdgeInsets.only(
+        top: _topSafeInset(context) + _kPinnedHeaderTopPadding,
+      ),
+      child: SizedBox(
+        height: _kPinnedHeaderHeight,
+        child: Padding(
+          padding: const EdgeInsets.only(left: 6, right: 12),
+          child: Row(
+            children: [
+              IconButton(
+                onPressed: _handleBackNavigation,
+                tooltip: '返回',
+                visualDensity: VisualDensity.compact,
+                style: IconButton.styleFrom(
+                  foregroundColor: colors.text,
+                  backgroundColor: Colors.transparent,
+                  splashFactory: InkRipple.splashFactory,
                 ),
-                const SizedBox(width: 4),
-                Expanded(
-                  child: Text(
-                    chapterTitle,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: TextStyle(
-                      color: colors.text,
-                      fontSize: 14,
-                      fontWeight: FontWeight.w600,
-                    ),
+                icon: const Icon(Icons.chevron_left_rounded, size: 22),
+              ),
+              const SizedBox(width: 4),
+              Expanded(
+                child: Text(
+                  chapterTitle,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    color: colors.text,
+                    fontSize: 14,
+                    fontWeight: FontWeight.w600,
                   ),
                 ),
-              ],
-            ),
+              ),
+            ],
           ),
         ),
       ),
@@ -925,8 +947,8 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
     return SizedBox(
       width: pageSize.width,
       height: pageSize.height,
-      child: ColoredBox(
-        color: colors.background,
+      child: DecoratedBox(
+        decoration: _buildReaderBackgroundDecoration(colors),
         child: Column(
           children: [
             _buildPinnedChapterHeader(colors),
@@ -1057,8 +1079,8 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
     return SizedBox(
       width: pageSize.width,
       height: pageSize.height,
-      child: ColoredBox(
-        color: colors.background,
+      child: DecoratedBox(
+        decoration: _buildReaderBackgroundDecoration(colors),
         child: Column(
           children: [
             _buildPinnedChapterHeader(colors),
@@ -3262,6 +3284,11 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
       draft = draft.copyWith(pageAnimationStyle: ReaderPageAnimationStyle.curl);
     }
 
+    await _ensureBackgroundPresetsReady();
+    if (!mounted) {
+      return;
+    }
+
     final result = await showModalBottomSheet<ReaderSettings>(
       context: context,
       isScrollControlled: true,
@@ -3270,9 +3297,43 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
       builder: (context) {
         return StatefulBuilder(
           builder: (context, setModalState) {
-            final customBackgroundPreview = _tryDecodeBase64(
-              draft.backgroundImageBase64,
-            );
+            final activeBackgroundBase64 = draft.backgroundImageBase64?.trim();
+            final hasBackgroundImage =
+                activeBackgroundBase64 != null &&
+                activeBackgroundBase64.isNotEmpty;
+            final isPresetBackground =
+                hasBackgroundImage &&
+                _backgroundPresetBase64.values.contains(activeBackgroundBase64);
+            final customBackgroundPreview =
+                hasBackgroundImage && !isPresetBackground
+                    ? _tryDecodeBase64(activeBackgroundBase64)
+                    : null;
+            final presetBackgroundTiles = <Widget>[];
+            for (final preset in _backgroundPresets) {
+              final previewBytes = _backgroundPresetBytes[preset.assetPath];
+              final presetBase64 = _backgroundPresetBase64[preset.assetPath];
+              if (previewBytes == null || presetBase64 == null) {
+                continue;
+              }
+              presetBackgroundTiles.add(
+                Padding(
+                  padding: const EdgeInsets.only(right: 8),
+                  child: _buildBackgroundTile(
+                    label: preset.label,
+                    selected: activeBackgroundBase64 == presetBase64,
+                    previewBytes: previewBytes,
+                    showLabel: false,
+                    onTap: () {
+                      setModalState(() {
+                        draft = draft.copyWith(
+                          backgroundImageBase64: presetBase64,
+                        );
+                      });
+                    },
+                  ),
+                ),
+              );
+            }
             final isMangaChapter = _chapterImageUrls.isNotEmpty;
             final keyboardInset = MediaQuery.viewInsetsOf(context).bottom;
             final safeBottom = _bottomSafeInset(context);
@@ -3558,25 +3619,27 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
                                   child: Row(
                                     children: [
                                       _buildBackgroundTile(
-                                        label: '示例1',
-                                        selected: false,
+                                        label: '无背景',
+                                        selected: !hasBackgroundImage,
+                                        icon: Icons.hide_image_outlined,
+                                        onTap: () {
+                                          setModalState(() {
+                                            draft = draft.copyWith(
+                                              clearBackgroundImage: true,
+                                            );
+                                          });
+                                        },
                                       ),
                                       const SizedBox(width: 8),
-                                      _buildBackgroundTile(
-                                        label: '示例2',
-                                        selected: false,
-                                      ),
-                                      const SizedBox(width: 8),
-                                      _buildBackgroundTile(
-                                        label: '示例3',
-                                        selected: false,
-                                      ),
-                                      const SizedBox(width: 8),
+                                      ...presetBackgroundTiles,
                                       _buildBackgroundTile(
                                         label: '自定义',
                                         selected:
-                                            customBackgroundPreview != null,
+                                            hasBackgroundImage &&
+                                            !isPresetBackground,
                                         previewBytes: customBackgroundPreview,
+                                        showLabel:
+                                            customBackgroundPreview == null,
                                       ),
                                       const SizedBox(width: 8),
                                       OutlinedButton.icon(
@@ -3598,7 +3661,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
                                         ),
                                         label: const Text('上传'),
                                       ),
-                                      if (customBackgroundPreview != null) ...[
+                                      if (hasBackgroundImage) ...[
                                         const SizedBox(width: 8),
                                         OutlinedButton(
                                           onPressed: () {
@@ -4013,6 +4076,27 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
     await _preferencesService.saveSettings(appliedResult);
   }
 
+  Future<void> _ensureBackgroundPresetsReady() async {
+    for (final preset in _backgroundPresets) {
+      final path = preset.assetPath;
+      if (_backgroundPresetBytes.containsKey(path) &&
+          _backgroundPresetBase64.containsKey(path)) {
+        continue;
+      }
+      try {
+        final data = await rootBundle.load(path);
+        final bytes = data.buffer.asUint8List();
+        if (bytes.isEmpty) {
+          continue;
+        }
+        _backgroundPresetBytes[path] = bytes;
+        _backgroundPresetBase64[path] = base64Encode(bytes);
+      } catch (error) {
+        debugPrint('Load reader preset background failed: $path, $error');
+      }
+    }
+  }
+
   Widget _buildSettingLine({
     required BuildContext context,
     required String label,
@@ -4160,6 +4244,9 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
     required String label,
     required bool selected,
     Uint8List? previewBytes,
+    VoidCallback? onTap,
+    bool showLabel = true,
+    IconData? icon,
   }) {
     final image =
         previewBytes == null
@@ -4169,9 +4256,9 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
               fit: BoxFit.cover,
             );
 
-    return Container(
-      width: 58,
-      height: _kPinnedHeaderHeight,
+    final tile = Container(
+      width: _kBackgroundTileWidth,
+      height: _kBackgroundTileHeight,
       alignment: Alignment.center,
       decoration: BoxDecoration(
         color: Theme.of(context).colorScheme.surfaceContainerHighest,
@@ -4187,30 +4274,55 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
       ),
       child:
           previewBytes == null
-              ? Text(label, style: Theme.of(context).textTheme.labelSmall)
-              : Container(
-                width: double.infinity,
-                height: double.infinity,
-                alignment: Alignment.bottomCenter,
-                decoration: BoxDecoration(
-                  borderRadius: BorderRadius.circular(6),
-                  gradient: const LinearGradient(
-                    begin: Alignment.topCenter,
-                    end: Alignment.bottomCenter,
-                    colors: [Color(0x00000000), Color(0x7A000000)],
-                  ),
-                ),
-                child: Padding(
-                  padding: const EdgeInsets.only(bottom: 2),
-                  child: Text(
-                    label,
-                    style: Theme.of(
-                      context,
-                    ).textTheme.labelSmall?.copyWith(color: Colors.white),
-                  ),
-                ),
-              ),
+              ? (icon != null
+                  ? Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(
+                        icon,
+                        size: 18,
+                        color: Theme.of(context).colorScheme.onSurfaceVariant,
+                      ),
+                      if (showLabel) ...[
+                        const SizedBox(height: 2),
+                        Text(
+                          label,
+                          style: Theme.of(context).textTheme.labelSmall,
+                        ),
+                      ],
+                    ],
+                  )
+                  : Text(label, style: Theme.of(context).textTheme.labelSmall))
+              : (!showLabel
+                  ? const SizedBox.expand()
+                  : Container(
+                    width: double.infinity,
+                    height: double.infinity,
+                    alignment: Alignment.bottomCenter,
+                    decoration: BoxDecoration(
+                      borderRadius: BorderRadius.circular(6),
+                      gradient: const LinearGradient(
+                        begin: Alignment.topCenter,
+                        end: Alignment.bottomCenter,
+                        colors: [Color(0x00000000), Color(0x7A000000)],
+                      ),
+                    ),
+                    child: Padding(
+                      padding: const EdgeInsets.only(bottom: 2),
+                      child: Text(
+                        label,
+                        style: Theme.of(
+                          context,
+                        ).textTheme.labelSmall?.copyWith(color: Colors.white),
+                      ),
+                    ),
+                  )),
     );
+
+    if (onTap == null) {
+      return tile;
+    }
+    return GestureDetector(onTap: onTap, child: tile);
   }
 
   Future<String?> _pickBackgroundImageBase64() async {
@@ -4653,4 +4765,11 @@ class _ReaderThemeColors {
   final Color meta;
   final Color divider;
   final Color overlay;
+}
+
+class _ReaderBackgroundPreset {
+  const _ReaderBackgroundPreset({required this.label, required this.assetPath});
+
+  final String label;
+  final String assetPath;
 }
