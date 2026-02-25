@@ -707,10 +707,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
   }
 
   ReaderPageAnimationStyle _effectivePageAnimationStyle() {
-    final style = _settings.pageAnimationStyle;
-    return style == ReaderPageAnimationStyle.simulation
-        ? ReaderPageAnimationStyle.curl
-        : style;
+    return _settings.pageAnimationStyle;
   }
 
   Widget _buildPagedReader(_ReaderThemeColors colors) {
@@ -882,7 +879,6 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
               );
             case ReaderPageAnimationStyle.fade:
               return FadeTransition(opacity: curved, child: child);
-            case ReaderPageAnimationStyle.simulation:
             case ReaderPageAnimationStyle.curl:
             case ReaderPageAnimationStyle.none:
               return FadeTransition(opacity: curved, child: child);
@@ -3354,9 +3350,6 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
     }
 
     var draft = _settings;
-    if (draft.pageAnimationStyle == ReaderPageAnimationStyle.simulation) {
-      draft = draft.copyWith(pageAnimationStyle: ReaderPageAnimationStyle.curl);
-    }
 
     await _ensureBackgroundPresetsReady();
     if (!mounted) {
@@ -4159,14 +4152,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
       return;
     }
 
-    final normalizedResult =
-        result.pageAnimationStyle == ReaderPageAnimationStyle.simulation
-            ? result.copyWith(pageAnimationStyle: ReaderPageAnimationStyle.curl)
-            : result;
-
-    final appliedResult = normalizedResult.copyWith(
-      pageTurnMode: ReaderPageTurnMode.tap,
-    );
+    final appliedResult = result.copyWith(pageTurnMode: ReaderPageTurnMode.tap);
 
     setState(() {
       _settings = appliedResult;
@@ -4723,7 +4709,6 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
     return switch (style) {
       ReaderPageAnimationStyle.curl => '卷页',
       ReaderPageAnimationStyle.fade => '淡入淡出',
-      ReaderPageAnimationStyle.simulation => '仿真',
       ReaderPageAnimationStyle.cover => '覆盖',
       ReaderPageAnimationStyle.translate => '平移',
       ReaderPageAnimationStyle.vertical => '上下',

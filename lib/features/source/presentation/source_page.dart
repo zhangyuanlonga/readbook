@@ -66,6 +66,8 @@ class _SourcePageState extends State<SourcePage> {
   static const int _kPageSize = 60;
   static const String _defaultConnectivityKeyword = '凡人修仙传';
   static const Duration _kSourceListLoadTimeout = Duration(seconds: 8);
+  static const Duration _kSourceCardEntryDuration = Duration(milliseconds: 420);
+  static const Duration _kCommentExpandDuration = Duration(milliseconds: 220);
 
   SearchService get _searchServiceClient =>
       _searchService ??= SearchService(sourceRepository: _repository);
@@ -471,7 +473,10 @@ class _SourcePageState extends State<SourcePage> {
           if (itemListIndex >= _visibleSources.length - 8) {
             unawaited(_loadNextPage());
           }
-          return _buildSourceCard(source);
+          return _buildAnimatedSourceCard(
+            source: source,
+            listIndex: itemListIndex,
+          );
         }
 
         if (showFooter && itemListIndex == _visibleSources.length) {
@@ -849,6 +854,37 @@ class _SourcePageState extends State<SourcePage> {
     );
   }
 
+  Widget _buildAnimatedSourceCard({
+    required SourceListItem source,
+    required int listIndex,
+  }) {
+    final delay = (listIndex % 8) * 0.08;
+    final card = _buildSourceCard(source);
+
+    return TweenAnimationBuilder<double>(
+      key: ValueKey<String>('source_entry_${source.id}'),
+      tween: Tween<double>(begin: 0, end: 1),
+      duration: _kSourceCardEntryDuration,
+      curve: Interval(delay, 1, curve: Curves.easeOutCubic),
+      child: card,
+      builder: (context, value, child) {
+        final translateY = (1 - value) * 18;
+        final scale = 0.985 + (0.015 * value);
+        return Opacity(
+          opacity: value,
+          child: Transform.translate(
+            offset: Offset(0, translateY),
+            child: Transform.scale(
+              alignment: Alignment.topCenter,
+              scale: scale,
+              child: child,
+            ),
+          ),
+        );
+      },
+    );
+  }
+
   Widget _buildSourceCard(SourceListItem source) {
     final checkedAtText = _buildConnectivityTestTimeText(source);
     final isTesting = _testingSourceIds.contains(source.id);
@@ -976,9 +1012,7 @@ class _SourcePageState extends State<SourcePage> {
                             mainAxisSize: MainAxisSize.min,
                             children: [
                               Icon(
-                                isCommentExpanded
-                                    ? Icons.expand_less_rounded
-                                    : Icons.sticky_note_2_outlined,
+                                Icons.sticky_note_2_outlined,
                                 size: 15,
                                 color: colorScheme.onSurfaceVariant,
                               ),
@@ -992,29 +1026,74 @@ class _SourcePageState extends State<SourcePage> {
                                   fontWeight: FontWeight.w600,
                                 ),
                               ),
+                              const SizedBox(width: 2),
+                              AnimatedRotation(
+                                turns: isCommentExpanded ? 0.5 : 0,
+                                duration: _kCommentExpandDuration,
+                                curve: Curves.easeOutCubic,
+                                child: Icon(
+                                  Icons.expand_more_rounded,
+                                  size: 15,
+                                  color: colorScheme.onSurfaceVariant,
+                                ),
+                              ),
                             ],
                           ),
                         ),
                       ),
-                    ],
-                    if (hasComment && isCommentExpanded) ...[
-                      const SizedBox(height: 4),
-                      Container(
-                        width: double.infinity,
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 8,
-                          vertical: 6,
-                        ),
-                        decoration: BoxDecoration(
-                          color: colorScheme.surfaceContainerHighest,
-                          borderRadius: BorderRadius.circular(8),
-                        ),
-                        child: Text(
-                          commentText,
-                          maxLines: 3,
-                          overflow: TextOverflow.ellipsis,
-                          style: Theme.of(context).textTheme.bodySmall,
-                        ),
+                      AnimatedSwitcher(
+                        duration: _kCommentExpandDuration,
+                        switchInCurve: Curves.easeOutCubic,
+                        switchOutCurve: Curves.easeInCubic,
+                        transitionBuilder: (child, animation) {
+                          final slideAnimation = Tween<Offset>(
+                            begin: const Offset(0, -0.08),
+                            end: Offset.zero,
+                          ).animate(animation);
+                          return FadeTransition(
+                            opacity: animation,
+                            child: SizeTransition(
+                              sizeFactor: animation,
+                              axisAlignment: -1,
+                              child: SlideTransition(
+                                position: slideAnimation,
+                                child: child,
+                              ),
+                            ),
+                          );
+                        },
+                        child:
+                            isCommentExpanded
+                                ? Padding(
+                                  key: ValueKey<String>(
+                                    'source_comment_open_${source.id}',
+                                  ),
+                                  padding: const EdgeInsets.only(top: 4),
+                                  child: Container(
+                                    width: double.infinity,
+                                    padding: const EdgeInsets.symmetric(
+                                      horizontal: 8,
+                                      vertical: 6,
+                                    ),
+                                    decoration: BoxDecoration(
+                                      color:
+                                          colorScheme.surfaceContainerHighest,
+                                      borderRadius: BorderRadius.circular(8),
+                                    ),
+                                    child: Text(
+                                      commentText,
+                                      maxLines: 3,
+                                      overflow: TextOverflow.ellipsis,
+                                      style:
+                                          Theme.of(context).textTheme.bodySmall,
+                                    ),
+                                  ),
+                                )
+                                : const SizedBox.shrink(
+                                  key: ValueKey<String>(
+                                    'source_comment_closed',
+                                  ),
+                                ),
                       ),
                     ],
                   ],

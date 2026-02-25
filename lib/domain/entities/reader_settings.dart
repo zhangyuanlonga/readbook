@@ -14,15 +14,7 @@ enum ReaderBackgroundTone {
 
 enum ReaderFontWeightLevel { light, regular, medium }
 
-enum ReaderPageAnimationStyle {
-  curl,
-  fade,
-  simulation,
-  cover,
-  translate,
-  vertical,
-  none,
-}
+enum ReaderPageAnimationStyle { curl, fade, cover, translate, vertical, none }
 
 enum ReaderMangaReadMode { continuous, paged, horizontal }
 
@@ -170,14 +162,10 @@ class ReaderSettings {
     );
 
     final animationName = json['pageAnimationStyle']?.toString();
-    final parsedAnimationStyle = ReaderPageAnimationStyle.values.firstWhere(
+    final pageAnimationStyle = ReaderPageAnimationStyle.values.firstWhere(
       (item) => item.name == animationName,
       orElse: () => ReaderPageAnimationStyle.curl,
     );
-    final pageAnimationStyle =
-        parsedAnimationStyle == ReaderPageAnimationStyle.simulation
-            ? ReaderPageAnimationStyle.curl
-            : parsedAnimationStyle;
 
     final mangaReadModeName = json['mangaReadMode']?.toString();
     final mangaReadMode = ReaderMangaReadMode.values.firstWhere(

@@ -75,14 +75,10 @@ class ReaderPreferencesService {
     );
 
     final animationName = prefs.getString(_pageAnimationStyleKey);
-    final parsedAnimationStyle = ReaderPageAnimationStyle.values.firstWhere(
+    final pageAnimationStyle = ReaderPageAnimationStyle.values.firstWhere(
       (item) => item.name == animationName,
       orElse: () => ReaderPageAnimationStyle.curl,
     );
-    final pageAnimationStyle =
-        parsedAnimationStyle == ReaderPageAnimationStyle.simulation
-            ? ReaderPageAnimationStyle.curl
-            : parsedAnimationStyle;
 
     final mangaReadModeName = prefs.getString(_mangaReadModeKey);
     final mangaReadMode = ReaderMangaReadMode.values.firstWhere(
