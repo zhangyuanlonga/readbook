@@ -9,6 +9,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:page_curl_effect/page_curl_effect.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../../app/layout/app_layout.dart';
 import '../../../app/layout/app_spacing.dart';
 import '../../../app/theme/app_theme.dart';
 
@@ -2255,10 +2256,10 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
     required double large,
   }) {
     final width = MediaQuery.sizeOf(context).width;
-    if (width < 360) {
+    if (width < AppLayout.phoneSmallWidth) {
       return compact;
     }
-    if (width >= 430) {
+    if (width >= AppLayout.phoneLargeWidth) {
       return large;
     }
     return regular;
@@ -2946,7 +2947,8 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
                               );
                             }
 
-                            if (constraints.maxWidth < 360) {
+                            if (constraints.maxWidth <
+                                AppLayout.phoneSmallWidth) {
                               return Column(
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [

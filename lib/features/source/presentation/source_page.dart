@@ -977,7 +977,8 @@ class _SourcePageState extends State<SourcePage> {
                           style: checkedAtTextStyle,
                         );
 
-                        if (constraints.maxWidth < 340) {
+                        if (constraints.maxWidth <
+                            AppLayout.compactContentWidth) {
                           return Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [

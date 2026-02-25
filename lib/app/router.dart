@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 import '../features/book/presentation/book_detail_page.dart';
 import '../features/book/presentation/local_book_detail_page.dart';
 import '../features/bookshelf/presentation/bookshelf_page.dart';
+import '../features/discover/presentation/discover_page.dart';
 import '../features/mine/presentation/mine_page.dart';
 import '../features/mine/presentation/cache_management_page.dart';
 import '../features/reader/presentation/local_reader_page.dart';
@@ -30,6 +31,11 @@ final GoRouter appRouter = GoRouter(
           path: '/bookshelf',
           name: 'bookshelf',
           builder: (context, state) => const BookshelfPage(),
+        ),
+        GoRoute(
+          path: '/discover',
+          name: 'discover',
+          builder: (context, state) => const DiscoverPage(),
         ),
         GoRoute(
           path: '/source',

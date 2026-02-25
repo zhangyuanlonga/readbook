@@ -104,6 +104,26 @@ class SourceConnectivityTestReport {
   bool get isSuccess => error == null;
 }
 
+class SingleSourceSearchResult {
+  const SingleSourceSearchResult({
+    required this.sourceId,
+    required this.sourceName,
+    required this.keyword,
+    required this.requestUrl,
+    required this.method,
+    required this.statusCode,
+    required this.books,
+  });
+
+  final String sourceId;
+  final String sourceName;
+  final String keyword;
+  final String requestUrl;
+  final HttpRequestMethod method;
+  final int statusCode;
+  final List<Book> books;
+}
+
 class SearchService {
   SearchService({
     SourceRepository? sourceRepository,
@@ -609,6 +629,51 @@ class SearchService {
         probeOnly: !validateRules,
       );
     }
+  }
+
+  Future<SingleSourceSearchResult> searchSingleSource({
+    required SourceDefinition source,
+    required String keyword,
+    int page = 1,
+    int pageSize = 20,
+    bool validateRules = true,
+    bool skipInit = false,
+    Duration? connectTimeout,
+    Duration? receiveTimeout,
+  }) async {
+    final normalizedKeyword = keyword.trim();
+    if (normalizedKeyword.isEmpty) {
+      throw AppException(
+        code: ErrorCode.validation,
+        stage: ErrorStage.search,
+        sourceId: source.id,
+        briefMessage: '搜索关键词不能为空。',
+      );
+    }
+
+    final output = await _searchSingleSource(
+      source: source,
+      context: SearchRequestContext(
+        keyword: normalizedKeyword,
+        page: page,
+        pageSize: pageSize,
+        sourceId: source.id,
+      ),
+      validateRules: validateRules,
+      skipInit: skipInit,
+      connectTimeout: connectTimeout,
+      receiveTimeout: receiveTimeout,
+    );
+
+    return SingleSourceSearchResult(
+      sourceId: source.id,
+      sourceName: source.name,
+      keyword: normalizedKeyword,
+      requestUrl: output.requestUrl,
+      method: output.method,
+      statusCode: output.statusCode,
+      books: output.books,
+    );
   }
 
   Future<_SourceSearchOutput> _searchSingleSource({

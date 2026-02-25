@@ -2,6 +2,8 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 
+import '../../../app/layout/app_layout.dart';
+import '../../../app/layout/app_spacing.dart';
 import '../../../data/datasources/local/app_database.dart';
 
 class SourceFilterSheetConfig {
@@ -184,6 +186,15 @@ class _SourceFilterSheetState extends State<_SourceFilterSheet> {
 
   @override
   Widget build(BuildContext context) {
+    final width = AppLayout.screenWidth(context);
+    final heightFactor =
+        width < AppLayout.phoneSmallWidth
+            ? 0.9
+            : width >= AppLayout.phoneLargeWidth
+            ? 0.82
+            : 0.85;
+    final horizontal = AppSpacing.pageHorizontal(context);
+
     final summaryText =
         _draftSelectedIds.isEmpty
             ? '当前：${widget.config.allSummaryLabel} ($_totalCount)'
@@ -193,9 +204,9 @@ class _SourceFilterSheetState extends State<_SourceFilterSheet> {
     );
 
     return FractionallySizedBox(
-      heightFactor: 0.85,
+      heightFactor: heightFactor,
       child: Padding(
-        padding: const EdgeInsets.fromLTRB(16, 6, 16, 16),
+        padding: EdgeInsets.fromLTRB(horizontal, 6, horizontal, 16),
         child: Column(
           children: [
             Align(
@@ -243,7 +254,7 @@ class _SourceFilterSheetState extends State<_SourceFilterSheet> {
                   ),
                 ];
 
-                if (constraints.maxWidth < 420) {
+                if (constraints.maxWidth < AppLayout.actionWrapWidth) {
                   return Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [

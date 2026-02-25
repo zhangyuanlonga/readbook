@@ -28,6 +28,7 @@ class LegadoSourceAdapter {
     final detailRuleMap = _extractMap(raw.rawData['ruleBookInfo']);
     final tocRuleMap = _extractMap(raw.rawData['ruleToc']);
     final contentRuleMap = _extractMap(raw.rawData['ruleContent']);
+    final exploreRuleMap = _extractMap(raw.rawData['ruleExplore']);
 
     final searchRule =
         _pickRule(raw.rawData, ['searchUrl', 'ruleSearchUrl']) ??
@@ -54,6 +55,14 @@ class LegadoSourceAdapter {
         _pickRule(raw.rawData, ['contentInitRule', 'ruleContentInit']) ??
         _pickRuleFromMap(contentRuleMap, ['init']);
     final contentInitRule = _splitInitRule(contentInitCandidate).requestRule;
+    final exploreInitRule =
+        _pickRule(raw.rawData, ['exploreInitRule', 'ruleExploreInit']) ??
+        _pickRuleFromMap(exploreRuleMap, ['init']);
+    final exploreUrl = _pickRule(raw.rawData, ['exploreUrl']);
+    final hasExploreUrl = exploreUrl != null && exploreUrl.trim().isNotEmpty;
+    final exploreEnabled =
+        hasExploreUrl &&
+        (_pickBool(raw.rawData, ['enabledExplore']) ?? true);
 
     var adaptedRules = SourceRuleSet(
       searchRule: searchRule,
@@ -141,6 +150,47 @@ class LegadoSourceAdapter {
           _pickRuleFromMap(contentRuleMap, ['content', 'text', 'body']),
       contentInitRule: contentInitRule,
       contentDecryptRule: _extractLegacyContentDecryptRule(raw.rawData),
+      exploreInitRule: exploreInitRule,
+      exploreListRule:
+          _pickRule(raw.rawData, ['ruleExploreList', 'exploreListRule']) ??
+          _pickRuleFromMap(exploreRuleMap, ['bookList', 'list']),
+      exploreTitleRule:
+          _pickRule(raw.rawData, ['ruleExploreName', 'exploreTitleRule']) ??
+          _pickRuleFromMap(exploreRuleMap, ['name', 'title', 'bookName']),
+      exploreDetailUrlRule:
+          _pickRule(raw.rawData, [
+            'ruleExploreBookUrl',
+            'ruleExploreDetailUrl',
+            'exploreDetailUrlRule',
+          ]) ??
+          _pickRuleFromMap(exploreRuleMap, ['bookUrl', 'detailUrl', 'url']),
+      exploreAuthorRule:
+          _pickRule(raw.rawData, ['ruleExploreAuthor', 'exploreAuthorRule']) ??
+          _pickRuleFromMap(exploreRuleMap, ['author']),
+      exploreIntroRule:
+          _pickRule(raw.rawData, ['ruleExploreIntro', 'exploreIntroRule']) ??
+          _pickRuleFromMap(exploreRuleMap, ['intro', 'desc', 'description']),
+      exploreCoverUrlRule:
+          _pickRule(raw.rawData, [
+            'ruleExploreCoverUrl',
+            'exploreCoverUrlRule',
+          ]) ??
+          _pickRuleFromMap(exploreRuleMap, ['coverUrl', 'cover', 'img']),
+      exploreLatestChapterRule:
+          _pickRule(raw.rawData, [
+            'ruleExploreLastChapter',
+            'exploreLatestChapterRule',
+          ]) ??
+          _pickRuleFromMap(exploreRuleMap, ['lastChapter', 'latestChapter']),
+      exploreKindRule:
+          _pickRule(raw.rawData, ['ruleExploreKind', 'exploreKindRule']) ??
+          _pickRuleFromMap(exploreRuleMap, ['kind']),
+      exploreWordCountRule:
+          _pickRule(raw.rawData, [
+            'ruleExploreWordCount',
+            'exploreWordCountRule',
+          ]) ??
+          _pickRuleFromMap(exploreRuleMap, ['wordCount', 'wordNum', 'words']),
     );
 
     adaptedRules = _applyInlineJsMangaFallback(
@@ -161,6 +211,8 @@ class LegadoSourceAdapter {
       enabled: raw.enabled,
       sourceType: raw.sourceType ?? 0,
       comment: _emptyToNull(_normalizeText(raw.sourceComment)),
+      exploreEnabled: exploreEnabled,
+      exploreUrl: exploreUrl,
       headers: _parseHeaders(raw.rawData['header'], baseUrl: baseUrl),
       rules: adaptedRules,
       originalSource: raw.rawData,

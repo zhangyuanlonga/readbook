@@ -6,6 +6,7 @@ import 'package:file_selector/file_selector.dart';
 import 'package:flutter/material.dart';
 import 'package:path_provider/path_provider.dart';
 
+import '../../../app/layout/app_layout.dart';
 import '../../../app/layout/app_spacing.dart';
 import '../../../core/errors/app_exception.dart';
 import '../../../core/errors/error_codes.dart';
@@ -762,10 +763,12 @@ class _SourceDiagnosticsPageState extends State<SourceDiagnosticsPage> {
     return showDialog<void>(
       context: context,
       builder: (context) {
+        final maxWidth = AppLayout.dialogMaxWidth(context, maxWidth: 560);
+
         return AlertDialog(
           title: Text('诊断详情 - ${report.sourceName}'),
-          content: SizedBox(
-            width: 420,
+          content: ConstrainedBox(
+            constraints: BoxConstraints(maxWidth: maxWidth),
             child: SingleChildScrollView(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,

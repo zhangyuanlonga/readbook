@@ -27,6 +27,16 @@ class SourceRuleSet {
     this.contentRule,
     this.contentInitRule,
     this.contentDecryptRule,
+    this.exploreInitRule,
+    this.exploreListRule,
+    this.exploreTitleRule,
+    this.exploreDetailUrlRule,
+    this.exploreAuthorRule,
+    this.exploreIntroRule,
+    this.exploreCoverUrlRule,
+    this.exploreLatestChapterRule,
+    this.exploreKindRule,
+    this.exploreWordCountRule,
   });
 
   final String? searchRule;
@@ -58,6 +68,17 @@ class SourceRuleSet {
   final String? contentInitRule;
   final String? contentDecryptRule;
 
+  final String? exploreInitRule;
+  final String? exploreListRule;
+  final String? exploreTitleRule;
+  final String? exploreDetailUrlRule;
+  final String? exploreAuthorRule;
+  final String? exploreIntroRule;
+  final String? exploreCoverUrlRule;
+  final String? exploreLatestChapterRule;
+  final String? exploreKindRule;
+  final String? exploreWordCountRule;
+
   SourceRuleSet copyWith({
     String? searchRule,
     String? searchInitRule,
@@ -84,6 +105,16 @@ class SourceRuleSet {
     String? contentRule,
     String? contentInitRule,
     String? contentDecryptRule,
+    String? exploreInitRule,
+    String? exploreListRule,
+    String? exploreTitleRule,
+    String? exploreDetailUrlRule,
+    String? exploreAuthorRule,
+    String? exploreIntroRule,
+    String? exploreCoverUrlRule,
+    String? exploreLatestChapterRule,
+    String? exploreKindRule,
+    String? exploreWordCountRule,
   }) {
     return SourceRuleSet(
       searchRule: searchRule ?? this.searchRule,
@@ -112,6 +143,18 @@ class SourceRuleSet {
       contentRule: contentRule ?? this.contentRule,
       contentInitRule: contentInitRule ?? this.contentInitRule,
       contentDecryptRule: contentDecryptRule ?? this.contentDecryptRule,
+      exploreInitRule: exploreInitRule ?? this.exploreInitRule,
+      exploreListRule: exploreListRule ?? this.exploreListRule,
+      exploreTitleRule: exploreTitleRule ?? this.exploreTitleRule,
+      exploreDetailUrlRule:
+          exploreDetailUrlRule ?? this.exploreDetailUrlRule,
+      exploreAuthorRule: exploreAuthorRule ?? this.exploreAuthorRule,
+      exploreIntroRule: exploreIntroRule ?? this.exploreIntroRule,
+      exploreCoverUrlRule: exploreCoverUrlRule ?? this.exploreCoverUrlRule,
+      exploreLatestChapterRule:
+          exploreLatestChapterRule ?? this.exploreLatestChapterRule,
+      exploreKindRule: exploreKindRule ?? this.exploreKindRule,
+      exploreWordCountRule: exploreWordCountRule ?? this.exploreWordCountRule,
     );
   }
 
@@ -142,6 +185,16 @@ class SourceRuleSet {
       'contentRule': contentRule,
       'contentInitRule': contentInitRule,
       'contentDecryptRule': contentDecryptRule,
+      'exploreInitRule': exploreInitRule,
+      'exploreListRule': exploreListRule,
+      'exploreTitleRule': exploreTitleRule,
+      'exploreDetailUrlRule': exploreDetailUrlRule,
+      'exploreAuthorRule': exploreAuthorRule,
+      'exploreIntroRule': exploreIntroRule,
+      'exploreCoverUrlRule': exploreCoverUrlRule,
+      'exploreLatestChapterRule': exploreLatestChapterRule,
+      'exploreKindRule': exploreKindRule,
+      'exploreWordCountRule': exploreWordCountRule,
     };
   }
 
@@ -174,6 +227,18 @@ class SourceRuleSet {
       contentRule: _asNullableString(json['contentRule']),
       contentInitRule: _asNullableString(json['contentInitRule']),
       contentDecryptRule: _asNullableString(json['contentDecryptRule']),
+      exploreInitRule: _asNullableString(json['exploreInitRule']),
+      exploreListRule: _asNullableString(json['exploreListRule']),
+      exploreTitleRule: _asNullableString(json['exploreTitleRule']),
+      exploreDetailUrlRule: _asNullableString(json['exploreDetailUrlRule']),
+      exploreAuthorRule: _asNullableString(json['exploreAuthorRule']),
+      exploreIntroRule: _asNullableString(json['exploreIntroRule']),
+      exploreCoverUrlRule: _asNullableString(json['exploreCoverUrlRule']),
+      exploreLatestChapterRule: _asNullableString(
+        json['exploreLatestChapterRule'],
+      ),
+      exploreKindRule: _asNullableString(json['exploreKindRule']),
+      exploreWordCountRule: _asNullableString(json['exploreWordCountRule']),
     );
   }
 
@@ -222,6 +287,8 @@ class SourceDefinition {
     this.lastCheckedAt,
     this.lastCheckMessage,
     this.comment,
+    this.exploreEnabled = false,
+    this.exploreUrl,
     Map<String, dynamic>? originalSource,
   }) : headers = Map.unmodifiable({...headers}),
        originalSource = _deepCopyMap(originalSource);
@@ -238,9 +305,19 @@ class SourceDefinition {
   final DateTime? lastCheckedAt;
   final String? lastCheckMessage;
   final String? comment;
+  final bool exploreEnabled;
+  final String? exploreUrl;
   final Map<String, dynamic>? originalSource;
 
   bool get isMangaSource => sourceType == 2;
+
+  bool get supportsExplore {
+    return exploreEnabled &&
+        (exploreUrl?.trim().isNotEmpty ?? false) &&
+        (rules.exploreListRule?.trim().isNotEmpty ?? false) &&
+        (rules.exploreTitleRule?.trim().isNotEmpty ?? false) &&
+        (rules.exploreDetailUrlRule?.trim().isNotEmpty ?? false);
+  }
 
   bool get requiresServerTokenAuth {
     if (headers.isEmpty) {
@@ -270,6 +347,9 @@ class SourceDefinition {
     bool clearLastCheckMessage = false,
     String? comment,
     bool clearComment = false,
+    bool? exploreEnabled,
+    String? exploreUrl,
+    bool clearExploreUrl = false,
     Map<String, dynamic>? originalSource,
     bool clearOriginalSource = false,
   }) {
@@ -290,6 +370,8 @@ class SourceDefinition {
               ? null
               : (lastCheckMessage ?? this.lastCheckMessage),
       comment: clearComment ? null : (comment ?? this.comment),
+      exploreEnabled: exploreEnabled ?? this.exploreEnabled,
+      exploreUrl: clearExploreUrl ? null : (exploreUrl ?? this.exploreUrl),
       originalSource:
           clearOriginalSource ? null : (originalSource ?? this.originalSource),
     );
@@ -309,6 +391,8 @@ class SourceDefinition {
       'lastCheckedAt': lastCheckedAt?.toIso8601String(),
       'lastCheckMessage': lastCheckMessage,
       'comment': comment,
+      'exploreEnabled': exploreEnabled,
+      'exploreUrl': exploreUrl,
       'originalSource': originalSource,
     };
   }
@@ -338,6 +422,8 @@ class SourceDefinition {
       lastCheckedAt: _parseDateTime(json['lastCheckedAt']),
       lastCheckMessage: _nullableString(json['lastCheckMessage']),
       comment: _nullableString(json['comment']),
+      exploreEnabled: _asBool(json['exploreEnabled']) ?? false,
+      exploreUrl: _nullableString(json['exploreUrl']),
       originalSource: _deepCopyMap(json['originalSource']),
     );
   }

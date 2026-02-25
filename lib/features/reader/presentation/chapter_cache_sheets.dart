@@ -3,6 +3,7 @@ import 'dart:math';
 
 import 'package:flutter/material.dart';
 
+import '../../../app/layout/app_layout.dart';
 import '../../../app/layout/app_spacing.dart';
 import '../../../domain/entities/chapter.dart';
 import '../application/chapter_cache_service.dart';
@@ -207,7 +208,8 @@ class _ChapterCacheRangeSheetState extends State<_ChapterCacheRangeSheet> {
                               ),
                             );
 
-                            if (constraints.maxWidth < 340) {
+                            if (constraints.maxWidth <
+                                AppLayout.compactContentWidth) {
                               return Column(
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
@@ -280,7 +282,7 @@ class _ChapterCacheRangeSheetState extends State<_ChapterCacheRangeSheet> {
                         },
                       );
 
-                      if (constraints.maxWidth < 360) {
+                      if (constraints.maxWidth < AppLayout.phoneSmallWidth) {
                         return Column(
                           children: [
                             startStepper,
@@ -322,7 +324,7 @@ class _ChapterCacheRangeSheetState extends State<_ChapterCacheRangeSheet> {
                 child: const Text('开始缓存'),
               );
 
-              if (constraints.maxWidth < 360) {
+              if (constraints.maxWidth < AppLayout.phoneSmallWidth) {
                 return Column(
                   children: [
                     SizedBox(width: double.infinity, child: cancelButton),
@@ -614,7 +616,7 @@ class _ChapterCacheProgressSheetState
                   child: Text(canClose ? '完成' : '缓存中...'),
                 );
 
-                if (constraints.maxWidth < 360) {
+                if (constraints.maxWidth < AppLayout.phoneSmallWidth) {
                   return Column(
                     children: [
                       SizedBox(width: double.infinity, child: stopButton),

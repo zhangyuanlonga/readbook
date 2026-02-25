@@ -5,6 +5,12 @@ import 'package:flutter/widgets.dart';
 class AppLayout {
   const AppLayout._();
 
+  static const double compactContentWidth = 340;
+  static const double phoneSmallWidth = 360;
+  static const double actionWrapWidth = 420;
+  static const double phoneLargeWidth = 430;
+  static const double railBreakpointWidth = 600;
+
   static double screenWidth(BuildContext context) {
     return MediaQuery.sizeOf(context).width;
   }
@@ -14,12 +20,12 @@ class AppLayout {
   }
 
   static bool isPhoneSmall(BuildContext context) {
-    return screenWidth(context) < 360;
+    return screenWidth(context) < phoneSmallWidth;
   }
 
   static bool isPhoneLarge(BuildContext context) {
     final width = screenWidth(context);
-    return width >= 430 && width < 600;
+    return width >= phoneLargeWidth && width < railBreakpointWidth;
   }
 
   static double shortestSide(BuildContext context) {
@@ -28,7 +34,7 @@ class AppLayout {
   }
 
   static bool isPhone(BuildContext context) {
-    return shortestSide(context) < 600;
+    return shortestSide(context) < railBreakpointWidth;
   }
 
   static double clampedTextScaleFactor(BuildContext context) {

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:html/parser.dart' as html_parser;
 
+import '../../../app/layout/app_layout.dart';
 import '../../../app/layout/app_spacing.dart';
 
 import '../../../core/errors/app_exception.dart';
@@ -799,9 +800,9 @@ class _BookDetailPageState extends State<BookDetailPage> {
       builder: (context) {
         final width = MediaQuery.sizeOf(context).width;
         final heightFactor =
-            width < 360
+            width < AppLayout.phoneSmallWidth
                 ? 0.92
-                : width >= 430
+                : width >= AppLayout.phoneLargeWidth
                 ? 0.84
                 : 0.88;
         final horizontal = AppSpacing.pageHorizontal(context);
@@ -825,7 +826,7 @@ class _BookDetailPageState extends State<BookDetailPage> {
                       style: Theme.of(context).textTheme.labelMedium,
                     );
 
-                    if (constraints.maxWidth < 340) {
+                    if (constraints.maxWidth < AppLayout.compactContentWidth) {
                       return Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [

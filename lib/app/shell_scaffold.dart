@@ -2,6 +2,8 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
+import 'layout/app_layout.dart';
+
 class ShellScaffold extends StatefulWidget {
   const ShellScaffold({super.key, required this.location, required this.child});
 
@@ -15,7 +17,6 @@ class ShellScaffold extends StatefulWidget {
 class _ShellScaffoldState extends State<ShellScaffold> {
   static const double _kSwipeVelocityThreshold = 420;
   static const bool _kEnableMobileTabSwitchAnimation = false;
-  static const double _kRailBreakpoint = 600;
 
   late int _currentIndex;
   bool _isForward = true;
@@ -53,7 +54,7 @@ class _ShellScaffoldState extends State<ShellScaffold> {
   @override
   Widget build(BuildContext context) {
     final useNavigationRail =
-        MediaQuery.sizeOf(context).width >= _kRailBreakpoint;
+        MediaQuery.sizeOf(context).width >= AppLayout.railBreakpointWidth;
     final enableTabSwipe = _enableMobileTabSwipe && !useNavigationRail;
 
     final shouldAnimateSwitch =
@@ -122,6 +123,10 @@ class _ShellScaffoldState extends State<ShellScaffold> {
                     label: Text('书架'),
                   ),
                   NavigationRailDestination(
+                    icon: Icon(Icons.travel_explore_outlined),
+                    label: Text('发现'),
+                  ),
+                  NavigationRailDestination(
                     icon: Icon(Icons.storage_outlined),
                     label: Text('书源'),
                   ),
@@ -152,6 +157,10 @@ class _ShellScaffoldState extends State<ShellScaffold> {
             label: '书架',
           ),
           NavigationDestination(
+            icon: Icon(Icons.travel_explore_outlined),
+            label: '发现',
+          ),
+          NavigationDestination(
             icon: Icon(Icons.storage_outlined),
             label: '书源',
           ),
@@ -173,7 +182,7 @@ class _ShellScaffoldState extends State<ShellScaffold> {
 
     if (velocity < 0) {
       final next = currentIndex + 1;
-      if (next <= 2) {
+      if (next <= 3) {
         _goToIndex(context, next);
       }
       return;
@@ -195,20 +204,26 @@ class _ShellScaffoldState extends State<ShellScaffold> {
         context.go('/bookshelf');
         return;
       case 1:
-        context.go('/source');
+        context.go('/discover');
         return;
       case 2:
+        context.go('/source');
+        return;
+      case 3:
         context.go('/mine');
         return;
     }
   }
 
   int _locationIndex(String currentLocation) {
-    if (currentLocation.startsWith('/source')) {
+    if (currentLocation.startsWith('/discover')) {
       return 1;
     }
-    if (currentLocation.startsWith('/mine')) {
+    if (currentLocation.startsWith('/source')) {
       return 2;
+    }
+    if (currentLocation.startsWith('/mine')) {
+      return 3;
     }
     return 0;
   }
