@@ -10,6 +10,7 @@ import 'package:page_curl_effect/page_curl_effect.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../app/layout/app_spacing.dart';
+import '../../../app/theme/app_theme.dart';
 
 import '../../../core/errors/app_exception.dart';
 import '../../../core/errors/error_codes.dart';
@@ -17,7 +18,6 @@ import '../../../data/datasources/local/app_database.dart';
 import '../../../domain/entities/bookshelf_book.dart';
 import '../../../domain/entities/chapter.dart';
 import '../../../domain/entities/reader_settings.dart';
-import '../../../app/theme/app_theme_provider.dart';
 import '../../../domain/entities/reading_progress.dart';
 import '../../book/application/book_detail_service.dart';
 import '../../bookshelf/application/bookshelf_service.dart';
@@ -703,14 +703,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
   }
 
   ReaderThemeMode _effectiveReaderThemeMode() {
-    final appBrightness = Theme.of(context).brightness;
-    if (appBrightness == Brightness.dark) {
-      return ReaderThemeMode.dark;
-    }
-
-    return _settings.themeMode == ReaderThemeMode.sepia
-        ? ReaderThemeMode.sepia
-        : ReaderThemeMode.light;
+    return _settings.themeMode;
   }
 
   ReaderPageAnimationStyle _effectivePageAnimationStyle() {
@@ -726,11 +719,12 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
 
     return LayoutBuilder(
       builder: (context, constraints) {
+        final bottomInset = _bottomSafeInset(context);
         final contentPadding = EdgeInsets.fromLTRB(
           _settings.horizontalPadding,
           18,
           _settings.horizontalPadding,
-          18,
+          18 + bottomInset,
         );
 
         final maxWidth = (constraints.maxWidth - contentPadding.horizontal)
@@ -804,7 +798,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
               if (pageCount > 1)
                 Positioned(
                   right: 12,
-                  bottom: 12 + _bottomSafeInset(context),
+                  bottom: 12 + bottomInset,
                   child: _buildPageIndexBadge(
                     colors: colors,
                     index: safeIndex,
@@ -831,7 +825,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
               Positioned.fill(child: pageChild),
               Positioned(
                 right: 12,
-                bottom: 12 + _bottomSafeInset(context),
+                bottom: 12 + bottomInset,
                 child: _buildPageIndexBadge(
                   colors: colors,
                   index: safeIndex,
@@ -920,7 +914,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
             if (pageCount > 1)
               Positioned(
                 right: 12,
-                bottom: 12,
+                bottom: 12 + bottomInset,
                 child: _buildPageIndexBadge(
                   colors: colors,
                   index: safeIndex,
@@ -1783,7 +1777,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
   }
 
   Widget _buildBottomOverlay(_ReaderThemeColors colors) {
-    final isNight = Theme.of(context).brightness == Brightness.dark;
+    final isNight = _effectiveReaderThemeMode() == ReaderThemeMode.dark;
     final dayNightLabel = isNight ? '日间' : '夜间';
     final dayNightIcon =
         isNight ? Icons.light_mode_outlined : Icons.dark_mode_outlined;
@@ -2745,74 +2739,80 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
 
     final isPagedMode = _isMangaPagedMode;
     double draftRatio = _currentScrollRatio();
+    final readerModalTheme = _readerModalTheme();
 
     final selectedRatio = await showModalBottomSheet<double>(
       context: context,
       showDragHandle: true,
       useSafeArea: true,
+      backgroundColor: readerModalTheme.colorScheme.surface,
       builder: (context) {
-        return StatefulBuilder(
-          builder: (context, setModalState) {
-            final progressLabel = '${(draftRatio * 100).round()}%';
-            final chapterLabel =
-                isPagedMode
-                    ? '第 ${(_mangaPageIndex + 1).clamp(1, total)} / $total 张'
-                    : '长图进度定位';
+        return Theme(
+          data: readerModalTheme,
+          child: StatefulBuilder(
+            builder: (context, setModalState) {
+              final progressLabel = '${(draftRatio * 100).round()}%';
+              final chapterLabel =
+                  isPagedMode
+                      ? '第 ${(_mangaPageIndex + 1).clamp(1, total)} / $total 张'
+                      : '长图进度定位';
 
-            return Padding(
-              padding: EdgeInsets.fromLTRB(
-                18,
-                8,
-                18,
-                18 + _bottomSafeInset(context),
-              ),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    '长图定位',
-                    style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                      fontWeight: FontWeight.w700,
-                    ),
-                  ),
-                  const SizedBox(height: 6),
-                  Text(
-                    '$chapterLabel · $progressLabel',
-                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                      color: Theme.of(context).colorScheme.onSurfaceVariant,
-                    ),
-                  ),
-                  const SizedBox(height: 10),
-                  Slider(
-                    min: 0,
-                    max: 1,
-                    divisions: 100,
-                    value: draftRatio,
-                    onChanged: (value) {
-                      setModalState(() {
-                        draftRatio = value;
-                      });
-                    },
-                  ),
-                  const SizedBox(height: 8),
-                  Row(
-                    children: [
-                      TextButton(
-                        onPressed: () => Navigator.of(context).pop(),
-                        child: const Text('取消'),
+              return Padding(
+                padding: EdgeInsets.fromLTRB(
+                  18,
+                  8,
+                  18,
+                  18 + _bottomSafeInset(context),
+                ),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      '长图定位',
+                      style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                        fontWeight: FontWeight.w700,
                       ),
-                      const Spacer(),
-                      FilledButton(
-                        onPressed: () => Navigator.of(context).pop(draftRatio),
-                        child: const Text('跳转'),
+                    ),
+                    const SizedBox(height: 6),
+                    Text(
+                      '$chapterLabel · $progressLabel',
+                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                        color: Theme.of(context).colorScheme.onSurfaceVariant,
                       ),
-                    ],
-                  ),
-                ],
-              ),
-            );
-          },
+                    ),
+                    const SizedBox(height: 10),
+                    Slider(
+                      min: 0,
+                      max: 1,
+                      divisions: 100,
+                      value: draftRatio,
+                      onChanged: (value) {
+                        setModalState(() {
+                          draftRatio = value;
+                        });
+                      },
+                    ),
+                    const SizedBox(height: 8),
+                    Row(
+                      children: [
+                        TextButton(
+                          onPressed: () => Navigator.of(context).pop(),
+                          child: const Text('取消'),
+                        ),
+                        const Spacer(),
+                        FilledButton(
+                          onPressed:
+                              () => Navigator.of(context).pop(draftRatio),
+                          child: const Text('跳转'),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              );
+            },
+          ),
         );
       },
     );
@@ -2842,6 +2842,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
     );
     final searchController = TextEditingController();
     double? selectedScrollRatio;
+    final readerModalTheme = _readerModalTheme();
 
     final selectedIndex = await showModalBottomSheet<int>(
       context: context,
@@ -2851,234 +2852,238 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
       ),
-      backgroundColor: Theme.of(context).colorScheme.surface,
+      backgroundColor: readerModalTheme.colorScheme.surface,
       builder: (context) {
-        final colorScheme = Theme.of(context).colorScheme;
-        final textTheme = Theme.of(context).textTheme;
+        return Theme(
+          data: readerModalTheme,
+          child: StatefulBuilder(
+            builder: (context, setModalState) {
+              final colorScheme = Theme.of(context).colorScheme;
+              final textTheme = Theme.of(context).textTheme;
+              final keyword = searchController.text.trim();
+              final isSearching = keyword.isNotEmpty;
+              final searchEntries =
+                  isSearching
+                      ? _buildFullTextSearchEntries(keyword)
+                      : const <_CatalogSearchEntry>[];
 
-        return StatefulBuilder(
-          builder: (context, setModalState) {
-            final keyword = searchController.text.trim();
-            final isSearching = keyword.isNotEmpty;
-            final searchEntries =
-                isSearching
-                    ? _buildFullTextSearchEntries(keyword)
-                    : const <_CatalogSearchEntry>[];
+              final keyboardInset = MediaQuery.viewInsetsOf(context).bottom;
+              final safeBottom = _bottomSafeInset(context);
 
-            final keyboardInset = MediaQuery.viewInsetsOf(context).bottom;
-            final safeBottom = _bottomSafeInset(context);
-
-            return AnimatedPadding(
-              duration: const Duration(milliseconds: 180),
-              curve: Curves.easeOutCubic,
-              padding: EdgeInsets.only(bottom: keyboardInset + safeBottom),
-              child: FractionallySizedBox(
-                heightFactor: 0.86,
-                child: Column(
-                  children: [
-                    Padding(
-                      padding: const EdgeInsets.fromLTRB(18, 6, 18, 8),
-                      child: Row(
-                        children: [
-                          Expanded(
-                            child: Text(
-                              '目录（${_chapters.length} 章）',
-                              style: textTheme.titleMedium?.copyWith(
-                                fontWeight: FontWeight.w700,
-                              ),
-                            ),
-                          ),
-                          if (currentIndex != null)
-                            FilledButton.tonalIcon(
-                              onPressed: () {
-                                final target =
-                                    ((currentIndex - 2).clamp(
-                                              0,
-                                              _chapters.length - 1,
-                                            ) *
-                                            itemExtent)
-                                        .toDouble();
-                                scrollController.animateTo(
-                                  target,
-                                  duration: const Duration(milliseconds: 180),
-                                  curve: Curves.easeOutCubic,
-                                );
-                              },
-                              icon: const Icon(
-                                Icons.my_location_outlined,
-                                size: 18,
-                              ),
-                              label: Text('定位 ${currentIndex + 1}'),
-                            ),
-                        ],
-                      ),
-                    ),
-                    Padding(
-                      padding: const EdgeInsets.fromLTRB(16, 2, 16, 10),
-                      child: TextField(
-                        controller: searchController,
-                        onChanged: (_) => setModalState(() {}),
-                        decoration: InputDecoration(
-                          isDense: true,
-                          hintText: '搜索全文中的句子、章节、角色名',
-                          prefixIcon: const Icon(Icons.search, size: 20),
-                          border: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(14),
-                          ),
-                        ),
-                      ),
-                    ),
-                    Divider(
-                      height: 1,
-                      color: colorScheme.outlineVariant.withValues(alpha: 0.7),
-                    ),
-                    if (isSearching && searchEntries.isEmpty)
-                      Expanded(
-                        child: Center(
-                          child: Text(
-                            '未找到匹配内容',
-                            style: textTheme.bodyMedium?.copyWith(
-                              color: colorScheme.onSurfaceVariant,
-                            ),
-                          ),
-                        ),
-                      )
-                    else if (isSearching)
-                      Expanded(
-                        child: ListView.separated(
-                          itemCount: searchEntries.length,
-                          separatorBuilder:
-                              (_, __) => Divider(
-                                height: 1,
-                                color: colorScheme.outlineVariant.withValues(
-                                  alpha: 0.35,
-                                ),
-                              ),
-                          itemBuilder: (context, index) {
-                            final entry = searchEntries[index];
-
-                            return ListTile(
-                              leading: Icon(
-                                entry.isContent
-                                    ? Icons.article_outlined
-                                    : Icons.list_alt_outlined,
-                                color: colorScheme.primary,
-                              ),
-                              title: Text(
-                                entry.title,
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                                style: textTheme.bodyLarge?.copyWith(
-                                  fontWeight: FontWeight.w600,
-                                ),
-                              ),
-                              subtitle: Text(
-                                entry.subtitle,
-                                maxLines: 2,
-                                overflow: TextOverflow.ellipsis,
-                                style: textTheme.bodySmall?.copyWith(
-                                  color: colorScheme.onSurfaceVariant,
-                                ),
-                              ),
-                              trailing: Text(
-                                entry.isContent ? '正文' : '目录',
-                                style: textTheme.labelMedium?.copyWith(
-                                  color: colorScheme.primary,
+              return AnimatedPadding(
+                duration: const Duration(milliseconds: 180),
+                curve: Curves.easeOutCubic,
+                padding: EdgeInsets.only(bottom: keyboardInset + safeBottom),
+                child: FractionallySizedBox(
+                  heightFactor: 0.86,
+                  child: Column(
+                    children: [
+                      Padding(
+                        padding: const EdgeInsets.fromLTRB(18, 6, 18, 8),
+                        child: Row(
+                          children: [
+                            Expanded(
+                              child: Text(
+                                '目录（${_chapters.length} 章）',
+                                style: textTheme.titleMedium?.copyWith(
                                   fontWeight: FontWeight.w700,
                                 ),
                               ),
-                              onTap: () {
-                                selectedScrollRatio = entry.scrollRatio;
-                                Navigator.of(context).pop(entry.chapterIndex);
-                              },
-                            );
-                          },
-                        ),
-                      )
-                    else
-                      Expanded(
-                        child: ListView.builder(
-                          controller: scrollController,
-                          itemExtent: itemExtent,
-                          itemCount: _chapters.length,
-                          itemBuilder: (context, index) {
-                            final chapter = _chapters[index];
-                            final selected = index == currentIndex;
-                            final showDivider = index < _chapters.length - 1;
-
-                            return Material(
-                              color:
-                                  selected
-                                      ? colorScheme.secondaryContainer
-                                          .withValues(alpha: 0.5)
-                                      : Colors.transparent,
-                              child: InkWell(
-                                onTap: () => Navigator.of(context).pop(index),
-                                child: Container(
-                                  padding: const EdgeInsets.symmetric(
-                                    horizontal: 16,
-                                  ),
-                                  decoration: BoxDecoration(
-                                    border:
-                                        showDivider
-                                            ? Border(
-                                              bottom: BorderSide(
-                                                color: colorScheme
-                                                    .outlineVariant
-                                                    .withValues(alpha: 0.35),
-                                              ),
-                                            )
-                                            : null,
-                                  ),
-                                  child: Row(
-                                    children: [
-                                      Expanded(
-                                        child: Column(
-                                          mainAxisAlignment:
-                                              MainAxisAlignment.center,
-                                          crossAxisAlignment:
-                                              CrossAxisAlignment.start,
-                                          children: [
-                                            Text(
-                                              chapter.title,
-                                              maxLines: 1,
-                                              overflow: TextOverflow.ellipsis,
-                                              style: textTheme.bodyLarge
-                                                  ?.copyWith(
-                                                    fontWeight:
-                                                        selected
-                                                            ? FontWeight.w700
-                                                            : FontWeight.w500,
-                                                    color:
-                                                        selected
-                                                            ? colorScheme
-                                                                .primary
-                                                            : colorScheme
-                                                                .onSurface,
-                                                  ),
-                                            ),
-                                          ],
-                                        ),
-                                      ),
-                                      if (selected)
-                                        Icon(
-                                          Icons.play_circle_fill_rounded,
-                                          size: 20,
-                                          color: colorScheme.primary,
-                                        ),
-                                    ],
-                                  ),
+                            ),
+                            if (currentIndex != null)
+                              FilledButton.tonalIcon(
+                                onPressed: () {
+                                  final target =
+                                      ((currentIndex - 2).clamp(
+                                                0,
+                                                _chapters.length - 1,
+                                              ) *
+                                              itemExtent)
+                                          .toDouble();
+                                  scrollController.animateTo(
+                                    target,
+                                    duration: const Duration(milliseconds: 180),
+                                    curve: Curves.easeOutCubic,
+                                  );
+                                },
+                                icon: const Icon(
+                                  Icons.my_location_outlined,
+                                  size: 18,
                                 ),
+                                label: Text('定位 ${currentIndex + 1}'),
                               ),
-                            );
-                          },
+                          ],
                         ),
                       ),
-                  ],
+                      Padding(
+                        padding: const EdgeInsets.fromLTRB(16, 2, 16, 10),
+                        child: TextField(
+                          controller: searchController,
+                          onChanged: (_) => setModalState(() {}),
+                          decoration: InputDecoration(
+                            isDense: true,
+                            hintText: '搜索全文中的句子、章节、角色名',
+                            prefixIcon: const Icon(Icons.search, size: 20),
+                            border: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(14),
+                            ),
+                          ),
+                        ),
+                      ),
+                      Divider(
+                        height: 1,
+                        color: colorScheme.outlineVariant.withValues(
+                          alpha: 0.7,
+                        ),
+                      ),
+                      if (isSearching && searchEntries.isEmpty)
+                        Expanded(
+                          child: Center(
+                            child: Text(
+                              '未找到匹配内容',
+                              style: textTheme.bodyMedium?.copyWith(
+                                color: colorScheme.onSurfaceVariant,
+                              ),
+                            ),
+                          ),
+                        )
+                      else if (isSearching)
+                        Expanded(
+                          child: ListView.separated(
+                            itemCount: searchEntries.length,
+                            separatorBuilder:
+                                (_, __) => Divider(
+                                  height: 1,
+                                  color: colorScheme.outlineVariant.withValues(
+                                    alpha: 0.35,
+                                  ),
+                                ),
+                            itemBuilder: (context, index) {
+                              final entry = searchEntries[index];
+
+                              return ListTile(
+                                leading: Icon(
+                                  entry.isContent
+                                      ? Icons.article_outlined
+                                      : Icons.list_alt_outlined,
+                                  color: colorScheme.primary,
+                                ),
+                                title: Text(
+                                  entry.title,
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: textTheme.bodyLarge?.copyWith(
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                ),
+                                subtitle: Text(
+                                  entry.subtitle,
+                                  maxLines: 2,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: textTheme.bodySmall?.copyWith(
+                                    color: colorScheme.onSurfaceVariant,
+                                  ),
+                                ),
+                                trailing: Text(
+                                  entry.isContent ? '正文' : '目录',
+                                  style: textTheme.labelMedium?.copyWith(
+                                    color: colorScheme.primary,
+                                    fontWeight: FontWeight.w700,
+                                  ),
+                                ),
+                                onTap: () {
+                                  selectedScrollRatio = entry.scrollRatio;
+                                  Navigator.of(context).pop(entry.chapterIndex);
+                                },
+                              );
+                            },
+                          ),
+                        )
+                      else
+                        Expanded(
+                          child: ListView.builder(
+                            controller: scrollController,
+                            itemExtent: itemExtent,
+                            itemCount: _chapters.length,
+                            itemBuilder: (context, index) {
+                              final chapter = _chapters[index];
+                              final selected = index == currentIndex;
+                              final showDivider = index < _chapters.length - 1;
+
+                              return Material(
+                                color:
+                                    selected
+                                        ? colorScheme.secondaryContainer
+                                            .withValues(alpha: 0.5)
+                                        : Colors.transparent,
+                                child: InkWell(
+                                  onTap: () => Navigator.of(context).pop(index),
+                                  child: Container(
+                                    padding: const EdgeInsets.symmetric(
+                                      horizontal: 16,
+                                    ),
+                                    decoration: BoxDecoration(
+                                      border:
+                                          showDivider
+                                              ? Border(
+                                                bottom: BorderSide(
+                                                  color: colorScheme
+                                                      .outlineVariant
+                                                      .withValues(alpha: 0.35),
+                                                ),
+                                              )
+                                              : null,
+                                    ),
+                                    child: Row(
+                                      children: [
+                                        Expanded(
+                                          child: Column(
+                                            mainAxisAlignment:
+                                                MainAxisAlignment.center,
+                                            crossAxisAlignment:
+                                                CrossAxisAlignment.start,
+                                            children: [
+                                              Text(
+                                                chapter.title,
+                                                maxLines: 1,
+                                                overflow: TextOverflow.ellipsis,
+                                                style: textTheme.bodyLarge
+                                                    ?.copyWith(
+                                                      fontWeight:
+                                                          selected
+                                                              ? FontWeight.w700
+                                                              : FontWeight.w500,
+                                                      color:
+                                                          selected
+                                                              ? colorScheme
+                                                                  .primary
+                                                              : colorScheme
+                                                                  .onSurface,
+                                                    ),
+                                              ),
+                                            ],
+                                          ),
+                                        ),
+                                        if (selected)
+                                          Icon(
+                                            Icons.play_circle_fill_rounded,
+                                            size: 20,
+                                            color: colorScheme.primary,
+                                          ),
+                                      ],
+                                    ),
+                                  ),
+                                ),
+                              );
+                            },
+                          ),
+                        ),
+                    ],
+                  ),
                 ),
-              ),
-            );
-          },
+              );
+            },
+          ),
         );
       },
     );
@@ -3206,11 +3211,20 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
   }
 
   Future<void> _toggleDayNight() async {
-    final isNight = Theme.of(context).brightness == Brightness.dark;
-    final nextThemeMode = isNight ? ThemeMode.light : ThemeMode.dark;
-
-    await ref.read(appThemeModeProvider.notifier).setThemeMode(nextThemeMode);
-
+    final isNight = _effectiveReaderThemeMode() == ReaderThemeMode.dark;
+    final nextSettings = _settings.copyWith(
+      themeMode: isNight ? ReaderThemeMode.light : ReaderThemeMode.dark,
+      backgroundStyle: ReaderBackgroundStyle.plain,
+      backgroundTone:
+          isNight
+              ? ReaderBackgroundTone.surface
+              : ReaderBackgroundTone.containerHigh,
+      clearBackgroundImage: true,
+    );
+    setState(() {
+      _settings = nextSettings;
+    });
+    await _preferencesService.saveSettings(nextSettings);
     _showMessage(isNight ? '已切换日间模式。' : '已切换夜间模式。');
   }
 
@@ -3288,761 +3302,770 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
     if (!mounted) {
       return;
     }
+    final readerModalTheme = _readerModalTheme();
 
     final result = await showModalBottomSheet<ReaderSettings>(
       context: context,
       isScrollControlled: true,
       showDragHandle: true,
       useSafeArea: true,
+      backgroundColor: readerModalTheme.colorScheme.surface,
       builder: (context) {
-        return StatefulBuilder(
-          builder: (context, setModalState) {
-            final activeBackgroundBase64 = draft.backgroundImageBase64?.trim();
-            final hasBackgroundImage =
-                activeBackgroundBase64 != null &&
-                activeBackgroundBase64.isNotEmpty;
-            final isPresetBackground =
-                hasBackgroundImage &&
-                _backgroundPresetBase64.values.contains(activeBackgroundBase64);
-            final customBackgroundPreview =
-                hasBackgroundImage && !isPresetBackground
-                    ? _tryDecodeBase64(activeBackgroundBase64)
-                    : null;
-            final presetBackgroundTiles = <Widget>[];
-            for (final preset in _backgroundPresets) {
-              final previewBytes = _backgroundPresetBytes[preset.assetPath];
-              final presetBase64 = _backgroundPresetBase64[preset.assetPath];
-              if (previewBytes == null || presetBase64 == null) {
-                continue;
-              }
-              presetBackgroundTiles.add(
-                Padding(
-                  padding: const EdgeInsets.only(right: 8),
-                  child: _buildBackgroundTile(
-                    label: preset.label,
-                    selected: activeBackgroundBase64 == presetBase64,
-                    previewBytes: previewBytes,
-                    showLabel: false,
-                    onTap: () {
-                      setModalState(() {
-                        draft = draft.copyWith(
-                          backgroundImageBase64: presetBase64,
-                        );
-                      });
-                    },
-                  ),
-                ),
-              );
-            }
-            final isMangaChapter = _chapterImageUrls.isNotEmpty;
-            final keyboardInset = MediaQuery.viewInsetsOf(context).bottom;
-            final safeBottom = _bottomSafeInset(context);
+        return Theme(
+          data: readerModalTheme,
+          child: StatefulBuilder(
+            builder: (context, setModalState) {
+              final activeBackgroundBase64 =
+                  draft.backgroundImageBase64?.trim();
+              final hasBackgroundImage =
+                  activeBackgroundBase64 != null &&
+                  activeBackgroundBase64.isNotEmpty;
+              final isPresetBackground =
+                  hasBackgroundImage &&
+                  _backgroundPresetBase64.values.contains(
+                    activeBackgroundBase64,
+                  );
+              final customBackgroundPreview =
+                  hasBackgroundImage && !isPresetBackground
+                      ? _tryDecodeBase64(activeBackgroundBase64)
+                      : null;
+              Future<void> applyCustomBackgroundImage() async {
+                final encoded = await _pickBackgroundImageBase64();
+                if (encoded == null || !context.mounted) {
+                  return;
+                }
 
-            return AnimatedPadding(
-              duration: const Duration(milliseconds: 180),
-              curve: Curves.easeOutCubic,
-              padding: EdgeInsets.only(bottom: keyboardInset + safeBottom),
-              child: SafeArea(
-                child: FractionallySizedBox(
-                  heightFactor: 0.6,
-                  child: Padding(
-                    padding: AppSpacing.modalSheetPadding(context),
-                    child: Column(
-                      children: [
-                        Align(
-                          alignment: Alignment.centerLeft,
-                          child: Text(
-                            '阅读设置',
-                            style: Theme.of(context).textTheme.titleMedium
-                                ?.copyWith(fontWeight: FontWeight.w700),
+                setModalState(() {
+                  draft = draft.copyWith(backgroundImageBase64: encoded);
+                });
+              }
+
+              final presetBackgroundTiles = <Widget>[];
+              for (final preset in _backgroundPresets) {
+                final previewBytes = _backgroundPresetBytes[preset.assetPath];
+                final presetBase64 = _backgroundPresetBase64[preset.assetPath];
+                if (previewBytes == null || presetBase64 == null) {
+                  continue;
+                }
+                presetBackgroundTiles.add(
+                  Padding(
+                    padding: const EdgeInsets.only(right: 8),
+                    child: _buildBackgroundTile(
+                      label: preset.label,
+                      selected: activeBackgroundBase64 == presetBase64,
+                      previewBytes: previewBytes,
+                      showLabel: false,
+                      onTap: () {
+                        setModalState(() {
+                          draft = draft.copyWith(
+                            backgroundImageBase64: presetBase64,
+                          );
+                        });
+                      },
+                    ),
+                  ),
+                );
+              }
+              final isMangaChapter = _chapterImageUrls.isNotEmpty;
+              final keyboardInset = MediaQuery.viewInsetsOf(context).bottom;
+              final safeBottom = _bottomSafeInset(context);
+
+              return AnimatedPadding(
+                duration: const Duration(milliseconds: 180),
+                curve: Curves.easeOutCubic,
+                padding: EdgeInsets.only(bottom: keyboardInset + safeBottom),
+                child: SafeArea(
+                  child: FractionallySizedBox(
+                    heightFactor: 0.6,
+                    child: Padding(
+                      padding: AppSpacing.modalSheetPadding(context),
+                      child: Column(
+                        children: [
+                          Align(
+                            alignment: Alignment.centerLeft,
+                            child: Text(
+                              '阅读设置',
+                              style: Theme.of(context).textTheme.titleMedium
+                                  ?.copyWith(fontWeight: FontWeight.w700),
+                            ),
                           ),
-                        ),
-                        const SizedBox(height: 8),
-                        Expanded(
-                          child: ListView(
-                            children: [
-                              _buildSettingLine(
-                                context: context,
-                                label: '亮度',
-                                child: Row(
-                                  children: [
-                                    Expanded(
-                                      child: Slider(
-                                        min: 0.2,
-                                        max: 1,
-                                        divisions: 8,
-                                        value: draft.brightness,
-                                        onChanged: (value) {
-                                          setModalState(() {
-                                            draft = draft.copyWith(
-                                              brightness: value,
-                                            );
-                                          });
-                                        },
-                                      ),
-                                    ),
-                                    const SizedBox(width: 6),
-                                    FilterChip(
-                                      label: const Text('护眼'),
-                                      selected:
-                                          draft.themeMode ==
-                                          ReaderThemeMode.sepia,
-                                      onSelected: (selected) {
-                                        setModalState(() {
-                                          draft = draft.copyWith(
-                                            themeMode:
-                                                selected
-                                                    ? ReaderThemeMode.sepia
-                                                    : ReaderThemeMode.light,
-                                            backgroundStyle:
-                                                selected
-                                                    ? ReaderBackgroundStyle.warm
-                                                    : draft.backgroundStyle,
-                                          );
-                                        });
-                                      },
-                                    ),
-                                  ],
-                                ),
-                              ),
-                              if (!isMangaChapter) ...[
-                                const Divider(height: 1),
+                          const SizedBox(height: 8),
+                          Expanded(
+                            child: ListView(
+                              children: [
                                 _buildSettingLine(
                                   context: context,
-                                  label: '字号',
+                                  label: '亮度',
                                   child: Row(
                                     children: [
-                                      IconButton.filledTonal(
-                                        visualDensity: VisualDensity.compact,
-                                        onPressed: () {
-                                          final next =
-                                              (draft.fontSize - 1)
-                                                  .clamp(14, 30)
-                                                  .toDouble();
-                                          setModalState(() {
-                                            draft = draft.copyWith(
-                                              fontSize: next,
-                                            );
-                                          });
-                                        },
-                                        icon: const Icon(Icons.remove),
-                                      ),
-                                      SizedBox(
-                                        width: 40,
-                                        child: Center(
-                                          child: Text(
-                                            draft.fontSize.toStringAsFixed(0),
-                                          ),
-                                        ),
-                                      ),
-                                      IconButton.filledTonal(
-                                        visualDensity: VisualDensity.compact,
-                                        onPressed: () {
-                                          final next =
-                                              (draft.fontSize + 1)
-                                                  .clamp(14, 30)
-                                                  .toDouble();
-                                          setModalState(() {
-                                            draft = draft.copyWith(
-                                              fontSize: next,
-                                            );
-                                          });
-                                        },
-                                        icon: const Icon(Icons.add),
-                                      ),
-                                      const SizedBox(width: 8),
                                       Expanded(
-                                        child: OutlinedButton.icon(
-                                          onPressed: () {
+                                        child: Slider(
+                                          min: 0.2,
+                                          max: 1,
+                                          divisions: 8,
+                                          value: draft.brightness,
+                                          onChanged: (value) {
                                             setModalState(() {
                                               draft = draft.copyWith(
-                                                fontWeightLevel: switch (draft
-                                                    .fontWeightLevel) {
-                                                  ReaderFontWeightLevel.light =>
-                                                    ReaderFontWeightLevel
-                                                        .regular,
-                                                  ReaderFontWeightLevel
-                                                      .regular =>
-                                                    ReaderFontWeightLevel
-                                                        .medium,
-                                                  ReaderFontWeightLevel
-                                                      .medium =>
-                                                    ReaderFontWeightLevel.light,
-                                                },
+                                                brightness: value,
                                               );
                                             });
                                           },
-                                          icon: const Icon(
-                                            Icons.font_download_outlined,
-                                            size: 16,
-                                          ),
-                                          label: Text(
-                                            _fontWeightLabel(
-                                              draft.fontWeightLevel,
+                                        ),
+                                      ),
+                                      const SizedBox(width: 6),
+                                      FilterChip(
+                                        label: const Text('护眼'),
+                                        selected:
+                                            draft.themeMode ==
+                                            ReaderThemeMode.sepia,
+                                        onSelected: (selected) {
+                                          setModalState(() {
+                                            draft = draft.copyWith(
+                                              themeMode:
+                                                  selected
+                                                      ? ReaderThemeMode.sepia
+                                                      : ReaderThemeMode.light,
+                                              backgroundStyle:
+                                                  selected
+                                                      ? ReaderBackgroundStyle
+                                                          .warm
+                                                      : ReaderBackgroundStyle
+                                                          .plain,
+                                              backgroundTone:
+                                                  selected
+                                                      ? ReaderBackgroundTone
+                                                          .container
+                                                      : ReaderBackgroundTone
+                                                          .surface,
+                                            );
+                                          });
+                                        },
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                                if (!isMangaChapter) ...[
+                                  const Divider(height: 1),
+                                  _buildSettingLine(
+                                    context: context,
+                                    label: '字号',
+                                    child: Row(
+                                      children: [
+                                        IconButton.filledTonal(
+                                          visualDensity: VisualDensity.compact,
+                                          onPressed: () {
+                                            final next =
+                                                (draft.fontSize - 1)
+                                                    .clamp(14, 30)
+                                                    .toDouble();
+                                            setModalState(() {
+                                              draft = draft.copyWith(
+                                                fontSize: next,
+                                              );
+                                            });
+                                          },
+                                          icon: const Icon(Icons.remove),
+                                        ),
+                                        SizedBox(
+                                          width: 40,
+                                          child: Center(
+                                            child: Text(
+                                              draft.fontSize.toStringAsFixed(0),
                                             ),
                                           ),
                                         ),
-                                      ),
-                                    ],
-                                  ),
-                                ),
-                              ],
-                              const Divider(height: 1),
-                              _buildSettingLine(
-                                context: context,
-                                label: '颜色',
-                                child: SingleChildScrollView(
-                                  scrollDirection: Axis.horizontal,
-                                  child: Row(
-                                    children: [
-                                      _buildThemeColorDot(
-                                        draft: draft,
-                                        color: const Color(0xFFFDFDFD),
-                                        mode: ReaderThemeMode.light,
-                                        backgroundStyle:
-                                            ReaderBackgroundStyle.plain,
-                                        onChanged: (next) {
-                                          setModalState(() {
-                                            draft = next;
-                                          });
-                                        },
-                                      ),
-                                      _buildThemeColorDot(
-                                        draft: draft,
-                                        color: const Color(0xFFF7EEDC),
-                                        mode: ReaderThemeMode.sepia,
-                                        backgroundStyle:
-                                            ReaderBackgroundStyle.warm,
-                                        onChanged: (next) {
-                                          setModalState(() {
-                                            draft = next;
-                                          });
-                                        },
-                                      ),
-                                      _buildThemeColorDot(
-                                        draft: draft,
-                                        color: const Color(0xFFF2F4F7),
-                                        mode: ReaderThemeMode.light,
-                                        backgroundStyle:
-                                            ReaderBackgroundStyle.paper,
-                                        onChanged: (next) {
-                                          setModalState(() {
-                                            draft = next;
-                                          });
-                                        },
-                                      ),
-                                      _buildThemeColorDot(
-                                        draft: draft,
-                                        color: const Color(0xFF1E1F24),
-                                        mode: ReaderThemeMode.dark,
-                                        backgroundStyle:
-                                            ReaderBackgroundStyle.plain,
-                                        onChanged: (next) {
-                                          setModalState(() {
-                                            draft = next;
-                                          });
-                                        },
-                                      ),
-                                    ],
-                                  ),
-                                ),
-                              ),
-                              const Divider(height: 1),
-                              _buildSettingLine(
-                                context: context,
-                                label: '背景层级',
-                                labelWidth: 92,
-                                helpText:
-                                    '背景层级用于在当前主题色板中切换阅读背景的明暗层级（surface / surfaceContainer*）。它不会改变文字颜色，只是让背景更亮/更灰/更厚重，暗色主题同样生效。',
-                                child: SingleChildScrollView(
-                                  scrollDirection: Axis.horizontal,
-                                  child: Row(
-                                    children: [
-                                      _buildBackgroundToneDot(
-                                        draft: draft,
-                                        tone: ReaderBackgroundTone.surface,
-                                        onChanged: (next) {
-                                          setModalState(() {
-                                            draft = next;
-                                          });
-                                        },
-                                      ),
-                                      _buildBackgroundToneDot(
-                                        draft: draft,
-                                        tone: ReaderBackgroundTone.containerLow,
-                                        onChanged: (next) {
-                                          setModalState(() {
-                                            draft = next;
-                                          });
-                                        },
-                                      ),
-                                      _buildBackgroundToneDot(
-                                        draft: draft,
-                                        tone: ReaderBackgroundTone.container,
-                                        onChanged: (next) {
-                                          setModalState(() {
-                                            draft = next;
-                                          });
-                                        },
-                                      ),
-                                      _buildBackgroundToneDot(
-                                        draft: draft,
-                                        tone:
-                                            ReaderBackgroundTone.containerHigh,
-                                        onChanged: (next) {
-                                          setModalState(() {
-                                            draft = next;
-                                          });
-                                        },
-                                      ),
-                                      _buildBackgroundToneDot(
-                                        draft: draft,
-                                        tone:
-                                            ReaderBackgroundTone
-                                                .containerHighest,
-                                        onChanged: (next) {
-                                          setModalState(() {
-                                            draft = next;
-                                          });
-                                        },
-                                      ),
-                                    ],
-                                  ),
-                                ),
-                              ),
-                              const Divider(height: 1),
-                              _buildSettingLine(
-                                context: context,
-                                label: '背景',
-                                child: SingleChildScrollView(
-                                  scrollDirection: Axis.horizontal,
-                                  child: Row(
-                                    children: [
-                                      _buildBackgroundTile(
-                                        label: '无背景',
-                                        selected: !hasBackgroundImage,
-                                        icon: Icons.hide_image_outlined,
-                                        onTap: () {
-                                          setModalState(() {
-                                            draft = draft.copyWith(
-                                              clearBackgroundImage: true,
-                                            );
-                                          });
-                                        },
-                                      ),
-                                      const SizedBox(width: 8),
-                                      ...presetBackgroundTiles,
-                                      _buildBackgroundTile(
-                                        label: '自定义',
-                                        selected:
-                                            hasBackgroundImage &&
-                                            !isPresetBackground,
-                                        previewBytes: customBackgroundPreview,
-                                        showLabel:
-                                            customBackgroundPreview == null,
-                                      ),
-                                      const SizedBox(width: 8),
-                                      OutlinedButton.icon(
-                                        onPressed: () async {
-                                          final encoded =
-                                              await _pickBackgroundImageBase64();
-                                          if (encoded == null) {
-                                            return;
-                                          }
-                                          setModalState(() {
-                                            draft = draft.copyWith(
-                                              backgroundImageBase64: encoded,
-                                            );
-                                          });
-                                        },
-                                        icon: const Icon(
-                                          Icons.add_photo_alternate_outlined,
-                                          size: 16,
-                                        ),
-                                        label: const Text('上传'),
-                                      ),
-                                      if (hasBackgroundImage) ...[
-                                        const SizedBox(width: 8),
-                                        OutlinedButton(
+                                        IconButton.filledTonal(
+                                          visualDensity: VisualDensity.compact,
                                           onPressed: () {
+                                            final next =
+                                                (draft.fontSize + 1)
+                                                    .clamp(14, 30)
+                                                    .toDouble();
+                                            setModalState(() {
+                                              draft = draft.copyWith(
+                                                fontSize: next,
+                                              );
+                                            });
+                                          },
+                                          icon: const Icon(Icons.add),
+                                        ),
+                                        const SizedBox(width: 8),
+                                        Expanded(
+                                          child: OutlinedButton.icon(
+                                            onPressed: () {
+                                              setModalState(() {
+                                                draft = draft.copyWith(
+                                                  fontWeightLevel: switch (draft
+                                                      .fontWeightLevel) {
+                                                    ReaderFontWeightLevel
+                                                        .light =>
+                                                      ReaderFontWeightLevel
+                                                          .regular,
+                                                    ReaderFontWeightLevel
+                                                        .regular =>
+                                                      ReaderFontWeightLevel
+                                                          .medium,
+                                                    ReaderFontWeightLevel
+                                                        .medium =>
+                                                      ReaderFontWeightLevel
+                                                          .light,
+                                                  },
+                                                );
+                                              });
+                                            },
+                                            icon: const Icon(
+                                              Icons.font_download_outlined,
+                                              size: 16,
+                                            ),
+                                            label: Text(
+                                              _fontWeightLabel(
+                                                draft.fontWeightLevel,
+                                              ),
+                                            ),
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                ],
+                                const Divider(height: 1),
+                                _buildSettingLine(
+                                  context: context,
+                                  label: '背景颜色',
+                                  labelWidth: 72,
+                                  child: SingleChildScrollView(
+                                    scrollDirection: Axis.horizontal,
+                                    child: Row(
+                                      children: [
+                                        _buildThemeColorDot(
+                                          draft: draft,
+                                          color: const Color(0xFFFDFDFD),
+                                          label: '明亮',
+                                          mode: ReaderThemeMode.light,
+                                          backgroundStyle:
+                                              ReaderBackgroundStyle.plain,
+                                          backgroundTone:
+                                              ReaderBackgroundTone.surface,
+                                          onChanged: (next) {
+                                            setModalState(() {
+                                              draft = next;
+                                            });
+                                          },
+                                        ),
+                                        _buildThemeColorDot(
+                                          draft: draft,
+                                          color: const Color(0xFFF7EEDC),
+                                          label: '护眼',
+                                          mode: ReaderThemeMode.sepia,
+                                          backgroundStyle:
+                                              ReaderBackgroundStyle.warm,
+                                          backgroundTone:
+                                              ReaderBackgroundTone.container,
+                                          onChanged: (next) {
+                                            setModalState(() {
+                                              draft = next;
+                                            });
+                                          },
+                                        ),
+                                        _buildThemeColorDot(
+                                          draft: draft,
+                                          color: const Color(0xFFE8EDF5),
+                                          label: '浅灰',
+                                          mode: ReaderThemeMode.light,
+                                          backgroundStyle:
+                                              ReaderBackgroundStyle.paper,
+                                          backgroundTone:
+                                              ReaderBackgroundTone
+                                                  .containerHigh,
+                                          onChanged: (next) {
+                                            setModalState(() {
+                                              draft = next;
+                                            });
+                                          },
+                                        ),
+                                        _buildThemeColorDot(
+                                          draft: draft,
+                                          color: const Color(0xFF242831),
+                                          label: '夜间',
+                                          mode: ReaderThemeMode.dark,
+                                          backgroundStyle:
+                                              ReaderBackgroundStyle.plain,
+                                          backgroundTone:
+                                              ReaderBackgroundTone
+                                                  .containerHigh,
+                                          onChanged: (next) {
+                                            setModalState(() {
+                                              draft = next;
+                                            });
+                                          },
+                                        ),
+                                        _buildThemeColorDot(
+                                          draft: draft,
+                                          color: const Color(0xFF16181D),
+                                          label: '深夜',
+                                          mode: ReaderThemeMode.dark,
+                                          backgroundStyle:
+                                              ReaderBackgroundStyle.plain,
+                                          backgroundTone:
+                                              ReaderBackgroundTone
+                                                  .containerHighest,
+                                          onChanged: (next) {
+                                            setModalState(() {
+                                              draft = next;
+                                            });
+                                          },
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                ),
+                                const Divider(height: 1),
+                                _buildSettingLine(
+                                  context: context,
+                                  label: '背景',
+                                  child: SingleChildScrollView(
+                                    scrollDirection: Axis.horizontal,
+                                    child: Row(
+                                      children: [
+                                        _buildBackgroundTile(
+                                          label: '无背景',
+                                          selected: !hasBackgroundImage,
+                                          icon: Icons.hide_image_outlined,
+                                          onTap: () {
                                             setModalState(() {
                                               draft = draft.copyWith(
                                                 clearBackgroundImage: true,
                                               );
                                             });
                                           },
-                                          child: const Text('移除'),
                                         ),
-                                      ],
-                                    ],
-                                  ),
-                                ),
-                              ),
-                              const Divider(height: 1),
-                              _buildSettingLine(
-                                context: context,
-                                label: '翻页',
-                                child: SingleChildScrollView(
-                                  scrollDirection: Axis.horizontal,
-                                  child: Row(
-                                    children: const [
-                                          ReaderPageAnimationStyle.curl,
-                                          ReaderPageAnimationStyle.cover,
-                                          ReaderPageAnimationStyle.translate,
-                                          ReaderPageAnimationStyle.vertical,
-                                          ReaderPageAnimationStyle.fade,
-                                          ReaderPageAnimationStyle.none,
-                                        ]
-                                        .map(
-                                          (style) => Padding(
-                                            padding: const EdgeInsets.only(
-                                              right: 8,
-                                            ),
-                                            child: ChoiceChip(
-                                              label: Text(
-                                                _pageAnimationLabel(style),
-                                              ),
-                                              selected:
-                                                  draft.pageAnimationStyle ==
-                                                  style,
-                                              onSelected: (_) {
-                                                setModalState(() {
-                                                  draft = draft.copyWith(
-                                                    pageAnimationStyle: style,
-                                                  );
-                                                });
-                                              },
-                                            ),
+                                        const SizedBox(width: 8),
+                                        ...presetBackgroundTiles,
+                                        _buildBackgroundTile(
+                                          label: '自定义',
+                                          selected:
+                                              hasBackgroundImage &&
+                                              !isPresetBackground,
+                                          previewBytes: customBackgroundPreview,
+                                          showLabel:
+                                              customBackgroundPreview == null,
+                                          onTap: applyCustomBackgroundImage,
+                                        ),
+                                        const SizedBox(width: 8),
+                                        OutlinedButton.icon(
+                                          onPressed: applyCustomBackgroundImage,
+                                          icon: const Icon(
+                                            Icons.add_photo_alternate_outlined,
+                                            size: 16,
                                           ),
-                                        )
-                                        .toList(growable: false),
+                                          label: const Text('上传'),
+                                        ),
+                                        if (hasBackgroundImage) ...[
+                                          const SizedBox(width: 8),
+                                          OutlinedButton(
+                                            onPressed: () {
+                                              setModalState(() {
+                                                draft = draft.copyWith(
+                                                  clearBackgroundImage: true,
+                                                );
+                                              });
+                                            },
+                                            child: const Text('移除'),
+                                          ),
+                                        ],
+                                      ],
+                                    ),
                                   ),
                                 ),
-                              ),
-                              const Divider(height: 1),
-                              _buildSettingLine(
-                                context: context,
-                                label: '其他',
-                                child:
-                                    isMangaChapter
-                                        ? Column(
-                                          crossAxisAlignment:
-                                              CrossAxisAlignment.start,
-                                          children: [
-                                            Wrap(
-                                              spacing: 8,
-                                              runSpacing: 8,
-                                              children: ReaderMangaReadMode
-                                                  .values
-                                                  .map(
-                                                    (mode) => ChoiceChip(
-                                                      label: Text(
-                                                        _mangaReadModeLabel(
-                                                          mode,
-                                                        ),
-                                                      ),
-                                                      selected:
-                                                          draft.mangaReadMode ==
-                                                          mode,
-                                                      onSelected: (_) {
-                                                        setModalState(() {
-                                                          draft = draft
-                                                              .copyWith(
-                                                                mangaReadMode:
-                                                                    mode,
-                                                              );
-                                                        });
-                                                      },
-                                                    ),
-                                                  )
-                                                  .toList(growable: false),
-                                            ),
-                                            const SizedBox(height: 10),
-                                            Text(
-                                              '留白',
-                                              style: Theme.of(
-                                                context,
-                                              ).textTheme.labelMedium?.copyWith(
-                                                color:
-                                                    Theme.of(context)
-                                                        .colorScheme
-                                                        .onSurfaceVariant,
+                                const Divider(height: 1),
+                                _buildSettingLine(
+                                  context: context,
+                                  label: '翻页',
+                                  child: SingleChildScrollView(
+                                    scrollDirection: Axis.horizontal,
+                                    child: Row(
+                                      children: const [
+                                            ReaderPageAnimationStyle.curl,
+                                            ReaderPageAnimationStyle.cover,
+                                            ReaderPageAnimationStyle.translate,
+                                            ReaderPageAnimationStyle.vertical,
+                                            ReaderPageAnimationStyle.fade,
+                                            ReaderPageAnimationStyle.none,
+                                          ]
+                                          .map(
+                                            (style) => Padding(
+                                              padding: const EdgeInsets.only(
+                                                right: 8,
                                               ),
-                                            ),
-                                            const SizedBox(height: 6),
-                                            Wrap(
-                                              spacing: 8,
-                                              runSpacing: 8,
-                                              children: const [
-                                                    0.0,
-                                                    4.0,
-                                                    8.0,
-                                                    12.0,
-                                                    16.0,
-                                                  ]
-                                                  .map(
-                                                    (value) => ChoiceChip(
-                                                      label: Text(
-                                                        '${value.toInt()}',
-                                                      ),
-                                                      selected:
-                                                          (draft.mangaImagePadding -
-                                                                  value)
-                                                              .abs() <
-                                                          0.2,
-                                                      onSelected: (_) {
-                                                        setModalState(() {
-                                                          draft = draft.copyWith(
-                                                            mangaImagePadding:
-                                                                value,
-                                                          );
-                                                        });
-                                                      },
-                                                    ),
-                                                  )
-                                                  .toList(growable: false),
-                                            ),
-                                            const SizedBox(height: 10),
-                                            Text(
-                                              '图间距',
-                                              style: Theme.of(
-                                                context,
-                                              ).textTheme.labelMedium?.copyWith(
-                                                color:
-                                                    Theme.of(context)
-                                                        .colorScheme
-                                                        .onSurfaceVariant,
-                                              ),
-                                            ),
-                                            const SizedBox(height: 6),
-                                            Wrap(
-                                              spacing: 8,
-                                              runSpacing: 8,
-                                              children: const [
-                                                    0.0,
-                                                    6.0,
-                                                    10.0,
-                                                    14.0,
-                                                    18.0,
-                                                  ]
-                                                  .map(
-                                                    (value) => ChoiceChip(
-                                                      label: Text(
-                                                        '${value.toInt()}',
-                                                      ),
-                                                      selected:
-                                                          (draft.mangaImageSpacing -
-                                                                  value)
-                                                              .abs() <
-                                                          0.2,
-                                                      onSelected: (_) {
-                                                        setModalState(() {
-                                                          draft = draft.copyWith(
-                                                            mangaImageSpacing:
-                                                                value,
-                                                          );
-                                                        });
-                                                      },
-                                                    ),
-                                                  )
-                                                  .toList(growable: false),
-                                            ),
-                                            const SizedBox(height: 10),
-                                            Text(
-                                              '背景',
-                                              style: Theme.of(
-                                                context,
-                                              ).textTheme.labelMedium?.copyWith(
-                                                color:
-                                                    Theme.of(context)
-                                                        .colorScheme
-                                                        .onSurfaceVariant,
-                                              ),
-                                            ),
-                                            const SizedBox(height: 6),
-                                            Wrap(
-                                              spacing: 8,
-                                              runSpacing: 8,
-                                              children: [
-                                                ChoiceChip(
-                                                  label: const Text('日间'),
-                                                  selected:
-                                                      draft.themeMode ==
-                                                          ReaderThemeMode
-                                                              .light &&
-                                                      draft.backgroundStyle ==
-                                                          ReaderBackgroundStyle
-                                                              .plain,
-                                                  onSelected: (_) {
-                                                    setModalState(() {
-                                                      draft = draft.copyWith(
-                                                        themeMode:
-                                                            ReaderThemeMode
-                                                                .light,
-                                                        backgroundStyle:
-                                                            ReaderBackgroundStyle
-                                                                .plain,
-                                                      );
-                                                    });
-                                                  },
+                                              child: ChoiceChip(
+                                                label: Text(
+                                                  _pageAnimationLabel(style),
                                                 ),
-                                                ChoiceChip(
-                                                  label: const Text('护眼'),
-                                                  selected:
-                                                      draft.themeMode ==
-                                                      ReaderThemeMode.sepia,
-                                                  onSelected: (_) {
-                                                    setModalState(() {
-                                                      draft = draft.copyWith(
-                                                        themeMode:
-                                                            ReaderThemeMode
-                                                                .sepia,
-                                                        backgroundStyle:
-                                                            ReaderBackgroundStyle
-                                                                .warm,
-                                                      );
-                                                    });
-                                                  },
-                                                ),
-                                                ChoiceChip(
-                                                  label: const Text('夜间'),
-                                                  selected:
-                                                      draft.themeMode ==
-                                                      ReaderThemeMode.dark,
-                                                  onSelected: (_) {
-                                                    setModalState(() {
-                                                      draft = draft.copyWith(
-                                                        themeMode:
-                                                            ReaderThemeMode
-                                                                .dark,
-                                                        backgroundStyle:
-                                                            ReaderBackgroundStyle
-                                                                .plain,
-                                                      );
-                                                    });
-                                                  },
-                                                ),
-                                              ],
-                                            ),
-                                            const SizedBox(height: 10),
-                                            Text(
-                                              '加载策略',
-                                              style: Theme.of(
-                                                context,
-                                              ).textTheme.labelMedium?.copyWith(
-                                                color:
-                                                    Theme.of(context)
-                                                        .colorScheme
-                                                        .onSurfaceVariant,
-                                              ),
-                                            ),
-                                            const SizedBox(height: 6),
-                                            Wrap(
-                                              spacing: 8,
-                                              runSpacing: 8,
-                                              children: ReaderMangaLoadStrategy
-                                                  .values
-                                                  .map(
-                                                    (strategy) => ChoiceChip(
-                                                      label: Text(
-                                                        _mangaLoadStrategyLabel(
-                                                          strategy,
-                                                        ),
-                                                      ),
-                                                      selected:
-                                                          draft
-                                                              .mangaLoadStrategy ==
-                                                          strategy,
-                                                      onSelected: (_) {
-                                                        setModalState(() {
-                                                          draft = draft.copyWith(
-                                                            mangaLoadStrategy:
-                                                                strategy,
-                                                          );
-                                                        });
-                                                      },
-                                                    ),
-                                                  )
-                                                  .toList(growable: false),
-                                            ),
-                                          ],
-                                        )
-                                        : Column(
-                                          crossAxisAlignment:
-                                              CrossAxisAlignment.start,
-                                          children: [
-                                            Wrap(
-                                              spacing: 8,
-                                              runSpacing: 8,
-                                              children: [
-                                                OutlinedButton(
-                                                  onPressed: () async {
-                                                    final result = await _showSpacingSheet(
-                                                      initialLineHeight:
-                                                          draft.lineHeight,
-                                                      initialHorizontalPadding:
-                                                          draft
-                                                              .horizontalPadding,
-                                                      initialParagraphSpacing:
-                                                          draft
-                                                              .paragraphSpacing,
-                                                      initialParagraphIndent:
-                                                          draft.paragraphIndent,
+                                                selected:
+                                                    draft.pageAnimationStyle ==
+                                                    style,
+                                                onSelected: (_) {
+                                                  setModalState(() {
+                                                    draft = draft.copyWith(
+                                                      pageAnimationStyle: style,
                                                     );
-                                                    if (result == null) {
-                                                      return;
-                                                    }
-                                                    setModalState(() {
-                                                      draft = draft.copyWith(
-                                                        horizontalPadding:
-                                                            result
+                                                  });
+                                                },
+                                              ),
+                                            ),
+                                          )
+                                          .toList(growable: false),
+                                    ),
+                                  ),
+                                ),
+                                const Divider(height: 1),
+                                _buildSettingLine(
+                                  context: context,
+                                  label: '其他',
+                                  child:
+                                      isMangaChapter
+                                          ? Column(
+                                            crossAxisAlignment:
+                                                CrossAxisAlignment.start,
+                                            children: [
+                                              Wrap(
+                                                spacing: 8,
+                                                runSpacing: 8,
+                                                children: ReaderMangaReadMode
+                                                    .values
+                                                    .map(
+                                                      (mode) => ChoiceChip(
+                                                        label: Text(
+                                                          _mangaReadModeLabel(
+                                                            mode,
+                                                          ),
+                                                        ),
+                                                        selected:
+                                                            draft
+                                                                .mangaReadMode ==
+                                                            mode,
+                                                        onSelected: (_) {
+                                                          setModalState(() {
+                                                            draft = draft
+                                                                .copyWith(
+                                                                  mangaReadMode:
+                                                                      mode,
+                                                                );
+                                                          });
+                                                        },
+                                                      ),
+                                                    )
+                                                    .toList(growable: false),
+                                              ),
+                                              const SizedBox(height: 10),
+                                              Text(
+                                                '留白',
+                                                style: Theme.of(context)
+                                                    .textTheme
+                                                    .labelMedium
+                                                    ?.copyWith(
+                                                      color:
+                                                          Theme.of(context)
+                                                              .colorScheme
+                                                              .onSurfaceVariant,
+                                                    ),
+                                              ),
+                                              const SizedBox(height: 6),
+                                              Wrap(
+                                                spacing: 8,
+                                                runSpacing: 8,
+                                                children: const [
+                                                      0.0,
+                                                      4.0,
+                                                      8.0,
+                                                      12.0,
+                                                      16.0,
+                                                    ]
+                                                    .map(
+                                                      (value) => ChoiceChip(
+                                                        label: Text(
+                                                          '${value.toInt()}',
+                                                        ),
+                                                        selected:
+                                                            (draft.mangaImagePadding -
+                                                                    value)
+                                                                .abs() <
+                                                            0.2,
+                                                        onSelected: (_) {
+                                                          setModalState(() {
+                                                            draft = draft.copyWith(
+                                                              mangaImagePadding:
+                                                                  value,
+                                                            );
+                                                          });
+                                                        },
+                                                      ),
+                                                    )
+                                                    .toList(growable: false),
+                                              ),
+                                              const SizedBox(height: 10),
+                                              Text(
+                                                '图间距',
+                                                style: Theme.of(context)
+                                                    .textTheme
+                                                    .labelMedium
+                                                    ?.copyWith(
+                                                      color:
+                                                          Theme.of(context)
+                                                              .colorScheme
+                                                              .onSurfaceVariant,
+                                                    ),
+                                              ),
+                                              const SizedBox(height: 6),
+                                              Wrap(
+                                                spacing: 8,
+                                                runSpacing: 8,
+                                                children: const [
+                                                      0.0,
+                                                      6.0,
+                                                      10.0,
+                                                      14.0,
+                                                      18.0,
+                                                    ]
+                                                    .map(
+                                                      (value) => ChoiceChip(
+                                                        label: Text(
+                                                          '${value.toInt()}',
+                                                        ),
+                                                        selected:
+                                                            (draft.mangaImageSpacing -
+                                                                    value)
+                                                                .abs() <
+                                                            0.2,
+                                                        onSelected: (_) {
+                                                          setModalState(() {
+                                                            draft = draft.copyWith(
+                                                              mangaImageSpacing:
+                                                                  value,
+                                                            );
+                                                          });
+                                                        },
+                                                      ),
+                                                    )
+                                                    .toList(growable: false),
+                                              ),
+                                              const SizedBox(height: 10),
+                                              Text(
+                                                '背景颜色',
+                                                style: Theme.of(context)
+                                                    .textTheme
+                                                    .labelMedium
+                                                    ?.copyWith(
+                                                      color:
+                                                          Theme.of(context)
+                                                              .colorScheme
+                                                              .onSurfaceVariant,
+                                                    ),
+                                              ),
+                                              const SizedBox(height: 6),
+                                              Wrap(
+                                                spacing: 8,
+                                                runSpacing: 8,
+                                                children: [
+                                                  ChoiceChip(
+                                                    label: const Text('日间'),
+                                                    selected:
+                                                        draft.themeMode ==
+                                                            ReaderThemeMode
+                                                                .light &&
+                                                        draft.backgroundStyle ==
+                                                            ReaderBackgroundStyle
+                                                                .plain,
+                                                    onSelected: (_) {
+                                                      setModalState(() {
+                                                        draft = draft.copyWith(
+                                                          themeMode:
+                                                              ReaderThemeMode
+                                                                  .light,
+                                                          backgroundStyle:
+                                                              ReaderBackgroundStyle
+                                                                  .plain,
+                                                          backgroundTone:
+                                                              ReaderBackgroundTone
+                                                                  .surface,
+                                                          clearBackgroundImage:
+                                                              true,
+                                                        );
+                                                      });
+                                                    },
+                                                  ),
+                                                  ChoiceChip(
+                                                    label: const Text('护眼'),
+                                                    selected:
+                                                        draft.themeMode ==
+                                                        ReaderThemeMode.sepia,
+                                                    onSelected: (_) {
+                                                      setModalState(() {
+                                                        draft = draft.copyWith(
+                                                          themeMode:
+                                                              ReaderThemeMode
+                                                                  .sepia,
+                                                          backgroundStyle:
+                                                              ReaderBackgroundStyle
+                                                                  .warm,
+                                                          backgroundTone:
+                                                              ReaderBackgroundTone
+                                                                  .container,
+                                                          clearBackgroundImage:
+                                                              true,
+                                                        );
+                                                      });
+                                                    },
+                                                  ),
+                                                  ChoiceChip(
+                                                    label: const Text('夜间'),
+                                                    selected:
+                                                        draft.themeMode ==
+                                                        ReaderThemeMode.dark,
+                                                    onSelected: (_) {
+                                                      setModalState(() {
+                                                        draft = draft.copyWith(
+                                                          themeMode:
+                                                              ReaderThemeMode
+                                                                  .dark,
+                                                          backgroundStyle:
+                                                              ReaderBackgroundStyle
+                                                                  .plain,
+                                                          backgroundTone:
+                                                              ReaderBackgroundTone
+                                                                  .containerHigh,
+                                                          clearBackgroundImage:
+                                                              true,
+                                                        );
+                                                      });
+                                                    },
+                                                  ),
+                                                ],
+                                              ),
+                                              const SizedBox(height: 10),
+                                              Text(
+                                                '加载策略',
+                                                style: Theme.of(context)
+                                                    .textTheme
+                                                    .labelMedium
+                                                    ?.copyWith(
+                                                      color:
+                                                          Theme.of(context)
+                                                              .colorScheme
+                                                              .onSurfaceVariant,
+                                                    ),
+                                              ),
+                                              const SizedBox(height: 6),
+                                              Wrap(
+                                                spacing: 8,
+                                                runSpacing: 8,
+                                                children: ReaderMangaLoadStrategy
+                                                    .values
+                                                    .map(
+                                                      (strategy) => ChoiceChip(
+                                                        label: Text(
+                                                          _mangaLoadStrategyLabel(
+                                                            strategy,
+                                                          ),
+                                                        ),
+                                                        selected:
+                                                            draft
+                                                                .mangaLoadStrategy ==
+                                                            strategy,
+                                                        onSelected: (_) {
+                                                          setModalState(() {
+                                                            draft = draft.copyWith(
+                                                              mangaLoadStrategy:
+                                                                  strategy,
+                                                            );
+                                                          });
+                                                        },
+                                                      ),
+                                                    )
+                                                    .toList(growable: false),
+                                              ),
+                                            ],
+                                          )
+                                          : Column(
+                                            crossAxisAlignment:
+                                                CrossAxisAlignment.start,
+                                            children: [
+                                              Wrap(
+                                                spacing: 8,
+                                                runSpacing: 8,
+                                                children: [
+                                                  OutlinedButton(
+                                                    onPressed: () async {
+                                                      final result = await _showSpacingSheet(
+                                                        initialLineHeight:
+                                                            draft.lineHeight,
+                                                        initialHorizontalPadding:
+                                                            draft
                                                                 .horizontalPadding,
-                                                        lineHeight:
-                                                            result.lineHeight,
-                                                        paragraphSpacing:
-                                                            result
+                                                        initialParagraphSpacing:
+                                                            draft
                                                                 .paragraphSpacing,
-                                                        paragraphIndent:
-                                                            result
+                                                        initialParagraphIndent:
+                                                            draft
                                                                 .paragraphIndent,
                                                       );
-                                                    });
-                                                  },
-                                                  child: const Text('间距设置'),
-                                                ),
-                                              ],
-                                            ),
-                                          ],
-                                        ),
+                                                      if (result == null) {
+                                                        return;
+                                                      }
+                                                      setModalState(() {
+                                                        draft = draft.copyWith(
+                                                          horizontalPadding:
+                                                              result
+                                                                  .horizontalPadding,
+                                                          lineHeight:
+                                                              result.lineHeight,
+                                                          paragraphSpacing:
+                                                              result
+                                                                  .paragraphSpacing,
+                                                          paragraphIndent:
+                                                              result
+                                                                  .paragraphIndent,
+                                                        );
+                                                      });
+                                                    },
+                                                    child: const Text('间距设置'),
+                                                  ),
+                                                ],
+                                              ),
+                                            ],
+                                          ),
+                                ),
+                              ],
+                            ),
+                          ),
+                          const SizedBox(height: 8),
+                          Row(
+                            children: [
+                              OutlinedButton(
+                                onPressed: () {
+                                  setModalState(() {
+                                    draft = const ReaderSettings();
+                                  });
+                                },
+                                child: const Text('恢复默认'),
+                              ),
+                              const Spacer(),
+                              FilledButton(
+                                onPressed:
+                                    () => Navigator.of(context).pop(draft),
+                                child: const Text('应用'),
                               ),
                             ],
                           ),
-                        ),
-                        const SizedBox(height: 8),
-                        Row(
-                          children: [
-                            OutlinedButton(
-                              onPressed: () {
-                                setModalState(() {
-                                  draft = const ReaderSettings();
-                                });
-                              },
-                              child: const Text('恢复默认'),
-                            ),
-                            const Spacer(),
-                            FilledButton(
-                              onPressed: () => Navigator.of(context).pop(draft),
-                              child: const Text('应用'),
-                            ),
-                          ],
-                        ),
-                      ],
+                        ],
+                      ),
                     ),
                   ),
                 ),
-              ),
-            );
-          },
+              );
+            },
+          ),
         );
       },
     );
@@ -4169,72 +4192,53 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
   Widget _buildThemeColorDot({
     required ReaderSettings draft,
     required Color color,
+    required String label,
     required ReaderThemeMode mode,
     required ReaderBackgroundStyle backgroundStyle,
+    required ReaderBackgroundTone backgroundTone,
     required ValueChanged<ReaderSettings> onChanged,
   }) {
     final selected =
-        draft.themeMode == mode && draft.backgroundStyle == backgroundStyle;
+        draft.themeMode == mode &&
+        draft.backgroundStyle == backgroundStyle &&
+        draft.backgroundTone == backgroundTone;
 
-    return GestureDetector(
-      onTap: () {
-        onChanged(
-          draft.copyWith(
-            themeMode: mode,
-            backgroundStyle: backgroundStyle,
-            clearBackgroundImage: true,
+    return Tooltip(
+      message: label,
+      child: GestureDetector(
+        onTap: () {
+          onChanged(
+            draft.copyWith(
+              themeMode: mode,
+              backgroundStyle: backgroundStyle,
+              backgroundTone: backgroundTone,
+              clearBackgroundImage: true,
+            ),
+          );
+        },
+        child: Container(
+          width: 30,
+          height: 30,
+          margin: const EdgeInsets.only(right: 8),
+          decoration: BoxDecoration(
+            color: color,
+            shape: BoxShape.circle,
+            border: Border.all(
+              color:
+                  selected
+                      ? Theme.of(context).colorScheme.primary
+                      : Theme.of(context).colorScheme.outlineVariant,
+              width: selected ? 2 : 1,
+            ),
           ),
-        );
-      },
-      child: Container(
-        width: 26,
-        height: 26,
-        margin: const EdgeInsets.only(right: 8),
-        decoration: BoxDecoration(
-          color: color,
-          shape: BoxShape.circle,
-          border: Border.all(
-            color:
-                selected ? Theme.of(context).colorScheme.primary : Colors.grey,
-            width: selected ? 2 : 1,
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildBackgroundToneDot({
-    required ReaderSettings draft,
-    required ReaderBackgroundTone tone,
-    required ValueChanged<ReaderSettings> onChanged,
-  }) {
-    final effectiveMode =
-        Theme.of(context).brightness == Brightness.dark
-            ? ReaderThemeMode.dark
-            : (draft.themeMode == ReaderThemeMode.sepia
-                ? ReaderThemeMode.sepia
-                : ReaderThemeMode.light);
-
-    final preview = draft.copyWith(backgroundTone: tone);
-    final previewColors = _resolveThemeColors(effectiveMode, preview);
-    final selected = draft.backgroundTone == tone;
-
-    return GestureDetector(
-      onTap: () => onChanged(preview),
-      child: Container(
-        width: 26,
-        height: 26,
-        margin: const EdgeInsets.only(right: 8),
-        decoration: BoxDecoration(
-          color: previewColors.background,
-          shape: BoxShape.circle,
-          border: Border.all(
-            color:
-                selected
-                    ? Theme.of(context).colorScheme.primary
-                    : Theme.of(context).colorScheme.outlineVariant,
-            width: selected ? 2 : 1,
-          ),
+          child:
+              selected
+                  ? Icon(
+                    Icons.check_rounded,
+                    size: 14,
+                    color: mode == ReaderThemeMode.dark ? Colors.white : null,
+                  )
+                  : null,
         ),
       ),
     );
@@ -4361,6 +4365,9 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
       }
 
       return base64Encode(bytes);
+    } on PlatformException catch (error) {
+      _showMessage('选择背景失败：${error.message ?? error.code}');
+      return null;
     } catch (error) {
       _showMessage('选择背景失败：$error');
       return null;
@@ -4424,188 +4431,198 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
       return '自定义';
     }
 
+    final readerModalTheme = _readerModalTheme();
+
     return showModalBottomSheet<_ReaderSpacingSheetResult>(
       context: context,
       showDragHandle: true,
       useSafeArea: true,
+      backgroundColor: readerModalTheme.colorScheme.surface,
       builder: (context) {
-        return StatefulBuilder(
-          builder: (context, setModalState) {
-            final currentLineLabel = resolveLabel(lineOptions, lineHeight);
-            final currentPaddingLabel = resolveLabel(
-              paddingOptions,
-              horizontalPadding,
-            );
+        return Theme(
+          data: readerModalTheme,
+          child: StatefulBuilder(
+            builder: (context, setModalState) {
+              final currentLineLabel = resolveLabel(lineOptions, lineHeight);
+              final currentPaddingLabel = resolveLabel(
+                paddingOptions,
+                horizontalPadding,
+              );
 
-            final currentParagraphLabel = resolveLabel(
-              paragraphOptions,
-              paragraphSpacing,
-            );
-            final currentIndentLabel = resolveLabel(
-              indentOptions,
-              paragraphIndent,
-            );
+              final currentParagraphLabel = resolveLabel(
+                paragraphOptions,
+                paragraphSpacing,
+              );
+              final currentIndentLabel = resolveLabel(
+                indentOptions,
+                paragraphIndent,
+              );
 
-            return SafeArea(
-              child: Padding(
-                padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
-                child: SizedBox(
-                  height: MediaQuery.sizeOf(context).height * 0.72,
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        '间距设置',
-                        style: Theme.of(context).textTheme.titleMedium
-                            ?.copyWith(fontWeight: FontWeight.w700),
-                      ),
-                      const SizedBox(height: 6),
-                      Text(
-                        '当前：行间距 $currentLineLabel / 页面边距 $currentPaddingLabel / 段落 $currentParagraphLabel / 缩进 $currentIndentLabel',
-                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                          color: Theme.of(context).colorScheme.onSurfaceVariant,
+              return SafeArea(
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
+                  child: SizedBox(
+                    height: MediaQuery.sizeOf(context).height * 0.72,
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          '间距设置',
+                          style: Theme.of(context).textTheme.titleMedium
+                              ?.copyWith(fontWeight: FontWeight.w700),
                         ),
-                      ),
-                      const SizedBox(height: 8),
-                      Expanded(
-                        child: ListView(
-                          children: [
-                            const SizedBox(height: 16),
-                            Text(
-                              '行间距',
-                              style: Theme.of(context).textTheme.titleSmall
-                                  ?.copyWith(fontWeight: FontWeight.w700),
-                            ),
-                            const SizedBox(height: 8),
-                            Wrap(
-                              spacing: 8,
-                              runSpacing: 8,
-                              children: [
-                                for (final option in lineOptions)
-                                  ChoiceChip(
-                                    label: Text(option.label),
-                                    selected:
-                                        (option.value - lineHeight).abs() <
-                                        0.06,
-                                    onSelected: (_) {
-                                      setModalState(() {
-                                        lineHeight = option.value;
-                                      });
-                                    },
-                                  ),
-                              ],
-                            ),
-                            const SizedBox(height: 16),
-                            Text(
-                              '页面边距',
-                              style: Theme.of(context).textTheme.titleSmall
-                                  ?.copyWith(fontWeight: FontWeight.w700),
-                            ),
-                            const SizedBox(height: 8),
-                            Wrap(
-                              spacing: 8,
-                              runSpacing: 8,
-                              children: [
-                                for (final option in paddingOptions)
-                                  ChoiceChip(
-                                    label: Text(option.label),
-                                    selected:
-                                        (option.value - horizontalPadding)
-                                            .abs() <
-                                        0.6,
-                                    onSelected: (_) {
-                                      setModalState(() {
-                                        horizontalPadding = option.value;
-                                      });
-                                    },
-                                  ),
-                              ],
-                            ),
+                        const SizedBox(height: 6),
+                        Text(
+                          '当前：行间距 $currentLineLabel / 页面边距 $currentPaddingLabel / 段落 $currentParagraphLabel / 缩进 $currentIndentLabel',
+                          style: Theme.of(
+                            context,
+                          ).textTheme.bodySmall?.copyWith(
+                            color:
+                                Theme.of(context).colorScheme.onSurfaceVariant,
+                          ),
+                        ),
+                        const SizedBox(height: 8),
+                        Expanded(
+                          child: ListView(
+                            children: [
+                              const SizedBox(height: 16),
+                              Text(
+                                '行间距',
+                                style: Theme.of(context).textTheme.titleSmall
+                                    ?.copyWith(fontWeight: FontWeight.w700),
+                              ),
+                              const SizedBox(height: 8),
+                              Wrap(
+                                spacing: 8,
+                                runSpacing: 8,
+                                children: [
+                                  for (final option in lineOptions)
+                                    ChoiceChip(
+                                      label: Text(option.label),
+                                      selected:
+                                          (option.value - lineHeight).abs() <
+                                          0.06,
+                                      onSelected: (_) {
+                                        setModalState(() {
+                                          lineHeight = option.value;
+                                        });
+                                      },
+                                    ),
+                                ],
+                              ),
+                              const SizedBox(height: 16),
+                              Text(
+                                '页面边距',
+                                style: Theme.of(context).textTheme.titleSmall
+                                    ?.copyWith(fontWeight: FontWeight.w700),
+                              ),
+                              const SizedBox(height: 8),
+                              Wrap(
+                                spacing: 8,
+                                runSpacing: 8,
+                                children: [
+                                  for (final option in paddingOptions)
+                                    ChoiceChip(
+                                      label: Text(option.label),
+                                      selected:
+                                          (option.value - horizontalPadding)
+                                              .abs() <
+                                          0.6,
+                                      onSelected: (_) {
+                                        setModalState(() {
+                                          horizontalPadding = option.value;
+                                        });
+                                      },
+                                    ),
+                                ],
+                              ),
 
-                            const SizedBox(height: 16),
-                            Text(
-                              '段落间距',
-                              style: Theme.of(context).textTheme.titleSmall
-                                  ?.copyWith(fontWeight: FontWeight.w700),
+                              const SizedBox(height: 16),
+                              Text(
+                                '段落间距',
+                                style: Theme.of(context).textTheme.titleSmall
+                                    ?.copyWith(fontWeight: FontWeight.w700),
+                              ),
+                              const SizedBox(height: 8),
+                              Wrap(
+                                spacing: 8,
+                                runSpacing: 8,
+                                children: [
+                                  for (final option in paragraphOptions)
+                                    ChoiceChip(
+                                      label: Text(option.label),
+                                      selected:
+                                          (option.value - paragraphSpacing)
+                                              .abs() <
+                                          0.6,
+                                      onSelected: (_) {
+                                        setModalState(() {
+                                          paragraphSpacing = option.value;
+                                        });
+                                      },
+                                    ),
+                                ],
+                              ),
+                              const SizedBox(height: 16),
+                              Text(
+                                '首行缩进',
+                                style: Theme.of(context).textTheme.titleSmall
+                                    ?.copyWith(fontWeight: FontWeight.w700),
+                              ),
+                              const SizedBox(height: 8),
+                              Wrap(
+                                spacing: 8,
+                                runSpacing: 8,
+                                children: [
+                                  for (final option in indentOptions)
+                                    ChoiceChip(
+                                      label: Text(option.label),
+                                      selected:
+                                          (option.value - paragraphIndent)
+                                              .abs() <
+                                          0.6,
+                                      onSelected: (_) {
+                                        setModalState(() {
+                                          paragraphIndent = option.value;
+                                        });
+                                      },
+                                    ),
+                                ],
+                              ),
+                              const SizedBox(height: 16),
+                            ],
+                          ),
+                        ),
+                        const SizedBox(height: 12),
+                        Row(
+                          children: [
+                            TextButton(
+                              onPressed: () => Navigator.of(context).pop(),
+                              child: const Text('取消'),
                             ),
-                            const SizedBox(height: 8),
-                            Wrap(
-                              spacing: 8,
-                              runSpacing: 8,
-                              children: [
-                                for (final option in paragraphOptions)
-                                  ChoiceChip(
-                                    label: Text(option.label),
-                                    selected:
-                                        (option.value - paragraphSpacing)
-                                            .abs() <
-                                        0.6,
-                                    onSelected: (_) {
-                                      setModalState(() {
-                                        paragraphSpacing = option.value;
-                                      });
-                                    },
+                            const Spacer(),
+                            FilledButton(
+                              onPressed: () {
+                                Navigator.of(context).pop(
+                                  _ReaderSpacingSheetResult(
+                                    lineHeight: lineHeight,
+                                    horizontalPadding: horizontalPadding,
+                                    paragraphSpacing: paragraphSpacing,
+                                    paragraphIndent: paragraphIndent,
                                   ),
-                              ],
+                                );
+                              },
+                              child: const Text('应用'),
                             ),
-                            const SizedBox(height: 16),
-                            Text(
-                              '首行缩进',
-                              style: Theme.of(context).textTheme.titleSmall
-                                  ?.copyWith(fontWeight: FontWeight.w700),
-                            ),
-                            const SizedBox(height: 8),
-                            Wrap(
-                              spacing: 8,
-                              runSpacing: 8,
-                              children: [
-                                for (final option in indentOptions)
-                                  ChoiceChip(
-                                    label: Text(option.label),
-                                    selected:
-                                        (option.value - paragraphIndent).abs() <
-                                        0.6,
-                                    onSelected: (_) {
-                                      setModalState(() {
-                                        paragraphIndent = option.value;
-                                      });
-                                    },
-                                  ),
-                              ],
-                            ),
-                            const SizedBox(height: 16),
                           ],
                         ),
-                      ),
-                      const SizedBox(height: 12),
-                      Row(
-                        children: [
-                          TextButton(
-                            onPressed: () => Navigator.of(context).pop(),
-                            child: const Text('取消'),
-                          ),
-                          const Spacer(),
-                          FilledButton(
-                            onPressed: () {
-                              Navigator.of(context).pop(
-                                _ReaderSpacingSheetResult(
-                                  lineHeight: lineHeight,
-                                  horizontalPadding: horizontalPadding,
-                                  paragraphSpacing: paragraphSpacing,
-                                  paragraphIndent: paragraphIndent,
-                                ),
-                              );
-                            },
-                            child: const Text('应用'),
-                          ),
-                        ],
-                      ),
-                    ],
+                      ],
+                    ),
                   ),
                 ),
-              ),
-            );
-          },
+              );
+            },
+          ),
         );
       },
     );
@@ -4639,11 +4656,24 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
     };
   }
 
+  ThemeData _readerModalTheme() {
+    final scheme = _colorSchemeForReaderMode(_effectiveReaderThemeMode());
+    final theme = AppTheme.build(scheme);
+    return theme.copyWith(
+      bottomSheetTheme: theme.bottomSheetTheme.copyWith(
+        backgroundColor: scheme.surface,
+        modalBackgroundColor: scheme.surface,
+        dragHandleColor: scheme.outlineVariant,
+      ),
+      dialogTheme: theme.dialogTheme.copyWith(backgroundColor: scheme.surface),
+    );
+  }
+
   _ReaderThemeColors _resolveThemeColors(
     ReaderThemeMode mode,
     ReaderSettings settings,
   ) {
-    final scheme = Theme.of(context).colorScheme;
+    final scheme = _colorSchemeForReaderMode(mode);
 
     final baseBackground = _backgroundForTone(scheme, settings.backgroundTone);
     final baseOverlay = _overlayForTone(scheme, settings.backgroundTone);
@@ -4654,8 +4684,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
     var metaColor = scheme.onSurfaceVariant;
     final dividerColor = scheme.outlineVariant.withValues(alpha: 0.6);
 
-    if (mode == ReaderThemeMode.sepia &&
-        Theme.of(context).brightness != Brightness.dark) {
+    if (mode == ReaderThemeMode.sepia) {
       const targetBackground = Color(0xFFF7EEDC);
       const targetOverlay = Color(0xFFF0E3C7);
       background =
@@ -4672,6 +4701,22 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
       meta: metaColor,
       divider: dividerColor,
       overlay: overlay,
+    );
+  }
+
+  ColorScheme _colorSchemeForReaderMode(ReaderThemeMode mode) {
+    final currentScheme = Theme.of(context).colorScheme;
+    final targetBrightness =
+        mode == ReaderThemeMode.dark ? Brightness.dark : Brightness.light;
+
+    if (currentScheme.brightness == targetBrightness) {
+      return currentScheme;
+    }
+
+    return ColorScheme.fromSeed(
+      seedColor: currentScheme.primary,
+      dynamicSchemeVariant: DynamicSchemeVariant.tonalSpot,
+      brightness: targetBrightness,
     );
   }
 
