@@ -317,7 +317,8 @@ class _BookDetailPageState extends State<BookDetailPage> {
                                               !hideActionIcons) ...[
                                             Icon(
                                               _isInBookshelf
-                                                  ? Icons.bookmark_remove_outlined
+                                                  ? Icons
+                                                      .bookmark_remove_outlined
                                                   : Icons.bookmark_add_outlined,
                                               size: 16,
                                             ),
@@ -432,10 +433,9 @@ class _BookDetailPageState extends State<BookDetailPage> {
   }
 
   String _normalizeSingleLineText(String text) {
-    return _normalizeText(text)
-        .replaceAll('\n', ' ')
-        .replaceAll(RegExp(r'\s{2,}'), ' ')
-        .trim();
+    return _normalizeText(
+      text,
+    ).replaceAll('\n', ' ').replaceAll(RegExp(r'\s{2,}'), ' ').trim();
   }
 
   Widget _buildLatestChapterCard(Chapter latestChapter) {
@@ -776,26 +776,47 @@ class _BookDetailPageState extends State<BookDetailPage> {
       useSafeArea: true,
       showDragHandle: true,
       builder: (context) {
+        final width = MediaQuery.sizeOf(context).width;
+        final heightFactor =
+            width < 360
+                ? 0.92
+                : width >= 430
+                ? 0.84
+                : 0.88;
+        final horizontal = AppSpacing.pageHorizontal(context);
+
         return FractionallySizedBox(
-          heightFactor: 0.88,
+          heightFactor: heightFactor,
           child: Padding(
-            padding: const EdgeInsets.fromLTRB(12, 4, 12, 12),
+            padding: EdgeInsets.fromLTRB(horizontal, 4, horizontal, 12),
             child: Column(
               children: [
-                Row(
-                  children: [
-                    Expanded(
-                      child: Text(
-                        '全部目录（${chapters.length} 章）',
-                        style: Theme.of(context).textTheme.titleMedium
-                            ?.copyWith(fontWeight: FontWeight.w700),
+                LayoutBuilder(
+                  builder: (context, constraints) {
+                    final title = Text(
+                      '全部目录（${chapters.length} 章）',
+                      style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                        fontWeight: FontWeight.w700,
                       ),
-                    ),
-                    Text(
+                    );
+                    final orderBadge = Text(
                       _manualTocReversed ? '倒序' : '正序',
                       style: Theme.of(context).textTheme.labelMedium,
-                    ),
-                  ],
+                    );
+
+                    if (constraints.maxWidth < 340) {
+                      return Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          title,
+                          const SizedBox(height: 4),
+                          orderBadge,
+                        ],
+                      );
+                    }
+
+                    return Row(children: [Expanded(child: title), orderBadge]);
+                  },
                 ),
                 const SizedBox(height: 8),
                 Expanded(

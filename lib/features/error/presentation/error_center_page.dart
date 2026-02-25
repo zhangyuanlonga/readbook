@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
+import '../../../app/layout/app_spacing.dart';
 import '../../../core/logging/source_log_store.dart';
 
 class ErrorCenterPage extends StatefulWidget {
@@ -16,6 +17,9 @@ class _ErrorCenterPageState extends State<ErrorCenterPage> {
 
   @override
   Widget build(BuildContext context) {
+    final horizontal = AppSpacing.pageHorizontal(context);
+    final bottomSafe = MediaQuery.viewPaddingOf(context).bottom;
+
     return Scaffold(
       appBar: AppBar(
         title: const Text('错误中心'),
@@ -44,7 +48,12 @@ class _ErrorCenterPageState extends State<ErrorCenterPage> {
               .toList(growable: false);
 
           return ListView(
-            padding: const EdgeInsets.all(16),
+            padding: EdgeInsets.fromLTRB(
+              horizontal,
+              16,
+              horizontal,
+              16 + bottomSafe,
+            ),
             children: [
               Card(
                 child: Padding(

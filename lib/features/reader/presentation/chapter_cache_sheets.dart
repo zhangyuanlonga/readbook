@@ -3,6 +3,7 @@ import 'dart:math';
 
 import 'package:flutter/material.dart';
 
+import '../../../app/layout/app_spacing.dart';
 import '../../../domain/entities/chapter.dart';
 import '../application/chapter_cache_service.dart';
 
@@ -129,6 +130,7 @@ class _ChapterCacheRangeSheetState extends State<_ChapterCacheRangeSheet> {
     final theme = Theme.of(context);
     final colorScheme = theme.colorScheme;
     final title = widget.bookTitle?.trim();
+    final horizontal = AppSpacing.pageHorizontal(context) + 2;
 
     final selectedCount = _endIndex - _startIndex + 1;
     final startLabel = _chapterLabel(_startIndex);
@@ -136,8 +138,8 @@ class _ChapterCacheRangeSheetState extends State<_ChapterCacheRangeSheet> {
 
     return Padding(
       padding: EdgeInsets.only(
-        left: 18,
-        right: 18,
+        left: horizontal,
+        right: horizontal,
         top: 10,
         bottom: 18 + MediaQuery.viewInsetsOf(context).bottom,
       ),
@@ -177,31 +179,53 @@ class _ChapterCacheRangeSheetState extends State<_ChapterCacheRangeSheet> {
                   Row(
                     children: [
                       Expanded(
-                        child: Text(
-                          '$startLabel - $endLabel',
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: theme.textTheme.titleMedium?.copyWith(
-                            fontWeight: FontWeight.w700,
-                          ),
-                        ),
-                      ),
-                      const SizedBox(width: 10),
-                      Container(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 10,
-                          vertical: 6,
-                        ),
-                        decoration: BoxDecoration(
-                          color: colorScheme.secondaryContainer,
-                          borderRadius: BorderRadius.circular(999),
-                        ),
-                        child: Text(
-                          '$selectedCount 章',
-                          style: theme.textTheme.labelMedium?.copyWith(
-                            color: colorScheme.onSecondaryContainer,
-                            fontWeight: FontWeight.w700,
-                          ),
+                        child: LayoutBuilder(
+                          builder: (context, constraints) {
+                            final rangeTitle = Text(
+                              '$startLabel - $endLabel',
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: theme.textTheme.titleMedium?.copyWith(
+                                fontWeight: FontWeight.w700,
+                              ),
+                            );
+                            final countChip = Container(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 10,
+                                vertical: 6,
+                              ),
+                              decoration: BoxDecoration(
+                                color: colorScheme.secondaryContainer,
+                                borderRadius: BorderRadius.circular(999),
+                              ),
+                              child: Text(
+                                '$selectedCount 章',
+                                style: theme.textTheme.labelMedium?.copyWith(
+                                  color: colorScheme.onSecondaryContainer,
+                                  fontWeight: FontWeight.w700,
+                                ),
+                              ),
+                            );
+
+                            if (constraints.maxWidth < 340) {
+                              return Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  rangeTitle,
+                                  const SizedBox(height: 8),
+                                  countChip,
+                                ],
+                              );
+                            }
+
+                            return Row(
+                              children: [
+                                Expanded(child: rangeTitle),
+                                const SizedBox(width: 10),
+                                countChip,
+                              ],
+                            );
+                          },
                         ),
                       ),
                     ],
@@ -231,65 +255,91 @@ class _ChapterCacheRangeSheetState extends State<_ChapterCacheRangeSheet> {
                     },
                   ),
                   const SizedBox(height: 8),
-                  Row(
-                    children: [
-                      Expanded(
-                        child: _buildStepper(
-                          label: '起始',
-                          value: _startIndex,
-                          minValue: 0,
-                          maxValue: _endIndex,
-                          onChanged: (value) {
-                            setState(() {
-                              _startIndex = value;
-                            });
-                          },
-                        ),
-                      ),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: _buildStepper(
-                          label: '结束',
-                          value: _endIndex,
-                          minValue: _startIndex,
-                          maxValue: widget.totalChapters - 1,
-                          onChanged: (value) {
-                            setState(() {
-                              _endIndex = value;
-                            });
-                          },
-                        ),
-                      ),
-                    ],
+                  LayoutBuilder(
+                    builder: (context, constraints) {
+                      final startStepper = _buildStepper(
+                        label: '起始',
+                        value: _startIndex,
+                        minValue: 0,
+                        maxValue: _endIndex,
+                        onChanged: (value) {
+                          setState(() {
+                            _startIndex = value;
+                          });
+                        },
+                      );
+                      final endStepper = _buildStepper(
+                        label: '结束',
+                        value: _endIndex,
+                        minValue: _startIndex,
+                        maxValue: widget.totalChapters - 1,
+                        onChanged: (value) {
+                          setState(() {
+                            _endIndex = value;
+                          });
+                        },
+                      );
+
+                      if (constraints.maxWidth < 360) {
+                        return Column(
+                          children: [
+                            startStepper,
+                            const SizedBox(height: 12),
+                            endStepper,
+                          ],
+                        );
+                      }
+
+                      return Row(
+                        children: [
+                          Expanded(child: startStepper),
+                          const SizedBox(width: 12),
+                          Expanded(child: endStepper),
+                        ],
+                      );
+                    },
                   ),
                 ],
               ),
             ),
           ),
           const SizedBox(height: 14),
-          Row(
-            children: [
-              Expanded(
-                child: OutlinedButton(
-                  onPressed: () => Navigator.of(context).pop(),
-                  child: const Text('取消'),
-                ),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: FilledButton(
-                  onPressed: () {
-                    Navigator.of(context).pop(
-                      _ChapterCacheRange(
-                        startIndex: _startIndex,
-                        endIndex: _endIndex,
-                      ),
-                    );
-                  },
-                  child: const Text('开始缓存'),
-                ),
-              ),
-            ],
+          LayoutBuilder(
+            builder: (context, constraints) {
+              final cancelButton = OutlinedButton(
+                onPressed: () => Navigator.of(context).pop(),
+                child: const Text('取消'),
+              );
+              final startButton = FilledButton(
+                onPressed: () {
+                  Navigator.of(context).pop(
+                    _ChapterCacheRange(
+                      startIndex: _startIndex,
+                      endIndex: _endIndex,
+                    ),
+                  );
+                },
+                child: const Text('开始缓存'),
+              );
+
+              if (constraints.maxWidth < 360) {
+                return Column(
+                  children: [
+                    SizedBox(width: double.infinity, child: cancelButton),
+                    const SizedBox(height: 8),
+                    SizedBox(width: double.infinity, child: startButton),
+                  ],
+                );
+              }
+
+              return Row(
+                children: [
+                  Expanded(child: cancelButton),
+                  const SizedBox(width: 12),
+                  Expanded(child: startButton),
+                ],
+              );
+            },
           ),
         ],
       ),
@@ -434,6 +484,7 @@ class _ChapterCacheProgressSheetState
     final theme = Theme.of(context);
     final colorScheme = theme.colorScheme;
     final title = widget.bookTitle?.trim();
+    final horizontal = AppSpacing.pageHorizontal(context) + 2;
 
     final progress = _progress;
     final done = progress?.done ?? 0;
@@ -450,7 +501,7 @@ class _ChapterCacheProgressSheetState
     return PopScope(
       canPop: canClose,
       child: Padding(
-        padding: const EdgeInsets.fromLTRB(18, 18, 18, 18),
+        padding: EdgeInsets.fromLTRB(horizontal, 18, horizontal, 18),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -536,38 +587,51 @@ class _ChapterCacheProgressSheetState
               ),
             ),
             const SizedBox(height: 14),
-            Row(
-              children: [
-                Expanded(
-                  child: OutlinedButton.icon(
-                    onPressed:
-                        canClose
-                            ? null
-                            : () {
-                              setState(() {
-                                _token.cancel();
-                              });
-                            },
-                    icon: const Icon(Icons.stop_circle_outlined),
-                    label: const Text('停止'),
-                  ),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: FilledButton(
-                    onPressed:
-                        canClose && !_closing
-                            ? () {
-                              setState(() {
-                                _closing = true;
-                              });
-                              Navigator.of(context).pop();
-                            }
-                            : null,
-                    child: Text(canClose ? '完成' : '缓存中...'),
-                  ),
-                ),
-              ],
+            LayoutBuilder(
+              builder: (context, constraints) {
+                final stopButton = OutlinedButton.icon(
+                  onPressed:
+                      canClose
+                          ? null
+                          : () {
+                            setState(() {
+                              _token.cancel();
+                            });
+                          },
+                  icon: const Icon(Icons.stop_circle_outlined),
+                  label: const Text('停止'),
+                );
+                final doneButton = FilledButton(
+                  onPressed:
+                      canClose && !_closing
+                          ? () {
+                            setState(() {
+                              _closing = true;
+                            });
+                            Navigator.of(context).pop();
+                          }
+                          : null,
+                  child: Text(canClose ? '完成' : '缓存中...'),
+                );
+
+                if (constraints.maxWidth < 360) {
+                  return Column(
+                    children: [
+                      SizedBox(width: double.infinity, child: stopButton),
+                      const SizedBox(height: 8),
+                      SizedBox(width: double.infinity, child: doneButton),
+                    ],
+                  );
+                }
+
+                return Row(
+                  children: [
+                    Expanded(child: stopButton),
+                    const SizedBox(width: 12),
+                    Expanded(child: doneButton),
+                  ],
+                );
+              },
             ),
             const SizedBox(height: 4),
             Text(

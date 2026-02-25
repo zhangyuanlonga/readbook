@@ -17,6 +17,11 @@ class AppLayout {
     return screenWidth(context) < 360;
   }
 
+  static bool isPhoneLarge(BuildContext context) {
+    final width = screenWidth(context);
+    return width >= 430 && width < 600;
+  }
+
   static double shortestSide(BuildContext context) {
     final size = MediaQuery.sizeOf(context);
     return math.min(size.width, size.height);

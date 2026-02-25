@@ -15,6 +15,7 @@ class ShellScaffold extends StatefulWidget {
 class _ShellScaffoldState extends State<ShellScaffold> {
   static const double _kSwipeVelocityThreshold = 420;
   static const bool _kEnableMobileTabSwitchAnimation = false;
+  static const double _kRailBreakpoint = 600;
 
   late int _currentIndex;
   bool _isForward = true;
@@ -51,10 +52,12 @@ class _ShellScaffoldState extends State<ShellScaffold> {
 
   @override
   Widget build(BuildContext context) {
+    final useNavigationRail =
+        MediaQuery.sizeOf(context).width >= _kRailBreakpoint;
+    final enableTabSwipe = _enableMobileTabSwipe && !useNavigationRail;
+
     final shouldAnimateSwitch =
-        _enableMobileTabSwipe &&
-        _hasTabSwitched &&
-        _kEnableMobileTabSwitchAnimation;
+        enableTabSwipe && _hasTabSwitched && _kEnableMobileTabSwitchAnimation;
 
     final switchedChild =
         shouldAnimateSwitch
@@ -91,7 +94,7 @@ class _ShellScaffoldState extends State<ShellScaffold> {
             );
 
     final body =
-        _enableMobileTabSwipe
+        enableTabSwipe
             ? GestureDetector(
               behavior: HitTestBehavior.translucent,
               onHorizontalDragEnd:
@@ -103,6 +106,38 @@ class _ShellScaffoldState extends State<ShellScaffold> {
               child: switchedChild,
             )
             : switchedChild;
+
+    if (useNavigationRail) {
+      return Scaffold(
+        body: Row(
+          children: [
+            SafeArea(
+              child: NavigationRail(
+                selectedIndex: _currentIndex,
+                onDestinationSelected: (index) => _goToIndex(context, index),
+                labelType: NavigationRailLabelType.all,
+                destinations: const [
+                  NavigationRailDestination(
+                    icon: Icon(Icons.bookmarks_outlined),
+                    label: Text('书架'),
+                  ),
+                  NavigationRailDestination(
+                    icon: Icon(Icons.storage_outlined),
+                    label: Text('书源'),
+                  ),
+                  NavigationRailDestination(
+                    icon: Icon(Icons.person_outline),
+                    label: Text('我的'),
+                  ),
+                ],
+              ),
+            ),
+            const VerticalDivider(width: 1),
+            Expanded(child: body),
+          ],
+        ),
+      );
+    }
 
     return Scaffold(
       body: body,

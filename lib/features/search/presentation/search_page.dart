@@ -12,6 +12,7 @@ import '../../../data/datasources/local/app_database.dart';
 import '../../../data/repositories/source_repository_impl.dart';
 import '../../../domain/entities/book.dart';
 import '../../../domain/repositories/source_repository.dart';
+import '../../source/presentation/source_filter_sheet.dart';
 import '../application/search_service.dart';
 
 class SearchPage extends StatefulWidget {
@@ -261,10 +262,9 @@ class _SearchPageState extends State<SearchPage> {
                 controller: _keywordController,
                 textInputAction: TextInputAction.search,
                 textAlignVertical: TextAlignVertical.center,
-                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                  fontSize: 14,
-                  height: 1.2,
-                ),
+                style: Theme.of(
+                  context,
+                ).textTheme.bodyMedium?.copyWith(fontSize: 14, height: 1.2),
                 onChanged: (_) => setState(() {}),
                 onSubmitted: (_) => _runSearch(),
                 decoration: InputDecoration(
@@ -455,16 +455,15 @@ class _SearchPageState extends State<SearchPage> {
   }
 
   Future<void> _showSourceFilterSheet() async {
-    final selected = await showModalBottomSheet<Set<String>>(
+    final selected = await showSourceFilterSheet(
       context: context,
-      isScrollControlled: true,
-      showDragHandle: true,
-      useSafeArea: true,
-      builder:
-          (context) => _SourceFilterSheet(
-            initialSelectedIds: _selectedSourceIds,
-            contentMode: _searchContentMode,
-          ),
+      config: SourceFilterSheetConfig(
+        initialSelectedIds: _selectedSourceIds,
+        enabledOnly: true,
+        isMangaSource: _searchContentMode == SearchContentMode.manga,
+        allSelectionLabel: '全部书源',
+        allSummaryLabel: '全部',
+      ),
     );
 
     if (!mounted || selected == null) {
@@ -1230,312 +1229,5 @@ class _SearchPageState extends State<SearchPage> {
     }
 
     ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(text)));
-  }
-}
-
-class _SourceFilterSheet extends StatefulWidget {
-  const _SourceFilterSheet({
-    required this.initialSelectedIds,
-    required this.contentMode,
-  });
-
-  final Set<String> initialSelectedIds;
-  final SearchContentMode contentMode;
-
-  @override
-  State<_SourceFilterSheet> createState() => _SourceFilterSheetState();
-}
-
-class _SourceFilterSheetState extends State<_SourceFilterSheet> {
-  static const int _kPageSize = 80;
-  static const Duration _kPageLoadTimeout = Duration(seconds: 8);
-
-  final TextEditingController _keywordController = TextEditingController();
-  final ScrollController _scrollController = ScrollController();
-
-  Timer? _searchDebounce;
-  late Set<String> _draftSelectedIds;
-  List<SourceListItem> _visibleSources = const <SourceListItem>[];
-  bool _isInitialLoading = true;
-  bool _isPageLoading = false;
-  bool _hasMorePages = true;
-  int _nextOffset = 0;
-  int _totalCount = 0;
-  int _queryTicket = 0;
-  String? _errorText;
-
-  bool get _isMangaMode => widget.contentMode == SearchContentMode.manga;
-
-  @override
-  void initState() {
-    super.initState();
-    _draftSelectedIds = <String>{...widget.initialSelectedIds};
-    _keywordController.addListener(_onKeywordChanged);
-    _scrollController.addListener(_onScroll);
-    unawaited(_reloadSourcePage(reset: true));
-  }
-
-  @override
-  void dispose() {
-    _searchDebounce?.cancel();
-    _keywordController.removeListener(_onKeywordChanged);
-    _keywordController.dispose();
-    _scrollController.removeListener(_onScroll);
-    _scrollController.dispose();
-    super.dispose();
-  }
-
-  void _onKeywordChanged() {
-    _searchDebounce?.cancel();
-    _searchDebounce = Timer(const Duration(milliseconds: 250), () {
-      unawaited(_reloadSourcePage(reset: true));
-    });
-  }
-
-  void _onScroll() {
-    if (!_scrollController.hasClients || _isInitialLoading || _isPageLoading) {
-      return;
-    }
-
-    final position = _scrollController.position;
-    if (position.pixels + 320 >= position.maxScrollExtent) {
-      unawaited(_reloadSourcePage(reset: false));
-    }
-  }
-
-  Future<void> _reloadSourcePage({required bool reset}) async {
-    if (!reset && (!_hasMorePages || _isPageLoading)) {
-      return;
-    }
-
-    final keyword = _keywordController.text.trim();
-    final ticket = reset ? ++_queryTicket : _queryTicket;
-
-    setState(() {
-      _isPageLoading = true;
-      if (reset) {
-        _isInitialLoading = true;
-        _hasMorePages = true;
-        _nextOffset = 0;
-        _totalCount = 0;
-        _visibleSources = const <SourceListItem>[];
-        _errorText = null;
-      }
-    });
-
-    try {
-      final pageFuture = AppDatabase.instance.querySourceListItems(
-        offset: reset ? 0 : _nextOffset,
-        limit: _kPageSize,
-        keyword: keyword,
-        enabledOnly: true,
-        isMangaSource: _isMangaMode,
-      );
-
-      final totalFuture =
-          reset
-              ? AppDatabase.instance.countSourceListItems(
-                keyword: keyword,
-                enabledOnly: true,
-                isMangaSource: _isMangaMode,
-              )
-              : Future<int>.value(_totalCount);
-
-      final page = await pageFuture.timeout(_kPageLoadTimeout);
-      final total = await totalFuture.timeout(_kPageLoadTimeout);
-
-      if (!mounted || ticket != _queryTicket) {
-        return;
-      }
-
-      setState(() {
-        _totalCount = total;
-        _visibleSources = reset ? page : [..._visibleSources, ...page];
-        _nextOffset = reset ? page.length : (_nextOffset + page.length);
-        _hasMorePages = _nextOffset < _totalCount;
-        _isInitialLoading = false;
-        _isPageLoading = false;
-        _errorText = null;
-      });
-    } on TimeoutException {
-      if (!mounted || ticket != _queryTicket) {
-        return;
-      }
-
-      setState(() {
-        _isInitialLoading = false;
-        _isPageLoading = false;
-        _errorText = '加载书源超时，请稍后重试。';
-      });
-    } catch (error) {
-      if (!mounted || ticket != _queryTicket) {
-        return;
-      }
-
-      setState(() {
-        _isInitialLoading = false;
-        _isPageLoading = false;
-        _errorText = '加载书源失败：$error';
-      });
-    }
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return FractionallySizedBox(
-      heightFactor: 0.85,
-      child: Padding(
-        padding: const EdgeInsets.fromLTRB(16, 6, 16, 16),
-        child: Column(
-          children: [
-            Align(
-              alignment: Alignment.centerLeft,
-              child: Text(
-                '指定书源',
-                style: Theme.of(
-                  context,
-                ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700),
-              ),
-            ),
-            const SizedBox(height: 8),
-            TextField(
-              controller: _keywordController,
-              decoration: InputDecoration(
-                isDense: true,
-                hintText: '搜索书源名称或域名',
-                prefixIcon: const Icon(Icons.search, size: 18),
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(12),
-                ),
-              ),
-            ),
-            const SizedBox(height: 8),
-            Row(
-              children: [
-                TextButton(
-                  onPressed: () {
-                    setState(() {
-                      _draftSelectedIds = <String>{};
-                    });
-                  },
-                  child: const Text('全部书源'),
-                ),
-                const SizedBox(width: 8),
-                TextButton(
-                  onPressed: () {
-                    setState(() {
-                      _draftSelectedIds.addAll(
-                        _visibleSources.map((item) => item.id),
-                      );
-                    });
-                  },
-                  child: const Text('全选已加载'),
-                ),
-                const Spacer(),
-                Text(
-                  _draftSelectedIds.isEmpty
-                      ? '当前：全部 ($_totalCount)'
-                      : '当前：${_draftSelectedIds.length} 个',
-                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                    color: Theme.of(context).colorScheme.onSurfaceVariant,
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 4),
-            Expanded(child: _buildBody()),
-            const SizedBox(height: 8),
-            Row(
-              children: [
-                TextButton(
-                  onPressed: () => Navigator.of(context).pop(),
-                  child: const Text('取消'),
-                ),
-                const Spacer(),
-                FilledButton(
-                  onPressed:
-                      () =>
-                          Navigator.of(context).pop(_draftSelectedIds.toSet()),
-                  child: const Text('应用筛选'),
-                ),
-              ],
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildBody() {
-    if (_isInitialLoading) {
-      return const Center(child: CircularProgressIndicator());
-    }
-
-    if (_errorText != null && _visibleSources.isEmpty) {
-      return Center(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Text(
-              _errorText!,
-              textAlign: TextAlign.center,
-              style: Theme.of(context).textTheme.bodySmall,
-            ),
-            const SizedBox(height: 8),
-            TextButton(
-              onPressed: () => unawaited(_reloadSourcePage(reset: true)),
-              child: const Text('重试'),
-            ),
-          ],
-        ),
-      );
-    }
-
-    if (_visibleSources.isEmpty) {
-      return Center(
-        child: Text('未匹配到书源', style: Theme.of(context).textTheme.bodyMedium),
-      );
-    }
-
-    final itemCount = _visibleSources.length + (_isPageLoading ? 1 : 0);
-    return ListView.builder(
-      controller: _scrollController,
-      itemCount: itemCount,
-      itemBuilder: (context, index) {
-        if (index >= _visibleSources.length) {
-          return const Padding(
-            padding: EdgeInsets.symmetric(vertical: 10),
-            child: Center(child: CircularProgressIndicator(strokeWidth: 2)),
-          );
-        }
-
-        final source = _visibleSources[index];
-        final selected = _draftSelectedIds.contains(source.id);
-        return CheckboxListTile(
-          value: selected,
-          dense: true,
-          controlAffinity: ListTileControlAffinity.leading,
-          title: Text(
-            source.name,
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-          ),
-          subtitle: Text(
-            source.baseUrl,
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-          ),
-          onChanged: (value) {
-            setState(() {
-              if (value ?? false) {
-                _draftSelectedIds.add(source.id);
-              } else {
-                _draftSelectedIds.remove(source.id);
-              }
-            });
-          },
-        );
-      },
-    );
   }
 }

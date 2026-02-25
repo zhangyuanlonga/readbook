@@ -909,30 +909,58 @@ class _SourcePageState extends State<SourcePage> {
                       ],
                     ),
                     const SizedBox(height: 4),
-                    Row(
-                      children: [
-                        Expanded(
-                          child: Text(
-                            _buildSourceSecondaryLine(source),
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: Theme.of(context).textTheme.bodySmall
-                                ?.copyWith(color: colorScheme.onSurfaceVariant),
-                          ),
-                        ),
-                        const SizedBox(width: 8),
-                        Text(
+                    LayoutBuilder(
+                      builder: (context, constraints) {
+                        final secondaryTextStyle = Theme.of(context)
+                            .textTheme
+                            .bodySmall
+                            ?.copyWith(color: colorScheme.onSurfaceVariant);
+                        final checkedAtTextStyle = Theme.of(
+                          context,
+                        ).textTheme.labelSmall?.copyWith(
+                          color: colorScheme.onSurfaceVariant,
+                          fontWeight: FontWeight.w600,
+                        );
+                        final secondary = Text(
+                          _buildSourceSecondaryLine(source),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: secondaryTextStyle,
+                        );
+                        final checked = Text(
                           '测试时间: $checkedAtText',
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
-                          style: Theme.of(
-                            context,
-                          ).textTheme.labelSmall?.copyWith(
-                            color: colorScheme.onSurfaceVariant,
-                            fontWeight: FontWeight.w600,
-                          ),
-                        ),
-                      ],
+                          style: checkedAtTextStyle,
+                        );
+
+                        if (constraints.maxWidth < 340) {
+                          return Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              secondary,
+                              const SizedBox(height: 2),
+                              checked,
+                            ],
+                          );
+                        }
+
+                        return Row(
+                          children: [
+                            Expanded(child: secondary),
+                            const SizedBox(width: 8),
+                            ConstrainedBox(
+                              constraints: BoxConstraints(
+                                maxWidth: constraints.maxWidth * 0.45,
+                              ),
+                              child: Align(
+                                alignment: Alignment.centerRight,
+                                child: checked,
+                              ),
+                            ),
+                          ],
+                        );
+                      },
                     ),
                     if (hasComment) ...[
                       const SizedBox(height: 3),

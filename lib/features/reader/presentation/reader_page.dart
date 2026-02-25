@@ -2252,6 +2252,22 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
     });
   }
 
+  double _adaptiveReaderSheetHeightFactor(
+    BuildContext context, {
+    required double compact,
+    required double regular,
+    required double large,
+  }) {
+    final width = MediaQuery.sizeOf(context).width;
+    if (width < 360) {
+      return compact;
+    }
+    if (width >= 430) {
+      return large;
+    }
+    return regular;
+  }
+
   double _currentScrollRatio() {
     if (_isTapPaginationEnabled()) {
       final pages = _pagedPages;
@@ -2869,54 +2885,98 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
 
               final keyboardInset = MediaQuery.viewInsetsOf(context).bottom;
               final safeBottom = _bottomSafeInset(context);
+              final sheetHeightFactor = _adaptiveReaderSheetHeightFactor(
+                context,
+                compact: 0.9,
+                regular: 0.86,
+                large: 0.82,
+              );
+              final sheetHorizontal = AppSpacing.pageHorizontal(context);
 
               return AnimatedPadding(
                 duration: const Duration(milliseconds: 180),
                 curve: Curves.easeOutCubic,
                 padding: EdgeInsets.only(bottom: keyboardInset + safeBottom),
                 child: FractionallySizedBox(
-                  heightFactor: 0.86,
+                  heightFactor: sheetHeightFactor,
                   child: Column(
                     children: [
                       Padding(
-                        padding: const EdgeInsets.fromLTRB(18, 6, 18, 8),
-                        child: Row(
-                          children: [
-                            Expanded(
-                              child: Text(
-                                '目录（${_chapters.length} 章）',
-                                style: textTheme.titleMedium?.copyWith(
-                                  fontWeight: FontWeight.w700,
-                                ),
+                        padding: EdgeInsets.fromLTRB(
+                          sheetHorizontal,
+                          6,
+                          sheetHorizontal,
+                          8,
+                        ),
+                        child: LayoutBuilder(
+                          builder: (context, constraints) {
+                            final title = Text(
+                              '目录（${_chapters.length} 章）',
+                              style: textTheme.titleMedium?.copyWith(
+                                fontWeight: FontWeight.w700,
                               ),
-                            ),
-                            if (currentIndex != null)
-                              FilledButton.tonalIcon(
-                                onPressed: () {
-                                  final target =
-                                      ((currentIndex - 2).clamp(
-                                                0,
-                                                _chapters.length - 1,
-                                              ) *
-                                              itemExtent)
-                                          .toDouble();
-                                  scrollController.animateTo(
-                                    target,
-                                    duration: const Duration(milliseconds: 180),
-                                    curve: Curves.easeOutCubic,
-                                  );
-                                },
-                                icon: const Icon(
-                                  Icons.my_location_outlined,
-                                  size: 18,
-                                ),
-                                label: Text('定位 ${currentIndex + 1}'),
-                              ),
-                          ],
+                            );
+                            final locationButton =
+                                currentIndex == null
+                                    ? null
+                                    : FilledButton.tonalIcon(
+                                      onPressed: () {
+                                        final target =
+                                            ((currentIndex - 2).clamp(
+                                                      0,
+                                                      _chapters.length - 1,
+                                                    ) *
+                                                    itemExtent)
+                                                .toDouble();
+                                        scrollController.animateTo(
+                                          target,
+                                          duration: const Duration(
+                                            milliseconds: 180,
+                                          ),
+                                          curve: Curves.easeOutCubic,
+                                        );
+                                      },
+                                      icon: const Icon(
+                                        Icons.my_location_outlined,
+                                        size: 18,
+                                      ),
+                                      label: Text('定位 ${currentIndex + 1}'),
+                                    );
+
+                            if (locationButton == null) {
+                              return Align(
+                                alignment: Alignment.centerLeft,
+                                child: title,
+                              );
+                            }
+
+                            if (constraints.maxWidth < 360) {
+                              return Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  title,
+                                  const SizedBox(height: 8),
+                                  locationButton,
+                                ],
+                              );
+                            }
+
+                            return Row(
+                              children: [
+                                Expanded(child: title),
+                                locationButton,
+                              ],
+                            );
+                          },
                         ),
                       ),
                       Padding(
-                        padding: const EdgeInsets.fromLTRB(16, 2, 16, 10),
+                        padding: EdgeInsets.fromLTRB(
+                          sheetHorizontal,
+                          2,
+                          sheetHorizontal,
+                          10,
+                        ),
                         child: TextField(
                           controller: searchController,
                           onChanged: (_) => setModalState(() {}),
@@ -3369,6 +3429,13 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
               final isMangaChapter = _chapterImageUrls.isNotEmpty;
               final keyboardInset = MediaQuery.viewInsetsOf(context).bottom;
               final safeBottom = _bottomSafeInset(context);
+              final sheetHeightFactor = _adaptiveReaderSheetHeightFactor(
+                context,
+                compact: 0.72,
+                regular: 0.66,
+                large: 0.62,
+              );
+              final sheetHorizontal = AppSpacing.pageHorizontal(context);
 
               return AnimatedPadding(
                 duration: const Duration(milliseconds: 180),
@@ -3376,9 +3443,14 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
                 padding: EdgeInsets.only(bottom: keyboardInset + safeBottom),
                 child: SafeArea(
                   child: FractionallySizedBox(
-                    heightFactor: 0.6,
+                    heightFactor: sheetHeightFactor,
                     child: Padding(
-                      padding: AppSpacing.modalSheetPadding(context),
+                      padding: EdgeInsets.fromLTRB(
+                        sheetHorizontal,
+                        8,
+                        sheetHorizontal,
+                        16,
+                      ),
                       child: Column(
                         children: [
                           Align(
@@ -4040,7 +4112,11 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
                             ),
                           ),
                           const SizedBox(height: 8),
-                          Row(
+                          OverflowBar(
+                            alignment: MainAxisAlignment.spaceBetween,
+                            overflowAlignment: OverflowBarAlignment.end,
+                            spacing: 8,
+                            overflowSpacing: 8,
                             children: [
                               OutlinedButton(
                                 onPressed: () {
@@ -4050,7 +4126,6 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
                                 },
                                 child: const Text('恢复默认'),
                               ),
-                              const Spacer(),
                               FilledButton(
                                 onPressed:
                                     () => Navigator.of(context).pop(draft),

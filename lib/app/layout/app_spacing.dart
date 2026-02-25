@@ -6,11 +6,23 @@ class AppSpacing {
   const AppSpacing._();
 
   static double pageHorizontal(BuildContext context) {
-    return AppLayout.isPhoneSmall(context) ? 12 : 16;
+    if (AppLayout.isPhoneSmall(context)) {
+      return 12;
+    }
+    if (AppLayout.isPhoneLarge(context)) {
+      return 20;
+    }
+    return 16;
   }
 
   static double cardHorizontal(BuildContext context) {
-    return AppLayout.isPhoneSmall(context) ? 12 : 14;
+    if (AppLayout.isPhoneSmall(context)) {
+      return 12;
+    }
+    if (AppLayout.isPhoneLarge(context)) {
+      return 16;
+    }
+    return 14;
   }
 
   static EdgeInsets pagePadding(BuildContext context) {
@@ -23,7 +35,12 @@ class AppSpacing {
   }
 
   static EdgeInsets dialogInsetPadding(BuildContext context) {
-    final horizontal = AppLayout.isPhoneSmall(context) ? 16.0 : 24.0;
+    final horizontal =
+        AppLayout.isPhoneSmall(context)
+            ? 16.0
+            : AppLayout.isPhoneLarge(context)
+            ? 28.0
+            : 24.0;
     return EdgeInsets.symmetric(horizontal: horizontal, vertical: 24);
   }
 
