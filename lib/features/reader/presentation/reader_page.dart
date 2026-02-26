@@ -107,6 +107,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
   bool _isAutoReadRunning = false;
   bool _isAutoReadSessionEnabled = false;
   bool _isAutoReadAdvancingChapter = false;
+  String? _dayModeBackgroundImageBackup;
   String? _cachedBackgroundImageKey;
   MemoryImage? _cachedBackgroundImage;
   List<List<_PagedSlice>> _pagedPages = const [];
@@ -2609,6 +2610,10 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
             : (_isAutoReadSessionEnabled
                 ? Icons.pause_circle_outline_rounded
                 : Icons.play_circle_outline_rounded);
+    final isDarkMode = _settings.themeMode == ReaderThemeMode.dark;
+    final dayNightLabel = isDarkMode ? '日间' : '夜间';
+    final dayNightIcon =
+        isDarkMode ? Icons.light_mode_rounded : Icons.dark_mode_rounded;
 
     final bottomInset = _bottomSafeInset(context);
 
@@ -2673,6 +2678,15 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
                           ),
                           Expanded(
                             child: _buildToolbarAction(
+                              icon: dayNightIcon,
+                              label: dayNightLabel,
+                              onTap: _toggleDayNightMode,
+                              colors: colors,
+                              active: isDarkMode,
+                            ),
+                          ),
+                          Expanded(
+                            child: _buildToolbarAction(
                               icon: Icons.tune,
                               label: '设置',
                               onTap: _showSettingsSheet,
@@ -2690,6 +2704,47 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
         ),
       ),
     );
+  }
+
+  Future<void> _toggleDayNightMode() async {
+    final isDarkMode = _settings.themeMode == ReaderThemeMode.dark;
+    final nextSettings = switch (isDarkMode) {
+      true => _settings.copyWith(
+        themeMode: ReaderThemeMode.light,
+        backgroundStyle: ReaderBackgroundStyle.plain,
+        backgroundTone: ReaderBackgroundTone.surface,
+        backgroundImageBase64:
+            (_dayModeBackgroundImageBackup?.trim().isEmpty ?? true)
+                ? _settings.backgroundImageBase64
+                : _dayModeBackgroundImageBackup?.trim(),
+        clearBackgroundImage: _dayModeBackgroundImageBackup == null,
+      ),
+      false => _settings.copyWith(
+        themeMode: ReaderThemeMode.dark,
+        backgroundStyle: ReaderBackgroundStyle.plain,
+        backgroundTone: ReaderBackgroundTone.containerHigh,
+        clearBackgroundImage: true,
+      ),
+    };
+
+    if (!mounted) {
+      return;
+    }
+
+    setState(() {
+      if (isDarkMode) {
+        _dayModeBackgroundImageBackup = null;
+      } else {
+        final currentBackground = _settings.backgroundImageBase64?.trim();
+        _dayModeBackgroundImageBackup =
+            (currentBackground == null || currentBackground.isEmpty)
+                ? null
+                : currentBackground;
+      }
+      _settings = nextSettings;
+    });
+
+    await _preferencesService.saveSettings(nextSettings);
   }
 
   Widget _buildTopActionButton({
