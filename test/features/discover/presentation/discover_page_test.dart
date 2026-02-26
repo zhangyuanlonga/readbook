@@ -5,12 +5,18 @@ import 'package:flutter_appread/core/network/request_context.dart';
 import 'package:flutter_appread/domain/entities/book.dart';
 import 'package:flutter_appread/domain/entities/source_definition.dart';
 import 'package:flutter_appread/domain/repositories/source_repository.dart';
+import 'package:flutter_appread/features/discover/application/discover_preferences_service.dart';
 import 'package:flutter_appread/features/discover/application/explore_service.dart';
 import 'package:flutter_appread/features/discover/presentation/discover_page.dart';
 import 'package:flutter_appread/features/search/application/search_service.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 void main() {
+  setUp(() {
+    SharedPreferences.setMockInitialValues(<String, Object>{});
+  });
+
   testWidgets('shows discover source summary when no discover-capable source', (
     tester,
   ) async {
@@ -213,6 +219,97 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('B可用源'), findsWidgets);
+  });
+
+  testWidgets('restores remembered source after page rebuild', (tester) async {
+    SharedPreferences.setMockInitialValues(<String, Object>{
+      'discover.selectedSourceId': 'remember_s2',
+    });
+    final prefs = await SharedPreferences.getInstance();
+    final preferencesService = DiscoverPreferencesService(preferences: prefs);
+
+    final service = ExploreService(
+      sourceRepository: _FakeSourceRepository(<SourceDefinition>[
+        SourceDefinition(
+          id: 'default_s1',
+          name: 'A默认源',
+          baseUrl: 'https://a.example.com',
+          enabled: true,
+          exploreEnabled: true,
+          exploreUrl: '推荐::/discover?page={{page}}',
+          rules: const SourceRuleSet(
+            exploreListRule: '.item@html',
+            exploreTitleRule: '.name@text',
+            exploreDetailUrlRule: '.name@href',
+          ),
+        ),
+        SourceDefinition(
+          id: 'remember_s2',
+          name: 'B记忆源',
+          baseUrl: 'https://b.example.com',
+          enabled: true,
+          exploreEnabled: true,
+          exploreUrl: '推荐::/discover?page={{page}}',
+          rules: const SourceRuleSet(
+            exploreListRule: '.item@html',
+            exploreTitleRule: '.name@text',
+            exploreDetailUrlRule: '.name@href',
+          ),
+        ),
+      ]),
+      searchService: _FakeSearchService(),
+    );
+
+    await tester.pumpWidget(
+      _TestHarness(
+        width: 900,
+        child: DiscoverPage(
+          exploreService: service,
+          discoverPreferencesService: preferencesService,
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('B记忆源'), findsWidgets);
+  });
+
+  testWidgets('category preview hides non-actionable group titles', (
+    tester,
+  ) async {
+    final service = ExploreService(
+      sourceRepository: _FakeSourceRepository(<SourceDefinition>[
+        SourceDefinition(
+          id: 'discover_s4',
+          name: '发现源D',
+          baseUrl: 'https://example.com',
+          enabled: true,
+          exploreEnabled: true,
+          exploreUrl:
+              '男频分类::\n古代言情::/discover/ancient?page={{page}}\n现代言情::/discover/modern?page={{page}}',
+          rules: const SourceRuleSet(
+            exploreListRule: '.item@html',
+            exploreTitleRule: '.name@text',
+            exploreDetailUrlRule: '.name@href',
+          ),
+        ),
+      ]),
+      searchService: _FakeSearchService(),
+    );
+
+    await tester.pumpWidget(
+      _TestHarness(width: 320, child: DiscoverPage(exploreService: service)),
+    );
+    await tester.pumpAndSettle();
+
+    expect(
+      find.descendant(of: find.byType(ChoiceChip), matching: find.text('男频分类')),
+      findsNothing,
+    );
+    expect(
+      find.descendant(of: find.byType(Chip), matching: find.text('男频分类')),
+      findsNothing,
+    );
   });
 }
 

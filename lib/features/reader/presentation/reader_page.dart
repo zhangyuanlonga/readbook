@@ -153,10 +153,15 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
   static const Duration _kAutoReadStepDuration = Duration(milliseconds: 520);
   static const Duration _kAutoReadResumeDelay = Duration(milliseconds: 420);
   static const int _kSwitchSourceCandidateLimit = 24;
+  static const int _kSwitchSourceLagTolerance = 20;
   static final RegExp _kSwitchSourceSpacePattern = RegExp(r'[\u3000\s]+');
   static final RegExp _kSwitchSourceSymbolPattern = RegExp(
     r'''[·•\-_:：|/\\\(\)\[\]【】<>《》"'‘’,.，。!?！？]''',
   );
+  static final RegExp _kSwitchSourceChapterPattern = RegExp(
+    r'第?\s*(\d{1,5})\s*章',
+  );
+  static final RegExp _kSwitchSourceNumberPattern = RegExp(r'(\d{1,5})');
 
   bool _isTapPaginationEnabled() {
     return _settings.pageTurnMode == ReaderPageTurnMode.tap &&
@@ -1840,6 +1845,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
         books: report.books,
         sourceNames: report.sourceNames,
         currentSourceId: currentSourceId,
+        currentChapterCount: _chapters.length,
         targetTitle: keyword,
         targetAuthor: _bookAuthor,
       );
@@ -1908,6 +1914,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
     required List<Book> books,
     required Map<String, String> sourceNames,
     required String currentSourceId,
+    required int currentChapterCount,
     required String targetTitle,
     required String? targetAuthor,
   }) {
@@ -1927,11 +1934,25 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
         normalizedTargetTitle: normalizedTargetTitle,
         normalizedTargetAuthor: normalizedTargetAuthor,
       );
+      final latestChapterLabel = _formatSwitchSourceLatestChapter(
+        book.latestChapter,
+      );
+      final latestChapterNumber = _extractSwitchSourceChapterNumber(
+        latestChapterLabel,
+      );
+      final isPotentiallyOutdated =
+          currentChapterCount > 0 &&
+          latestChapterNumber != null &&
+          latestChapterNumber + _kSwitchSourceLagTolerance <
+              currentChapterCount;
 
       final candidate = _ReaderSourceSwitchCandidate(
         book: book,
         sourceName: sourceNames[book.sourceId] ?? book.sourceId,
         score: score,
+        latestChapterLabel: latestChapterLabel,
+        latestChapterNumber: latestChapterNumber,
+        isPotentiallyOutdated: isPotentiallyOutdated,
       );
 
       final existing = bestBySource[book.sourceId];
@@ -1945,6 +1966,12 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
         final scoreDiff = b.score.compareTo(a.score);
         if (scoreDiff != 0) {
           return scoreDiff;
+        }
+        final latestDiff = (b.latestChapterNumber ?? -1).compareTo(
+          a.latestChapterNumber ?? -1,
+        );
+        if (latestDiff != 0) {
+          return latestDiff;
         }
         return a.sourceName.compareTo(b.sourceName);
       });
@@ -2004,6 +2031,30 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
         .replaceAll(_kSwitchSourceSymbolPattern, '');
   }
 
+  String _formatSwitchSourceLatestChapter(String? latestChapter) {
+    final normalized = latestChapter?.replaceAll(
+      _kSwitchSourceSpacePattern,
+      ' ',
+    );
+    final text = normalized?.trim() ?? '';
+    if (text.isEmpty) {
+      return '未知';
+    }
+    return text;
+  }
+
+  int? _extractSwitchSourceChapterNumber(String text) {
+    final chapterMatch = _kSwitchSourceChapterPattern.firstMatch(text);
+    if (chapterMatch != null) {
+      return int.tryParse(chapterMatch.group(1)!);
+    }
+    final numberMatch = _kSwitchSourceNumberPattern.firstMatch(text);
+    if (numberMatch != null) {
+      return int.tryParse(numberMatch.group(1)!);
+    }
+    return null;
+  }
+
   Future<_ReaderSourceSwitchCandidate?> _showSwitchSourceCandidateSheet(
     List<_ReaderSourceSwitchCandidate> candidates,
   ) async {
@@ -2057,6 +2108,16 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
                       ),
                     ),
                   ),
+                  const SizedBox(height: 2),
+                  Align(
+                    alignment: Alignment.centerLeft,
+                    child: Text(
+                      '当前目录：${_chapters.length} 章',
+                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                        color: Theme.of(context).colorScheme.onSurfaceVariant,
+                      ),
+                    ),
+                  ),
                   const SizedBox(height: 8),
                   Expanded(
                     child: ListView.separated(
@@ -2069,6 +2130,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
                             (author == null || author.isEmpty)
                                 ? candidate.sourceName
                                 : '${candidate.sourceName} · $author';
+                        final colorScheme = Theme.of(context).colorScheme;
 
                         return ListTile(
                           contentPadding: EdgeInsets.zero,
@@ -2079,12 +2141,48 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
                             style: Theme.of(context).textTheme.titleSmall
                                 ?.copyWith(fontWeight: FontWeight.w600),
                           ),
-                          subtitle: Text(
-                            subtitle,
-                            maxLines: 2,
-                            overflow: TextOverflow.ellipsis,
+                          subtitle: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                subtitle,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                              const SizedBox(height: 2),
+                              Text(
+                                '最新：${candidate.latestChapterLabel}',
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: Theme.of(
+                                  context,
+                                ).textTheme.bodySmall?.copyWith(
+                                  color:
+                                      candidate.isPotentiallyOutdated
+                                          ? colorScheme.error
+                                          : colorScheme.onSurfaceVariant,
+                                  fontWeight:
+                                      candidate.isPotentiallyOutdated
+                                          ? FontWeight.w700
+                                          : FontWeight.w500,
+                                ),
+                              ),
+                            ],
                           ),
-                          trailing: const Icon(Icons.chevron_right),
+                          trailing: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              if (candidate.isPotentiallyOutdated) ...[
+                                Icon(
+                                  Icons.warning_amber_rounded,
+                                  color: colorScheme.error,
+                                  size: 18,
+                                ),
+                                const SizedBox(width: 2),
+                              ],
+                              const Icon(Icons.chevron_right),
+                            ],
+                          ),
                           onTap: () => Navigator.of(context).pop(candidate),
                         );
                       },
@@ -2151,6 +2249,28 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
       final chapters = detailResult.chapters;
       if (chapters.isEmpty) {
         throw StateError('新书源目录为空。');
+      }
+
+      final currentChapterCount = snapshot.chapters.length;
+      final currentReadingChapterNo = (snapshot.currentIndex ?? 0) + 1;
+      final targetChapterCount = chapters.length;
+      final isBehindCurrentReading =
+          targetChapterCount < currentReadingChapterNo;
+      final isSignificantlyBehind =
+          currentChapterCount > 0 &&
+          targetChapterCount + _kSwitchSourceLagTolerance < currentChapterCount;
+      if ((isBehindCurrentReading || isSignificantlyBehind) && mounted) {
+        final shouldContinue = await _confirmSwitchSourceCoverage(
+          sourceName: candidate.sourceName,
+          currentChapterCount: currentChapterCount,
+          currentReadingChapterNo: currentReadingChapterNo,
+          targetChapterCount: targetChapterCount,
+          isBehindCurrentReading: isBehindCurrentReading,
+        );
+        if (!shouldContinue) {
+          _showMessage('已取消切换：目标书源章节较少。');
+          return;
+        }
       }
 
       final targetIndex = _resolveSwitchChapterIndex(
@@ -2237,6 +2357,51 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
         });
       }
     }
+  }
+
+  Future<bool> _confirmSwitchSourceCoverage({
+    required String sourceName,
+    required int currentChapterCount,
+    required int currentReadingChapterNo,
+    required int targetChapterCount,
+    required bool isBehindCurrentReading,
+  }) async {
+    final shouldWarnByTotal =
+        currentChapterCount > 0 &&
+        targetChapterCount + _kSwitchSourceLagTolerance < currentChapterCount;
+    final reasonText =
+        isBehindCurrentReading
+            ? '该书源目录无法覆盖你当前阅读章节。'
+            : shouldWarnByTotal
+            ? '该书源目录明显少于当前书源，可能更新较慢。'
+            : '该书源章节数量存在明显差异。';
+    final detailText =
+        StringBuffer()
+          ..writeln('当前书源：$currentChapterCount 章')
+          ..writeln('当前阅读：第 $currentReadingChapterNo 章')
+          ..writeln('目标书源：$targetChapterCount 章');
+
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) {
+        return AlertDialog(
+          title: Text('切换到 $sourceName ?'),
+          content: Text('$reasonText\n\n$detailText\n继续切换可能回退到较早章节。'),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(false),
+              child: const Text('取消'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.of(context).pop(true),
+              child: const Text('继续切换'),
+            ),
+          ],
+        );
+      },
+    );
+
+    return confirmed == true;
   }
 
   int _resolveSwitchChapterIndex({
@@ -5810,11 +5975,17 @@ class _ReaderSourceSwitchCandidate {
     required this.book,
     required this.sourceName,
     required this.score,
+    required this.latestChapterLabel,
+    required this.latestChapterNumber,
+    required this.isPotentiallyOutdated,
   });
 
   final Book book;
   final String sourceName;
   final int score;
+  final String latestChapterLabel;
+  final int? latestChapterNumber;
+  final bool isPotentiallyOutdated;
 }
 
 class _ReaderSourceSnapshot {

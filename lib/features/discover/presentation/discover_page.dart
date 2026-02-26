@@ -10,6 +10,7 @@ import '../../../app/layout/app_spacing.dart';
 import '../../../core/errors/app_exception.dart';
 import '../../../domain/entities/book.dart';
 import '../../../domain/entities/source_definition.dart';
+import '../application/discover_preferences_service.dart';
 import '../application/explore_service.dart';
 
 enum _SourceRuntimeStatus {
@@ -21,10 +22,15 @@ enum _SourceRuntimeStatus {
 }
 
 class DiscoverPage extends StatefulWidget {
-  const DiscoverPage({super.key, ExploreService? exploreService})
-    : _exploreService = exploreService;
+  const DiscoverPage({
+    super.key,
+    ExploreService? exploreService,
+    DiscoverPreferencesService? discoverPreferencesService,
+  }) : _exploreService = exploreService,
+       _discoverPreferencesService = discoverPreferencesService;
 
   final ExploreService? _exploreService;
+  final DiscoverPreferencesService? _discoverPreferencesService;
 
   @override
   State<DiscoverPage> createState() => _DiscoverPageState();
@@ -35,6 +41,7 @@ class _DiscoverPageState extends State<DiscoverPage> {
   static const int _bookPageSize = 24;
   static const int _compactCategoryPreviewCount = 8;
   static const int _compactCategoryColumns = 4;
+  static const int _backgroundProbeBatchLimit = 60;
   static const Set<PointerDeviceKind> _dragDevices = <PointerDeviceKind>{
     PointerDeviceKind.touch,
     PointerDeviceKind.mouse,
@@ -45,6 +52,7 @@ class _DiscoverPageState extends State<DiscoverPage> {
   };
 
   late final ExploreService _exploreService;
+  late final DiscoverPreferencesService _discoverPreferencesService;
   final ScrollController _booksScrollController = ScrollController();
 
   bool _isLoadingSources = false;
@@ -61,12 +69,12 @@ class _DiscoverPageState extends State<DiscoverPage> {
   int _selectedCategoryIndex = -1;
   List<Book> _books = const <Book>[];
   final Set<String> _probingSourceIds = <String>{};
+  final Set<String> _verifiedSourceIds = <String>{};
   final Map<String, String> _sourceParseErrorById = <String, String>{};
   final Map<String, String> _sourceBookErrorById = <String, String>{};
 
   int _nextPage = 1;
   bool _hasMore = false;
-  String? _requestUrl;
 
   String? _sourceErrorText;
   String? _bookErrorText;
@@ -74,6 +82,7 @@ class _DiscoverPageState extends State<DiscoverPage> {
   int _sourceRequestToken = 0;
   int _categoryRequestToken = 0;
   int _bookRequestToken = 0;
+  String? _rememberedSourceId;
 
   ExploreCategoryItem? get _selectedCategory {
     if (_selectedCategoryIndex < 0 ||
@@ -87,12 +96,14 @@ class _DiscoverPageState extends State<DiscoverPage> {
   void initState() {
     super.initState();
     _exploreService = widget._exploreService ?? ExploreService();
+    _discoverPreferencesService =
+        widget._discoverPreferencesService ?? DiscoverPreferencesService();
     _booksScrollController.addListener(_onBookListScroll);
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) {
         return;
       }
-      unawaited(_loadSources());
+      unawaited(_bootstrapDiscoverState());
     });
   }
 
@@ -113,12 +124,9 @@ class _DiscoverPageState extends State<DiscoverPage> {
         title: const Text('发现'),
         actions: <Widget>[
           IconButton(
-            onPressed:
-                _isLoadingSources || _discoverSources.isEmpty
-                    ? null
-                    : _showSourcePicker,
-            tooltip: '切换书源',
-            icon: const Icon(Icons.swap_horiz_rounded),
+            onPressed: _refreshCurrentView,
+            tooltip: '刷新',
+            icon: const Icon(Icons.refresh_rounded),
           ),
         ],
       ),
@@ -175,6 +183,19 @@ class _DiscoverPageState extends State<DiscoverPage> {
     }
   }
 
+  Future<void> _bootstrapDiscoverState() async {
+    try {
+      _rememberedSourceId =
+          await _discoverPreferencesService.loadSelectedSourceId();
+    } catch (_) {
+      _rememberedSourceId = null;
+    }
+    if (!mounted) {
+      return;
+    }
+    await _loadSources();
+  }
+
   Widget _buildCompactLayout(BuildContext context) {
     return ScrollConfiguration(
       behavior: const MaterialScrollBehavior().copyWith(
@@ -221,11 +242,7 @@ class _DiscoverPageState extends State<DiscoverPage> {
                   child: ListView(
                     controller: _booksScrollController,
                     physics: const AlwaysScrollableScrollPhysics(),
-                    children: <Widget>[
-                      _buildBooksHeaderCard(context),
-                      const SizedBox(height: 12),
-                      _buildBooksPaneContent(context, includeHeader: false),
-                    ],
+                    children: <Widget>[_buildBooksPaneContent(context)],
                   ),
                 ),
               ),
@@ -252,12 +269,13 @@ class _DiscoverPageState extends State<DiscoverPage> {
         source == null
             ? (_isLoadingSources ? '正在加载可用书源...' : '请选择书源')
             : _buildSourceSummary(source);
+    final categoryName = _selectedCategory?.title ?? '未选分类';
     final status = _resolveSourceStatus(source?.id);
     final statusDetail = _sourceStatusDetail(source?.id);
 
     return Card(
       child: Padding(
-        padding: const EdgeInsets.all(12),
+        padding: const EdgeInsets.fromLTRB(12, 10, 12, 10),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: <Widget>[
@@ -281,10 +299,10 @@ class _DiscoverPageState extends State<DiscoverPage> {
                 ),
               ],
             ),
-            const SizedBox(height: 6),
+            const SizedBox(height: 4),
             if (_isLoadingSources) ...<Widget>[
               const LinearProgressIndicator(minHeight: 2),
-              const SizedBox(height: 8),
+              const SizedBox(height: 6),
             ],
             Text(
               source?.name ?? '未选择书源',
@@ -292,19 +310,19 @@ class _DiscoverPageState extends State<DiscoverPage> {
               overflow: TextOverflow.ellipsis,
               style: Theme.of(
                 context,
-              ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700),
+              ).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w700),
             ),
-            const SizedBox(height: 4),
+            const SizedBox(height: 2),
             Text(
               summary,
               maxLines: 2,
               overflow: TextOverflow.ellipsis,
-              style: Theme.of(context).textTheme.bodySmall?.copyWith(
+              style: Theme.of(context).textTheme.labelLarge?.copyWith(
                 color: Theme.of(context).colorScheme.onSurfaceVariant,
               ),
             ),
             if (source != null) ...<Widget>[
-              const SizedBox(height: 8),
+              const SizedBox(height: 6),
               LayoutBuilder(
                 builder: (context, constraints) {
                   final hasSourceSwitcher = _discoverSources.length > 1;
@@ -372,12 +390,12 @@ class _DiscoverPageState extends State<DiscoverPage> {
               ),
             ],
             if (source != null && statusDetail != null) ...<Widget>[
-              const SizedBox(height: 6),
+              const SizedBox(height: 4),
               Text(
                 statusDetail,
                 maxLines: 2,
                 overflow: TextOverflow.ellipsis,
-                style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                style: Theme.of(context).textTheme.labelMedium?.copyWith(
                   color: _sourceStatusColor(context, status),
                 ),
               ),
@@ -391,8 +409,31 @@ class _DiscoverPageState extends State<DiscoverPage> {
                 ),
               ],
             ],
+            if (source != null) ...<Widget>[
+              const SizedBox(height: 6),
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 10,
+                  vertical: 8,
+                ),
+                decoration: BoxDecoration(
+                  color: Theme.of(context).colorScheme.surfaceContainerHigh,
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: Text(
+                  _buildSourceContextSummary(categoryName: categoryName),
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: Theme.of(context).textTheme.labelLarge?.copyWith(
+                    color: Theme.of(context).colorScheme.onSurfaceVariant,
+                    height: 1.3,
+                  ),
+                ),
+              ),
+            ],
             if (_enabledSourceCount > 0) ...<Widget>[
-              const SizedBox(height: 8),
+              const SizedBox(height: 6),
               Text(
                 '已启用书源：$_enabledSourceCount · 支持发现：$_discoverCapableCount',
                 style: Theme.of(context).textTheme.labelMedium?.copyWith(
@@ -427,11 +468,20 @@ class _DiscoverPageState extends State<DiscoverPage> {
       return _buildInfoCard(context, message: '该书源没有可用的发现分类。');
     }
 
+    final actionableEntries = _categories
+        .asMap()
+        .entries
+        .where((entry) => entry.value.isActionable)
+        .toList(growable: false);
+    if (actionableEntries.isEmpty) {
+      return _buildInfoCard(context, message: '该书源暂无可点击分类。');
+    }
+
     final previewCount = math.min(
-      _categories.length,
+      actionableEntries.length,
       _compactCategoryPreviewCount,
     );
-    final hiddenCount = _categories.length - previewCount;
+    final hiddenCount = actionableEntries.length - previewCount;
     return Card(
       child: Padding(
         padding: const EdgeInsets.fromLTRB(12, 10, 12, 12),
@@ -451,7 +501,7 @@ class _DiscoverPageState extends State<DiscoverPage> {
                 TextButton.icon(
                   onPressed: _showCategoryPicker,
                   icon: const Icon(Icons.grid_view_rounded),
-                  label: Text('全部 ${_categories.length}'),
+                  label: Text('全部 ${actionableEntries.length}'),
                 ),
               ],
             ),
@@ -473,8 +523,8 @@ class _DiscoverPageState extends State<DiscoverPage> {
                         width: itemWidth,
                         child: _buildCategoryChip(
                           context,
-                          index,
-                          _categories[index],
+                          actionableEntries[index].key,
+                          actionableEntries[index].value,
                         ),
                       ),
                   ],
@@ -501,26 +551,57 @@ class _DiscoverPageState extends State<DiscoverPage> {
     int index,
     ExploreCategoryItem item,
   ) {
+    final colorScheme = Theme.of(context).colorScheme;
     final isSelected = index == _selectedCategoryIndex;
     if (item.isActionable) {
-      return ChoiceChip(
-        label: Text(item.title, maxLines: 1, overflow: TextOverflow.ellipsis),
-        selected: isSelected,
-        onSelected: (_) => _selectCategory(index),
+      return Tooltip(
+        message: item.title,
+        waitDuration: const Duration(milliseconds: 250),
+        child: ChoiceChip(
+          label: Text(item.title, maxLines: 1, overflow: TextOverflow.ellipsis),
+          selected: isSelected,
+          showCheckmark: true,
+          checkmarkColor:
+              isSelected
+                  ? colorScheme.onSecondaryContainer
+                  : colorScheme.onSurfaceVariant,
+          selectedColor: colorScheme.secondaryContainer,
+          side: BorderSide(
+            color:
+                isSelected ? colorScheme.secondary : colorScheme.outlineVariant,
+          ),
+          labelStyle: Theme.of(context).textTheme.labelLarge?.copyWith(
+            color:
+                isSelected
+                    ? colorScheme.onSecondaryContainer
+                    : colorScheme.onSurface,
+            fontWeight: isSelected ? FontWeight.w700 : FontWeight.w500,
+          ),
+          visualDensity: VisualDensity.compact,
+          materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+          mouseCursor: SystemMouseCursors.click,
+          onSelected: (_) => _selectCategory(index),
+        ),
       );
     }
 
-    return Chip(
-      avatar: Icon(
-        Icons.label_outline_rounded,
-        size: 16,
-        color: Theme.of(context).colorScheme.onSurfaceVariant,
+    return Tooltip(
+      message: item.title,
+      waitDuration: const Duration(milliseconds: 250),
+      child: Chip(
+        avatar: Icon(
+          Icons.label_outline_rounded,
+          size: 16,
+          color: colorScheme.onSurfaceVariant,
+        ),
+        label: Text(item.title, maxLines: 1, overflow: TextOverflow.ellipsis),
+        labelStyle: Theme.of(
+          context,
+        ).textTheme.labelLarge?.copyWith(color: colorScheme.onSurfaceVariant),
+        side: BorderSide(color: colorScheme.outlineVariant),
+        visualDensity: VisualDensity.compact,
+        backgroundColor: colorScheme.surfaceContainerHighest,
       ),
-      label: Text(item.title, maxLines: 1, overflow: TextOverflow.ellipsis),
-      labelStyle: Theme.of(context).textTheme.labelLarge?.copyWith(
-        color: Theme.of(context).colorScheme.onSurfaceVariant,
-      ),
-      backgroundColor: Theme.of(context).colorScheme.surfaceContainerHighest,
     );
   }
 
@@ -531,6 +612,8 @@ class _DiscoverPageState extends State<DiscoverPage> {
     if (_discoverSources.isEmpty) {
       return _buildInfoCard(context, message: '暂无支持发现的书源。');
     }
+    final actionableCount =
+        _categories.where((item) => item.isActionable).length;
 
     return Card(
       clipBehavior: Clip.antiAlias,
@@ -543,9 +626,9 @@ class _DiscoverPageState extends State<DiscoverPage> {
                 context,
               ).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w700),
             ),
-            subtitle: Text('${_categories.length} 个分类'),
+            subtitle: Text('$actionableCount 个分类'),
             trailing: IconButton(
-              onPressed: _categories.isEmpty ? null : _showCategoryPicker,
+              onPressed: actionableCount == 0 ? null : _showCategoryPicker,
               tooltip: '全部分类',
               icon: const Icon(Icons.list_alt_rounded),
             ),
@@ -568,24 +651,28 @@ class _DiscoverPageState extends State<DiscoverPage> {
     if (_isLoadingCategories) {
       return const Center(child: CircularProgressIndicator());
     }
-    if (_categories.isEmpty) {
+    final actionableEntries = _categories
+        .asMap()
+        .entries
+        .where((entry) => entry.value.isActionable)
+        .toList(growable: false);
+    if (actionableEntries.isEmpty) {
       return _buildPanelMessage(
         context,
-        message: '该书源没有可用的发现分类。',
+        message: '该书源暂无可点击分类。',
         icon: Icons.grid_off_rounded,
       );
     }
 
     return ListView.separated(
-      itemCount: _categories.length,
+      itemCount: actionableEntries.length,
       separatorBuilder: (_, __) => const Divider(height: 1),
-      itemBuilder: (context, index) {
-        final item = _categories[index];
+      itemBuilder: (context, row) {
+        final entry = actionableEntries[row];
+        final index = entry.key;
+        final item = entry.value;
         final selected = index == _selectedCategoryIndex;
-        final textColor =
-            item.isActionable
-                ? Theme.of(context).colorScheme.onSurface
-                : Theme.of(context).colorScheme.onSurfaceVariant;
+        final textColor = Theme.of(context).colorScheme.onSurface;
 
         return Material(
           color:
@@ -593,7 +680,7 @@ class _DiscoverPageState extends State<DiscoverPage> {
                   ? Theme.of(context).colorScheme.secondaryContainer
                   : Colors.transparent,
           child: InkWell(
-            onTap: item.isActionable ? () => _selectCategory(index) : null,
+            onTap: () => _selectCategory(index),
             child: Padding(
               padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
               child: Row(
@@ -634,13 +721,6 @@ class _DiscoverPageState extends State<DiscoverPage> {
                       ],
                     ),
                   ),
-                  if (!item.isActionable)
-                    Text(
-                      '分组',
-                      style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                        color: Theme.of(context).colorScheme.onSurfaceVariant,
-                      ),
-                    ),
                   if (selected) ...<Widget>[
                     const SizedBox(width: 8),
                     Icon(
@@ -658,81 +738,7 @@ class _DiscoverPageState extends State<DiscoverPage> {
     );
   }
 
-  Widget _buildBooksHeaderCard(BuildContext context) {
-    final source = _selectedSource;
-    final category = _selectedCategory;
-    final sourceName = source?.name ?? '未选择书源';
-    final categoryName = category?.title ?? '未选择分类';
-
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(12),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: <Widget>[
-            Row(
-              children: <Widget>[
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: <Widget>[
-                      Text(
-                        categoryName,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: Theme.of(context).textTheme.titleMedium
-                            ?.copyWith(fontWeight: FontWeight.w700),
-                      ),
-                      const SizedBox(height: 4),
-                      Text(
-                        sourceName,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                          color: Theme.of(context).colorScheme.onSurfaceVariant,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-                IconButton(
-                  onPressed: _refreshCurrentView,
-                  tooltip: '刷新',
-                  icon: const Icon(Icons.refresh_rounded),
-                ),
-              ],
-            ),
-            const SizedBox(height: 8),
-            Wrap(
-              spacing: 8,
-              runSpacing: 8,
-              children: <Widget>[
-                _buildInfoPill(context, label: '书籍', value: '${_books.length}'),
-                if (_hasMore)
-                  _buildInfoPill(context, label: '下一页', value: '$_nextPage'),
-              ],
-            ),
-            if (_requestUrl != null && _requestUrl!.isNotEmpty) ...<Widget>[
-              const SizedBox(height: 8),
-              Text(
-                _requestUrl!,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                  color: Theme.of(context).colorScheme.onSurfaceVariant,
-                ),
-              ),
-            ],
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildBooksPaneContent(
-    BuildContext context, {
-    bool includeHeader = true,
-  }) {
+  Widget _buildBooksPaneContent(BuildContext context) {
     if (_isLoadingSources && _discoverSources.isEmpty) {
       return _buildLoadingCard(context, message: '正在加载发现书源...');
     }
@@ -826,20 +832,9 @@ class _DiscoverPageState extends State<DiscoverPage> {
       );
     }
 
-    if (!includeHeader) {
-      return Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: children,
-      );
-    }
-
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: <Widget>[
-        _buildBooksHeaderCard(context),
-        const SizedBox(height: 12),
-        ...children,
-      ],
+      children: children,
     );
   }
 
@@ -858,6 +853,14 @@ class _DiscoverPageState extends State<DiscoverPage> {
       clipBehavior: Clip.antiAlias,
       child: InkWell(
         onTap: () => _openBookDetail(book, heroTag: heroTag),
+        borderRadius: BorderRadius.circular(12),
+        mouseCursor: SystemMouseCursors.click,
+        hoverColor: Theme.of(
+          context,
+        ).colorScheme.primary.withValues(alpha: 0.06),
+        focusColor: Theme.of(
+          context,
+        ).colorScheme.primary.withValues(alpha: 0.1),
         child: Padding(
           padding: const EdgeInsets.all(12),
           child: Row(
@@ -1177,7 +1180,7 @@ class _DiscoverPageState extends State<DiscoverPage> {
 
   Future<void> _loadSources() async {
     final requestToken = ++_sourceRequestToken;
-    final previousSourceId = _selectedSource?.id;
+    final previousSourceId = _selectedSource?.id ?? _rememberedSourceId;
 
     setState(() {
       _isLoadingSources = true;
@@ -1213,8 +1216,9 @@ class _DiscoverPageState extends State<DiscoverPage> {
         _books = const <Book>[];
         _nextPage = 1;
         _hasMore = false;
-        _requestUrl = null;
       });
+
+      unawaited(_persistSelectedSourceId(selected?.id));
 
       if (selected != null) {
         await _loadCategoriesForSource(
@@ -1223,13 +1227,21 @@ class _DiscoverPageState extends State<DiscoverPage> {
         );
       }
 
-      unawaited(_probeSourceCompatibilityInBackground(loadedSources));
+      unawaited(
+        _probeSourceCompatibilityInBackground(
+          _buildInitialProbeSources(
+            sources: loadedSources,
+            selectedSourceId: selected?.id,
+          ),
+        ),
+      );
     } catch (error) {
       if (!mounted || requestToken != _sourceRequestToken) {
         return;
       }
       setState(() {
         _probingSourceIds.clear();
+        _verifiedSourceIds.clear();
         _sourceParseErrorById.clear();
         _sourceBookErrorById.clear();
         _enabledSourceCount = 0;
@@ -1243,8 +1255,39 @@ class _DiscoverPageState extends State<DiscoverPage> {
   void _syncSourceRuntimeCache(List<SourceDefinition> sources) {
     final sourceIdSet = sources.map((item) => item.id).toSet();
     _probingSourceIds.removeWhere((id) => !sourceIdSet.contains(id));
+    _verifiedSourceIds.removeWhere((id) => !sourceIdSet.contains(id));
     _sourceParseErrorById.removeWhere((id, _) => !sourceIdSet.contains(id));
     _sourceBookErrorById.removeWhere((id, _) => !sourceIdSet.contains(id));
+  }
+
+  List<SourceDefinition> _buildInitialProbeSources({
+    required List<SourceDefinition> sources,
+    required String? selectedSourceId,
+  }) {
+    if (sources.isEmpty) {
+      return const <SourceDefinition>[];
+    }
+
+    final output = <SourceDefinition>[];
+    if (selectedSourceId != null && selectedSourceId.isNotEmpty) {
+      for (final source in sources) {
+        if (source.id == selectedSourceId) {
+          output.add(source);
+          break;
+        }
+      }
+    }
+
+    for (final source in sources) {
+      if (output.length >= _backgroundProbeBatchLimit) {
+        break;
+      }
+      if (output.any((item) => item.id == source.id)) {
+        continue;
+      }
+      output.add(source);
+    }
+    return output;
   }
 
   Future<void> _probeSourceCompatibilityInBackground(
@@ -1280,6 +1323,7 @@ class _DiscoverPageState extends State<DiscoverPage> {
 
       setState(() {
         _probingSourceIds.remove(source.id);
+        _verifiedSourceIds.add(source.id);
         if (parseError == null || parseError.isEmpty) {
           _sourceParseErrorById.remove(source.id);
         } else {
@@ -1304,6 +1348,7 @@ class _DiscoverPageState extends State<DiscoverPage> {
   }) async {
     final requestToken = ++_categoryRequestToken;
     final previousCategory = preserveCurrentCategory ? _selectedCategory : null;
+    unawaited(_persistSelectedSourceId(source.id));
 
     setState(() {
       _selectedSource = source;
@@ -1315,7 +1360,6 @@ class _DiscoverPageState extends State<DiscoverPage> {
       _books = const <Book>[];
       _nextPage = 1;
       _hasMore = false;
-      _requestUrl = null;
     });
 
     try {
@@ -1331,6 +1375,7 @@ class _DiscoverPageState extends State<DiscoverPage> {
 
       setState(() {
         _isLoadingCategories = false;
+        _verifiedSourceIds.add(source.id);
         _sourceParseErrorById.remove(source.id);
         _categories = parsedCategories;
         _selectedCategoryIndex = nextCategoryIndex;
@@ -1347,6 +1392,7 @@ class _DiscoverPageState extends State<DiscoverPage> {
       }
       setState(() {
         _isLoadingCategories = false;
+        _verifiedSourceIds.add(source.id);
         final message = _toReadableError(error, fallback: '解析发现分类失败');
         _sourceErrorText = message;
         _sourceParseErrorById[source.id] = message;
@@ -1374,7 +1420,6 @@ class _DiscoverPageState extends State<DiscoverPage> {
         _books = const <Book>[];
         _nextPage = 1;
         _hasMore = false;
-        _requestUrl = null;
       } else {
         _isLoadingMore = true;
       }
@@ -1400,7 +1445,6 @@ class _DiscoverPageState extends State<DiscoverPage> {
         _books = deduplicatedBooks;
         _nextPage = result.page + 1;
         _hasMore = result.hasMore && result.books.isNotEmpty;
-        _requestUrl = result.requestUrl;
         _isLoadingBooks = false;
         _isLoadingMore = false;
         _sourceBookErrorById.remove(source.id);
@@ -1478,7 +1522,6 @@ class _DiscoverPageState extends State<DiscoverPage> {
     setState(() {
       _selectedCategoryIndex = index;
       _bookErrorText = null;
-      _requestUrl = null;
       _nextPage = 1;
       _hasMore = false;
       _books = const <Book>[];
@@ -1560,6 +1603,15 @@ class _DiscoverPageState extends State<DiscoverPage> {
     );
   }
 
+  Future<void> _persistSelectedSourceId(String? sourceId) async {
+    _rememberedSourceId = sourceId;
+    try {
+      await _discoverPreferencesService.saveSelectedSourceId(sourceId);
+    } catch (_) {
+      // Preferences persistence failure should not block discover interaction.
+    }
+  }
+
   Future<void> _switchToNextHealthySource() async {
     if (_discoverSources.length < 2 || _isLoadingCategories) {
       return;
@@ -1600,6 +1652,9 @@ class _DiscoverPageState extends State<DiscoverPage> {
     }
     if (_sourceBookErrorById.containsKey(sourceId)) {
       return _SourceRuntimeStatus.requestFailed;
+    }
+    if (!_verifiedSourceIds.contains(sourceId)) {
+      return _SourceRuntimeStatus.unknown;
     }
     return _SourceRuntimeStatus.ready;
   }
@@ -1660,16 +1715,39 @@ class _DiscoverPageState extends State<DiscoverPage> {
     bool compact = false,
   }) {
     final callback = _isLoadingCategories ? null : onPressed;
+    final style = OutlinedButton.styleFrom(
+      visualDensity: VisualDensity.compact,
+      tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+      padding: EdgeInsets.symmetric(
+        horizontal: compact ? 8 : 12,
+        vertical: compact ? 8 : 10,
+      ),
+    );
     if (compact) {
-      return OutlinedButton(key: key, onPressed: callback, child: Text(label));
+      return OutlinedButton(
+        key: key,
+        onPressed: callback,
+        style: style,
+        child: Text(label),
+      );
     }
 
     return OutlinedButton.icon(
       key: key,
       onPressed: callback,
-      icon: Icon(icon),
+      style: style,
+      icon: Icon(icon, size: 18),
       label: Text(label),
     );
+  }
+
+  String _buildSourceContextSummary({required String categoryName}) {
+    final segments = <String>[
+      '分类：$categoryName',
+      '书籍：${_books.length}',
+      if (_hasMore) '下一页：$_nextPage',
+    ];
+    return segments.join('  ·  ');
   }
 
   IconData _sourceStatusIcon(_SourceRuntimeStatus status) {
@@ -2173,6 +2251,9 @@ class _CategoryPickerSheetState extends State<_CategoryPickerSheet> {
         .asMap()
         .entries
         .where((entry) {
+          if (!entry.value.isActionable) {
+            return false;
+          }
           if (lowerKeyword.isEmpty) {
             return true;
           }
@@ -2231,21 +2312,14 @@ class _CategoryPickerSheetState extends State<_CategoryPickerSheet> {
                           final selected = index == widget.selectedIndex;
 
                           return ListTile(
-                            enabled: item.isActionable,
-                            onTap:
-                                item.isActionable
-                                    ? () => Navigator.of(context).pop(index)
-                                    : null,
+                            onTap: () => Navigator.of(context).pop(index),
                             title: Text(
                               item.title,
                               maxLines: 1,
                               overflow: TextOverflow.ellipsis,
                             ),
                             subtitle: Text(
-                              item.isActionable
-                                  ? (_buildCategoryStyleHintText(item) ??
-                                      '可点击分类')
-                                  : '分组标题，不可直接加载',
+                              _buildCategoryStyleHintText(item) ?? '可点击分类',
                             ),
                             trailing:
                                 selected

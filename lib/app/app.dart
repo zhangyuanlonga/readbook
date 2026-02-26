@@ -183,7 +183,7 @@ class _SystemUiOverlayWrapperState extends State<_SystemUiOverlayWrapper> {
           return AlertDialog(
             title: const Text('公告'),
             content: const Text(
-              '该 App 为初版，目的是适配阅读书源，保证每天一版本更新，书源问题和更新APP，请在我的页面点击书源反馈入口进行反馈。',
+              '每天高产更新，请在我的页面点击反馈进群及时使用最新版。',
             ),
             actions: [
               FilledButton(
