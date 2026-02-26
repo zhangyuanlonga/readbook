@@ -33,7 +33,8 @@ class DiscoverPage extends StatefulWidget {
 class _DiscoverPageState extends State<DiscoverPage> {
   static const double _expandedBreakpoint = 840;
   static const int _bookPageSize = 24;
-  static const int _compactCategoryPreviewCount = 10;
+  static const int _compactCategoryPreviewCount = 8;
+  static const int _compactCategoryColumns = 4;
   static const Set<PointerDeviceKind> _dragDevices = <PointerDeviceKind>{
     PointerDeviceKind.touch,
     PointerDeviceKind.mouse,
@@ -457,17 +458,19 @@ class _DiscoverPageState extends State<DiscoverPage> {
             const SizedBox(height: 6),
             LayoutBuilder(
               builder: (context, constraints) {
+                const spacing = 8.0;
                 final availableWidth = constraints.maxWidth;
+                final itemWidth =
+                    (availableWidth - (_compactCategoryColumns - 1) * spacing) /
+                    _compactCategoryColumns;
+
                 return Wrap(
-                  spacing: 8,
-                  runSpacing: 8,
+                  spacing: spacing,
+                  runSpacing: spacing,
                   children: <Widget>[
                     for (var index = 0; index < previewCount; index++)
                       SizedBox(
-                        width: _resolveCategoryPreviewDisplayWidth(
-                          _categories[index],
-                          availableWidth: availableWidth,
-                        ),
+                        width: itemWidth,
                         child: _buildCategoryChip(
                           context,
                           index,
@@ -2109,38 +2112,6 @@ Color _sourceStatusColor(BuildContext context, _SourceRuntimeStatus status) {
     case _SourceRuntimeStatus.unknown:
       return scheme.onSurfaceVariant;
   }
-}
-
-double _resolveCategoryPreviewWidth(ExploreCategoryItem item) {
-  final basisPercent = _normalizeCategoryBasisPercent(item);
-  if (basisPercent != null) {
-    return 92 + (160 * basisPercent);
-  }
-
-  final grow = item.style.layoutFlexGrow;
-  if (grow != null && grow > 0) {
-    final normalizedGrow = (grow / 4).clamp(0.0, 1.0);
-    return 108 + (100 * normalizedGrow);
-  }
-
-  return 128;
-}
-
-double _resolveCategoryPreviewDisplayWidth(
-  ExploreCategoryItem item, {
-  required double availableWidth,
-}) {
-  final safeAvailableWidth = math.max(availableWidth, 96);
-  final maxWidth = math.min(safeAvailableWidth, 360);
-  final preferredWidth =
-      _resolveCategoryPreviewWidth(item).clamp(96.0, maxWidth).toDouble();
-
-  if (safeAvailableWidth < 440) {
-    final twoColumnWidth =
-        ((safeAvailableWidth - 8) / 2).clamp(96.0, maxWidth).toDouble();
-    return math.min(preferredWidth, twoColumnWidth);
-  }
-  return preferredWidth;
 }
 
 double? _normalizeCategoryBasisPercent(ExploreCategoryItem item) {
