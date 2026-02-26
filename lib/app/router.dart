@@ -7,7 +7,10 @@ import '../features/bookshelf/presentation/bookshelf_page.dart';
 import '../features/discover/presentation/discover_page.dart';
 import '../features/mine/presentation/mine_page.dart';
 import '../features/mine/presentation/cache_management_page.dart';
+import '../features/mine/presentation/reader_settings_page.dart';
 import '../features/mine/presentation/rule_config_page.dart';
+import '../features/mine/presentation/about_page.dart';
+import '../features/mine/presentation/system_settings_page.dart';
 import '../features/reader/presentation/local_reader_page.dart';
 import '../features/reader/presentation/reader_page.dart';
 import '../features/search/presentation/search_page.dart';
@@ -59,6 +62,21 @@ final GoRouter appRouter = GoRouter(
       path: '/rule-config',
       name: 'rule-config',
       builder: (context, state) => const RuleConfigPage(),
+    ),
+    GoRoute(
+      path: '/reader-settings',
+      name: 'reader-settings',
+      builder: (context, state) => const ReaderSettingsPage(),
+    ),
+    GoRoute(
+      path: '/about',
+      name: 'about',
+      builder: (context, state) => const AboutPage(),
+    ),
+    GoRoute(
+      path: '/system-settings',
+      name: 'system-settings',
+      builder: (context, state) => const SystemSettingsPage(),
     ),
     GoRoute(
       path: '/search',

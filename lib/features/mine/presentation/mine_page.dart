@@ -27,6 +27,23 @@ class _MinePageState extends ConsumerState<MinePage> {
     _SeedColorOption('经典紫', Color(0xFF6750A4)),
     _SeedColorOption('纯白', Color(0xFFFFFFFF)),
   ];
+  static const List<_ThemeModeOption> _themeModeOptions = [
+    _ThemeModeOption(
+      mode: ThemeMode.light,
+      label: '日间',
+      icon: Icons.light_mode_outlined,
+    ),
+    _ThemeModeOption(
+      mode: ThemeMode.dark,
+      label: '夜间',
+      icon: Icons.dark_mode_outlined,
+    ),
+    _ThemeModeOption(
+      mode: ThemeMode.system,
+      label: '跟随系统',
+      icon: Icons.settings_suggest_outlined,
+    ),
+  ];
 
   @override
   Widget build(BuildContext context) {
@@ -74,20 +91,22 @@ class _MinePageState extends ConsumerState<MinePage> {
                         icon: Icons.settings_outlined,
                         label: '主题设置',
                         badgeText: _themeModeLabel(themeMode),
+                        colorDot: seedColor,
                         onTap:
-                            () =>
-                                _showThemeModeSheet(context: context, ref: ref),
+                            () => _showThemeSettingsSheet(
+                              context: context,
+                              ref: ref,
+                            ),
                       ),
                       _MineActionItem(
                         icon: Icons.menu_book_outlined,
                         label: '阅读设置',
-                        onTap: () => _showMessage('阅读设置请在阅读页底部工具栏中调整。'),
+                        onTap: () => context.push('/reader-settings'),
                       ),
                       _MineActionItem(
-                        icon: Icons.color_lens_outlined,
-                        label: '主题颜色',
-                        colorDot: seedColor,
-                        onTap: () => _showSeedSheet(context: context, ref: ref),
+                        icon: Icons.tune_rounded,
+                        label: '系统设置',
+                        onTap: () => context.push('/system-settings'),
                       ),
                     ],
                   ),
@@ -120,7 +139,7 @@ class _MinePageState extends ConsumerState<MinePage> {
                       _MineActionItem(
                         icon: Icons.info_outline,
                         label: '关于',
-                        onTap: () => _showMessage('AppRead 版本信息整理中。'),
+                        onTap: () => context.push('/about'),
                       ),
                     ],
                   ),
@@ -379,62 +398,236 @@ class _MinePageState extends ConsumerState<MinePage> {
     };
   }
 
-  Future<void> _showThemeModeSheet({
+  Future<void> _showThemeSettingsSheet({
     required BuildContext context,
     required WidgetRef ref,
   }) async {
-    final themeMode = ref.read(appThemeModeProvider);
+    final initialThemeMode = ref.read(appThemeModeProvider);
+    final initialSeedColor = ref.read(appSeedColorProvider);
 
-    final selected = await showModalBottomSheet<ThemeMode>(
+    final selected = await showModalBottomSheet<_ThemeSettingsResult>(
       context: context,
       showDragHandle: true,
       useSafeArea: true,
+      isScrollControlled: true,
       builder: (context) {
-        return SafeArea(
-          child: Padding(
-            padding: const EdgeInsets.fromLTRB(18, 8, 18, 16),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  '主题模式',
-                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                    fontWeight: FontWeight.w700,
+        ThemeMode selectedThemeMode = initialThemeMode;
+        Color selectedSeedColor = initialSeedColor;
+
+        return StatefulBuilder(
+          builder: (context, setSheetState) {
+            final colorScheme = Theme.of(context).colorScheme;
+            final textTheme = Theme.of(context).textTheme;
+            final bottomInset = MediaQuery.viewInsetsOf(context).bottom;
+            final maxHeight = MediaQuery.sizeOf(context).height * 0.5;
+
+            return SafeArea(
+              child: AnimatedPadding(
+                duration: const Duration(milliseconds: 180),
+                curve: Curves.easeOutCubic,
+                padding: EdgeInsets.only(bottom: bottomInset),
+                child: ConstrainedBox(
+                  constraints: BoxConstraints(maxHeight: maxHeight),
+                  child: Padding(
+                    padding: const EdgeInsets.fromLTRB(18, 8, 18, 16),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          '主题设置',
+                          style: textTheme.titleMedium?.copyWith(
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                        const SizedBox(height: 6),
+                        Text(
+                          '统一管理主题模式和主题颜色。',
+                          style: textTheme.bodySmall?.copyWith(
+                            color: colorScheme.onSurfaceVariant,
+                          ),
+                        ),
+                        const SizedBox(height: 10),
+                        Flexible(
+                          child: SingleChildScrollView(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Container(
+                                  width: double.infinity,
+                                  padding: const EdgeInsets.fromLTRB(
+                                    12,
+                                    10,
+                                    12,
+                                    12,
+                                  ),
+                                  decoration: BoxDecoration(
+                                    color: colorScheme.surfaceContainerLow,
+                                    borderRadius: BorderRadius.circular(12),
+                                    border: Border.all(
+                                      color: colorScheme.outlineVariant
+                                          .withValues(alpha: 0.48),
+                                    ),
+                                  ),
+                                  child: Column(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
+                                    children: [
+                                      Text(
+                                        '主题模式',
+                                        style: textTheme.labelLarge?.copyWith(
+                                          fontWeight: FontWeight.w700,
+                                        ),
+                                      ),
+                                      const SizedBox(height: 8),
+                                      LayoutBuilder(
+                                        builder: (context, constraints) {
+                                          const spacing = 8.0;
+                                          final columns =
+                                              constraints.maxWidth >= 560
+                                                  ? 3
+                                                  : constraints.maxWidth >= 360
+                                                  ? 2
+                                                  : 1;
+                                          final itemWidth =
+                                              (constraints.maxWidth -
+                                                  ((columns - 1) * spacing)) /
+                                              columns;
+
+                                          return Wrap(
+                                            spacing: spacing,
+                                            runSpacing: spacing,
+                                            children: _themeModeOptions
+                                                .map(
+                                                  (option) => SizedBox(
+                                                    width: itemWidth,
+                                                    child: _buildThemeModeTile(
+                                                      context,
+                                                      option: option,
+                                                      selectedMode:
+                                                          selectedThemeMode,
+                                                      onTap:
+                                                          () => setSheetState(
+                                                            () {
+                                                              selectedThemeMode =
+                                                                  option.mode;
+                                                            },
+                                                          ),
+                                                    ),
+                                                  ),
+                                                )
+                                                .toList(growable: false),
+                                          );
+                                        },
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                                const SizedBox(height: 10),
+                                Container(
+                                  width: double.infinity,
+                                  padding: const EdgeInsets.fromLTRB(
+                                    12,
+                                    10,
+                                    12,
+                                    12,
+                                  ),
+                                  decoration: BoxDecoration(
+                                    color: colorScheme.surfaceContainerLow,
+                                    borderRadius: BorderRadius.circular(12),
+                                    border: Border.all(
+                                      color: colorScheme.outlineVariant
+                                          .withValues(alpha: 0.48),
+                                    ),
+                                  ),
+                                  child: Column(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
+                                    children: [
+                                      Text(
+                                        '主题颜色',
+                                        style: textTheme.labelLarge?.copyWith(
+                                          fontWeight: FontWeight.w700,
+                                        ),
+                                      ),
+                                      const SizedBox(height: 8),
+                                      LayoutBuilder(
+                                        builder: (context, constraints) {
+                                          const spacing = 8.0;
+                                          final columns =
+                                              constraints.maxWidth >= 560
+                                                  ? 3
+                                                  : constraints.maxWidth >= 360
+                                                  ? 2
+                                                  : 1;
+                                          final itemWidth =
+                                              (constraints.maxWidth -
+                                                  ((columns - 1) * spacing)) /
+                                              columns;
+
+                                          return Wrap(
+                                            spacing: spacing,
+                                            runSpacing: spacing,
+                                            children: _seedColorOptions
+                                                .map(
+                                                  (option) => SizedBox(
+                                                    width: itemWidth,
+                                                    child: _buildThemeColorTile(
+                                                      context,
+                                                      option: option,
+                                                      selectedColor:
+                                                          selectedSeedColor,
+                                                      onTap:
+                                                          () => setSheetState(
+                                                            () {
+                                                              selectedSeedColor =
+                                                                  option.color;
+                                                            },
+                                                          ),
+                                                    ),
+                                                  ),
+                                                )
+                                                .toList(growable: false),
+                                          );
+                                        },
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                        const SizedBox(height: 12),
+                        Row(
+                          children: [
+                            Expanded(
+                              child: OutlinedButton(
+                                onPressed: () => Navigator.of(context).pop(),
+                                child: const Text('取消'),
+                              ),
+                            ),
+                            const SizedBox(width: 10),
+                            Expanded(
+                              child: FilledButton(
+                                onPressed:
+                                    () => Navigator.of(context).pop(
+                                      _ThemeSettingsResult(
+                                        themeMode: selectedThemeMode,
+                                        seedColor: selectedSeedColor,
+                                      ),
+                                    ),
+                                child: const Text('保存'),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ],
+                    ),
                   ),
                 ),
-                const SizedBox(height: 6),
-                Text(
-                  '阅读页切换日/夜会同步修改全局主题。',
-                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                    color: Theme.of(context).colorScheme.onSurfaceVariant,
-                  ),
-                ),
-                const SizedBox(height: 12),
-                RadioListTile<ThemeMode>(
-                  value: ThemeMode.light,
-                  groupValue: themeMode,
-                  onChanged: (value) => Navigator.of(context).pop(value),
-                  title: const Text('日间'),
-                  secondary: const Icon(Icons.light_mode_outlined),
-                ),
-                RadioListTile<ThemeMode>(
-                  value: ThemeMode.dark,
-                  groupValue: themeMode,
-                  onChanged: (value) => Navigator.of(context).pop(value),
-                  title: const Text('夜间'),
-                  secondary: const Icon(Icons.dark_mode_outlined),
-                ),
-                RadioListTile<ThemeMode>(
-                  value: ThemeMode.system,
-                  groupValue: themeMode,
-                  onChanged: (value) => Navigator.of(context).pop(value),
-                  title: const Text('跟随系统'),
-                  secondary: const Icon(Icons.settings_suggest_outlined),
-                ),
-              ],
-            ),
-          ),
+              ),
+            );
+          },
         );
       },
     );
@@ -443,64 +636,135 @@ class _MinePageState extends ConsumerState<MinePage> {
       return;
     }
 
-    await ref.read(appThemeModeProvider.notifier).setThemeMode(selected);
+    if (selected.themeMode != initialThemeMode) {
+      await ref
+          .read(appThemeModeProvider.notifier)
+          .setThemeMode(selected.themeMode);
+    }
+    if (selected.seedColor.toARGB32() != initialSeedColor.toARGB32()) {
+      await ref
+          .read(appSeedColorProvider.notifier)
+          .setSeedColor(selected.seedColor);
+    }
   }
 
-  Future<void> _showSeedSheet({
-    required BuildContext context,
-    required WidgetRef ref,
-  }) async {
-    final selected = ref.read(appSeedColorProvider);
+  Widget _buildThemeModeTile(
+    BuildContext context, {
+    required _ThemeModeOption option,
+    required ThemeMode selectedMode,
+    required VoidCallback onTap,
+  }) {
+    final colorScheme = Theme.of(context).colorScheme;
+    final selected = option.mode == selectedMode;
 
-    final picked = await showModalBottomSheet<Color>(
-      context: context,
-      showDragHandle: true,
-      useSafeArea: true,
-      builder: (context) {
-        return SafeArea(
-          child: Padding(
-            padding: const EdgeInsets.fromLTRB(18, 8, 18, 16),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  '主题颜色',
-                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                    fontWeight: FontWeight.w700,
-                  ),
-                ),
-                const SizedBox(height: 12),
-                for (final option in _seedColorOptions)
-                  RadioListTile<Color>(
-                    value: option.color,
-                    groupValue: selected,
-                    onChanged: (value) => Navigator.of(context).pop(value),
-                    title: Text(option.label),
-                    secondary: Container(
-                      width: 18,
-                      height: 18,
-                      decoration: BoxDecoration(
-                        shape: BoxShape.circle,
-                        color: option.color,
-                        border: Border.all(
-                          color: Theme.of(context).colorScheme.outlineVariant,
-                        ),
-                      ),
-                    ),
-                  ),
-              ],
-            ),
+    return InkWell(
+      borderRadius: BorderRadius.circular(12),
+      onTap: onTap,
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 160),
+        curve: Curves.easeOutCubic,
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
+        decoration: BoxDecoration(
+          color:
+              selected
+                  ? colorScheme.secondaryContainer.withValues(alpha: 0.8)
+                  : colorScheme.surface,
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(
+            color:
+                selected
+                    ? colorScheme.primary
+                    : colorScheme.outlineVariant.withValues(alpha: 0.58),
+            width: selected ? 1.4 : 1,
           ),
-        );
-      },
+        ),
+        child: Row(
+          children: [
+            Icon(
+              option.icon,
+              size: 18,
+              color:
+                  selected ? colorScheme.primary : colorScheme.onSurfaceVariant,
+            ),
+            const SizedBox(width: 8),
+            Expanded(
+              child: Text(
+                option.label,
+                style: Theme.of(
+                  context,
+                ).textTheme.labelLarge?.copyWith(fontWeight: FontWeight.w700),
+              ),
+            ),
+            Icon(
+              selected ? Icons.check_circle_rounded : Icons.circle_outlined,
+              size: 18,
+              color: selected ? colorScheme.primary : colorScheme.outline,
+            ),
+          ],
+        ),
+      ),
     );
+  }
 
-    if (picked == null) {
-      return;
-    }
+  Widget _buildThemeColorTile(
+    BuildContext context, {
+    required _SeedColorOption option,
+    required Color selectedColor,
+    required VoidCallback onTap,
+  }) {
+    final colorScheme = Theme.of(context).colorScheme;
+    final selected = option.color.toARGB32() == selectedColor.toARGB32();
 
-    await ref.read(appSeedColorProvider.notifier).setSeedColor(picked);
+    return InkWell(
+      borderRadius: BorderRadius.circular(12),
+      onTap: onTap,
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 160),
+        curve: Curves.easeOutCubic,
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
+        decoration: BoxDecoration(
+          color:
+              selected
+                  ? colorScheme.secondaryContainer.withValues(alpha: 0.82)
+                  : colorScheme.surface,
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(
+            color:
+                selected
+                    ? colorScheme.primary
+                    : colorScheme.outlineVariant.withValues(alpha: 0.58),
+            width: selected ? 1.4 : 1,
+          ),
+        ),
+        child: Row(
+          children: [
+            Container(
+              width: 13,
+              height: 13,
+              decoration: BoxDecoration(
+                color: option.color,
+                shape: BoxShape.circle,
+                border: Border.all(
+                  color: colorScheme.outlineVariant,
+                  width: 0.8,
+                ),
+              ),
+            ),
+            const SizedBox(width: 8),
+            Expanded(
+              child: Text(
+                option.label,
+                style: Theme.of(
+                  context,
+                ).textTheme.labelLarge?.copyWith(fontWeight: FontWeight.w700),
+              ),
+            ),
+            if (selected)
+              Icon(Icons.check_rounded, size: 18, color: colorScheme.primary),
+          ],
+        ),
+      ),
+    );
   }
 
   Future<void> _openSourceFeedback() async {
@@ -529,6 +793,28 @@ class _SeedColorOption {
 
   final String label;
   final Color color;
+}
+
+class _ThemeModeOption {
+  const _ThemeModeOption({
+    required this.mode,
+    required this.label,
+    required this.icon,
+  });
+
+  final ThemeMode mode;
+  final String label;
+  final IconData icon;
+}
+
+class _ThemeSettingsResult {
+  const _ThemeSettingsResult({
+    required this.themeMode,
+    required this.seedColor,
+  });
+
+  final ThemeMode themeMode;
+  final Color seedColor;
 }
 
 class _MineActionItem {
