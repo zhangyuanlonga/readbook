@@ -19,6 +19,7 @@ import '../../../domain/entities/source_definition.dart';
 import '../../../domain/repositories/source_repository.dart';
 import '../../search/application/search_service.dart';
 import '../application/source_capability_analyzer.dart';
+import '../application/external_source_import_bridge.dart';
 import '../application/source_import_service.dart';
 
 class SourcePage extends StatefulWidget {
@@ -49,6 +50,7 @@ class _SourcePageState extends State<SourcePage> {
   final FocusNode _searchFocusNode = FocusNode();
   final ScrollController _scrollController = ScrollController();
   Timer? _searchDebounce;
+  StreamSubscription<IncomingSourceImportPayload>? _incomingImportSubscription;
   String _searchKeyword = '';
   bool _showSearchBar = false;
   bool _isPageLoading = false;
@@ -62,6 +64,7 @@ class _SourcePageState extends State<SourcePage> {
   int _novelCount = 0;
   int _mangaCount = 0;
   int _queryTicket = 0;
+  bool _isConsumingExternalImportPayloads = false;
 
   static const int _kPageSize = 60;
   static const String _defaultConnectivityKeyword = '凡人修仙传';
@@ -80,10 +83,18 @@ class _SourcePageState extends State<SourcePage> {
     super.initState();
     _searchController.addListener(_onSearchInputChanged);
     _scrollController.addListener(_onSourceListScroll);
+    _incomingImportSubscription = ExternalSourceImportBridge
+        .instance
+        .payloadStream
+        .listen((_) {
+          unawaited(_consumePendingExternalImportPayloads());
+        });
+    unawaited(ExternalSourceImportBridge.instance.initialize());
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) {
         return;
       }
+      unawaited(_consumePendingExternalImportPayloads());
       unawaited(_reloadSourceList(reset: true));
     });
   }
@@ -91,6 +102,7 @@ class _SourcePageState extends State<SourcePage> {
   @override
   void dispose() {
     _searchDebounce?.cancel();
+    _incomingImportSubscription?.cancel();
     _scrollController.removeListener(_onSourceListScroll);
     _scrollController.dispose();
     _searchController.removeListener(_onSearchInputChanged);
@@ -1439,6 +1451,44 @@ class _SourcePageState extends State<SourcePage> {
       await _importSingleText(content: content, sourceLabel: file.name);
     } catch (_) {
       _showMessage('读取文件失败：${file.name}');
+    }
+  }
+
+  Future<void> _consumePendingExternalImportPayloads() async {
+    if (_isConsumingExternalImportPayloads) {
+      return;
+    }
+
+    _isConsumingExternalImportPayloads = true;
+    try {
+      while (mounted) {
+        final payload =
+            ExternalSourceImportBridge.instance.consumePendingPayload();
+        if (payload == null) {
+          break;
+        }
+        await _importFromExternalPayload(payload);
+      }
+    } finally {
+      _isConsumingExternalImportPayloads = false;
+    }
+  }
+
+  Future<void> _importFromExternalPayload(
+    IncomingSourceImportPayload payload,
+  ) async {
+    final sourceLabel =
+        payload.label.trim().isEmpty ? '外部书源' : payload.label.trim();
+
+    try {
+      final content = _importService.decodeSourceBytes(payload.bytes);
+      if (content.trim().isEmpty) {
+        _showMessage('导入失败：$sourceLabel 内容为空。');
+        return;
+      }
+      await _importSingleText(content: content, sourceLabel: sourceLabel);
+    } catch (_) {
+      _showMessage('读取外部文件失败：$sourceLabel');
     }
   }
 

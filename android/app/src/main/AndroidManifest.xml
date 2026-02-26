@@ -24,6 +24,43 @@
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data
+                    android:scheme="content"
+                    android:mimeType="application/json" />
+                <data
+                    android:scheme="content"
+                    android:mimeType="text/plain" />
+                <data
+                    android:scheme="content"
+                    android:mimeType="application/octet-stream" />
+                <data
+                    android:scheme="file"
+                    android:mimeType="application/json" />
+                <data
+                    android:scheme="file"
+                    android:mimeType="text/plain" />
+                <data
+                    android:scheme="file"
+                    android:mimeType="application/octet-stream" />
+            </intent-filter>
+            <intent-filter>
+                <action android:name="android.intent.action.SEND" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:mimeType="application/json" />
+                <data android:mimeType="text/plain" />
+                <data android:mimeType="application/octet-stream" />
+            </intent-filter>
+            <intent-filter>
+                <action android:name="android.intent.action.SEND_MULTIPLE" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:mimeType="application/json" />
+                <data android:mimeType="text/plain" />
+                <data android:mimeType="application/octet-stream" />
+            </intent-filter>
         </activity>
         <meta-data
             android:name="io.flutter.embedding.android.EnableImpeller"

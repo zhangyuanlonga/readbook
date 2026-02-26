@@ -5,6 +5,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../data/datasources/local/app_database.dart';
+import '../features/source/application/external_source_import_bridge.dart';
 import 'layout/app_layout.dart';
 import 'router.dart';
 import 'theme/app_theme.dart';
@@ -44,9 +45,7 @@ class App extends ConsumerWidget {
         final textScale = AppLayout.clampedTextScaleFactor(context);
 
         return MediaQuery(
-          data: mediaQuery.copyWith(
-            textScaler: TextScaler.linear(textScale),
-          ),
+          data: mediaQuery.copyWith(textScaler: TextScaler.linear(textScale)),
           child: _SystemUiOverlayWrapper(
             child: child ?? const SizedBox.shrink(),
           ),
@@ -67,6 +66,7 @@ class _SystemUiOverlayWrapper extends StatefulWidget {
 }
 
 class _SystemUiOverlayWrapperState extends State<_SystemUiOverlayWrapper> {
+  StreamSubscription<IncomingSourceImportPayload>? _incomingImportSub;
   Brightness? _lastBrightness;
   bool _hasShownStartupAnnouncement = false;
   bool _startupAnnouncementScheduled = false;
@@ -79,6 +79,9 @@ class _SystemUiOverlayWrapperState extends State<_SystemUiOverlayWrapper> {
   @override
   void initState() {
     super.initState();
+    _incomingImportSub = ExternalSourceImportBridge.instance.payloadStream
+        .listen(_onIncomingSourceImportPayload);
+    unawaited(ExternalSourceImportBridge.instance.initialize());
     unawaited(_prepareStartup());
   }
 
@@ -125,6 +128,7 @@ class _SystemUiOverlayWrapperState extends State<_SystemUiOverlayWrapper> {
 
   @override
   void dispose() {
+    _incomingImportSub?.cancel();
     _startupDelayTimer?.cancel();
     super.dispose();
   }
@@ -182,9 +186,7 @@ class _SystemUiOverlayWrapperState extends State<_SystemUiOverlayWrapper> {
         builder: (context) {
           return AlertDialog(
             title: const Text('公告'),
-            content: const Text(
-              '每天高产更新，请在我的页面点击反馈进群及时使用最新版。',
-            ),
+            content: const Text('每天高产更新，请在我的页面点击反馈进群及时使用最新版。'),
             actions: [
               FilledButton(
                 onPressed: () => Navigator.of(context).pop(),
@@ -194,6 +196,15 @@ class _SystemUiOverlayWrapperState extends State<_SystemUiOverlayWrapper> {
           );
         },
       );
+    });
+  }
+
+  void _onIncomingSourceImportPayload(IncomingSourceImportPayload _) {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) {
+        return;
+      }
+      appRouter.go('/source');
     });
   }
 
