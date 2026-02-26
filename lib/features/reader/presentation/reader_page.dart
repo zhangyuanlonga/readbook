@@ -140,6 +140,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
 
   static const double _kPinnedHeaderTopPadding = 6;
   static const double _kPinnedHeaderHeight = 40;
+  static const double _kBottomProgressReserve = 24;
   static const double _kBackgroundTileWidth = 84;
   static const double _kBackgroundTileHeight = 52;
   static const Duration _kAutoReadStepDuration = Duration(milliseconds: 520);
@@ -179,6 +180,13 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
     final viewPadding = MediaQuery.viewPaddingOf(context).bottom;
     final gestureInsets = MediaQuery.systemGestureInsetsOf(context).bottom;
     return max(viewPadding, gestureInsets);
+  }
+
+  double _effectiveBottomSafeInset(BuildContext context) {
+    final rawInset = _bottomSafeInset(context);
+    final platform = Theme.of(context).platform;
+    final minInset = platform == TargetPlatform.iOS ? 14.0 : 0.0;
+    return max(rawInset, minInset);
   }
 
   double _pinnedHeaderTotalHeight(BuildContext context) {
@@ -503,7 +511,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
   Widget _buildReaderList(_ReaderThemeColors colors) {
     final paragraphs = _paragraphs;
 
-    final bottomInset = _bottomSafeInset(context);
+    final bottomInset = _effectiveBottomSafeInset(context);
 
     return Stack(
       children: [
@@ -667,7 +675,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
   Widget _buildMangaContinuousReader(_ReaderThemeColors colors) {
     final horizontalPadding = _settings.mangaImagePadding;
 
-    final bottomInset = _bottomSafeInset(context);
+    final bottomInset = _effectiveBottomSafeInset(context);
 
     return ListView.separated(
       key: ValueKey('manga_$_chapterId'),
@@ -703,7 +711,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
             ? const NeverScrollableScrollPhysics()
             : const PageScrollPhysics();
 
-    final bottomInset = _bottomSafeInset(context);
+    final bottomInset = _effectiveBottomSafeInset(context);
 
     return Stack(
       children: [
@@ -853,12 +861,12 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
 
     return LayoutBuilder(
       builder: (context, constraints) {
-        final bottomInset = _bottomSafeInset(context);
+        final bottomInset = _effectiveBottomSafeInset(context);
         final contentPadding = EdgeInsets.fromLTRB(
           _settings.horizontalPadding,
           18,
           _settings.horizontalPadding,
-          18 + bottomInset,
+          18 + bottomInset + _kBottomProgressReserve,
         );
 
         final maxWidth = (constraints.maxWidth - contentPadding.horizontal)
@@ -1166,14 +1174,13 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
     required double bottomInset,
   }) {
     final platform = Theme.of(context).platform;
-    final minBottomInset = platform == TargetPlatform.iOS ? 14.0 : 0.0;
-    final safeBottomInset = max(bottomInset, minBottomInset);
-    final collapsedBottomOffset =
+    final safeBottomInset = max(bottomInset, _effectiveBottomSafeInset(context));
+    final collapsedTextBottomPadding =
         platform == TargetPlatform.iOS
             ? (safeBottomInset - 8).clamp(0.0, 64.0)
             : 4.0 + safeBottomInset;
-    final bottomOffset =
-        _showOverlayControls ? 78.0 + safeBottomInset : collapsedBottomOffset;
+    final collapsedStripHeight = collapsedTextBottomPadding + 22.0;
+    final bottomOffset = _showOverlayControls ? 78.0 + safeBottomInset : 0.0;
 
     return Positioned(
       left: 0,
@@ -1184,17 +1191,51 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
           duration: const Duration(milliseconds: 140),
           curve: Curves.easeOutCubic,
           opacity: _showOverlayControls ? 0.78 : 1,
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 14),
-            child: Align(
-              alignment: Alignment.bottomLeft,
-              child: _buildPageIndexBadge(
-                colors: colors,
-                index: index,
-                total: total,
-              ),
-            ),
-          ),
+          child:
+              _showOverlayControls
+                  ? Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 14),
+                    child: Align(
+                      alignment: Alignment.bottomLeft,
+                      child: _buildPageIndexBadge(
+                        colors: colors,
+                        index: index,
+                        total: total,
+                      ),
+                    ),
+                  )
+                  : SizedBox(
+                    height: collapsedStripHeight,
+                    child: Stack(
+                      children: [
+                        Positioned.fill(
+                          child: DecoratedBox(
+                            decoration: BoxDecoration(
+                              gradient: LinearGradient(
+                                begin: Alignment.topCenter,
+                                end: Alignment.bottomCenter,
+                                colors: [
+                                  colors.background.withValues(alpha: 0),
+                                  colors.background.withValues(alpha: 0.72),
+                                  colors.background.withValues(alpha: 0.96),
+                                ],
+                                stops: const [0, 0.55, 1],
+                              ),
+                            ),
+                          ),
+                        ),
+                        Positioned(
+                          left: 14,
+                          bottom: collapsedTextBottomPadding,
+                          child: _buildPageIndexBadge(
+                            colors: colors,
+                            index: index,
+                            total: total,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
         ),
       ),
     );
@@ -2656,7 +2697,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
     final dayNightIcon =
         isDarkMode ? Icons.light_mode_rounded : Icons.dark_mode_rounded;
 
-    final bottomInset = _bottomSafeInset(context);
+    final bottomInset = _effectiveBottomSafeInset(context);
 
     return Positioned(
       left: 0,
@@ -3359,14 +3400,12 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
     required double regular,
     required double large,
   }) {
-    final width = MediaQuery.sizeOf(context).width;
-    if (width < AppLayout.phoneSmallWidth) {
-      return compact;
-    }
-    if (width >= AppLayout.phoneLargeWidth) {
-      return large;
-    }
-    return regular;
+    return AppLayout.sheetHeightFactor(
+      context,
+      compact: compact,
+      regular: regular,
+      large: large,
+    );
   }
 
   double _currentScrollRatio() {

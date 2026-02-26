@@ -7,10 +7,23 @@
 - [x] P0-01 已执行：详情页操作区已改为基于局部宽度分支，宽屏可显示完整文案（开始阅读/移出书架）。
 - [x] P0-01a 已执行：根据实机反馈下调短文案阈值，避免大屏手机仍停留在“阅读/移出”。
 - [x] P0-02 已执行：书架网格列数已改为基于 `SliverLayoutBuilder` 局部宽度计算。
-- [ ] P1-01 未执行：断点语义层尚未统一。
-- [ ] P1-02 未执行：多页面 `maxWidth` token 尚未收敛。
-- [ ] P1-03 未执行：BottomSheet 高度策略尚未统一。
-- [ ] P2-01 未执行：关键展示页断点回归测试尚未补齐。
+- [x] P1-01 已执行：`AppLayout` 已提供语义断点桶（compact/regularPhone/largePhone/phoneXl/medium/expanded）并接入基础布局层。
+- [x] P1-02 已执行：`mine/settings/about/rule_config` 页面的 `maxWidth` 已收敛到 `AppLayout` 统一 token/API。
+- [x] P1-03 已执行：`book/source/reader` 三处 BottomSheet 高度策略已统一到 `AppLayout.sheetHeightFactor`。
+- [x] P1-03a 已执行：`discover` 的书源/分类选择弹层也已统一接入 `AppLayout.sheetHeightFactor`。
+- [x] P2-01 已执行：关键展示页断点回归测试已补齐（详情按钮 + 书架网格受约束宽度）。
+- [x] P2-01a 已执行：已补充 `AppLayout` 语义断点与内容宽度策略的回归测试。
+- [x] P2-01b 已执行：已补充详情页操作按钮断点 widget 测试（含 430 宽度长文案、186-210 区间图标显隐、loading 禁用态）。
+- [x] P4-01 已执行：`discover/mine/about/book_detail/bookshelf` 的局部断点分支与关键尺寸常量已收敛到 `AppLayout`/组件命名常量。
+
+## 经验复盘（本次）
+
+- 问题：详情页按钮使用 `Expanded` 等分，导致按钮被拉满，内部留白过大，视觉显得“太宽”。
+- 根因：把“空间填满”误当成“自适应”，忽略了 CTA 按钮应优先按内容宽度收敛。
+- 教训与约束：
+  - 按钮组默认使用“内容优先宽度”，仅在空间不足时再退化为等分或换行。
+  - 文案长短分支只看实际可用宽度，不要被 `compactStyle` 这类模式开关强制短化。
+  - 适配评审必须显式检查“控件本体尺寸”和“内部空白”，不能只看是否溢出。
 
 ## 背景与目标
 
@@ -109,26 +122,26 @@
 
 ### Phase 1：基础设施（1 天）
 
-- [ ] 扩展 `AppLayout` 语义断点 API。
-- [ ] 提供统一辅助方法：
-  - `isCompact` / `isLargePhoneUp` / `isMediumUp` / `resolveWidthBucket`。
-- [ ] 不改业务外观，只接入基础能力。
+- [x] 扩展 `AppLayout` 语义断点 API。
+- [x] 提供统一辅助方法：
+  - `isLargePhoneUp` / `isMediumUp` / `isExpandedUp` / `widthBucket`。
+- [x] 不改业务外观，只接入基础能力。
 
 ### Phase 2：小说详情页（1 天）
 
 - [x] 重构详情头部布局与操作区。
 - [x] 让“图标+完整文案”在 `largePhone` 起稳定生效。
-- [ ] 补充页面级 widget 测试（断点矩阵）。
+- [x] 补充页面级 widget 测试（断点矩阵，已覆盖操作按钮核心断点行为）。
 
 ### Phase 3：网格与弹层（1-1.5 天）
 
 - [x] 修正书架网格列数计算口径（改局部约束）。
-- [ ] 统一 `book/source/reader` 的 sheet 高度分支入口。
+- [x] 统一 `book/source/reader` 的 sheet 高度分支入口。
 
 ### Phase 4：全站收敛（1-2 天）
 
-- [ ] 收敛 `mine/settings/about/rule_config` 的 `maxWidth` 与间距 token。
-- [ ] 清理重复断点判断与魔法数字。
+- [x] 收敛 `mine/settings/about/rule_config` 的 `maxWidth` 与间距 token。
+- [x] 清理重复断点判断与魔法数字。
 
 ### Phase 5：回归与冻结（0.5-1 天）
 

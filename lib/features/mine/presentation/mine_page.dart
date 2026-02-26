@@ -18,6 +18,19 @@ class MinePage extends ConsumerStatefulWidget {
 
 class _MinePageState extends ConsumerState<MinePage> {
   String? _highlightedTileId;
+  static const double _ultraNarrowGridWidth = 250;
+  static const EdgeInsets _profileCardPadding = EdgeInsets.fromLTRB(
+    14,
+    12,
+    14,
+    12,
+  );
+  static const EdgeInsets _actionSectionPadding = EdgeInsets.fromLTRB(
+    14,
+    12,
+    14,
+    14,
+  );
 
   static final Uri _sourceFeedbackUri = Uri.parse(
     'https://qun.qq.com/universal-share/share?ac=1&authKey=Tabvg05EAafVbER7E8%2BzAQ18yErg2a%2B5PoqQH41t6dbPjcZIfDSnNX%2F4KCAXhzVh&busi_data=eyJncm91cENvZGUiOiIxMDgyODI3MjI0IiwidG9rZW4iOiIzam5tVFQ0cUs1T3VlMytzVk9iOXB1Zk40Q1RaUXJiQytzd2JlZUx3NDhXQTJscy9ZZGE5WW1hQXhPdGFwMHU1IiwidWluIjoiNzgyMDQ1MDExIn0%3D&data=PHNA5IOU4A3ujR5i9rmpWqWn4Qc-L9MNr8ByREa7IfvpXTo1utwnHVIfjkB7Rlk4x3yE9dfMR5_ZjOfsQ9wYcA&svctype=4&tempid=h5_group_info',
@@ -57,11 +70,11 @@ class _MinePageState extends ConsumerState<MinePage> {
     return Scaffold(
       appBar: AppBar(title: const Text('我的')),
       body: LayoutBuilder(
-        builder: (context, constraints) {
-          final maxWidth =
-              constraints.maxWidth >= AppLayout.railBreakpointWidth
-                  ? 700.0
-                  : constraints.maxWidth;
+        builder: (context, _) {
+          final maxWidth = AppLayout.pageContentMaxWidth(
+            context,
+            maxWidth: AppLayout.mineContentMaxWidth,
+          );
 
           return Align(
             alignment: Alignment.topCenter,
@@ -87,13 +100,8 @@ class _MinePageState extends ConsumerState<MinePage> {
                     index: 1,
                     child: _buildActionSection(
                       context,
-                      title: '设置',
+                      title: '常用',
                       actions: [
-                        _MineActionItem(
-                          icon: Icons.card_membership_outlined,
-                          label: '会员',
-                          onTap: () => _showMessage('会员功能开发中。'),
-                        ),
                         _MineActionItem(
                           icon: Icons.settings_outlined,
                           label: '主题设置',
@@ -115,21 +123,32 @@ class _MinePageState extends ConsumerState<MinePage> {
                           label: '系统设置',
                           onTap: () => context.push('/system-settings'),
                         ),
+                        _MineActionItem(
+                          icon: Icons.card_membership_outlined,
+                          label: '会员',
+                          onTap: () => _showMessage('会员功能开发中。'),
+                        ),
+                        _MineActionItem(
+                          icon: Icons.menu_book_rounded,
+                          label: '书源',
+                          onTap: () => context.go('/source'),
+                        ),
+                        _MineActionItem(
+                          icon: Icons.rule_outlined,
+                          label: '规则配置',
+                          onTap: () => context.push('/rule-config'),
+                        ),
+                        _MineActionItem(
+                          icon: Icons.cloud_outlined,
+                          label: '缓存管理',
+                          onTap: () => context.push('/cache'),
+                        ),
                       ],
                     ),
                   ),
                   const SizedBox(height: 12),
                   _buildPageEntrance(
                     index: 2,
-                    child: _buildActionSection(
-                      context,
-                      title: '常用服务',
-                      actions: _resolveCommonServiceActions(context),
-                    ),
-                  ),
-                  const SizedBox(height: 12),
-                  _buildPageEntrance(
-                    index: 3,
                     child: _buildActionSection(
                       context,
                       title: '其他',
@@ -171,11 +190,11 @@ class _MinePageState extends ConsumerState<MinePage> {
 
     return Card(
       child: Padding(
-        padding: const EdgeInsets.all(10),
+        padding: _profileCardPadding,
         child: Row(
           children: [
             CircleAvatar(
-              radius: 19,
+              radius: 20,
               backgroundColor: colorScheme.primaryContainer,
               child: Icon(
                 Icons.auto_stories_rounded,
@@ -183,23 +202,25 @@ class _MinePageState extends ConsumerState<MinePage> {
                 size: 20,
               ),
             ),
-            const SizedBox(width: 10),
+            const SizedBox(width: 12),
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
                     'AppRead',
-                    style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                    style: Theme.of(context).textTheme.titleMedium?.copyWith(
                       fontWeight: FontWeight.w700,
                     ),
                   ),
-                  const SizedBox(height: 3),
+                  const SizedBox(height: 4),
                   Text(
                     subtitle,
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
                     style: Theme.of(context).textTheme.bodySmall?.copyWith(
                       color: colorScheme.onSurfaceVariant,
-                      height: 1.3,
+                      height: 1.32,
                     ),
                   ),
                 ],
@@ -219,101 +240,79 @@ class _MinePageState extends ConsumerState<MinePage> {
   }) {
     final colorScheme = Theme.of(context).colorScheme;
 
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.fromLTRB(12, 10, 12, 12),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                Expanded(
-                  child: Text(
-                    title,
-                    style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                      fontWeight: FontWeight.w700,
-                    ),
+    return _buildSectionCardShell(
+      context,
+      padding: _actionSectionPadding,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Expanded(
+                child: Text(
+                  title,
+                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                    fontWeight: FontWeight.w700,
                   ),
                 ),
-                if (trailing != null) trailing,
-              ],
-            ),
-            const SizedBox(height: 8),
-            LayoutBuilder(
-              builder: (context, constraints) {
-                final columns = _resolveGridColumns(
-                  width: constraints.maxWidth,
-                  itemCount: actions.length,
-                );
-                final denseGrid = columns >= 4;
-                final crossSpacing = denseGrid ? 8.0 : 10.0;
-                final mainSpacing = denseGrid ? 8.0 : 10.0;
-                final mainAxisExtent = switch (columns) {
-                  >= 4 => 88.0,
-                  3 => 98.0,
-                  _ => 106.0,
-                };
+              ),
+              if (trailing != null) trailing,
+            ],
+          ),
+          const SizedBox(height: 10),
+          LayoutBuilder(
+            builder: (context, constraints) {
+              final columns = _resolveGridColumns(
+                width: constraints.maxWidth,
+              );
+              final denseGrid = columns >= 4;
+              final crossSpacing = denseGrid ? 9.0 : 10.0;
+              final mainSpacing = denseGrid ? 9.0 : 10.0;
+              final mainAxisExtent = switch (columns) {
+                >= 4 => 92.0,
+                3 => 102.0,
+                _ => 110.0,
+              };
 
-                return GridView.builder(
-                  shrinkWrap: true,
-                  physics: const NeverScrollableScrollPhysics(),
-                  itemCount: actions.length,
-                  gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-                    crossAxisCount: columns,
-                    crossAxisSpacing: crossSpacing,
-                    mainAxisSpacing: mainSpacing,
-                    mainAxisExtent: mainAxisExtent,
-                  ),
-                  itemBuilder: (context, index) {
-                    final item = actions[index];
-                    final tileId = 'mine_${title}_$index';
-                    return _buildGridEntrance(
-                      section: title,
-                      index: index,
-                      child: _buildActionTile(
-                        context,
-                        item: item,
-                        denseGrid: denseGrid,
-                        tileId: tileId,
-                        highlighted: _highlightedTileId == tileId,
-                        borderColor: colorScheme.outlineVariant.withValues(
-                          alpha: denseGrid ? 0.24 : 0.34,
-                        ),
+              return GridView.builder(
+                shrinkWrap: true,
+                physics: const NeverScrollableScrollPhysics(),
+                itemCount: actions.length,
+                gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                  crossAxisCount: columns,
+                  crossAxisSpacing: crossSpacing,
+                  mainAxisSpacing: mainSpacing,
+                  mainAxisExtent: mainAxisExtent,
+                ),
+                itemBuilder: (context, index) {
+                  final item = actions[index];
+                  final tileId = 'mine_${title}_$index';
+                  return _buildGridEntrance(
+                    section: title,
+                    index: index,
+                    child: _buildActionTile(
+                      context,
+                      item: item,
+                      denseGrid: denseGrid,
+                      tileId: tileId,
+                      highlighted: _highlightedTileId == tileId,
+                      borderColor: colorScheme.outlineVariant.withValues(
+                        alpha: denseGrid ? 0.34 : 0.42,
                       ),
-                    );
-                  },
-                );
-              },
-            ),
-          ],
-        ),
+                    ),
+                  );
+                },
+              );
+            },
+          ),
+        ],
       ),
     );
   }
 
-  int _resolveGridColumns({required double width, required int itemCount}) {
-    if (itemCount <= 1) {
-      return 1;
-    }
-
-    if (itemCount == 4) {
-      // Keep 4 columns on common phone widths; only downgrade on extra narrow widths.
-      if (width < 250) {
-        return 2;
-      }
-      return 4;
-    }
-    if (itemCount == 3 && width < AppLayout.compactContentWidth) {
-      return 3;
-    }
-
-    final base = switch (width) {
-      < 340 => 3,
-      < 600 => 4,
-      < 840 => 5,
-      _ => 6,
-    };
-    return base.clamp(1, itemCount);
+  int _resolveGridColumns({required double width}) {
+    if (width < _ultraNarrowGridWidth) return 2;
+    return 4;
   }
 
   Widget _buildActionTile(
@@ -346,7 +345,7 @@ class _MinePageState extends ConsumerState<MinePage> {
     return Material(
       color: Colors.transparent,
       child: InkWell(
-        borderRadius: BorderRadius.circular(12),
+        borderRadius: BorderRadius.circular(14),
         onHighlightChanged: (value) {
           if (value) {
             if (_highlightedTileId == tileId) {
@@ -371,14 +370,12 @@ class _MinePageState extends ConsumerState<MinePage> {
           scale: highlighted ? 0.965 : 1,
           child: Ink(
             decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(12),
+              borderRadius: BorderRadius.circular(14),
               border: Border.all(color: borderColor),
-              color: colorScheme.surfaceContainerLow.withValues(
-                alpha: denseGrid ? 0.62 : 0.76,
-              ),
+              color: Colors.transparent,
             ),
             child: Padding(
-              padding: const EdgeInsets.fromLTRB(8, 8, 8, 8),
+              padding: const EdgeInsets.fromLTRB(9, 9, 9, 9),
               child: Stack(
                 children: [
                   if (item.badgeText != null && item.badgeText!.isNotEmpty)
@@ -412,7 +409,7 @@ class _MinePageState extends ConsumerState<MinePage> {
                               height: iconSize,
                               decoration: BoxDecoration(
                                 color: colorScheme.primaryContainer.withValues(
-                                  alpha: denseGrid ? 0.34 : 0.42,
+                                  alpha: denseGrid ? 0.4 : 0.46,
                                 ),
                                 shape: BoxShape.circle,
                               ),
@@ -459,6 +456,14 @@ class _MinePageState extends ConsumerState<MinePage> {
         ),
       ),
     );
+  }
+
+  Widget _buildSectionCardShell(
+    BuildContext context, {
+    required Widget child,
+    required EdgeInsetsGeometry padding,
+  }) {
+    return Padding(padding: padding, child: child);
   }
 
   Widget _buildPageEntrance({required int index, required Widget child}) {
@@ -631,11 +636,9 @@ class _MinePageState extends ConsumerState<MinePage> {
                                         builder: (context, constraints) {
                                           const spacing = 8.0;
                                           final columns =
-                                              constraints.maxWidth >= 560
-                                                  ? 3
-                                                  : constraints.maxWidth >= 360
-                                                  ? 2
-                                                  : 1;
+                                              AppLayout.optionGridColumnsForWidth(
+                                                constraints.maxWidth,
+                                              );
                                           final itemWidth =
                                               (constraints.maxWidth -
                                                   ((columns - 1) * spacing)) /
@@ -702,11 +705,9 @@ class _MinePageState extends ConsumerState<MinePage> {
                                         builder: (context, constraints) {
                                           const spacing = 8.0;
                                           final columns =
-                                              constraints.maxWidth >= 560
-                                                  ? 3
-                                                  : constraints.maxWidth >= 360
-                                                  ? 2
-                                                  : 1;
+                                              AppLayout.optionGridColumnsForWidth(
+                                                constraints.maxWidth,
+                                              );
                                           final itemWidth =
                                               (constraints.maxWidth -
                                                   ((columns - 1) * spacing)) /

@@ -13,6 +13,7 @@ import '../../../domain/entities/chapter.dart';
 import '../../bookshelf/application/bookshelf_service.dart';
 import '../../reader/presentation/chapter_cache_sheets.dart';
 import '../application/book_detail_service.dart';
+import 'widgets/book_detail_primary_actions.dart';
 
 class BookDetailPage extends StatefulWidget {
   const BookDetailPage({
@@ -244,8 +245,7 @@ class _BookDetailPageState extends State<BookDetailPage> {
                               ?.copyWith(color: colorScheme.onSurfaceVariant),
                         ),
                         const SizedBox(height: 10),
-                        if (detail.author != null &&
-                            detail.author!.isNotEmpty)
+                        if (detail.author != null && detail.author!.isNotEmpty)
                           Row(
                             children: [
                               Expanded(
@@ -262,10 +262,16 @@ class _BookDetailPageState extends State<BookDetailPage> {
                         const SizedBox(height: 10),
                         LayoutBuilder(
                           builder: (context, constraints) {
-                            return _buildPrimaryActionRow(
-                              result,
+                            return BookDetailPrimaryActions(
                               availableWidth: constraints.maxWidth,
-                              compactStyle: constraints.maxWidth < 260,
+                              isInBookshelf: _isInBookshelf,
+                              isShelfActionLoading: _isShelfActionLoading,
+                              onRead:
+                                  result.chapters.isEmpty
+                                      ? null
+                                      : () =>
+                                          _openChapter(result.chapters.first),
+                              onToggleBookshelf: _toggleBookshelf,
                             );
                           },
                         ),
@@ -281,132 +287,6 @@ class _BookDetailPageState extends State<BookDetailPage> {
             ],
           ),
         ),
-      ),
-    );
-  }
-
-  Widget _buildPrimaryActionRow(
-    BookDetailLoadResult result, {
-    required double availableWidth,
-    bool compactStyle = false,
-  }) {
-    final buttonTextStyle = Theme.of(context).textTheme.labelSmall?.copyWith(
-      fontWeight: FontWeight.w600,
-      height: 1.05,
-    );
-    // Use actual available width for copy density; do not force short labels
-    // only because the section is in compact mode.
-    final useShortLabels = availableWidth < 210;
-    final hideActionIcons = availableWidth < 186;
-
-    final readLabel = useShortLabels ? '阅读' : '开始阅读';
-    final shelfLabel =
-        useShortLabels
-            ? (_isInBookshelf ? '移出' : '加入')
-            : (_isInBookshelf ? '移出书架' : '加入书架');
-
-    final readButton = SizedBox(
-      height: 34,
-      child: FilledButton(
-        style: FilledButton.styleFrom(
-          textStyle: buttonTextStyle,
-          tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-          visualDensity: const VisualDensity(horizontal: -1, vertical: -2),
-          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-        ),
-        onPressed:
-            result.chapters.isEmpty
-                ? null
-                : () => _openChapter(result.chapters.first),
-        child: _buildActionButtonContent(
-          icon: Icons.chrome_reader_mode_outlined,
-          label: readLabel,
-          hideIcon: hideActionIcons,
-        ),
-      ),
-    );
-
-    final shelfButton = SizedBox(
-      height: 34,
-      child: OutlinedButton(
-        style: OutlinedButton.styleFrom(
-          textStyle: buttonTextStyle,
-          tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-          visualDensity: const VisualDensity(horizontal: -1, vertical: -2),
-          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-        ),
-        onPressed: _isShelfActionLoading ? null : _toggleBookshelf,
-        child: _buildActionButtonContent(
-          icon:
-              _isInBookshelf
-                  ? Icons.bookmark_remove_outlined
-                  : Icons.bookmark_add_outlined,
-          label: _isShelfActionLoading ? '处理中' : shelfLabel,
-          hideIcon: _isShelfActionLoading || hideActionIcons,
-        ),
-      ),
-    );
-
-    final buttonGap = compactStyle ? 8.0 : 10.0;
-    final readIdealWidth = useShortLabels ? 104.0 : 140.0;
-    final shelfIdealWidth = useShortLabels ? 96.0 : 128.0;
-    final minPairWidth = 96.0 * 2 + buttonGap;
-    final idealPairWidth = readIdealWidth + shelfIdealWidth + buttonGap;
-
-    if (availableWidth < minPairWidth) {
-      return Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          SizedBox(width: double.infinity, child: readButton),
-          const SizedBox(height: 6),
-          SizedBox(width: double.infinity, child: shelfButton),
-        ],
-      );
-    }
-
-    if (availableWidth >= idealPairWidth) {
-      return Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          SizedBox(width: readIdealWidth, child: readButton),
-          SizedBox(width: buttonGap),
-          SizedBox(width: shelfIdealWidth, child: shelfButton),
-        ],
-      );
-    }
-
-    final equalWidth = (availableWidth - buttonGap) / 2;
-    return Row(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        SizedBox(width: equalWidth, child: readButton),
-        SizedBox(width: buttonGap),
-        SizedBox(width: equalWidth, child: shelfButton),
-      ],
-    );
-  }
-
-  Widget _buildActionButtonContent({
-    required IconData icon,
-    required String label,
-    required bool hideIcon,
-  }) {
-    return FittedBox(
-      fit: BoxFit.scaleDown,
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          if (!hideIcon) ...[
-            Icon(icon, size: 14),
-            const SizedBox(width: 3),
-          ],
-          Text(
-            label,
-            maxLines: 1,
-            softWrap: false,
-            overflow: TextOverflow.fade,
-          ),
-        ],
       ),
     );
   }
@@ -846,13 +726,12 @@ class _BookDetailPageState extends State<BookDetailPage> {
       useSafeArea: true,
       showDragHandle: true,
       builder: (context) {
-        final width = MediaQuery.sizeOf(context).width;
-        final heightFactor =
-            width < AppLayout.phoneSmallWidth
-                ? 0.92
-                : width >= AppLayout.phoneLargeWidth
-                ? 0.84
-                : 0.88;
+        final heightFactor = AppLayout.sheetHeightFactor(
+          context,
+          compact: 0.92,
+          regular: 0.88,
+          large: 0.84,
+        );
         final horizontal = AppSpacing.pageHorizontal(context);
 
         return FractionallySizedBox(

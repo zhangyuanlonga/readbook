@@ -119,11 +119,11 @@ class _ReaderSettingsPageState extends State<ReaderSettingsPage> {
     return Scaffold(
       appBar: AppBar(title: const Text('阅读设置')),
       body: LayoutBuilder(
-        builder: (context, constraints) {
-          final maxWidth =
-              constraints.maxWidth >= AppLayout.railBreakpointWidth
-                  ? 760.0
-                  : constraints.maxWidth;
+        builder: (context, _) {
+          final maxWidth = AppLayout.pageContentMaxWidth(
+            context,
+            maxWidth: AppLayout.settingsContentMaxWidth,
+          );
 
           if (_isLoading) {
             return const Center(

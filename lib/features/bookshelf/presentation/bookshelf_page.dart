@@ -14,6 +14,7 @@ import '../application/bookshelf_service.dart';
 import '../application/local_book_import_service.dart';
 import '../../reader/application/reader_preferences_service.dart';
 import '../../book/application/book_detail_service.dart';
+import 'widgets/bookshelf_grid_sliver.dart';
 
 enum _BookshelfAppBarAction { importLocalBook }
 
@@ -392,41 +393,14 @@ class _BookshelfPageState extends State<BookshelfPage> {
   }
 
   Widget _buildBookGridSliver() {
-    const crossSpacing = 8.0;
-    const mainSpacing = 12.0;
-
-    return SliverLayoutBuilder(
-      builder: (context, constraints) {
-        final width = constraints.crossAxisExtent.clamp(220.0, 2400.0);
-
-        var crossAxisCount = 3;
-        if (width >= 1400) {
-          crossAxisCount = 6;
-        } else if (width >= 1100) {
-          crossAxisCount = 5;
-        } else if (width >= 800) {
-          crossAxisCount = 4;
-        }
-
-        final itemWidth =
-            (width - crossSpacing * (crossAxisCount - 1)) / crossAxisCount;
-        final itemHeight = itemWidth * 1.32 + 52;
-
-        return SliverGrid(
-          delegate: SliverChildBuilderDelegate((context, index) {
-            final book = _books[index];
-            return _buildModeSwitchAnimatedBookItem(
-              book: book,
-              index: index,
-              child: _buildGridCard(book),
-            );
-          }, childCount: _books.length),
-          gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-            crossAxisCount: crossAxisCount,
-            crossAxisSpacing: crossSpacing,
-            mainAxisSpacing: mainSpacing,
-            childAspectRatio: itemWidth / itemHeight,
-          ),
+    return BookshelfGridSliver(
+      itemCount: _books.length,
+      itemBuilder: (context, index) {
+        final book = _books[index];
+        return _buildModeSwitchAnimatedBookItem(
+          book: book,
+          index: index,
+          child: _buildGridCard(book),
         );
       },
     );

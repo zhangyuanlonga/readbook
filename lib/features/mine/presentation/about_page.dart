@@ -51,14 +51,8 @@ class AboutPage extends StatelessWidget {
       child: Scaffold(
         appBar: AppBar(title: const Text('关于')),
         body: LayoutBuilder(
-          builder: (context, constraints) {
-            final availableWidth = constraints.maxWidth;
-            final contentMaxWidth =
-                availableWidth >= 1200
-                    ? 1080.0
-                    : availableWidth >= AppLayout.railBreakpointWidth
-                    ? 920.0
-                    : availableWidth;
+          builder: (context, _) {
+            final contentMaxWidth = AppLayout.aboutPageContentMaxWidth(context);
 
             return Align(
               alignment: Alignment.topCenter,
@@ -67,7 +61,7 @@ class AboutPage extends StatelessWidget {
                 child: LayoutBuilder(
                   builder: (context, innerConstraints) {
                     final width = innerConstraints.maxWidth;
-                    final isExpanded = width >= 840;
+                    final isExpanded = AppLayout.isExpandedWidth(width);
 
                     final leftColumn = <Widget>[
                       _buildIntroCard(context),
@@ -211,7 +205,7 @@ class AboutPage extends StatelessWidget {
               const SizedBox(height: 12),
               LayoutBuilder(
                 builder: (context, constraints) {
-                  final useRow = constraints.maxWidth >= 560;
+                  final useRow = AppLayout.isMediumWidth(constraints.maxWidth);
                   final items = <Widget>[
                     _buildMetricPill(context, '架构', '分层设计'),
                     _buildMetricPill(context, '书源', 'Legado 兼容'),

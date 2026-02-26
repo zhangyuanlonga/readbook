@@ -6,20 +6,28 @@ class AppSpacing {
   const AppSpacing._();
 
   static double pageHorizontal(BuildContext context) {
-    if (AppLayout.isPhoneSmall(context)) {
+    final width = AppLayout.screenWidth(context);
+    final bucket = AppLayout.widthBucket(context);
+    if (bucket == AppWidthBucket.compact) {
       return 12;
     }
-    if (AppLayout.isPhoneLarge(context)) {
+    if (bucket == AppWidthBucket.phoneXl ||
+        (bucket == AppWidthBucket.largePhone &&
+            width >= AppLayout.phoneLargeWidth)) {
       return 20;
     }
     return 16;
   }
 
   static double cardHorizontal(BuildContext context) {
-    if (AppLayout.isPhoneSmall(context)) {
+    final width = AppLayout.screenWidth(context);
+    final bucket = AppLayout.widthBucket(context);
+    if (bucket == AppWidthBucket.compact) {
       return 12;
     }
-    if (AppLayout.isPhoneLarge(context)) {
+    if (bucket == AppWidthBucket.phoneXl ||
+        (bucket == AppWidthBucket.largePhone &&
+            width >= AppLayout.phoneLargeWidth)) {
       return 16;
     }
     return 14;
@@ -35,10 +43,14 @@ class AppSpacing {
   }
 
   static EdgeInsets dialogInsetPadding(BuildContext context) {
+    final width = AppLayout.screenWidth(context);
+    final bucket = AppLayout.widthBucket(context);
     final horizontal =
-        AppLayout.isPhoneSmall(context)
+        bucket == AppWidthBucket.compact
             ? 16.0
-            : AppLayout.isPhoneLarge(context)
+            : bucket == AppWidthBucket.phoneXl ||
+                (bucket == AppWidthBucket.largePhone &&
+                    width >= AppLayout.phoneLargeWidth)
             ? 28.0
             : 24.0;
     return EdgeInsets.symmetric(horizontal: horizontal, vertical: 24);

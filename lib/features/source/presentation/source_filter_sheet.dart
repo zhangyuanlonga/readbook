@@ -186,13 +186,12 @@ class _SourceFilterSheetState extends State<_SourceFilterSheet> {
 
   @override
   Widget build(BuildContext context) {
-    final width = AppLayout.screenWidth(context);
-    final heightFactor =
-        width < AppLayout.phoneSmallWidth
-            ? 0.9
-            : width >= AppLayout.phoneLargeWidth
-            ? 0.82
-            : 0.85;
+    final heightFactor = AppLayout.sheetHeightFactor(
+      context,
+      compact: 0.9,
+      regular: 0.85,
+      large: 0.82,
+    );
     final horizontal = AppSpacing.pageHorizontal(context);
 
     final summaryText =

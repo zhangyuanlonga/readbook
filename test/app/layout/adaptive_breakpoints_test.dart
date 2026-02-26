@@ -77,6 +77,211 @@ void main() {
     expect(flags430.isPhone, isTrue);
   });
 
+  testWidgets('AppLayout width bucket uses semantic breakpoints', (
+    tester,
+  ) async {
+    final bucket320 = await _readFromContext<AppWidthBucket>(
+      tester,
+      width: 320,
+      read: AppLayout.widthBucket,
+    );
+    final bucket360 = await _readFromContext<AppWidthBucket>(
+      tester,
+      width: 360,
+      read: AppLayout.widthBucket,
+    );
+    final bucket390 = await _readFromContext<AppWidthBucket>(
+      tester,
+      width: 390,
+      read: AppLayout.widthBucket,
+    );
+    final bucket480 = await _readFromContext<AppWidthBucket>(
+      tester,
+      width: 480,
+      read: AppLayout.widthBucket,
+    );
+    final bucket600 = await _readFromContext<AppWidthBucket>(
+      tester,
+      width: 600,
+      read: AppLayout.widthBucket,
+    );
+    final bucket840 = await _readFromContext<AppWidthBucket>(
+      tester,
+      width: 840,
+      read: AppLayout.widthBucket,
+    );
+
+    expect(bucket320, AppWidthBucket.compact);
+    expect(bucket360, AppWidthBucket.regularPhone);
+    expect(bucket390, AppWidthBucket.largePhone);
+    expect(bucket480, AppWidthBucket.phoneXl);
+    expect(bucket600, AppWidthBucket.medium);
+    expect(bucket840, AppWidthBucket.expanded);
+  });
+
+  testWidgets(
+    'AppLayout pageContentMaxWidth keeps phone width and caps medium+',
+    (tester) async {
+      final width390 = await _readFromContext<double>(
+        tester,
+        width: 390,
+        read:
+            (context) => AppLayout.pageContentMaxWidth(
+              context,
+              maxWidth: AppLayout.mineContentMaxWidth,
+            ),
+      );
+      final width600 = await _readFromContext<double>(
+        tester,
+        width: 600,
+        read:
+            (context) => AppLayout.pageContentMaxWidth(
+              context,
+              maxWidth: AppLayout.mineContentMaxWidth,
+            ),
+      );
+      final width720 = await _readFromContext<double>(
+        tester,
+        width: 720,
+        read:
+            (context) => AppLayout.pageContentMaxWidth(
+              context,
+              maxWidth: AppLayout.mineContentMaxWidth,
+            ),
+      );
+
+      expect(width390, 390);
+      expect(width600, 600);
+      expect(width720, AppLayout.mineContentMaxWidth);
+    },
+  );
+
+  testWidgets('AppLayout aboutPageContentMaxWidth follows two-stage caps', (
+    tester,
+  ) async {
+    final width500 = await _readFromContext<double>(
+      tester,
+      width: 500,
+      read: AppLayout.aboutPageContentMaxWidth,
+    );
+    final width700 = await _readFromContext<double>(
+      tester,
+      width: 700,
+      read: AppLayout.aboutPageContentMaxWidth,
+    );
+    final width980 = await _readFromContext<double>(
+      tester,
+      width: 980,
+      read: AppLayout.aboutPageContentMaxWidth,
+    );
+    final width1300 = await _readFromContext<double>(
+      tester,
+      width: 1300,
+      read: AppLayout.aboutPageContentMaxWidth,
+    );
+
+    expect(width500, 500);
+    expect(width700, 700);
+    expect(width980, AppLayout.aboutContentMaxWidth);
+    expect(width1300, AppLayout.aboutExpandedContentMaxWidth);
+  });
+
+  testWidgets('AppLayout optionGridColumnsForWidth matches width buckets', (
+    tester,
+  ) async {
+    final columns320 = await _readFromContext<int>(
+      tester,
+      width: 320,
+      read: (context) => AppLayout.optionGridColumnsForWidth(320),
+    );
+    final columns390 = await _readFromContext<int>(
+      tester,
+      width: 390,
+      read: (context) => AppLayout.optionGridColumnsForWidth(390),
+    );
+    final columns600 = await _readFromContext<int>(
+      tester,
+      width: 600,
+      read: (context) => AppLayout.optionGridColumnsForWidth(600),
+    );
+
+    expect(columns320, 1);
+    expect(columns390, 2);
+    expect(columns600, 3);
+  });
+
+  testWidgets('AppLayout bookshelfGridColumnsForWidth uses width thresholds', (
+    tester,
+  ) async {
+    final columns799 = await _readFromContext<int>(
+      tester,
+      width: 799,
+      read: (context) => AppLayout.bookshelfGridColumnsForWidth(799),
+    );
+    final columns800 = await _readFromContext<int>(
+      tester,
+      width: 800,
+      read: (context) => AppLayout.bookshelfGridColumnsForWidth(800),
+    );
+    final columns1100 = await _readFromContext<int>(
+      tester,
+      width: 1100,
+      read: (context) => AppLayout.bookshelfGridColumnsForWidth(1100),
+    );
+    final columns1400 = await _readFromContext<int>(
+      tester,
+      width: 1400,
+      read: (context) => AppLayout.bookshelfGridColumnsForWidth(1400),
+    );
+
+    expect(columns799, 3);
+    expect(columns800, 4);
+    expect(columns1100, 5);
+    expect(columns1400, 6);
+  });
+
+  testWidgets('AppLayout sheetHeightFactor follows compact/regular/large', (
+    tester,
+  ) async {
+    final compact = await _readFromContext<double>(
+      tester,
+      width: 320,
+      read:
+          (context) => AppLayout.sheetHeightFactor(
+            context,
+            compact: 0.92,
+            regular: 0.9,
+            large: 0.85,
+          ),
+    );
+    final regular = await _readFromContext<double>(
+      tester,
+      width: 390,
+      read:
+          (context) => AppLayout.sheetHeightFactor(
+            context,
+            compact: 0.92,
+            regular: 0.9,
+            large: 0.85,
+          ),
+    );
+    final large = await _readFromContext<double>(
+      tester,
+      width: 430,
+      read:
+          (context) => AppLayout.sheetHeightFactor(
+            context,
+            compact: 0.92,
+            regular: 0.9,
+            large: 0.85,
+          ),
+    );
+
+    expect(compact, 0.92);
+    expect(regular, 0.9);
+    expect(large, 0.85);
+  });
+
   testWidgets('ShellScaffold keeps bottom bar on narrow phone widths', (
     tester,
   ) async {

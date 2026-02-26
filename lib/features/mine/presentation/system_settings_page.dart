@@ -3,6 +3,7 @@ import 'package:go_router/go_router.dart';
 
 import '../../../app/layout/app_layout.dart';
 import '../../../app/layout/app_spacing.dart';
+import '../application/app_icon_service.dart';
 
 class SystemSettingsPage extends StatelessWidget {
   const SystemSettingsPage({super.key});
@@ -23,11 +24,11 @@ class SystemSettingsPage extends StatelessWidget {
       child: Scaffold(
         appBar: AppBar(title: const Text('系统设置')),
         body: LayoutBuilder(
-          builder: (context, constraints) {
-            final maxWidth =
-                constraints.maxWidth >= AppLayout.railBreakpointWidth
-                    ? 860.0
-                    : constraints.maxWidth;
+          builder: (context, _) {
+            final maxWidth = AppLayout.pageContentMaxWidth(
+              context,
+              maxWidth: AppLayout.systemSettingsContentMaxWidth,
+            );
 
             return Align(
               alignment: Alignment.topCenter,
@@ -35,7 +36,9 @@ class SystemSettingsPage extends StatelessWidget {
                 constraints: BoxConstraints(maxWidth: maxWidth),
                 child: LayoutBuilder(
                   builder: (context, innerConstraints) {
-                    final isExpanded = innerConstraints.maxWidth >= 840;
+                    final isExpanded = AppLayout.isExpandedWidth(
+                      innerConstraints.maxWidth,
+                    );
                     final leftCards = <Widget>[
                       _buildOverviewCard(context),
                       const SizedBox(height: 10),
@@ -159,6 +162,8 @@ class SystemSettingsPage extends StatelessWidget {
               subtitle: '全局主题切换采用 180ms 缓动动画。',
               status: '180ms',
             ),
+            const SizedBox(height: 8),
+            const _AppIconSettingRow(),
           ],
         ),
       ),
@@ -341,6 +346,212 @@ class _SettingRow extends StatelessWidget {
       borderRadius: BorderRadius.circular(10),
       onTap: onTap,
       child: child,
+    );
+  }
+}
+
+class _AppIconSettingRow extends StatefulWidget {
+  const _AppIconSettingRow();
+
+  @override
+  State<_AppIconSettingRow> createState() => _AppIconSettingRowState();
+}
+
+class _AppIconSettingRowState extends State<_AppIconSettingRow> {
+  final AppIconService _appIconService = AppIconService();
+
+  bool _isLoading = true;
+  bool _isSupported = false;
+  bool _isUpdating = false;
+  AppIconVariant _currentIcon = AppIconVariant.primary;
+  String? _errorText;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadCurrentIcon();
+  }
+
+  Future<void> _loadCurrentIcon() async {
+    final supported = await _appIconService.isSupported();
+    var current = AppIconVariant.primary;
+    if (supported) {
+      current = await _appIconService.currentIcon();
+    }
+    if (!mounted) {
+      return;
+    }
+    setState(() {
+      _isLoading = false;
+      _isSupported = supported;
+      _currentIcon = current;
+      _errorText = null;
+    });
+  }
+
+  Future<void> _switchIcon(AppIconVariant icon) async {
+    if (_isUpdating || !_isSupported || icon == _currentIcon) {
+      return;
+    }
+    setState(() {
+      _isUpdating = true;
+      _errorText = null;
+    });
+    try {
+      await _appIconService.setIcon(icon);
+      final current = await _appIconService.currentIcon();
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _currentIcon = current;
+      });
+    } catch (_) {
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _errorText = '图标切换失败，请稍后重试。';
+      });
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isUpdating = false;
+        });
+      }
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (_isLoading) {
+      return const _SettingRow(
+        icon: Icons.app_shortcut_rounded,
+        title: 'APP 图标',
+        subtitle: '正在读取当前图标配置。',
+        status: '读取中',
+      );
+    }
+    if (!_isSupported) {
+      return const _SettingRow(
+        icon: Icons.app_shortcut_rounded,
+        title: 'APP 图标',
+        subtitle: '当前平台不支持动态切换图标。',
+        status: '不可用',
+      );
+    }
+
+    final colorScheme = Theme.of(context).colorScheme;
+    final textTheme = Theme.of(context).textTheme;
+
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.fromLTRB(10, 10, 10, 10),
+      decoration: BoxDecoration(
+        color: colorScheme.surfaceContainerLow,
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(
+          color: colorScheme.outlineVariant.withValues(alpha: 0.45),
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Padding(
+                padding: const EdgeInsets.only(top: 2),
+                child: Icon(
+                  Icons.app_shortcut_rounded,
+                  size: 18,
+                  color: colorScheme.primary,
+                ),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'APP 图标',
+                      style: textTheme.labelLarge?.copyWith(
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                    const SizedBox(height: 3),
+                    Text(
+                      '切换后桌面图标可能有短暂刷新延迟。',
+                      style: textTheme.bodySmall?.copyWith(
+                        color: colorScheme.onSurfaceVariant,
+                        height: 1.3,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 8),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                decoration: BoxDecoration(
+                  color: colorScheme.secondaryContainer,
+                  borderRadius: BorderRadius.circular(999),
+                ),
+                child: Text(
+                  _currentIcon.label,
+                  style: textTheme.labelSmall?.copyWith(
+                    color: colorScheme.onSecondaryContainer,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: [
+              for (final icon in AppIconVariant.values)
+                ChoiceChip(
+                  label: Text(icon.label),
+                  selected: icon == _currentIcon,
+                  onSelected: _isUpdating ? null : (_) => _switchIcon(icon),
+                  showCheckmark: false,
+                ),
+            ],
+          ),
+          if (_isUpdating) ...[
+            const SizedBox(height: 8),
+            Row(
+              children: [
+                SizedBox(
+                  width: 14,
+                  height: 14,
+                  child: CircularProgressIndicator(
+                    strokeWidth: 2,
+                    color: colorScheme.primary,
+                  ),
+                ),
+                const SizedBox(width: 6),
+                Text(
+                  '正在切换图标...',
+                  style: textTheme.bodySmall?.copyWith(
+                    color: colorScheme.onSurfaceVariant,
+                  ),
+                ),
+              ],
+            ),
+          ],
+          if (_errorText case final message?) ...[
+            const SizedBox(height: 8),
+            Text(
+              message,
+              style: textTheme.bodySmall?.copyWith(color: colorScheme.error),
+            ),
+          ],
+        ],
+      ),
     );
   }
 }

@@ -37,7 +37,6 @@ class DiscoverPage extends StatefulWidget {
 }
 
 class _DiscoverPageState extends State<DiscoverPage> {
-  static const double _expandedBreakpoint = 840;
   static const int _bookPageSize = 24;
   static const int _compactCategoryPreviewCount = 8;
   static const int _compactCategoryColumns = 4;
@@ -147,18 +146,18 @@ class _DiscoverPageState extends State<DiscoverPage> {
             padding: EdgeInsets.fromLTRB(horizontal, 12, horizontal, 12),
             child: LayoutBuilder(
               builder: (context, constraints) {
-                if (constraints.maxWidth >= _expandedBreakpoint) {
+                if (AppLayout.isExpandedWidth(constraints.maxWidth)) {
                   return _buildWideLayout(
                     context,
-                    sidePanelWidth: 300,
-                    maxContentWidth: 980,
+                    sidePanelWidth: AppLayout.discoverExpandedSidePanelWidth,
+                    maxContentWidth: AppLayout.discoverExpandedContentMaxWidth,
                   );
                 }
                 if (constraints.maxWidth >= AppLayout.railBreakpointWidth) {
                   return _buildWideLayout(
                     context,
-                    sidePanelWidth: 250,
-                    maxContentWidth: 880,
+                    sidePanelWidth: AppLayout.discoverMediumSidePanelWidth,
+                    maxContentWidth: AppLayout.discoverMediumContentMaxWidth,
                   );
                 }
                 return _buildCompactLayout(context);
@@ -327,7 +326,9 @@ class _DiscoverPageState extends State<DiscoverPage> {
                 builder: (context, constraints) {
                   final hasSourceSwitcher = _discoverSources.length > 1;
                   final useCompactSwitcher =
-                      hasSourceSwitcher && constraints.maxWidth < 316;
+                      hasSourceSwitcher &&
+                      AppLayout.widthBucketFor(constraints.maxWidth) ==
+                          AppWidthBucket.compact;
 
                   if (!hasSourceSwitcher) {
                     return _buildSourceStatusPill(context, status);
@@ -534,7 +535,7 @@ class _DiscoverPageState extends State<DiscoverPage> {
             if (hiddenCount > 0) ...<Widget>[
               const SizedBox(height: 8),
               Text(
-                '还有 $hiddenCount 个分类，可点“全部”查看。',
+                '分类总数 ${actionableEntries.length}，已展示 $previewCount。',
                 style: Theme.of(context).textTheme.bodySmall?.copyWith(
                   color: Theme.of(context).colorScheme.onSurfaceVariant,
                 ),
@@ -560,11 +561,7 @@ class _DiscoverPageState extends State<DiscoverPage> {
         child: ChoiceChip(
           label: Text(item.title, maxLines: 1, overflow: TextOverflow.ellipsis),
           selected: isSelected,
-          showCheckmark: true,
-          checkmarkColor:
-              isSelected
-                  ? colorScheme.onSecondaryContainer
-                  : colorScheme.onSurfaceVariant,
+          showCheckmark: false,
           selectedColor: colorScheme.secondaryContainer,
           side: BorderSide(
             color:
@@ -1957,8 +1954,12 @@ class _SourcePickerSheetState extends State<_SourcePickerSheet> {
   Widget build(BuildContext context) {
     final filteredSources = _filteredSources;
     final horizontal = AppSpacing.pageHorizontal(context);
-    final height = MediaQuery.sizeOf(context).height;
-    final heightFactor = height < 700 ? 0.92 : 0.85;
+    final heightFactor = AppLayout.sheetHeightFactor(
+      context,
+      compact: 0.92,
+      regular: 0.9,
+      large: 0.85,
+    );
 
     return FractionallySizedBox(
       heightFactor: heightFactor,
@@ -2262,8 +2263,12 @@ class _CategoryPickerSheetState extends State<_CategoryPickerSheet> {
         .toList(growable: false);
 
     final horizontal = AppSpacing.pageHorizontal(context);
-    final height = MediaQuery.sizeOf(context).height;
-    final heightFactor = height < 700 ? 0.92 : 0.85;
+    final heightFactor = AppLayout.sheetHeightFactor(
+      context,
+      compact: 0.92,
+      regular: 0.9,
+      large: 0.85,
+    );
 
     return FractionallySizedBox(
       heightFactor: heightFactor,
@@ -2317,9 +2322,6 @@ class _CategoryPickerSheetState extends State<_CategoryPickerSheet> {
                               item.title,
                               maxLines: 1,
                               overflow: TextOverflow.ellipsis,
-                            ),
-                            subtitle: Text(
-                              _buildCategoryStyleHintText(item) ?? '可点击分类',
                             ),
                             trailing:
                                 selected

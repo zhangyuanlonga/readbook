@@ -53,8 +53,7 @@ class _ShellScaffoldState extends State<ShellScaffold> {
 
   @override
   Widget build(BuildContext context) {
-    final useNavigationRail =
-        MediaQuery.sizeOf(context).width >= AppLayout.railBreakpointWidth;
+    final useNavigationRail = AppLayout.isMediumUp(context);
     final enableTabSwipe = _enableMobileTabSwipe && !useNavigationRail;
 
     final shouldAnimateSwitch =

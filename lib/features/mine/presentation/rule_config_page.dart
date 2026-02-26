@@ -24,11 +24,11 @@ class RuleConfigPage extends StatelessWidget {
       child: Scaffold(
         appBar: AppBar(title: const Text('规则配置')),
         body: LayoutBuilder(
-          builder: (context, constraints) {
-            final maxWidth =
-                constraints.maxWidth >= AppLayout.railBreakpointWidth
-                    ? 760.0
-                    : constraints.maxWidth;
+          builder: (context, _) {
+            final maxWidth = AppLayout.pageContentMaxWidth(
+              context,
+              maxWidth: AppLayout.settingsContentMaxWidth,
+            );
 
             return Align(
               alignment: Alignment.topCenter,
