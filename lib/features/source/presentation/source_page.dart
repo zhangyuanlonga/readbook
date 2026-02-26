@@ -1,10 +1,12 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:io';
 import 'package:dio/dio.dart';
 import 'package:file_selector/file_selector.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
+import 'package:path_provider/path_provider.dart';
 
 import '../../../app/layout/app_layout.dart';
 import '../../../app/layout/app_spacing.dart';
@@ -43,6 +45,7 @@ class _SourcePageState extends State<SourcePage> {
   final Set<String> _testingSourceIds = <String>{};
   final Set<String> _changingEnabledSourceIds = <String>{};
   final Set<String> _deletingSourceIds = <String>{};
+  final Set<String> _exportingSourceIds = <String>{};
   final Set<String> _selectedSourceIds = <String>{};
   final Set<String> _expandedCommentSourceIds = <String>{};
   List<SourceListItem> _visibleSources = const <SourceListItem>[];
@@ -909,8 +912,9 @@ class _SourcePageState extends State<SourcePage> {
     final isTesting = _testingSourceIds.contains(source.id);
     final isChangingEnabled = _changingEnabledSourceIds.contains(source.id);
     final isDeleting = _deletingSourceIds.contains(source.id);
+    final isExporting = _exportingSourceIds.contains(source.id);
     final selected = _selectedSourceIds.contains(source.id);
-    final isActionLocked = _isBatchDeleting || isDeleting;
+    final isActionLocked = _isBatchDeleting || isDeleting || isExporting;
     final colorScheme = Theme.of(context).colorScheme;
     final hasComment = _hasSourceComment(source.comment);
     final isCommentExpanded = _expandedCommentSourceIds.contains(source.id);
@@ -958,6 +962,7 @@ class _SourcePageState extends State<SourcePage> {
                             isTesting: isTesting,
                             isChangingEnabled: isChangingEnabled,
                             isDeleting: isDeleting,
+                            isExporting: isExporting,
                             isActionLocked: isActionLocked,
                             status: source.lastCheckStatus,
                           ),
@@ -1131,10 +1136,12 @@ class _SourcePageState extends State<SourcePage> {
     required bool isTesting,
     required bool isChangingEnabled,
     required bool isDeleting,
+    required bool isExporting,
     required bool isActionLocked,
     required SourceHealthStatus status,
   }) {
-    final showProgress = isTesting || isChangingEnabled || isDeleting;
+    final showProgress =
+        isTesting || isChangingEnabled || isDeleting || isExporting;
 
     return Row(
       mainAxisSize: MainAxisSize.min,
@@ -1175,6 +1182,11 @@ class _SourcePageState extends State<SourcePage> {
                   ),
           itemBuilder:
               (context) => [
+                PopupMenuItem(
+                  value: _SourceAction.export,
+                  enabled: !isActionLocked,
+                  child: const Text('导出书源'),
+                ),
                 PopupMenuItem(
                   value: _SourceAction.test,
                   enabled: !isTesting && !isActionLocked,
@@ -1264,6 +1276,9 @@ class _SourcePageState extends State<SourcePage> {
     required bool isTesting,
   }) {
     switch (action) {
+      case _SourceAction.export:
+        unawaited(_exportSource(source));
+        return;
       case _SourceAction.test:
         if (!isTesting) {
           _runConnectivityTest(source);
@@ -1962,6 +1977,245 @@ class _SourcePageState extends State<SourcePage> {
     return AppDatabase.instance.getSourceById(sourceId);
   }
 
+  Future<void> _exportSource(SourceListItem source) async {
+    if (_exportingSourceIds.contains(source.id)) {
+      return;
+    }
+
+    setState(() {
+      _exportingSourceIds.add(source.id);
+    });
+
+    try {
+      final latestSource = await _getSourceById(source.id);
+      if (latestSource == null) {
+        _showMessage('书源不存在或已被删除。');
+        return;
+      }
+
+      final suggestedName =
+          '${_sanitizeFileToken(latestSource.name)}_${_timestampToken()}.json';
+      final outputPath = await _resolveSourceExportTargetPath(suggestedName);
+      if (outputPath == null || outputPath.trim().isEmpty) {
+        _showMessage('已取消导出。');
+        return;
+      }
+
+      final file = File(outputPath.trim());
+      if (!await file.parent.exists()) {
+        await file.parent.create(recursive: true);
+      }
+
+      final exportEntry = _buildSourceExportEntry(latestSource);
+      final content = const JsonEncoder.withIndent(
+        '  ',
+      ).convert(<Map<String, dynamic>>[exportEntry]);
+      await file.writeAsString(content, flush: true);
+
+      final hasOriginalSource =
+          latestSource.originalSource != null &&
+          latestSource.originalSource!.isNotEmpty;
+      if (hasOriginalSource) {
+        _showMessage('导出成功：${file.path}');
+      } else {
+        _showMessage('导出成功：${file.path}（已按兼容格式生成）');
+      }
+    } catch (error) {
+      _showMessage('导出失败：$error');
+    } finally {
+      if (mounted) {
+        setState(() {
+          _exportingSourceIds.remove(source.id);
+        });
+      }
+    }
+  }
+
+  Map<String, dynamic> _buildSourceExportEntry(SourceDefinition source) {
+    final original = source.originalSource;
+    if (original != null && original.isNotEmpty) {
+      return Map<String, dynamic>.from(original);
+    }
+    return _buildFallbackExportEntry(source);
+  }
+
+  Map<String, dynamic> _buildFallbackExportEntry(SourceDefinition source) {
+    final payload = <String, dynamic>{
+      'bookSourceName': source.name,
+      'bookSourceUrl': source.baseUrl,
+      'bookSourceType': source.sourceType,
+      'enabled': source.enabled,
+    };
+    final group = source.group?.trim();
+    if (group != null && group.isNotEmpty) {
+      payload['bookSourceGroup'] = group;
+    }
+    final comment = source.comment?.trim();
+    if (comment != null && comment.isNotEmpty) {
+      payload['bookSourceComment'] = comment;
+    }
+    if (source.headers.isNotEmpty) {
+      payload['header'] = source.headers;
+    }
+
+    final rules = source.rules;
+    _putStringIfNotBlank(payload, 'searchUrl', rules.searchRule);
+    _putStringIfNotBlank(payload, 'searchInitRule', rules.searchInitRule);
+    _putStringIfNotBlank(payload, 'ruleSearchList', rules.searchListRule);
+    _putStringIfNotBlank(payload, 'ruleSearchName', rules.searchTitleRule);
+    _putStringIfNotBlank(
+      payload,
+      'ruleSearchBookUrl',
+      rules.searchDetailUrlRule,
+    );
+    _putStringIfNotBlank(payload, 'ruleSearchAuthor', rules.searchAuthorRule);
+    _putStringIfNotBlank(payload, 'ruleSearchIntro', rules.searchIntroRule);
+    _putStringIfNotBlank(
+      payload,
+      'ruleSearchCoverUrl',
+      rules.searchCoverUrlRule,
+    );
+    _putStringIfNotBlank(
+      payload,
+      'ruleSearchLastChapter',
+      rules.searchLatestChapterRule,
+    );
+
+    _putStringIfNotBlank(payload, 'ruleBookInfo', rules.detailRule);
+    _putStringIfNotBlank(payload, 'detailInitRule', rules.detailInitRule);
+    _putStringIfNotBlank(payload, 'ruleBookName', rules.detailTitleRule);
+    _putStringIfNotBlank(payload, 'ruleBookAuthor', rules.detailAuthorRule);
+    _putStringIfNotBlank(payload, 'ruleBookIntro', rules.detailIntroRule);
+    _putStringIfNotBlank(payload, 'ruleCoverUrl', rules.detailCoverUrlRule);
+    _putStringIfNotBlank(payload, 'ruleTocUrl', rules.detailTocUrlRule);
+
+    _putStringIfNotBlank(payload, 'ruleToc', rules.tocRule);
+    _putStringIfNotBlank(payload, 'tocInitRule', rules.tocInitRule);
+    _putStringIfNotBlank(payload, 'ruleChapterList', rules.tocListRule);
+    _putStringIfNotBlank(payload, 'ruleChapterName', rules.tocTitleRule);
+    _putStringIfNotBlank(payload, 'ruleChapterUrl', rules.tocChapterUrlRule);
+    if (rules.tocReversed) {
+      payload['reverseToc'] = true;
+    }
+
+    _putStringIfNotBlank(payload, 'ruleContent', rules.contentRule);
+    _putStringIfNotBlank(payload, 'contentInitRule', rules.contentInitRule);
+    _putStringIfNotBlank(
+      payload,
+      'contentDecryptRule',
+      rules.contentDecryptRule,
+    );
+
+    final exploreUrl = source.exploreUrl?.trim();
+    if (exploreUrl != null && exploreUrl.isNotEmpty) {
+      payload['exploreUrl'] = exploreUrl;
+      payload['enabledExplore'] = source.exploreEnabled;
+    }
+    _putStringIfNotBlank(payload, 'exploreInitRule', rules.exploreInitRule);
+    _putStringIfNotBlank(payload, 'ruleExploreList', rules.exploreListRule);
+    _putStringIfNotBlank(payload, 'ruleExploreName', rules.exploreTitleRule);
+    _putStringIfNotBlank(
+      payload,
+      'ruleExploreBookUrl',
+      rules.exploreDetailUrlRule,
+    );
+    _putStringIfNotBlank(payload, 'ruleExploreAuthor', rules.exploreAuthorRule);
+    _putStringIfNotBlank(payload, 'ruleExploreIntro', rules.exploreIntroRule);
+    _putStringIfNotBlank(
+      payload,
+      'ruleExploreCoverUrl',
+      rules.exploreCoverUrlRule,
+    );
+    _putStringIfNotBlank(
+      payload,
+      'ruleExploreLastChapter',
+      rules.exploreLatestChapterRule,
+    );
+    _putStringIfNotBlank(payload, 'ruleExploreKind', rules.exploreKindRule);
+    _putStringIfNotBlank(
+      payload,
+      'ruleExploreWordCount',
+      rules.exploreWordCountRule,
+    );
+
+    return payload;
+  }
+
+  void _putStringIfNotBlank(
+    Map<String, dynamic> payload,
+    String key,
+    String? value,
+  ) {
+    final normalized = value?.trim();
+    if (normalized == null || normalized.isEmpty) {
+      return;
+    }
+    payload[key] = normalized;
+  }
+
+  Future<String?> _resolveSourceExportTargetPath(String suggestedName) async {
+    try {
+      final saveLocation = await getSaveLocation(
+        suggestedName: suggestedName,
+        confirmButtonText: '保存书源',
+        acceptedTypeGroups: const [
+          XTypeGroup(
+            label: 'JSON',
+            extensions: ['json'],
+            uniformTypeIdentifiers: ['public.json'],
+          ),
+        ],
+      );
+      if (saveLocation == null) {
+        return null;
+      }
+      return _normalizeJsonPath(saveLocation.path);
+    } catch (_) {
+      try {
+        final directoryPath = await getDirectoryPath(
+          confirmButtonText: '选择导出目录',
+        );
+        if (directoryPath == null || directoryPath.trim().isEmpty) {
+          return null;
+        }
+
+        _showMessage('保存文件窗口不可用，已切换为目录选择。');
+        return _joinPath(directoryPath.trim(), suggestedName);
+      } catch (_) {
+        final fallbackPath = await _buildFallbackExportPath(suggestedName);
+        _showMessage('路径选择不可用，已导出到应用文稿目录。');
+        return fallbackPath;
+      }
+    }
+  }
+
+  String _normalizeJsonPath(String rawPath) {
+    final value = rawPath.trim();
+    if (value.toLowerCase().endsWith('.json')) {
+      return value;
+    }
+    return '$value.json';
+  }
+
+  Future<String> _buildFallbackExportPath(String fileName) async {
+    final baseDirectory = await getApplicationDocumentsDirectory();
+    final exportDirectory = Directory(
+      _joinPath(baseDirectory.path, 'flutter_appread_exports'),
+    );
+    if (!await exportDirectory.exists()) {
+      await exportDirectory.create(recursive: true);
+    }
+    return _joinPath(exportDirectory.path, fileName);
+  }
+
+  String _joinPath(String left, String right) {
+    final separator = Platform.pathSeparator;
+    if (left.endsWith(separator)) {
+      return '$left$right';
+    }
+    return '$left$separator$right';
+  }
+
   Future<void> _showConnectivityResultDialog(
     SourceConnectivityTestReport report, {
     SourceCapabilityProfile? capability,
@@ -2076,6 +2330,28 @@ class _SourcePageState extends State<SourcePage> {
     final minute = local.minute.toString().padLeft(2, '0');
     final second = local.second.toString().padLeft(2, '0');
     return '$year-$month-$day $hour:$minute:$second';
+  }
+
+  String _timestampToken() {
+    final now = DateTime.now();
+    final year = now.year.toString().padLeft(4, '0');
+    final month = now.month.toString().padLeft(2, '0');
+    final day = now.day.toString().padLeft(2, '0');
+    final hour = now.hour.toString().padLeft(2, '0');
+    final minute = now.minute.toString().padLeft(2, '0');
+    final second = now.second.toString().padLeft(2, '0');
+    return '$year$month$day-$hour$minute$second';
+  }
+
+  String _sanitizeFileToken(String value) {
+    final sanitized = value
+        .trim()
+        .replaceAll(RegExp(r'[\\/:*?"<>|]'), '_')
+        .replaceAll(RegExp(r'\s+'), '_');
+    if (sanitized.isEmpty) {
+      return 'source';
+    }
+    return sanitized;
   }
 
   void _setImporting(bool value) {
@@ -2257,4 +2533,4 @@ class _SourceLoadingCard extends StatelessWidget {
 
 enum _ImportAction { paste, url, file, batchSample }
 
-enum _SourceAction { test, delete }
+enum _SourceAction { export, test, delete }

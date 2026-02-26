@@ -126,24 +126,14 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
   int _curlAutoDirection = 1;
   final Map<String, Uint8List> _backgroundPresetBytes = <String, Uint8List>{};
   final Map<String, String> _backgroundPresetBase64 = <String, String>{};
+  final List<_ReaderBackgroundPreset> _backgroundPresets =
+      <_ReaderBackgroundPreset>[];
 
-  static const List<_ReaderBackgroundPreset> _backgroundPresets = [
-    _ReaderBackgroundPreset(
-      label: '预设1',
-      assetPath: 'assets/reader/backgrounds/20260224-212555-700782.jpeg',
-    ),
-    _ReaderBackgroundPreset(
-      label: '预设2',
-      assetPath: 'assets/reader/backgrounds/20260224-212555-b91cd8.jpeg',
-    ),
-    _ReaderBackgroundPreset(
-      label: '预设3',
-      assetPath: 'assets/reader/backgrounds/20260224-212555-01b93d.jpeg',
-    ),
-    _ReaderBackgroundPreset(
-      label: '预设4',
-      assetPath: 'assets/reader/backgrounds/Image_1768236174407.jpg',
-    ),
+  static const List<String> _kFallbackBackgroundPresetPaths = [
+    'assets/reader/backgrounds/20260224-212555-700782.jpeg',
+    'assets/reader/backgrounds/20260224-212555-b91cd8.jpeg',
+    'assets/reader/backgrounds/20260224-212555-01b93d.jpeg',
+    'assets/reader/backgrounds/Image_1768236174407.jpg',
   ];
 
   static const double _kPinnedHeaderTopPadding = 6;
@@ -5304,6 +5294,22 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
   }
 
   Future<void> _ensureBackgroundPresetsReady() async {
+    if (_backgroundPresets.isEmpty) {
+      final discoveredPaths = await _loadBackgroundPresetAssetPaths();
+      final presetPaths =
+          discoveredPaths.isNotEmpty
+              ? discoveredPaths
+              : _kFallbackBackgroundPresetPaths;
+      for (var index = 0; index < presetPaths.length; index += 1) {
+        _backgroundPresets.add(
+          _ReaderBackgroundPreset(
+            label: '预设${index + 1}',
+            assetPath: presetPaths[index],
+          ),
+        );
+      }
+    }
+
     for (final preset in _backgroundPresets) {
       final path = preset.assetPath;
       if (_backgroundPresetBytes.containsKey(path) &&
@@ -5321,6 +5327,30 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
       } catch (error) {
         debugPrint('Load reader preset background failed: $path, $error');
       }
+    }
+  }
+
+  Future<List<String>> _loadBackgroundPresetAssetPaths() async {
+    try {
+      final rawManifest = await rootBundle.loadString('AssetManifest.json');
+      final decoded = jsonDecode(rawManifest);
+      if (decoded is! Map<String, dynamic>) {
+        return const <String>[];
+      }
+
+      final paths = decoded.keys
+          .where((path) => path.startsWith('assets/reader/backgrounds/'))
+          .where((path) {
+            final lowerPath = path.toLowerCase();
+            return lowerPath.endsWith('.jpg') ||
+                lowerPath.endsWith('.jpeg') ||
+                lowerPath.endsWith('.png') ||
+                lowerPath.endsWith('.webp');
+          })
+          .toList(growable: false);
+      return paths..sort();
+    } catch (_) {
+      return const <String>[];
     }
   }
 
