@@ -62,7 +62,6 @@ class _SourcePageState extends State<SourcePage> {
   String? _listErrorText;
   int _nextOffset = 0;
   int _totalCount = 0;
-  int _enabledCount = 0;
   int _totalImportedCount = 0;
   int _novelCount = 0;
   int _mangaCount = 0;
@@ -180,7 +179,6 @@ class _SourcePageState extends State<SourcePage> {
       setState(() {
         _visibleSources = page;
         _totalCount = summary.totalCount;
-        _enabledCount = overview.enabledCount;
         _totalImportedCount = overview.totalCount;
         _novelCount = overview.novelCount;
         _mangaCount = overview.mangaCount;
@@ -444,7 +442,6 @@ class _SourcePageState extends State<SourcePage> {
         if (index == 0) {
           return _buildOverviewCard(
             totalSourceCount: _totalImportedCount,
-            enabledCount: _enabledCount,
             novelCount: _novelCount,
             mangaCount: _mangaCount,
           );
@@ -666,12 +663,9 @@ class _SourcePageState extends State<SourcePage> {
 
   Widget _buildOverviewCard({
     required int totalSourceCount,
-    required int enabledCount,
     required int novelCount,
     required int mangaCount,
   }) {
-    final colorScheme = Theme.of(context).colorScheme;
-
     return Card(
       margin: const EdgeInsets.only(bottom: 8),
       shape: _buildOutlinedCardShape(context),
@@ -682,7 +676,10 @@ class _SourcePageState extends State<SourcePage> {
           children: [
             Row(
               children: [
-                Icon(Icons.storage_rounded, color: colorScheme.primary),
+                Icon(
+                  Icons.storage_rounded,
+                  color: Theme.of(context).colorScheme.primary,
+                ),
                 const SizedBox(width: 8),
                 Text(
                   '书源概览',
@@ -698,7 +695,6 @@ class _SourcePageState extends State<SourcePage> {
               runSpacing: 8,
               children: [
                 _buildOverviewChip('书源总数', '$totalSourceCount'),
-                _buildOverviewChip('启用', '$enabledCount'),
                 _buildOverviewChip('小说源', '$novelCount'),
                 _buildOverviewChip('漫画源', '$mangaCount'),
               ],
@@ -716,79 +712,70 @@ class _SourcePageState extends State<SourcePage> {
       shape: _buildOutlinedCardShape(context),
       margin: EdgeInsets.zero,
       child: Padding(
-        padding: const EdgeInsets.all(14),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
+        padding: const EdgeInsets.fromLTRB(4, 4, 4, 4),
+        child: Row(
           children: [
-            Row(
-              children: [
-                Icon(Icons.search_rounded, color: colorScheme.primary),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: Text(
-                    '书源搜索',
-                    style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                      fontWeight: FontWeight.w700,
-                    ),
-                  ),
+            Expanded(
+              child: Container(
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(14),
+                  border: Border.all(color: colorScheme.outline),
                 ),
-                IconButton(
-                  tooltip: '收起搜索',
-                  onPressed: _toggleSearchBar,
-                  icon: const Icon(Icons.expand_less_rounded),
-                ),
-              ],
-            ),
-            const SizedBox(height: 8),
-            Container(
-              decoration: BoxDecoration(
-                borderRadius: BorderRadius.circular(14),
-                border: Border.all(color: colorScheme.outline),
-              ),
-              child: TextField(
-                controller: _searchController,
-                focusNode: _searchFocusNode,
-                textInputAction: TextInputAction.search,
-                textAlignVertical: TextAlignVertical.center,
-                style: Theme.of(
-                  context,
-                ).textTheme.bodyMedium?.copyWith(fontSize: 13.5, height: 1.25),
-                decoration: InputDecoration(
-                  hintText: '例如：3A小说 / aaawz.cc / 小说',
-                  hintStyle: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                child: TextField(
+                  controller: _searchController,
+                  focusNode: _searchFocusNode,
+                  textInputAction: TextInputAction.search,
+                  textAlignVertical: TextAlignVertical.center,
+                  style: Theme.of(
+                    context,
+                  ).textTheme.bodyMedium?.copyWith(
                     fontSize: 13.5,
                     height: 1.25,
-                    color: colorScheme.onSurfaceVariant,
                   ),
-                  border: InputBorder.none,
-                  filled: false,
-                  isDense: true,
-                  prefixIcon: const Padding(
-                    padding: EdgeInsetsDirectional.only(start: 12, end: 6),
-                    child: Icon(Icons.search_rounded, size: 18),
+                  decoration: InputDecoration(
+                    hintText: '搜索书源名称或域名',
+                    hintStyle: Theme.of(
+                      context,
+                    ).textTheme.bodyMedium?.copyWith(
+                      fontSize: 13.5,
+                      height: 1.25,
+                      color: colorScheme.onSurfaceVariant,
+                    ),
+                    border: InputBorder.none,
+                    filled: false,
+                    isDense: true,
+                    prefixIcon: const Padding(
+                      padding: EdgeInsetsDirectional.only(start: 12, end: 6),
+                      child: Icon(Icons.search_rounded, size: 18),
+                    ),
+                    prefixIconConstraints: const BoxConstraints(
+                      minWidth: 0,
+                      minHeight: 0,
+                    ),
+                    contentPadding: const EdgeInsets.symmetric(
+                      horizontal: 10,
+                      vertical: 12,
+                    ),
+                    suffixIconConstraints: const BoxConstraints(
+                      minWidth: 36,
+                      minHeight: 36,
+                    ),
+                    suffixIcon:
+                        _searchKeyword.isEmpty
+                            ? null
+                            : IconButton(
+                              tooltip: '清空关键词',
+                              onPressed: () => _searchController.clear(),
+                              icon: const Icon(Icons.close_rounded, size: 18),
+                            ),
                   ),
-                  prefixIconConstraints: const BoxConstraints(
-                    minWidth: 0,
-                    minHeight: 0,
-                  ),
-                  contentPadding: const EdgeInsets.symmetric(
-                    horizontal: 10,
-                    vertical: 12,
-                  ),
-                  suffixIconConstraints: const BoxConstraints(
-                    minWidth: 36,
-                    minHeight: 36,
-                  ),
-                  suffixIcon:
-                      _searchKeyword.isEmpty
-                          ? null
-                          : IconButton(
-                            tooltip: '清空关键词',
-                            onPressed: () => _searchController.clear(),
-                            icon: const Icon(Icons.close_rounded, size: 18),
-                          ),
                 ),
               ),
+            ),
+            IconButton(
+              tooltip: '收起搜索',
+              onPressed: _toggleSearchBar,
+              icon: const Icon(Icons.expand_less_rounded),
             ),
           ],
         ),
@@ -909,7 +896,8 @@ class _SourcePageState extends State<SourcePage> {
   }
 
   Widget _buildSourceCard(SourceListItem source) {
-    final checkedAtText = _buildConnectivityTestTimeText(source);
+    final hasTestedTime = source.lastCheckStatus != SourceHealthStatus.unknown &&
+        source.lastCheckedAt != null;
     final isTesting = _testingSourceIds.contains(source.id);
     final isChangingEnabled = _changingEnabledSourceIds.contains(source.id);
     final isDeleting = _deletingSourceIds.contains(source.id);
@@ -965,65 +953,37 @@ class _SourcePageState extends State<SourcePage> {
                             isDeleting: isDeleting,
                             isExporting: isExporting,
                             isActionLocked: isActionLocked,
-                            status: source.lastCheckStatus,
                           ),
                       ],
                     ),
                     const SizedBox(height: 4),
-                    LayoutBuilder(
-                      builder: (context, constraints) {
-                        final secondaryTextStyle = Theme.of(context)
-                            .textTheme
-                            .bodySmall
-                            ?.copyWith(color: colorScheme.onSurfaceVariant);
-                        final checkedAtTextStyle = Theme.of(
-                          context,
-                        ).textTheme.labelSmall?.copyWith(
-                          color: colorScheme.onSurfaceVariant,
-                          fontWeight: FontWeight.w600,
-                        );
-                        final secondary = Text(
+                    Wrap(
+                      spacing: 6,
+                      runSpacing: 4,
+                      crossAxisAlignment: WrapCrossAlignment.center,
+                      children: [
+                        _buildHealthStatusPill(source.lastCheckStatus),
+                        Text(
                           _buildSourceSecondaryLine(source),
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
-                          style: secondaryTextStyle,
-                        );
-                        final checked = Text(
-                          '测试时间: $checkedAtText',
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: checkedAtTextStyle,
-                        );
-
-                        if (constraints.maxWidth <
-                            AppLayout.compactContentWidth) {
-                          return Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              secondary,
-                              const SizedBox(height: 2),
-                              checked,
-                            ],
-                          );
-                        }
-
-                        return Row(
-                          children: [
-                            Expanded(child: secondary),
-                            const SizedBox(width: 8),
-                            ConstrainedBox(
-                              constraints: BoxConstraints(
-                                maxWidth: constraints.maxWidth * 0.45,
-                              ),
-                              child: Align(
-                                alignment: Alignment.centerRight,
-                                child: checked,
-                              ),
-                            ),
-                          ],
-                        );
-                      },
+                          style: Theme.of(context).textTheme.bodySmall
+                              ?.copyWith(color: colorScheme.onSurfaceVariant),
+                        ),
+                      ],
                     ),
+                    if (hasTestedTime) ...[
+                      const SizedBox(height: 2),
+                      Text(
+                        '测试时间: ${_buildConnectivityTestTimeText(source)}',
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                          color: colorScheme.onSurfaceVariant,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ],
                     if (hasComment) ...[
                       const SizedBox(height: 3),
                       InkWell(
@@ -1139,7 +1099,6 @@ class _SourcePageState extends State<SourcePage> {
     required bool isDeleting,
     required bool isExporting,
     required bool isActionLocked,
-    required SourceHealthStatus status,
   }) {
     final showProgress =
         isTesting || isChangingEnabled || isDeleting || isExporting;
@@ -1147,8 +1106,6 @@ class _SourcePageState extends State<SourcePage> {
     return Row(
       mainAxisSize: MainAxisSize.min,
       children: [
-        _buildHealthStatusDot(status),
-        const SizedBox(width: 6),
         if (showProgress)
           const Padding(
             padding: EdgeInsets.only(right: 4),
@@ -1204,7 +1161,7 @@ class _SourcePageState extends State<SourcePage> {
     );
   }
 
-  Widget _buildHealthStatusDot(SourceHealthStatus status) {
+  Widget _buildHealthStatusPill(SourceHealthStatus status) {
     final colorScheme = Theme.of(context).colorScheme;
 
     final color = switch (status) {
@@ -1222,12 +1179,33 @@ class _SourcePageState extends State<SourcePage> {
       SourceHealthStatus.unknown => '未测',
     };
 
-    return Tooltip(
-      message: '测试状态: $label',
-      child: Container(
-        width: 8,
-        height: 8,
-        decoration: BoxDecoration(color: color, shape: BoxShape.circle),
+    final icon = switch (status) {
+      SourceHealthStatus.healthy => Icons.check_circle_rounded,
+      SourceHealthStatus.degraded ||
+      SourceHealthStatus.unavailable => Icons.error_outline_rounded,
+      SourceHealthStatus.unknown => Icons.help_outline_rounded,
+    };
+
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.14),
+        borderRadius: BorderRadius.circular(999),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(icon, size: 12, color: color),
+            const SizedBox(width: 3),
+            Text(
+              label,
+              style: Theme.of(
+                context,
+              ).textTheme.labelSmall?.copyWith(color: color),
+            ),
+          ],
+        ),
       ),
     );
   }
