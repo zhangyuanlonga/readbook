@@ -39,7 +39,6 @@ class DiscoverPage extends StatefulWidget {
 class _DiscoverPageState extends State<DiscoverPage> {
   static const int _bookPageSize = 24;
   static const int _compactCategoryPreviewCount = 8;
-  static const int _compactCategoryColumns = 4;
   static const int _backgroundProbeBatchLimit = 60;
   static const Set<PointerDeviceKind> _dragDevices = <PointerDeviceKind>{
     PointerDeviceKind.touch,
@@ -271,23 +270,30 @@ class _DiscoverPageState extends State<DiscoverPage> {
     final categoryName = _selectedCategory?.title ?? '未选分类';
     final status = _resolveSourceStatus(source?.id);
     final statusDetail = _sourceStatusDetail(source?.id);
+    final colorScheme = Theme.of(context).colorScheme;
+    final textTheme = Theme.of(context).textTheme;
+    final hasMultipleSources = _discoverSources.length > 1;
 
     return Card(
       child: Padding(
-        padding: const EdgeInsets.fromLTRB(12, 10, 12, 10),
+        padding: const EdgeInsets.fromLTRB(12, 10, 12, 12),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: <Widget>[
+            // -- Row 1: status pill + switch button --
             Row(
               children: <Widget>[
-                Expanded(
-                  child: Text(
+                if (source != null)
+                  _buildSourceStatusPill(context, status)
+                else
+                  Text(
                     '当前书源',
-                    style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                    style: textTheme.labelLarge?.copyWith(
                       fontWeight: FontWeight.w700,
+                      color: colorScheme.onSurfaceVariant,
                     ),
                   ),
-                ),
+                const Spacer(),
                 TextButton.icon(
                   onPressed:
                       _isLoadingSources || _discoverSources.isEmpty
@@ -298,148 +304,106 @@ class _DiscoverPageState extends State<DiscoverPage> {
                 ),
               ],
             ),
-            const SizedBox(height: 4),
+
+            // -- Loading indicator --
             if (_isLoadingSources) ...<Widget>[
               const LinearProgressIndicator(minHeight: 2),
               const SizedBox(height: 6),
             ],
+
+            // -- Row 2: source name (prominent) --
             Text(
               source?.name ?? '未选择书源',
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
-              style: Theme.of(
-                context,
-              ).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w700),
+              style: textTheme.titleMedium?.copyWith(
+                fontWeight: FontWeight.w700,
+              ),
             ),
             const SizedBox(height: 2),
+
+            // -- Row 3: source summary (group · host) --
             Text(
               summary,
-              maxLines: 2,
+              maxLines: 1,
               overflow: TextOverflow.ellipsis,
-              style: Theme.of(context).textTheme.labelLarge?.copyWith(
-                color: Theme.of(context).colorScheme.onSurfaceVariant,
+              style: textTheme.labelLarge?.copyWith(
+                color: colorScheme.onSurfaceVariant,
               ),
             ),
-            if (source != null) ...<Widget>[
-              const SizedBox(height: 6),
-              LayoutBuilder(
-                builder: (context, constraints) {
-                  final hasSourceSwitcher = _discoverSources.length > 1;
-                  final useCompactSwitcher =
-                      hasSourceSwitcher &&
-                      AppLayout.widthBucketFor(constraints.maxWidth) ==
-                          AppWidthBucket.compact;
 
-                  if (!hasSourceSwitcher) {
-                    return _buildSourceStatusPill(context, status);
-                  }
-
-                  if (useCompactSwitcher) {
-                    return Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: <Widget>[
-                        _buildSourceStatusPill(context, status),
-                        const SizedBox(height: 8),
-                        Row(
-                          children: <Widget>[
-                            Expanded(
-                              child: _buildSourceSwitchButton(
-                                key: const Key('discover_prev_source'),
-                                icon: Icons.chevron_left_rounded,
-                                label: '上一源',
-                                compact: true,
-                                onPressed: () => _switchSourceByOffset(-1),
-                              ),
-                            ),
-                            const SizedBox(width: 8),
-                            Expanded(
-                              child: _buildSourceSwitchButton(
-                                key: const Key('discover_next_source'),
-                                icon: Icons.chevron_right_rounded,
-                                label: '下一源',
-                                compact: true,
-                                onPressed: () => _switchSourceByOffset(1),
-                              ),
-                            ),
-                          ],
-                        ),
-                      ],
-                    );
-                  }
-
-                  return Wrap(
-                    spacing: 8,
-                    runSpacing: 8,
-                    crossAxisAlignment: WrapCrossAlignment.center,
-                    children: <Widget>[
-                      _buildSourceStatusPill(context, status),
-                      _buildSourceSwitchButton(
-                        key: const Key('discover_prev_source'),
-                        icon: Icons.chevron_left_rounded,
-                        label: '上一源',
-                        onPressed: () => _switchSourceByOffset(-1),
-                      ),
-                      _buildSourceSwitchButton(
-                        key: const Key('discover_next_source'),
-                        icon: Icons.chevron_right_rounded,
-                        label: '下一源',
-                        onPressed: () => _switchSourceByOffset(1),
-                      ),
-                    ],
-                  );
-                },
-              ),
-            ],
+            // -- Error detail --
             if (source != null && statusDetail != null) ...<Widget>[
               const SizedBox(height: 4),
               Text(
                 statusDetail,
                 maxLines: 2,
                 overflow: TextOverflow.ellipsis,
-                style: Theme.of(context).textTheme.labelMedium?.copyWith(
+                style: textTheme.labelMedium?.copyWith(
                   color: _sourceStatusColor(context, status),
                 ),
               ),
-              if (_discoverSources.length > 1 &&
+              if (hasMultipleSources &&
                   status == _SourceRuntimeStatus.parseFailed) ...<Widget>[
-                const SizedBox(height: 4),
+                const SizedBox(height: 2),
                 TextButton.icon(
                   onPressed: _switchToNextHealthySource,
-                  icon: const Icon(Icons.skip_next_rounded),
+                  icon: const Icon(Icons.skip_next_rounded, size: 18),
                   label: const Text('切换到下一个可用源'),
                 ),
               ],
             ],
+
+            // -- Context summary box --
             if (source != null) ...<Widget>[
-              const SizedBox(height: 6),
+              const SizedBox(height: 8),
               Container(
                 width: double.infinity,
                 padding: const EdgeInsets.symmetric(
                   horizontal: 10,
-                  vertical: 8,
+                  vertical: 7,
                 ),
                 decoration: BoxDecoration(
-                  color: Theme.of(context).colorScheme.surfaceContainerHigh,
+                  color: colorScheme.surfaceContainerHigh,
                   borderRadius: BorderRadius.circular(10),
                 ),
                 child: Text(
-                  _buildSourceContextSummary(categoryName: categoryName),
-                  maxLines: 2,
+                  '分类：$categoryName · 书籍：${_books.length}',
+                  maxLines: 1,
                   overflow: TextOverflow.ellipsis,
-                  style: Theme.of(context).textTheme.labelLarge?.copyWith(
-                    color: Theme.of(context).colorScheme.onSurfaceVariant,
+                  style: textTheme.labelLarge?.copyWith(
+                    color: colorScheme.onSurfaceVariant,
                     height: 1.3,
                   ),
                 ),
               ),
             ],
-            if (_enabledSourceCount > 0) ...<Widget>[
-              const SizedBox(height: 6),
-              Text(
-                '已启用书源：$_enabledSourceCount · 支持发现：$_discoverCapableCount',
-                style: Theme.of(context).textTheme.labelMedium?.copyWith(
-                  color: Theme.of(context).colorScheme.onSurfaceVariant,
-                ),
+
+            // -- Source switcher buttons (fixed bottom) --
+            if (source != null && hasMultipleSources) ...<Widget>[
+              const SizedBox(height: 8),
+              Row(
+                children: <Widget>[
+                  Expanded(
+                    child: _buildSourceSwitchButton(
+                      key: const Key('discover_prev_source'),
+                      icon: Icons.chevron_left_rounded,
+                      label: '上一源',
+                      compact: true,
+                      onPressed: () => _switchSourceByOffset(-1),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: _buildSourceSwitchButton(
+                      key: const Key('discover_next_source'),
+                      icon: Icons.chevron_right_rounded,
+                      label: '下一源',
+                      compact: true,
+                      onPressed: () => _switchSourceByOffset(1),
+                    ),
+                  ),
+                ],
               ),
             ],
           ],
@@ -482,7 +446,6 @@ class _DiscoverPageState extends State<DiscoverPage> {
       actionableEntries.length,
       _compactCategoryPreviewCount,
     );
-    final hiddenCount = actionableEntries.length - previewCount;
     return Card(
       child: Padding(
         padding: const EdgeInsets.fromLTRB(12, 10, 12, 12),
@@ -507,40 +470,21 @@ class _DiscoverPageState extends State<DiscoverPage> {
               ],
             ),
             const SizedBox(height: 6),
-            LayoutBuilder(
-              builder: (context, constraints) {
-                const spacing = 8.0;
-                final availableWidth = constraints.maxWidth;
-                final itemWidth =
-                    (availableWidth - (_compactCategoryColumns - 1) * spacing) /
-                    _compactCategoryColumns;
-
-                return Wrap(
-                  spacing: spacing,
-                  runSpacing: spacing,
-                  children: <Widget>[
-                    for (var index = 0; index < previewCount; index++)
-                      SizedBox(
-                        width: itemWidth,
-                        child: _buildCategoryChip(
-                          context,
-                          actionableEntries[index].key,
-                          actionableEntries[index].value,
-                        ),
-                      ),
+            SingleChildScrollView(
+              scrollDirection: Axis.horizontal,
+              child: Row(
+                children: <Widget>[
+                  for (var index = 0; index < previewCount; index++) ...<Widget>[
+                    if (index > 0) const SizedBox(width: 8),
+                    _buildCategoryChip(
+                      context,
+                      actionableEntries[index].key,
+                      actionableEntries[index].value,
+                    ),
                   ],
-                );
-              },
-            ),
-            if (hiddenCount > 0) ...<Widget>[
-              const SizedBox(height: 8),
-              Text(
-                '分类总数 ${actionableEntries.length}，已展示 $previewCount。',
-                style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                  color: Theme.of(context).colorScheme.onSurfaceVariant,
-                ),
+                ],
               ),
-            ],
+            ),
           ],
         ),
       ),
@@ -1738,15 +1682,6 @@ class _DiscoverPageState extends State<DiscoverPage> {
     );
   }
 
-  String _buildSourceContextSummary({required String categoryName}) {
-    final segments = <String>[
-      '分类：$categoryName',
-      '书籍：${_books.length}',
-      if (_hasMore) '下一页：$_nextPage',
-    ];
-    return segments.join('  ·  ');
-  }
-
   IconData _sourceStatusIcon(_SourceRuntimeStatus status) {
     switch (status) {
       case _SourceRuntimeStatus.ready:
@@ -1969,11 +1904,25 @@ class _SourcePickerSheetState extends State<_SourcePickerSheet> {
           children: <Widget>[
             Align(
               alignment: Alignment.centerLeft,
-              child: Text(
-                '切换发现书源',
-                style: Theme.of(
-                  context,
-                ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: <Widget>[
+                  Text(
+                    '切换发现书源',
+                    style: Theme.of(
+                      context,
+                    ).textTheme.titleMedium?.copyWith(
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    '共 ${widget.sources.length} 个发现书源',
+                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                      color: Theme.of(context).colorScheme.onSurfaceVariant,
+                    ),
+                  ),
+                ],
               ),
             ),
             const SizedBox(height: 8),
@@ -2011,61 +1960,81 @@ class _SourcePickerSheetState extends State<_SourcePickerSheet> {
                             parseErrorBySourceId: widget.parseErrorBySourceId,
                             bookErrorBySourceId: widget.bookErrorBySourceId,
                           );
-                          final statusDetail =
-                              _resolveSourceRuntimeStatusDetail(
-                                sourceId: source.id,
-                                parseErrorBySourceId:
-                                    widget.parseErrorBySourceId,
-                                bookErrorBySourceId: widget.bookErrorBySourceId,
-                              );
                           final statusColor = _sourceStatusColor(
                             context,
                             status,
                           );
                           return ListTile(
                             onTap: () => Navigator.of(context).pop(source),
-                            leading: const Icon(Icons.storage_outlined),
-                            title: Text(
-                              source.name,
+                            selected: selected,
+                            selectedTileColor: Theme.of(
+                              context,
+                            ).colorScheme.secondaryContainer.withValues(
+                              alpha: 0.5,
+                            ),
+                            title: Row(
+                              children: <Widget>[
+                                Expanded(
+                                  child: Text(
+                                    source.name,
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: selected
+                                        ? Theme.of(
+                                            context,
+                                          ).textTheme.bodyLarge?.copyWith(
+                                            fontWeight: FontWeight.w700,
+                                          )
+                                        : null,
+                                  ),
+                                ),
+                                const SizedBox(width: 8),
+                                DecoratedBox(
+                                  decoration: BoxDecoration(
+                                    color: statusColor.withValues(alpha: 0.14),
+                                    borderRadius: BorderRadius.circular(999),
+                                  ),
+                                  child: Padding(
+                                    padding: const EdgeInsets.symmetric(
+                                      horizontal: 7,
+                                      vertical: 3,
+                                    ),
+                                    child: Row(
+                                      mainAxisSize: MainAxisSize.min,
+                                      children: <Widget>[
+                                        Icon(
+                                          _sourceStatusIcon(status),
+                                          size: 12,
+                                          color: statusColor,
+                                        ),
+                                        const SizedBox(width: 3),
+                                        Text(
+                                          _sourceStatusLabel(status),
+                                          style: Theme.of(
+                                            context,
+                                          ).textTheme.labelSmall?.copyWith(
+                                            color: statusColor,
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                            subtitle: Text(
+                              _buildSourceSummary(source),
                               maxLines: 1,
                               overflow: TextOverflow.ellipsis,
                             ),
-                            subtitle: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              mainAxisSize: MainAxisSize.min,
-                              children: <Widget>[
-                                Text(
-                                  _buildSourceSummary(source),
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
-                                ),
-                                Text(
-                                  statusDetail ?? _sourceStatusLabel(status),
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
-                                  style: Theme.of(context).textTheme.bodySmall
-                                      ?.copyWith(color: statusColor),
-                                ),
-                              ],
-                            ),
-                            trailing: Row(
-                              mainAxisSize: MainAxisSize.min,
-                              children: <Widget>[
-                                Icon(
-                                  _sourceStatusIcon(status),
-                                  color: statusColor,
-                                  size: 18,
-                                ),
-                                if (selected) ...<Widget>[
-                                  const SizedBox(width: 8),
-                                  Icon(
-                                    Icons.check_circle_rounded,
-                                    color:
-                                        Theme.of(context).colorScheme.primary,
-                                  ),
-                                ],
-                              ],
-                            ),
+                            trailing:
+                                selected
+                                    ? Icon(
+                                      Icons.check_circle_rounded,
+                                      color:
+                                          Theme.of(context).colorScheme.primary,
+                                    )
+                                    : null,
                           );
                         },
                       ),
@@ -2111,25 +2080,6 @@ _SourceRuntimeStatus _resolveSourceRuntimeStatus({
     return _SourceRuntimeStatus.requestFailed;
   }
   return _SourceRuntimeStatus.ready;
-}
-
-String? _resolveSourceRuntimeStatusDetail({
-  required String sourceId,
-  required Map<String, String> parseErrorBySourceId,
-  required Map<String, String> bookErrorBySourceId,
-}) {
-  if (sourceId.isEmpty) {
-    return null;
-  }
-  final parseError = parseErrorBySourceId[sourceId];
-  if (parseError != null && parseError.isNotEmpty) {
-    return parseError;
-  }
-  final bookError = bookErrorBySourceId[sourceId];
-  if (bookError != null && bookError.isNotEmpty) {
-    return bookError;
-  }
-  return null;
 }
 
 int _sourceStatusRank(_SourceRuntimeStatus status) {
@@ -2278,11 +2228,25 @@ class _CategoryPickerSheetState extends State<_CategoryPickerSheet> {
           children: <Widget>[
             Align(
               alignment: Alignment.centerLeft,
-              child: Text(
-                '选择分类',
-                style: Theme.of(
-                  context,
-                ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: <Widget>[
+                  Text(
+                    '选择分类',
+                    style: Theme.of(
+                      context,
+                    ).textTheme.titleMedium?.copyWith(
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    '共 ${indexed.length} 个可用分类',
+                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                      color: Theme.of(context).colorScheme.onSurfaceVariant,
+                    ),
+                  ),
+                ],
               ),
             ),
             const SizedBox(height: 8),
@@ -2318,10 +2282,23 @@ class _CategoryPickerSheetState extends State<_CategoryPickerSheet> {
 
                           return ListTile(
                             onTap: () => Navigator.of(context).pop(index),
+                            selected: selected,
+                            selectedTileColor: Theme.of(
+                              context,
+                            ).colorScheme.secondaryContainer.withValues(
+                              alpha: 0.5,
+                            ),
                             title: Text(
                               item.title,
                               maxLines: 1,
                               overflow: TextOverflow.ellipsis,
+                              style: selected
+                                  ? Theme.of(
+                                      context,
+                                    ).textTheme.bodyLarge?.copyWith(
+                                      fontWeight: FontWeight.w700,
+                                    )
+                                  : null,
                             ),
                             trailing:
                                 selected
