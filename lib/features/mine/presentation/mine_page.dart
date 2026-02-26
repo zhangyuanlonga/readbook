@@ -17,6 +17,8 @@ class MinePage extends ConsumerStatefulWidget {
 }
 
 class _MinePageState extends ConsumerState<MinePage> {
+  String? _highlightedTileId;
+
   static final Uri _sourceFeedbackUri = Uri.parse(
     'https://qun.qq.com/universal-share/share?ac=1&authKey=Tabvg05EAafVbER7E8%2BzAQ18yErg2a%2B5PoqQH41t6dbPjcZIfDSnNX%2F4KCAXhzVh&busi_data=eyJncm91cENvZGUiOiIxMDgyODI3MjI0IiwidG9rZW4iOiIzam5tVFQ0cUs1T3VlMytzVk9iOXB1Zk40Q1RaUXJiQytzd2JlZUx3NDhXQTJscy9ZZGE5WW1hQXhPdGFwMHU1IiwidWluIjoiNzgyMDQ1MDExIn0%3D&data=PHNA5IOU4A3ujR5i9rmpWqWn4Qc-L9MNr8ByREa7IfvpXTo1utwnHVIfjkB7Rlk4x3yE9dfMR5_ZjOfsQ9wYcA&svctype=4&tempid=h5_group_info',
   );
@@ -58,7 +60,7 @@ class _MinePageState extends ConsumerState<MinePage> {
         builder: (context, constraints) {
           final maxWidth =
               constraints.maxWidth >= AppLayout.railBreakpointWidth
-                  ? 760.0
+                  ? 700.0
                   : constraints.maxWidth;
 
           return Align(
@@ -73,75 +75,87 @@ class _MinePageState extends ConsumerState<MinePage> {
                   12 + bottomSafe,
                 ),
                 children: [
-                  _buildProfileCard(
-                    context,
-                    subtitle: '后续会持续补充系统设置、规则工具与同步能力。',
+                  _buildPageEntrance(
+                    index: 0,
+                    child: _buildProfileCard(
+                      context,
+                      subtitle: '后续会持续补充系统设置、规则工具与同步能力。',
+                    ),
                   ),
-                  const SizedBox(height: 10),
-                  _buildActionSection(
-                    context,
-                    title: '设置',
-                    actions: [
-                      _MineActionItem(
-                        icon: Icons.card_membership_outlined,
-                        label: '会员',
-                        onTap: () => _showMessage('会员功能开发中。'),
-                      ),
-                      _MineActionItem(
-                        icon: Icons.settings_outlined,
-                        label: '主题设置',
-                        badgeText: _themeModeLabel(themeMode),
-                        colorDot: seedColor,
-                        onTap:
-                            () => _showThemeSettingsSheet(
-                              context: context,
-                              ref: ref,
-                            ),
-                      ),
-                      _MineActionItem(
-                        icon: Icons.menu_book_outlined,
-                        label: '阅读设置',
-                        onTap: () => context.push('/reader-settings'),
-                      ),
-                      _MineActionItem(
-                        icon: Icons.tune_rounded,
-                        label: '系统设置',
-                        onTap: () => context.push('/system-settings'),
-                      ),
-                    ],
+                  const SizedBox(height: 12),
+                  _buildPageEntrance(
+                    index: 1,
+                    child: _buildActionSection(
+                      context,
+                      title: '设置',
+                      actions: [
+                        _MineActionItem(
+                          icon: Icons.card_membership_outlined,
+                          label: '会员',
+                          onTap: () => _showMessage('会员功能开发中。'),
+                        ),
+                        _MineActionItem(
+                          icon: Icons.settings_outlined,
+                          label: '主题设置',
+                          badgeText: _themeModeLabel(themeMode),
+                          colorDot: seedColor,
+                          onTap:
+                              () => _showThemeSettingsSheet(
+                                context: context,
+                                ref: ref,
+                              ),
+                        ),
+                        _MineActionItem(
+                          icon: Icons.menu_book_outlined,
+                          label: '阅读设置',
+                          onTap: () => context.push('/reader-settings'),
+                        ),
+                        _MineActionItem(
+                          icon: Icons.tune_rounded,
+                          label: '系统设置',
+                          onTap: () => context.push('/system-settings'),
+                        ),
+                      ],
+                    ),
                   ),
-                  const SizedBox(height: 10),
-                  _buildActionSection(
-                    context,
-                    title: '常用服务',
-                    actions: _resolveCommonServiceActions(context),
+                  const SizedBox(height: 12),
+                  _buildPageEntrance(
+                    index: 2,
+                    child: _buildActionSection(
+                      context,
+                      title: '常用服务',
+                      actions: _resolveCommonServiceActions(context),
+                    ),
                   ),
-                  const SizedBox(height: 10),
-                  _buildActionSection(
-                    context,
-                    title: '其他',
-                    actions: [
-                      _MineActionItem(
-                        icon: Icons.quiz_outlined,
-                        label: '常见问题',
-                        onTap: () => _showMessage('常见问题整理中。'),
-                      ),
-                      _MineActionItem(
-                        icon: Icons.feedback_outlined,
-                        label: '反馈',
-                        onTap: _openSourceFeedback,
-                      ),
-                      _MineActionItem(
-                        icon: Icons.share_outlined,
-                        label: '分享',
-                        onTap: () => _showMessage('分享能力开发中。'),
-                      ),
-                      _MineActionItem(
-                        icon: Icons.info_outline,
-                        label: '关于',
-                        onTap: () => context.push('/about'),
-                      ),
-                    ],
+                  const SizedBox(height: 12),
+                  _buildPageEntrance(
+                    index: 3,
+                    child: _buildActionSection(
+                      context,
+                      title: '其他',
+                      actions: [
+                        _MineActionItem(
+                          icon: Icons.quiz_outlined,
+                          label: '常见问题',
+                          onTap: () => _showMessage('常见问题整理中。'),
+                        ),
+                        _MineActionItem(
+                          icon: Icons.feedback_outlined,
+                          label: '反馈',
+                          onTap: _openSourceFeedback,
+                        ),
+                        _MineActionItem(
+                          icon: Icons.share_outlined,
+                          label: '分享',
+                          onTap: () => _showMessage('分享能力开发中。'),
+                        ),
+                        _MineActionItem(
+                          icon: Icons.info_outline,
+                          label: '关于',
+                          onTap: () => context.push('/about'),
+                        ),
+                      ],
+                    ),
                   ),
                 ],
               ),
@@ -207,7 +221,7 @@ class _MinePageState extends ConsumerState<MinePage> {
 
     return Card(
       child: Padding(
-        padding: const EdgeInsets.fromLTRB(10, 8, 10, 10),
+        padding: const EdgeInsets.fromLTRB(12, 10, 12, 12),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
@@ -224,23 +238,21 @@ class _MinePageState extends ConsumerState<MinePage> {
                 if (trailing != null) trailing,
               ],
             ),
-            const SizedBox(height: 6),
+            const SizedBox(height: 8),
             LayoutBuilder(
               builder: (context, constraints) {
-                final columns = _resolveGridColumns(constraints.maxWidth);
-                final itemHeight =
-                    columns <= 3
-                        ? 84.0
-                        : columns == 4
-                        ? 78.0
-                        : 74.0;
-                final crossSpacing = columns >= 5 ? 8.0 : 6.0;
-                final mainSpacing = columns >= 5 ? 8.0 : 6.0;
-                final totalSpacing = crossSpacing * (columns - 1);
-                final itemWidth = ((constraints.maxWidth - totalSpacing) /
-                        columns)
-                    .clamp(64.0, 240.0);
-                final childAspectRatio = itemWidth / itemHeight;
+                final columns = _resolveGridColumns(
+                  width: constraints.maxWidth,
+                  itemCount: actions.length,
+                );
+                final denseGrid = columns >= 4;
+                final crossSpacing = denseGrid ? 8.0 : 10.0;
+                final mainSpacing = denseGrid ? 8.0 : 10.0;
+                final mainAxisExtent = switch (columns) {
+                  >= 4 => 88.0,
+                  3 => 98.0,
+                  _ => 106.0,
+                };
 
                 return GridView.builder(
                   shrinkWrap: true,
@@ -250,15 +262,23 @@ class _MinePageState extends ConsumerState<MinePage> {
                     crossAxisCount: columns,
                     crossAxisSpacing: crossSpacing,
                     mainAxisSpacing: mainSpacing,
-                    childAspectRatio: childAspectRatio,
+                    mainAxisExtent: mainAxisExtent,
                   ),
                   itemBuilder: (context, index) {
                     final item = actions[index];
-                    return _buildActionTile(
-                      context,
-                      item: item,
-                      borderColor: colorScheme.outlineVariant.withValues(
-                        alpha: 0.36,
+                    final tileId = 'mine_${title}_$index';
+                    return _buildGridEntrance(
+                      section: title,
+                      index: index,
+                      child: _buildActionTile(
+                        context,
+                        item: item,
+                        denseGrid: denseGrid,
+                        tileId: tileId,
+                        highlighted: _highlightedTileId == tileId,
+                        borderColor: colorScheme.outlineVariant.withValues(
+                          alpha: denseGrid ? 0.24 : 0.34,
+                        ),
                       ),
                     );
                   },
@@ -271,102 +291,230 @@ class _MinePageState extends ConsumerState<MinePage> {
     );
   }
 
-  int _resolveGridColumns(double width) {
-    if (width < AppLayout.compactContentWidth) {
-      return 3;
+  int _resolveGridColumns({required double width, required int itemCount}) {
+    if (itemCount <= 1) {
+      return 1;
     }
-    if (width < AppLayout.railBreakpointWidth) {
+
+    if (itemCount == 4) {
+      // Keep 4 columns on common phone widths; only downgrade on extra narrow widths.
+      if (width < 250) {
+        return 2;
+      }
       return 4;
     }
-    if (width < 840) {
-      return 5;
+    if (itemCount == 3 && width < AppLayout.compactContentWidth) {
+      return 3;
     }
-    return 6;
+
+    final base = switch (width) {
+      < 340 => 3,
+      < 600 => 4,
+      < 840 => 5,
+      _ => 6,
+    };
+    return base.clamp(1, itemCount);
   }
 
   Widget _buildActionTile(
     BuildContext context, {
     required _MineActionItem item,
+    required bool denseGrid,
+    required String tileId,
+    required bool highlighted,
     required Color borderColor,
   }) {
     final theme = Theme.of(context);
     final colorScheme = theme.colorScheme;
+    final iconSize = denseGrid ? 30.0 : 34.0;
+    final iconGlyphSize = denseGrid ? 17.0 : 19.0;
+    final badgePadding =
+        denseGrid
+            ? const EdgeInsets.symmetric(horizontal: 6, vertical: 2)
+            : const EdgeInsets.symmetric(horizontal: 7, vertical: 3);
+    final labelTextStyle =
+        denseGrid
+            ? theme.textTheme.labelMedium?.copyWith(
+              fontWeight: FontWeight.w600,
+              height: 1.1,
+            )
+            : theme.textTheme.labelLarge?.copyWith(
+              fontWeight: FontWeight.w700,
+              height: 1.15,
+            );
 
     return Material(
       color: Colors.transparent,
       child: InkWell(
         borderRadius: BorderRadius.circular(12),
+        onHighlightChanged: (value) {
+          if (value) {
+            if (_highlightedTileId == tileId) {
+              return;
+            }
+            setState(() {
+              _highlightedTileId = tileId;
+            });
+            return;
+          }
+          if (_highlightedTileId != tileId) {
+            return;
+          }
+          setState(() {
+            _highlightedTileId = null;
+          });
+        },
         onTap: item.onTap,
-        child: Ink(
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(10),
-            border: Border.all(color: borderColor),
-            color: colorScheme.surfaceContainerLow.withValues(alpha: 0.7),
-          ),
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 5),
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Stack(
-                  clipBehavior: Clip.none,
-                  children: [
-                    Icon(item.icon, size: 20, color: colorScheme.onSurface),
-                    if (item.badgeText != null && item.badgeText!.isNotEmpty)
-                      Positioned(
-                        right: -24,
-                        top: -6,
-                        child: Container(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 5,
-                            vertical: 2,
-                          ),
-                          decoration: BoxDecoration(
-                            color: colorScheme.secondaryContainer,
-                            borderRadius: BorderRadius.circular(999),
-                          ),
-                          child: Text(
-                            item.badgeText!,
-                            style: theme.textTheme.labelSmall?.copyWith(
-                              color: colorScheme.onSecondaryContainer,
-                              fontWeight: FontWeight.w700,
-                            ),
+        child: AnimatedScale(
+          duration: const Duration(milliseconds: 140),
+          curve: Curves.easeOutCubic,
+          scale: highlighted ? 0.965 : 1,
+          child: Ink(
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: borderColor),
+              color: colorScheme.surfaceContainerLow.withValues(
+                alpha: denseGrid ? 0.62 : 0.76,
+              ),
+            ),
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(8, 8, 8, 8),
+              child: Stack(
+                children: [
+                  if (item.badgeText != null && item.badgeText!.isNotEmpty)
+                    Positioned(
+                      top: 0,
+                      right: 0,
+                      child: Container(
+                        padding: badgePadding,
+                        decoration: BoxDecoration(
+                          color: colorScheme.secondaryContainer,
+                          borderRadius: BorderRadius.circular(999),
+                        ),
+                        child: Text(
+                          item.badgeText!,
+                          style: theme.textTheme.labelSmall?.copyWith(
+                            color: colorScheme.onSecondaryContainer,
+                            fontWeight: FontWeight.w700,
                           ),
                         ),
                       ),
-                    if (item.colorDot != null)
-                      Positioned(
-                        right: -12,
-                        top: -2,
-                        child: Container(
-                          width: 9,
-                          height: 9,
-                          decoration: BoxDecoration(
-                            color: item.colorDot,
-                            shape: BoxShape.circle,
-                            border: Border.all(
-                              color: colorScheme.outlineVariant,
-                              width: 1,
+                    ),
+                  Center(
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Stack(
+                          clipBehavior: Clip.none,
+                          children: [
+                            Container(
+                              width: iconSize,
+                              height: iconSize,
+                              decoration: BoxDecoration(
+                                color: colorScheme.primaryContainer.withValues(
+                                  alpha: denseGrid ? 0.34 : 0.42,
+                                ),
+                                shape: BoxShape.circle,
+                              ),
+                              child: Icon(
+                                item.icon,
+                                size: iconGlyphSize,
+                                color: colorScheme.onSurface,
+                              ),
                             ),
-                          ),
+                            if (item.colorDot != null)
+                              Positioned(
+                                right: -1,
+                                bottom: -1,
+                                child: Container(
+                                  width: 10,
+                                  height: 10,
+                                  decoration: BoxDecoration(
+                                    color: item.colorDot,
+                                    shape: BoxShape.circle,
+                                    border: Border.all(
+                                      color: colorScheme.surface,
+                                      width: 1.2,
+                                    ),
+                                  ),
+                                ),
+                              ),
+                          ],
                         ),
-                      ),
-                  ],
-                ),
-                const SizedBox(height: 4),
-                Text(
-                  item.label,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: theme.textTheme.labelMedium?.copyWith(
-                    fontWeight: FontWeight.w600,
+                        SizedBox(height: denseGrid ? 6 : 8),
+                        Text(
+                          item.label,
+                          maxLines: denseGrid ? 1 : 2,
+                          textAlign: TextAlign.center,
+                          overflow: TextOverflow.ellipsis,
+                          style: labelTextStyle,
+                        ),
+                      ],
+                    ),
                   ),
-                ),
-              ],
+                ],
+              ),
             ),
           ),
         ),
       ),
+    );
+  }
+
+  Widget _buildPageEntrance({required int index, required Widget child}) {
+    final delay = (index * 0.08).clamp(0.0, 0.42);
+    final begin = delay;
+    final end = (begin + 0.46).clamp(0.0, 1.0);
+
+    return TweenAnimationBuilder<double>(
+      key: ValueKey<String>('mine_page_entry_$index'),
+      tween: Tween<double>(begin: 0, end: 1),
+      duration: const Duration(milliseconds: 520),
+      curve: Interval(begin, end, curve: Curves.easeOutCubic),
+      child: child,
+      builder: (context, value, child) {
+        final translateY = (1 - value) * 14;
+        return Opacity(
+          opacity: value,
+          child: Transform.translate(
+            offset: Offset(0, translateY),
+            child: child,
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _buildGridEntrance({
+    required String section,
+    required int index,
+    required Widget child,
+  }) {
+    final delay = (index * 0.07).clamp(0.0, 0.42);
+    final begin = delay;
+    final end = (begin + 0.5).clamp(0.0, 1.0);
+
+    return TweenAnimationBuilder<double>(
+      key: ValueKey<String>('mine_grid_${section}_$index'),
+      tween: Tween<double>(begin: 0, end: 1),
+      duration: const Duration(milliseconds: 500),
+      curve: Interval(begin, end, curve: Curves.easeOutCubic),
+      child: child,
+      builder: (context, value, child) {
+        final translateY = (1 - value) * 10;
+        final scale = 0.985 + (0.015 * value);
+        return Opacity(
+          opacity: value,
+          child: Transform.translate(
+            offset: Offset(0, translateY),
+            child: Transform.scale(
+              scale: scale,
+              alignment: Alignment.center,
+              child: child,
+            ),
+          ),
+        );
+      },
     );
   }
 

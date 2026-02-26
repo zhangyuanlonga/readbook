@@ -227,14 +227,14 @@ class _BookDetailPageState extends State<BookDetailPage> {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   _buildCoverPreview(detail.coverUrl, heroTag: heroTag),
-                  const SizedBox(width: 14),
+                  const SizedBox(width: 10),
                   Expanded(
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(
                           detail.title,
-                          style: Theme.of(context).textTheme.titleLarge
+                          style: Theme.of(context).textTheme.titleMedium
                               ?.copyWith(fontWeight: FontWeight.w700),
                         ),
                         const SizedBox(height: 6),
@@ -244,111 +244,28 @@ class _BookDetailPageState extends State<BookDetailPage> {
                               ?.copyWith(color: colorScheme.onSurfaceVariant),
                         ),
                         const SizedBox(height: 10),
-                        Wrap(
-                          spacing: 8,
-                          runSpacing: 8,
-                          children: [
-                            _buildMetaChip('来源', result.sourceName),
-                            if (detail.author != null &&
-                                detail.author!.isNotEmpty)
-                              _buildMetaChip('作者', detail.author!),
-                          ],
-                        ),
-                        const SizedBox(height: 12),
+                        if (detail.author != null &&
+                            detail.author!.isNotEmpty)
+                          Row(
+                            children: [
+                              Expanded(
+                                child: _buildMetaChip('来源', result.sourceName),
+                              ),
+                              const SizedBox(width: 8),
+                              Expanded(
+                                child: _buildMetaChip('作者', detail.author!),
+                              ),
+                            ],
+                          )
+                        else
+                          _buildMetaChip('来源', result.sourceName),
+                        const SizedBox(height: 10),
                         LayoutBuilder(
                           builder: (context, constraints) {
-                            final availableWidth = constraints.maxWidth;
-                            final perButtonWidth =
-                                (availableWidth - 10).clamp(0.0, 2000.0) / 2;
-                            final useShortLabels = perButtonWidth < 180;
-                            final hideActionIcons = perButtonWidth < 148;
-
-                            final readLabel = useShortLabels ? '阅读' : '开始阅读';
-                            final shelfLabel =
-                                useShortLabels
-                                    ? (_isInBookshelf ? '移出' : '书架')
-                                    : (_isInBookshelf ? '移出书架' : '加入书架');
-
-                            return Row(
-                              children: [
-                                Expanded(
-                                  child: FilledButton(
-                                    style: FilledButton.styleFrom(
-                                      padding: const EdgeInsets.symmetric(
-                                        horizontal: 10,
-                                      ),
-                                    ),
-                                    onPressed:
-                                        result.chapters.isEmpty
-                                            ? null
-                                            : () => _openChapter(
-                                              result.chapters.first,
-                                            ),
-                                    child: FittedBox(
-                                      fit: BoxFit.scaleDown,
-                                      child: Row(
-                                        mainAxisSize: MainAxisSize.min,
-                                        children: [
-                                          if (!hideActionIcons) ...[
-                                            const Icon(
-                                              Icons.chrome_reader_mode_outlined,
-                                              size: 16,
-                                            ),
-                                            const SizedBox(width: 4),
-                                          ],
-                                          Text(
-                                            readLabel,
-                                            maxLines: 1,
-                                            softWrap: false,
-                                            overflow: TextOverflow.fade,
-                                          ),
-                                        ],
-                                      ),
-                                    ),
-                                  ),
-                                ),
-                                const SizedBox(width: 10),
-                                Expanded(
-                                  child: OutlinedButton(
-                                    style: OutlinedButton.styleFrom(
-                                      padding: const EdgeInsets.symmetric(
-                                        horizontal: 10,
-                                      ),
-                                    ),
-                                    onPressed:
-                                        _isShelfActionLoading
-                                            ? null
-                                            : _toggleBookshelf,
-                                    child: FittedBox(
-                                      fit: BoxFit.scaleDown,
-                                      child: Row(
-                                        mainAxisSize: MainAxisSize.min,
-                                        children: [
-                                          if (!_isShelfActionLoading &&
-                                              !hideActionIcons) ...[
-                                            Icon(
-                                              _isInBookshelf
-                                                  ? Icons
-                                                      .bookmark_remove_outlined
-                                                  : Icons.bookmark_add_outlined,
-                                              size: 16,
-                                            ),
-                                            const SizedBox(width: 4),
-                                          ],
-                                          Text(
-                                            _isShelfActionLoading
-                                                ? '处理中'
-                                                : shelfLabel,
-                                            maxLines: 1,
-                                            softWrap: false,
-                                            overflow: TextOverflow.fade,
-                                          ),
-                                        ],
-                                      ),
-                                    ),
-                                  ),
-                                ),
-                              ],
+                            return _buildPrimaryActionRow(
+                              result,
+                              availableWidth: constraints.maxWidth,
+                              compactStyle: constraints.maxWidth < 260,
                             );
                           },
                         ),
@@ -364,6 +281,132 @@ class _BookDetailPageState extends State<BookDetailPage> {
             ],
           ),
         ),
+      ),
+    );
+  }
+
+  Widget _buildPrimaryActionRow(
+    BookDetailLoadResult result, {
+    required double availableWidth,
+    bool compactStyle = false,
+  }) {
+    final buttonTextStyle = Theme.of(context).textTheme.labelSmall?.copyWith(
+      fontWeight: FontWeight.w600,
+      height: 1.05,
+    );
+    // Use actual available width for copy density; do not force short labels
+    // only because the section is in compact mode.
+    final useShortLabels = availableWidth < 210;
+    final hideActionIcons = availableWidth < 186;
+
+    final readLabel = useShortLabels ? '阅读' : '开始阅读';
+    final shelfLabel =
+        useShortLabels
+            ? (_isInBookshelf ? '移出' : '加入')
+            : (_isInBookshelf ? '移出书架' : '加入书架');
+
+    final readButton = SizedBox(
+      height: 34,
+      child: FilledButton(
+        style: FilledButton.styleFrom(
+          textStyle: buttonTextStyle,
+          tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+          visualDensity: const VisualDensity(horizontal: -1, vertical: -2),
+          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+        ),
+        onPressed:
+            result.chapters.isEmpty
+                ? null
+                : () => _openChapter(result.chapters.first),
+        child: _buildActionButtonContent(
+          icon: Icons.chrome_reader_mode_outlined,
+          label: readLabel,
+          hideIcon: hideActionIcons,
+        ),
+      ),
+    );
+
+    final shelfButton = SizedBox(
+      height: 34,
+      child: OutlinedButton(
+        style: OutlinedButton.styleFrom(
+          textStyle: buttonTextStyle,
+          tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+          visualDensity: const VisualDensity(horizontal: -1, vertical: -2),
+          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+        ),
+        onPressed: _isShelfActionLoading ? null : _toggleBookshelf,
+        child: _buildActionButtonContent(
+          icon:
+              _isInBookshelf
+                  ? Icons.bookmark_remove_outlined
+                  : Icons.bookmark_add_outlined,
+          label: _isShelfActionLoading ? '处理中' : shelfLabel,
+          hideIcon: _isShelfActionLoading || hideActionIcons,
+        ),
+      ),
+    );
+
+    final buttonGap = compactStyle ? 8.0 : 10.0;
+    final readIdealWidth = useShortLabels ? 104.0 : 140.0;
+    final shelfIdealWidth = useShortLabels ? 96.0 : 128.0;
+    final minPairWidth = 96.0 * 2 + buttonGap;
+    final idealPairWidth = readIdealWidth + shelfIdealWidth + buttonGap;
+
+    if (availableWidth < minPairWidth) {
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          SizedBox(width: double.infinity, child: readButton),
+          const SizedBox(height: 6),
+          SizedBox(width: double.infinity, child: shelfButton),
+        ],
+      );
+    }
+
+    if (availableWidth >= idealPairWidth) {
+      return Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          SizedBox(width: readIdealWidth, child: readButton),
+          SizedBox(width: buttonGap),
+          SizedBox(width: shelfIdealWidth, child: shelfButton),
+        ],
+      );
+    }
+
+    final equalWidth = (availableWidth - buttonGap) / 2;
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        SizedBox(width: equalWidth, child: readButton),
+        SizedBox(width: buttonGap),
+        SizedBox(width: equalWidth, child: shelfButton),
+      ],
+    );
+  }
+
+  Widget _buildActionButtonContent({
+    required IconData icon,
+    required String label,
+    required bool hideIcon,
+  }) {
+    return FittedBox(
+      fit: BoxFit.scaleDown,
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          if (!hideIcon) ...[
+            Icon(icon, size: 14),
+            const SizedBox(width: 3),
+          ],
+          Text(
+            label,
+            maxLines: 1,
+            softWrap: false,
+            overflow: TextOverflow.fade,
+          ),
+        ],
       ),
     );
   }
@@ -385,8 +428,8 @@ class _BookDetailPageState extends State<BookDetailPage> {
           borderRadius: BorderRadius.circular(14),
           child: Image.network(
             coverUrl!,
-            width: 96,
-            height: 136,
+            width: 84,
+            height: 120,
             fit: BoxFit.cover,
             errorBuilder:
                 (context, error, stackTrace) => _buildCoverFallback('封面加载失败'),
@@ -401,8 +444,8 @@ class _BookDetailPageState extends State<BookDetailPage> {
   Widget _buildCoverFallback(String text) {
     final colorScheme = Theme.of(context).colorScheme;
     return Container(
-      width: 96,
-      height: 136,
+      width: 84,
+      height: 120,
       decoration: BoxDecoration(
         color: colorScheme.surfaceContainerHighest,
         borderRadius: BorderRadius.circular(14),
@@ -421,14 +464,17 @@ class _BookDetailPageState extends State<BookDetailPage> {
     final colorScheme = Theme.of(context).colorScheme;
 
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+      padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 5),
       decoration: BoxDecoration(
         color: colorScheme.secondaryContainer,
         borderRadius: BorderRadius.circular(999),
       ),
       child: Text(
         '$label: $value',
-        style: Theme.of(context).textTheme.labelMedium?.copyWith(
+        maxLines: 1,
+        softWrap: false,
+        overflow: TextOverflow.ellipsis,
+        style: Theme.of(context).textTheme.labelSmall?.copyWith(
           color: colorScheme.onSecondaryContainer,
           fontWeight: FontWeight.w600,
         ),
@@ -625,6 +671,8 @@ class _BookDetailPageState extends State<BookDetailPage> {
           const SizedBox(height: 8),
           Text(
             intro,
+            maxLines: 5,
+            overflow: TextOverflow.ellipsis,
             style: Theme.of(context).textTheme.bodyMedium?.copyWith(
               color: colorScheme.onSurfaceVariant,
               height: 1.45,

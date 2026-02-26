@@ -120,6 +120,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
   PageCurlController? _pageCurlController;
   Size? _pageCurlPaperSize;
   bool _isCurlAutoTurning = false;
+  bool _isSystemUiVisible = true;
   late final AnimationController _curlAutoTurnController;
   double _curlAutoStartX = 0;
   double _curlAutoEndX = 0;
@@ -202,12 +203,16 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
     _curlAutoTurnController.addListener(_onCurlAutoTurnTick);
     _curlAutoTurnController.addStatusListener(_onCurlAutoTurnStatus);
     _scrollController.addListener(_onScrollChanged);
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _syncSystemUiVisibility(force: true);
+    });
 
     _bootstrap();
   }
 
   @override
   void dispose() {
+    _syncSystemUiVisibility(force: true, visible: true);
     _progressDebounceTimer?.cancel();
     _autoReadResumeTimer?.cancel();
     _scrollController.removeListener(_onScrollChanged);
@@ -237,6 +242,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
         backgroundColor: colors.background,
         body: SafeArea(
           top: false,
+          bottom: false,
           child: ClipRect(
             child: Stack(
               clipBehavior: Clip.hardEdge,
@@ -733,14 +739,11 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
             },
           ),
         ),
-        Positioned(
-          right: 12,
-          bottom: 12 + bottomInset,
-          child: _buildPageIndexBadge(
-            colors: colors,
-            index: currentIndex,
-            total: pageCount,
-          ),
+        _buildPageIndexOverlay(
+          colors: colors,
+          index: currentIndex,
+          total: pageCount,
+          bottomInset: bottomInset,
         ),
       ],
     );
@@ -927,14 +930,11 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
                 ),
               ),
               if (pageCount > 1)
-                Positioned(
-                  right: 12,
-                  bottom: 12 + bottomInset,
-                  child: _buildPageIndexBadge(
-                    colors: colors,
-                    index: safeIndex,
-                    total: pageCount,
-                  ),
+                _buildPageIndexOverlay(
+                  colors: colors,
+                  index: safeIndex,
+                  total: pageCount,
+                  bottomInset: bottomInset,
                 ),
             ],
           );
@@ -954,14 +954,11 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
           return Stack(
             children: [
               Positioned.fill(child: pageChild),
-              Positioned(
-                right: 12,
-                bottom: 12 + bottomInset,
-                child: _buildPageIndexBadge(
-                  colors: colors,
-                  index: safeIndex,
-                  total: pageCount,
-                ),
+              _buildPageIndexOverlay(
+                colors: colors,
+                index: safeIndex,
+                total: pageCount,
+                bottomInset: bottomInset,
               ),
             ],
           );
@@ -1042,14 +1039,11 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
               ),
             ),
             if (pageCount > 1)
-              Positioned(
-                right: 12,
-                bottom: 12 + bottomInset,
-                child: _buildPageIndexBadge(
-                  colors: colors,
-                  index: safeIndex,
-                  total: pageCount,
-                ),
+              _buildPageIndexOverlay(
+                colors: colors,
+                index: safeIndex,
+                total: pageCount,
+                bottomInset: bottomInset,
               ),
           ],
         );
@@ -1143,16 +1137,65 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
     required int index,
     required int total,
   }) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-      decoration: BoxDecoration(
-        color: colors.overlay.withValues(alpha: 0.72),
-        borderRadius: BorderRadius.circular(999),
-        border: Border.all(color: colors.divider.withValues(alpha: 0.7)),
+    final safeTotal = total <= 0 ? 1 : total;
+    final safeIndex = index.clamp(0, safeTotal - 1);
+    final current = safeIndex + 1;
+    final percent = (current / safeTotal) * 100;
+
+    return Text(
+      '$current/$safeTotal · ${percent.toStringAsFixed(2)}%',
+      style: TextStyle(
+        color: colors.text.withValues(alpha: 0.78),
+        fontSize: 12,
+        fontWeight: FontWeight.w500,
+        shadows: [
+          Shadow(
+            color: Colors.black.withValues(alpha: 0.12),
+            blurRadius: 2,
+            offset: const Offset(0, 1),
+          ),
+        ],
       ),
-      child: Text(
-        '${index + 1}/$total',
-        style: TextStyle(color: colors.meta, fontSize: 12),
+    );
+  }
+
+  Widget _buildPageIndexOverlay({
+    required _ReaderThemeColors colors,
+    required int index,
+    required int total,
+    required double bottomInset,
+  }) {
+    final platform = Theme.of(context).platform;
+    final minBottomInset = platform == TargetPlatform.iOS ? 14.0 : 0.0;
+    final safeBottomInset = max(bottomInset, minBottomInset);
+    final collapsedBottomOffset =
+        platform == TargetPlatform.iOS
+            ? (safeBottomInset - 8).clamp(0.0, 64.0)
+            : 4.0 + safeBottomInset;
+    final bottomOffset =
+        _showOverlayControls ? 78.0 + safeBottomInset : collapsedBottomOffset;
+
+    return Positioned(
+      left: 0,
+      right: 0,
+      bottom: bottomOffset,
+      child: IgnorePointer(
+        child: AnimatedOpacity(
+          duration: const Duration(milliseconds: 140),
+          curve: Curves.easeOutCubic,
+          opacity: _showOverlayControls ? 0.78 : 1,
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 14),
+            child: Align(
+              alignment: Alignment.bottomLeft,
+              child: _buildPageIndexBadge(
+                colors: colors,
+                index: index,
+                total: total,
+              ),
+            ),
+          ),
+        ),
       ),
     );
   }
@@ -2052,7 +2095,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
     _stopAutoReadSession();
     final shouldRestoreOverlay = _showOverlayControls;
     if (shouldRestoreOverlay) {
-      _hideOverlayControls(resumeAutoRead: false);
+      _hideOverlayControls(resumeAutoRead: false, syncSystemUi: false);
     }
 
     final readerModalTheme = _readerModalTheme();
@@ -2189,9 +2232,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
     );
 
     if (shouldRestoreOverlay && mounted) {
-      setState(() {
-        _showOverlayControls = true;
-      });
+      _setOverlayControlsVisibility(true);
     }
 
     return selected;
@@ -3769,9 +3810,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
 
     if (isCenterTap) {
       final nextShow = !_showOverlayControls;
-      setState(() {
-        _showOverlayControls = nextShow;
-      });
+      _setOverlayControlsVisibility(nextShow);
       if (!nextShow) {
         _scheduleAutoReadResume();
       }
@@ -3802,17 +3841,56 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
     }
   }
 
-  void _hideOverlayControls({bool resumeAutoRead = true}) {
+  void _hideOverlayControls({
+    bool resumeAutoRead = true,
+    bool syncSystemUi = true,
+  }) {
     if (!_showOverlayControls || !mounted) {
       return;
     }
 
-    setState(() {
-      _showOverlayControls = false;
-    });
+    if (syncSystemUi) {
+      _setOverlayControlsVisibility(false);
+    } else {
+      setState(() {
+        _showOverlayControls = false;
+      });
+    }
     if (resumeAutoRead) {
       _scheduleAutoReadResume();
     }
+  }
+
+  void _setOverlayControlsVisibility(bool visible) {
+    if (!mounted || _showOverlayControls == visible) {
+      return;
+    }
+
+    setState(() {
+      _showOverlayControls = visible;
+    });
+    _syncSystemUiVisibility(visible: visible);
+  }
+
+  void _syncSystemUiVisibility({bool force = false, bool? visible}) {
+    if (!mounted) {
+      return;
+    }
+    final shouldShow = visible ?? _showOverlayControls;
+    if (!force && _isSystemUiVisible == shouldShow) {
+      return;
+    }
+    _isSystemUiVisible = shouldShow;
+
+    if (shouldShow) {
+      SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
+      return;
+    }
+
+    SystemChrome.setEnabledSystemUIMode(
+      SystemUiMode.manual,
+      overlays: const [SystemUiOverlay.bottom],
+    );
   }
 
   Future<void> _openCatalogSheetFromOverlay() async {
@@ -4472,7 +4550,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
     _stopAutoReadSession();
     final shouldRestoreOverlay = _showOverlayControls;
     if (shouldRestoreOverlay) {
-      _hideOverlayControls(resumeAutoRead: false);
+      _hideOverlayControls(resumeAutoRead: false, syncSystemUi: false);
     }
 
     var draft = _settings;
@@ -5285,9 +5363,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
     }
 
     if (shouldRestoreOverlay) {
-      setState(() {
-        _showOverlayControls = true;
-      });
+      _setOverlayControlsVisibility(true);
     }
 
     if (result == null) {

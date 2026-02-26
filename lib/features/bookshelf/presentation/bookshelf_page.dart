@@ -177,7 +177,7 @@ class _BookshelfPageState extends State<BookshelfPage> {
                   horizontal,
                   16 + bottomSafe,
                 ),
-                sliver: _buildBooksContentSliver(horizontal),
+                sliver: _buildBooksContentSliver(),
               ),
             ],
           ),
@@ -186,7 +186,7 @@ class _BookshelfPageState extends State<BookshelfPage> {
     );
   }
 
-  Widget _buildBooksContentSliver(double horizontalPadding) {
+  Widget _buildBooksContentSliver() {
     if (_isLoading && _books.isEmpty) {
       return const SliverToBoxAdapter(
         child: Card(
@@ -219,7 +219,7 @@ class _BookshelfPageState extends State<BookshelfPage> {
     }
 
     if (_useGridView) {
-      return _buildBookGridSliver(horizontalPadding);
+      return _buildBookGridSliver();
     }
 
     return SliverList(
@@ -391,40 +391,44 @@ class _BookshelfPageState extends State<BookshelfPage> {
     );
   }
 
-  Widget _buildBookGridSliver(double horizontalPadding) {
+  Widget _buildBookGridSliver() {
     const crossSpacing = 8.0;
     const mainSpacing = 12.0;
-    final screenWidth = MediaQuery.sizeOf(context).width;
-    final width = (screenWidth - horizontalPadding * 2).clamp(220.0, 2400.0);
 
-    var crossAxisCount = 3;
-    if (width >= 1400) {
-      crossAxisCount = 6;
-    } else if (width >= 1100) {
-      crossAxisCount = 5;
-    } else if (width >= 800) {
-      crossAxisCount = 4;
-    }
+    return SliverLayoutBuilder(
+      builder: (context, constraints) {
+        final width = constraints.crossAxisExtent.clamp(220.0, 2400.0);
 
-    final itemWidth =
-        (width - crossSpacing * (crossAxisCount - 1)) / crossAxisCount;
-    final itemHeight = itemWidth * 1.32 + 52;
+        var crossAxisCount = 3;
+        if (width >= 1400) {
+          crossAxisCount = 6;
+        } else if (width >= 1100) {
+          crossAxisCount = 5;
+        } else if (width >= 800) {
+          crossAxisCount = 4;
+        }
 
-    return SliverGrid(
-      delegate: SliverChildBuilderDelegate((context, index) {
-        final book = _books[index];
-        return _buildModeSwitchAnimatedBookItem(
-          book: book,
-          index: index,
-          child: _buildGridCard(book),
+        final itemWidth =
+            (width - crossSpacing * (crossAxisCount - 1)) / crossAxisCount;
+        final itemHeight = itemWidth * 1.32 + 52;
+
+        return SliverGrid(
+          delegate: SliverChildBuilderDelegate((context, index) {
+            final book = _books[index];
+            return _buildModeSwitchAnimatedBookItem(
+              book: book,
+              index: index,
+              child: _buildGridCard(book),
+            );
+          }, childCount: _books.length),
+          gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+            crossAxisCount: crossAxisCount,
+            crossAxisSpacing: crossSpacing,
+            mainAxisSpacing: mainSpacing,
+            childAspectRatio: itemWidth / itemHeight,
+          ),
         );
-      }, childCount: _books.length),
-      gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-        crossAxisCount: crossAxisCount,
-        crossAxisSpacing: crossSpacing,
-        mainAxisSpacing: mainSpacing,
-        childAspectRatio: itemWidth / itemHeight,
-      ),
+      },
     );
   }
 

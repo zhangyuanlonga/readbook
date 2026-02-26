@@ -673,6 +673,7 @@ class _SourcePageState extends State<SourcePage> {
     final colorScheme = Theme.of(context).colorScheme;
 
     return Card(
+      margin: const EdgeInsets.only(bottom: 8),
       shape: _buildOutlinedCardShape(context),
       child: Padding(
         padding: const EdgeInsets.all(14),
