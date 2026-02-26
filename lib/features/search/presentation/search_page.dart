@@ -13,7 +13,14 @@ import '../../../data/repositories/source_repository_impl.dart';
 import '../../../domain/entities/book.dart';
 import '../../../domain/repositories/source_repository.dart';
 import '../../source/presentation/source_filter_sheet.dart';
+import '../application/search_history_service.dart';
 import '../application/search_service.dart';
+import 'widgets/search_book_card.dart';
+import 'widgets/search_empty_state.dart';
+import 'widgets/search_failure_banner.dart';
+import 'widgets/search_input_card.dart';
+import 'widgets/search_progress_card.dart';
+import 'widgets/search_report_summary.dart';
 
 class SearchPage extends StatefulWidget {
   const SearchPage({super.key});
@@ -24,51 +31,24 @@ class SearchPage extends StatefulWidget {
 
 class _SearchPageState extends State<SearchPage> {
   final TextEditingController _keywordController = TextEditingController();
+  final FocusNode _searchFocusNode = FocusNode();
   final SourceRepository _sourceRepository = SourceRepositoryImpl(
     AppDatabase.instance,
   );
   late final SearchService _searchService;
+  final SearchHistoryService _historyService = SearchHistoryService();
 
   static final RegExp _preciseSpaceRegex = RegExp(r'[\u3000\s]+');
   static final RegExp _htmlTagRegex = RegExp(r'<[^>]+>');
   static const Set<String> _preciseTitleSeparators = <String>{
-    ' ',
-    '-',
-    '_',
-    '.',
-    '·',
-    ':',
-    '：',
-    '/',
-    '|',
-    '(',
-    '（',
-    '[',
-    '【',
-    '<',
-    '《',
+    ' ', '-', '_', '.', '·', ':', '：', '/', '|',
+    '(', '（', '[', '【', '<', '《',
   };
   static const Set<String> _preciseLeadingWrappers = <String>{
-    '《',
-    '〈',
-    '<',
-    '「',
-    '『',
-    '【',
-    '[',
-    '(',
-    '（',
+    '《', '〈', '<', '「', '『', '【', '[', '(', '（',
   };
   static const Set<String> _preciseTrailingWrappers = <String>{
-    '》',
-    '〉',
-    '>',
-    '」',
-    '』',
-    '】',
-    ']',
-    ')',
-    '）',
+    '》', '〉', '>', '」', '』', '】', ']', ')', '）',
   };
   static const Duration _progressUiThrottleWindow = Duration(milliseconds: 120);
   static const Duration _sourceCountLoadTimeout = Duration(seconds: 8);
@@ -81,7 +61,6 @@ class _SearchPageState extends State<SearchPage> {
     PointerDeviceKind.unknown,
   };
   static const int _searchResultPageSize = 40;
-  static const int _failurePreviewLimit = 2;
 
   bool _isSearching = false;
   bool _isLoadingSourceCount = false;
@@ -100,16 +79,22 @@ class _SearchPageState extends State<SearchPage> {
   Timer? _progressUiTimer;
   DateTime? _lastProgressUiUpdateAt;
 
+  // Pre-processed snippet caches
+  Map<String, String?> _normalizedIntros = const <String, String?>{};
+  Map<String, String?> _normalizedLatestChapters = const <String, String?>{};
+
+  // Search history
+  List<String> _searchHistory = const <String>[];
+
   @override
   void initState() {
     super.initState();
     _searchService = SearchService(sourceRepository: _sourceRepository);
     _pageScrollController.addListener(_onPageScroll);
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!mounted) {
-        return;
-      }
+      if (!mounted) return;
       unawaited(_refreshSourceCount());
+      unawaited(_loadSearchHistory());
     });
   }
 
@@ -119,13 +104,15 @@ class _SearchPageState extends State<SearchPage> {
     _clearProgressUiThrottle();
     _pageScrollController.removeListener(_onPageScroll);
     _pageScrollController.dispose();
+    _searchFocusNode.dispose();
     _keywordController.dispose();
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
-    final colorScheme = Theme.of(context).colorScheme;
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
     final horizontal = AppSpacing.pageHorizontal(context);
     final bottomSafe = MediaQuery.viewPaddingOf(context).bottom;
     final canPopRoute = context.canPop();
@@ -134,9 +121,7 @@ class _SearchPageState extends State<SearchPage> {
     return PopScope<void>(
       canPop: canPopRoute,
       onPopInvokedWithResult: (didPop, _) {
-        if (didPop || !mounted) {
-          return;
-        }
+        if (didPop || !mounted) return;
         context.go('/bookshelf');
       },
       child: Scaffold(
@@ -162,6 +147,7 @@ class _SearchPageState extends State<SearchPage> {
             ),
             child: ListView(
               controller: _pageScrollController,
+              keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
               padding: EdgeInsets.fromLTRB(
                 horizontal,
                 12,
@@ -169,27 +155,46 @@ class _SearchPageState extends State<SearchPage> {
                 16 + bottomSafe,
               ),
               children: [
-                _buildSearchInputCard(),
-                const SizedBox(height: 12),
-                if (_isSearching || report != null) _buildProgressCard(),
+                SearchInputCard(
+                  keywordController: _keywordController,
+                  focusNode: _searchFocusNode,
+                  isSearching: _isSearching,
+                  searchContentMode: _searchContentMode,
+                  isPreciseBookMatch: _isPreciseBookMatch,
+                  selectedSourceCount: _selectedSourceIds.length,
+                  availableSourceCount: _availableSourceCount,
+                  isLoadingSourceCount: _isLoadingSourceCount,
+                  onSearch: _runSearch,
+                  onClearResults: _clearResults,
+                  onContentModeChanged: _onContentModeChanged,
+                  onPreciseMatchChanged: _onPreciseMatchChanged,
+                  onOpenSourceFilter: () => unawaited(_showSourceFilterSheet()),
+                  onClearSourceFilter: _clearSourceFilter,
+                ),
+                if (_isSearching)
+                  SearchProgressCard(
+                    report: report,
+                    isSearching: _isSearching,
+                  ),
                 if (report != null) ...[
-                  const SizedBox(height: 12),
-                  _buildReportSummary(report, _visibleBooks.length),
+                  const SizedBox(height: 8),
+                  SearchReportSummary(
+                    report: report,
+                    visibleBookCount: _visibleBooks.length,
+                    isPreciseBookMatch: _isPreciseBookMatch,
+                  ),
                   if (report.failures.isNotEmpty) ...[
-                    const SizedBox(height: 12),
-                    _buildFailureBanner(report),
+                    const SizedBox(height: 8),
+                    SearchFailureBanner(report: report),
                   ],
-                  const SizedBox(height: 12),
+                  const SizedBox(height: 10),
                   _buildResultList(report, _visibleBooks),
                 ] else if (!_isSearching)
-                  Card(
-                    child: Padding(
-                      padding: const EdgeInsets.all(16),
-                      child: Text(
-                        '输入关键词后开始搜索。',
-                        style: Theme.of(context).textTheme.bodyMedium,
-                      ),
-                    ),
+                  SearchEmptyState(
+                    history: _searchHistory,
+                    onHistoryTap: _onHistoryTap,
+                    onClearHistory: _onClearHistory,
+                    onRemoveHistoryItem: _onRemoveHistoryItem,
                   ),
               ],
             ),
@@ -198,6 +203,8 @@ class _SearchPageState extends State<SearchPage> {
       ),
     );
   }
+
+  // ── Navigation ──
 
   void _handleBackNavigation() {
     if (context.canPop()) {
@@ -207,214 +214,80 @@ class _SearchPageState extends State<SearchPage> {
     context.go('/bookshelf');
   }
 
-  Widget _buildSearchInputCard() {
-    final colorScheme = Theme.of(context).colorScheme;
-    final isMangaMode = _searchContentMode == SearchContentMode.manga;
-    final hintText = isMangaMode ? '输入漫画名或作者，例如：一人之下' : '输入书名或作者，例如：凡人修仙传';
+  // ── Callbacks for SearchInputCard ──
 
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(10),
-        child: Column(
-          children: [
-            Align(
-              alignment: Alignment.centerLeft,
-              child: SegmentedButton<SearchContentMode>(
-                segments: const [
-                  ButtonSegment<SearchContentMode>(
-                    value: SearchContentMode.novel,
-                    icon: Icon(Icons.menu_book_rounded),
-                    label: Text('小说'),
-                  ),
-                  ButtonSegment<SearchContentMode>(
-                    value: SearchContentMode.manga,
-                    icon: Icon(Icons.auto_stories_rounded),
-                    label: Text('漫画'),
-                  ),
-                ],
-                selected: <SearchContentMode>{_searchContentMode},
-                showSelectedIcon: false,
-                onSelectionChanged:
-                    _isSearching
-                        ? null
-                        : (selection) {
-                          final mode =
-                              selection.isEmpty ? null : selection.first;
-                          if (mode == null || mode == _searchContentMode) {
-                            return;
-                          }
-                          setState(() {
-                            _searchContentMode = mode;
-                            _selectedSourceIds = <String>{};
-                            _setReport(null);
-                          });
-                          unawaited(_refreshSourceCount());
-                        },
-              ),
-            ),
-            const SizedBox(height: 8),
-            Container(
-              decoration: BoxDecoration(
-                borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: colorScheme.outline),
-              ),
-              child: TextField(
-                controller: _keywordController,
-                textInputAction: TextInputAction.search,
-                textAlignVertical: TextAlignVertical.center,
-                style: Theme.of(
-                  context,
-                ).textTheme.bodyMedium?.copyWith(fontSize: 14, height: 1.2),
-                onChanged: (_) => setState(() {}),
-                onSubmitted: (_) => _runSearch(),
-                decoration: InputDecoration(
-                  hintText: hintText,
-                  hintStyle: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                    fontSize: 14,
-                    height: 1.2,
-                    color: colorScheme.onSurfaceVariant,
-                  ),
-                  border: InputBorder.none,
-                  filled: false,
-                  prefixIcon: const Icon(Icons.search_rounded, size: 20),
-                  prefixIconConstraints: const BoxConstraints(
-                    minWidth: 38,
-                    minHeight: 38,
-                  ),
-                  suffixIcon:
-                      _keywordController.text.isEmpty
-                          ? null
-                          : IconButton(
-                            tooltip: '清空输入',
-                            onPressed: () {
-                              _keywordController.clear();
-                              setState(() {});
-                            },
-                            icon: const Icon(Icons.close_rounded),
-                          ),
-                  isDense: true,
-                  contentPadding: const EdgeInsets.symmetric(
-                    horizontal: 8,
-                    vertical: 9,
-                  ),
-                ),
-              ),
-            ),
-            const SizedBox(height: 8),
-            _buildSourceFilterRow(),
-            const SizedBox(height: 8),
-            _buildPreciseMatchRow(),
-            const SizedBox(height: 8),
-            Row(
-              children: [
-                Expanded(
-                  child: FilledButton(
-                    onPressed: _runSearch,
-                    child: Text(_isSearching ? '取消搜索' : '搜索'),
-                  ),
-                ),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: OutlinedButton(
-                    onPressed:
-                        _isSearching
-                            ? null
-                            : () {
-                              _keywordController.clear();
-                              setState(() {
-                                _setReport(null);
-                              });
-                            },
-                    child: const Text('清空结果'),
-                  ),
-                ),
-              ],
-            ),
-          ],
-        ),
-      ),
-    );
+  void _onContentModeChanged(SearchContentMode mode) {
+    setState(() {
+      _searchContentMode = mode;
+      _selectedSourceIds = <String>{};
+      _setReport(null);
+    });
+    unawaited(_refreshSourceCount());
   }
 
-  Widget _buildSourceFilterRow() {
-    final selectedCount = _selectedSourceIds.length;
-
-    final summaryText =
-        _isLoadingSourceCount && _availableSourceCount == 0
-            ? '书源: 统计中...'
-            : _availableSourceCount == 0
-            ? '当前类型没有可选书源'
-            : selectedCount == 0
-            ? '书源: 全部 ($_availableSourceCount)'
-            : '书源: 指定 $selectedCount / $_availableSourceCount';
-
-    return Container(
-      padding: const EdgeInsets.fromLTRB(10, 6, 6, 6),
-      decoration: BoxDecoration(
-        color: Theme.of(context).colorScheme.surfaceContainerLow,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: Theme.of(context).colorScheme.outlineVariant),
-      ),
-      child: Row(
-        children: [
-          Expanded(
-            child: Text(
-              summaryText,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                color: Theme.of(context).colorScheme.onSurfaceVariant,
-                fontWeight: FontWeight.w600,
-              ),
-            ),
-          ),
-          if (_isLoadingSourceCount)
-            const SizedBox(
-              width: 20,
-              height: 20,
-              child: Padding(
-                padding: EdgeInsets.all(2),
-                child: CircularProgressIndicator(strokeWidth: 2),
-              ),
-            )
-          else ...[
-            if (_selectedSourceIds.isNotEmpty)
-              IconButton(
-                tooltip: '清空筛选',
-                visualDensity: VisualDensity.compact,
-                onPressed:
-                    _isSearching
-                        ? null
-                        : () {
-                          setState(() {
-                            _selectedSourceIds = <String>{};
-                            _setReport(null);
-                          });
-                        },
-                icon: const Icon(Icons.clear_rounded, size: 18),
-              ),
-            TextButton.icon(
-              style: TextButton.styleFrom(
-                visualDensity: VisualDensity.compact,
-                tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-              ),
-              onPressed:
-                  (_isSearching || _availableSourceCount == 0)
-                      ? null
-                      : () => unawaited(_showSourceFilterSheet()),
-              icon: const Icon(Icons.filter_list_rounded, size: 18),
-              label: const Text('指定书源'),
-            ),
-          ],
-        ],
-      ),
-    );
+  void _onPreciseMatchChanged(bool value) {
+    setState(() {
+      _isPreciseBookMatch = value;
+      _setReport(_report);
+    });
   }
+
+  void _clearResults() {
+    _keywordController.clear();
+    setState(() {
+      _setReport(null);
+    });
+  }
+
+  void _clearSourceFilter() {
+    setState(() {
+      _selectedSourceIds = <String>{};
+      _setReport(null);
+    });
+  }
+
+  // ── Search History ──
+
+  Future<void> _loadSearchHistory() async {
+    final history = await _historyService.getAll();
+    if (!mounted) return;
+    setState(() {
+      _searchHistory = history;
+    });
+  }
+
+  void _onHistoryTap(String keyword) {
+    _keywordController.text = keyword;
+    _keywordController.selection = TextSelection.fromPosition(
+      TextPosition(offset: keyword.length),
+    );
+    _runSearch();
+  }
+
+  void _onClearHistory() {
+    unawaited(_historyService.clear());
+    setState(() {
+      _searchHistory = const <String>[];
+    });
+  }
+
+  void _onRemoveHistoryItem(String keyword) {
+    unawaited(
+      _historyService.remove(keyword).then((_) => _loadSearchHistory()),
+    );
+    // Optimistic UI: remove immediately
+    setState(() {
+      _searchHistory =
+          _searchHistory
+              .where((item) => item != keyword)
+              .toList(growable: false);
+    });
+  }
+
+  // ── Source filter ──
 
   Future<void> _refreshSourceCount() async {
-    if (!mounted) {
-      return;
-    }
+    if (!mounted) return;
 
     final isMangaMode = _searchContentMode == SearchContentMode.manga;
 
@@ -435,12 +308,13 @@ class _SearchPageState extends State<SearchPage> {
       setState(() {
         _availableSourceCount = count;
       });
-    } catch (_) {
+    } catch (error) {
       if (!mounted ||
           isMangaMode != (_searchContentMode == SearchContentMode.manga)) {
         return;
       }
 
+      debugPrint('Failed to load source count: $error');
       setState(() {
         _availableSourceCount = 0;
       });
@@ -466,9 +340,7 @@ class _SearchPageState extends State<SearchPage> {
       ),
     );
 
-    if (!mounted || selected == null) {
-      return;
-    }
+    if (!mounted || selected == null) return;
 
     setState(() {
       _selectedSourceIds = selected;
@@ -476,36 +348,32 @@ class _SearchPageState extends State<SearchPage> {
     });
   }
 
+  // ── Scroll pagination ──
+
   void _onPageScroll() {
-    if (!_pageScrollController.hasClients || _isSearching) {
-      return;
-    }
+    if (!_pageScrollController.hasClients || _isSearching) return;
 
     final position = _pageScrollController.position;
-    if (position.pixels + 280 < position.maxScrollExtent) {
-      return;
-    }
+    if (position.pixels + 280 < position.maxScrollExtent) return;
 
     _appendMoreRenderedResults();
   }
 
   void _appendMoreRenderedResults() {
-    if (_isAppendingResults) {
-      return;
-    }
+    if (_isAppendingResults) return;
 
     final total = _visibleBooks.length;
-    if (total == 0 || _renderedResultCount >= total) {
-      return;
-    }
+    if (total == 0 || _renderedResultCount >= total) return;
 
     _isAppendingResults = true;
     setState(() {
-      _renderedResultCount = (_renderedResultCount + _searchResultPageSize)
-          .clamp(0, total);
+      _renderedResultCount =
+          (_renderedResultCount + _searchResultPageSize).clamp(0, total);
     });
     _isAppendingResults = false;
   }
+
+  // ── Report & snippet pre-processing ──
 
   void _setReport(SearchExecutionReport? report) {
     _report = report;
@@ -513,6 +381,22 @@ class _SearchPageState extends State<SearchPage> {
         report == null
             ? const <Book>[]
             : _applyPreciseFilter(report.books, report.keyword);
+
+    // Pre-process snippets to avoid regex work during build
+    if (report != null && _visibleBooks.isNotEmpty) {
+      final intros = <String, String?>{};
+      final chapters = <String, String?>{};
+      for (final book in _visibleBooks) {
+        final key = '${book.sourceId}_${book.id}_${book.detailUrl.hashCode}';
+        intros[key] = _normalizeSnippet(book.intro);
+        chapters[key] = _normalizeSnippet(book.latestChapter);
+      }
+      _normalizedIntros = intros;
+      _normalizedLatestChapters = chapters;
+    } else {
+      _normalizedIntros = const <String, String?>{};
+      _normalizedLatestChapters = const <String, String?>{};
+    }
 
     if (_visibleBooks.isEmpty) {
       _renderedResultCount = 0;
@@ -526,260 +410,11 @@ class _SearchPageState extends State<SearchPage> {
     _renderedResultCount = target;
   }
 
-  Widget _buildProgressCard() {
-    final colorScheme = Theme.of(context).colorScheme;
-    final report = _report;
-    final sourceCount = report?.sourceCount ?? 1;
-    final processedCount = report?.processedSourceCount ?? 0;
-    final progressValue =
-        sourceCount == 0 ? 0.0 : (processedCount / sourceCount).clamp(0.0, 1.0);
-    final progressPercent = (progressValue * 100).round();
-
-    final progressText =
-        report == null ? '正在搜索书源...' : '正在搜索 $processedCount/$sourceCount 个书源';
-
-    return Card(
-      color: colorScheme.surfaceContainerHigh,
-      child: Padding(
-        padding: const EdgeInsets.all(12),
-        child: Column(
-          children: [
-            Row(
-              children: [
-                Expanded(child: Text(progressText)),
-                Text(
-                  '$progressPercent%',
-                  style: Theme.of(context).textTheme.labelLarge?.copyWith(
-                    color: colorScheme.primary,
-                    fontWeight: FontWeight.w700,
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 6),
-            LinearProgressIndicator(
-              value: progressValue,
-              minHeight: 6,
-              borderRadius: BorderRadius.circular(999),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildPreciseMatchRow() {
-    return InkWell(
-      borderRadius: BorderRadius.circular(10),
-      onTap:
-          _isSearching
-              ? null
-              : () {
-                setState(() {
-                  _isPreciseBookMatch = !_isPreciseBookMatch;
-                  _setReport(_report);
-                });
-              },
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 2, vertical: 2),
-        child: Row(
-          children: [
-            Checkbox(
-              value: _isPreciseBookMatch,
-              onChanged:
-                  _isSearching
-                      ? null
-                      : (value) {
-                        setState(() {
-                          _isPreciseBookMatch = value ?? false;
-                          _setReport(_report);
-                        });
-                      },
-              visualDensity: VisualDensity.compact,
-            ),
-            const SizedBox(width: 2),
-            Text(
-              '精准书名',
-              style: Theme.of(
-                context,
-              ).textTheme.bodySmall?.copyWith(fontWeight: FontWeight.w600),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildReportSummary(
-    SearchExecutionReport report,
-    int visibleBookCount,
-  ) {
-    final resultText =
-        _isPreciseBookMatch && visibleBookCount != report.books.length
-            ? '$visibleBookCount/${report.books.length} 本'
-            : '$visibleBookCount 本';
-
-    return Wrap(
-      spacing: 8,
-      runSpacing: 8,
-      children: [
-        _buildSummaryChip('关键词', report.keyword),
-        _buildSummaryChip(
-          '类型',
-          _searchContentMode == SearchContentMode.manga ? '漫画' : '小说',
-        ),
-        _buildSummaryChip('结果', resultText),
-        _buildSummaryChip(
-          '成功源',
-          '${report.successSourceCount}/${report.sourceCount}',
-        ),
-        _buildSummaryChip('筛选', _selectedSourceIds.isEmpty ? '全部书源' : '指定书源'),
-        _buildSummaryChip('匹配', _isPreciseBookMatch ? '精准' : '默认'),
-        if (report.failedSourceCount > 0)
-          _buildSummaryChip('失败源', '${report.failedSourceCount}'),
-      ],
-    );
-  }
-
-  Widget _buildSummaryChip(String label, String value) {
-    final colorScheme = Theme.of(context).colorScheme;
-
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-      decoration: BoxDecoration(
-        color: colorScheme.secondaryContainer,
-        borderRadius: BorderRadius.circular(999),
-      ),
-      child: Text(
-        '$label: $value',
-        style: Theme.of(context).textTheme.labelSmall?.copyWith(
-          color: colorScheme.onSecondaryContainer,
-          fontWeight: FontWeight.w600,
-        ),
-      ),
-    );
-  }
-
-  Widget _buildFailureBanner(SearchExecutionReport report) {
-    final colorScheme = Theme.of(context).colorScheme;
-    final preview = report.failures
-        .take(_failurePreviewLimit)
-        .toList(growable: false);
-    final canOpenDetail = report.failures.length > _failurePreviewLimit;
-
-    return Container(
-      width: double.infinity,
-      decoration: BoxDecoration(
-        color: colorScheme.errorContainer,
-        borderRadius: BorderRadius.circular(16),
-      ),
-      padding: const EdgeInsets.all(12),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Expanded(
-                child: Text(
-                  '${report.failedSourceCount} 个书源异常',
-                  style: Theme.of(context).textTheme.labelLarge?.copyWith(
-                    color: colorScheme.onErrorContainer,
-                    fontWeight: FontWeight.w700,
-                  ),
-                ),
-              ),
-              if (canOpenDetail)
-                TextButton(
-                  style: TextButton.styleFrom(
-                    foregroundColor: colorScheme.onErrorContainer,
-                  ),
-                  onPressed: () => _showFailureDetails(report),
-                  child: const Text('查看明细'),
-                ),
-            ],
-          ),
-          const SizedBox(height: 6),
-          ...preview.map(
-            (failure) => Padding(
-              padding: const EdgeInsets.only(bottom: 4),
-              child: Text(
-                '${failure.sourceName} (${failure.code.name}): ${failure.message}',
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                  color: colorScheme.onErrorContainer,
-                ),
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Future<void> _showFailureDetails(SearchExecutionReport report) async {
-    if (!mounted) {
-      return;
-    }
-
-    await showModalBottomSheet<void>(
-      context: context,
-      isScrollControlled: true,
-      showDragHandle: true,
-      builder: (context) {
-        final colorScheme = Theme.of(context).colorScheme;
-        return SafeArea(
-          child: Padding(
-            padding: const EdgeInsets.fromLTRB(16, 4, 16, 16),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Align(
-                  alignment: Alignment.centerLeft,
-                  child: Text(
-                    '书源异常明细 (${report.failures.length})',
-                    style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                      fontWeight: FontWeight.w700,
-                    ),
-                  ),
-                ),
-                const SizedBox(height: 8),
-                Flexible(
-                  child: ListView.separated(
-                    shrinkWrap: true,
-                    itemCount: report.failures.length,
-                    separatorBuilder:
-                        (_, __) => Divider(
-                          height: 1,
-                          color: colorScheme.outlineVariant,
-                        ),
-                    itemBuilder: (context, index) {
-                      final failure = report.failures[index];
-                      return ListTile(
-                        contentPadding: EdgeInsets.zero,
-                        title: Text(
-                          failure.sourceName,
-                          style: Theme.of(context).textTheme.titleSmall,
-                        ),
-                        subtitle: Text(
-                          '[${failure.code.name}] ${failure.message}',
-                          maxLines: 3,
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                      );
-                    },
-                  ),
-                ),
-              ],
-            ),
-          ),
-        );
-      },
-    );
-  }
+  // ── Result list ──
 
   Widget _buildResultList(SearchExecutionReport report, List<Book> books) {
     if (books.isEmpty) {
+      final theme = Theme.of(context);
       final emptyTip =
           _isPreciseBookMatch && report.books.isNotEmpty
               ? '已开启精准匹配，当前关键词未命中精准书名。'
@@ -788,23 +423,52 @@ class _SearchPageState extends State<SearchPage> {
       return Card(
         child: Padding(
           padding: const EdgeInsets.all(16),
-          child: Text(emptyTip, style: Theme.of(context).textTheme.bodyMedium),
+          child: Text(emptyTip, style: theme.textTheme.bodyMedium),
         ),
       );
     }
 
     final visibleCount = _renderedResultCount.clamp(0, books.length);
-    final visibleBooks = books.take(visibleCount).toList(growable: false);
     final hasMoreResults = visibleCount < books.length;
 
     return Column(
       children: [
-        ...visibleBooks.asMap().entries.map(
-          (entry) => _buildBookCard(
-            entry.value,
-            report.sourceNames,
-            listIndex: entry.key,
-          ),
+        ListView.builder(
+          shrinkWrap: true,
+          physics: const NeverScrollableScrollPhysics(),
+          itemCount: visibleCount,
+          itemBuilder: (context, index) {
+            final book = books[index];
+            final sourceName =
+                report.sourceNames[book.sourceId] ?? book.sourceId;
+            final heroTag = _buildBookCoverHeroTag(
+              book: book,
+              listIndex: index,
+            );
+            final snippetKey =
+                '${book.sourceId}_${book.id}_${book.detailUrl.hashCode}';
+
+            return SearchBookCard(
+              book: book,
+              sourceName: sourceName,
+              heroTag: heroTag,
+              normalizedIntro: _normalizedIntros[snippetKey],
+              normalizedLatestChapter: _normalizedLatestChapters[snippetKey],
+              onTap: () {
+                final route =
+                    Uri(
+                      path: '/book/${book.id}',
+                      queryParameters: {
+                        'sourceId': book.sourceId,
+                        'detailUrl': book.detailUrl,
+                        'title': book.title,
+                        'heroTag': heroTag,
+                      },
+                    ).toString();
+                context.push(route);
+              },
+            );
+          },
         ),
         if (hasMoreResults)
           Padding(
@@ -830,183 +494,18 @@ class _SearchPageState extends State<SearchPage> {
     );
   }
 
-  Widget _buildBookCard(
-    Book book,
-    Map<String, String> sourceNames, {
+  String _buildBookCoverHeroTag({
+    required Book book,
     required int listIndex,
   }) {
-    final sourceName = sourceNames[book.sourceId] ?? book.sourceId;
-    final latestChapter = _normalizeSnippet(book.latestChapter);
-    final intro = _normalizeSnippet(book.intro);
-    final author = book.author?.trim();
-    final heroTag = _buildBookCoverHeroTag(book: book, listIndex: listIndex);
-
-    return Card(
-      margin: const EdgeInsets.only(bottom: 10),
-      clipBehavior: Clip.antiAlias,
-      child: InkWell(
-        onTap: () {
-          final route =
-              Uri(
-                path: '/book/${book.id}',
-                queryParameters: {
-                  'sourceId': book.sourceId,
-                  'detailUrl': book.detailUrl,
-                  'title': book.title,
-                  'heroTag': heroTag,
-                },
-              ).toString();
-          context.push(route);
-        },
-        child: Padding(
-          padding: const EdgeInsets.all(12),
-          child: Row(
-            crossAxisAlignment: CrossAxisAlignment.center,
-            children: [
-              _buildCoverPreview(book.coverUrl, heroTag: heroTag),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      book.title,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                        fontWeight: FontWeight.w700,
-                      ),
-                    ),
-                    const SizedBox(height: 4),
-                    Wrap(
-                      spacing: 6,
-                      runSpacing: 6,
-                      children: [
-                        _buildInfoPill('来源', sourceName),
-                        if (author != null && author.isNotEmpty)
-                          _buildInfoPill('作者', author),
-                      ],
-                    ),
-                    if (latestChapter != null && latestChapter.isNotEmpty)
-                      Padding(
-                        padding: const EdgeInsets.only(top: 6),
-                        child: Text(
-                          '最新章节: $latestChapter',
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: Theme.of(context).textTheme.bodySmall,
-                        ),
-                      ),
-                    if (intro != null && intro.isNotEmpty)
-                      Padding(
-                        padding: const EdgeInsets.only(top: 6),
-                        child: Container(
-                          width: double.infinity,
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 8,
-                            vertical: 6,
-                          ),
-                          decoration: BoxDecoration(
-                            color:
-                                Theme.of(
-                                  context,
-                                ).colorScheme.surfaceContainerHigh,
-                            borderRadius: BorderRadius.circular(8),
-                          ),
-                          child: Text(
-                            intro,
-                            maxLines: 2,
-                            overflow: TextOverflow.ellipsis,
-                            style: Theme.of(
-                              context,
-                            ).textTheme.bodySmall?.copyWith(
-                              color:
-                                  Theme.of(
-                                    context,
-                                  ).colorScheme.onSurfaceVariant,
-                              height: 1.35,
-                            ),
-                          ),
-                        ),
-                      ),
-                  ],
-                ),
-              ),
-              const SizedBox(width: 8),
-              Center(
-                child: Icon(
-                  Icons.chevron_right,
-                  color: Theme.of(context).colorScheme.onSurfaceVariant,
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildInfoPill(String label, String value) {
-    final colorScheme = Theme.of(context).colorScheme;
-
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-      decoration: BoxDecoration(
-        color: colorScheme.surfaceContainerHighest,
-        borderRadius: BorderRadius.circular(8),
-      ),
-      child: Text(
-        '$label: $value',
-        style: Theme.of(context).textTheme.labelSmall,
-      ),
-    );
-  }
-
-  String _buildBookCoverHeroTag({required Book book, required int listIndex}) {
     return 'book_cover_${book.sourceId}_${book.id}_${book.detailUrl.hashCode}_$listIndex';
   }
 
-  Widget _buildCoverPreview(String? coverUrl, {required String heroTag}) {
-    final uri = Uri.tryParse(coverUrl ?? '');
-    if (uri == null || !uri.hasScheme) {
-      return Hero(tag: heroTag, child: _buildCoverFallback());
-    }
-
-    return Hero(
-      tag: heroTag,
-      child: ClipRRect(
-        borderRadius: BorderRadius.circular(8),
-        child: Image.network(
-          coverUrl!,
-          width: 56,
-          height: 80,
-          fit: BoxFit.cover,
-          errorBuilder: (context, error, stackTrace) => _buildCoverFallback(),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildCoverFallback() {
-    final colorScheme = Theme.of(context).colorScheme;
-
-    return Container(
-      width: 56,
-      height: 80,
-      alignment: Alignment.center,
-      decoration: BoxDecoration(
-        color: colorScheme.surfaceContainerHighest,
-        borderRadius: BorderRadius.circular(8),
-      ),
-      child: Text('封面', style: Theme.of(context).textTheme.labelSmall),
-    );
-  }
+  // ── Snippet normalization (used at _setReport time, not during build) ──
 
   String? _normalizeSnippet(String? raw) {
     final text = raw?.trim();
-    if (text == null || text.isEmpty) {
-      return null;
-    }
+    if (text == null || text.isEmpty) return null;
 
     var normalized = text
         .replaceAll(r'\r\n', '\n')
@@ -1032,15 +531,13 @@ class _SearchPageState extends State<SearchPage> {
     return normalized.isEmpty ? null : normalized;
   }
 
+  // ── Precise matching ──
+
   List<Book> _applyPreciseFilter(List<Book> books, String keyword) {
-    if (!_isPreciseBookMatch) {
-      return books;
-    }
+    if (!_isPreciseBookMatch) return books;
 
     final normalizedKeyword = _normalizePreciseText(keyword);
-    if (normalizedKeyword.isEmpty) {
-      return books;
-    }
+    if (normalizedKeyword.isEmpty) return books;
 
     return books
         .where((book) => _isPreciseTitleMatch(book.title, normalizedKeyword))
@@ -1049,13 +546,9 @@ class _SearchPageState extends State<SearchPage> {
 
   bool _isPreciseTitleMatch(String title, String normalizedKeyword) {
     final normalizedTitle = _normalizePreciseText(title);
-    if (normalizedTitle.isEmpty) {
-      return false;
-    }
+    if (normalizedTitle.isEmpty) return false;
 
-    if (normalizedTitle == normalizedKeyword) {
-      return true;
-    }
+    if (normalizedTitle == normalizedKeyword) return true;
 
     if (!normalizedTitle.startsWith(normalizedKeyword) ||
         normalizedTitle.length <= normalizedKeyword.length) {
@@ -1068,9 +561,7 @@ class _SearchPageState extends State<SearchPage> {
 
   String _normalizePreciseText(String raw) {
     var normalized = raw.trim().toLowerCase();
-    if (normalized.isEmpty) {
-      return '';
-    }
+    if (normalized.isEmpty) return '';
 
     if (normalized.contains('<') && normalized.contains('>')) {
       normalized = normalized.replaceAll(_htmlTagRegex, ' ');
@@ -1094,6 +585,8 @@ class _SearchPageState extends State<SearchPage> {
 
     return normalized;
   }
+
+  // ── Progress throttling ──
 
   void _clearProgressUiThrottle() {
     _progressUiTimer?.cancel();
@@ -1126,9 +619,7 @@ class _SearchPageState extends State<SearchPage> {
     }
 
     _pendingProgressReport = report;
-    if (_progressUiTimer?.isActive ?? false) {
-      return;
-    }
+    if (_progressUiTimer?.isActive ?? false) return;
 
     final delay = _progressUiThrottleWindow - now.difference(lastUpdateAt);
     _progressUiTimer = Timer(delay, () {
@@ -1148,6 +639,8 @@ class _SearchPageState extends State<SearchPage> {
       });
     });
   }
+
+  // ── Search execution ──
 
   Future<void> _runSearch() async {
     if (_isSearching) {
@@ -1202,6 +695,9 @@ class _SearchPageState extends State<SearchPage> {
         _setReport(report);
       });
 
+      // Save to search history
+      unawaited(_historyService.add(keyword).then((_) => _loadSearchHistory()));
+
       if (report.books.isEmpty) {
         _showMessage('搜索完成，但没有命中结果。');
       }
@@ -1210,10 +706,11 @@ class _SearchPageState extends State<SearchPage> {
         return;
       }
       _showMessage(error.briefMessage);
-    } catch (_) {
+    } catch (error) {
       if (!mounted || token.isCancelled || sessionId != _searchSessionId) {
         return;
       }
+      debugPrint('Search failed: $error');
       _showMessage('搜索失败，请稍后重试。');
     } finally {
       _clearProgressUiThrottle();
@@ -1229,9 +726,7 @@ class _SearchPageState extends State<SearchPage> {
   }
 
   void _cancelSearch() {
-    if (!_isSearching) {
-      return;
-    }
+    if (!_isSearching) return;
 
     _activeSearchToken?.cancel();
     _clearProgressUiThrottle();
@@ -1243,10 +738,7 @@ class _SearchPageState extends State<SearchPage> {
   }
 
   void _showMessage(String text) {
-    if (!mounted) {
-      return;
-    }
-
+    if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(text)));
   }
 }
