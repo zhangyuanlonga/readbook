@@ -105,7 +105,8 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
   Timer? _autoReadResumeTimer;
   int _autoReadTaskToken = 0;
   bool _isAutoReadRunning = false;
-  bool _autoReadPausedByGesture = false;
+  bool _isAutoReadSessionEnabled = false;
+  bool _isAutoReadAdvancingChapter = false;
   String? _cachedBackgroundImageKey;
   MemoryImage? _cachedBackgroundImage;
   List<List<_PagedSlice>> _pagedPages = const [];
@@ -502,61 +503,131 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
 
     final bottomInset = _bottomSafeInset(context);
 
-    return NotificationListener<ScrollNotification>(
-      onNotification: _onReaderScrollNotification,
-      child: ListView.builder(
-        key: ValueKey(_chapterId),
-        controller: _scrollController,
-        cacheExtent: 1200,
-        padding: EdgeInsets.fromLTRB(
-          _settings.horizontalPadding,
-          18,
-          _settings.horizontalPadding,
-          96 + bottomInset,
-        ),
-        itemCount: paragraphs.isEmpty ? 1 : paragraphs.length,
-        itemBuilder: (context, index) {
-          if (paragraphs.isEmpty) {
-            return Text(
-              _applyParagraphIndent(_content),
-              style: _paragraphTextStyle(colors),
-            );
-          }
-
-          final paragraph = paragraphs[index];
-          final isLast = index == paragraphs.length - 1;
-
-          return RepaintBoundary(
-            child: Padding(
-              padding: EdgeInsets.only(
-                bottom: isLast ? 0 : _settings.paragraphSpacing,
-              ),
-              child: Text(
-                _applyParagraphIndent(paragraph),
-                style: _paragraphTextStyle(colors),
-              ),
+    return Stack(
+      children: [
+        NotificationListener<ScrollNotification>(
+          onNotification: _onReaderScrollNotification,
+          child: ListView.builder(
+            key: ValueKey(_chapterId),
+            controller: _scrollController,
+            cacheExtent: 1200,
+            padding: EdgeInsets.fromLTRB(
+              _settings.horizontalPadding,
+              18,
+              _settings.horizontalPadding,
+              96 + bottomInset,
             ),
-          );
-        },
+            itemCount: paragraphs.isEmpty ? 1 : paragraphs.length,
+            itemBuilder: (context, index) {
+              if (paragraphs.isEmpty) {
+                return Text(
+                  _applyParagraphIndent(_content),
+                  style: _paragraphTextStyle(colors),
+                );
+              }
+
+              final paragraph = paragraphs[index];
+              final isLast = index == paragraphs.length - 1;
+
+              return RepaintBoundary(
+                child: Padding(
+                  padding: EdgeInsets.only(
+                    bottom: isLast ? 0 : _settings.paragraphSpacing,
+                  ),
+                  child: Text(
+                    _applyParagraphIndent(paragraph),
+                    style: _paragraphTextStyle(colors),
+                  ),
+                ),
+              );
+            },
+          ),
+        ),
+        if (_isAutoReadSessionEnabled) _buildAutoReadIndicator(colors),
+      ],
+    );
+  }
+
+  Widget _buildAutoReadIndicator(_ReaderThemeColors colors) {
+    return Positioned.fill(
+      child: IgnorePointer(
+        child: LayoutBuilder(
+          builder: (context, constraints) {
+            final maxHeight = constraints.maxHeight;
+            if (maxHeight <= 1) {
+              return const SizedBox.shrink();
+            }
+            return AnimatedBuilder(
+              animation: _scrollController,
+              builder: (context, _) {
+                if (!_scrollController.hasClients ||
+                    _isMangaChapter ||
+                    _isTapPaginationEnabled()) {
+                  return const SizedBox.shrink();
+                }
+
+                final ratio = _autoReadProgressRatio();
+                final top = (maxHeight * ratio).clamp(2.0, maxHeight - 2.0);
+
+                return Stack(
+                  children: [
+                    Positioned(
+                      top: top - 14,
+                      left: 10,
+                      right: 10,
+                      child: Container(
+                        height: 28,
+                        decoration: BoxDecoration(
+                          gradient: LinearGradient(
+                            begin: Alignment.topCenter,
+                            end: Alignment.bottomCenter,
+                            colors: [
+                              Colors.transparent,
+                              colors.meta.withValues(alpha: 0.08),
+                              Colors.transparent,
+                            ],
+                          ),
+                        ),
+                      ),
+                    ),
+                    Positioned(
+                      top: top,
+                      left: 16,
+                      right: 16,
+                      child: Container(
+                        height: 1.8,
+                        decoration: BoxDecoration(
+                          borderRadius: BorderRadius.circular(999),
+                          gradient: LinearGradient(
+                            colors: [
+                              Colors.transparent,
+                              colors.meta.withValues(alpha: 0.28),
+                              colors.text.withValues(alpha: 0.52),
+                              colors.meta.withValues(alpha: 0.28),
+                              Colors.transparent,
+                            ],
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
+                );
+              },
+            );
+          },
+        ),
       ),
     );
   }
 
   bool _onReaderScrollNotification(ScrollNotification notification) {
-    if (!_settings.autoReadEnabled || _isTapPaginationEnabled()) {
+    if (!_isAutoReadSessionEnabled || _isTapPaginationEnabled()) {
       return false;
     }
 
     if (notification is ScrollStartNotification &&
         notification.dragDetails != null) {
-      _autoReadPausedByGesture = true;
-      _stopAutoRead();
-      return false;
-    }
-
-    if (notification is ScrollEndNotification && _autoReadPausedByGesture) {
-      _autoReadPausedByGesture = false;
-      _scheduleAutoReadResume();
+      _stopAutoReadSession();
     }
 
     return false;
@@ -1936,7 +2007,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
   Future<_ReaderSourceSwitchCandidate?> _showSwitchSourceCandidateSheet(
     List<_ReaderSourceSwitchCandidate> candidates,
   ) async {
-    _stopAutoRead();
+    _stopAutoReadSession();
     final shouldRestoreOverlay = _showOverlayControls;
     if (shouldRestoreOverlay) {
       _hideOverlayControls(resumeAutoRead: false);
@@ -2375,12 +2446,14 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
   }
 
   Widget _buildBottomOverlay(_ReaderThemeColors colors) {
-    final isNight = _effectiveReaderThemeMode() == ReaderThemeMode.dark;
-    final dayNightLabel = isNight ? '日间' : '夜间';
-    final dayNightIcon =
-        isNight ? Icons.light_mode_outlined : Icons.dark_mode_outlined;
-    final middleLabel = _isMangaChapter ? '定位' : dayNightLabel;
-    final middleIcon = _isMangaChapter ? Icons.gps_fixed_rounded : dayNightIcon;
+    final middleLabel =
+        _isMangaChapter ? '定位' : (_isAutoReadSessionEnabled ? '停止' : '自动读');
+    final middleIcon =
+        _isMangaChapter
+            ? Icons.gps_fixed_rounded
+            : (_isAutoReadSessionEnabled
+                ? Icons.pause_circle_outline_rounded
+                : Icons.play_circle_outline_rounded);
 
     final bottomInset = _bottomSafeInset(context);
 
@@ -2437,11 +2510,10 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
                               onTap:
                                   _isMangaChapter
                                       ? _openMangaPositionSheet
-                                      : _toggleDayNight,
+                                      : _toggleAutoReadSession,
                               colors: colors,
                               active:
-                                  !_isMangaChapter &&
-                                  _settings.themeMode == ReaderThemeMode.dark,
+                                  !_isMangaChapter && _isAutoReadSessionEnabled,
                             ),
                           ),
                           Expanded(
@@ -2565,10 +2637,8 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
     try {
       _settings = await _preferencesService.loadSettings();
       _settings = _settings.copyWith(
-        pageTurnMode:
-            _settings.autoReadEnabled
-                ? ReaderPageTurnMode.scroll
-                : ReaderPageTurnMode.tap,
+        pageTurnMode: ReaderPageTurnMode.tap,
+        autoReadEnabled: false,
       );
 
       final progress = await _preferencesService.loadProgress(widget.bookId);
@@ -2676,7 +2746,6 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
     Map<String, String> imageHeaders = const {},
   }) {
     _stopAutoRead();
-    _autoReadPausedByGesture = false;
     _disposeMangaTransformControllers();
     _content = content;
     _chapterImageUrls = List.unmodifiable(imageUrls);
@@ -2837,7 +2906,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
   }
 
   bool _canRunAutoReadNow() {
-    if (!_settings.autoReadEnabled ||
+    if (!_isAutoReadSessionEnabled ||
         _isMangaChapter ||
         _isTapPaginationEnabled() ||
         _showOverlayControls ||
@@ -2860,12 +2929,35 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
     return position.pixels < position.maxScrollExtent - 0.8;
   }
 
+  double _autoReadProgressRatio() {
+    if (!_scrollController.hasClients) {
+      return 0;
+    }
+    final maxExtent = _scrollController.position.maxScrollExtent;
+    if (maxExtent <= 0) {
+      return 1;
+    }
+    return (_scrollController.position.pixels / maxExtent).clamp(0.0, 1.0);
+  }
+
+  bool _isAutoReadAtChapterEnd() {
+    if (!_scrollController.hasClients) {
+      return false;
+    }
+    final position = _scrollController.position;
+    final maxExtent = position.maxScrollExtent;
+    if (maxExtent <= 0.8) {
+      return true;
+    }
+    return position.pixels >= maxExtent - 0.8;
+  }
+
   void _scheduleAutoReadResume() {
     if (!mounted) {
       return;
     }
     _autoReadResumeTimer?.cancel();
-    if (!_settings.autoReadEnabled) {
+    if (!_isAutoReadSessionEnabled) {
       return;
     }
     _autoReadResumeTimer = Timer(_kAutoReadResumeDelay, () {
@@ -2878,10 +2970,9 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
       return;
     }
     if (restart) {
-      _autoReadPausedByGesture = false;
       _stopAutoRead();
     }
-    if (!_settings.autoReadEnabled) {
+    if (!_isAutoReadSessionEnabled) {
       _stopAutoRead();
       return;
     }
@@ -2893,6 +2984,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
         _startAutoReadIfNeeded();
       } else {
         _stopAutoRead();
+        unawaited(_tryAutoReadAdvanceChapter());
       }
     });
   }
@@ -2941,6 +3033,33 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
 
     if (token == _autoReadTaskToken) {
       _isAutoReadRunning = false;
+      unawaited(_tryAutoReadAdvanceChapter());
+    }
+  }
+
+  Future<void> _tryAutoReadAdvanceChapter() async {
+    if (!_isAutoReadSessionEnabled ||
+        _isAutoReadAdvancingChapter ||
+        _isMangaChapter ||
+        _isTapPaginationEnabled() ||
+        _showOverlayControls ||
+        _isBootstrapping ||
+        _isLoadingContent ||
+        _errorText != null ||
+        !_isAutoReadAtChapterEnd()) {
+      return;
+    }
+
+    final currentIndex = _currentIndex;
+    if (currentIndex == null || currentIndex >= _chapters.length - 1) {
+      return;
+    }
+
+    _isAutoReadAdvancingChapter = true;
+    try {
+      await _jumpTo(currentIndex + 1, initialScrollRatio: 0);
+    } finally {
+      _isAutoReadAdvancingChapter = false;
     }
   }
 
@@ -3433,8 +3552,9 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
         localPosition.dy >= centerTop &&
         localPosition.dy <= centerBottom;
 
-    if (_settings.autoReadEnabled) {
-      _stopAutoRead();
+    if (_isAutoReadSessionEnabled) {
+      _stopAutoReadSession(showMessage: true);
+      return;
     }
 
     if (isCenterTap) {
@@ -3592,7 +3712,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
       _showMessage('当前书籍暂无目录。');
       return;
     }
-    _stopAutoRead();
+    _stopAutoReadSession();
 
     const itemExtent = 64.0;
     final currentIndex = _currentIndex;
@@ -4020,22 +4140,63 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
     return '$prefix$snippet$suffix';
   }
 
-  Future<void> _toggleDayNight() async {
-    final isNight = _effectiveReaderThemeMode() == ReaderThemeMode.dark;
-    final nextSettings = _settings.copyWith(
-      themeMode: isNight ? ReaderThemeMode.light : ReaderThemeMode.dark,
-      backgroundStyle: ReaderBackgroundStyle.plain,
-      backgroundTone:
-          isNight
-              ? ReaderBackgroundTone.surface
-              : ReaderBackgroundTone.containerHigh,
-      clearBackgroundImage: true,
-    );
+  Future<void> _toggleAutoReadSession() async {
+    if (_isAutoReadSessionEnabled) {
+      _stopAutoReadSession(showMessage: true);
+      return;
+    }
+
+    if (_isMangaChapter) {
+      _showMessage('漫画模式暂不支持自动阅读。');
+      return;
+    }
+
+    if (_showOverlayControls) {
+      _hideOverlayControls(resumeAutoRead: false);
+    }
+    _startAutoReadSession(showMessage: true);
+  }
+
+  void _startAutoReadSession({bool showMessage = false}) {
+    if (!mounted || _isMangaChapter) {
+      return;
+    }
+
+    _autoReadResumeTimer?.cancel();
     setState(() {
-      _settings = nextSettings;
+      _isAutoReadSessionEnabled = true;
+      _settings = _settings.copyWith(
+        pageTurnMode: ReaderPageTurnMode.scroll,
+        autoReadEnabled: false,
+      );
     });
-    await _preferencesService.saveSettings(nextSettings);
-    _showMessage(isNight ? '已切换日间模式。' : '已切换夜间模式。');
+    _reconcileAutoRead(restart: true);
+    if (showMessage) {
+      _showMessage('已开启自动阅读。');
+    }
+  }
+
+  void _stopAutoReadSession({bool showMessage = false}) {
+    final hadSession = _isAutoReadSessionEnabled;
+    _isAutoReadAdvancingChapter = false;
+    _autoReadResumeTimer?.cancel();
+    _stopAutoRead();
+
+    if (mounted) {
+      setState(() {
+        _isAutoReadSessionEnabled = false;
+        _settings = _settings.copyWith(
+          pageTurnMode: ReaderPageTurnMode.tap,
+          autoReadEnabled: false,
+        );
+      });
+    } else {
+      _isAutoReadSessionEnabled = false;
+    }
+
+    if (showMessage && hadSession) {
+      _showMessage('已停止自动阅读。');
+    }
   }
 
   int? _resolveCurrentIndex(List<Chapter> chapters) {
@@ -4098,7 +4259,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
   }
 
   Future<void> _showSettingsSheet() async {
-    _stopAutoRead();
+    _stopAutoReadSession();
     final shouldRestoreOverlay = _showOverlayControls;
     if (shouldRestoreOverlay) {
       _hideOverlayControls(resumeAutoRead: false);
@@ -4854,91 +5015,64 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
                                                 ],
                                               ),
                                               const SizedBox(height: 10),
-                                              SwitchListTile.adaptive(
-                                                value: draft.autoReadEnabled,
-                                                contentPadding: EdgeInsets.zero,
-                                                dense: true,
-                                                title: const Text('自动阅读'),
-                                                subtitle: Text(
-                                                  draft.autoReadEnabled
-                                                      ? '已开启滚动阅读'
-                                                      : '关闭',
-                                                ),
-                                                onChanged: (enabled) {
+                                              Text(
+                                                '自动阅读速度：${_autoReadSpeedLevelLabel(draft.autoReadSpeed)} · ${draft.autoReadSpeed.round()} px/s',
+                                                style: Theme.of(context)
+                                                    .textTheme
+                                                    .labelMedium
+                                                    ?.copyWith(
+                                                      color:
+                                                          Theme.of(context)
+                                                              .colorScheme
+                                                              .onSurfaceVariant,
+                                                    ),
+                                              ),
+                                              Slider(
+                                                min:
+                                                    ReaderSettings
+                                                        .minAutoReadSpeed,
+                                                max:
+                                                    ReaderSettings
+                                                        .maxAutoReadSpeed,
+                                                divisions: 20,
+                                                label:
+                                                    '${draft.autoReadSpeed.round()}',
+                                                value:
+                                                    draft.autoReadSpeed
+                                                        .clamp(
+                                                          ReaderSettings
+                                                              .minAutoReadSpeed,
+                                                          ReaderSettings
+                                                              .maxAutoReadSpeed,
+                                                        )
+                                                        .toDouble(),
+                                                onChanged: (value) {
                                                   setModalState(() {
                                                     draft = draft.copyWith(
-                                                      autoReadEnabled: enabled,
-                                                      pageTurnMode:
-                                                          enabled
-                                                              ? ReaderPageTurnMode
-                                                                  .scroll
-                                                              : ReaderPageTurnMode
-                                                                  .tap,
+                                                      autoReadSpeed: value,
                                                     );
                                                   });
                                                 },
                                               ),
-                                              if (draft.autoReadEnabled) ...[
-                                                const SizedBox(height: 6),
-                                                Text(
-                                                  '速度：${_autoReadSpeedLevelLabel(draft.autoReadSpeed)} · ${draft.autoReadSpeed.round()} px/s',
-                                                  style: Theme.of(context)
-                                                      .textTheme
-                                                      .labelMedium
-                                                      ?.copyWith(
-                                                        color:
-                                                            Theme.of(context)
-                                                                .colorScheme
-                                                                .onSurfaceVariant,
-                                                      ),
-                                                ),
-                                                Slider(
-                                                  min:
-                                                      ReaderSettings
-                                                          .minAutoReadSpeed,
-                                                  max:
-                                                      ReaderSettings
-                                                          .maxAutoReadSpeed,
-                                                  divisions: 20,
-                                                  label:
-                                                      '${draft.autoReadSpeed.round()}',
-                                                  value:
-                                                      draft.autoReadSpeed
-                                                          .clamp(
-                                                            ReaderSettings
-                                                                .minAutoReadSpeed,
-                                                            ReaderSettings
-                                                                .maxAutoReadSpeed,
-                                                          )
-                                                          .toDouble(),
-                                                  onChanged: (value) {
-                                                    setModalState(() {
-                                                      draft = draft.copyWith(
-                                                        autoReadSpeed: value,
-                                                      );
-                                                    });
-                                                  },
-                                                ),
-                                                Row(
-                                                  children: [
-                                                    Text(
-                                                      '慢',
-                                                      style:
-                                                          Theme.of(context)
-                                                              .textTheme
-                                                              .labelSmall,
-                                                    ),
-                                                    const Spacer(),
-                                                    Text(
-                                                      '快',
-                                                      style:
-                                                          Theme.of(context)
-                                                              .textTheme
-                                                              .labelSmall,
-                                                    ),
-                                                  ],
-                                                ),
-                                              ],
+                                              Row(
+                                                children: [
+                                                  Text(
+                                                    '慢',
+                                                    style:
+                                                        Theme.of(
+                                                          context,
+                                                        ).textTheme.labelSmall,
+                                                  ),
+                                                  const Spacer(),
+                                                  Text(
+                                                    '快',
+                                                    style:
+                                                        Theme.of(
+                                                          context,
+                                                        ).textTheme.labelSmall,
+                                                  ),
+                                                ],
+                                              ),
                                             ],
                                           ),
                                 ),
@@ -4990,22 +5124,18 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
     }
 
     if (result == null) {
-      _scheduleAutoReadResume();
       return;
     }
 
     final appliedResult = result.copyWith(
-      pageTurnMode:
-          result.autoReadEnabled
-              ? ReaderPageTurnMode.scroll
-              : ReaderPageTurnMode.tap,
+      pageTurnMode: ReaderPageTurnMode.tap,
+      autoReadEnabled: false,
     );
 
     setState(() {
       _settings = appliedResult;
     });
     await _preferencesService.saveSettings(appliedResult);
-    _reconcileAutoRead(restart: true);
   }
 
   Future<void> _ensureBackgroundPresetsReady() async {
