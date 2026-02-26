@@ -23,189 +23,31 @@ class SystemSettingsPage extends StatelessWidget {
       },
       child: Scaffold(
         appBar: AppBar(title: const Text('系统设置')),
-        body: LayoutBuilder(
-          builder: (context, _) {
-            final maxWidth = AppLayout.pageContentMaxWidth(
-              context,
-              maxWidth: AppLayout.systemSettingsContentMaxWidth,
-            );
-
-            return Align(
-              alignment: Alignment.topCenter,
-              child: ConstrainedBox(
-                constraints: BoxConstraints(maxWidth: maxWidth),
-                child: LayoutBuilder(
-                  builder: (context, innerConstraints) {
-                    final isExpanded = AppLayout.isExpandedWidth(
-                      innerConstraints.maxWidth,
-                    );
-                    final leftCards = <Widget>[
-                      _buildOverviewCard(context),
-                      const SizedBox(height: 10),
-                      _buildDisplayCard(context),
-                    ];
-                    final rightCards = <Widget>[
-                      _buildRuntimeCard(context),
-                      const SizedBox(height: 10),
-                      _buildPlannedCard(context),
-                    ];
-
-                    return ListView(
-                      padding: EdgeInsets.fromLTRB(
-                        horizontal,
-                        12,
-                        horizontal,
-                        12 + bottomSafe,
-                      ),
-                      children: [
-                        if (!isExpanded) ...leftCards,
-                        if (!isExpanded) const SizedBox(height: 10),
-                        if (!isExpanded) ...rightCards,
-                        if (isExpanded)
-                          Row(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Expanded(
-                                flex: 12,
-                                child: Column(children: leftCards),
-                              ),
-                              const SizedBox(width: 10),
-                              Expanded(
-                                flex: 10,
-                                child: Column(children: rightCards),
-                              ),
-                            ],
-                          ),
-                      ],
-                    );
-                  },
-                ),
+        body: Align(
+          alignment: Alignment.topCenter,
+          child: ConstrainedBox(
+            constraints: BoxConstraints(
+              maxWidth: AppLayout.pageContentMaxWidth(
+                context,
+                maxWidth: AppLayout.systemSettingsContentMaxWidth,
               ),
-            );
-          },
-        ),
-      ),
-    );
-  }
-
-  Widget _buildOverviewCard(BuildContext context) {
-    final colorScheme = Theme.of(context).colorScheme;
-
-    return Card(
-      clipBehavior: Clip.antiAlias,
-      child: Container(
-        decoration: BoxDecoration(
-          gradient: LinearGradient(
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-            colors: [
-              colorScheme.tertiaryContainer.withValues(alpha: 0.8),
-              colorScheme.surfaceContainerLow,
-            ],
-          ),
-        ),
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(14, 14, 14, 12),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
-                children: [
-                  Icon(Icons.tune_rounded, color: colorScheme.primary),
-                  const SizedBox(width: 8),
-                  Text(
-                    '系统级配置',
-                    style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                      fontWeight: FontWeight.w700,
-                    ),
-                  ),
-                ],
+            ),
+            child: ListView(
+              padding: EdgeInsets.fromLTRB(
+                horizontal,
+                12,
+                horizontal,
+                12 + bottomSafe,
               ),
-              const SizedBox(height: 8),
-              Text(
-                '用于集中展示运行策略、显示行为与平台相关能力。当前先提供基础信息与入口，后续逐步开放可配置项。',
-                style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                  color: colorScheme.onSurfaceVariant,
-                  height: 1.35,
-                ),
-              ),
-            ],
+              children: [_buildAppIconCard(context)],
+            ),
           ),
         ),
       ),
     );
   }
 
-  Widget _buildDisplayCard(BuildContext context) {
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.fromLTRB(12, 12, 12, 10),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            _buildSectionTitle(
-              context,
-              icon: Icons.display_settings_outlined,
-              title: '显示与交互',
-            ),
-            const SizedBox(height: 8),
-            _SettingRow(
-              icon: Icons.text_fields_rounded,
-              title: '文本缩放策略',
-              subtitle: '当前启用安全区间限制，避免极端字号破版。',
-              status: '已启用',
-            ),
-            const SizedBox(height: 8),
-            _SettingRow(
-              icon: Icons.motion_photos_on_outlined,
-              title: '过渡动画时长',
-              subtitle: '全局主题切换采用 180ms 缓动动画。',
-              status: '180ms',
-            ),
-            const SizedBox(height: 8),
-            const _AppIconSettingRow(),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildRuntimeCard(BuildContext context) {
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.fromLTRB(12, 12, 12, 10),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            _buildSectionTitle(
-              context,
-              icon: Icons.memory_rounded,
-              title: '运行与数据',
-            ),
-            const SizedBox(height: 8),
-            _SettingRow(
-              icon: Icons.wifi_tethering_rounded,
-              title: '网络请求策略',
-              subtitle: '书源请求包含统一超时、错误分类与重试策略。',
-              status: '已配置',
-            ),
-            const SizedBox(height: 8),
-            _SettingRow(
-              icon: Icons.cloud_outlined,
-              title: '缓存管理',
-              subtitle: '进入缓存页清理已缓存章节数据。',
-              status: '可管理',
-              onTap: () => context.push('/cache'),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildPlannedCard(BuildContext context) {
-    final colorScheme = Theme.of(context).colorScheme;
-
+  Widget _buildAppIconCard(BuildContext context) {
     return Card(
       child: Padding(
         padding: const EdgeInsets.fromLTRB(12, 12, 12, 12),
@@ -214,26 +56,18 @@ class SystemSettingsPage extends StatelessWidget {
           children: [
             _buildSectionTitle(
               context,
-              icon: Icons.engineering_outlined,
-              title: '后续计划',
+              icon: Icons.app_shortcut_rounded,
+              title: 'APP 图标',
             ),
-            const SizedBox(height: 8),
+            const SizedBox(height: 6),
             Text(
-              '后续会在此页补充平台权限开关、启动行为、日志级别与实验性能力入口。',
+              '选择桌面图标样式。',
               style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                color: colorScheme.onSurfaceVariant,
-                height: 1.35,
+                color: Theme.of(context).colorScheme.onSurfaceVariant,
               ),
             ),
             const SizedBox(height: 10),
-            SizedBox(
-              width: double.infinity,
-              child: OutlinedButton.icon(
-                onPressed: null,
-                icon: const Icon(Icons.construction_outlined, size: 18),
-                label: const Text('更多能力开发中'),
-              ),
-            ),
+            const _AppIconSettingPanel(),
           ],
         ),
       ),
@@ -246,7 +80,6 @@ class SystemSettingsPage extends StatelessWidget {
     required String title,
   }) {
     final colorScheme = Theme.of(context).colorScheme;
-
     return Row(
       children: [
         Icon(icon, size: 18, color: colorScheme.primary),
@@ -262,102 +95,14 @@ class SystemSettingsPage extends StatelessWidget {
   }
 }
 
-class _SettingRow extends StatelessWidget {
-  const _SettingRow({
-    required this.icon,
-    required this.title,
-    required this.subtitle,
-    required this.status,
-    this.onTap,
-  });
-
-  final IconData icon;
-  final String title;
-  final String subtitle;
-  final String status;
-  final VoidCallback? onTap;
+class _AppIconSettingPanel extends StatefulWidget {
+  const _AppIconSettingPanel();
 
   @override
-  Widget build(BuildContext context) {
-    final colorScheme = Theme.of(context).colorScheme;
-    final child = Container(
-      width: double.infinity,
-      padding: const EdgeInsets.fromLTRB(10, 10, 10, 10),
-      decoration: BoxDecoration(
-        color: colorScheme.surfaceContainerLow,
-        borderRadius: BorderRadius.circular(10),
-        border: Border.all(
-          color: colorScheme.outlineVariant.withValues(alpha: 0.45),
-        ),
-      ),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Padding(
-            padding: const EdgeInsets.only(top: 2),
-            child: Icon(icon, size: 18, color: colorScheme.primary),
-          ),
-          const SizedBox(width: 8),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  title,
-                  style: Theme.of(
-                    context,
-                  ).textTheme.labelLarge?.copyWith(fontWeight: FontWeight.w700),
-                ),
-                const SizedBox(height: 3),
-                Text(
-                  subtitle,
-                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                    color: colorScheme.onSurfaceVariant,
-                    height: 1.3,
-                  ),
-                ),
-              ],
-            ),
-          ),
-          const SizedBox(width: 8),
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-            decoration: BoxDecoration(
-              color: colorScheme.secondaryContainer,
-              borderRadius: BorderRadius.circular(999),
-            ),
-            child: Text(
-              status,
-              style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                color: colorScheme.onSecondaryContainer,
-                fontWeight: FontWeight.w700,
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-
-    if (onTap == null) {
-      return child;
-    }
-
-    return InkWell(
-      borderRadius: BorderRadius.circular(10),
-      onTap: onTap,
-      child: child,
-    );
-  }
+  State<_AppIconSettingPanel> createState() => _AppIconSettingPanelState();
 }
 
-class _AppIconSettingRow extends StatefulWidget {
-  const _AppIconSettingRow();
-
-  @override
-  State<_AppIconSettingRow> createState() => _AppIconSettingRowState();
-}
-
-class _AppIconSettingRowState extends State<_AppIconSettingRow> {
+class _AppIconSettingPanelState extends State<_AppIconSettingPanel> {
   final AppIconService _appIconService = AppIconService();
 
   bool _isLoading = true;
@@ -425,25 +170,104 @@ class _AppIconSettingRowState extends State<_AppIconSettingRow> {
   @override
   Widget build(BuildContext context) {
     if (_isLoading) {
-      return const _SettingRow(
-        icon: Icons.app_shortcut_rounded,
-        title: 'APP 图标',
-        subtitle: '正在读取当前图标配置。',
-        status: '读取中',
-      );
+      return _buildStateHint(context, message: '正在读取当前图标配置...');
     }
     if (!_isSupported) {
-      return const _SettingRow(
-        icon: Icons.app_shortcut_rounded,
-        title: 'APP 图标',
-        subtitle: '当前平台不支持动态切换图标。',
-        status: '不可用',
-      );
+      return _buildStateHint(context, message: '当前平台不支持动态切换图标。');
     }
 
     final colorScheme = Theme.of(context).colorScheme;
     final textTheme = Theme.of(context).textTheme;
 
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Container(
+          width: double.infinity,
+          padding: const EdgeInsets.fromLTRB(10, 8, 10, 8),
+          decoration: BoxDecoration(
+            color: colorScheme.secondaryContainer,
+            borderRadius: BorderRadius.circular(10),
+          ),
+          child: Row(
+            children: [
+              Icon(
+                Icons.check_circle_rounded,
+                size: 16,
+                color: colorScheme.onSecondaryContainer,
+              ),
+              const SizedBox(width: 6),
+              Text(
+                '当前图标：${_currentIcon.label}',
+                style: textTheme.labelMedium?.copyWith(
+                  color: colorScheme.onSecondaryContainer,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 10),
+        Row(
+          children: [
+            Expanded(
+              child: _AppIconOptionTile(
+                icon: Icons.home_rounded,
+                label: AppIconVariant.primary.label,
+                description: '默认样式',
+                selected: _currentIcon == AppIconVariant.primary,
+                enabled: !_isUpdating,
+                onTap: () => _switchIcon(AppIconVariant.primary),
+              ),
+            ),
+            const SizedBox(width: 8),
+            Expanded(
+              child: _AppIconOptionTile(
+                icon: Icons.auto_awesome_rounded,
+                label: AppIconVariant.alt.label,
+                description: '备选样式',
+                selected: _currentIcon == AppIconVariant.alt,
+                enabled: !_isUpdating,
+                onTap: () => _switchIcon(AppIconVariant.alt),
+              ),
+            ),
+          ],
+        ),
+        if (_isUpdating) ...[
+          const SizedBox(height: 10),
+          Row(
+            children: [
+              SizedBox(
+                width: 14,
+                height: 14,
+                child: CircularProgressIndicator(
+                  strokeWidth: 2,
+                  color: colorScheme.primary,
+                ),
+              ),
+              const SizedBox(width: 6),
+              Text(
+                '正在切换图标...',
+                style: textTheme.bodySmall?.copyWith(
+                  color: colorScheme.onSurfaceVariant,
+                ),
+              ),
+            ],
+          ),
+        ],
+        if (_errorText case final message?) ...[
+          const SizedBox(height: 8),
+          Text(
+            message,
+            style: textTheme.bodySmall?.copyWith(color: colorScheme.error),
+          ),
+        ],
+      ],
+    );
+  }
+
+  Widget _buildStateHint(BuildContext context, {required String message}) {
+    final colorScheme = Theme.of(context).colorScheme;
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.fromLTRB(10, 10, 10, 10),
@@ -454,103 +278,101 @@ class _AppIconSettingRowState extends State<_AppIconSettingRow> {
           color: colorScheme.outlineVariant.withValues(alpha: 0.45),
         ),
       ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Padding(
-                padding: const EdgeInsets.only(top: 2),
-                child: Icon(
-                  Icons.app_shortcut_rounded,
-                  size: 18,
-                  color: colorScheme.primary,
-                ),
-              ),
-              const SizedBox(width: 8),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
+      child: Text(
+        message,
+        style: Theme.of(context).textTheme.bodySmall?.copyWith(
+          color: colorScheme.onSurfaceVariant,
+          height: 1.3,
+        ),
+      ),
+    );
+  }
+}
+
+class _AppIconOptionTile extends StatelessWidget {
+  const _AppIconOptionTile({
+    required this.icon,
+    required this.label,
+    required this.description,
+    required this.selected,
+    required this.enabled,
+    required this.onTap,
+  });
+
+  final IconData icon;
+  final String label;
+  final String description;
+  final bool selected;
+  final bool enabled;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+    final borderColor =
+        selected ? colorScheme.primary : colorScheme.outlineVariant;
+    final backgroundColor =
+        selected
+            ? colorScheme.secondaryContainer
+            : colorScheme.surfaceContainerLow;
+    final foregroundColor =
+        selected ? colorScheme.onSecondaryContainer : colorScheme.onSurface;
+
+    return Opacity(
+      opacity: enabled ? 1 : 0.6,
+      child: Material(
+        color: backgroundColor,
+        borderRadius: BorderRadius.circular(10),
+        child: InkWell(
+          borderRadius: BorderRadius.circular(10),
+          onTap: enabled ? onTap : null,
+          child: Container(
+            width: double.infinity,
+            padding: const EdgeInsets.fromLTRB(10, 10, 10, 10),
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(10),
+              border: Border.all(color: borderColor),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
                   children: [
-                    Text(
-                      'APP 图标',
-                      style: textTheme.labelLarge?.copyWith(
-                        fontWeight: FontWeight.w700,
+                    Icon(icon, size: 16, color: foregroundColor),
+                    const SizedBox(width: 6),
+                    Expanded(
+                      child: Text(
+                        label,
+                        style: Theme.of(context).textTheme.labelLarge?.copyWith(
+                          color: foregroundColor,
+                          fontWeight: FontWeight.w700,
+                        ),
                       ),
                     ),
-                    const SizedBox(height: 3),
-                    Text(
-                      '切换后桌面图标可能有短暂刷新延迟。',
-                      style: textTheme.bodySmall?.copyWith(
-                        color: colorScheme.onSurfaceVariant,
-                        height: 1.3,
+                    if (selected)
+                      Icon(
+                        Icons.check_rounded,
+                        size: 16,
+                        color: foregroundColor,
                       ),
-                    ),
                   ],
                 ),
-              ),
-              const SizedBox(width: 8),
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                decoration: BoxDecoration(
-                  color: colorScheme.secondaryContainer,
-                  borderRadius: BorderRadius.circular(999),
-                ),
-                child: Text(
-                  _currentIcon.label,
-                  style: textTheme.labelSmall?.copyWith(
-                    color: colorScheme.onSecondaryContainer,
-                    fontWeight: FontWeight.w700,
-                  ),
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 8),
-          Wrap(
-            spacing: 8,
-            runSpacing: 8,
-            children: [
-              for (final icon in AppIconVariant.values)
-                ChoiceChip(
-                  label: Text(icon.label),
-                  selected: icon == _currentIcon,
-                  onSelected: _isUpdating ? null : (_) => _switchIcon(icon),
-                  showCheckmark: false,
-                ),
-            ],
-          ),
-          if (_isUpdating) ...[
-            const SizedBox(height: 8),
-            Row(
-              children: [
-                SizedBox(
-                  width: 14,
-                  height: 14,
-                  child: CircularProgressIndicator(
-                    strokeWidth: 2,
-                    color: colorScheme.primary,
-                  ),
-                ),
-                const SizedBox(width: 6),
+                const SizedBox(height: 4),
                 Text(
-                  '正在切换图标...',
-                  style: textTheme.bodySmall?.copyWith(
-                    color: colorScheme.onSurfaceVariant,
+                  description,
+                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                    color:
+                        selected
+                            ? colorScheme.onSecondaryContainer.withValues(
+                              alpha: 0.85,
+                            )
+                            : colorScheme.onSurfaceVariant,
                   ),
                 ),
               ],
             ),
-          ],
-          if (_errorText case final message?) ...[
-            const SizedBox(height: 8),
-            Text(
-              message,
-              style: textTheme.bodySmall?.copyWith(color: colorScheme.error),
-            ),
-          ],
-        ],
+          ),
+        ),
       ),
     );
   }

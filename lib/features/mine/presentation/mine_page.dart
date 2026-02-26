@@ -523,26 +523,6 @@ class _MinePageState extends ConsumerState<MinePage> {
     );
   }
 
-  List<_MineActionItem> _resolveCommonServiceActions(BuildContext context) {
-    return <_MineActionItem>[
-      _MineActionItem(
-        icon: Icons.menu_book_rounded,
-        label: '书源',
-        onTap: () => context.go('/source'),
-      ),
-      _MineActionItem(
-        icon: Icons.rule_outlined,
-        label: '规则配置',
-        onTap: () => context.push('/rule-config'),
-      ),
-      _MineActionItem(
-        icon: Icons.cloud_outlined,
-        label: '缓存管理',
-        onTap: () => context.push('/cache'),
-      ),
-    ];
-  }
-
   String _themeModeLabel(ThemeMode mode) {
     return switch (mode) {
       ThemeMode.light => '日间',
