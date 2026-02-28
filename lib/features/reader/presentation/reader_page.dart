@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'dart:math';
 
 import 'package:file_selector/file_selector.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -1174,7 +1175,10 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
     required double bottomInset,
   }) {
     final platform = Theme.of(context).platform;
-    final safeBottomInset = max(bottomInset, _effectiveBottomSafeInset(context));
+    final safeBottomInset = max(
+      bottomInset,
+      _effectiveBottomSafeInset(context),
+    );
     final collapsedTextBottomPadding =
         platform == TargetPlatform.iOS
             ? (safeBottomInset - 8).clamp(0.0, 64.0)
@@ -1896,37 +1900,11 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
       return;
     }
 
-    setState(() {
-      _isSwitchSourceLoading = true;
-    });
-
-    List<_ReaderSourceSwitchCandidate> candidates = const [];
+    _SwitchSourceScope scope;
     try {
-      final scope = await _buildSwitchSourceScope(
-        currentSourceId: currentSourceId,
-      );
+      scope = await _buildSwitchSourceScope(currentSourceId: currentSourceId);
       if (scope.sourceIds.isEmpty) {
         _showMessage('暂无可切换的同类型书源。');
-        return;
-      }
-
-      final report = await _switchSourceSearchService.search(
-        keyword: keyword,
-        pageSize: 16,
-        contentMode: scope.contentMode,
-        sourceIds: scope.sourceIds,
-      );
-      candidates = _buildSwitchSourceCandidates(
-        books: report.books,
-        sourceNames: report.sourceNames,
-        currentSourceId: currentSourceId,
-        currentChapterCount: _chapters.length,
-        targetTitle: keyword,
-        targetAuthor: _bookAuthor,
-      );
-
-      if (candidates.isEmpty) {
-        _showMessage('没有检索到可切换书源，请稍后重试。');
         return;
       }
     } on AppException catch (error) {
@@ -1935,19 +1913,43 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
     } catch (_) {
       _showMessage('查找可切换书源失败，请稍后重试。');
       return;
-    } finally {
-      if (mounted) {
-        setState(() {
-          _isSwitchSourceLoading = false;
-        });
-      }
     }
 
+    final lookupStateNotifier = ValueNotifier<_ReaderSwitchSourceLookupState>(
+      _ReaderSwitchSourceLookupState.loading(
+        sourceCount: scope.sourceIds.length,
+      ),
+    );
+    final cancellationToken = SearchCancellationToken();
+
+    setState(() {
+      _isSwitchSourceLoading = true;
+    });
+
+    final searchFuture = _loadSwitchSourceCandidatesProgressively(
+      keyword: keyword,
+      scope: scope,
+      currentSourceId: currentSourceId,
+      lookupStateNotifier: lookupStateNotifier,
+      cancellationToken: cancellationToken,
+    );
+
     if (!mounted) {
+      cancellationToken.cancel();
+      unawaited(searchFuture.whenComplete(lookupStateNotifier.dispose));
       return;
     }
 
-    final selected = await _showSwitchSourceCandidateSheet(candidates);
+    final selected = await _showSwitchSourceCandidateSheet(lookupStateNotifier);
+    cancellationToken.cancel();
+    unawaited(searchFuture.whenComplete(lookupStateNotifier.dispose));
+
+    if (mounted) {
+      setState(() {
+        _isSwitchSourceLoading = false;
+      });
+    }
+
     if (selected == null || !mounted) {
       _scheduleAutoReadResume();
       return;
@@ -1983,6 +1985,88 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
       contentMode:
           isMangaType ? SearchContentMode.manga : SearchContentMode.novel,
     );
+  }
+
+  Future<void> _loadSwitchSourceCandidatesProgressively({
+    required String keyword,
+    required _SwitchSourceScope scope,
+    required String currentSourceId,
+    required ValueNotifier<_ReaderSwitchSourceLookupState> lookupStateNotifier,
+    required SearchCancellationToken cancellationToken,
+  }) async {
+    try {
+      final report = await _switchSourceSearchService.search(
+        keyword: keyword,
+        pageSize: 16,
+        contentMode: scope.contentMode,
+        sourceIds: scope.sourceIds,
+        cancellationToken: cancellationToken,
+        onProgress: (progress) {
+          if (cancellationToken.isCancelled) {
+            return;
+          }
+
+          final candidates = _buildSwitchSourceCandidates(
+            books: progress.books,
+            sourceNames: progress.sourceNames,
+            currentSourceId: currentSourceId,
+            currentChapterCount: _chapters.length,
+            targetTitle: keyword,
+            targetAuthor: _bookAuthor,
+          );
+
+          lookupStateNotifier.value = _ReaderSwitchSourceLookupState(
+            isLoading: true,
+            sourceCount: progress.sourceCount,
+            processedSourceCount: progress.processedSourceCount,
+            candidates: candidates,
+            errorText: null,
+          );
+        },
+      );
+
+      if (cancellationToken.isCancelled) {
+        return;
+      }
+
+      final candidates = _buildSwitchSourceCandidates(
+        books: report.books,
+        sourceNames: report.sourceNames,
+        currentSourceId: currentSourceId,
+        currentChapterCount: _chapters.length,
+        targetTitle: keyword,
+        targetAuthor: _bookAuthor,
+      );
+      lookupStateNotifier.value = _ReaderSwitchSourceLookupState(
+        isLoading: false,
+        sourceCount: report.sourceCount,
+        processedSourceCount: report.processedSourceCount,
+        candidates: candidates,
+        errorText: candidates.isEmpty ? '没有检索到可切换书源，请稍后重试。' : null,
+      );
+    } on AppException catch (error) {
+      if (cancellationToken.isCancelled) {
+        return;
+      }
+      lookupStateNotifier.value = _ReaderSwitchSourceLookupState(
+        isLoading: false,
+        sourceCount: scope.sourceIds.length,
+        processedSourceCount: 0,
+        candidates: const <_ReaderSourceSwitchCandidate>[],
+        errorText: '查找可切换书源失败：${error.briefMessage}',
+      );
+    } catch (_) {
+      if (cancellationToken.isCancelled) {
+        return;
+      }
+      lookupStateNotifier.value = _ReaderSwitchSourceLookupState(
+        isLoading: false,
+        sourceCount: scope.sourceIds.length,
+        processedSourceCount: 0,
+        candidates: const <_ReaderSourceSwitchCandidate>[],
+        errorText: '查找可切换书源失败，请稍后重试。',
+      );
+    }
   }
 
   List<_ReaderSourceSwitchCandidate> _buildSwitchSourceCandidates({
@@ -2131,7 +2215,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
   }
 
   Future<_ReaderSourceSwitchCandidate?> _showSwitchSourceCandidateSheet(
-    List<_ReaderSourceSwitchCandidate> candidates,
+    ValueListenable<_ReaderSwitchSourceLookupState> lookupStateListenable,
   ) async {
     _stopAutoReadSession();
     final shouldRestoreOverlay = _showOverlayControls;
@@ -2162,109 +2246,184 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
             heightFactor: heightFactor,
             child: Padding(
               padding: EdgeInsets.fromLTRB(horizontal, 4, horizontal, 12),
-              child: Column(
-                children: [
-                  Align(
-                    alignment: Alignment.centerLeft,
-                    child: Text(
-                      '切换书源（${candidates.length}）',
-                      style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                        fontWeight: FontWeight.w700,
-                      ),
-                    ),
-                  ),
-                  const SizedBox(height: 4),
-                  Align(
-                    alignment: Alignment.centerLeft,
-                    child: Text(
-                      '当前书名：${_bookTitle.trim().isEmpty ? '未知' : _bookTitle}',
-                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                        color: Theme.of(context).colorScheme.onSurfaceVariant,
-                      ),
-                    ),
-                  ),
-                  const SizedBox(height: 2),
-                  Align(
-                    alignment: Alignment.centerLeft,
-                    child: Text(
-                      '当前目录：${_chapters.length} 章',
-                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                        color: Theme.of(context).colorScheme.onSurfaceVariant,
-                      ),
-                    ),
-                  ),
-                  const SizedBox(height: 8),
-                  Expanded(
-                    child: ListView.separated(
-                      itemCount: candidates.length,
-                      separatorBuilder: (_, __) => const Divider(height: 1),
-                      itemBuilder: (context, index) {
-                        final candidate = candidates[index];
-                        final author = candidate.book.author?.trim();
-                        final subtitle =
-                            (author == null || author.isEmpty)
-                                ? candidate.sourceName
-                                : '${candidate.sourceName} · $author';
-                        final colorScheme = Theme.of(context).colorScheme;
+              child: ValueListenableBuilder<_ReaderSwitchSourceLookupState>(
+                valueListenable: lookupStateListenable,
+                builder: (context, lookupState, _) {
+                  final candidates = lookupState.candidates;
+                  final colorScheme = Theme.of(context).colorScheme;
+                  final progressText =
+                      lookupState.sourceCount <= 0
+                          ? '正在准备书源列表...'
+                          : '已扫描 ${lookupState.processedSourceCount}/${lookupState.sourceCount} 个书源';
+                  final emptyMessage =
+                      lookupState.errorText ?? '没有检索到可切换书源，请稍后重试。';
 
-                        return ListTile(
-                          contentPadding: EdgeInsets.zero,
-                          title: Text(
-                            candidate.book.title,
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: Theme.of(context).textTheme.titleSmall
-                                ?.copyWith(fontWeight: FontWeight.w600),
-                          ),
-                          subtitle: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                subtitle,
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
+                  return Column(
+                    children: [
+                      Align(
+                        alignment: Alignment.centerLeft,
+                        child: Text(
+                          '切换书源（${candidates.length}）',
+                          style: Theme.of(context).textTheme.titleMedium
+                              ?.copyWith(fontWeight: FontWeight.w700),
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+                      Align(
+                        alignment: Alignment.centerLeft,
+                        child: Text(
+                          '当前书名：${_bookTitle.trim().isEmpty ? '未知' : _bookTitle}',
+                          style: Theme.of(context).textTheme.bodySmall
+                              ?.copyWith(color: colorScheme.onSurfaceVariant),
+                        ),
+                      ),
+                      const SizedBox(height: 2),
+                      Align(
+                        alignment: Alignment.centerLeft,
+                        child: Text(
+                          '当前目录：${_chapters.length} 章',
+                          style: Theme.of(context).textTheme.bodySmall
+                              ?.copyWith(color: colorScheme.onSurfaceVariant),
+                        ),
+                      ),
+                      const SizedBox(height: 2),
+                      Align(
+                        alignment: Alignment.centerLeft,
+                        child: Text(
+                          progressText,
+                          style: Theme.of(context).textTheme.bodySmall
+                              ?.copyWith(color: colorScheme.onSurfaceVariant),
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      Expanded(
+                        child:
+                            candidates.isEmpty
+                                ? lookupState.isLoading
+                                    ? _buildSwitchSourceLoadingPlaceholderList(
+                                      colorScheme,
+                                    )
+                                    : Center(
+                                      child: Text(
+                                        emptyMessage,
+                                        textAlign: TextAlign.center,
+                                        style: Theme.of(
+                                          context,
+                                        ).textTheme.bodyMedium?.copyWith(
+                                          color: colorScheme.onSurfaceVariant,
+                                        ),
+                                      ),
+                                    )
+                                : ListView.separated(
+                                  itemCount: candidates.length,
+                                  separatorBuilder:
+                                      (_, __) => const Divider(height: 1),
+                                  itemBuilder: (context, index) {
+                                    final candidate = candidates[index];
+                                    final author =
+                                        candidate.book.author?.trim();
+                                    final subtitle =
+                                        (author == null || author.isEmpty)
+                                            ? candidate.sourceName
+                                            : '${candidate.sourceName} · $author';
+
+                                    return ListTile(
+                                      contentPadding: EdgeInsets.zero,
+                                      title: Text(
+                                        candidate.book.title,
+                                        maxLines: 1,
+                                        overflow: TextOverflow.ellipsis,
+                                        style: Theme.of(
+                                          context,
+                                        ).textTheme.titleSmall?.copyWith(
+                                          fontWeight: FontWeight.w600,
+                                        ),
+                                      ),
+                                      subtitle: Column(
+                                        crossAxisAlignment:
+                                            CrossAxisAlignment.start,
+                                        children: [
+                                          Text(
+                                            subtitle,
+                                            maxLines: 1,
+                                            overflow: TextOverflow.ellipsis,
+                                          ),
+                                          const SizedBox(height: 2),
+                                          Text(
+                                            '最新：${candidate.latestChapterLabel}',
+                                            maxLines: 1,
+                                            overflow: TextOverflow.ellipsis,
+                                            style: Theme.of(
+                                              context,
+                                            ).textTheme.bodySmall?.copyWith(
+                                              color:
+                                                  candidate
+                                                          .isPotentiallyOutdated
+                                                      ? colorScheme.error
+                                                      : colorScheme
+                                                          .onSurfaceVariant,
+                                              fontWeight:
+                                                  candidate
+                                                          .isPotentiallyOutdated
+                                                      ? FontWeight.w700
+                                                      : FontWeight.w500,
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                      trailing: Row(
+                                        mainAxisSize: MainAxisSize.min,
+                                        children: [
+                                          if (candidate
+                                              .isPotentiallyOutdated) ...[
+                                            Icon(
+                                              Icons.warning_amber_rounded,
+                                              color: colorScheme.error,
+                                              size: 18,
+                                            ),
+                                            const SizedBox(width: 2),
+                                          ],
+                                          const Icon(Icons.chevron_right),
+                                        ],
+                                      ),
+                                      onTap:
+                                          () => Navigator.of(
+                                            context,
+                                          ).pop(candidate),
+                                    );
+                                  },
+                                ),
+                      ),
+                      if (lookupState.isLoading && candidates.isNotEmpty) ...[
+                        const SizedBox(height: 8),
+                        Row(
+                          children: [
+                            SizedBox(
+                              width: 14,
+                              height: 14,
+                              child: CircularProgressIndicator(
+                                strokeWidth: 2,
+                                color: colorScheme.primary,
                               ),
-                              const SizedBox(height: 2),
-                              Text(
-                                '最新：${candidate.latestChapterLabel}',
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
+                            ),
+                            const SizedBox(width: 8),
+                            Expanded(
+                              child: Text(
+                                '正在继续检索其他书源...',
                                 style: Theme.of(
                                   context,
                                 ).textTheme.bodySmall?.copyWith(
-                                  color:
-                                      candidate.isPotentiallyOutdated
-                                          ? colorScheme.error
-                                          : colorScheme.onSurfaceVariant,
-                                  fontWeight:
-                                      candidate.isPotentiallyOutdated
-                                          ? FontWeight.w700
-                                          : FontWeight.w500,
+                                  color: colorScheme.onSurfaceVariant,
                                 ),
                               ),
-                            ],
-                          ),
-                          trailing: Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              if (candidate.isPotentiallyOutdated) ...[
-                                Icon(
-                                  Icons.warning_amber_rounded,
-                                  color: colorScheme.error,
-                                  size: 18,
-                                ),
-                                const SizedBox(width: 2),
-                              ],
-                              const Icon(Icons.chevron_right),
-                            ],
-                          ),
-                          onTap: () => Navigator.of(context).pop(candidate),
-                        );
-                      },
-                    ),
-                  ),
-                  SizedBox(height: bottomInset),
-                ],
+                            ),
+                          ],
+                        ),
+                      ],
+                      SizedBox(height: bottomInset),
+                    ],
+                  );
+                },
               ),
             ),
           ),
@@ -2277,6 +2436,52 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
     }
 
     return selected;
+  }
+
+  Widget _buildSwitchSourceLoadingPlaceholderList(ColorScheme colorScheme) {
+    final placeholderColor = colorScheme.surfaceContainerHigh;
+    return ListView.separated(
+      itemCount: 6,
+      separatorBuilder: (_, __) => const Divider(height: 1),
+      itemBuilder: (context, index) {
+        final titleWidth = 110.0 + (index % 3) * 42.0;
+        final subtitleWidth = 150.0 + (index % 2) * 56.0;
+
+        return ListTile(
+          contentPadding: EdgeInsets.zero,
+          title: Align(
+            alignment: Alignment.centerLeft,
+            child: Container(
+              width: titleWidth,
+              height: 14,
+              decoration: BoxDecoration(
+                color: placeholderColor,
+                borderRadius: BorderRadius.circular(999),
+              ),
+            ),
+          ),
+          subtitle: Padding(
+            padding: const EdgeInsets.only(top: 6),
+            child: Align(
+              alignment: Alignment.centerLeft,
+              child: Container(
+                width: subtitleWidth,
+                height: 12,
+                decoration: BoxDecoration(
+                  color: placeholderColor.withValues(alpha: 0.85),
+                  borderRadius: BorderRadius.circular(999),
+                ),
+              ),
+            ),
+          ),
+          trailing: Icon(
+            Icons.hourglass_top_rounded,
+            color: colorScheme.onSurfaceVariant,
+            size: 18,
+          ),
+        );
+      },
+    );
   }
 
   Future<void> _applySwitchSourceCandidate(
@@ -5897,6 +6102,31 @@ class _ReaderSourceSwitchCandidate {
   final String latestChapterLabel;
   final int? latestChapterNumber;
   final bool isPotentiallyOutdated;
+}
+
+class _ReaderSwitchSourceLookupState {
+  const _ReaderSwitchSourceLookupState({
+    required this.isLoading,
+    required this.sourceCount,
+    required this.processedSourceCount,
+    required this.candidates,
+    required this.errorText,
+  });
+
+  const _ReaderSwitchSourceLookupState.loading({required int sourceCount})
+    : this(
+        isLoading: true,
+        sourceCount: sourceCount,
+        processedSourceCount: 0,
+        candidates: const <_ReaderSourceSwitchCandidate>[],
+        errorText: null,
+      );
+
+  final bool isLoading;
+  final int sourceCount;
+  final int processedSourceCount;
+  final List<_ReaderSourceSwitchCandidate> candidates;
+  final String? errorText;
 }
 
 class _ReaderSourceSnapshot {
