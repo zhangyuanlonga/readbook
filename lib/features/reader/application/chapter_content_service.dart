@@ -18,6 +18,7 @@ import '../../../core/rule_engine/processors/legacy_script_rule_fallback.dart';
 import '../../../core/rule_engine/processors/replace_regex_executor.dart';
 import '../../../core/rule_engine/processors/source_js_variable_store.dart';
 import '../../../core/source/source_response_processor.dart';
+import '../../../core/webview/interactive_verification_browser_executor.dart';
 import '../../../core/webview/webview_executor.dart';
 import '../../../data/datasources/local/app_database.dart';
 import '../../../data/repositories/source_repository_impl.dart';
@@ -48,6 +49,7 @@ class ChapterContentService {
     SourceRepository? sourceRepository,
     AppHttpClient? httpClient,
     WebViewExecutor? webViewExecutor,
+    InteractiveVerificationBrowserExecutor? interactiveVerificationExecutor,
     RuleEngine? ruleEngine,
     ContentTextCleaner? cleaner,
     ReplaceRegexExecutor? replaceRegexExecutor,
@@ -60,6 +62,9 @@ class ChapterContentService {
            SourceRepositoryImpl(database ?? AppDatabase.instance),
        _httpClient = httpClient ?? AppHttpClient(),
        _webViewExecutor = webViewExecutor ?? WebViewExecutor(),
+       _interactiveVerificationExecutor =
+           interactiveVerificationExecutor ??
+           InteractiveVerificationBrowserExecutor.instance,
        _ruleEngine = ruleEngine ?? RuleEngine(),
        _cleaner = cleaner ?? const ContentTextCleaner(),
        _replaceRegexExecutor = replaceRegexExecutor ?? ReplaceRegexExecutor(),
@@ -73,6 +78,7 @@ class ChapterContentService {
   final SourceRepository _sourceRepository;
   final AppHttpClient _httpClient;
   final WebViewExecutor _webViewExecutor;
+  final InteractiveVerificationBrowserExecutor _interactiveVerificationExecutor;
   final RuleEngine _ruleEngine;
   final ContentTextCleaner _cleaner;
   final ReplaceRegexExecutor _replaceRegexExecutor;
@@ -1314,6 +1320,7 @@ class ChapterContentService {
 
     return JsExecutionContext(
       sourceId: source.id,
+      stage: ErrorStage.content,
       baseUrl: source.baseUrl,
       variables: variables,
       sourceJson: _buildSourceJsJson(source),
@@ -1327,6 +1334,78 @@ class ChapterContentService {
       ),
       jsLibScript: source.jsLib,
       onBridgePutVariables: collectPutVariables,
+      onWebViewBridgeCall:
+          (request) => _executeJsWebViewBridge(
+            source: source,
+            stage: ErrorStage.content,
+            request: request,
+          ),
+    );
+  }
+
+  Future<JsWebViewBridgeResponse> _executeJsWebViewBridge({
+    required SourceDefinition source,
+    required ErrorStage stage,
+    required JsWebViewBridgeRequest request,
+  }) async {
+    final candidateUrl = request.url.trim();
+    final fallbackUrl = source.baseUrl.trim();
+    final targetUrl =
+        candidateUrl.isNotEmpty
+            ? candidateUrl
+            : (fallbackUrl.isNotEmpty ? fallbackUrl : 'about:blank');
+    final bridgeCall = request.bridgeCall.trim().toLowerCase();
+    final webViewRequest = WebViewRequestPayload(
+      url: targetUrl,
+      headers: source.headers,
+      html: request.html,
+      webJs: request.js,
+      sourceRegex: request.sourceRegex,
+      overrideUrlRegex: request.overrideUrlRegex,
+      stage: stage,
+      sourceId: source.id,
+    );
+
+    WebViewResponsePayload response;
+    if (bridgeCall == 'startbrowser' || bridgeCall == 'startbrowserawait') {
+      try {
+        response = await _interactiveVerificationExecutor.open(
+          request: webViewRequest,
+          awaitUserResult: bridgeCall == 'startbrowserawait',
+          title: request.title,
+          refetchAfterSuccess: request.refetchAfterSuccess ?? true,
+        );
+      } catch (error) {
+        final allowFallback =
+            error is StateError &&
+            error.toString().contains('Navigator is unavailable');
+        if (!allowFallback) {
+          rethrow;
+        }
+        _logger.warn(
+          'Interactive verification failed and fallback to headless WebView',
+          context: <String, Object?>{
+            'sourceId': source.id,
+            'stage': stage.name,
+            'bridgeCall': bridgeCall,
+            'url': targetUrl,
+            'briefMessage': error.toString(),
+            'diagnostic': 'webview_interactive_fallback_headless',
+          },
+        );
+        response = await _webViewExecutor.load(request: webViewRequest);
+      }
+    } else {
+      response = await _webViewExecutor.load(request: webViewRequest);
+    }
+
+    return JsWebViewBridgeResponse(
+      statusCode: response.statusCode,
+      body: response.body,
+      finalUrl: response.finalUrl,
+      matchedResourceUrl: response.matchedResourceUrl,
+      matchedOverrideUrl: response.matchedOverrideUrl,
+      scriptResult: response.scriptResult,
     );
   }
 

@@ -258,6 +258,8 @@
 
 - [x] 规则兼容修复（补充）：导入链路支持 GBK 文件解码与常见乱码名称纠正，且放宽“baseUrl 非 http”场景（searchUrl 为绝对地址时允许导入）。
 
+- [x] Legado 源码对齐：新增 `java.*` Bridge 映射基线文档与 `full/partial/unsupported` 统一口径（适配器与兼容矩阵共用），避免将 `stub/no-op` 误判为 full 兼容。
+
 - [x] 阅读体验修复（补充）：搜索结果/详情简介增加模板残留与 HTML 清洗（如 `{{last_chapter_title`、`<p>`），减少脏文本展示。
 
 - [x] 书架交互增强（补充）：书架新增列表/网格视图切换按钮，支持两种浏览模式。
@@ -384,5 +386,4 @@
 - [ ] P0：手机端自适应走查（Android/iOS）：修复溢出/遮挡/触控区问题，采用稳定保守策略（见 `docs/phone_only_adaptive_strategy.md`）。
 - [ ] P2：平板/桌面布局升级（可选，当前不纳入手机端范围）：NavigationRail/双栏详情（见 `docs/responsive_adaptive_plan.md`）。
 - [ ] P2：关键页面 Golden 测试（可选）：覆盖 2~3 个手机尺寸 + textScale=1.3，避免 UI 回归。
-
 

@@ -94,6 +94,45 @@ void main() {
       await executor.dispose();
     });
 
+    test(
+      'supports inline html payload with about:blank fallback url',
+      () async {
+        late WebViewRequestPayload captured;
+        final executor = WebViewExecutor(
+          poolSize: 1,
+          sessionFactory: (workerIndex) {
+            return _FakeWebViewSession(
+              workerIndex: workerIndex,
+              onLoad: (request, timeout) async {
+                captured = request;
+                return const WebViewResponsePayload(
+                  statusCode: 200,
+                  body: 'ok',
+                  finalUrl: 'about:blank',
+                  scriptResult: 'title',
+                );
+              },
+            );
+          },
+        );
+
+        final response = await executor.load(
+          request: const WebViewRequestPayload(
+            url: '',
+            html: '<html><body>inline</body></html>',
+            webJs: 'document.title',
+            overrideUrlRegex: 'pass',
+          ),
+        );
+
+        expect(captured.url, 'about:blank');
+        expect(captured.html, '<html><body>inline</body></html>');
+        expect(captured.overrideUrlRegex, 'pass');
+        expect(response.scriptResult, 'title');
+        await executor.dispose();
+      },
+    );
+
     test('disposes pooled sessions and rejects new requests', () async {
       final sessions = <_FakeWebViewSession>[];
       final executor = WebViewExecutor(

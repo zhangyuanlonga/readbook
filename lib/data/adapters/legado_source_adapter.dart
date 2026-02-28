@@ -3,91 +3,12 @@ import 'dart:convert';
 import '../../core/errors/app_exception.dart';
 import '../../core/errors/error_codes.dart';
 import '../../core/errors/error_stage.dart';
+import '../../core/rule_engine/legado_bridge_capability.dart';
 import '../../domain/entities/source_definition.dart';
 import '../models/legado_source_raw.dart';
 
 class LegadoSourceAdapter {
   const LegadoSourceAdapter();
-
-  static const Set<String> _supportedBridgeCalls = <String>{
-    'ajax',
-    'ajaxall',
-    'connect',
-    'head',
-    'post',
-    'put',
-    'get',
-    'log',
-    'toast',
-    'longtoast',
-    'startbrowser',
-    'startbrowserawait',
-    'webview',
-    'setcontent',
-    'getstring',
-    'getstringlist',
-    'getelements',
-    'getelement',
-    'getcookie',
-    'base64decode',
-    'base64encode',
-    'base64decodetobytearray',
-    'base64decoder',
-    'md5encode',
-    'md5encode16',
-    'encodeuri',
-    'htmlformat',
-    'timeformat',
-    'timeformatutc',
-    'tonumchapter',
-    't2s',
-    's2t',
-    'strtobytes',
-    'bytestostring',
-    'createsymmetriccrypto',
-    'refreshtocurl',
-    'getwebviewua',
-    'randomuuid',
-    'androidid',
-    'deviceid',
-    'hexdecodetostring',
-    'hexdecodetobytearray',
-    'hexencodetostring',
-    'digesthex',
-    'hmachex',
-    'hmacbase64',
-    'desencodetobase64string',
-    'initurl',
-    'getstrresponse',
-    'tourl',
-    'regetbook',
-    'aesdecodeargsbase64str',
-    'cachefile',
-    'getverificationcode',
-    'importscript',
-    'removecookie',
-    'aesdecodetostring',
-    'aesdecodetobytearray',
-    'aesbase64decodetostring',
-    'aesbase64decodetobytearray',
-    'aesencodetostring',
-    'aesencodetobytearray',
-    'aesencodetobase64string',
-    'aesencodetobase64bytearray',
-  };
-  static const Set<String> _unsupportedBridgeCalls = <String>{
-    'readfile',
-    'getfile',
-    'readtxtfile',
-    'deletefile',
-    'downloadfile',
-    'unzipfile',
-    'gettxtinfolder',
-    'getzipstringcontent',
-    'queryttf',
-    'querybase64ttf',
-    'replacefont',
-  };
 
   List<SourceDefinition> adaptAll(Iterable<LegadoSourceRaw> raws) {
     return raws.map(adapt).toList(growable: false);
@@ -362,10 +283,14 @@ class LegadoSourceAdapter {
         if (call.isEmpty) {
           continue;
         }
-        if (_supportedBridgeCalls.contains(call)) {
+        if (LegadoBridgeCapability.fullBridgeCalls.contains(call)) {
           continue;
         }
-        if (_unsupportedBridgeCalls.contains(call)) {
+        if (LegadoBridgeCapability.partialBridgeCalls.contains(call)) {
+          hasPartialRisk = true;
+          continue;
+        }
+        if (LegadoBridgeCapability.unsupportedBridgeCalls.contains(call)) {
           return SourceJsCapability.unsupported;
         }
         hasPartialRisk = true;

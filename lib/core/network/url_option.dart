@@ -28,8 +28,11 @@ class UrlOption {
   factory UrlOption.fromMap(Map<String, dynamic> options) {
     final methodText =
         (options['method'] ?? '').toString().trim().toUpperCase();
-    final method =
-        methodText == 'POST' ? HttpRequestMethod.post : HttpRequestMethod.get;
+    final method = switch (methodText) {
+      'POST' => HttpRequestMethod.post,
+      'HEAD' => HttpRequestMethod.head,
+      _ => HttpRequestMethod.get,
+    };
 
     final responseCharset = _asNullableString(
       options['responseCharset'] ??

@@ -1,90 +1,10 @@
 import 'dart:convert';
 import 'dart:io';
 
+import 'package:flutter_appread/core/rule_engine/legado_bridge_capability.dart';
 import 'package:flutter_appread/data/adapters/legado_source_adapter.dart';
 import 'package:flutter_appread/data/models/legado_source_raw.dart';
 import 'package:flutter_appread/domain/entities/source_definition.dart';
-
-const Set<String> _supportedBridgeCalls = <String>{
-  'ajax',
-  'ajaxall',
-  'connect',
-  'head',
-  'post',
-  'put',
-  'get',
-  'log',
-  'toast',
-  'longtoast',
-  'startbrowser',
-  'startbrowserawait',
-  'webview',
-  'setcontent',
-  'getstring',
-  'getstringlist',
-  'getelements',
-  'getelement',
-  'getcookie',
-  'base64decode',
-  'base64encode',
-  'base64decodetobytearray',
-  'base64decoder',
-  'md5encode',
-  'md5encode16',
-  'encodeuri',
-  'htmlformat',
-  'timeformat',
-  'timeformatutc',
-  'tonumchapter',
-  't2s',
-  's2t',
-  'strtobytes',
-  'bytestostring',
-  'createsymmetriccrypto',
-  'refreshtocurl',
-  'getwebviewua',
-  'randomuuid',
-  'androidid',
-  'deviceid',
-  'hexdecodetostring',
-  'hexdecodetobytearray',
-  'hexencodetostring',
-  'digesthex',
-  'hmachex',
-  'hmacbase64',
-  'desencodetobase64string',
-  'initurl',
-  'getstrresponse',
-  'tourl',
-  'regetbook',
-  'aesdecodeargsbase64str',
-  'cachefile',
-  'getverificationcode',
-  'importscript',
-  'removecookie',
-  'aesdecodetostring',
-  'aesdecodetobytearray',
-  'aesbase64decodetostring',
-  'aesbase64decodetobytearray',
-  'aesencodetostring',
-  'aesencodetobytearray',
-  'aesencodetobase64string',
-  'aesencodetobase64bytearray',
-};
-
-const Set<String> _unsupportedBridgeCalls = <String>{
-  'readfile',
-  'getfile',
-  'readtxtfile',
-  'deletefile',
-  'downloadfile',
-  'unzipfile',
-  'gettxtinfolder',
-  'getzipstringcontent',
-  'queryttf',
-  'querybase64ttf',
-  'replacefont',
-};
 
 final RegExp _bridgeCallPattern = RegExp(
   r'java\.([a-zA-Z_][a-zA-Z0-9_]*)\s*\(',
@@ -327,11 +247,15 @@ Set<String> _collectReasons({
   }
 
   for (final call in bridgeCalls) {
-    if (_unsupportedBridgeCalls.contains(call)) {
+    if (LegadoBridgeCapability.unsupportedBridgeCalls.contains(call)) {
       reasons.add('unsupported_bridge.$call');
       continue;
     }
-    if (!_supportedBridgeCalls.contains(call)) {
+    if (LegadoBridgeCapability.partialBridgeCalls.contains(call)) {
+      reasons.add('partial_bridge.$call');
+      continue;
+    }
+    if (!LegadoBridgeCapability.knownBridgeCalls.contains(call)) {
       reasons.add('unknown_bridge.$call');
     }
   }

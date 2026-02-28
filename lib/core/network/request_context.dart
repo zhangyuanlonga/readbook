@@ -1,6 +1,6 @@
 import '../errors/error_stage.dart';
 
-enum HttpRequestMethod { get, post }
+enum HttpRequestMethod { get, post, head }
 
 class RequestContext {
   const RequestContext({

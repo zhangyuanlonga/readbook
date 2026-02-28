@@ -298,7 +298,7 @@ void main() {
     });
 
     test(
-      'marks jsCapability as full for legacy helper bridge aliases and no-op calls',
+      'marks jsCapability as partial for legacy helper bridge aliases and semantic-gap calls',
       () {
         final raw = LegadoSourceRaw.fromJson({
           'bookSourceName': '桥接兼容源',
@@ -351,7 +351,26 @@ result
 
         final source = adapter.adapt(raw);
 
-        expect(source.jsCapability, SourceJsCapability.full);
+        expect(source.jsCapability, SourceJsCapability.partial);
+      },
+    );
+
+    test(
+      'marks jsCapability as partial for recognized but not-yet-aligned bridge calls',
+      () {
+        final raw = LegadoSourceRaw.fromJson({
+          'bookSourceName': '非对称加密桥接源',
+          'bookSourceUrl': 'https://example.com',
+          'searchUrl': '/search?key={{key}}',
+          'ruleContent': {
+            'content':
+                '@js:java.createAsymmetricCrypto("RSA/ECB/PKCS1Padding");result',
+          },
+        });
+
+        final source = adapter.adapt(raw);
+
+        expect(source.jsCapability, SourceJsCapability.partial);
       },
     );
 

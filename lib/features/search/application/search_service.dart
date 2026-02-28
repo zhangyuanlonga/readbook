@@ -18,6 +18,7 @@ import '../../../core/rule_engine/processors/legacy_rule_variable_processor.dart
 import '../../../core/rule_engine/processors/legacy_script_rule_fallback.dart';
 import '../../../core/rule_engine/processors/source_js_variable_store.dart';
 import '../../../core/source/source_response_processor.dart';
+import '../../../core/webview/interactive_verification_browser_executor.dart';
 import '../../../core/webview/webview_executor.dart';
 import '../../../data/datasources/local/app_database.dart';
 import '../../../data/repositories/source_repository_impl.dart';
@@ -133,6 +134,7 @@ class SearchService {
     SourceRepository? sourceRepository,
     AppHttpClient? httpClient,
     WebViewExecutor? webViewExecutor,
+    InteractiveVerificationBrowserExecutor? interactiveVerificationExecutor,
     UrlTemplateResolver? urlTemplateResolver,
     SearchResultParser? parser,
     RuleEngine? ruleEngine,
@@ -143,6 +145,9 @@ class SearchService {
            sourceRepository ?? SourceRepositoryImpl(AppDatabase.instance),
        _httpClient = httpClient ?? AppHttpClient(),
        _webViewExecutor = webViewExecutor ?? WebViewExecutor(),
+       _interactiveVerificationExecutor =
+           interactiveVerificationExecutor ??
+           InteractiveVerificationBrowserExecutor.instance,
        _urlTemplateResolver =
            urlTemplateResolver ?? const UrlTemplateResolver(),
        _parser = parser ?? SearchResultParser(),
@@ -157,6 +162,7 @@ class SearchService {
   final SourceRepository _sourceRepository;
   final AppHttpClient _httpClient;
   final WebViewExecutor _webViewExecutor;
+  final InteractiveVerificationBrowserExecutor _interactiveVerificationExecutor;
   final UrlTemplateResolver _urlTemplateResolver;
   final SearchResultParser _parser;
   final RuleEngine _ruleEngine;
@@ -1431,11 +1437,84 @@ class SearchService {
 
     return JsExecutionContext(
       sourceId: source.id,
+      stage: ErrorStage.search,
       baseUrl: source.baseUrl,
       variables: variables,
       sourceJson: _buildSourceJsJson(source),
       jsLibScript: source.jsLib,
       onBridgePutVariables: collectPutVariables,
+      onWebViewBridgeCall:
+          (request) => _executeJsWebViewBridge(
+            source: source,
+            stage: ErrorStage.search,
+            request: request,
+          ),
+    );
+  }
+
+  Future<JsWebViewBridgeResponse> _executeJsWebViewBridge({
+    required SourceDefinition source,
+    required ErrorStage stage,
+    required JsWebViewBridgeRequest request,
+  }) async {
+    final candidateUrl = request.url.trim();
+    final fallbackUrl = source.baseUrl.trim();
+    final targetUrl =
+        candidateUrl.isNotEmpty
+            ? candidateUrl
+            : (fallbackUrl.isNotEmpty ? fallbackUrl : 'about:blank');
+    final bridgeCall = request.bridgeCall.trim().toLowerCase();
+    final webViewRequest = WebViewRequestPayload(
+      url: targetUrl,
+      headers: source.headers,
+      html: request.html,
+      webJs: request.js,
+      sourceRegex: request.sourceRegex,
+      overrideUrlRegex: request.overrideUrlRegex,
+      stage: stage,
+      sourceId: source.id,
+    );
+
+    WebViewResponsePayload response;
+    if (bridgeCall == 'startbrowser' || bridgeCall == 'startbrowserawait') {
+      try {
+        response = await _interactiveVerificationExecutor.open(
+          request: webViewRequest,
+          awaitUserResult: bridgeCall == 'startbrowserawait',
+          title: request.title,
+          refetchAfterSuccess: request.refetchAfterSuccess ?? true,
+        );
+      } catch (error) {
+        final allowFallback =
+            error is StateError &&
+            error.toString().contains('Navigator is unavailable');
+        if (!allowFallback) {
+          rethrow;
+        }
+        _logger.warn(
+          'Interactive verification failed and fallback to headless WebView',
+          context: <String, Object?>{
+            'sourceId': source.id,
+            'stage': stage.name,
+            'bridgeCall': bridgeCall,
+            'url': targetUrl,
+            'briefMessage': error.toString(),
+            'diagnostic': 'webview_interactive_fallback_headless',
+          },
+        );
+        response = await _webViewExecutor.load(request: webViewRequest);
+      }
+    } else {
+      response = await _webViewExecutor.load(request: webViewRequest);
+    }
+
+    return JsWebViewBridgeResponse(
+      statusCode: response.statusCode,
+      body: response.body,
+      finalUrl: response.finalUrl,
+      matchedResourceUrl: response.matchedResourceUrl,
+      matchedOverrideUrl: response.matchedOverrideUrl,
+      scriptResult: response.scriptResult,
     );
   }
 

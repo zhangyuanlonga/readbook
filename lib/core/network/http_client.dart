@@ -260,6 +260,7 @@ class AppHttpClient {
     return switch (method) {
       HttpRequestMethod.get => 'GET',
       HttpRequestMethod.post => 'POST',
+      HttpRequestMethod.head => 'HEAD',
     };
   }
 

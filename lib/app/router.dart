@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
+import '../core/navigation/global_navigator.dart';
 import '../features/book/presentation/book_detail_page.dart';
 import '../features/book/presentation/local_book_detail_page.dart';
 import '../features/bookshelf/presentation/bookshelf_page.dart';
@@ -18,12 +19,10 @@ import '../features/source/presentation/source_page.dart';
 import '../features/source/presentation/source_diagnostics_page.dart';
 import 'shell_scaffold.dart';
 
-final GlobalKey<NavigatorState> _rootNavigatorKey = GlobalKey<NavigatorState>();
-
-GlobalKey<NavigatorState> get appRootNavigatorKey => _rootNavigatorKey;
+GlobalKey<NavigatorState> get appRootNavigatorKey => globalRootNavigatorKey;
 
 final GoRouter appRouter = GoRouter(
-  navigatorKey: _rootNavigatorKey,
+  navigatorKey: globalRootNavigatorKey,
   initialLocation: '/bookshelf',
   routes: [
     ShellRoute(

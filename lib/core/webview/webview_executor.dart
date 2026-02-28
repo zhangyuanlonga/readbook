@@ -15,8 +15,10 @@ class WebViewRequestPayload {
     this.headers = const <String, String>{},
     this.body,
     this.contentType,
+    this.html,
     this.webJs,
     this.sourceRegex,
+    this.overrideUrlRegex,
     this.stage = ErrorStage.search,
     this.sourceId,
     this.timeout,
@@ -27,8 +29,10 @@ class WebViewRequestPayload {
   final Map<String, String> headers;
   final Object? body;
   final String? contentType;
+  final String? html;
   final String? webJs;
   final String? sourceRegex;
+  final String? overrideUrlRegex;
   final ErrorStage stage;
   final String? sourceId;
   final Duration? timeout;
@@ -40,12 +44,16 @@ class WebViewResponsePayload {
     required this.body,
     required this.finalUrl,
     this.matchedResourceUrl,
+    this.matchedOverrideUrl,
+    this.scriptResult,
   });
 
   final int statusCode;
   final String body;
   final String finalUrl;
   final String? matchedResourceUrl;
+  final String? matchedOverrideUrl;
+  final String? scriptResult;
 }
 
 abstract class WebViewSession {
@@ -132,13 +140,21 @@ class WebViewExecutor {
   }
 
   _PreparedWebViewRequest _normalizeRequest(WebViewRequestPayload request) {
-    final normalizedUrl = request.url.trim();
+    var normalizedUrl = request.url.trim();
+    final normalizedHtml = request.html;
+    if (normalizedUrl.isEmpty &&
+        normalizedHtml != null &&
+        normalizedHtml.trim().isNotEmpty) {
+      normalizedUrl = 'about:blank';
+    }
     if (normalizedUrl.isEmpty) {
       throw StateError('WebView request url is empty.');
     }
 
     final uri = Uri.tryParse(normalizedUrl);
-    if (uri == null || !uri.hasScheme || uri.host.isEmpty) {
+    final hasValidHost = uri?.host.trim().isNotEmpty == true;
+    final isAboutBlank = uri?.scheme == 'about';
+    if (uri == null || !uri.hasScheme || (!hasValidHost && !isAboutBlank)) {
       throw StateError('WebView request url is invalid: $normalizedUrl');
     }
 
@@ -157,8 +173,10 @@ class WebViewExecutor {
         headers: Map<String, String>.unmodifiable(mergedHeaders),
         body: request.body,
         contentType: request.contentType,
+        html: request.html,
         webJs: request.webJs,
         sourceRegex: request.sourceRegex,
+        overrideUrlRegex: request.overrideUrlRegex,
         stage: request.stage,
         sourceId: request.sourceId,
         timeout: request.timeout,
@@ -306,24 +324,35 @@ class _HeadlessWebViewSession implements WebViewSession {
     }
 
     final uri = Uri.tryParse(request.url);
-    if (uri == null || !uri.hasScheme || uri.host.isEmpty) {
+    final hasValidHost = uri?.host.trim().isNotEmpty == true;
+    final isAboutBlank = uri?.scheme == 'about';
+    if (uri == null || !uri.hasScheme || (!hasValidHost && !isAboutBlank)) {
       throw StateError('WebView request url is invalid: ${request.url}');
     }
 
     final activeLoad = _ActiveWebViewLoad(
       request: request,
       sourceRegex: _compileSourceRegex(request.sourceRegex),
+      overrideUrlRegex: _compileSourceRegex(request.overrideUrlRegex),
     );
     _activeLoad = activeLoad;
-
-    await controller.loadUrl(
-      urlRequest: URLRequest(
-        url: WebUri.uri(uri),
-        method: _methodText(request.method),
-        headers: request.headers.isEmpty ? null : request.headers,
-        body: _encodeRequestBody(request.body),
-      ),
-    );
+    final inlineHtml = request.html;
+    if (inlineHtml != null && inlineHtml.trim().isNotEmpty) {
+      await controller.loadData(
+        data: inlineHtml,
+        baseUrl: WebUri.uri(uri),
+        historyUrl: WebUri.uri(uri),
+      );
+    } else {
+      await controller.loadUrl(
+        urlRequest: URLRequest(
+          url: WebUri.uri(uri),
+          method: _methodText(request.method),
+          headers: request.headers.isEmpty ? null : request.headers,
+          body: _encodeRequestBody(request.body),
+        ),
+      );
+    }
 
     try {
       return await activeLoad.completer.future.timeout(timeout);
@@ -425,6 +454,23 @@ class _HeadlessWebViewSession implements WebViewSession {
           activeLoad.matchedResourceUrl = resourceUrl;
         }
       },
+      onUpdateVisitedHistory: (controller, updatedUrl, _) {
+        final activeLoad = _activeLoad;
+        if (activeLoad == null || activeLoad.matchedOverrideUrl != null) {
+          return;
+        }
+        final overrideRegex = activeLoad.overrideUrlRegex;
+        if (overrideRegex == null) {
+          return;
+        }
+        final candidate = updatedUrl?.toString().trim() ?? '';
+        if (candidate.isEmpty) {
+          return;
+        }
+        if (overrideRegex.hasMatch(candidate)) {
+          activeLoad.matchedOverrideUrl = candidate;
+        }
+      },
       onLoadStop: (controller, loadedUrl) async {
         final activeLoad = _activeLoad;
         if (activeLoad == null || activeLoad.completer.isCompleted) {
@@ -432,9 +478,13 @@ class _HeadlessWebViewSession implements WebViewSession {
         }
 
         try {
+          String? scriptResult;
           final webJs = activeLoad.request.webJs?.trim();
           if (webJs != null && webJs.isNotEmpty) {
-            await controller.evaluateJavascript(source: webJs);
+            final scriptValue = await controller.evaluateJavascript(
+              source: webJs,
+            );
+            scriptResult = _stringifyJsValue(scriptValue);
           }
 
           final html = await controller.evaluateJavascript(
@@ -450,10 +500,14 @@ class _HeadlessWebViewSession implements WebViewSession {
                       ? currentUrl.toString()
                       : (loadedUrl?.toString() ?? activeLoad.request.url),
               matchedResourceUrl: activeLoad.matchedResourceUrl,
+              matchedOverrideUrl: activeLoad.matchedOverrideUrl,
+              scriptResult: scriptResult,
             ),
           );
         } catch (error) {
-          activeLoad.completeError(StateError('WebView evaluate failed: $error'));
+          activeLoad.completeError(
+            StateError('WebView evaluate failed: $error'),
+          );
         }
       },
     );
@@ -497,6 +551,7 @@ class _HeadlessWebViewSession implements WebViewSession {
     return switch (method) {
       HttpRequestMethod.get => 'GET',
       HttpRequestMethod.post => 'POST',
+      HttpRequestMethod.head => 'HEAD',
     };
   }
 
@@ -532,15 +587,21 @@ class _HeadlessWebViewSession implements WebViewSession {
 }
 
 class _ActiveWebViewLoad {
-  _ActiveWebViewLoad({required this.request, required this.sourceRegex});
+  _ActiveWebViewLoad({
+    required this.request,
+    required this.sourceRegex,
+    required this.overrideUrlRegex,
+  });
 
   final WebViewRequestPayload request;
   final RegExp? sourceRegex;
+  final RegExp? overrideUrlRegex;
   final Completer<WebViewResponsePayload> completer =
       Completer<WebViewResponsePayload>();
 
   var statusCode = 200;
   String? matchedResourceUrl;
+  String? matchedOverrideUrl;
 
   void complete(WebViewResponsePayload payload) {
     if (!completer.isCompleted) {

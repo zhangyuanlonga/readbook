@@ -39,6 +39,8 @@
 | `test/regression/source_baseline_regression_test.dart` | 大样本导入后的核心规则链路基线 |
 | `test/data/adapters/legado_source_adapter_test.dart` | 规则字段映射与兼容降级逻辑 |
 | `test/features/search/application/search_service_test.dart` | 搜索链路规则执行与网络选项解析 |
+| `docs/legado_native_bridge_mapping.md` | Legado 原生 `java.*` 桥接语义对照、`full/partial/unsupported` 单一口径 |
+| `docs/legado_compatibility_status_2026-02-28.md` | 当前兼容度快照与差距清单（基于 3000 源矩阵） |
 
 ### 状态判定标准
 
@@ -124,8 +126,11 @@
 1. 继续扩充高频复杂源 fixture，覆盖更多真实书源组合语法（不改 UI）。
 2. 固化并扩展兼容基线回归：`legacy_source_compatibility_test` + `source_baseline_regression_test` 常态化执行。
 3. `已完成（2026-02-28）`：针对 `webView:true` 源补充跨平台稳定性回归（超时、重建、资源嗅探一致性、WebView 失败后 HTTP 回退）。
-4. `已完成（2026-02-28）`：补齐高频 `java.*` 兼容别名（`connect/getElement/getCookie/toNumChapter/timeFormatUTC/t2s/s2t/strToBytes/bytesToString/createSymmetricCrypto`）并新增 no-op UI 桥接（`toast/longToast/startBrowser/startBrowserAwait/webView`），诊断能力判定与回归测试同步收敛。
-5. `已完成（2026-02-28）`：补齐第二批高频桥接（`deviceID/HMacBase64/aesDecodeArgsBase64Str/initUrl/getStrResponse/toURL/toUrl/reGetBook/cacheFile/importScript/removeCookie/getVerificationCode`），并将预取识别扩展到 `cacheFile/importScript`；`3000 书源` 矩阵 `non_full` 从 `82` 降到 `75`（相对首轮 `122` 已降到 `75`）。
+4. `已完成（2026-02-28）`：补齐高频 `java.*` 兼容别名（`connect/getElement/getCookie/toNumChapter/timeFormatUTC/t2s/s2t/strToBytes/bytesToString/createSymmetricCrypto`）并新增 UI 相关桥接兜底（`toast/longToast/startBrowser/startBrowserAwait/webView`），诊断能力判定与回归测试同步收敛。
+5. `已完成（2026-02-28）`：补齐第二批高频桥接（`deviceID/HMacBase64/aesDecodeArgsBase64Str/initUrl/getStrResponse/toURL/toUrl/reGetBook/cacheFile/importScript/removeCookie/getVerificationCode`），并将预取识别扩展到 `cacheFile/importScript`。  
+   说明：旧口径把部分 `stub/no-op` 计为 full，因此历史统计为 `non_full=75`；2026-02-28 已切换源码对齐口径（`full/partial/unsupported`），同一批 `3000 书源` 最新统计为 `non_full=176`（其中 `partial=109`，`unsupported=67`），用于真实反映剩余兼容差距。
+6. `已完成（2026-02-28）`：`webView` 系列 JS bridge 与业务层执行器一致化，`java.webView/webViewGetSource/webViewGetOverrideUrl/startBrowserAwait` 已通过 `WebViewExecutor` 执行并补回归。
+7. `已完成（2026-02-28）`：`startBrowser/startBrowserAwait` 新增交互验证执行器（真实页面人工验证 + 结果回传），并在无可用 Navigator 场景自动回退到现有 headless WebView。
 
 本轮 `webView:true` 稳定性回归补充：
 - 主链路（搜索 / 详情 / 正文）均新增 “WebView 抛错 -> HTTP 回退成功” 回归用例。

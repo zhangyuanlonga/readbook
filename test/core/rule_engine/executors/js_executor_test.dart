@@ -319,6 +319,76 @@ void main() {
       },
     );
 
+    test(
+      'supports webView bridge callbacks through WebView executor context',
+      () async {
+        final requests = <JsWebViewBridgeRequest>[];
+        final value = await executor.execute(
+          script: '''
+          var html = java.webView("<html><title>x</title></html>", "https://example.com/web", "document.title");
+          var source = java.webViewGetSource("", "https://example.com/video", "", "m3u8");
+          var override = java.webViewGetOverrideUrl("", "https://example.com/login", "", "pass");
+          var verify = java.startBrowserAwait("https://example.com/verify", "verify", true);
+          [html, source, override, verify.body(), String(verify.code()), verify.url()].join("|");
+        ''',
+          context: JsExecutionContext(
+            onWebViewBridgeCall: (request) async {
+              requests.add(request);
+              switch (request.bridgeCall) {
+                case 'webview':
+                  return const JsWebViewBridgeResponse(
+                    statusCode: 200,
+                    body: '<html></html>',
+                    finalUrl: 'https://example.com/web',
+                    scriptResult: 'title-x',
+                  );
+                case 'webviewgetsource':
+                  return const JsWebViewBridgeResponse(
+                    statusCode: 200,
+                    body: '',
+                    finalUrl: 'https://example.com/video',
+                    matchedResourceUrl: 'https://cdn.example.com/a.m3u8',
+                  );
+                case 'webviewgetoverrideurl':
+                  return const JsWebViewBridgeResponse(
+                    statusCode: 200,
+                    body: '',
+                    finalUrl: 'https://example.com/login',
+                    matchedOverrideUrl: 'https://example.com/pass',
+                  );
+                case 'startbrowserawait':
+                  return const JsWebViewBridgeResponse(
+                    statusCode: 200,
+                    body: 'verify-ok',
+                    finalUrl: 'https://example.com/verify',
+                  );
+                default:
+                  return const JsWebViewBridgeResponse(
+                    statusCode: 0,
+                    body: '',
+                    finalUrl: '',
+                  );
+              }
+            },
+          ),
+        );
+
+        expect(
+          value,
+          'title-x|https://cdn.example.com/a.m3u8|https://example.com/pass|verify-ok|200|https://example.com/verify',
+        );
+        expect(
+          requests.map((item) => item.bridgeCall).toList(growable: false),
+          <String>[
+            'webview',
+            'webviewgetsource',
+            'webviewgetoverrideurl',
+            'startbrowserawait',
+          ],
+        );
+      },
+    );
+
     test('supports java.connect response object alias', () async {
       final server = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
       server.listen((request) async {

@@ -10,6 +10,7 @@ import '../../errors/error_stage.dart';
 import '../../logging/app_logger.dart';
 import '../../network/http_client.dart';
 import '../../network/request_context.dart';
+import '../legado_bridge_capability.dart';
 import '../processors/legacy_rule_compat.dart';
 import '../processors/legacy_script_rule_fallback.dart';
 import '../rule_parser.dart';
@@ -19,6 +20,48 @@ import 'regex_executor.dart';
 
 typedef JsRuntimeFactory = JavascriptRuntime Function();
 typedef JsBridgePutCallback = void Function(Map<String, String> variables);
+typedef JsBridgeWebViewCallback =
+    Future<JsWebViewBridgeResponse> Function(JsWebViewBridgeRequest request);
+
+class JsWebViewBridgeRequest {
+  const JsWebViewBridgeRequest({
+    required this.bridgeCall,
+    required this.url,
+    this.html,
+    this.js,
+    this.sourceRegex,
+    this.overrideUrlRegex,
+    this.title,
+    this.refetchAfterSuccess,
+  });
+
+  final String bridgeCall;
+  final String url;
+  final String? html;
+  final String? js;
+  final String? sourceRegex;
+  final String? overrideUrlRegex;
+  final String? title;
+  final bool? refetchAfterSuccess;
+}
+
+class JsWebViewBridgeResponse {
+  const JsWebViewBridgeResponse({
+    required this.statusCode,
+    required this.body,
+    required this.finalUrl,
+    this.matchedResourceUrl,
+    this.matchedOverrideUrl,
+    this.scriptResult,
+  });
+
+  final int statusCode;
+  final String body;
+  final String finalUrl;
+  final String? matchedResourceUrl;
+  final String? matchedOverrideUrl;
+  final String? scriptResult;
+}
 
 class JsExecutionContext {
   const JsExecutionContext({
@@ -34,6 +77,9 @@ class JsExecutionContext {
     this.cacheJson,
     this.jsLibScript,
     this.onBridgePutVariables,
+    this.onWebViewBridgeCall,
+    this.allowAnalyzeUrlBridge = false,
+    this.allowPreUpdateBridge = false,
   });
 
   final String? result;
@@ -48,6 +94,9 @@ class JsExecutionContext {
   final Map<String, dynamic>? cacheJson;
   final String? jsLibScript;
   final JsBridgePutCallback? onBridgePutVariables;
+  final JsBridgeWebViewCallback? onWebViewBridgeCall;
+  final bool allowAnalyzeUrlBridge;
+  final bool allowPreUpdateBridge;
 
   JsExecutionContext copyWith({
     String? result,
@@ -62,6 +111,9 @@ class JsExecutionContext {
     Map<String, dynamic>? cacheJson,
     String? jsLibScript,
     JsBridgePutCallback? onBridgePutVariables,
+    JsBridgeWebViewCallback? onWebViewBridgeCall,
+    bool? allowAnalyzeUrlBridge,
+    bool? allowPreUpdateBridge,
   }) {
     return JsExecutionContext(
       result: result ?? this.result,
@@ -76,6 +128,10 @@ class JsExecutionContext {
       cacheJson: cacheJson ?? this.cacheJson,
       jsLibScript: jsLibScript ?? this.jsLibScript,
       onBridgePutVariables: onBridgePutVariables ?? this.onBridgePutVariables,
+      onWebViewBridgeCall: onWebViewBridgeCall ?? this.onWebViewBridgeCall,
+      allowAnalyzeUrlBridge:
+          allowAnalyzeUrlBridge ?? this.allowAnalyzeUrlBridge,
+      allowPreUpdateBridge: allowPreUpdateBridge ?? this.allowPreUpdateBridge,
     );
   }
 }
@@ -103,72 +159,6 @@ class JsExecutor {
   final Duration defaultTimeout;
   final Duration networkRequestTimeout;
   final int networkRequestLimit;
-  static const Set<String> _supportedBridgeCalls = <String>{
-    'ajax',
-    'ajaxall',
-    'connect',
-    'head',
-    'get',
-    'post',
-    'setcontent',
-    'getstring',
-    'getstringlist',
-    'getelements',
-    'getelement',
-    'getcookie',
-    'put',
-    'log',
-    'toast',
-    'longtoast',
-    'startbrowser',
-    'startbrowserawait',
-    'webview',
-    'base64decode',
-    'base64encode',
-    'base64decodetobytearray',
-    'base64decoder',
-    'md5encode',
-    'md5encode16',
-    'encodeuri',
-    'htmlformat',
-    'timeformat',
-    'timeformatutc',
-    'tonumchapter',
-    't2s',
-    's2t',
-    'strtobytes',
-    'bytestostring',
-    'createsymmetriccrypto',
-    'refreshtocurl',
-    'getwebviewua',
-    'randomuuid',
-    'androidid',
-    'deviceid',
-    'hexdecodetostring',
-    'hexdecodetobytearray',
-    'hexencodetostring',
-    'digesthex',
-    'hmachex',
-    'hmacbase64',
-    'desencodetobase64string',
-    'initurl',
-    'getstrresponse',
-    'tourl',
-    'regetbook',
-    'aesdecodeargsbase64str',
-    'cachefile',
-    'getverificationcode',
-    'importscript',
-    'removecookie',
-    'aesdecodetostring',
-    'aesdecodetobytearray',
-    'aesbase64decodetostring',
-    'aesbase64decodetobytearray',
-    'aesencodetostring',
-    'aesencodetobytearray',
-    'aesencodetobase64string',
-    'aesencodetobase64bytearray',
-  };
   static const String _channelPut = '__appread_js_bridge_put';
   static const String _channelGet = '__appread_js_bridge_get';
   static const String _channelLog = '__appread_js_bridge_log';
@@ -195,8 +185,15 @@ class JsExecutor {
   static const String _channelAes = '__appread_js_bridge_aes';
   static const String _channelNetworkCollect =
       '__appread_js_bridge_network_collect';
+  static const String _channelCacheControl =
+      '__appread_js_bridge_cache_control';
+  static const String _channelWebViewCollect =
+      '__appread_js_bridge_webview_collect';
   static const int _maxNetworkProbeRounds = 5;
+  static const int _maxWebViewProbeRounds = 5;
   static const int _maxRuleBridgeRecursionDepth = 3;
+  static final Map<String, _JsRemoteFileCacheEntry> _remoteFileCache =
+      <String, _JsRemoteFileCacheEntry>{};
 
   Future<String?> execute({
     required String script,
@@ -217,6 +214,19 @@ class JsExecutor {
           'stage': context.stage?.name,
           'bridgeCall': unsupportedBridgeCall,
           'diagnostic': 'js_bridge_unsupported',
+        },
+      );
+    }
+
+    final partialBridgeCall = _firstPartialBridgeCall(normalizedScript);
+    if (partialBridgeCall != null) {
+      _logger.warn(
+        'JS script includes partially compatible bridge call',
+        context: <String, Object?>{
+          'sourceId': context.sourceId,
+          'stage': context.stage?.name,
+          'bridgeCall': partialBridgeCall,
+          'diagnostic': 'js_bridge_partial',
         },
       );
     }
@@ -268,11 +278,18 @@ class JsExecutor {
         context: context,
         bridgeVariables: bridgeVariables,
       );
+      final webViewCache = await _prefetchWebViewResponses(
+        script: normalizedScript,
+        context: context,
+        bridgeVariables: bridgeVariables,
+        ajaxCache: ajaxCache,
+      );
       _injectContext(
         runtime,
         context,
         bridgeVariables: bridgeVariables,
         ajaxCache: ajaxCache,
+        webViewCache: webViewCache,
       );
       _injectJsLib(runtime, context);
       final result = runtime.evaluate(normalizedScript);
@@ -370,7 +387,8 @@ class JsExecutor {
     JavascriptRuntime runtime,
     JsExecutionContext context, {
     required Map<String, String> bridgeVariables,
-    required Map<String, String> ajaxCache,
+    required Map<String, Map<String, Object?>> ajaxCache,
+    required Map<String, Map<String, Object?>> webViewCache,
   }) {
     runtime.evaluate('var result = ${jsonEncode(context.result ?? '')};');
     if (context.baseUrl != null && context.baseUrl!.trim().isNotEmpty) {
@@ -387,12 +405,16 @@ class JsExecutor {
     }
     runtime.evaluate('var __bridge_vars = ${jsonEncode(bridgeVariables)};');
     runtime.evaluate(
+      'var __bridge_context = ${jsonEncode(<String, Object?>{'allowAnalyzeUrlBridge': context.allowAnalyzeUrlBridge, 'allowPreUpdateBridge': context.allowPreUpdateBridge})};',
+    );
+    runtime.evaluate(
       'var __cookie_store = ${jsonEncode(context.cookieJson ?? const <String, dynamic>{})};',
     );
     runtime.evaluate(
       'var __cache_store = ${jsonEncode(context.cacheJson ?? const <String, dynamic>{})};',
     );
     runtime.evaluate('var __ajax_cache = ${jsonEncode(ajaxCache)};');
+    runtime.evaluate('var __webview_cache = ${jsonEncode(webViewCache)};');
     final bridgeInitResult = runtime.evaluate('''
       function __appread_bridge_call(channel, payload) {
         try {
@@ -620,31 +642,268 @@ class JsExecutor {
         __appread_str_response_state.code = isFinite(parsedCode) ? parsedCode : 200;
       }
       function __appread_make_str_response() {
+        return __appread_make_response({
+          url: __appread_str_response_state.url || '',
+          body: __appread_str_response_state.body || '',
+          statusCode: __appread_str_response_state.code || 200,
+          headers: {}
+        });
+      }
+      function __appread_normalize_header_map(rawHeaders) {
+        if (rawHeaders == null || typeof rawHeaders !== 'object') {
+          return {};
+        }
+        var output = {};
+        var keys = Object.keys(rawHeaders);
+        for (var i = 0; i < keys.length; i++) {
+          var key = __appread_bridge_text(keys[i]).trim();
+          if (!key) {
+            continue;
+          }
+          var value = rawHeaders[keys[i]];
+          if (Array.isArray(value)) {
+            output[key] = value.map(function(item) {
+              return __appread_bridge_text(item);
+            });
+            continue;
+          }
+          output[key] = [__appread_bridge_text(value)];
+        }
+        return output;
+      }
+      function __appread_header_values(headers, name) {
+        var target = __appread_bridge_text(name).trim().toLowerCase();
+        if (!target) {
+          return [];
+        }
+        var keys = Object.keys(headers || {});
+        for (var i = 0; i < keys.length; i++) {
+          var key = __appread_bridge_text(keys[i]).trim();
+          if (key.toLowerCase() !== target) {
+            continue;
+          }
+          var value = headers[key];
+          return Array.isArray(value) ? value : [__appread_bridge_text(value)];
+        }
+        return [];
+      }
+      function __appread_parse_cookie_map(headers) {
+        var output = {};
+        var values = __appread_header_values(headers, 'set-cookie');
+        for (var i = 0; i < values.length; i++) {
+          var line = __appread_bridge_text(values[i]).trim();
+          if (!line) {
+            continue;
+          }
+          var separator = line.indexOf(';');
+          var firstPart = separator >= 0 ? line.substring(0, separator) : line;
+          var pairIndex = firstPart.indexOf('=');
+          if (pairIndex <= 0) {
+            continue;
+          }
+          var key = firstPart.substring(0, pairIndex).trim();
+          if (!key) {
+            continue;
+          }
+          output[key] = firstPart.substring(pairIndex + 1).trim();
+        }
+        return output;
+      }
+      function __appread_make_response(meta) {
+        var payload = meta == null || typeof meta !== 'object' ? {} : meta;
+        var resolvedUrl = __appread_bridge_text(payload.url || '');
+        var bodyText = __appread_bridge_text(payload.body || '');
+        var statusCode = Number(payload.statusCode != null ? payload.statusCode : payload.code);
+        if (!isFinite(statusCode)) {
+          statusCode = bodyText ? 200 : 0;
+        }
+        var headers = __appread_normalize_header_map(payload.headers);
+        var cookiesMap = __appread_parse_cookie_map(headers);
         return {
-          url: function() { return __appread_str_response_state.url || ''; },
-          body: function() { return __appread_str_response_state.body || ''; },
-          bodyText: function() { return __appread_str_response_state.body || ''; },
-          text: function() { return __appread_str_response_state.body || ''; },
-          html: function() { return __appread_str_response_state.body || ''; },
-          code: function() { return __appread_str_response_state.code || 200; },
-          headers: function() { return []; },
-          cookies: function() { return {}; },
-          toString: function() { return __appread_str_response_state.body || ''; }
+          url: function() { return resolvedUrl; },
+          body: function() { return bodyText; },
+          bodyText: function() { return bodyText; },
+          text: function() { return bodyText; },
+          html: function() { return bodyText; },
+          code: function() { return statusCode; },
+          statusCode: function() { return statusCode; },
+          message: function() {
+            if (statusCode >= 200 && statusCode < 300) {
+              return 'OK';
+            }
+            if (statusCode >= 400) {
+              return 'HTTP ' + statusCode;
+            }
+            return '';
+          },
+          headers: function() { return headers; },
+          headerMap: function() { return headers; },
+          header: function(name) {
+            var values = __appread_header_values(headers, name);
+            return values.length > 0 ? values[0] : '';
+          },
+          cookies: function() { return cookiesMap; },
+          raw: function() {
+            return {
+              url: resolvedUrl,
+              body: bodyText,
+              statusCode: statusCode,
+              headers: headers
+            };
+          },
+          valueOf: function() { return bodyText; },
+          toString: function() { return bodyText; }
         };
       }
-      function __appread_ajax_fetch(method, url, body, headers) {
-        var signature = __appread_ajax_signature(method, url, body, headers);
-        var output = __ajax_cache[signature];
-        if (output == null) {
+      function __appread_lookup_cached_response(signature, urlKey, fallbackUrl) {
+        var payload = __ajax_cache[signature];
+        if (payload == null) {
+          payload = __ajax_cache[urlKey];
+        }
+        if (payload == null) {
+          return __appread_make_response({
+            url: fallbackUrl || '',
+            body: '',
+            statusCode: 0,
+            headers: {}
+          });
+        }
+        if (typeof payload === 'string') {
+          return __appread_make_response({
+            url: fallbackUrl || '',
+            body: payload,
+            statusCode: payload ? 200 : 0,
+            headers: {}
+          });
+        }
+        return __appread_make_response(payload);
+      }
+      function __appread_ajax_fetch_response(method, url, body, headers, options) {
+        var normalizedMethod = __appread_bridge_text(method).toUpperCase();
+        var signature = __appread_ajax_signature(normalizedMethod, url, body, headers);
+        var urlKey = __appread_ajax_url_key(normalizedMethod, url);
+        var resolvedUrl = __appread_resolve_url(url, __appread_current_base_url());
+        var payload = __ajax_cache[signature];
+        if (payload == null) {
+          var opts = options == null || typeof options !== 'object' ? {} : options;
+          var bridgeName = __appread_bridge_text(opts.bridge || 'ajax').trim().toLowerCase();
+          if (!bridgeName) {
+            bridgeName = 'ajax';
+          }
+          var cacheTtlSeconds = Number(opts.cacheTtlSeconds);
+          if (!isFinite(cacheTtlSeconds) || cacheTtlSeconds < 0) {
+            cacheTtlSeconds = 0;
+          }
           __appread_bridge_call('$_channelNetworkCollect', {
-            method: __appread_bridge_text(method).toUpperCase(),
+            method: normalizedMethod,
             url: __appread_bridge_text(url),
             body: __appread_bridge_text(body),
-            headers: headers == null ? {} : headers
+            headers: headers == null ? {} : headers,
+            bridge: bridgeName,
+            cacheTtlSeconds: Math.floor(cacheTtlSeconds)
           });
-          output = __ajax_cache[__appread_ajax_url_key(method, url)];
         }
-        return output == null ? '' : String(output);
+        return __appread_lookup_cached_response(signature, urlKey, resolvedUrl);
+      }
+      function __appread_ajax_fetch(method, url, body, headers) {
+        return __appread_ajax_fetch_response(method, url, body, headers).body();
+      }
+      function __appread_webview_signature(bridge, payload) {
+        var data = payload == null || typeof payload !== 'object' ? {} : payload;
+        return [
+          __appread_bridge_text(bridge).trim().toLowerCase(),
+          __appread_bridge_text(data.url),
+          __appread_bridge_text(data.html),
+          __appread_bridge_text(data.js),
+          __appread_bridge_text(data.sourceRegex),
+          __appread_bridge_text(data.overrideUrlRegex),
+          __appread_bridge_text(data.title),
+          String(!!data.refetchAfterSuccess)
+        ].join('|');
+      }
+      function __appread_make_webview_payload(raw, fallbackUrl) {
+        if (raw == null || typeof raw !== 'object') {
+          return {
+            url: __appread_bridge_text(fallbackUrl),
+            body: '',
+            statusCode: 0,
+            finalUrl: __appread_bridge_text(fallbackUrl),
+            matchedResourceUrl: '',
+            matchedOverrideUrl: '',
+            scriptResult: ''
+          };
+        }
+        return {
+          url: __appread_bridge_text(raw.url || fallbackUrl || ''),
+          body: __appread_bridge_text(raw.body || ''),
+          statusCode: Number(raw.statusCode || 0),
+          finalUrl: __appread_bridge_text(raw.finalUrl || raw.url || fallbackUrl || ''),
+          matchedResourceUrl: __appread_bridge_text(raw.matchedResourceUrl || ''),
+          matchedOverrideUrl: __appread_bridge_text(raw.matchedOverrideUrl || ''),
+          scriptResult: __appread_bridge_text(raw.scriptResult || '')
+        };
+      }
+      function __appread_webview_fetch_payload(bridge, payload) {
+        var bridgeName = __appread_bridge_text(bridge).trim().toLowerCase();
+        var data = payload == null || typeof payload !== 'object' ? {} : payload;
+        var resolvedUrl = __appread_resolve_url(
+          __appread_bridge_text(data.url),
+          __appread_current_base_url()
+        );
+        var normalizedPayload = {
+          url: resolvedUrl,
+          html: __appread_bridge_text(data.html),
+          js: __appread_bridge_text(data.js),
+          sourceRegex: __appread_bridge_text(data.sourceRegex),
+          overrideUrlRegex: __appread_bridge_text(data.overrideUrlRegex),
+          title: __appread_bridge_text(data.title),
+          refetchAfterSuccess: !!data.refetchAfterSuccess
+        };
+        var signature = __appread_webview_signature(bridgeName, normalizedPayload);
+        var cached = __webview_cache[signature];
+        if (cached == null) {
+          __appread_bridge_call('$_channelWebViewCollect', {
+            bridge: bridgeName,
+            url: normalizedPayload.url,
+            html: normalizedPayload.html,
+            js: normalizedPayload.js,
+            sourceRegex: normalizedPayload.sourceRegex,
+            overrideUrlRegex: normalizedPayload.overrideUrlRegex,
+            title: normalizedPayload.title,
+            refetchAfterSuccess: normalizedPayload.refetchAfterSuccess
+          });
+          cached = __webview_cache[signature];
+        }
+        return __appread_make_webview_payload(cached, normalizedPayload.url);
+      }
+      function __appread_webview_text(bridge, payload) {
+        var bridgeName = __appread_bridge_text(bridge).trim().toLowerCase();
+        var data = payload == null || typeof payload !== 'object' ? {} : payload;
+        if (bridgeName === 'webviewgetsource') {
+          return data.matchedResourceUrl || data.body || '';
+        }
+        if (bridgeName === 'webviewgetoverrideurl') {
+          return data.matchedOverrideUrl || data.finalUrl || data.body || '';
+        }
+        if (bridgeName === 'webview') {
+          return data.scriptResult || data.body || '';
+        }
+        return data.body || '';
+      }
+      function __appread_webview_fetch_text(bridge, payload) {
+        return __appread_webview_text(
+          bridge,
+          __appread_webview_fetch_payload(bridge, payload)
+        );
+      }
+      function __appread_webview_fetch_response(bridge, payload) {
+        var data = __appread_webview_fetch_payload(bridge, payload);
+        return __appread_make_response({
+          url: data.finalUrl || data.url || '',
+          body: __appread_webview_text(bridge, data),
+          statusCode: data.statusCode || 0,
+          headers: {}
+        });
       }
       function __appread_ajax_all(method, urls, body, headers) {
         if (!Array.isArray(urls)) {
@@ -652,34 +911,11 @@ class JsExecutor {
         }
         var results = [];
         for (var i = 0; i < urls.length; i++) {
-          var text = __appread_ajax_fetch(method, urls[i], body, headers);
-          results.push({
-            body: (function(v) {
-              return function() {
-                return v;
-              };
-            })(text),
-            toString: (function(v) {
-              return function() {
-                return v;
-              };
-            })(text)
-          });
+          results.push(__appread_ajax_fetch_response(method, urls[i], body, headers, {
+            bridge: 'ajaxall'
+          }));
         }
         return results;
-      }
-      function __appread_connect_response(text) {
-        var bodyText = text == null ? '' : String(text);
-        return {
-          body: function() { return bodyText; },
-          bodyText: function() { return bodyText; },
-          text: function() { return bodyText; },
-          html: function() { return bodyText; },
-          code: function() { return 200; },
-          headers: function() { return []; },
-          cookies: function() { return {}; },
-          toString: function() { return bodyText; }
-        };
       }
       function __appread_connect(url, headers) {
         var state = {
@@ -689,8 +925,13 @@ class JsExecutor {
           headers: headers == null || typeof headers !== 'object' ? {} : headers
         };
         function executeFetch() {
-          var text = __appread_ajax_fetch(state.method, state.url, state.body, state.headers);
-          return __appread_connect_response(text);
+          return __appread_ajax_fetch_response(
+            state.method,
+            state.url,
+            state.body,
+            state.headers,
+            { bridge: 'connect' }
+          );
         }
         return {
           url: function(value) {
@@ -699,7 +940,7 @@ class JsExecutor {
           },
           method: function(value) {
             var text = __appread_bridge_text(value).toUpperCase();
-            state.method = text === 'POST' ? 'POST' : 'GET';
+            state.method = text === 'POST' ? 'POST' : text === 'HEAD' ? 'HEAD' : 'GET';
             return this;
           },
           header: function(key, value) {
@@ -725,6 +966,10 @@ class JsExecutor {
           },
           post: function() {
             state.method = 'POST';
+            return executeFetch();
+          },
+          head: function() {
+            state.method = 'HEAD';
             return executeFetch();
           },
           execute: function() {
@@ -778,8 +1023,31 @@ class JsExecutor {
         deleteMemory: function(key) {
           delete __cache_store[__appread_bridge_text(key)];
           return '';
+        },
+        delete: function(key) {
+          var cacheKey = __appread_bridge_text(key).trim();
+          if (!cacheKey) {
+            return '';
+          }
+          delete __cache_store[cacheKey];
+          __appread_bridge_call('$_channelCacheControl', {
+            action: 'delete_file_cache',
+            key: cacheKey
+          });
+          return '';
         }
       };
+      function __appread_context_enabled(flagName) {
+        if (__bridge_context == null || typeof __bridge_context !== 'object') {
+          return false;
+        }
+        return !!__bridge_context[flagName];
+      }
+      function __appread_log_context_gap(api, expectedContext) {
+        __appread_bridge_call('$_channelLog', {
+          message: 'bridge_context_gap|' + api + '|expected=' + expectedContext
+        });
+      }
       var java = {
         put: function(key, value) {
           __appread_bridge_call('$_channelPut', {
@@ -871,14 +1139,52 @@ class JsExecutor {
         longToast: function(message) {
           return '';
         },
-        startBrowser: function(url) {
+        startBrowser: function(url, title) {
+          __appread_webview_fetch_payload('startbrowser', {
+            url: __appread_bridge_text(url),
+            title: __appread_bridge_text(title)
+          });
           return '';
         },
-        startBrowserAwait: function(url) {
-          return '';
+        startBrowserAwait: function(url, title, refetchAfterSuccess) {
+          return __appread_webview_fetch_response('startbrowserawait', {
+            url: __appread_bridge_text(url),
+            title: __appread_bridge_text(title),
+            refetchAfterSuccess: refetchAfterSuccess === undefined
+              ? true
+              : !!refetchAfterSuccess
+          });
         },
-        webView: function(url) {
-          return '';
+        webView: function(html, url, js) {
+          var htmlValue = '';
+          var urlValue = '';
+          if (arguments.length <= 1) {
+            urlValue = __appread_bridge_text(html);
+          } else {
+            htmlValue = __appread_bridge_text(html);
+            urlValue = __appread_bridge_text(url);
+          }
+          return __appread_webview_fetch_text('webview', {
+            html: htmlValue,
+            url: urlValue,
+            js: __appread_bridge_text(js)
+          });
+        },
+        webViewGetSource: function(html, url, js, sourceRegex) {
+          return __appread_webview_fetch_text('webviewgetsource', {
+            html: __appread_bridge_text(html),
+            url: __appread_bridge_text(url),
+            js: __appread_bridge_text(js),
+            sourceRegex: __appread_bridge_text(sourceRegex)
+          });
+        },
+        webViewGetOverrideUrl: function(html, url, js, overrideUrlRegex) {
+          return __appread_webview_fetch_text('webviewgetoverrideurl', {
+            html: __appread_bridge_text(html),
+            url: __appread_bridge_text(url),
+            js: __appread_bridge_text(js),
+            overrideUrlRegex: __appread_bridge_text(overrideUrlRegex)
+          });
         },
         setContent: function(content, baseUrlValue) {
           __appread_bridge_call('$_channelRuleAccess', {
@@ -958,6 +1264,9 @@ class JsExecutor {
           return java.androidId();
         },
         initUrl: function(url) {
+          if (!__appread_context_enabled('allowAnalyzeUrlBridge')) {
+            __appread_log_context_gap('initUrl', 'analyzeUrl');
+          }
           var candidate = __appread_bridge_text(url);
           if (!candidate) {
             candidate = __appread_bridge_text(java.ruleUrl);
@@ -976,6 +1285,9 @@ class JsExecutor {
           return candidate;
         },
         getStrResponse: function(url, body, code) {
+          if (!__appread_context_enabled('allowAnalyzeUrlBridge')) {
+            __appread_log_context_gap('getStrResponse', 'analyzeUrl');
+          }
           var nextUrl = '';
           var nextBody = '';
           if (arguments.length >= 2) {
@@ -993,6 +1305,25 @@ class JsExecutor {
                 __appread_bridge_text(__appread_str_response_state.url) ||
                 __appread_current_base_url();
           }
+          if (nextUrl && !nextBody && arguments.length <= 1) {
+            var fetched = __appread_ajax_fetch_response('GET', nextUrl, '', {}, {
+              bridge: 'getstrresponse'
+            });
+            var fetchedCode = fetched.code();
+            if (code != null) {
+              var parsed = Number(code);
+              if (isFinite(parsed)) {
+                fetchedCode = parsed;
+              }
+            }
+            __appread_update_str_response(fetched.url(), fetched.body(), fetchedCode);
+            return __appread_make_response({
+              url: fetched.url(),
+              body: fetched.body(),
+              statusCode: fetchedCode,
+              headers: fetched.headers()
+            });
+          }
           if (!nextBody) {
             nextBody = __appread_bridge_text(__appread_str_response_state.body);
           }
@@ -1000,6 +1331,21 @@ class JsExecutor {
             nextBody = __appread_bridge_text(result);
           }
           __appread_update_str_response(nextUrl, nextBody, code);
+          return __appread_make_str_response();
+        },
+        getResponse: function(url, body, headers) {
+          if (!__appread_context_enabled('allowAnalyzeUrlBridge')) {
+            __appread_log_context_gap('getResponse', 'analyzeUrl');
+          }
+          if (arguments.length > 0 && __appread_maybe_url(url)) {
+            return __appread_ajax_fetch_response(
+              'GET',
+              __appread_bridge_text(url),
+              body == null ? '' : __appread_bridge_text(body),
+              headers == null ? {} : headers,
+              { bridge: 'getresponse' }
+            );
+          }
           return __appread_make_str_response();
         },
         toURL: function(value, baseValue) {
@@ -1015,13 +1361,45 @@ class JsExecutor {
           );
         },
         reGetBook: function() {
-          return '';
+          if (!__appread_context_enabled('allowPreUpdateBridge')) {
+            __appread_log_context_gap('reGetBook', 'preUpdateJs');
+          }
+          var bookUrl = '';
+          try {
+            if (typeof book !== 'undefined' && book != null && book.bookUrl != null) {
+              bookUrl = __appread_bridge_text(book.bookUrl);
+            }
+          } catch (_) {}
+          if (!bookUrl) {
+            bookUrl = __appread_bridge_text(java.get('bookUrl'));
+          }
+          if (bookUrl) {
+            java.put('bookUrl', bookUrl);
+          }
+          return bookUrl;
         },
         refreshTocUrl: function(url) {
+          if (!__appread_context_enabled('allowPreUpdateBridge')) {
+            __appread_log_context_gap('refreshTocUrl', 'preUpdateJs');
+          }
           if (arguments.length > 0) {
             java.put("nextTocUrl", __appread_bridge_text(url));
           }
-          return java.get("nextTocUrl");
+          var nextTocUrl = java.get("nextTocUrl");
+          if (nextTocUrl) {
+            return nextTocUrl;
+          }
+          try {
+            if (typeof book !== 'undefined' && book != null) {
+              if (book.tocUrl != null && __appread_bridge_text(book.tocUrl).trim()) {
+                return __appread_bridge_text(book.tocUrl);
+              }
+              if (book.chapterUrl != null && __appread_bridge_text(book.chapterUrl).trim()) {
+                return __appread_bridge_text(book.chapterUrl);
+              }
+            }
+          } catch (_) {}
+          return '';
         },
         hexDecodeToString: function(value) {
           var output = __appread_bridge_call('$_channelHexCodec', {
@@ -1100,11 +1478,46 @@ class JsExecutor {
             decodedIv
           );
         },
-        cacheFile: function(url, headers) {
-          return java.ajax(java.toUrl(url), headers);
+        cacheFile: function(url, saveTimeOrHeaders, headers) {
+          var targetUrl = java.toUrl(url);
+          var saveTime = 0;
+          var requestHeaders = {};
+          if (typeof saveTimeOrHeaders === 'number') {
+            saveTime = Math.floor(saveTimeOrHeaders);
+            if (saveTime < 0) {
+              saveTime = 0;
+            }
+            if (headers != null && typeof headers === 'object') {
+              requestHeaders = headers;
+            }
+          } else if (saveTimeOrHeaders != null && typeof saveTimeOrHeaders === 'object') {
+            requestHeaders = saveTimeOrHeaders;
+          }
+          var cacheKey = java.md5Encode16(targetUrl);
+          var cached = cache.getFromMemory(cacheKey);
+          if (cached) {
+            return cached;
+          }
+          var response = __appread_ajax_fetch_response('GET', targetUrl, '', requestHeaders, {
+            bridge: 'cachefile',
+            cacheTtlSeconds: saveTime
+          });
+          var bodyText = response.body();
+          cache.putMemory(cacheKey, bodyText);
+          return bodyText;
         },
-        importScript: function(url, headers) {
-          return java.cacheFile(url, headers);
+        importScript: function(path, saveTimeOrHeaders, headers) {
+          var target = __appread_bridge_text(path).trim();
+          if (!target) {
+            return '';
+          }
+          var normalizedTarget = target.toLowerCase();
+          if (normalizedTarget.indexOf('http://') === 0 ||
+              normalizedTarget.indexOf('https://') === 0 ||
+              target.charAt(0) === '/') {
+            return java.cacheFile(target, saveTimeOrHeaders, headers);
+          }
+          return '';
         },
         getVerificationCode: function(url) {
           return '';
@@ -1113,7 +1526,9 @@ class JsExecutor {
           return cookie.removeCookie(host);
         },
         ajax: function(url, headers) {
-          return __appread_ajax_fetch('GET', url, '', headers);
+          return __appread_ajax_fetch_response('GET', url, '', headers, {
+            bridge: 'ajax'
+          }).body();
         },
         ajaxAll: function(urls, headers) {
           return __appread_ajax_all('GET', urls, '', headers);
@@ -1122,11 +1537,15 @@ class JsExecutor {
           return __appread_connect(url, headers);
         },
         head: function(url, headers) {
-          return __appread_ajax_fetch('GET', url, '', headers);
+          return __appread_ajax_fetch_response('HEAD', url, '', headers, {
+            bridge: 'head'
+          });
         },
         get: function(keyOrUrl, headers) {
           if (arguments.length > 1 || __appread_maybe_url(keyOrUrl)) {
-            return __appread_ajax_fetch('GET', keyOrUrl, '', headers);
+            return __appread_ajax_fetch_response('GET', keyOrUrl, '', headers, {
+              bridge: 'get'
+            });
           }
           var value = __appread_bridge_call('$_channelGet', {
             key: __appread_bridge_text(keyOrUrl)
@@ -1134,7 +1553,9 @@ class JsExecutor {
           return value == null ? '' : String(value);
         },
         post: function(url, body, headers) {
-          return __appread_ajax_fetch('POST', url, body, headers);
+          return __appread_ajax_fetch_response('POST', url, body, headers, {
+            bridge: 'post'
+          });
         },
         createSymmetricCrypto: function(transformation, key, iv) {
           var normalizedTransformation = __appread_bridge_text(
@@ -1313,6 +1734,7 @@ class JsExecutor {
     required _JsRuleBridgeState ruleState,
     void Function(String key, String value)? onBridgePut,
     void Function(_JsNetworkRequest request)? onNetworkRequest,
+    void Function(_JsWebViewRequest request)? onWebViewRequest,
   }) {
     runtime.onMessage(_channelPut, (dynamic args) {
       final payload = _asPayload(args);
@@ -1635,8 +2057,11 @@ class JsExecutor {
       final payload = _asPayload(args);
       final methodText =
           payload['method']?.toString().trim().toUpperCase() ?? 'GET';
-      final method =
-          methodText == 'POST' ? _JsNetworkMethod.post : _JsNetworkMethod.get;
+      final method = switch (methodText) {
+        'POST' => _JsNetworkMethod.post,
+        'HEAD' => _JsNetworkMethod.head,
+        _ => _JsNetworkMethod.get,
+      };
 
       final normalizedUrl = _resolveNetworkUrl(
         payload['url']?.toString(),
@@ -1648,12 +2073,19 @@ class JsExecutor {
 
       final body = _normalizeRequestBodyValue(payload['body']);
       final headers = _normalizeHeadersValue(payload['headers']);
+      final bridgeCall = payload['bridge']?.toString().trim().toLowerCase();
+      final cacheTtlSeconds = _asNullableInt(payload['cacheTtlSeconds']);
       onNetworkRequest(
         _JsNetworkRequest(
           method: method,
           url: normalizedUrl,
           body: body,
           headers: headers,
+          bridgeCall: bridgeCall,
+          cacheTtlSeconds:
+              cacheTtlSeconds == null || cacheTtlSeconds < 0
+                  ? null
+                  : cacheTtlSeconds,
           signature: _buildAjaxSignature(
             method: method.name.toUpperCase(),
             url: normalizedUrl,
@@ -1668,18 +2100,70 @@ class JsExecutor {
       );
       return '';
     });
+
+    runtime.onMessage(_channelWebViewCollect, (dynamic args) {
+      if (onWebViewRequest == null) {
+        return '';
+      }
+
+      final payload = _asPayload(args);
+      final bridgeCall =
+          payload['bridge']?.toString().trim().toLowerCase() ?? '';
+      if (bridgeCall.isEmpty) {
+        return '';
+      }
+
+      final url = _resolveWebViewUrl(
+        payload['url']?.toString(),
+        baseUrl: context.baseUrl,
+      );
+      final request = _JsWebViewRequest(
+        bridgeCall: bridgeCall,
+        url: url,
+        html: payload['html']?.toString(),
+        js: payload['js']?.toString(),
+        sourceRegex: payload['sourceRegex']?.toString(),
+        overrideUrlRegex: payload['overrideUrlRegex']?.toString(),
+        title: payload['title']?.toString(),
+        refetchAfterSuccess: _asNullableBool(payload['refetchAfterSuccess']),
+        signature: _buildWebViewSignature(
+          bridgeCall: bridgeCall,
+          url: url,
+          html: payload['html']?.toString(),
+          js: payload['js']?.toString(),
+          sourceRegex: payload['sourceRegex']?.toString(),
+          overrideUrlRegex: payload['overrideUrlRegex']?.toString(),
+          title: payload['title']?.toString(),
+          refetchAfterSuccess: _asNullableBool(payload['refetchAfterSuccess']),
+        ),
+      );
+      onWebViewRequest(request);
+      return '';
+    });
+
+    runtime.onMessage(_channelCacheControl, (dynamic args) {
+      final payload = _asPayload(args);
+      final action = payload['action']?.toString().trim().toLowerCase() ?? '';
+      if (action == 'delete_file_cache') {
+        final key = payload['key']?.toString().trim() ?? '';
+        if (key.isNotEmpty) {
+          _remoteFileCache.remove(key);
+        }
+      }
+      return '';
+    });
   }
 
-  Future<Map<String, String>> _prefetchNetworkResponses({
+  Future<Map<String, Map<String, Object?>>> _prefetchNetworkResponses({
     required String script,
     required JsExecutionContext context,
     required Map<String, String> bridgeVariables,
   }) async {
     if (!_containsNetworkBridgeInvocation(script)) {
-      return const <String, String>{};
+      return const <String, Map<String, Object?>>{};
     }
 
-    final cache = <String, String>{};
+    final cache = <String, Map<String, Object?>>{};
     final fetchedSignatures = <String>{};
     final staticRequests = _extractStaticNetworkRequests(script, context);
     var candidateCount = staticRequests.length;
@@ -1690,6 +2174,12 @@ class JsExecutor {
       cache: cache,
       fetchedSignatures: fetchedSignatures,
     );
+
+    final networkBridgeInvocationCount = _countNetworkBridgeInvocations(script);
+    if (networkBridgeInvocationCount > 0 &&
+        staticRequests.length >= networkBridgeInvocationCount) {
+      return cache;
+    }
 
     for (
       var round = 0;
@@ -1737,10 +2227,175 @@ class JsExecutor {
     return cache;
   }
 
+  Future<Map<String, Map<String, Object?>>> _prefetchWebViewResponses({
+    required String script,
+    required JsExecutionContext context,
+    required Map<String, String> bridgeVariables,
+    required Map<String, Map<String, Object?>> ajaxCache,
+  }) async {
+    if (context.onWebViewBridgeCall == null) {
+      return const <String, Map<String, Object?>>{};
+    }
+    if (!_containsWebViewBridgeInvocation(script)) {
+      return const <String, Map<String, Object?>>{};
+    }
+
+    final cache = <String, Map<String, Object?>>{};
+    final fetchedSignatures = <String>{};
+    var candidateCount = 0;
+
+    for (
+      var round = 0;
+      round < _maxWebViewProbeRounds &&
+          fetchedSignatures.length < networkRequestLimit;
+      round += 1
+    ) {
+      final requests = await _collectProbeWebViewRequests(
+        script: script,
+        context: context,
+        bridgeVariables: bridgeVariables,
+        ajaxCache: ajaxCache,
+        webViewCache: cache,
+      );
+      if (requests.isEmpty) {
+        break;
+      }
+      candidateCount += requests.length;
+      final before = fetchedSignatures.length;
+      await _prefetchWebViewRequests(
+        requests: requests,
+        context: context,
+        cache: cache,
+        fetchedSignatures: fetchedSignatures,
+      );
+      if (fetchedSignatures.length == before) {
+        break;
+      }
+    }
+
+    if (candidateCount > networkRequestLimit &&
+        fetchedSignatures.length >= networkRequestLimit) {
+      _logger.warn(
+        'JS bridge webview call limit reached',
+        context: <String, Object?>{
+          'sourceId': context.sourceId,
+          'stage': context.stage?.name,
+          'maxCalls': networkRequestLimit,
+          'actualCalls': candidateCount,
+          'diagnostic': 'js_bridge_webview_call_limit',
+        },
+      );
+    }
+
+    return cache;
+  }
+
+  Future<void> _prefetchWebViewRequests({
+    required List<_JsWebViewRequest> requests,
+    required JsExecutionContext context,
+    required Map<String, Map<String, Object?>> cache,
+    required Set<String> fetchedSignatures,
+  }) async {
+    for (final request in requests) {
+      if (fetchedSignatures.length >= networkRequestLimit) {
+        return;
+      }
+      if (fetchedSignatures.contains(request.signature)) {
+        continue;
+      }
+      fetchedSignatures.add(request.signature);
+      await _prefetchSingleWebViewRequest(
+        request: request,
+        context: context,
+        cache: cache,
+      );
+    }
+  }
+
+  Future<void> _prefetchSingleWebViewRequest({
+    required _JsWebViewRequest request,
+    required JsExecutionContext context,
+    required Map<String, Map<String, Object?>> cache,
+  }) async {
+    final callback = context.onWebViewBridgeCall;
+    if (callback == null) {
+      return;
+    }
+
+    try {
+      final response = await callback(request.toBridgeRequest());
+      final payload = _buildWebViewPayload(
+        request: request,
+        response: response,
+      );
+      cache[request.signature] = payload;
+    } catch (error) {
+      _logger.warn(
+        'JS bridge webview prefetch failed',
+        context: <String, Object?>{
+          'sourceId': context.sourceId,
+          'stage': context.stage?.name,
+          'bridgeCall': request.bridgeCall,
+          'url': request.url,
+          'briefMessage': error.toString(),
+          'diagnostic': 'js_bridge_webview_failed',
+        },
+      );
+    }
+  }
+
+  Future<List<_JsWebViewRequest>> _collectProbeWebViewRequests({
+    required String script,
+    required JsExecutionContext context,
+    required Map<String, String> bridgeVariables,
+    required Map<String, Map<String, Object?>> ajaxCache,
+    required Map<String, Map<String, Object?>> webViewCache,
+  }) async {
+    final requests = <_JsWebViewRequest>[];
+    JavascriptRuntime? runtime;
+    try {
+      runtime = _runtimeFactory();
+      final probeVariables = <String, String>{...bridgeVariables};
+      final probeRuleState = _JsRuleBridgeState(
+        content: context.result ?? '',
+        baseUrl: context.baseUrl,
+      );
+      _registerTier1Bridge(
+        runtime,
+        context: context,
+        bridgeVariables: probeVariables,
+        ruleState: probeRuleState,
+        onWebViewRequest: requests.add,
+      );
+      _injectContext(
+        runtime,
+        context,
+        bridgeVariables: probeVariables,
+        ajaxCache: ajaxCache,
+        webViewCache: webViewCache,
+      );
+      _injectJsLib(runtime, context);
+      runtime.evaluate(script);
+    } catch (_) {
+      // Probe mode intentionally ignores script runtime errors.
+    } finally {
+      runtime?.dispose();
+    }
+
+    if (requests.isEmpty) {
+      return const <_JsWebViewRequest>[];
+    }
+    final unique = <String, _JsWebViewRequest>{};
+    for (final request in requests) {
+      unique.putIfAbsent(request.signature, () => request);
+    }
+    return unique.values.toList(growable: false);
+  }
+
   Future<void> _prefetchRequests({
     required List<_JsNetworkRequest> requests,
     required JsExecutionContext context,
-    required Map<String, String> cache,
+    required Map<String, Map<String, Object?>> cache,
     required Set<String> fetchedSignatures,
   }) async {
     for (final request in requests) {
@@ -1763,16 +2418,24 @@ class JsExecutor {
   Future<void> _prefetchSingleRequest({
     required _JsNetworkRequest request,
     required JsExecutionContext context,
-    required Map<String, String> cache,
+    required Map<String, Map<String, Object?>> cache,
   }) async {
+    final cachedFilePayload = _readRemoteFileCachePayload(request);
+    if (cachedFilePayload != null) {
+      cache[request.signature] = cachedFilePayload;
+      cache[request.urlKey] = cachedFilePayload;
+      return;
+    }
+
     try {
       final response = await _httpClient.get(
         RequestContext(
           url: request.url,
-          method:
-              request.method == _JsNetworkMethod.post
-                  ? HttpRequestMethod.post
-                  : HttpRequestMethod.get,
+          method: switch (request.method) {
+            _JsNetworkMethod.post => HttpRequestMethod.post,
+            _JsNetworkMethod.head => HttpRequestMethod.head,
+            _ => HttpRequestMethod.get,
+          },
           headers: request.headers,
           body: request.body.isEmpty ? null : request.body,
           connectTimeout: networkRequestTimeout,
@@ -1783,8 +2446,15 @@ class JsExecutor {
               context.sourceJson?['concurrentRate']?.toString().trim(),
         ),
       );
-      cache[request.signature] = response.body;
-      cache[request.urlKey] = response.body;
+      final payload = _buildNetworkPayload(
+        url: request.url,
+        statusCode: response.statusCode,
+        body: response.body,
+        headers: response.headers,
+      );
+      cache[request.signature] = payload;
+      cache[request.urlKey] = payload;
+      _writeRemoteFileCachePayload(request, payload);
     } catch (error) {
       _logger.warn(
         'JS bridge network prefetch failed',
@@ -1804,7 +2474,7 @@ class JsExecutor {
     required String script,
     required JsExecutionContext context,
     required Map<String, String> bridgeVariables,
-    required Map<String, String> cache,
+    required Map<String, Map<String, Object?>> cache,
   }) async {
     final requests = <_JsNetworkRequest>[];
     JavascriptRuntime? runtime;
@@ -1827,6 +2497,7 @@ class JsExecutor {
         context,
         bridgeVariables: probeVariables,
         ajaxCache: cache,
+        webViewCache: const <String, Map<String, Object?>>{},
       );
       _injectJsLib(runtime, context);
       runtime.evaluate(script);
@@ -1860,12 +2531,12 @@ class JsExecutor {
       r'java\.(ajax|get|post|connect|head|cacheFile|importScript)\s*\(',
     );
     for (final match in callPattern.allMatches(script)) {
-      final methodText = match.group(1)?.trim().toLowerCase();
-      if (methodText == null || methodText.isEmpty) {
+      final bridgeCall = match.group(1)?.trim().toLowerCase();
+      if (bridgeCall == null || bridgeCall.isEmpty) {
         continue;
       }
 
-      final method = _JsNetworkMethod.fromBridgeName(methodText);
+      final method = _JsNetworkMethod.fromBridgeName(bridgeCall);
       if (method == null) {
         continue;
       }
@@ -1903,6 +2574,7 @@ class JsExecutor {
 
       var body = '';
       Map<String, String> headers = const <String, String>{};
+      int? cacheTtlSeconds;
 
       if (method == _JsNetworkMethod.post) {
         if (args.length >= 2) {
@@ -1918,6 +2590,38 @@ class JsExecutor {
           headers =
               _parseHeadersLiteral(args[2], variables: staticStrings) ??
               const <String, String>{};
+        }
+      } else if (bridgeCall == 'cachefile') {
+        if (args.length >= 2) {
+          final ttlValue = _parsePrimitiveLiteral(args[1]);
+          if (ttlValue is num) {
+            cacheTtlSeconds = ttlValue.toInt();
+            if (args.length >= 3) {
+              headers =
+                  _parseHeadersLiteral(args[2], variables: staticStrings) ??
+                  const <String, String>{};
+            }
+          } else {
+            headers =
+                _parseHeadersLiteral(args[1], variables: staticStrings) ??
+                const <String, String>{};
+          }
+        }
+      } else if (bridgeCall == 'importscript') {
+        if (args.length >= 2) {
+          final ttlValue = _parsePrimitiveLiteral(args[1]);
+          if (ttlValue is num) {
+            cacheTtlSeconds = ttlValue.toInt();
+            if (args.length >= 3) {
+              headers =
+                  _parseHeadersLiteral(args[2], variables: staticStrings) ??
+                  const <String, String>{};
+            }
+          } else {
+            headers =
+                _parseHeadersLiteral(args[1], variables: staticStrings) ??
+                const <String, String>{};
+          }
         }
       } else if (args.length >= 2) {
         headers =
@@ -1941,6 +2645,11 @@ class JsExecutor {
           url: normalizedUrl,
           body: body,
           headers: headers,
+          bridgeCall: bridgeCall,
+          cacheTtlSeconds:
+              cacheTtlSeconds == null || cacheTtlSeconds < 0
+                  ? null
+                  : cacheTtlSeconds,
           signature: signature,
           urlKey: urlKey,
         ),
@@ -2583,6 +3292,61 @@ class JsExecutor {
     return baseUri.resolve(text).toString();
   }
 
+  String _resolveWebViewUrl(String? source, {String? baseUrl}) {
+    final text = source?.trim() ?? '';
+    if (text.isNotEmpty) {
+      final direct = Uri.tryParse(text);
+      if (direct != null &&
+          direct.hasScheme &&
+          (direct.scheme == 'http' ||
+              direct.scheme == 'https' ||
+              direct.scheme == 'about')) {
+        return direct.toString();
+      }
+    }
+
+    final resolved = _resolveNetworkUrl(
+      text.isEmpty ? null : text,
+      baseUrl: baseUrl,
+    );
+    if (resolved != null && resolved.isNotEmpty) {
+      return resolved;
+    }
+
+    final fallback = baseUrl?.trim() ?? '';
+    if (fallback.isNotEmpty) {
+      final fallbackUri = Uri.tryParse(fallback);
+      if (fallbackUri != null &&
+          fallbackUri.hasScheme &&
+          (fallbackUri.scheme == 'http' || fallbackUri.scheme == 'https')) {
+        return fallbackUri.toString();
+      }
+    }
+    return 'about:blank';
+  }
+
+  String _buildWebViewSignature({
+    required String bridgeCall,
+    required String url,
+    String? html,
+    String? js,
+    String? sourceRegex,
+    String? overrideUrlRegex,
+    String? title,
+    bool? refetchAfterSuccess,
+  }) {
+    return <String>[
+      bridgeCall.trim().toLowerCase(),
+      url.trim(),
+      html ?? '',
+      js ?? '',
+      sourceRegex ?? '',
+      overrideUrlRegex ?? '',
+      title ?? '',
+      '${refetchAfterSuccess ?? false}',
+    ].join('|');
+  }
+
   bool _looksLikeNetworkUrlLiteral(String source) {
     final text = source.trim().toLowerCase();
     return text.startsWith('http://') ||
@@ -2619,6 +3383,98 @@ class JsExecutor {
       ..sort((left, right) => left.key.compareTo(right.key));
 
     return entries.map((entry) => '${entry.key}:${entry.value}').join('\n');
+  }
+
+  Map<String, Object?> _buildNetworkPayload({
+    required String url,
+    required int statusCode,
+    required String body,
+    required Map<String, List<String>> headers,
+  }) {
+    final normalizedHeaders = <String, List<String>>{};
+    for (final entry in headers.entries) {
+      final key = entry.key.trim();
+      if (key.isEmpty) {
+        continue;
+      }
+      normalizedHeaders[key] = List<String>.from(entry.value);
+    }
+
+    return <String, Object?>{
+      'url': url,
+      'statusCode': statusCode,
+      'body': body,
+      'headers': normalizedHeaders,
+    };
+  }
+
+  Map<String, Object?> _buildWebViewPayload({
+    required _JsWebViewRequest request,
+    required JsWebViewBridgeResponse response,
+  }) {
+    return <String, Object?>{
+      'url': request.url,
+      'statusCode': response.statusCode,
+      'body': response.body,
+      'finalUrl': response.finalUrl,
+      'matchedResourceUrl': response.matchedResourceUrl ?? '',
+      'matchedOverrideUrl': response.matchedOverrideUrl ?? '',
+      'scriptResult': response.scriptResult ?? '',
+    };
+  }
+
+  Map<String, Object?>? _readRemoteFileCachePayload(_JsNetworkRequest request) {
+    final key = _resolveRemoteFileCacheKey(request);
+    if (key == null || key.isEmpty) {
+      return null;
+    }
+
+    final cached = _remoteFileCache[key];
+    if (cached == null) {
+      return null;
+    }
+
+    final expiresAt = cached.expiresAt;
+    if (expiresAt != null && DateTime.now().isAfter(expiresAt)) {
+      _remoteFileCache.remove(key);
+      return null;
+    }
+
+    return Map<String, Object?>.from(cached.payload);
+  }
+
+  void _writeRemoteFileCachePayload(
+    _JsNetworkRequest request,
+    Map<String, Object?> payload,
+  ) {
+    final key = _resolveRemoteFileCacheKey(request);
+    if (key == null || key.isEmpty) {
+      return;
+    }
+
+    final ttl = request.cacheTtlSeconds ?? 0;
+    final expiresAt =
+        ttl > 0 ? DateTime.now().add(Duration(seconds: ttl)) : null;
+    _remoteFileCache[key] = _JsRemoteFileCacheEntry(
+      payload: Map<String, Object?>.from(payload),
+      expiresAt: expiresAt,
+    );
+  }
+
+  String? _resolveRemoteFileCacheKey(_JsNetworkRequest request) {
+    final bridgeCall = request.bridgeCall?.trim().toLowerCase();
+    if (bridgeCall != 'cachefile' && bridgeCall != 'importscript') {
+      return null;
+    }
+    return _md5Encode16(request.url);
+  }
+
+  String _md5Encode16(String value) {
+    final full = crypto.md5.convert(utf8.encode(value)).toString();
+    if (full.length < 24) {
+      return full;
+    }
+    return full.substring(8, 24);
   }
 
   List<String> _evaluateBridgeRule({
@@ -3182,6 +4038,19 @@ class JsExecutor {
     return null;
   }
 
+  int? _asNullableInt(dynamic value) {
+    if (value is int) {
+      return value;
+    }
+    if (value is num) {
+      return value.toInt();
+    }
+    if (value is String) {
+      return int.tryParse(value.trim());
+    }
+    return null;
+  }
+
   String _normalizeRequestBodyValue(dynamic raw) {
     if (raw == null) {
       return '';
@@ -3663,6 +4532,44 @@ class JsExecutor {
     return false;
   }
 
+  bool _containsWebViewBridgeInvocation(String script) {
+    return RegExp(
+      r'java\.(webView|webViewGetSource|webViewGetOverrideUrl|startBrowserAwait|startBrowser)\s*\(',
+      caseSensitive: false,
+    ).hasMatch(script);
+  }
+
+  int _countNetworkBridgeInvocations(String script) {
+    var count =
+        RegExp(
+          r'java\.(ajax|ajaxAll|post|connect|head|cacheFile|importScript)\s*\(',
+        ).allMatches(script).length;
+
+    final getPattern = RegExp(r'java\.get\s*\(');
+    for (final match in getPattern.allMatches(script)) {
+      final openParenIndex = match.end - 1;
+      final argsText = _extractInvocationArguments(script, openParenIndex);
+      if (argsText == null || argsText.trim().isEmpty) {
+        continue;
+      }
+      final args = _splitTopLevelSegments(argsText, delimiter: ',');
+      if (args.isEmpty) {
+        continue;
+      }
+      if (args.length >= 2) {
+        count += 1;
+        continue;
+      }
+
+      final raw = args.first.trim();
+      final literal = _parseStringLiteral(raw);
+      if (literal == null || _looksLikeNetworkUrlLiteral(literal)) {
+        count += 1;
+      }
+    }
+    return count;
+  }
+
   bool _looksLikelyInfiniteLoop(String script) {
     final compact = script.replaceAll(RegExp(r'\s+'), '');
     return compact.contains('while(true)') || compact.contains('for(;;)');
@@ -3686,10 +4593,27 @@ class JsExecutor {
     ).allMatches(script)) {
       final call = (match.group(1) ?? '').trim();
       final normalized = call.toLowerCase();
-      if (normalized.isEmpty || _supportedBridgeCalls.contains(normalized)) {
+      if (normalized.isEmpty ||
+          LegadoBridgeCapability.knownBridgeCalls.contains(normalized)) {
         continue;
       }
       return call;
+    }
+    return null;
+  }
+
+  String? _firstPartialBridgeCall(String script) {
+    for (final match in RegExp(
+      r'java\.([a-zA-Z_][a-zA-Z0-9_]*)\s*\(',
+    ).allMatches(script)) {
+      final call = (match.group(1) ?? '').trim();
+      final normalized = call.toLowerCase();
+      if (normalized.isEmpty) {
+        continue;
+      }
+      if (LegadoBridgeCapability.partialBridgeCalls.contains(normalized)) {
+        return call;
+      }
     }
     return null;
   }
@@ -3710,14 +4634,15 @@ class JsExecutor {
 
 enum _JsNetworkMethod {
   get,
-  post;
+  post,
+  head;
 
   static _JsNetworkMethod? fromBridgeName(String value) {
     final normalized = value.trim().toLowerCase();
     return switch (normalized) {
       'ajax' => _JsNetworkMethod.get,
       'connect' => _JsNetworkMethod.get,
-      'head' => _JsNetworkMethod.get,
+      'head' => _JsNetworkMethod.head,
       'cachefile' => _JsNetworkMethod.get,
       'importscript' => _JsNetworkMethod.get,
       'get' => _JsNetworkMethod.get,
@@ -3733,6 +4658,8 @@ class _JsNetworkRequest {
     required this.url,
     required this.body,
     required this.headers,
+    this.bridgeCall,
+    this.cacheTtlSeconds,
     required this.signature,
     required this.urlKey,
   });
@@ -3741,8 +4668,57 @@ class _JsNetworkRequest {
   final String url;
   final String body;
   final Map<String, String> headers;
+  final String? bridgeCall;
+  final int? cacheTtlSeconds;
   final String signature;
   final String urlKey;
+}
+
+class _JsWebViewRequest {
+  const _JsWebViewRequest({
+    required this.bridgeCall,
+    required this.url,
+    this.html,
+    this.js,
+    this.sourceRegex,
+    this.overrideUrlRegex,
+    this.title,
+    this.refetchAfterSuccess,
+    required this.signature,
+  });
+
+  final String bridgeCall;
+  final String url;
+  final String? html;
+  final String? js;
+  final String? sourceRegex;
+  final String? overrideUrlRegex;
+  final String? title;
+  final bool? refetchAfterSuccess;
+  final String signature;
+
+  JsWebViewBridgeRequest toBridgeRequest() {
+    return JsWebViewBridgeRequest(
+      bridgeCall: bridgeCall,
+      url: url,
+      html: html,
+      js: js,
+      sourceRegex: sourceRegex,
+      overrideUrlRegex: overrideUrlRegex,
+      title: title,
+      refetchAfterSuccess: refetchAfterSuccess,
+    );
+  }
+}
+
+class _JsRemoteFileCacheEntry {
+  const _JsRemoteFileCacheEntry({
+    required this.payload,
+    required this.expiresAt,
+  });
+
+  final Map<String, Object?> payload;
+  final DateTime? expiresAt;
 }
 
 class _JsRuleBridgeState {
