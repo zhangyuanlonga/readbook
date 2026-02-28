@@ -502,6 +502,48 @@ $baseUrl/content, {
     });
 
     test(
+      'allows manga sources without ruleContent and extracts image urls',
+      () async {
+        final server = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
+        server.listen((request) async {
+          request.response
+            ..statusCode = 200
+            ..write('''
+            <div class="manga">
+              <img data-src="/images/1001.jpg" />
+              <img src="https://cdn.example.com/1002.png" />
+            </div>
+          ''');
+          await request.response.close();
+        });
+
+        final baseUrl = 'http://${server.address.host}:${server.port}';
+        final repository = _FakeSourceRepository([
+          SourceDefinition(
+            id: 'm_no_content_rule',
+            name: '漫画无正文规则源',
+            baseUrl: baseUrl,
+            sourceType: 2,
+            rules: const SourceRuleSet(),
+          ),
+        ]);
+
+        final service = ChapterContentService(sourceRepository: repository);
+        final result = await service.load(
+          sourceId: 'm_no_content_rule',
+          chapterUrl: '$baseUrl/chapter-1',
+        );
+
+        expect(result.isImageContent, isTrue);
+        expect(result.imageUrls, hasLength(2));
+        expect(result.imageUrls.first, '$baseUrl/images/1001.jpg');
+        expect(result.imageUrls.last, 'https://cdn.example.com/1002.png');
+
+        await server.close(force: true);
+      },
+    );
+
+    test(
       'falls back to response image extraction for lazy image attributes',
       () async {
         final server = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);

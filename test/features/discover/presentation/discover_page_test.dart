@@ -274,6 +274,61 @@ void main() {
     expect(find.text('B记忆源'), findsWidgets);
   });
 
+  testWidgets('source picker can filter novel and manga sources', (
+    tester,
+  ) async {
+    final service = ExploreService(
+      sourceRepository: _FakeSourceRepository(<SourceDefinition>[
+        SourceDefinition(
+          id: 'novel_source',
+          name: '小说源A',
+          baseUrl: 'https://novel.example.com',
+          enabled: true,
+          sourceType: 0,
+          exploreEnabled: true,
+          exploreUrl: '推荐::/discover?page={{page}}',
+          rules: const SourceRuleSet(
+            exploreListRule: '.item@html',
+            exploreTitleRule: '.name@text',
+            exploreDetailUrlRule: '.name@href',
+          ),
+        ),
+        SourceDefinition(
+          id: 'manga_source',
+          name: '漫画源B',
+          baseUrl: 'https://manga.example.com',
+          enabled: true,
+          sourceType: 2,
+          exploreEnabled: true,
+          exploreUrl: '推荐::/discover?page={{page}}',
+          rules: const SourceRuleSet(
+            exploreListRule: '.item@html',
+            exploreTitleRule: '.name@text',
+            exploreDetailUrlRule: '.name@href',
+          ),
+        ),
+      ]),
+      searchService: _FakeSearchService(),
+    );
+
+    await tester.pumpWidget(
+      _TestHarness(width: 900, child: DiscoverPage(exploreService: service)),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byKey(const Key('discover_source_switch_button')));
+    await tester.pumpAndSettle();
+
+    expect(find.text('小说源A').evaluate().length, greaterThanOrEqualTo(2));
+    expect(find.text('漫画源B'), findsWidgets);
+
+    await tester.tap(find.byKey(const Key('discover_source_filter_manga')));
+    await tester.pumpAndSettle();
+
+    expect(find.text('小说源A').evaluate().length, 1);
+    expect(find.text('漫画源B'), findsWidgets);
+  });
+
   testWidgets('category preview hides non-actionable group titles', (
     tester,
   ) async {

@@ -66,6 +66,7 @@ class _SourcePageState extends State<SourcePage> {
   int _novelCount = 0;
   int _mangaCount = 0;
   int _queryTicket = 0;
+  bool _loadMoreScheduledFromBuild = false;
   bool _isConsumingExternalImportPayloads = false;
 
   static const int _kPageSize = 60;
@@ -251,6 +252,20 @@ class _SourcePageState extends State<SourcePage> {
         _isPageLoading = false;
       });
     }
+  }
+
+  void _scheduleLoadNextPageFromBuild() {
+    if (_loadMoreScheduledFromBuild || !mounted) {
+      return;
+    }
+    _loadMoreScheduledFromBuild = true;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _loadMoreScheduledFromBuild = false;
+      if (!mounted) {
+        return;
+      }
+      unawaited(_loadNextPage());
+    });
   }
 
   void _syncSelectionWithVisibleSources() {
@@ -486,7 +501,7 @@ class _SourcePageState extends State<SourcePage> {
         if (itemListIndex >= 0 && itemListIndex < _visibleSources.length) {
           final source = _visibleSources[itemListIndex];
           if (itemListIndex >= _visibleSources.length - 8) {
-            unawaited(_loadNextPage());
+            _scheduleLoadNextPageFromBuild();
           }
           return _buildAnimatedSourceCard(
             source: source,

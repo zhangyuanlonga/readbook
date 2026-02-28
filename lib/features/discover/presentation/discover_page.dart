@@ -21,6 +21,8 @@ enum _SourceRuntimeStatus {
   requestFailed,
 }
 
+enum _SourceTypeFilter { all, novel, manga, unknown }
+
 class DiscoverPage extends StatefulWidget {
   const DiscoverPage({
     super.key,
@@ -295,6 +297,7 @@ class _DiscoverPageState extends State<DiscoverPage> {
                   ),
                 const Spacer(),
                 TextButton.icon(
+                  key: const Key('discover_source_switch_button'),
                   onPressed:
                       _isLoadingSources || _discoverSources.isEmpty
                           ? null
@@ -1883,11 +1886,15 @@ class _SourcePickerSheet extends StatefulWidget {
 
 class _SourcePickerSheetState extends State<_SourcePickerSheet> {
   final TextEditingController _searchController = TextEditingController();
+  _SourceTypeFilter _sourceTypeFilter = _SourceTypeFilter.all;
 
   List<SourceDefinition> get _filteredSources {
     final keyword = _searchController.text.trim().toLowerCase();
     final result = widget.sources
         .where((source) {
+          if (!_matchesSourceTypeFilter(source)) {
+            return false;
+          }
           if (keyword.isEmpty) {
             return true;
           }
@@ -1934,6 +1941,10 @@ class _SourcePickerSheetState extends State<_SourcePickerSheet> {
   @override
   Widget build(BuildContext context) {
     final filteredSources = _filteredSources;
+    final allCount = widget.sources.length;
+    final novelCount = _countByType(_SourceTypeFilter.novel);
+    final mangaCount = _countByType(_SourceTypeFilter.manga);
+    final unknownCount = _countByType(_SourceTypeFilter.unknown);
     final horizontal = AppSpacing.pageHorizontal(context);
     final heightFactor = AppLayout.sheetHeightFactor(
       context,
@@ -1981,6 +1992,37 @@ class _SourcePickerSheetState extends State<_SourcePickerSheet> {
                   borderRadius: BorderRadius.circular(12),
                 ),
               ),
+            ),
+            const SizedBox(height: 8),
+            Wrap(
+              spacing: 8,
+              runSpacing: 6,
+              children: <Widget>[
+                _buildTypeFilterChip(
+                  key: const Key('discover_source_filter_all'),
+                  filter: _SourceTypeFilter.all,
+                  label: '全部',
+                  count: allCount,
+                ),
+                _buildTypeFilterChip(
+                  key: const Key('discover_source_filter_novel'),
+                  filter: _SourceTypeFilter.novel,
+                  label: '小说',
+                  count: novelCount,
+                ),
+                _buildTypeFilterChip(
+                  key: const Key('discover_source_filter_manga'),
+                  filter: _SourceTypeFilter.manga,
+                  label: '漫画',
+                  count: mangaCount,
+                ),
+                _buildTypeFilterChip(
+                  key: const Key('discover_source_filter_unknown'),
+                  filter: _SourceTypeFilter.unknown,
+                  label: '未知',
+                  count: unknownCount,
+                ),
+              ],
             ),
             const SizedBox(height: 8),
             Expanded(
@@ -2033,6 +2075,8 @@ class _SourcePickerSheetState extends State<_SourcePickerSheet> {
                                   ),
                                 ),
                                 const SizedBox(width: 8),
+                                _buildSourceTypePill(context, source),
+                                const SizedBox(width: 6),
                                 DecoratedBox(
                                   decoration: BoxDecoration(
                                     color: statusColor.withValues(alpha: 0.14),
@@ -2086,6 +2130,104 @@ class _SourcePickerSheetState extends State<_SourcePickerSheet> {
         ),
       ),
     );
+  }
+
+  Widget _buildTypeFilterChip({
+    required Key key,
+    required _SourceTypeFilter filter,
+    required String label,
+    required int count,
+  }) {
+    return ChoiceChip(
+      key: key,
+      label: Text('$label ($count)'),
+      selected: _sourceTypeFilter == filter,
+      onSelected: (_) {
+        setState(() {
+          _sourceTypeFilter = filter;
+        });
+      },
+    );
+  }
+
+  Widget _buildSourceTypePill(BuildContext context, SourceDefinition source) {
+    final typeColor = _sourceTypeColor(context, source);
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        color: typeColor.withValues(alpha: 0.14),
+        borderRadius: BorderRadius.circular(999),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
+        child: Text(
+          _sourceTypeLabel(source),
+          style: Theme.of(
+            context,
+          ).textTheme.labelSmall?.copyWith(color: typeColor),
+        ),
+      ),
+    );
+  }
+
+  bool _matchesSourceTypeFilter(SourceDefinition source) {
+    switch (_sourceTypeFilter) {
+      case _SourceTypeFilter.all:
+        return true;
+      case _SourceTypeFilter.novel:
+        return _isNovelSource(source);
+      case _SourceTypeFilter.manga:
+        return _isMangaSource(source);
+      case _SourceTypeFilter.unknown:
+        return _isUnknownSource(source);
+    }
+  }
+
+  int _countByType(_SourceTypeFilter filter) {
+    return widget.sources.where((source) {
+      switch (filter) {
+        case _SourceTypeFilter.all:
+          return true;
+        case _SourceTypeFilter.novel:
+          return _isNovelSource(source);
+        case _SourceTypeFilter.manga:
+          return _isMangaSource(source);
+        case _SourceTypeFilter.unknown:
+          return _isUnknownSource(source);
+      }
+    }).length;
+  }
+
+  bool _isNovelSource(SourceDefinition source) {
+    return source.sourceType == 0 && !source.isMangaSource;
+  }
+
+  bool _isMangaSource(SourceDefinition source) {
+    return source.isMangaSource;
+  }
+
+  bool _isUnknownSource(SourceDefinition source) {
+    return !_isNovelSource(source) && !_isMangaSource(source);
+  }
+
+  String _sourceTypeLabel(SourceDefinition source) {
+    if (_isMangaSource(source)) {
+      return '漫画';
+    }
+    if (_isNovelSource(source)) {
+      return '小说';
+    }
+    return '未知';
+  }
+
+  Color _sourceTypeColor(BuildContext context, SourceDefinition source) {
+    final scheme = Theme.of(context).colorScheme;
+    if (_isMangaSource(source)) {
+      return scheme.tertiary;
+    }
+    if (_isNovelSource(source)) {
+      return scheme.primary;
+    }
+    return scheme.onSurfaceVariant;
   }
 
   String _buildSourceSummary(SourceDefinition source) {

@@ -174,8 +174,9 @@ class ChapterContentService {
     );
     contentRule ??= _buildVariableExpressionFallback(source.rules.contentRule);
     contentRule ??= _buildFallbackContentRule(source.rules.contentDecryptRule);
+    final allowMangaContentRuleFallback = source.isMangaSource;
 
-    if (contentRule == null) {
+    if (contentRule == null && !allowMangaContentRuleFallback) {
       throw AppException(
         code: ErrorCode.validation,
         stage: ErrorStage.content,
@@ -291,34 +292,41 @@ class ChapterContentService {
       onBridgePutVariables: collectPutVariables,
     );
 
-    final contentExpression = _resolveRuntimeRuleTemplate(
-      expression: contentRule,
-      context: runtimeContext,
-    );
-    final resolvedContentExpression = await _resolveLegacyVariableExpression(
-      content: normalizedResponseBody,
-      expression: contentExpression,
-      rawRule: source.rules.contentRule,
-      stage: ErrorStage.content,
-      variables: variableState,
-      fallbackExtractor: 'html',
-      jsContext: _mergeJsContextVariables(runtimeJsContext, variableState),
-    );
+    List<String> extractedSegments;
+    if (contentRule == null) {
+      // Manga fallback: when ruleContent is absent, extract image URLs from
+      // full response payload instead of failing fast.
+      extractedSegments = <String>[normalizedResponseBody];
+    } else {
+      final contentExpression = _resolveRuntimeRuleTemplate(
+        expression: contentRule,
+        context: runtimeContext,
+      );
+      final resolvedContentExpression = await _resolveLegacyVariableExpression(
+        content: normalizedResponseBody,
+        expression: contentExpression,
+        rawRule: source.rules.contentRule,
+        stage: ErrorStage.content,
+        variables: variableState,
+        fallbackExtractor: 'html',
+        jsContext: _mergeJsContextVariables(runtimeJsContext, variableState),
+      );
 
-    final extractedSegments =
-        _looksLikeRuleExpression(resolvedContentExpression)
-            ? await _executeAllWithFallback(
-              content: normalizedResponseBody,
-              expression: resolvedContentExpression,
-              stage: ErrorStage.content,
-              jsContext: _mergeJsContextVariables(
-                runtimeJsContext,
-                variableState,
-              ),
-            )
-            : <String>[
-              resolvedContentExpression.trim(),
-            ].where((item) => item.isNotEmpty).toList(growable: false);
+      extractedSegments =
+          _looksLikeRuleExpression(resolvedContentExpression)
+              ? await _executeAllWithFallback(
+                content: normalizedResponseBody,
+                expression: resolvedContentExpression,
+                stage: ErrorStage.content,
+                jsContext: _mergeJsContextVariables(
+                  runtimeJsContext,
+                  variableState,
+                ),
+              )
+              : <String>[
+                resolvedContentExpression.trim(),
+              ].where((item) => item.isNotEmpty).toList(growable: false);
+    }
 
     final imageUrls = _extractImageUrls(
       extractedSegments: extractedSegments,
@@ -398,23 +406,25 @@ class ChapterContentService {
       sourceId: normalizedSourceId,
     );
 
-    cleaned = await _appendNextContentPages(
-      source: source,
-      sourceId: normalizedSourceId,
-      initialContent: cleaned,
-      initialPageHtml: normalizedResponseBody,
-      initialPageUrl: requestUrl,
-      requestContext: runtimeContext,
-      contentExpression: contentRule,
-      variableState: variableState,
-      runtimeJsVariables: runtimeJsVariables,
-      bookId: normalizedBookId,
-      chapterUrl: normalizedChapterUrl,
-      chapterIndex: chapterIndex,
-      chapterTitle: chapterTitle,
-      nextChapterUrl: nextChapterUrl,
-      onBridgePutVariables: collectPutVariables,
-    );
+    if (contentRule != null) {
+      cleaned = await _appendNextContentPages(
+        source: source,
+        sourceId: normalizedSourceId,
+        initialContent: cleaned,
+        initialPageHtml: normalizedResponseBody,
+        initialPageUrl: requestUrl,
+        requestContext: runtimeContext,
+        contentExpression: contentRule,
+        variableState: variableState,
+        runtimeJsVariables: runtimeJsVariables,
+        bookId: normalizedBookId,
+        chapterUrl: normalizedChapterUrl,
+        chapterIndex: chapterIndex,
+        chapterTitle: chapterTitle,
+        nextChapterUrl: nextChapterUrl,
+        onBridgePutVariables: collectPutVariables,
+      );
+    }
 
     if (cleaned.isEmpty) {
       throw RuleMatchEmptyException(
@@ -1960,7 +1970,7 @@ class ChapterContentService {
         continue;
       }
 
-      if (_looksLikeImageUrl(trimmed)) {
+      if (_shouldTreatAsDirectImageUrl(trimmed)) {
         addUrl(trimmed);
         continue;
       }
@@ -2131,7 +2141,7 @@ class ChapterContentService {
       return;
     }
 
-    if (_looksLikeImageUrl(text)) {
+    if (_shouldTreatAsDirectImageUrl(text)) {
       addUrl(text);
       return;
     }
@@ -2154,6 +2164,36 @@ class ChapterContentService {
         normalized.contains('.gif') ||
         normalized.contains('.bmp') ||
         normalized.contains('.avif');
+  }
+
+  bool _shouldTreatAsDirectImageUrl(String value) {
+    final normalized = value.trim();
+    if (normalized.isEmpty) {
+      return false;
+    }
+    if (!_looksLikeImageUrl(normalized)) {
+      return false;
+    }
+
+    // HTML/JSON/CSS fragments should be parsed for embedded image urls.
+    if (normalized.contains('<') ||
+        normalized.contains('>') ||
+        normalized.startsWith('{') ||
+        normalized.startsWith('[') ||
+        normalized.contains('\n') ||
+        normalized.contains('\r')) {
+      return false;
+    }
+
+    final lowered = normalized.toLowerCase();
+    if (lowered.contains('src=') ||
+        lowered.contains('data-src=') ||
+        lowered.contains('data-original=') ||
+        lowered.contains('url(')) {
+      return false;
+    }
+
+    return true;
   }
 
   String? _normalizeImageUrl(
