@@ -6,6 +6,8 @@ import '../../../core/errors/error_stage.dart';
 import '../../../core/logging/app_logger.dart';
 import '../../../core/network/http_client.dart';
 import '../../../core/network/request_context.dart';
+import '../../../core/network/url_option.dart';
+import '../../../core/rule_engine/executors/js_executor.dart';
 import '../../../core/rule_engine/rule_engine.dart';
 import '../../../core/rule_engine/processors/url_template_resolver.dart';
 import '../../../core/rule_engine/processors/legacy_rule_compat.dart';
@@ -13,7 +15,9 @@ import '../../../core/rule_engine/processors/legacy_rule_variable_processor.dart
 import '../../../core/rule_engine/processors/legacy_xpath_compat.dart';
 import '../../../core/rule_engine/processors/legacy_link_post_processor.dart';
 import '../../../core/rule_engine/processors/legacy_script_rule_fallback.dart';
+import '../../../core/rule_engine/processors/source_js_variable_store.dart';
 import '../../../core/source/source_response_processor.dart';
+import '../../../core/webview/webview_executor.dart';
 import '../../../data/datasources/local/app_database.dart';
 import '../../../data/repositories/source_repository_impl.dart';
 import '../../../domain/entities/book_detail.dart';
@@ -42,6 +46,7 @@ class BookDetailService {
   BookDetailService({
     SourceRepository? sourceRepository,
     AppHttpClient? httpClient,
+    WebViewExecutor? webViewExecutor,
     AppLogger? logger,
     RuleEngine? ruleEngine,
     UrlTemplateResolver? urlTemplateResolver,
@@ -49,6 +54,7 @@ class BookDetailService {
   }) : _sourceRepository =
            sourceRepository ?? SourceRepositoryImpl(AppDatabase.instance),
        _httpClient = httpClient ?? AppHttpClient(),
+       _webViewExecutor = webViewExecutor ?? WebViewExecutor(),
        _logger = logger ?? AppLogger.instance,
        _ruleEngine = ruleEngine ?? RuleEngine(),
        _urlTemplateResolver =
@@ -58,6 +64,7 @@ class BookDetailService {
 
   final SourceRepository _sourceRepository;
   final AppHttpClient _httpClient;
+  final WebViewExecutor _webViewExecutor;
   final AppLogger _logger;
   final RuleEngine _ruleEngine;
   final UrlTemplateResolver _urlTemplateResolver;
@@ -70,11 +77,14 @@ class BookDetailService {
     required String bookId,
     required String detailUrl,
     String? fallbackTitle,
+    String? fallbackAuthor,
     bool forceRefresh = false,
   }) async {
     final normalizedSourceId = sourceId.trim();
     final normalizedBookId = bookId.trim();
     final normalizedDetailUrl = detailUrl.trim();
+    final normalizedFallbackTitle = _normalizeOptionalText(fallbackTitle);
+    final normalizedFallbackAuthor = _normalizeOptionalText(fallbackAuthor);
 
     if (normalizedSourceId.isEmpty ||
         normalizedBookId.isEmpty ||
@@ -87,6 +97,22 @@ class BookDetailService {
     }
 
     final source = await _getSource(normalizedSourceId);
+    final bookVariableUpdates = <String, String>{};
+    final runtimeJsVariables = <String, String>{
+      ...SourceJsVariableStore.load(source),
+      ...SourceJsVariableStore.loadBook(source, bookId: normalizedBookId),
+    };
+
+    void collectPutVariables(Map<String, String> variables) {
+      if (variables.isEmpty) {
+        return;
+      }
+      bookVariableUpdates.addAll(variables);
+      runtimeJsVariables.addAll(
+        SourceJsVariableStore.toRuntimeVariables(variables),
+      );
+    }
+
     final detailUri = Uri.tryParse(normalizedDetailUrl);
     if (detailUri == null || !detailUri.hasScheme) {
       throw AppException(
@@ -97,14 +123,17 @@ class BookDetailService {
       );
     }
 
-    final baseKeyword =
-        fallbackTitle?.trim().isNotEmpty == true
-            ? fallbackTitle!.trim()
-            : 'detail';
+    final baseKeyword = normalizedFallbackTitle ?? 'detail';
     final templateContext = SearchRequestContext(
       keyword: baseKeyword,
       sourceId: normalizedSourceId,
       extraParams: {'detailUrl': normalizedDetailUrl},
+    );
+    var bookJsJson = _buildBookJsJson(
+      sourceId: normalizedSourceId,
+      bookId: normalizedBookId,
+      detailUrl: normalizedDetailUrl,
+      title: normalizedFallbackTitle,
     );
 
     final detailInitVariables = await _loadInitVariables(
@@ -112,6 +141,13 @@ class BookDetailService {
       stage: ErrorStage.detail,
       initRule: source.rules.detailInitRule,
       context: templateContext,
+      jsContext: _buildDetailJsContext(
+        source: source,
+        runtimeContext: templateContext,
+        bookJson: bookJsJson,
+        seedVariables: runtimeJsVariables,
+        onBridgePutVariables: collectPutVariables,
+      ),
     );
 
     final detailContext =
@@ -129,6 +165,13 @@ class BookDetailService {
       stage: ErrorStage.toc,
       initRule: source.rules.tocInitRule,
       context: detailContext,
+      jsContext: _buildDetailJsContext(
+        source: source,
+        runtimeContext: detailContext,
+        bookJson: bookJsJson,
+        seedVariables: runtimeJsVariables,
+        onBridgePutVariables: collectPutVariables,
+      ),
     );
 
     final runtimeContext =
@@ -152,6 +195,13 @@ class BookDetailService {
 
     final detailRules = _buildDetailRules(source);
     final detailVariables = <String, String>{...runtimeContext.extraParams};
+    var ruleJsContext = _buildDetailJsContext(
+      source: source,
+      runtimeContext: runtimeContext,
+      bookJson: bookJsJson,
+      seedVariables: runtimeJsVariables,
+      onBridgePutVariables: collectPutVariables,
+    );
 
     final titleRule = _resolveRuntimeRuleTemplate(
       _resolveDetailRule(detailRules.initRule, detailRules.titleRule),
@@ -179,31 +229,59 @@ class BookDetailService {
       context: runtimeContext,
     );
 
-    _extractOptionalValue(
+    await _extractOptionalValue(
       content: normalizedDetailHtml,
       expression: detailRules.initRule,
       rawRule: detailRules.rawInitRule,
       stage: ErrorStage.detail,
       variables: detailVariables,
       fallbackExtractor: 'html',
+      jsContext: ruleJsContext,
     );
 
+    final canRename = await _evaluateCanRename(
+      content: normalizedDetailHtml,
+      stage: ErrorStage.detail,
+      expression: detailRules.canRenameRule,
+      rawRule: detailRules.rawCanRenameRule,
+      variables: detailVariables,
+      jsContext: _mergeJsContextVariables(ruleJsContext, detailVariables),
+    );
+    final extractedTitle = _normalizeOptionalText(
+      await _extractOptionalValue(
+        content: normalizedDetailHtml,
+        expression: titleRule,
+        rawRule: detailRules.rawTitleRule,
+        stage: ErrorStage.detail,
+        variables: detailVariables,
+        fallbackExtractor: 'text',
+        jsContext: _mergeJsContextVariables(ruleJsContext, detailVariables),
+      ),
+    );
     final title =
-        _extractOptionalValue(
-          content: normalizedDetailHtml,
-          expression: titleRule,
-          rawRule: detailRules.rawTitleRule,
-          stage: ErrorStage.detail,
-          variables: detailVariables,
-          fallbackExtractor: 'text',
+        _selectPreferredText(
+          preferPrimary: canRename,
+          primary: extractedTitle,
+          fallback: normalizedFallbackTitle,
         ) ??
-        (fallbackTitle?.trim().isNotEmpty == true
-            ? fallbackTitle!.trim()
-            : '未命名书籍');
+        '未命名书籍';
+    bookJsJson = _buildBookJsJson(
+      sourceId: normalizedSourceId,
+      bookId: normalizedBookId,
+      detailUrl: normalizedDetailUrl,
+      title: title,
+    );
+    ruleJsContext = _buildDetailJsContext(
+      source: source,
+      runtimeContext: runtimeContext,
+      bookJson: bookJsJson,
+      seedVariables: runtimeJsVariables,
+      onBridgePutVariables: collectPutVariables,
+    );
 
     final cover = _resolveMaybeUrl(
       pageUrl: normalizedDetailUrl,
-      rawUrl: _extractOptionalValue(
+      rawUrl: await _extractOptionalValue(
         content: normalizedDetailHtml,
         expression: coverRule,
         rawRule: detailRules.rawCoverUrlRule,
@@ -211,10 +289,11 @@ class BookDetailService {
         variables: detailVariables,
         fallbackExtractor: 'attr(src)',
         preferredAttribute: 'src',
+        jsContext: _mergeJsContextVariables(ruleJsContext, detailVariables),
       ),
     );
 
-    final extractedTocUrl = _extractOptionalValue(
+    final extractedTocUrl = await _extractOptionalValue(
       content: normalizedDetailHtml,
       expression: tocUrlRule,
       rawRule: detailRules.rawTocUrlRule,
@@ -222,6 +301,7 @@ class BookDetailService {
       variables: detailVariables,
       fallbackExtractor: 'attr(href)',
       preferredAttribute: 'href',
+      jsContext: _mergeJsContextVariables(ruleJsContext, detailVariables),
     );
 
     final resolvedTocRuleLiteral =
@@ -247,34 +327,65 @@ class BookDetailService {
       tocUrl = normalizedDetailUrl;
     }
 
-    final detail = BookDetail(
-      id: normalizedBookId,
-      sourceId: normalizedSourceId,
-      title: title,
-      detailUrl: normalizedDetailUrl,
-      author: _extractOptionalValue(
+    final extractedAuthor = _normalizeOptionalText(
+      await _extractOptionalValue(
         content: normalizedDetailHtml,
         expression: authorRule,
         rawRule: detailRules.rawAuthorRule,
         stage: ErrorStage.detail,
         variables: detailVariables,
         fallbackExtractor: 'text',
+        jsContext: _mergeJsContextVariables(ruleJsContext, detailVariables),
       ),
-      intro: _extractOptionalValue(
+    );
+    final detail = BookDetail(
+      id: normalizedBookId,
+      sourceId: normalizedSourceId,
+      title: title,
+      detailUrl: normalizedDetailUrl,
+      author: _selectPreferredText(
+        preferPrimary: canRename,
+        primary: extractedAuthor,
+        fallback: normalizedFallbackAuthor,
+      ),
+      intro: await _extractOptionalValue(
         content: normalizedDetailHtml,
         expression: introRule,
         rawRule: detailRules.rawIntroRule,
         stage: ErrorStage.detail,
         variables: detailVariables,
         fallbackExtractor: 'text',
+        jsContext: _mergeJsContextVariables(ruleJsContext, detailVariables),
       ),
       coverUrl: cover,
       tocUrl: tocUrl,
+    );
+    final tocJsContext = _buildDetailJsContext(
+      source: source,
+      runtimeContext: runtimeContext,
+      bookJson: _buildBookJsJson(
+        sourceId: normalizedSourceId,
+        bookId: normalizedBookId,
+        detailUrl: normalizedDetailUrl,
+        title: detail.title,
+        author: detail.author,
+        intro: detail.intro,
+        coverUrl: detail.coverUrl,
+        tocUrl: detail.tocUrl,
+      ),
+      seedVariables: runtimeJsVariables,
+      onBridgePutVariables: collectPutVariables,
     );
 
     final tocCacheKey = '$normalizedSourceId|$normalizedDetailUrl';
     if (!forceRefresh && _tocCache.containsKey(tocCacheKey)) {
       final cached = _tocCache[tocCacheKey]!;
+      await _persistBookJsVariables(
+        source: source,
+        bookId: normalizedBookId,
+        variables: bookVariableUpdates,
+        stage: ErrorStage.detail,
+      );
       return BookDetailLoadResult(
         detail: detail,
         chapters: List.unmodifiable(cached),
@@ -296,14 +407,17 @@ class BookDetailService {
       );
     } else {
       try {
-        chapters = _parseChapters(
-          html: normalizedDetailHtml,
-          pageUrl: normalizedDetailUrl,
+        var tocPageHtml = normalizedDetailHtml;
+        var tocPageUrl = normalizedDetailUrl;
+        chapters = await _parseChapters(
+          html: tocPageHtml,
+          pageUrl: tocPageUrl,
           rules: tocRules,
           sourceId: normalizedSourceId,
           bookId: normalizedBookId,
           context: runtimeContext,
           seedVariables: detailVariables,
+          jsContext: tocJsContext,
         );
 
         if (chapters.isEmpty && tocUrl != normalizedDetailUrl) {
@@ -317,16 +431,32 @@ class BookDetailService {
               _responseProcessor
                   .process(body: tocHtml, requestUrl: tocUrl)
                   .body;
-          chapters = _parseChapters(
-            html: normalizedTocHtml,
-            pageUrl: tocUrl,
+          tocPageHtml = normalizedTocHtml;
+          tocPageUrl = tocUrl;
+          chapters = await _parseChapters(
+            html: tocPageHtml,
+            pageUrl: tocPageUrl,
             rules: tocRules,
             sourceId: normalizedSourceId,
             bookId: normalizedBookId,
             context: runtimeContext,
             seedVariables: detailVariables,
+            jsContext: tocJsContext,
           );
         }
+
+        chapters = await _appendNextTocChapters(
+          source: source,
+          rules: tocRules,
+          sourceId: normalizedSourceId,
+          bookId: normalizedBookId,
+          context: runtimeContext,
+          seedVariables: detailVariables,
+          jsContext: tocJsContext,
+          initialPageHtml: tocPageHtml,
+          initialPageUrl: tocPageUrl,
+          initialChapters: chapters,
+        );
 
         if (chapters.isEmpty) {
           throw RuleMatchEmptyException(
@@ -374,6 +504,12 @@ class BookDetailService {
       }
     }
 
+    await _persistBookJsVariables(
+      source: source,
+      bookId: normalizedBookId,
+      variables: bookVariableUpdates,
+      stage: ErrorStage.detail,
+    );
     return BookDetailLoadResult(
       detail: detail,
       chapters: chapters,
@@ -396,6 +532,36 @@ class BookDetailService {
       sourceId: sourceId,
       stage: ErrorStage.detail,
     );
+  }
+
+  Future<void> _persistBookJsVariables({
+    required SourceDefinition source,
+    required String bookId,
+    required Map<String, String> variables,
+    required ErrorStage stage,
+  }) async {
+    if (variables.isEmpty) {
+      return;
+    }
+
+    final nextSource = SourceJsVariableStore.mergeBook(
+      source: source,
+      bookId: bookId,
+      updates: variables,
+    );
+    try {
+      await _sourceRepository.upsertAll([nextSource]);
+    } catch (error) {
+      _logger.warn(
+        'Persist source js variables failed',
+        context: <String, Object?>{
+          'sourceId': source.id,
+          'sourceName': source.name,
+          'stage': stage.name,
+          'error': error.toString(),
+        },
+      );
+    }
   }
 
   Future<String> _fetchHtml({
@@ -438,6 +604,70 @@ class BookDetailService {
       },
     );
 
+    final response = await _executeRequest(
+      source: source,
+      stage: stage,
+      requestSpec: requestSpec,
+      requestUrl: requestUrl,
+      requestBody: requestBody,
+      contentType: contentType,
+      requestHeaders: requestHeaders,
+    );
+
+    return response.body;
+  }
+
+  Future<_NetworkLoadResult> _executeRequest({
+    required SourceDefinition source,
+    required ErrorStage stage,
+    required _SearchRequestSpec requestSpec,
+    required String requestUrl,
+    required Object? requestBody,
+    required String? contentType,
+    required Map<String, String> requestHeaders,
+  }) async {
+    if (requestSpec.useWebView) {
+      try {
+        final webViewResponse = await _webViewExecutor.load(
+          request: WebViewRequestPayload(
+            url: requestUrl,
+            method: requestSpec.method,
+            headers: requestHeaders,
+            body: requestBody,
+            contentType: contentType,
+            webJs: requestSpec.webJs,
+            sourceRegex: requestSpec.sourceRegex,
+            stage: stage,
+            sourceId: source.id,
+          ),
+        );
+        final matchedResourceUrl =
+            webViewResponse.matchedResourceUrl?.trim() ?? '';
+        final shouldUseMatchedResourceUrl =
+            requestSpec.sourceRegex != null &&
+            requestSpec.sourceRegex!.trim().isNotEmpty &&
+            matchedResourceUrl.isNotEmpty;
+        return _NetworkLoadResult(
+          statusCode: webViewResponse.statusCode,
+          body:
+              shouldUseMatchedResourceUrl
+                  ? matchedResourceUrl
+                  : webViewResponse.body,
+        );
+      } catch (error) {
+        _logger.warn(
+          'WebView request failed and fallback to HTTP',
+          context: <String, Object?>{
+            'sourceId': source.id,
+            'stage': stage.name,
+            'url': requestUrl,
+            'briefMessage': error.toString(),
+            'diagnostic': 'webview_fallback_http',
+          },
+        );
+      }
+    }
+
     final response = await _httpClient.get(
       RequestContext(
         url: requestUrl,
@@ -446,13 +676,16 @@ class BookDetailService {
         contentType: contentType,
         responseCharset: requestSpec.responseCharset,
         headers: requestHeaders,
-        maxRetries: 1,
+        maxRetries: requestSpec.maxRetries,
         stage: stage,
         sourceId: source.id,
+        sourceConcurrentRate: source.concurrentRate,
       ),
     );
-
-    return response.body;
+    return _NetworkLoadResult(
+      statusCode: response.statusCode,
+      body: response.body,
+    );
   }
 
   _DetailParseRules _buildDetailRules(SourceDefinition source) {
@@ -472,6 +705,8 @@ class BookDetailService {
         fallbackExtractor: 'text',
       ),
       rawAuthorRule: source.rules.detailAuthorRule,
+      canRenameRule: _normalizeOptionalText(source.rules.detailCanRenameRule),
+      rawCanRenameRule: source.rules.detailCanRenameRule,
       introRule: _normalizeRuleExpression(
         source.rules.detailIntroRule,
         fallbackExtractor: 'text',
@@ -493,24 +728,22 @@ class BookDetailService {
   }
 
   _TocParseRules? _buildTocRules(SourceDefinition source) {
+    final listRuleRaw = _normalizeListRuleReversePrefix(
+      source.rules.tocListRule ?? source.rules.tocRule,
+    );
     final preferCurrentNodeChunk =
         _isBareCurrentNodeExtractorRule(source.rules.tocTitleRule) ||
         _isBareCurrentNodeExtractorRule(source.rules.tocChapterUrlRule);
 
     var listRule = _normalizeRuleExpression(
-      source.rules.tocListRule ?? source.rules.tocRule,
+      listRuleRaw.rule,
       fallbackExtractor: preferCurrentNodeChunk ? 'outerhtml' : 'html',
     );
     if (preferCurrentNodeChunk) {
       listRule = _upgradeListRuleToOuterHtml(listRule);
     }
-    listRule ??= _buildVariableExpressionFallback(
-      source.rules.tocListRule ?? source.rules.tocRule,
-    );
-    listRule ??= _buildScriptFallbackExpression(
-      source.rules.tocListRule ?? source.rules.tocRule,
-      list: true,
-    );
+    listRule ??= _buildVariableExpressionFallback(listRuleRaw.rule);
+    listRule ??= _buildScriptFallbackExpression(listRuleRaw.rule, list: true);
 
     var titleRule = _normalizeRuleExpression(
       source.rules.tocTitleRule,
@@ -531,6 +764,16 @@ class BookDetailService {
       source.rules.tocChapterUrlRule,
     );
 
+    var nextUrlRule = _normalizeLinkRuleExpression(
+      source.rules.tocNextUrlRule,
+      fallbackExtractor: 'attr(href)',
+      preferredAttribute: 'href',
+    );
+    nextUrlRule ??= _buildVariableExpressionFallback(
+      source.rules.tocNextUrlRule,
+    );
+    nextUrlRule ??= _buildScriptFallbackExpression(source.rules.tocNextUrlRule);
+
     if (listRule == null || titleRule == null || chapterUrlRule == null) {
       return null;
     }
@@ -542,7 +785,25 @@ class BookDetailService {
       rawListRule: source.rules.tocListRule ?? source.rules.tocRule,
       rawTitleRule: source.rules.tocTitleRule,
       rawChapterUrlRule: source.rules.tocChapterUrlRule,
-      reversed: source.rules.tocReversed,
+      nextUrlRule: nextUrlRule,
+      rawNextUrlRule: source.rules.tocNextUrlRule,
+      reversed: source.rules.tocReversed || listRuleRaw.reversed,
+    );
+  }
+
+  _ListRuleNormalization _normalizeListRuleReversePrefix(String? rawRule) {
+    final text = rawRule?.trim();
+    if (text == null || text.isEmpty) {
+      return const _ListRuleNormalization();
+    }
+    if (!text.startsWith('-')) {
+      return _ListRuleNormalization(rule: text);
+    }
+
+    final normalized = text.substring(1).trim();
+    return _ListRuleNormalization(
+      rule: normalized.isEmpty ? null : normalized,
+      reversed: true,
     );
   }
 
@@ -620,7 +881,7 @@ class BookDetailService {
     return upgraded.join('||');
   }
 
-  List<Chapter> _parseChapters({
+  Future<List<Chapter>> _parseChapters({
     required String html,
     required String pageUrl,
     required _TocParseRules rules,
@@ -628,14 +889,16 @@ class BookDetailService {
     required String bookId,
     required SearchRequestContext context,
     required Map<String, String> seedVariables,
-  }) {
-    final chunks = _tryExecuteAll(
+    required JsExecutionContext jsContext,
+  }) async {
+    final chunks = await _tryExecuteAll(
       content: html,
       expression: rules.listRule,
       stage: ErrorStage.toc,
       rawRule: rules.rawListRule,
       variables: seedVariables,
       fallbackExtractor: 'html',
+      jsContext: _mergeJsContextVariables(jsContext, seedVariables),
     );
     if (chunks.isEmpty) {
       return const [];
@@ -650,15 +913,29 @@ class BookDetailService {
     final dedupe = <String, Chapter>{};
     for (final chunk in chunks) {
       final variableState = <String, String>{...seedVariables};
-      final title = _extractOptionalValue(
+      final chunkJsContext = _buildChapterJsContext(
+        jsContext: jsContext,
+        bookId: bookId,
+        chapterUrl: pageUrl,
+        chapterIndex: dedupe.length,
+      );
+      final title = await _extractOptionalValue(
         content: chunk,
         expression: rules.titleRule,
         stage: ErrorStage.toc,
         rawRule: rules.rawTitleRule,
         variables: variableState,
         fallbackExtractor: 'text',
+        jsContext: _mergeJsContextVariables(chunkJsContext, variableState),
       );
-      final chapterUrlRaw = _extractOptionalValue(
+      final chapterRuleJsContext = _buildChapterJsContext(
+        jsContext: chunkJsContext,
+        bookId: bookId,
+        chapterUrl: pageUrl,
+        chapterIndex: dedupe.length,
+        chapterTitle: title,
+      );
+      final chapterUrlRaw = await _extractOptionalValue(
         content: chunk,
         expression: chapterUrlRule,
         stage: ErrorStage.toc,
@@ -666,6 +943,10 @@ class BookDetailService {
         variables: variableState,
         fallbackExtractor: 'attr(href)',
         preferredAttribute: 'href',
+        jsContext: _mergeJsContextVariables(
+          chapterRuleJsContext,
+          variableState,
+        ),
       );
 
       if (title == null || chapterUrlRaw == null) {
@@ -673,7 +954,9 @@ class BookDetailService {
       }
 
       final chapterUrlValue =
-          rules.chapterUrlRule == LegacyScriptRuleFallback.fieldExpression
+          rules.chapterUrlRule == LegacyScriptRuleFallback.fieldExpression ||
+                  rules.chapterUrlRule.startsWith('js:') ||
+                  rules.chapterUrlRule.startsWith('@js:')
               ? chapterUrlRaw.trim()
               : LegacyLinkPostProcessor.apply(
                 value: chapterUrlRaw,
@@ -724,7 +1007,177 @@ class BookDetailService {
     );
   }
 
-  List<String> _tryExecuteAll({
+  Future<List<Chapter>> _appendNextTocChapters({
+    required SourceDefinition source,
+    required _TocParseRules rules,
+    required String sourceId,
+    required String bookId,
+    required SearchRequestContext context,
+    required Map<String, String> seedVariables,
+    required JsExecutionContext jsContext,
+    required String initialPageHtml,
+    required String initialPageUrl,
+    required List<Chapter> initialChapters,
+  }) async {
+    final nextRule = rules.nextUrlRule?.trim();
+    if (nextRule == null || nextRule.isEmpty || initialChapters.isEmpty) {
+      return initialChapters;
+    }
+
+    final allChapters = <Chapter>[...initialChapters];
+    final dedupeKeys = <String>{
+      for (final chapter in initialChapters)
+        _buildChapterDedupeKey(
+          title: chapter.title,
+          chapterUrl: chapter.chapterUrl,
+        ),
+    };
+    final visitedPages = <String>{_stripRequestOptions(initialPageUrl)};
+    var currentHtml = initialPageHtml;
+    var currentUrl = initialPageUrl;
+    var emptyRounds = 0;
+    const maxPages = 50;
+
+    for (var page = 0; page < maxPages; page += 1) {
+      final nextUrl = await _extractNextTocUrl(
+        sourceId: sourceId,
+        rules: rules,
+        html: currentHtml,
+        pageUrl: currentUrl,
+        context: context,
+        seedVariables: seedVariables,
+        jsContext: jsContext,
+      );
+      if (nextUrl == null || nextUrl.trim().isEmpty) {
+        break;
+      }
+
+      final normalizedNextUrl = _stripRequestOptions(nextUrl);
+      if (!visitedPages.add(normalizedNextUrl)) {
+        break;
+      }
+
+      final nextHtmlResponse = await _fetchHtml(
+        source: source,
+        stage: ErrorStage.toc,
+        url: nextUrl,
+        context: context,
+      );
+      final normalizedNextHtml =
+          _responseProcessor
+              .process(body: nextHtmlResponse, requestUrl: nextUrl)
+              .body;
+      final nextChapters = await _parseChapters(
+        html: normalizedNextHtml,
+        pageUrl: nextUrl,
+        rules: rules,
+        sourceId: sourceId,
+        bookId: bookId,
+        context: context,
+        seedVariables: seedVariables,
+        jsContext: jsContext,
+      );
+
+      if (nextChapters.isEmpty) {
+        emptyRounds += 1;
+        if (emptyRounds >= 2) {
+          break;
+        }
+      } else {
+        emptyRounds = 0;
+        for (final chapter in nextChapters) {
+          final key = _buildChapterDedupeKey(
+            title: chapter.title,
+            chapterUrl: chapter.chapterUrl,
+          );
+          if (dedupeKeys.add(key)) {
+            allChapters.add(chapter);
+          }
+        }
+      }
+
+      currentHtml = normalizedNextHtml;
+      currentUrl = nextUrl;
+    }
+
+    return List<Chapter>.generate(
+      allChapters.length,
+      (index) => Chapter(
+        id: allChapters[index].id,
+        bookId: allChapters[index].bookId,
+        title: allChapters[index].title,
+        chapterUrl: allChapters[index].chapterUrl,
+        index: index,
+      ),
+      growable: false,
+    );
+  }
+
+  Future<String?> _extractNextTocUrl({
+    required String sourceId,
+    required _TocParseRules rules,
+    required String html,
+    required String pageUrl,
+    required SearchRequestContext context,
+    required Map<String, String> seedVariables,
+    required JsExecutionContext jsContext,
+  }) async {
+    final nextExpression = rules.nextUrlRule?.trim();
+    if (nextExpression == null || nextExpression.isEmpty) {
+      return null;
+    }
+
+    final resolvedExpression = _resolveRuntimeRuleTemplate(
+      nextExpression,
+      pageUrl,
+      context: context,
+    );
+    final variableState = <String, String>{...seedVariables};
+    String? nextRaw;
+
+    if (_looksLikeRequestRule(resolvedExpression)) {
+      nextRaw = resolvedExpression;
+    } else {
+      nextRaw = await _extractOptionalValue(
+        content: html,
+        expression: resolvedExpression,
+        stage: ErrorStage.toc,
+        rawRule: rules.rawNextUrlRule,
+        variables: variableState,
+        fallbackExtractor: 'attr(href)',
+        preferredAttribute: 'href',
+        jsContext: _mergeJsContextVariables(jsContext, variableState),
+      );
+    }
+
+    if (nextRaw == null || nextRaw.trim().isEmpty) {
+      return null;
+    }
+
+    final shouldBypassPostProcess =
+        nextExpression == LegacyScriptRuleFallback.fieldExpression ||
+        nextExpression.startsWith('js:') ||
+        nextExpression.startsWith('@js:');
+    final nextValue =
+        shouldBypassPostProcess
+            ? nextRaw.trim()
+            : LegacyLinkPostProcessor.apply(
+              value: nextRaw,
+              rawRule: rules.rawNextUrlRule,
+            );
+    if (nextValue.trim().isEmpty) {
+      return null;
+    }
+
+    final resolved = _resolveMaybeUrl(pageUrl: pageUrl, rawUrl: nextValue);
+    if (resolved == null || resolved.trim().isEmpty) {
+      return null;
+    }
+    _validateResolvedRequestUrl(requestUrl: resolved, sourceId: sourceId);
+    return resolved;
+  }
+
+  Future<List<String>> _tryExecuteAll({
     required String content,
     required String expression,
     required ErrorStage stage,
@@ -732,7 +1185,8 @@ class BookDetailService {
     String? preferredAttribute,
     String? rawRule,
     Map<String, String>? variables,
-  }) {
+    JsExecutionContext? jsContext,
+  }) async {
     final mutableVariables = variables ?? <String, String>{};
 
     if (expression == LegacyScriptRuleFallback.listExpression) {
@@ -742,30 +1196,46 @@ class BookDetailService {
       );
     }
 
+    if (LegacyScriptRuleFallback.isScriptOnlyRule(rawRule)) {
+      final fallbackValues = LegacyScriptRuleFallback.evaluateListChunks(
+        content: content,
+        rawRule: rawRule,
+      );
+      if (fallbackValues.isNotEmpty) {
+        return fallbackValues;
+      }
+    }
+
     final variableAwareRaw =
         LegacyRuleVariableProcessor.containsVariableSyntax(rawRule)
             ? rawRule!.trim()
             : null;
     if (variableAwareRaw != null) {
-      final resolvedRaw = LegacyRuleVariableProcessor.resolveExpression(
-        expression: variableAwareRaw,
-        variables: mutableVariables,
-        resolvePutValue:
-            (valueExpression) => _evaluatePutValue(
-              content: content,
-              stage: stage,
-              valueExpression: valueExpression,
-              fallbackExtractor: fallbackExtractor,
-              preferredAttribute: preferredAttribute,
-            ),
-      );
+      final resolvedRaw =
+          await LegacyRuleVariableProcessor.resolveExpressionAsync(
+            expression: variableAwareRaw,
+            variables: mutableVariables,
+            resolvePutValue:
+                (valueExpression) => _evaluatePutValue(
+                  content: content,
+                  stage: stage,
+                  valueExpression: valueExpression,
+                  fallbackExtractor: fallbackExtractor,
+                  preferredAttribute: preferredAttribute,
+                  jsContext: _mergeJsContextVariables(
+                    jsContext,
+                    mutableVariables,
+                  ),
+                ),
+          );
 
-      final values = _executeAllRuleLikeExpression(
+      final values = await _executeAllRuleLikeExpression(
         content: content,
         stage: stage,
         expression: resolvedRaw,
         fallbackExtractor: fallbackExtractor,
         preferredAttribute: preferredAttribute,
+        jsContext: _mergeJsContextVariables(jsContext, mutableVariables),
       );
       if (values.isNotEmpty) {
         return values;
@@ -779,10 +1249,11 @@ class BookDetailService {
 
     for (final candidate in _splitFallbackExpressions(resolvedExpression)) {
       try {
-        final values = _ruleEngine.executeAll(
+        final values = await _ruleEngine.executeAll(
           content: content,
           expression: candidate,
           stage: stage,
+          jsContext: _mergeJsContextVariables(jsContext, mutableVariables),
         );
         if (values.isNotEmpty) {
           return values;
@@ -795,7 +1266,7 @@ class BookDetailService {
     return const [];
   }
 
-  String? _extractOptionalValue({
+  Future<String?> _extractOptionalValue({
     required String content,
     required String? expression,
     required ErrorStage stage,
@@ -803,33 +1274,37 @@ class BookDetailService {
     required Map<String, String> variables,
     String? preferredAttribute,
     String? rawRule,
-  }) {
+    JsExecutionContext? jsContext,
+  }) async {
     final variableAwareRaw =
         LegacyRuleVariableProcessor.containsVariableSyntax(rawRule)
             ? rawRule!.trim()
             : null;
 
     if (variableAwareRaw != null) {
-      final resolvedRaw = LegacyRuleVariableProcessor.resolveExpression(
-        expression: variableAwareRaw,
-        variables: variables,
-        resolvePutValue:
-            (valueExpression) => _evaluatePutValue(
-              content: content,
-              stage: stage,
-              valueExpression: valueExpression,
-              fallbackExtractor: fallbackExtractor,
-              preferredAttribute: preferredAttribute,
-            ),
-      );
+      final resolvedRaw =
+          await LegacyRuleVariableProcessor.resolveExpressionAsync(
+            expression: variableAwareRaw,
+            variables: variables,
+            resolvePutValue:
+                (valueExpression) => _evaluatePutValue(
+                  content: content,
+                  stage: stage,
+                  valueExpression: valueExpression,
+                  fallbackExtractor: fallbackExtractor,
+                  preferredAttribute: preferredAttribute,
+                  jsContext: _mergeJsContextVariables(jsContext, variables),
+                ),
+          );
 
-      final variableRawValue = _executeRuleLikeExpression(
+      final variableRawValue = await _executeRuleLikeExpression(
         content: content,
         stage: stage,
         expression: resolvedRaw,
         fallbackExtractor: fallbackExtractor,
         preferredAttribute: preferredAttribute,
         treatLiteralAsValue: true,
+        jsContext: _mergeJsContextVariables(jsContext, variables),
       );
       if (variableRawValue != null) {
         return variableRawValue;
@@ -857,10 +1332,11 @@ class BookDetailService {
 
     for (final candidate in _splitFallbackExpressions(resolvedExpression)) {
       try {
-        final value = _ruleEngine.executeFirst(
+        final value = await _ruleEngine.executeFirst(
           content: content,
           expression: candidate,
           stage: stage,
+          jsContext: _mergeJsContextVariables(jsContext, variables),
         );
         final normalized = value.trim();
         if (normalized.isNotEmpty) {
@@ -877,13 +1353,14 @@ class BookDetailService {
     );
   }
 
-  String? _evaluatePutValue({
+  Future<String?> _evaluatePutValue({
     required String content,
     required ErrorStage stage,
     required String valueExpression,
     required String fallbackExtractor,
     String? preferredAttribute,
-  }) {
+    JsExecutionContext? jsContext,
+  }) async {
     final text = valueExpression.trim();
     if (text.isEmpty) {
       return null;
@@ -896,16 +1373,120 @@ class BookDetailService {
       fallbackExtractor: fallbackExtractor,
       preferredAttribute: preferredAttribute,
       treatLiteralAsValue: true,
+      jsContext: jsContext,
     );
   }
 
-  List<String> _executeAllRuleLikeExpression({
+  Future<bool> _evaluateCanRename({
+    required String content,
+    required ErrorStage stage,
+    required String? expression,
+    required Map<String, String> variables,
+    String? rawRule,
+    JsExecutionContext? jsContext,
+  }) async {
+    final normalizedExpression = _normalizeOptionalText(expression);
+    if (normalizedExpression == null) {
+      return true;
+    }
+
+    final literal = _parseBooleanLike(normalizedExpression);
+    if (literal != null) {
+      return literal;
+    }
+
+    final resolvedExpression = LegacyRuleVariableProcessor.replaceGetTokens(
+      normalizedExpression,
+      variables,
+    );
+    final resolvedLiteral = _parseBooleanLike(resolvedExpression);
+    if (resolvedLiteral != null) {
+      return resolvedLiteral;
+    }
+
+    final dynamicValue = _normalizeOptionalText(
+      await _executeRuleLikeExpression(
+        content: content,
+        stage: stage,
+        expression: resolvedExpression,
+        fallbackExtractor: 'text',
+        treatLiteralAsValue: true,
+        jsContext: _mergeJsContextVariables(jsContext, variables),
+      ),
+    );
+
+    final fallbackValue =
+        dynamicValue ??
+        _normalizeOptionalText(
+          LegacyScriptRuleFallback.evaluateFieldValue(
+            content: content,
+            rawRule: rawRule,
+          ),
+        );
+    if (fallbackValue == null) {
+      return false;
+    }
+
+    final parsed = _parseBooleanLike(fallbackValue);
+    return parsed ?? true;
+  }
+
+  String? _selectPreferredText({
+    required bool preferPrimary,
+    required String? primary,
+    required String? fallback,
+  }) {
+    final normalizedPrimary = _normalizeOptionalText(primary);
+    final normalizedFallback = _normalizeOptionalText(fallback);
+    if (preferPrimary) {
+      return normalizedPrimary ?? normalizedFallback;
+    }
+    return normalizedFallback ?? normalizedPrimary;
+  }
+
+  bool? _parseBooleanLike(String? value) {
+    final text = _normalizeOptionalText(value)?.toLowerCase();
+    if (text == null) {
+      return null;
+    }
+
+    if (text == 'true' || text == '1' || text == 'yes' || text == 'on') {
+      return true;
+    }
+    if (text == 'false' ||
+        text == '0' ||
+        text == 'no' ||
+        text == 'off' ||
+        text == 'null' ||
+        text == 'undefined' ||
+        text == 'nan') {
+      return false;
+    }
+
+    final numeric = num.tryParse(text);
+    if (numeric != null) {
+      return numeric != 0;
+    }
+
+    return null;
+  }
+
+  String? _normalizeOptionalText(String? value) {
+    final text = value?.trim();
+    if (text == null || text.isEmpty) {
+      return null;
+    }
+    return text;
+  }
+
+  Future<List<String>> _executeAllRuleLikeExpression({
     required String content,
     required ErrorStage stage,
     required String expression,
     required String fallbackExtractor,
     String? preferredAttribute,
-  }) {
+    JsExecutionContext? jsContext,
+  }) async {
     final text = expression.trim();
     if (text.isEmpty) {
       return const [];
@@ -922,10 +1503,11 @@ class BookDetailService {
 
     for (final candidate in _splitFallbackExpressions(normalizedExpression)) {
       try {
-        final values = _ruleEngine.executeAll(
+        final values = await _ruleEngine.executeAll(
           content: content,
           expression: candidate,
           stage: stage,
+          jsContext: jsContext,
         );
         if (values.isNotEmpty) {
           return values;
@@ -938,14 +1520,15 @@ class BookDetailService {
     return const [];
   }
 
-  String? _executeRuleLikeExpression({
+  Future<String?> _executeRuleLikeExpression({
     required String content,
     required ErrorStage stage,
     required String expression,
     required String fallbackExtractor,
     String? preferredAttribute,
     bool treatLiteralAsValue = false,
-  }) {
+    JsExecutionContext? jsContext,
+  }) async {
     final text = expression.trim();
     if (text.isEmpty) {
       return null;
@@ -969,10 +1552,11 @@ class BookDetailService {
 
     for (final candidate in _splitFallbackExpressions(normalizedExpression)) {
       try {
-        final value = _ruleEngine.executeFirst(
+        final value = await _ruleEngine.executeFirst(
           content: content,
           expression: candidate,
           stage: stage,
+          jsContext: jsContext,
         );
         final normalized = value.trim();
         if (normalized.isNotEmpty) {
@@ -995,6 +1579,9 @@ class BookDetailService {
     if (text.isEmpty) {
       return null;
     }
+    if (text.startsWith('js:') || text.startsWith('@js:')) {
+      return text;
+    }
 
     final staticRule = LegacyRuleCompat.extractStaticRuleExpression(text);
     if (staticRule == null || staticRule.isEmpty) {
@@ -1003,11 +1590,13 @@ class BookDetailService {
 
     if (staticRule.startsWith('html:') ||
         staticRule.startsWith('regex:') ||
-        staticRule.startsWith('json:')) {
+        staticRule.startsWith('json:') ||
+        staticRule.startsWith('js:') ||
+        staticRule.startsWith('@js:')) {
       return staticRule;
     }
 
-    final xpathCandidate = LegacyXPathCompat.buildRuleExpression(
+    final xpathCandidate = LegacyXPathCompat.buildNativeRuleExpression(
       expression: staticRule,
       fallbackExtractor: fallbackExtractor,
       preferredAttribute: preferredAttribute,
@@ -1027,6 +1616,19 @@ class BookDetailService {
         staticRule.startsWith(r'$[') ||
         staticRule == r'$') {
       return 'json:$staticRule';
+    }
+
+    if (LegacyRuleCompat.looksLikeAllInOneRegexExpression(staticRule) ||
+        LegacyRuleCompat.looksLikeRegexGroupReference(staticRule)) {
+      return staticRule;
+    }
+
+    if (staticRule.contains('{{@@') ||
+        staticRule.contains('{{@css:') ||
+        staticRule.contains('{{@json:') ||
+        staticRule.contains('{{@xpath:') ||
+        staticRule.contains('{{@js:')) {
+      return staticRule;
     }
 
     return LegacyRuleCompat.buildHtmlRuleExpression(
@@ -1056,10 +1658,21 @@ class BookDetailService {
       return true;
     }
 
+    if (LegacyRuleCompat.looksLikeAllInOneRegexExpression(text) ||
+        LegacyRuleCompat.looksLikeRegexGroupReference(text)) {
+      return true;
+    }
+
     return text.contains('@') ||
         text.contains('##') ||
         text.contains('||') ||
-        text.contains('&&');
+        text.contains('&&') ||
+        text.contains('%%') ||
+        text.contains('{{@@') ||
+        text.contains('{{@css:') ||
+        text.contains('{{@json:') ||
+        text.contains('{{@xpath:') ||
+        text.contains('{{@js:');
   }
 
   String? _resolveMaybeUrl({required String pageUrl, required String? rawUrl}) {
@@ -1155,6 +1768,29 @@ class BookDetailService {
         decoded.contains('<div') ||
         decoded.contains('<html') ||
         decoded.contains('<body');
+  }
+
+  void _validateResolvedRequestUrl({
+    required String requestUrl,
+    required String sourceId,
+  }) {
+    final normalized = requestUrl.trim();
+    final uri = Uri.tryParse(normalized);
+    final scheme = uri?.scheme.toLowerCase() ?? '';
+    final isHttpUrl =
+        uri != null && uri.hasScheme && (scheme == 'http' || scheme == 'https');
+    if (isHttpUrl &&
+        !_looksLikeHtmlFragment(normalized) &&
+        !_looksLikeEncodedHtmlFragment(normalized)) {
+      return;
+    }
+
+    throw AppException(
+      code: ErrorCode.validation,
+      stage: ErrorStage.toc,
+      sourceId: sourceId,
+      briefMessage: '目录分页地址非法：$normalized',
+    );
   }
 
   String? _resolveAbsoluteHttpUrl({
@@ -1385,11 +2021,158 @@ class BookDetailService {
     return 'title:$normalizedTitle';
   }
 
+  JsExecutionContext _buildDetailJsContext({
+    required SourceDefinition source,
+    required SearchRequestContext runtimeContext,
+    required Map<String, dynamic> bookJson,
+    Map<String, String> seedVariables = const <String, String>{},
+    JsBridgePutCallback? onBridgePutVariables,
+  }) {
+    final variables = <String, String>{
+      ...seedVariables,
+      ...runtimeContext.extraParams,
+    };
+
+    void collectPutVariables(Map<String, String> updates) {
+      if (updates.isEmpty) {
+        return;
+      }
+      variables.addAll(SourceJsVariableStore.toRuntimeVariables(updates));
+      onBridgePutVariables?.call(updates);
+    }
+
+    return JsExecutionContext(
+      sourceId: source.id,
+      baseUrl: source.baseUrl,
+      variables: variables,
+      sourceJson: _buildSourceJsJson(source),
+      bookJson: bookJson,
+      jsLibScript: source.jsLib,
+      onBridgePutVariables: collectPutVariables,
+    );
+  }
+
+  JsExecutionContext _buildChapterJsContext({
+    required JsExecutionContext jsContext,
+    required String bookId,
+    required String chapterUrl,
+    int? chapterIndex,
+    String? chapterTitle,
+  }) {
+    return jsContext.copyWith(
+      chapterJson: _buildChapterJsJson(
+        bookId: bookId,
+        chapterUrl: chapterUrl,
+        chapterIndex: chapterIndex,
+        chapterTitle: chapterTitle,
+      ),
+    );
+  }
+
+  JsExecutionContext? _mergeJsContextVariables(
+    JsExecutionContext? jsContext,
+    Map<String, String>? variables,
+  ) {
+    if (jsContext == null || variables == null || variables.isEmpty) {
+      return jsContext;
+    }
+
+    return jsContext.copyWith(
+      variables: <String, String>{...jsContext.variables, ...variables},
+    );
+  }
+
+  Map<String, dynamic> _buildSourceJsJson(SourceDefinition source) {
+    final payload = <String, dynamic>{...?source.originalSource};
+    payload.putIfAbsent('id', () => source.id);
+    payload.putIfAbsent('name', () => source.name);
+    payload.putIfAbsent('bookSourceName', () => source.name);
+    payload.putIfAbsent('baseUrl', () => source.baseUrl);
+    payload.putIfAbsent('bookSourceUrl', () => source.baseUrl);
+    payload.putIfAbsent('sourceType', () => source.sourceType);
+    payload.putIfAbsent('enabled', () => source.enabled);
+    return payload;
+  }
+
+  Map<String, dynamic> _buildBookJsJson({
+    required String sourceId,
+    required String bookId,
+    required String detailUrl,
+    String? title,
+    String? author,
+    String? intro,
+    String? coverUrl,
+    String? tocUrl,
+  }) {
+    final output = <String, dynamic>{
+      'id': bookId,
+      'bookId': bookId,
+      'sourceId': sourceId,
+      'detailUrl': detailUrl,
+      'bookUrl': detailUrl,
+      'url': detailUrl,
+    };
+
+    final normalizedTitle = title?.trim() ?? '';
+    if (normalizedTitle.isNotEmpty) {
+      output['title'] = normalizedTitle;
+      output['name'] = normalizedTitle;
+    }
+
+    final normalizedAuthor = author?.trim() ?? '';
+    if (normalizedAuthor.isNotEmpty) {
+      output['author'] = normalizedAuthor;
+    }
+
+    final normalizedIntro = intro?.trim() ?? '';
+    if (normalizedIntro.isNotEmpty) {
+      output['intro'] = normalizedIntro;
+    }
+
+    final normalizedCover = coverUrl?.trim() ?? '';
+    if (normalizedCover.isNotEmpty) {
+      output['coverUrl'] = normalizedCover;
+    }
+
+    final normalizedToc = tocUrl?.trim() ?? '';
+    if (normalizedToc.isNotEmpty) {
+      output['tocUrl'] = normalizedToc;
+    }
+
+    return output;
+  }
+
+  Map<String, dynamic> _buildChapterJsJson({
+    required String bookId,
+    required String chapterUrl,
+    int? chapterIndex,
+    String? chapterTitle,
+  }) {
+    final output = <String, dynamic>{
+      'bookId': bookId,
+      'chapterUrl': chapterUrl,
+      'url': chapterUrl,
+    };
+
+    if (chapterIndex != null) {
+      output['index'] = chapterIndex;
+    }
+
+    final normalizedTitle = chapterTitle?.trim() ?? '';
+    if (normalizedTitle.isNotEmpty) {
+      output['title'] = normalizedTitle;
+      output['name'] = normalizedTitle;
+    }
+
+    return output;
+  }
+
   Future<Map<String, String>> _loadInitVariables({
     required SourceDefinition source,
     required ErrorStage stage,
     required String? initRule,
     required SearchRequestContext context,
+    JsExecutionContext? jsContext,
   }) async {
     final rawInitRule = initRule?.trim();
     if (rawInitRule == null || rawInitRule.isEmpty) {
@@ -1424,18 +2207,14 @@ class BookDetailService {
       context: context,
     );
 
-    final response = await _httpClient.get(
-      RequestContext(
-        url: requestUrl,
-        method: requestSpec.method,
-        body: requestBody,
-        contentType: contentType,
-        responseCharset: requestSpec.responseCharset,
-        headers: requestHeaders,
-        maxRetries: 1,
-        stage: stage,
-        sourceId: source.id,
-      ),
+    final response = await _executeRequest(
+      source: source,
+      stage: stage,
+      requestSpec: requestSpec,
+      requestUrl: requestUrl,
+      requestBody: requestBody,
+      contentType: contentType,
+      requestHeaders: requestHeaders,
     );
 
     final normalizedInitBody =
@@ -1451,11 +2230,12 @@ class BookDetailService {
       return _flattenInitVariables(decoded);
     }();
 
-    final putVariables = _extractInitPutVariables(
+    final putVariables = await _extractInitPutVariables(
       content: normalizedInitBody,
       stage: stage,
       parseRule: initParts.parseRule,
       context: context,
+      jsContext: jsContext,
     );
 
     if (jsonVariables.isEmpty && putVariables.isEmpty) {
@@ -1490,12 +2270,13 @@ class BookDetailService {
     return _InitRuleParts(parseRule: normalized);
   }
 
-  Map<String, String> _extractInitPutVariables({
+  Future<Map<String, String>> _extractInitPutVariables({
     required String content,
     required ErrorStage stage,
     required String? parseRule,
     required SearchRequestContext context,
-  }) {
+    JsExecutionContext? jsContext,
+  }) async {
     if (!LegacyRuleVariableProcessor.containsVariableSyntax(parseRule)) {
       return const {};
     }
@@ -1503,7 +2284,7 @@ class BookDetailService {
     final working = <String, String>{...context.toVariables()};
     final baseline = Map<String, String>.from(working);
 
-    LegacyRuleVariableProcessor.resolveExpression(
+    await LegacyRuleVariableProcessor.resolveExpressionAsync(
       expression: parseRule!.trim(),
       variables: working,
       resolvePutValue:
@@ -1511,6 +2292,7 @@ class BookDetailService {
             content: content,
             stage: stage,
             valueExpression: valueExpression,
+            jsContext: _mergeJsContextVariables(jsContext, working),
           ),
     );
 
@@ -1528,11 +2310,12 @@ class BookDetailService {
     return output;
   }
 
-  String? _evaluateInitPutValue({
+  Future<String?> _evaluateInitPutValue({
     required String content,
     required ErrorStage stage,
     required String valueExpression,
-  }) {
+    JsExecutionContext? jsContext,
+  }) async {
     final text = valueExpression.trim();
     if (text.isEmpty) {
       return null;
@@ -1545,10 +2328,11 @@ class BookDetailService {
     if (normalizedRule != null) {
       for (final candidate in _splitFallbackExpressions(normalizedRule)) {
         try {
-          final value = _ruleEngine.executeFirst(
+          final value = await _ruleEngine.executeFirst(
             content: content,
             expression: candidate,
             stage: stage,
+            jsContext: jsContext,
           );
           final normalized = value.trim();
           if (normalized.isNotEmpty) {
@@ -1569,32 +2353,28 @@ class BookDetailService {
 
   _SearchRequestSpec _parseRequestSpec(String rawRule) {
     final normalized = rawRule.trim();
-    final splitResult = _splitRequestOptions(normalized);
-    if (splitResult == null) {
+    final parsedRule = UrlOptionParser.parseRule(normalized);
+    if (parsedRule == null) {
       return _SearchRequestSpec(
         urlTemplate: normalized,
         method: HttpRequestMethod.get,
+        maxRetries: 1,
       );
     }
 
-    final options = _decodeOptionsMap(splitResult.optionsText);
-    final methodText = options['method']?.toString().toUpperCase();
-    final method =
-        methodText == 'POST' ? HttpRequestMethod.post : HttpRequestMethod.get;
+    final option = parsedRule.options;
 
     return _SearchRequestSpec(
-      urlTemplate: splitResult.urlTemplate,
-      method: method,
-      bodyTemplate: _normalizeBodyTemplate(options['body']),
-      contentType: _asNullableString(
-        options['contentType'] ?? options['content-type'],
-      ),
-      responseCharset: _asNullableString(
-        options['responseCharset'] ??
-            options['response-charset'] ??
-            options['charset'],
-      ),
-      headers: _parseHeaders(options['headers'] ?? options['header']),
+      urlTemplate: parsedRule.urlTemplate,
+      method: option.method,
+      bodyTemplate: _normalizeBodyTemplate(option.body),
+      contentType: option.contentType,
+      responseCharset: option.responseCharset,
+      headers: option.headers,
+      maxRetries: option.retry ?? 1,
+      useWebView: option.webView,
+      webJs: option.webJs,
+      sourceRegex: option.sourceRegex,
     );
   }
 
@@ -1628,6 +2408,11 @@ class BookDetailService {
       urlTemplate: urlTemplate,
       optionsText: optionsText,
     );
+  }
+
+  String _stripRequestOptions(String url) {
+    final split = _splitRequestOptions(url.trim());
+    return split?.urlTemplate ?? url.trim();
   }
 
   int? _findTrailingObjectStart(String value) {
@@ -1683,71 +2468,6 @@ class BookDetailService {
     }
 
     return null;
-  }
-
-  Map<String, dynamic> _decodeOptionsMap(String source) {
-    try {
-      final decoded = jsonDecode(source);
-      if (decoded is Map<String, dynamic>) {
-        return decoded;
-      }
-      if (decoded is Map) {
-        return decoded.map((key, value) => MapEntry(key.toString(), value));
-      }
-    } on FormatException {
-      // fall through
-    }
-
-    final normalized = _normalizePseudoJson(source);
-    try {
-      final decoded = jsonDecode(normalized);
-      if (decoded is Map<String, dynamic>) {
-        return decoded;
-      }
-      if (decoded is Map) {
-        return decoded.map((key, value) => MapEntry(key.toString(), value));
-      }
-    } on FormatException {
-      return const {};
-    }
-
-    return const {};
-  }
-
-  String _normalizePseudoJson(String source) {
-    return source.replaceAllMapped(RegExp(r"'([^'\\]*(?:\\.[^'\\]*)*)'"), (
-      match,
-    ) {
-      final inner = match.group(1) ?? '';
-      final escaped = inner
-          .replaceAll(r'\', r'\\')
-          .replaceAll('"', r'\"')
-          .replaceAll('\n', r'\n');
-      return '"$escaped"';
-    });
-  }
-
-  Map<String, String> _parseHeaders(Object? source) {
-    if (source == null) {
-      return const {};
-    }
-
-    final rawHeaders = source is String ? _decodeOptionsMap(source) : source;
-
-    if (rawHeaders is! Map) {
-      return const {};
-    }
-
-    final headers = <String, String>{};
-    for (final entry in rawHeaders.entries) {
-      final key = entry.key.toString().trim();
-      final value = entry.value.toString().trim();
-      if (key.isNotEmpty && value.isNotEmpty) {
-        headers[key] = value;
-      }
-    }
-
-    return headers;
   }
 
   Map<String, String> _resolveRequestHeaders({
@@ -1867,17 +2587,6 @@ class BookDetailService {
     return value;
   }
 
-  String? _asNullableString(Object? value) {
-    if (value == null) {
-      return null;
-    }
-    final text = value.toString().trim();
-    if (text.isEmpty) {
-      return null;
-    }
-    return text;
-  }
-
   dynamic _tryDecodeJson(String source) {
     try {
       return jsonDecode(source);
@@ -1962,6 +2671,9 @@ class BookDetailService {
     if (text == null || text.isEmpty) {
       return null;
     }
+    if (text.startsWith('js:') || text.startsWith('@js:')) {
+      return text;
+    }
 
     final staticRule = LegacyRuleCompat.extractStaticRuleExpression(text);
     if (staticRule == null || staticRule.isEmpty) {
@@ -1970,11 +2682,13 @@ class BookDetailService {
 
     if (staticRule.startsWith('html:') ||
         staticRule.startsWith('regex:') ||
-        staticRule.startsWith('json:')) {
+        staticRule.startsWith('json:') ||
+        staticRule.startsWith('js:') ||
+        staticRule.startsWith('@js:')) {
       return staticRule;
     }
 
-    final xpathCandidate = LegacyXPathCompat.buildRuleExpression(
+    final xpathCandidate = LegacyXPathCompat.buildNativeRuleExpression(
       expression: staticRule,
       fallbackExtractor: fallbackExtractor,
       preferredAttribute: preferredAttribute,
@@ -1987,6 +2701,11 @@ class BookDetailService {
         staticRule.startsWith(r'$[') ||
         staticRule == r'$') {
       return 'json:$staticRule';
+    }
+
+    if (LegacyRuleCompat.looksLikeAllInOneRegexExpression(staticRule) ||
+        LegacyRuleCompat.looksLikeRegexGroupReference(staticRule)) {
+      return staticRule;
     }
 
     if (staticRule.contains(r'{{$.') ||
@@ -2125,6 +2844,13 @@ class _ProtectedTemplate {
   final Map<String, String> placeholders;
 }
 
+class _NetworkLoadResult {
+  const _NetworkLoadResult({required this.statusCode, required this.body});
+
+  final int statusCode;
+  final String body;
+}
+
 class _RequestRuleSplit {
   const _RequestRuleSplit({
     required this.urlTemplate,
@@ -2143,6 +2869,10 @@ class _SearchRequestSpec {
     this.contentType,
     this.responseCharset,
     this.headers = const {},
+    this.maxRetries = 1,
+    this.useWebView = false,
+    this.webJs,
+    this.sourceRegex,
   });
 
   final String urlTemplate;
@@ -2151,6 +2881,10 @@ class _SearchRequestSpec {
   final String? contentType;
   final String? responseCharset;
   final Map<String, String> headers;
+  final int maxRetries;
+  final bool useWebView;
+  final String? webJs;
+  final String? sourceRegex;
 }
 
 class _DetailParseRules {
@@ -2161,6 +2895,8 @@ class _DetailParseRules {
     this.rawTitleRule,
     this.authorRule,
     this.rawAuthorRule,
+    this.canRenameRule,
+    this.rawCanRenameRule,
     this.introRule,
     this.rawIntroRule,
     this.coverUrlRule,
@@ -2175,6 +2911,8 @@ class _DetailParseRules {
   final String? rawTitleRule;
   final String? authorRule;
   final String? rawAuthorRule;
+  final String? canRenameRule;
+  final String? rawCanRenameRule;
   final String? introRule;
   final String? rawIntroRule;
   final String? coverUrlRule;
@@ -2191,6 +2929,8 @@ class _TocParseRules {
     required this.rawListRule,
     required this.rawTitleRule,
     required this.rawChapterUrlRule,
+    this.nextUrlRule,
+    this.rawNextUrlRule,
     required this.reversed,
   });
 
@@ -2200,6 +2940,8 @@ class _TocParseRules {
   final String? rawListRule;
   final String? rawTitleRule;
   final String? rawChapterUrlRule;
+  final String? nextUrlRule;
+  final String? rawNextUrlRule;
   final bool reversed;
 }
 
@@ -2208,4 +2950,11 @@ class _InitRuleParts {
 
   final String? requestRule;
   final String? parseRule;
+}
+
+class _ListRuleNormalization {
+  const _ListRuleNormalization({this.rule, this.reversed = false});
+
+  final String? rule;
+  final bool reversed;
 }

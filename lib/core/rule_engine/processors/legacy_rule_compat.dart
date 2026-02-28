@@ -74,8 +74,8 @@ class LegacyRuleCompat {
         .map((item) => item.trim())
         .where((item) => item.isNotEmpty)
         .map(
-          (item) => buildHtmlRuleCandidate(
-            stage: item,
+          (item) => _buildHtmlInterleaveExpression(
+            expression: item,
             fallbackExtractor: fallbackExtractor,
             preferredAttribute: preferredAttribute,
           ),
@@ -89,6 +89,41 @@ class LegacyRuleCompat {
     }
 
     return candidates.join('||');
+  }
+
+  static String? _buildHtmlInterleaveExpression({
+    required String expression,
+    required String fallbackExtractor,
+    String? preferredAttribute,
+  }) {
+    final normalized = expression.trim();
+    if (normalized.isEmpty) {
+      return null;
+    }
+
+    final segments = normalized
+        .split('%%')
+        .map((item) => item.trim())
+        .where((item) => item.isNotEmpty)
+        .toList(growable: false);
+    if (segments.isEmpty) {
+      return null;
+    }
+
+    final converted = <String>[];
+    for (final segment in segments) {
+      final candidate = buildHtmlRuleCandidate(
+        stage: segment,
+        fallbackExtractor: fallbackExtractor,
+        preferredAttribute: preferredAttribute,
+      );
+      if (candidate == null || candidate.trim().isEmpty) {
+        return null;
+      }
+      converted.add(candidate);
+    }
+
+    return converted.join('%%');
   }
 
   static String? extractStaticRuleExpression(String expression) {
@@ -112,6 +147,24 @@ class LegacyRuleCompat {
     }
 
     return candidates.join('||');
+  }
+
+  static bool looksLikeAllInOneRegexExpression(String expression) {
+    final normalized = expression.trim();
+    if (normalized.isEmpty) {
+      return false;
+    }
+    if (normalized.startsWith('http://') ||
+        normalized.startsWith('https://') ||
+        normalized.startsWith('://')) {
+      return false;
+    }
+    return (normalized.startsWith(':') || normalized.startsWith('+')) &&
+        normalized.length > 1;
+  }
+
+  static bool looksLikeRegexGroupReference(String expression) {
+    return RegExp(r'^\$\d+$').hasMatch(expression.trim());
   }
 
   static String? _stripScriptDecorations(String expression) {

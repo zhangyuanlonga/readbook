@@ -9,6 +9,86 @@ import '../models/legado_source_raw.dart';
 class LegadoSourceAdapter {
   const LegadoSourceAdapter();
 
+  static const Set<String> _supportedBridgeCalls = <String>{
+    'ajax',
+    'ajaxall',
+    'connect',
+    'head',
+    'post',
+    'put',
+    'get',
+    'log',
+    'toast',
+    'longtoast',
+    'startbrowser',
+    'startbrowserawait',
+    'webview',
+    'setcontent',
+    'getstring',
+    'getstringlist',
+    'getelements',
+    'getelement',
+    'getcookie',
+    'base64decode',
+    'base64encode',
+    'base64decodetobytearray',
+    'base64decoder',
+    'md5encode',
+    'md5encode16',
+    'encodeuri',
+    'htmlformat',
+    'timeformat',
+    'timeformatutc',
+    'tonumchapter',
+    't2s',
+    's2t',
+    'strtobytes',
+    'bytestostring',
+    'createsymmetriccrypto',
+    'refreshtocurl',
+    'getwebviewua',
+    'randomuuid',
+    'androidid',
+    'deviceid',
+    'hexdecodetostring',
+    'hexdecodetobytearray',
+    'hexencodetostring',
+    'digesthex',
+    'hmachex',
+    'hmacbase64',
+    'desencodetobase64string',
+    'initurl',
+    'getstrresponse',
+    'tourl',
+    'regetbook',
+    'aesdecodeargsbase64str',
+    'cachefile',
+    'getverificationcode',
+    'importscript',
+    'removecookie',
+    'aesdecodetostring',
+    'aesdecodetobytearray',
+    'aesbase64decodetostring',
+    'aesbase64decodetobytearray',
+    'aesencodetostring',
+    'aesencodetobytearray',
+    'aesencodetobase64string',
+    'aesencodetobase64bytearray',
+  };
+  static const Set<String> _unsupportedBridgeCalls = <String>{
+    'readfile',
+    'getfile',
+    'readtxtfile',
+    'deletefile',
+    'downloadfile',
+    'unzipfile',
+    'gettxtinfolder',
+    'getzipstringcontent',
+    'queryttf',
+    'querybase64ttf',
+    'replacefont',
+  };
+
   List<SourceDefinition> adaptAll(Iterable<LegadoSourceRaw> raws) {
     return raws.map(adapt).toList(growable: false);
   }
@@ -61,8 +141,7 @@ class LegadoSourceAdapter {
     final exploreUrl = _pickRule(raw.rawData, ['exploreUrl']);
     final hasExploreUrl = exploreUrl != null && exploreUrl.trim().isNotEmpty;
     final exploreEnabled =
-        hasExploreUrl &&
-        (_pickBool(raw.rawData, ['enabledExplore']) ?? true);
+        hasExploreUrl && (_pickBool(raw.rawData, ['enabledExplore']) ?? true);
 
     var adaptedRules = SourceRuleSet(
       searchRule: searchRule,
@@ -114,6 +193,12 @@ class LegadoSourceAdapter {
       detailAuthorRule:
           _pickRule(raw.rawData, ['ruleBookAuthor', 'detailAuthorRule']) ??
           _pickRuleFromMap(detailRuleMap, ['author']),
+      detailCanRenameRule:
+          _pickRule(raw.rawData, [
+            'ruleBookCanReName',
+            'detailCanRenameRule',
+          ]) ??
+          _pickRuleFromMap(detailRuleMap, ['canReName', 'canRename']),
       detailIntroRule:
           _pickRule(raw.rawData, ['ruleBookIntro', 'detailIntroRule']) ??
           _pickRuleFromMap(detailRuleMap, ['intro', 'description', 'desc']),
@@ -141,6 +226,9 @@ class LegadoSourceAdapter {
       tocChapterUrlRule:
           _pickRule(raw.rawData, ['ruleChapterUrl', 'tocChapterUrlRule']) ??
           _pickRuleFromMap(tocRuleMap, ['chapterUrl', 'url', 'link']),
+      tocNextUrlRule:
+          _pickRule(raw.rawData, ['ruleTocNextUrl', 'tocNextUrlRule']) ??
+          _pickRuleFromMap(tocRuleMap, ['nextTocUrl', 'nextUrl']),
       tocReversed:
           _pickBool(raw.rawData, ['reverseToc', 'tocReverse']) ??
           _pickBoolFromMap(tocRuleMap, ['reverse', 'isReverse', 'isDesc']) ??
@@ -150,6 +238,12 @@ class LegadoSourceAdapter {
           _pickRuleFromMap(contentRuleMap, ['content', 'text', 'body']),
       contentInitRule: contentInitRule,
       contentDecryptRule: _extractLegacyContentDecryptRule(raw.rawData),
+      contentReplaceRegex:
+          _pickRule(raw.rawData, ['replaceRegex', 'contentReplaceRegex']) ??
+          _pickRuleFromMap(contentRuleMap, ['replaceRegex']),
+      contentNextUrlRule:
+          _pickRule(raw.rawData, ['nextContentUrl', 'contentNextUrlRule']) ??
+          _pickRuleFromMap(contentRuleMap, ['nextContentUrl', 'nextUrl']),
       exploreInitRule: exploreInitRule,
       exploreListRule:
           _pickRule(raw.rawData, ['ruleExploreList', 'exploreListRule']) ??
@@ -198,6 +292,22 @@ class LegadoSourceAdapter {
       sourceType: raw.sourceType ?? 0,
       rules: adaptedRules,
     );
+    final isServerProxySource = _isServerProxySource(
+      rawData: raw.rawData,
+      baseUrl: baseUrl,
+      rules: adaptedRules,
+    );
+    if (isServerProxySource) {
+      adaptedRules = _applyServerProxyRuleFallback(adaptedRules);
+    }
+    final headers = _applyServerProxyHeaderFallback(
+      _parseHeaders(raw.rawData['header'], baseUrl: baseUrl),
+      enabled: isServerProxySource,
+    );
+    final jsCapability = _detectJsCapability(
+      rawData: raw.rawData,
+      rules: adaptedRules,
+    );
 
     return SourceDefinition(
       id: _buildId(
@@ -213,10 +323,155 @@ class LegadoSourceAdapter {
       comment: _emptyToNull(_normalizeText(raw.sourceComment)),
       exploreEnabled: exploreEnabled,
       exploreUrl: exploreUrl,
-      headers: _parseHeaders(raw.rawData['header'], baseUrl: baseUrl),
+      concurrentRate: _pickRule(raw.rawData, ['concurrentRate']),
+      jsLib: _normalizeRuleValue(raw.rawData['jsLib']),
+      headers: headers,
+      jsCapability: jsCapability,
       rules: adaptedRules,
       originalSource: raw.rawData,
     );
+  }
+
+  SourceJsCapability _detectJsCapability({
+    required Map<String, dynamic> rawData,
+    required SourceRuleSet rules,
+  }) {
+    final samples = <String>[
+      ..._collectRuleSamples(rules),
+      ..._collectRawJsSamples(rawData),
+    ];
+    if (samples.isEmpty) {
+      return SourceJsCapability.full;
+    }
+
+    var hasPartialRisk = false;
+    for (final sample in samples) {
+      final normalized = sample.toLowerCase();
+      if (normalized.contains('packages.')) {
+        return SourceJsCapability.unsupported;
+      }
+
+      if (normalized.contains('document.') || normalized.contains('window.')) {
+        hasPartialRisk = true;
+      }
+
+      for (final match in RegExp(
+        r'java\.([a-zA-Z_][a-zA-Z0-9_]*)\s*\(',
+      ).allMatches(sample)) {
+        final call = (match.group(1) ?? '').trim().toLowerCase();
+        if (call.isEmpty) {
+          continue;
+        }
+        if (_supportedBridgeCalls.contains(call)) {
+          continue;
+        }
+        if (_unsupportedBridgeCalls.contains(call)) {
+          return SourceJsCapability.unsupported;
+        }
+        hasPartialRisk = true;
+      }
+    }
+
+    return hasPartialRisk
+        ? SourceJsCapability.partial
+        : SourceJsCapability.full;
+  }
+
+  List<String> _collectRuleSamples(SourceRuleSet rules) {
+    final values = <String?>[
+      rules.searchRule,
+      rules.searchInitRule,
+      rules.searchListRule,
+      rules.searchTitleRule,
+      rules.searchDetailUrlRule,
+      rules.searchAuthorRule,
+      rules.searchIntroRule,
+      rules.searchCoverUrlRule,
+      rules.searchLatestChapterRule,
+      rules.detailRule,
+      rules.detailInitRule,
+      rules.detailTitleRule,
+      rules.detailAuthorRule,
+      rules.detailIntroRule,
+      rules.detailCoverUrlRule,
+      rules.detailTocUrlRule,
+      rules.tocRule,
+      rules.tocInitRule,
+      rules.tocListRule,
+      rules.tocTitleRule,
+      rules.tocChapterUrlRule,
+      rules.tocNextUrlRule,
+      rules.contentRule,
+      rules.contentInitRule,
+      rules.contentDecryptRule,
+      rules.contentReplaceRegex,
+      rules.contentNextUrlRule,
+      rules.exploreInitRule,
+      rules.exploreListRule,
+      rules.exploreTitleRule,
+      rules.exploreDetailUrlRule,
+      rules.exploreAuthorRule,
+      rules.exploreIntroRule,
+      rules.exploreCoverUrlRule,
+      rules.exploreLatestChapterRule,
+      rules.exploreKindRule,
+      rules.exploreWordCountRule,
+    ];
+
+    return values
+        .map((item) => item?.trim() ?? '')
+        .where((item) => _looksLikeJsUsage(item))
+        .toList(growable: false);
+  }
+
+  List<String> _collectRawJsSamples(Map<String, dynamic> rawData) {
+    final output = <String>[];
+    void walk(dynamic value) {
+      if (value == null) {
+        return;
+      }
+      if (value is Map) {
+        for (final entry in value.entries) {
+          walk(entry.value);
+        }
+        return;
+      }
+      if (value is Iterable) {
+        for (final item in value) {
+          walk(item);
+        }
+        return;
+      }
+      final text = value.toString().trim();
+      if (text.isEmpty) {
+        return;
+      }
+      if (_looksLikeJsUsage(text)) {
+        output.add(text);
+      }
+    }
+
+    walk(rawData['header']);
+    walk(rawData['jsLib']);
+    walk(rawData['loginCheckJs']);
+    walk(rawData['ruleSearch']);
+    walk(rawData['ruleBookInfo']);
+    walk(rawData['ruleToc']);
+    walk(rawData['ruleContent']);
+    walk(rawData['ruleExplore']);
+    return output;
+  }
+
+  bool _looksLikeJsUsage(String text) {
+    if (text.isEmpty) {
+      return false;
+    }
+    final normalized = text.toLowerCase();
+    return normalized.contains('@js:') ||
+        normalized.contains('<js>') ||
+        normalized.startsWith('js:') ||
+        normalized.contains('java.') ||
+        normalized.contains('packages.');
   }
 
   SourceRuleSet _applyInlineJsMangaFallback({
@@ -326,6 +581,83 @@ class LegadoSourceAdapter {
     }
 
     return next;
+  }
+
+  bool _isServerProxySource({
+    required Map<String, dynamic> rawData,
+    required String baseUrl,
+    required SourceRuleSet rules,
+  }) {
+    if (!_isHttpUrl(baseUrl)) {
+      return false;
+    }
+
+    final jsLib = _normalizeRuleValue(rawData['jsLib']) ?? '';
+    if (jsLib.isEmpty) {
+      return false;
+    }
+
+    final hasApiHelper = jsLib.contains('getApiUrl');
+    final hasServerTokenHeader =
+        jsLib.contains('x-sec-token') && jsLib.contains('source.getVariable()');
+    final hasAndroidIdHeader = jsLib.contains('x-android-id');
+    if (!(hasApiHelper && hasServerTokenHeader && hasAndroidIdHeader)) {
+      return false;
+    }
+
+    final searchRule = rules.searchRule ?? '';
+    return _looksLikeJavaScriptRule(searchRule) &&
+        searchRule.contains('getApiUrl') &&
+        searchRule.contains('/search');
+  }
+
+  SourceRuleSet _applyServerProxyRuleFallback(SourceRuleSet rules) {
+    var next = rules;
+
+    final searchRule = next.searchRule ?? '';
+    if (_looksLikeJavaScriptRule(searchRule) &&
+        searchRule.contains('getApiUrl') &&
+        searchRule.contains('/search')) {
+      next = next.copyWith(
+        searchRule:
+            '/{{sourceMode}}/search?keyword={{serverKeyword|encode}}&page={{page}}',
+      );
+    }
+
+    final searchDetailUrlRule = next.searchDetailUrlRule ?? '';
+    if ((searchDetailUrlRule.contains('@js:') ||
+            _looksLikeJavaScriptRule(searchDetailUrlRule)) &&
+        searchDetailUrlRule.contains('book_id')) {
+      next = next.copyWith(
+        searchDetailUrlRule: r'{{$.type}}/info?novelId={{$.book_id}}',
+      );
+    }
+
+    final contentRule = next.contentRule ?? '';
+    if (_looksLikeJavaScriptRule(contentRule) &&
+        (contentRule.contains(r'requestApiUrl(`/${type}/chap') ||
+            contentRule.contains('/chap'))) {
+      next = next.copyWith(
+        contentRule:
+            r'json:$.data.content||json:$.data.url||json:$.data.images[*]',
+      );
+    }
+
+    return next;
+  }
+
+  Map<String, String> _applyServerProxyHeaderFallback(
+    Map<String, String> headers, {
+    required bool enabled,
+  }) {
+    if (!enabled) {
+      return headers;
+    }
+
+    final merged = <String, String>{...headers};
+    merged.putIfAbsent('x-sec-token', () => '{{sourceToken}}');
+    merged.putIfAbsent('x-android-id', () => '{{androidId}}');
+    return merged;
   }
 
   bool _containsReload(Map<String, dynamic> payload) {

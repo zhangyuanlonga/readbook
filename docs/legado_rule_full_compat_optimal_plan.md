@@ -6,6 +6,28 @@
 
 ---
 
+## 当前执行快照（2026-02-27）
+
+> 口径：仅统计引擎/数据兼容主线，不把 UI 改造纳入里程碑。
+
+| Phase | 状态快照 | 说明 |
+|------|------|------|
+| Phase 0（规则补齐） | 已完成 | `0-1 ~ 0-14` 已收口，规则语义补齐闭环 |
+| Phase 1（QuickJS） | 已完成（主线） | QuickJS 主链路已稳定运行，`book/chapter/source/cookie/cache` 上下文与 `jsLib` 注入已打通 |
+| Phase 1 Bridge | 已完成（主线） | Tier-1~Tier-4 主线已闭环，`jsCapability` 分级与 `js_fallback_legacy`/超时守卫诊断已接入回归 |
+| Phase 2（XPath） | 已完成（主线） | 原生 `XPathExecutor` 已接入 `RuleParser/RuleEngine`，并保留 `LegacyXPathCompat` 失败/空结果降级 |
+| Phase 3（WebView） | 已完成（主线） | `flutter_inappwebview`、Headless WebView 执行器、`webView:true` 路由与 `sourceRegex` 采集+消费链路已闭环 |
+
+**已通过的主线回归（本轮）**：
+- `flutter analyze` 通过。
+- 搜索→详情→目录→正文链路相关测试通过（含 `legacy_source_compatibility_test`）。
+- 核心规则与网络链路回归通过（`core/rule_engine`、`core/webview`、`core/network`）。
+- `manga_inline_js_source_test`、`legado_source_adapter_test` 已恢复通过（fixture 与 server-proxy 降级映射已收口）。
+- `webView:true` 稳定性回归已补齐：主链路新增 “WebView 异常 -> HTTP 回退” 用例，批量诊断进度统计一致性已加回归。
+- 高频 Bridge 兼容补齐已落地：`connect/getElement/getCookie/toNumChapter/timeFormatUTC/t2s/s2t/strToBytes/bytesToString/createSymmetricCrypto` + `toast/longToast/startBrowser/startBrowserAwait/webView` no-op 桥接。
+
+---
+
 ## 一、Legado 规则体系全貌
 
 ### 1.1 规则类型（6 种）
@@ -75,7 +97,9 @@ URL,{ "method":"POST", "charset":"gbk", "body":"key=xxx",
 
 ---
 
-## 二、逐项兼容现状（142 项 Checklist）
+## 二、逐项兼容现状（142 项 Checklist，基线清单）
+
+> 说明：本节用于展示“初始差距基线”，并非实时执行进度。实时进展以“当前执行快照”与 `docs/plan_e_implementation.md` 为准。
 
 ### 2.1 规则前缀
 
@@ -99,8 +123,8 @@ URL,{ "method":"POST", "charset":"gbk", "body":"key=xxx",
 | `##regex##replacement` 后缀替换 | ✅ | HTML/JSON 均支持 |
 | `@put/@get` 变量 | ✅ | LegacyRuleVariableProcessor 已实装 |
 | `&&` 合并 | ❌ | **完全未实装**，当前被当作分隔符 strip 掉 |
-| `%%` 交错 | ❌ | 完全未实装 |
-| `{{}}` 内嵌规则求值 | ⚠️ | 仅 JSON 模板 `{{$.field}}` 可用；`{{@@rule}}`/`{{@css:rule}}` 不支持 |
+| `%%` 交错 | ✅ | RuleEngine 已支持多列表 round-robin 交错取值 |
+| `{{}}` 内嵌规则求值 | ✅ | 已支持 `{{@@...}}`/`{{@css:...}}`/`{{@json:...}}`/`{{@xpath:...}}` |
 
 ### 2.3 URL 格式
 
@@ -160,7 +184,7 @@ URL,{ "method":"POST", "charset":"gbk", "body":"key=xxx",
 | `loginUrl` / `loginUi` | ❌ | 未实装（MVP 可暂缓） |
 | `bookUrlPattern` | ❌ | 未读取 |
 | `webJs`（WebView JS） | ❌ | 未实装 |
-| `sourceRegex`（资源嗅探） | ❌ | 未实装 |
+| `sourceRegex`（资源嗅探） | ⚠️ | 已支持在 Headless WebView 中匹配采集资源 URL，后续补齐完整回填链路 |
 | `book` / `chapter` / `source` JS 变量 | ❌ | JS 上下文中不可用 |
 
 ---
@@ -222,7 +246,7 @@ URL,{ "method":"POST", "charset":"gbk", "body":"key=xxx",
 
 **优势**：完整浏览器环境（DOM + JS + 网络），天然支持 `"webView": true` 源和 `webJs` 执行。
 **劣势**：
-- **需要 UI 上下文**——即使隐藏 WebView，也要附着在 Widget 树上。
+- **需要 Flutter 宿主上下文**——即使隐藏 WebView，也要附着在 Widget 树上（属于引擎内部运行约束，不代表需要改业务 UI 页面）。
 - **性能差**——每次规则执行要创建/复用 WebView 实例，延迟显著。
 - **不适合高频调用**——搜索一次可能需要执行几十次 JS 规则，WebView 开销不可接受。
 - 桌面端（Windows/Linux）支持差。
@@ -310,7 +334,7 @@ WebView 加载：flutter_inappwebview（仅用于 webView:true 的源）
 | 1-7 | **Bridge Tier-4：规则解析** | 注入 `java.setContent/getString/getElements/getStringList` → 桥接回 Dart 规则引擎（需注意递归） |
 | 1-8 | **JS 上下文变量注入** | `result`/`baseUrl`/`book`/`chapter`/`source`/`cookie`/`cache` 注入到 JS 全局作用域 |
 | 1-9 | **`<js>` 中间分隔支持** | 规则字符串 `cssRule<js>jsCode</js>xpathRule` → 按 `<js>` 切割 → 前段走原规则引擎 → JS 处理 result → 后段继续 |
-| 1-10 | **保留模式匹配降级** | QuickJS 执行失败 / 超时 → 自动 fallback 到 LegacyScriptRuleFallback |
+| 1-10 | **JS 能力诊断 + 模式匹配降级** | 导入阶段产出 `jsCapability` 分级；QuickJS 执行失败 / 超时时自动 fallback 到 LegacyScriptRuleFallback 并记录诊断原因 |
 
 **关键设计决策**：
 
@@ -345,6 +369,7 @@ WebView 加载：flutter_inappwebview（仅用于 webView:true 的源）
 ### Phase 3：WebView 层（可选，按需）
 
 > 兼容率从 90% → 92-95%。
+> 约束：Phase 3 仅新增引擎侧 `WebViewExecutor` 后台能力，不以页面改版、交互改造、视觉展示作为交付目标。
 
 | # | 任务 |
 |---|------|
@@ -355,7 +380,7 @@ WebView 加载：flutter_inappwebview（仅用于 webView:true 的源）
 | 3-5 | 支持 `sourceRegex` 资源嗅探（拦截 WebView 加载的媒体资源 URL） |
 | 3-6 | Cookie 管理接入（`java.getCookie` 桥接 WebView CookieManager） |
 
-**注意**：Phase 3 主要面向音频源（type=1）和极少数反爬站点，可根据实际需求决定是否实施。
+**注意**：Phase 3 主要面向音频源（type=1）和极少数反爬站点，可根据实际需求决定是否实施；即使启用，也应保持现有 UI 结构不变。
 
 ---
 

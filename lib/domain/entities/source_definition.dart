@@ -1,5 +1,7 @@
 enum SourceHealthStatus { unknown, healthy, degraded, unavailable }
 
+enum SourceJsCapability { full, partial, unsupported }
+
 class SourceRuleSet {
   const SourceRuleSet({
     this.searchRule,
@@ -15,6 +17,7 @@ class SourceRuleSet {
     this.detailInitRule,
     this.detailTitleRule,
     this.detailAuthorRule,
+    this.detailCanRenameRule,
     this.detailIntroRule,
     this.detailCoverUrlRule,
     this.detailTocUrlRule,
@@ -27,6 +30,9 @@ class SourceRuleSet {
     this.contentRule,
     this.contentInitRule,
     this.contentDecryptRule,
+    this.contentReplaceRegex,
+    this.tocNextUrlRule,
+    this.contentNextUrlRule,
     this.exploreInitRule,
     this.exploreListRule,
     this.exploreTitleRule,
@@ -53,6 +59,7 @@ class SourceRuleSet {
   final String? detailInitRule;
   final String? detailTitleRule;
   final String? detailAuthorRule;
+  final String? detailCanRenameRule;
   final String? detailIntroRule;
   final String? detailCoverUrlRule;
   final String? detailTocUrlRule;
@@ -67,6 +74,9 @@ class SourceRuleSet {
   final String? contentRule;
   final String? contentInitRule;
   final String? contentDecryptRule;
+  final String? contentReplaceRegex;
+  final String? tocNextUrlRule;
+  final String? contentNextUrlRule;
 
   final String? exploreInitRule;
   final String? exploreListRule;
@@ -93,6 +103,7 @@ class SourceRuleSet {
     String? detailInitRule,
     String? detailTitleRule,
     String? detailAuthorRule,
+    String? detailCanRenameRule,
     String? detailIntroRule,
     String? detailCoverUrlRule,
     String? detailTocUrlRule,
@@ -105,6 +116,9 @@ class SourceRuleSet {
     String? contentRule,
     String? contentInitRule,
     String? contentDecryptRule,
+    String? contentReplaceRegex,
+    String? tocNextUrlRule,
+    String? contentNextUrlRule,
     String? exploreInitRule,
     String? exploreListRule,
     String? exploreTitleRule,
@@ -131,6 +145,7 @@ class SourceRuleSet {
       detailInitRule: detailInitRule ?? this.detailInitRule,
       detailTitleRule: detailTitleRule ?? this.detailTitleRule,
       detailAuthorRule: detailAuthorRule ?? this.detailAuthorRule,
+      detailCanRenameRule: detailCanRenameRule ?? this.detailCanRenameRule,
       detailIntroRule: detailIntroRule ?? this.detailIntroRule,
       detailCoverUrlRule: detailCoverUrlRule ?? this.detailCoverUrlRule,
       detailTocUrlRule: detailTocUrlRule ?? this.detailTocUrlRule,
@@ -143,11 +158,13 @@ class SourceRuleSet {
       contentRule: contentRule ?? this.contentRule,
       contentInitRule: contentInitRule ?? this.contentInitRule,
       contentDecryptRule: contentDecryptRule ?? this.contentDecryptRule,
+      contentReplaceRegex: contentReplaceRegex ?? this.contentReplaceRegex,
+      tocNextUrlRule: tocNextUrlRule ?? this.tocNextUrlRule,
+      contentNextUrlRule: contentNextUrlRule ?? this.contentNextUrlRule,
       exploreInitRule: exploreInitRule ?? this.exploreInitRule,
       exploreListRule: exploreListRule ?? this.exploreListRule,
       exploreTitleRule: exploreTitleRule ?? this.exploreTitleRule,
-      exploreDetailUrlRule:
-          exploreDetailUrlRule ?? this.exploreDetailUrlRule,
+      exploreDetailUrlRule: exploreDetailUrlRule ?? this.exploreDetailUrlRule,
       exploreAuthorRule: exploreAuthorRule ?? this.exploreAuthorRule,
       exploreIntroRule: exploreIntroRule ?? this.exploreIntroRule,
       exploreCoverUrlRule: exploreCoverUrlRule ?? this.exploreCoverUrlRule,
@@ -173,6 +190,7 @@ class SourceRuleSet {
       'detailInitRule': detailInitRule,
       'detailTitleRule': detailTitleRule,
       'detailAuthorRule': detailAuthorRule,
+      'detailCanRenameRule': detailCanRenameRule,
       'detailIntroRule': detailIntroRule,
       'detailCoverUrlRule': detailCoverUrlRule,
       'detailTocUrlRule': detailTocUrlRule,
@@ -185,6 +203,9 @@ class SourceRuleSet {
       'contentRule': contentRule,
       'contentInitRule': contentInitRule,
       'contentDecryptRule': contentDecryptRule,
+      'contentReplaceRegex': contentReplaceRegex,
+      'tocNextUrlRule': tocNextUrlRule,
+      'contentNextUrlRule': contentNextUrlRule,
       'exploreInitRule': exploreInitRule,
       'exploreListRule': exploreListRule,
       'exploreTitleRule': exploreTitleRule,
@@ -215,6 +236,7 @@ class SourceRuleSet {
       detailInitRule: _asNullableString(json['detailInitRule']),
       detailTitleRule: _asNullableString(json['detailTitleRule']),
       detailAuthorRule: _asNullableString(json['detailAuthorRule']),
+      detailCanRenameRule: _asNullableString(json['detailCanRenameRule']),
       detailIntroRule: _asNullableString(json['detailIntroRule']),
       detailCoverUrlRule: _asNullableString(json['detailCoverUrlRule']),
       detailTocUrlRule: _asNullableString(json['detailTocUrlRule']),
@@ -227,6 +249,9 @@ class SourceRuleSet {
       contentRule: _asNullableString(json['contentRule']),
       contentInitRule: _asNullableString(json['contentInitRule']),
       contentDecryptRule: _asNullableString(json['contentDecryptRule']),
+      contentReplaceRegex: _asNullableString(json['contentReplaceRegex']),
+      tocNextUrlRule: _asNullableString(json['tocNextUrlRule']),
+      contentNextUrlRule: _asNullableString(json['contentNextUrlRule']),
       exploreInitRule: _asNullableString(json['exploreInitRule']),
       exploreListRule: _asNullableString(json['exploreListRule']),
       exploreTitleRule: _asNullableString(json['exploreTitleRule']),
@@ -289,6 +314,9 @@ class SourceDefinition {
     this.comment,
     this.exploreEnabled = false,
     this.exploreUrl,
+    this.concurrentRate,
+    this.jsLib,
+    this.jsCapability = SourceJsCapability.full,
     Map<String, dynamic>? originalSource,
   }) : headers = Map.unmodifiable({...headers}),
        originalSource = _deepCopyMap(originalSource);
@@ -307,6 +335,9 @@ class SourceDefinition {
   final String? comment;
   final bool exploreEnabled;
   final String? exploreUrl;
+  final String? concurrentRate;
+  final String? jsLib;
+  final SourceJsCapability jsCapability;
   final Map<String, dynamic>? originalSource;
 
   bool get isMangaSource => sourceType == 2;
@@ -350,6 +381,11 @@ class SourceDefinition {
     bool? exploreEnabled,
     String? exploreUrl,
     bool clearExploreUrl = false,
+    String? concurrentRate,
+    bool clearConcurrentRate = false,
+    String? jsLib,
+    bool clearJsLib = false,
+    SourceJsCapability? jsCapability,
     Map<String, dynamic>? originalSource,
     bool clearOriginalSource = false,
   }) {
@@ -372,6 +408,10 @@ class SourceDefinition {
       comment: clearComment ? null : (comment ?? this.comment),
       exploreEnabled: exploreEnabled ?? this.exploreEnabled,
       exploreUrl: clearExploreUrl ? null : (exploreUrl ?? this.exploreUrl),
+      concurrentRate:
+          clearConcurrentRate ? null : (concurrentRate ?? this.concurrentRate),
+      jsLib: clearJsLib ? null : (jsLib ?? this.jsLib),
+      jsCapability: jsCapability ?? this.jsCapability,
       originalSource:
           clearOriginalSource ? null : (originalSource ?? this.originalSource),
     );
@@ -393,6 +433,9 @@ class SourceDefinition {
       'comment': comment,
       'exploreEnabled': exploreEnabled,
       'exploreUrl': exploreUrl,
+      'concurrentRate': concurrentRate,
+      'jsLib': jsLib,
+      'jsCapability': jsCapability.name,
       'originalSource': originalSource,
     };
   }
@@ -424,6 +467,9 @@ class SourceDefinition {
       comment: _nullableString(json['comment']),
       exploreEnabled: _asBool(json['exploreEnabled']) ?? false,
       exploreUrl: _nullableString(json['exploreUrl']),
+      concurrentRate: _nullableString(json['concurrentRate']),
+      jsLib: _nullableString(json['jsLib']),
+      jsCapability: _parseJsCapability(json['jsCapability']),
       originalSource: _deepCopyMap(json['originalSource']),
     );
   }
@@ -525,5 +571,16 @@ class SourceDefinition {
       return DateTime.tryParse(value);
     }
     return null;
+  }
+
+  static SourceJsCapability _parseJsCapability(Object? value) {
+    if (value is String) {
+      for (final item in SourceJsCapability.values) {
+        if (item.name == value) {
+          return item;
+        }
+      }
+    }
+    return SourceJsCapability.full;
   }
 }

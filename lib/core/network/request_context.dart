@@ -18,6 +18,7 @@ class RequestContext {
     this.retryStatusCodes = const {408, 429, 500, 502, 503, 504},
     this.stage = ErrorStage.search,
     this.sourceId,
+    this.sourceConcurrentRate,
   });
 
   final String url;
@@ -34,6 +35,7 @@ class RequestContext {
   final Set<int> retryStatusCodes;
   final ErrorStage stage;
   final String? sourceId;
+  final String? sourceConcurrentRate;
 
   bool shouldRetryStatusCode(int statusCode) {
     return retryStatusCodes.contains(statusCode);

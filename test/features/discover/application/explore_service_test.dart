@@ -138,7 +138,7 @@ void main() {
         exploreUrl: '推荐::/discover?page={{page}}',
         rules: const SourceRuleSet(
           exploreInitRule: '/explore/init',
-          exploreListRule: '.book-item@html',
+          exploreListRule: '-.book-item@html',
           exploreTitleRule: '.book-title@text',
           exploreDetailUrlRule: '.book-title@href',
           exploreAuthorRule: '.book-author@text',
@@ -197,7 +197,7 @@ void main() {
       expect(capturedPageSize, 20);
       expect(capturedSource?.rules.searchRule, '/discover?page={{page}}');
       expect(capturedSource?.rules.searchInitRule, '/explore/init');
-      expect(capturedSource?.rules.searchListRule, '.book-item@html');
+      expect(capturedSource?.rules.searchListRule, '-.book-item@html');
       expect(capturedSource?.rules.searchTitleRule, '.book-title@text');
       expect(capturedSource?.rules.searchDetailUrlRule, '.book-title@href');
       expect(capturedSource?.rules.searchAuthorRule, '.book-author@text');

@@ -5,6 +5,7 @@ import 'dart:typed_data';
 import 'package:charset/charset.dart';
 import 'package:flutter_appread/core/errors/app_exception.dart';
 import 'package:flutter_appread/core/errors/error_codes.dart';
+import 'package:flutter_appread/core/webview/webview_executor.dart';
 import 'package:flutter_appread/domain/entities/source_definition.dart';
 import 'package:flutter_appread/domain/repositories/source_repository.dart';
 import 'package:flutter_appread/features/reader/application/chapter_content_service.dart';
@@ -57,6 +58,163 @@ void main() {
       expect(first.fromCache, isFalse);
       expect(second.fromCache, isTrue);
       expect(hitCount, 1);
+
+      await server.close(force: true);
+    });
+
+    test('applies content replaceRegex rules', () async {
+      final server = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
+      server.listen((request) async {
+        request.response
+          ..statusCode = 200
+          ..write('<div class="content">第一段 REMOVE_ME 第二段</div>');
+        await request.response.close();
+      });
+
+      final baseUrl = 'http://${server.address.host}:${server.port}';
+      final repository = _FakeSourceRepository([
+        SourceDefinition(
+          id: 's_replace_regex',
+          name: '替换源',
+          baseUrl: baseUrl,
+          rules: const SourceRuleSet(
+            contentRule: '.content@text',
+            contentReplaceRegex: r'REMOVE_ME##',
+          ),
+        ),
+      ]);
+
+      final service = ChapterContentService(sourceRepository: repository);
+      final result = await service.load(
+        sourceId: 's_replace_regex',
+        chapterUrl: '$baseUrl/chapter-replace',
+      );
+
+      expect(result.content, contains('第一段'));
+      expect(result.content, contains('第二段'));
+      expect(result.content, isNot(contains('REMOVE_ME')));
+
+      await server.close(force: true);
+    });
+
+    test('loads paged content via nextContentUrl rule', () async {
+      final server = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
+      server.listen((request) async {
+        if (request.uri.path == '/chapter/1') {
+          request.response
+            ..statusCode = 200
+            ..write('''
+              <div class="content">第一段</div>
+              <a class="next" href="/chapter/1-p2">下一页</a>
+            ''');
+        } else if (request.uri.path == '/chapter/1-p2') {
+          request.response
+            ..statusCode = 200
+            ..write('<div class="content">第二段</div>');
+        } else {
+          request.response
+            ..statusCode = 404
+            ..write('not found');
+        }
+        await request.response.close();
+      });
+
+      final baseUrl = 'http://${server.address.host}:${server.port}';
+      final repository = _FakeSourceRepository([
+        SourceDefinition(
+          id: 's_next_content',
+          name: '正文翻页源',
+          baseUrl: baseUrl,
+          rules: const SourceRuleSet(
+            contentRule: '.content@text',
+            contentNextUrlRule: '.next@href',
+          ),
+        ),
+      ]);
+
+      final service = ChapterContentService(sourceRepository: repository);
+      final result = await service.load(
+        sourceId: 's_next_content',
+        chapterUrl: '$baseUrl/chapter/1',
+      );
+
+      expect(result.content, contains('第一段'));
+      expect(result.content, contains('第二段'));
+
+      await server.close(force: true);
+    });
+
+    test('respects retry option in chapter request url', () async {
+      final server = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
+      var requestCount = 0;
+      server.listen((request) async {
+        requestCount += 1;
+        if (requestCount == 1) {
+          request.response
+            ..statusCode = 500
+            ..write('error');
+        } else {
+          request.response
+            ..statusCode = 200
+            ..write('<div class="content">重试成功</div>');
+        }
+        await request.response.close();
+      });
+
+      final baseUrl = 'http://${server.address.host}:${server.port}';
+      final repository = _FakeSourceRepository([
+        SourceDefinition(
+          id: 's_retry_content',
+          name: '重试源',
+          baseUrl: baseUrl,
+          rules: const SourceRuleSet(contentRule: '.content@text'),
+        ),
+      ]);
+
+      final service = ChapterContentService(sourceRepository: repository);
+      final result = await service.load(
+        sourceId: 's_retry_content',
+        chapterUrl: '$baseUrl/chapter-retry,{"retry":1}',
+      );
+
+      expect(result.content, contains('重试成功'));
+      expect(requestCount, 2);
+
+      await server.close(force: true);
+    });
+
+    test('passes source/book/chapter js context into content rules', () async {
+      final server = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
+      server.listen((request) async {
+        request.response
+          ..statusCode = 200
+          ..write('<div class="content">ignored</div>');
+        await request.response.close();
+      });
+
+      final baseUrl = 'http://${server.address.host}:${server.port}';
+      final repository = _FakeSourceRepository([
+        SourceDefinition(
+          id: 's_ctx_content',
+          name: 'JS正文源',
+          baseUrl: baseUrl,
+          rules: const SourceRuleSet(
+            contentRule:
+                "@js:book.id + '|' + chapter.chapterUrl + '|' + source.bookSourceName",
+          ),
+        ),
+      ]);
+
+      final service = ChapterContentService(sourceRepository: repository);
+      final result = await service.load(
+        sourceId: 's_ctx_content',
+        chapterUrl: '$baseUrl/chapter/42',
+        bookId: 'book_ctx_42',
+        chapterIndex: 3,
+        chapterTitle: '第三章',
+      );
+
+      expect(result.content, 'book_ctx_42|$baseUrl/chapter/42|JS正文源');
 
       await server.close(force: true);
     });
@@ -581,6 +739,67 @@ $baseUrl/content, {
       await server.close(force: true);
     });
 
+    test('persists java.put/java.get as book-scoped variables', () async {
+      final server = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
+      server.listen((request) async {
+        request.response
+          ..statusCode = 200
+          ..write('<div class="body">book variable</div>');
+        await request.response.close();
+      });
+
+      final baseUrl = 'http://${server.address.host}:${server.port}';
+      final repository = _FakeSourceRepository([
+        SourceDefinition(
+          id: 's_book_scope_content',
+          name: 'book-scope-content',
+          baseUrl: baseUrl,
+          rules: const SourceRuleSet(
+            contentRule:
+                '@js:var saved = java.get("bk"); saved ? saved : (java.put("bk", chapter.chapterUrl), "init")',
+          ),
+        ),
+      ]);
+
+      final service = ChapterContentService(sourceRepository: repository);
+      final first = await service.load(
+        sourceId: 's_book_scope_content',
+        chapterUrl: '$baseUrl/chapter-1',
+        bookId: 'book-a',
+      );
+      expect(first.content, 'init');
+
+      final second = await service.load(
+        sourceId: 's_book_scope_content',
+        chapterUrl: '$baseUrl/chapter-2',
+        bookId: 'book-a',
+      );
+      expect(second.content, '$baseUrl/chapter-1');
+
+      final third = await service.load(
+        sourceId: 's_book_scope_content',
+        chapterUrl: '$baseUrl/chapter-3',
+        bookId: 'book-b',
+      );
+      expect(third.content, 'init');
+
+      final persisted =
+          repository.sources
+                  .firstWhere((item) => item.id == 's_book_scope_content')
+                  .originalSource?[r'_appread_js_book_variables']
+              as Map?;
+      expect(
+        persisted?['book-a'],
+        isA<Map>().having((value) => value['bk'], 'bk', '$baseUrl/chapter-1'),
+      );
+      expect(
+        persisted?['book-b'],
+        isA<Map>().having((value) => value['bk'], 'bk', '$baseUrl/chapter-3'),
+      );
+
+      await server.close(force: true);
+    });
+
     test('supports xpath-style content rule', () async {
       final server = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
       server.listen((request) async {
@@ -658,6 +877,74 @@ $baseUrl/content, {
         await server.close(force: true);
       },
     );
+
+    test('uses sourceRegex matched resource url for webView content', () async {
+      final repository = _FakeSourceRepository([
+        SourceDefinition(
+          id: 's_webview_content_regex',
+          name: 'WebView正文嗅探源',
+          baseUrl: 'https://example.com',
+          rules: const SourceRuleSet(contentRule: '@js:result'),
+        ),
+      ]);
+      final webViewExecutor = _FakeWebViewExecutor(
+        body: '<html><body>ignored</body></html>',
+        matchedResourceUrl: 'https://cdn.example.com/audio/ch1.m3u8',
+      );
+
+      final service = ChapterContentService(
+        sourceRepository: repository,
+        webViewExecutor: webViewExecutor,
+      );
+      final result = await service.load(
+        sourceId: 's_webview_content_regex',
+        chapterUrl:
+            'https://example.com/ch1,{"webView":true,"sourceRegex":"cdn\\\\.example\\\\.com","webJs":"window.__ok=true;"}',
+      );
+
+      expect(result.content, 'https://cdn.example.com/audio/ch1.m3u8');
+      expect(webViewExecutor.callCount, 1);
+      expect(webViewExecutor.lastRequest?.sourceRegex, r'cdn\.example\.com');
+      expect(webViewExecutor.lastRequest?.webJs, 'window.__ok=true;');
+    });
+
+    test('falls back to HTTP when WebView content request throws', () async {
+      final server = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
+      server.listen((request) async {
+        request.response
+          ..statusCode = 200
+          ..write('<div class="content">HTTP正文回退</div>');
+        await request.response.close();
+      });
+
+      final baseUrl = 'http://${server.address.host}:${server.port}';
+      final repository = _FakeSourceRepository([
+        SourceDefinition(
+          id: 's_webview_content_fallback',
+          name: 'WebView正文回退源',
+          baseUrl: baseUrl,
+          rules: const SourceRuleSet(contentRule: '.content@text'),
+        ),
+      ]);
+      final webViewExecutor = _FakeWebViewExecutor(
+        body: '<html><body>ignored</body></html>',
+        error: StateError('webview content crashed'),
+      );
+
+      final service = ChapterContentService(
+        sourceRepository: repository,
+        webViewExecutor: webViewExecutor,
+      );
+      final result = await service.load(
+        sourceId: 's_webview_content_fallback',
+        chapterUrl: '$baseUrl/chapter-1,{"webView":true}',
+      );
+
+      expect(webViewExecutor.callCount, 1);
+      expect(result.content, contains('HTTP正文回退'));
+
+      await server.close(force: true);
+    });
 
     test('throws when content rule is missing', () async {
       final repository = _FakeSourceRepository([
@@ -754,5 +1041,36 @@ class _FakeSourceRepository implements SourceRepository {
   @override
   Stream<List<SourceDefinition>> watchAll() {
     return Stream.value(List.unmodifiable(sources));
+  }
+}
+
+class _FakeWebViewExecutor extends WebViewExecutor {
+  _FakeWebViewExecutor({
+    required this.body,
+    this.matchedResourceUrl,
+    this.error,
+  });
+
+  final String body;
+  final String? matchedResourceUrl;
+  final Object? error;
+  int callCount = 0;
+  WebViewRequestPayload? lastRequest;
+
+  @override
+  Future<WebViewResponsePayload> load({
+    required WebViewRequestPayload request,
+  }) async {
+    callCount += 1;
+    lastRequest = request;
+    if (error != null) {
+      throw error!;
+    }
+    return WebViewResponsePayload(
+      statusCode: 200,
+      body: body,
+      finalUrl: request.url,
+      matchedResourceUrl: matchedResourceUrl,
+    );
   }
 }

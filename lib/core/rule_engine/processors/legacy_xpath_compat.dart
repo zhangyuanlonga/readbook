@@ -30,7 +30,7 @@ class LegacyXPathCompat {
 
     final normalized = <String>[];
     for (final candidate in candidates) {
-      final mapped = _buildSingleRule(
+      final mapped = _buildLegacyCssRule(
         candidate,
         fallbackExtractor: fallbackExtractor,
         preferredAttribute: preferredAttribute,
@@ -48,7 +48,78 @@ class LegacyXPathCompat {
     return normalized.toSet().join('||');
   }
 
-  static String? _buildSingleRule(
+  static String? buildNativeRuleExpression({
+    required String expression,
+    required String fallbackExtractor,
+    String? preferredAttribute,
+    bool includeLegacyFallback = true,
+  }) {
+    final candidates = expression
+        .split('||')
+        .map((item) => item.trim())
+        .where((item) => item.isNotEmpty)
+        .toList(growable: false);
+    if (candidates.isEmpty) {
+      return null;
+    }
+
+    final normalized = <String>[];
+    for (final candidate in candidates) {
+      final core = _parseCore(
+        candidate,
+        fallbackExtractor: fallbackExtractor,
+        preferredAttribute: preferredAttribute,
+      );
+      if (core == null || core.path.isEmpty) {
+        return null;
+      }
+
+      final native = 'xpath:${core.path}@${core.extractor}';
+      normalized.add(native);
+
+      if (includeLegacyFallback) {
+        final legacy = _buildLegacyCssRule(
+          candidate,
+          fallbackExtractor: fallbackExtractor,
+          preferredAttribute: preferredAttribute,
+        );
+        if (legacy != null && legacy.isNotEmpty) {
+          normalized.add(legacy);
+        }
+      }
+    }
+
+    if (normalized.isEmpty) {
+      return null;
+    }
+
+    return normalized.toSet().join('||');
+  }
+
+  static String? _buildLegacyCssRule(
+    String expression, {
+    required String fallbackExtractor,
+    String? preferredAttribute,
+  }) {
+    final core = _parseCore(
+      expression,
+      fallbackExtractor: fallbackExtractor,
+      preferredAttribute: preferredAttribute,
+    );
+    if (core == null || core.path.isEmpty) {
+      return null;
+    }
+
+    final extraction = _extractTrailingAccessor(core.path);
+    final css = _convertPathToCss(extraction.path);
+    if (css == null || css.isEmpty) {
+      return null;
+    }
+
+    return 'html:$css@${core.extractor}';
+  }
+
+  static _XPathCore? _parseCore(
     String expression, {
     required String fallbackExtractor,
     String? preferredAttribute,
@@ -68,20 +139,49 @@ class LegacyXPathCompat {
       return null;
     }
 
-    final extraction = _extractTrailingAccessor(text);
-    final css = _convertPathToCss(extraction.path);
-    if (css == null || css.isEmpty) {
-      return null;
+    final explicitExtractor = _extractExplicitExtractor(text);
+    if (explicitExtractor != null) {
+      final normalizedPath = explicitExtractor.path.trim();
+      if (normalizedPath.isEmpty) {
+        return null;
+      }
+      return _XPathCore(
+        path: normalizedPath,
+        extractor: explicitExtractor.extractor,
+      );
     }
 
+    final inferred = _extractTrailingAccessor(text);
     final extractor =
-        extraction.extractor ??
+        inferred.extractor ??
         _normalizeFallbackExtractor(
           fallbackExtractor,
           preferredAttribute: preferredAttribute,
         );
+    return _XPathCore(path: text.trim(), extractor: extractor);
+  }
 
-    return 'html:$css@$extractor';
+  static _XPathCore? _extractExplicitExtractor(String expression) {
+    final match = RegExp(
+      r'@(text|html|innerhtml|outerhtml|attr\([^)]+\))$',
+      caseSensitive: false,
+    ).firstMatch(expression.trim());
+    if (match == null) {
+      return null;
+    }
+
+    final rawExtractor = match.group(1)?.trim().toLowerCase();
+    if (rawExtractor == null || rawExtractor.isEmpty) {
+      return null;
+    }
+
+    final path = expression.substring(0, match.start).trim();
+    if (path.isEmpty) {
+      return null;
+    }
+
+    final extractor = rawExtractor == 'innerhtml' ? 'html' : rawExtractor;
+    return _XPathCore(path: path, extractor: extractor);
   }
 
   static _XPathExtraction _extractTrailingAccessor(String path) {
@@ -363,4 +463,11 @@ class _XPathExtraction {
 
   final String path;
   final String? extractor;
+}
+
+class _XPathCore {
+  const _XPathCore({required this.path, required this.extractor});
+
+  final String path;
+  final String extractor;
 }

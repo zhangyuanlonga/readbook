@@ -5,6 +5,7 @@ import 'package:charset/charset.dart';
 import 'package:flutter_appread/core/errors/app_exception.dart';
 import 'package:flutter_appread/core/errors/error_codes.dart';
 import 'package:flutter_appread/core/network/http_client.dart';
+import 'package:flutter_appread/core/webview/webview_executor.dart';
 import 'package:flutter_appread/domain/entities/source_definition.dart';
 import 'package:flutter_appread/domain/repositories/source_repository.dart';
 import 'package:flutter_appread/features/search/application/search_service.dart';
@@ -198,6 +199,124 @@ url+so+"?searchkey={{key}}"
       await server.close(force: true);
     });
 
+    test('supports "-" prefixed search list rule reverse order', () async {
+      final server = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
+      server.listen((request) async {
+        request.response
+          ..statusCode = 200
+          ..write('''
+            <div class="item"><a class="title" href="/book/1">第一本</a></div>
+            <div class="item"><a class="title" href="/book/2">第二本</a></div>
+          ''');
+        await request.response.close();
+      });
+
+      final baseUrl = 'http://${server.address.host}:${server.port}';
+      final service = SearchService(
+        sourceRepository: _FakeSourceRepository(const <SourceDefinition>[]),
+      );
+      final result = await service.searchSingleSource(
+        source: SourceDefinition(
+          id: 's_reverse',
+          name: '倒序源',
+          baseUrl: baseUrl,
+          rules: const SourceRuleSet(
+            searchRule: '/search?key={{key}}',
+            searchListRule: '-.item@html',
+            searchTitleRule: '.title@text',
+            searchDetailUrlRule: '.title@href',
+          ),
+        ),
+        keyword: '凡人',
+      );
+
+      expect(result.books, hasLength(2));
+      expect(result.books.first.title, '第二本');
+      expect(result.books.last.title, '第一本');
+
+      await server.close(force: true);
+    });
+
+    test('passes source js context into search parse rules', () async {
+      final server = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
+      server.listen((request) async {
+        request.response
+          ..statusCode = 200
+          ..write(
+            '<div class="item"><a class="title" href="/book/raw">原始标题</a></div>',
+          );
+        await request.response.close();
+      });
+
+      final baseUrl = 'http://${server.address.host}:${server.port}';
+      final repository = _FakeSourceRepository([
+        SourceDefinition(
+          id: 's_js_context',
+          name: 'JS上下文源',
+          baseUrl: baseUrl,
+          rules: const SourceRuleSet(
+            searchRule: '/ctx?key={{key}}',
+            searchListRule: '.item@html',
+            searchTitleRule: '.title@text',
+            searchDetailUrlRule: "@js:source.bookSourceUrl + '/book/from-js'",
+          ),
+        ),
+      ]);
+
+      final service = SearchService(sourceRepository: repository);
+      final report = await service.search(
+        keyword: '凡人',
+        sourceIds: const ['s_js_context'],
+      );
+
+      expect(report.books, hasLength(1));
+      expect(report.books.first.title, '原始标题');
+      expect(report.books.first.detailUrl, '$baseUrl/book/from-js');
+
+      await server.close(force: true);
+    });
+
+    test('injects source jsLib into search parse rules', () async {
+      final server = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
+      server.listen((request) async {
+        request.response
+          ..statusCode = 200
+          ..write(
+            '<div class="item"><a class="title" href="/book/raw">原始标题</a></div>',
+          );
+        await request.response.close();
+      });
+
+      final baseUrl = 'http://${server.address.host}:${server.port}';
+      final repository = _FakeSourceRepository([
+        SourceDefinition(
+          id: 's_js_lib_context',
+          name: 'JS库上下文源',
+          baseUrl: baseUrl,
+          jsLib:
+              'function buildDetailUrl(base) { return base + "/book/from-js-lib"; }',
+          rules: const SourceRuleSet(
+            searchRule: '/ctx?key={{key}}',
+            searchListRule: '.item@html',
+            searchTitleRule: '.title@text',
+            searchDetailUrlRule: '@js:buildDetailUrl(source.bookSourceUrl)',
+          ),
+        ),
+      ]);
+
+      final service = SearchService(sourceRepository: repository);
+      final report = await service.search(
+        keyword: '凡人',
+        sourceIds: const ['s_js_lib_context'],
+      );
+
+      expect(report.books, hasLength(1));
+      expect(report.books.first.title, '原始标题');
+      expect(report.books.first.detailUrl, '$baseUrl/book/from-js-lib');
+
+      await server.close(force: true);
+    });
+
     test('searches enabled sources and keeps per-source failures', () async {
       final server = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
       server.listen((request) async {
@@ -295,6 +414,52 @@ url+so+"?searchkey={{key}}"
 
       expect(report.books, hasLength(1));
       expect(report.books.first.title, '剑来');
+
+      await server.close(force: true);
+    });
+
+    test('supports retry option in searchUrl postfix options', () async {
+      final server = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
+      var requestCount = 0;
+      server.listen((request) async {
+        requestCount += 1;
+        if (requestCount == 1) {
+          request.response
+            ..statusCode = 500
+            ..write('error');
+        } else {
+          request.response
+            ..statusCode = 200
+            ..write('''
+              <div class="item">
+                <a class="name" href="/book/retry">重试成功</a>
+              </div>
+            ''');
+        }
+        await request.response.close();
+      });
+
+      final baseUrl = 'http://${server.address.host}:${server.port}';
+      final repository = _FakeSourceRepository([
+        SourceDefinition(
+          id: 's_retry',
+          name: '重试源',
+          baseUrl: baseUrl,
+          rules: SourceRuleSet(
+            searchRule: '$baseUrl/search,{"retry":1}',
+            searchListRule: '.item@html',
+            searchTitleRule: '.name@text',
+            searchDetailUrlRule: '.name@href',
+          ),
+        ),
+      ]);
+
+      final service = SearchService(sourceRepository: repository);
+      final report = await service.search(keyword: 'retry');
+
+      expect(report.books, hasLength(1));
+      expect(report.books.first.title, '重试成功');
+      expect(requestCount, 2);
 
       await server.close(force: true);
     });
@@ -1950,6 +2115,218 @@ url+so+JSON.stringify(post)
       await server.close(force: true);
     });
 
+    test(
+      'routes request to WebView executor when webView option is true',
+      () async {
+        final webViewExecutor = _FakeWebViewExecutor(
+          body: '''
+          <div class="item">
+            <a class="name" href="/book/webview-1">凡人修仙传</a>
+          </div>
+        ''',
+        );
+        final repository = _FakeSourceRepository([
+          SourceDefinition(
+            id: 's_webview_search',
+            name: 'WebView搜索源',
+            baseUrl: 'https://example.com',
+            rules: const SourceRuleSet(
+              searchRule: '/search,{"webView":true}',
+              searchListRule: '.item@html',
+              searchTitleRule: '.name@text',
+              searchDetailUrlRule: '.name@href',
+            ),
+          ),
+        ]);
+
+        final service = SearchService(
+          sourceRepository: repository,
+          webViewExecutor: webViewExecutor,
+        );
+        final report = await service.search(keyword: '凡人');
+
+        expect(report.books, hasLength(1));
+        expect(report.books.first.title, '凡人修仙传');
+        expect(
+          report.books.first.detailUrl,
+          'https://example.com/book/webview-1',
+        );
+        expect(webViewExecutor.callCount, 1);
+        expect(webViewExecutor.lastRequest?.url, 'https://example.com/search');
+      },
+    );
+
+    test('passes webJs and sourceRegex to WebView executor', () async {
+      final webViewExecutor = _FakeWebViewExecutor(
+        body: '''
+          <div class="item">
+            <a class="name" href="/book/webview-2">诛仙</a>
+          </div>
+        ''',
+      );
+      final repository = _FakeSourceRepository([
+        SourceDefinition(
+          id: 's_webview_search_options',
+          name: 'WebView搜索源-选项',
+          baseUrl: 'https://example.com',
+          rules: const SourceRuleSet(
+            searchRule:
+                '/search,{"webView":true,"webJs":"window.__x=1;","sourceRegex":"cdn\\\\.example\\\\.com"}',
+            searchListRule: '.item@html',
+            searchTitleRule: '.name@text',
+            searchDetailUrlRule: '.name@href',
+          ),
+        ),
+      ]);
+
+      final service = SearchService(
+        sourceRepository: repository,
+        webViewExecutor: webViewExecutor,
+      );
+      final report = await service.search(keyword: '诛仙');
+
+      expect(report.books, hasLength(1));
+      expect(webViewExecutor.callCount, 1);
+      expect(webViewExecutor.lastRequest?.webJs, 'window.__x=1;');
+      expect(webViewExecutor.lastRequest?.sourceRegex, r'cdn\.example\.com');
+    });
+
+    test(
+      'uses sourceRegex matched resource url for WebView search response',
+      () async {
+        final webViewExecutor = _FakeWebViewExecutor(
+          body:
+              '<div class="item"><a class="name" href="/ignored">忽略</a></div>',
+          matchedResourceUrl: 'https://cdn.example.com/book/789',
+        );
+        final repository = _FakeSourceRepository([
+          SourceDefinition(
+            id: 's_webview_search_regex',
+            name: 'WebView搜索嗅探源',
+            baseUrl: 'https://example.com',
+            rules: const SourceRuleSet(
+              searchRule:
+                  '/search,{"webView":true,"sourceRegex":"cdn\\\\.example\\\\.com"}',
+              searchListRule:
+                  r'regex:(https://cdn\.example\.com/book/\d+)::group=1',
+              searchTitleRule: '@js:result',
+              searchDetailUrlRule: '@js:result',
+            ),
+          ),
+        ]);
+
+        final service = SearchService(
+          sourceRepository: repository,
+          webViewExecutor: webViewExecutor,
+        );
+        final report = await service.search(keyword: '嗅探');
+
+        expect(report.books, hasLength(1));
+        expect(report.books.first.title, 'https://cdn.example.com/book/789');
+        expect(
+          report.books.first.detailUrl,
+          'https://cdn.example.com/book/789',
+        );
+      },
+    );
+
+    test('falls back to HTTP when WebView search request throws', () async {
+      final server = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
+      server.listen((request) async {
+        request.response
+          ..statusCode = 200
+          ..write(
+            '<div class="item"><a class="name" href="/book/http-1">HTTP回退书籍</a></div>',
+          );
+        await request.response.close();
+      });
+
+      final baseUrl = 'http://${server.address.host}:${server.port}';
+      final webViewExecutor = _FakeWebViewExecutor(
+        body: '<div>ignored</div>',
+        error: StateError('webview crashed'),
+      );
+      final repository = _FakeSourceRepository([
+        SourceDefinition(
+          id: 's_webview_search_fallback',
+          name: 'WebView搜索回退源',
+          baseUrl: baseUrl,
+          rules: const SourceRuleSet(
+            searchRule: '/search,{"webView":true}',
+            searchListRule: '.item@html',
+            searchTitleRule: '.name@text',
+            searchDetailUrlRule: '.name@href',
+          ),
+        ),
+      ]);
+
+      final service = SearchService(
+        sourceRepository: repository,
+        webViewExecutor: webViewExecutor,
+      );
+      final report = await service.search(keyword: '回退');
+
+      expect(webViewExecutor.callCount, 1);
+      expect(report.books, hasLength(1));
+      expect(report.books.first.title, 'HTTP回退书籍');
+      expect(report.books.first.detailUrl, '$baseUrl/book/http-1');
+
+      await server.close(force: true);
+    });
+
+    test('persists java.put variables and restores on next search run', () async {
+      final server = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
+      server.listen((request) async {
+        request.response
+          ..statusCode = 200
+          ..write(
+            '<div class="item"><a class="name" href="/book/1">原始标题</a></div>',
+          );
+        await request.response.close();
+      });
+
+      final baseUrl = 'http://${server.address.host}:${server.port}';
+      final repository = _FakeSourceRepository([
+        SourceDefinition(
+          id: 's_js_variable_persist',
+          name: 'JS变量持久化源',
+          baseUrl: baseUrl,
+          rules: const SourceRuleSet(
+            searchRule: '/search?key={{key}}',
+            searchListRule: '.item@html',
+            searchTitleRule:
+                '@js:var token = java.get("persist_token"); token ? "第二次:" + token : (java.put("persist_token","seed-1"), "第一次")',
+            searchDetailUrlRule: '.name@href',
+          ),
+        ),
+      ]);
+
+      final service = SearchService(sourceRepository: repository);
+
+      final firstReport = await service.search(keyword: '凡人');
+      expect(firstReport.books, hasLength(1));
+      expect(firstReport.books.first.title, '第一次');
+
+      final persisted =
+          repository.sources
+              .firstWhere((item) => item.id == 's_js_variable_persist')
+              .originalSource?[r'_appread_js_variables'];
+      expect(
+        persisted,
+        isA<Map>().having(
+          (value) => value['persist_token'],
+          'persist_token',
+          'seed-1',
+        ),
+      );
+
+      final secondReport = await service.search(keyword: '凡人');
+      expect(secondReport.books, hasLength(1));
+      expect(secondReport.books.first.title, '第二次:seed-1');
+
+      await server.close(force: true);
+    });
+
     test('throws when there is no enabled source', () async {
       final repository = _FakeSourceRepository([
         SourceDefinition(
@@ -2024,5 +2401,36 @@ class _FakeSourceRepository implements SourceRepository {
   @override
   Stream<List<SourceDefinition>> watchAll() {
     return Stream.value(List.unmodifiable(sources));
+  }
+}
+
+class _FakeWebViewExecutor extends WebViewExecutor {
+  _FakeWebViewExecutor({
+    required this.body,
+    this.matchedResourceUrl,
+    this.error,
+  });
+
+  final String body;
+  final String? matchedResourceUrl;
+  final Object? error;
+  int callCount = 0;
+  WebViewRequestPayload? lastRequest;
+
+  @override
+  Future<WebViewResponsePayload> load({
+    required WebViewRequestPayload request,
+  }) async {
+    callCount += 1;
+    lastRequest = request;
+    if (error != null) {
+      throw error!;
+    }
+    return WebViewResponsePayload(
+      statusCode: 200,
+      body: body,
+      finalUrl: request.url,
+      matchedResourceUrl: matchedResourceUrl,
+    );
   }
 }

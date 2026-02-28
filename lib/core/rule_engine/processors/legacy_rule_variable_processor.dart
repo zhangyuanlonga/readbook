@@ -1,4 +1,8 @@
+import 'dart:async';
+
 typedef LegacyPutValueResolver = String? Function(String valueExpression);
+typedef AsyncLegacyPutValueResolver =
+    FutureOr<String?> Function(String valueExpression);
 
 class LegacyRuleVariableProcessor {
   const LegacyRuleVariableProcessor._();
@@ -27,6 +31,30 @@ class LegacyRuleVariableProcessor {
         variables,
       );
       final resolved = resolvePutValue(valueExpression)?.trim();
+      if (resolved == null || resolved.isEmpty) {
+        continue;
+      }
+
+      variables[assignment.key] = resolved;
+      variables[r'$.' + assignment.key] = resolved;
+    }
+
+    return replaceGetTokens(extraction.remainingExpression, variables).trim();
+  }
+
+  static Future<String> resolveExpressionAsync({
+    required String expression,
+    required Map<String, String> variables,
+    required AsyncLegacyPutValueResolver resolvePutValue,
+  }) async {
+    final extraction = _extractPutAssignments(expression);
+
+    for (final assignment in extraction.assignments) {
+      final valueExpression = replaceGetTokens(
+        assignment.valueExpression,
+        variables,
+      );
+      final resolved = (await resolvePutValue(valueExpression))?.trim();
       if (resolved == null || resolved.isEmpty) {
         continue;
       }

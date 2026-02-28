@@ -4,6 +4,7 @@ import 'package:charset/charset.dart';
 import 'package:flutter_appread/core/errors/app_exception.dart';
 import 'package:flutter_appread/core/errors/error_codes.dart';
 import 'package:flutter_appread/core/errors/error_stage.dart';
+import 'package:flutter_appread/core/webview/webview_executor.dart';
 import 'package:flutter_appread/domain/entities/source_definition.dart';
 import 'package:flutter_appread/domain/repositories/source_repository.dart';
 import 'package:flutter_appread/features/book/application/book_detail_service.dart';
@@ -74,6 +75,160 @@ void main() {
       expect(result.chapters.first.title, '第2章');
       expect(result.chapters.first.chapterUrl, '$baseUrl/c2');
       expect(result.tocFromCache, isFalse);
+
+      await server.close(force: true);
+    });
+
+    test('supports "-" prefixed toc list rule reverse order', () async {
+      final server = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
+      server.listen((request) async {
+        if (request.uri.path == '/book/1') {
+          request.response
+            ..statusCode = 200
+            ..write('''
+              <h1 class="title">凡人修仙传</h1>
+              <a class="toc" href="/book/1/toc">目录</a>
+            ''');
+        } else if (request.uri.path == '/book/1/toc') {
+          request.response
+            ..statusCode = 200
+            ..write('''
+              <div class="chapter"><a class="link" href="/c1">第1章</a></div>
+              <div class="chapter"><a class="link" href="/c2">第2章</a></div>
+            ''');
+        } else {
+          request.response
+            ..statusCode = 404
+            ..write('not found');
+        }
+        await request.response.close();
+      });
+
+      final baseUrl = 'http://${server.address.host}:${server.port}';
+      final repository = _FakeSourceRepository([
+        SourceDefinition(
+          id: 's_reverse_toc',
+          name: '目录倒序源',
+          baseUrl: baseUrl,
+          rules: const SourceRuleSet(
+            detailTitleRule: '.title@text',
+            detailTocUrlRule: '.toc@href',
+            tocListRule: '-.chapter@html',
+            tocTitleRule: '.link@text',
+            tocChapterUrlRule: '.link@href',
+          ),
+        ),
+      ]);
+
+      final service = BookDetailService(sourceRepository: repository);
+      final result = await service.load(
+        sourceId: 's_reverse_toc',
+        bookId: 'book_reverse_1',
+        detailUrl: '$baseUrl/book/1',
+      );
+
+      expect(result.chapters, hasLength(2));
+      expect(result.chapters.first.title, '第2章');
+      expect(result.chapters.last.title, '第1章');
+
+      await server.close(force: true);
+    });
+
+    test('loads paged toc via nextTocUrl rule', () async {
+      final server = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
+      server.listen((request) async {
+        if (request.uri.path == '/book/paged') {
+          request.response
+            ..statusCode = 200
+            ..write('<a class="toc" href="/toc/p1">目录</a>');
+        } else if (request.uri.path == '/toc/p1') {
+          request.response
+            ..statusCode = 200
+            ..write('''
+              <div class="chapter"><a class="link" href="/c1">第1章</a></div>
+              <a class="next" href="/toc/p2">下一页</a>
+            ''');
+        } else if (request.uri.path == '/toc/p2') {
+          request.response
+            ..statusCode = 200
+            ..write(
+              '<div class="chapter"><a class="link" href="/c2">第2章</a></div>',
+            );
+        } else {
+          request.response
+            ..statusCode = 404
+            ..write('not found');
+        }
+        await request.response.close();
+      });
+
+      final baseUrl = 'http://${server.address.host}:${server.port}';
+      final repository = _FakeSourceRepository([
+        SourceDefinition(
+          id: 's_toc_next',
+          name: '目录翻页源',
+          baseUrl: baseUrl,
+          rules: const SourceRuleSet(
+            detailTocUrlRule: '.toc@href',
+            tocListRule: '.chapter@html',
+            tocTitleRule: '.link@text',
+            tocChapterUrlRule: '.link@href',
+            tocNextUrlRule: '.next@href',
+          ),
+        ),
+      ]);
+
+      final service = BookDetailService(sourceRepository: repository);
+      final result = await service.load(
+        sourceId: 's_toc_next',
+        bookId: 'book_toc_next',
+        detailUrl: '$baseUrl/book/paged',
+      );
+
+      expect(result.chapters, hasLength(2));
+      expect(result.chapters.first.title, '第1章');
+      expect(result.chapters.last.title, '第2章');
+      expect(result.chapters.last.chapterUrl, '$baseUrl/c2');
+
+      await server.close(force: true);
+    });
+
+    test('passes source/book js context into detail rules', () async {
+      final server = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
+      server.listen((request) async {
+        request.response
+          ..statusCode = 200
+          ..write(
+            '<div class="chapter"><a class="link" href="/c1">第一章</a></div>',
+          );
+        await request.response.close();
+      });
+
+      final baseUrl = 'http://${server.address.host}:${server.port}';
+      final repository = _FakeSourceRepository([
+        SourceDefinition(
+          id: 's_ctx_detail',
+          name: 'JS详情源',
+          baseUrl: baseUrl,
+          rules: const SourceRuleSet(
+            detailTitleRule: "@js:book.id + '|' + source.bookSourceName",
+            tocListRule: '.chapter@html',
+            tocTitleRule: '.link@text',
+            tocChapterUrlRule: '.link@href',
+          ),
+        ),
+      ]);
+
+      final service = BookDetailService(sourceRepository: repository);
+      final result = await service.load(
+        sourceId: 's_ctx_detail',
+        bookId: 'book_ctx_1',
+        detailUrl: '$baseUrl/book/ctx',
+      );
+
+      expect(result.detail.title, 'book_ctx_1|JS详情源');
+      expect(result.chapters, hasLength(1));
+      expect(result.chapters.first.chapterUrl, '$baseUrl/c1');
 
       await server.close(force: true);
     });
@@ -671,6 +826,91 @@ $baseUrl/book/1/toc, {
       },
     );
 
+    test('persists java.put/java.get as book-scoped variables', () async {
+      final server = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
+      server.listen((request) async {
+        if (request.uri.path.startsWith('/book/')) {
+          request.response
+            ..statusCode = 200
+            ..write('<a class="toc" href="/toc">目录</a>');
+        } else if (request.uri.path == '/toc') {
+          request.response
+            ..statusCode = 200
+            ..write(
+              '<div class="chapter"><a class="link" href="/c1">第一章</a></div>',
+            );
+        } else {
+          request.response
+            ..statusCode = 404
+            ..write('not found');
+        }
+        await request.response.close();
+      });
+
+      final baseUrl = 'http://${server.address.host}:${server.port}';
+      final repository = _FakeSourceRepository([
+        SourceDefinition(
+          id: 's_book_scope_detail',
+          name: 'book-scope-detail',
+          baseUrl: baseUrl,
+          rules: const SourceRuleSet(
+            detailTitleRule:
+                '@js:var saved = java.get("detail_key"); saved ? saved : (java.put("detail_key", book.detailUrl), "init")',
+            detailTocUrlRule: '.toc@href',
+            tocListRule: '.chapter@html',
+            tocTitleRule: '.link@text',
+            tocChapterUrlRule: '.link@href',
+          ),
+        ),
+      ]);
+
+      final service = BookDetailService(sourceRepository: repository);
+      final first = await service.load(
+        sourceId: 's_book_scope_detail',
+        bookId: 'book-a',
+        detailUrl: '$baseUrl/book/1',
+      );
+      expect(first.detail.title, 'init');
+
+      final second = await service.load(
+        sourceId: 's_book_scope_detail',
+        bookId: 'book-a',
+        detailUrl: '$baseUrl/book/2',
+      );
+      expect(second.detail.title, '$baseUrl/book/1');
+
+      final third = await service.load(
+        sourceId: 's_book_scope_detail',
+        bookId: 'book-b',
+        detailUrl: '$baseUrl/book/3',
+      );
+      expect(third.detail.title, 'init');
+
+      final persisted =
+          repository.sources
+                  .firstWhere((item) => item.id == 's_book_scope_detail')
+                  .originalSource?[r'_appread_js_book_variables']
+              as Map?;
+      expect(
+        persisted?['book-a'],
+        isA<Map>().having(
+          (value) => value['detail_key'],
+          'detail_key',
+          '$baseUrl/book/1',
+        ),
+      );
+      expect(
+        persisted?['book-b'],
+        isA<Map>().having(
+          (value) => value['detail_key'],
+          'detail_key',
+          '$baseUrl/book/3',
+        ),
+      );
+
+      await server.close(force: true);
+    });
+
     test('supports xpath-style detail and toc rules', () async {
       final server = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
       server.listen((request) async {
@@ -950,6 +1190,238 @@ $baseUrl/book/1/toc, {
 
       await server.close(force: true);
     });
+
+    test(
+      'keeps fallback title/author when canReName evaluates false',
+      () async {
+        final server = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
+        server.listen((request) async {
+          if (request.uri.path == '/book/can-rename-false') {
+            request.response
+              ..statusCode = 200
+              ..write('''
+              <h1 class="title">详情标题</h1>
+              <span class="author">详情作者</span>
+              <a class="toc" href="/book/can-rename-false/toc">目录</a>
+            ''');
+          } else if (request.uri.path == '/book/can-rename-false/toc') {
+            request.response
+              ..statusCode = 200
+              ..write(
+                '<div class="chapter"><a class="link" href="/c1">第一章</a></div>',
+              );
+          } else {
+            request.response
+              ..statusCode = 404
+              ..write('not found');
+          }
+          await request.response.close();
+        });
+
+        final baseUrl = 'http://${server.address.host}:${server.port}';
+        final repository = _FakeSourceRepository([
+          SourceDefinition(
+            id: 's_can_rename_false',
+            name: '重命名关闭测试源',
+            baseUrl: baseUrl,
+            rules: const SourceRuleSet(
+              detailTitleRule: '.title@text',
+              detailAuthorRule: '.author@text',
+              detailCanRenameRule: 'false',
+              detailTocUrlRule: '.toc@href',
+              tocListRule: '.chapter@html',
+              tocTitleRule: '.link@text',
+              tocChapterUrlRule: '.link@href',
+            ),
+          ),
+        ]);
+
+        final service = BookDetailService(sourceRepository: repository);
+        final result = await service.load(
+          sourceId: 's_can_rename_false',
+          bookId: 'book_can_rename_false',
+          detailUrl: '$baseUrl/book/can-rename-false',
+          fallbackTitle: '入口标题',
+          fallbackAuthor: '入口作者',
+        );
+
+        expect(result.detail.title, '入口标题');
+        expect(result.detail.author, '入口作者');
+        expect(result.chapters, hasLength(1));
+
+        await server.close(force: true);
+      },
+    );
+
+    test(
+      'overrides fallback title/author when canReName evaluates true',
+      () async {
+        final server = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
+        server.listen((request) async {
+          if (request.uri.path == '/book/can-rename-true') {
+            request.response
+              ..statusCode = 200
+              ..write('''
+              <h1 class="title">详情标题</h1>
+              <span class="author">详情作者</span>
+              <a class="toc" href="/book/can-rename-true/toc">目录</a>
+            ''');
+          } else if (request.uri.path == '/book/can-rename-true/toc') {
+            request.response
+              ..statusCode = 200
+              ..write(
+                '<div class="chapter"><a class="link" href="/c1">第一章</a></div>',
+              );
+          } else {
+            request.response
+              ..statusCode = 404
+              ..write('not found');
+          }
+          await request.response.close();
+        });
+
+        final baseUrl = 'http://${server.address.host}:${server.port}';
+        final repository = _FakeSourceRepository([
+          SourceDefinition(
+            id: 's_can_rename_true',
+            name: '重命名开启测试源',
+            baseUrl: baseUrl,
+            rules: const SourceRuleSet(
+              detailTitleRule: '.title@text',
+              detailAuthorRule: '.author@text',
+              detailCanRenameRule: 'true',
+              detailTocUrlRule: '.toc@href',
+              tocListRule: '.chapter@html',
+              tocTitleRule: '.link@text',
+              tocChapterUrlRule: '.link@href',
+            ),
+          ),
+        ]);
+
+        final service = BookDetailService(sourceRepository: repository);
+        final result = await service.load(
+          sourceId: 's_can_rename_true',
+          bookId: 'book_can_rename_true',
+          detailUrl: '$baseUrl/book/can-rename-true',
+          fallbackTitle: '入口标题',
+          fallbackAuthor: '入口作者',
+        );
+
+        expect(result.detail.title, '详情标题');
+        expect(result.detail.author, '详情作者');
+        expect(result.chapters, hasLength(1));
+
+        await server.close(force: true);
+      },
+    );
+
+    test(
+      'uses sourceRegex matched resource url for webView detail parsing',
+      () async {
+        final webViewExecutor = _FakeWebViewExecutor(
+          body: '''
+          <div class="ignored">ignored html</div>
+        ''',
+          matchedResourceUrl: 'https://cdn.example.com/ch/101',
+        );
+        final repository = _FakeSourceRepository([
+          SourceDefinition(
+            id: 's_webview_detail_regex',
+            name: 'WebView详情嗅探源',
+            baseUrl: 'https://example.com',
+            rules: const SourceRuleSet(
+              detailTitleRule:
+                  r'regex:(https://cdn\.example\.com/ch/\d+)::group=1',
+              tocListRule: r'regex:(https://cdn\.example\.com/ch/\d+)::group=1',
+              tocTitleRule: '@js:result',
+              tocChapterUrlRule: '@js:result',
+            ),
+          ),
+        ]);
+
+        final service = BookDetailService(
+          sourceRepository: repository,
+          webViewExecutor: webViewExecutor,
+        );
+        final result = await service.load(
+          sourceId: 's_webview_detail_regex',
+          bookId: 'book_webview_detail_regex',
+          detailUrl:
+              'https://example.com/detail,{"webView":true,"sourceRegex":"cdn\\\\.example\\\\.com"}',
+        );
+
+        expect(result.detail.title, 'https://cdn.example.com/ch/101');
+        expect(result.chapters, hasLength(1));
+        expect(
+          result.chapters.first.chapterUrl,
+          'https://cdn.example.com/ch/101',
+        );
+        expect(webViewExecutor.callCount, 1);
+        expect(webViewExecutor.lastRequest?.sourceRegex, r'cdn\.example\.com');
+      },
+    );
+
+    test('falls back to HTTP when WebView detail request throws', () async {
+      final server = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
+      server.listen((request) async {
+        if (request.uri.path == '/detail') {
+          request.response
+            ..statusCode = 200
+            ..write('''
+              <h1 class="title">HTTP详情页</h1>
+              <a class="toc" href="/detail/toc">目录</a>
+            ''');
+        } else if (request.uri.path == '/detail/toc') {
+          request.response
+            ..statusCode = 200
+            ..write(
+              '<div class="chapter"><a class="link" href="/detail/c1">第一章</a></div>',
+            );
+        } else {
+          request.response
+            ..statusCode = 404
+            ..write('not found');
+        }
+        await request.response.close();
+      });
+
+      final baseUrl = 'http://${server.address.host}:${server.port}';
+      final webViewExecutor = _FakeWebViewExecutor(
+        body: '<div>ignored</div>',
+        error: StateError('webview detail crashed'),
+      );
+      final repository = _FakeSourceRepository([
+        SourceDefinition(
+          id: 's_webview_detail_fallback',
+          name: 'WebView详情回退源',
+          baseUrl: baseUrl,
+          rules: const SourceRuleSet(
+            detailTitleRule: '.title@text',
+            detailTocUrlRule: '.toc@href',
+            tocListRule: '.chapter@html',
+            tocTitleRule: '.link@text',
+            tocChapterUrlRule: '.link@href',
+          ),
+        ),
+      ]);
+
+      final service = BookDetailService(
+        sourceRepository: repository,
+        webViewExecutor: webViewExecutor,
+      );
+      final result = await service.load(
+        sourceId: 's_webview_detail_fallback',
+        bookId: 'book_webview_detail_fallback',
+        detailUrl: '$baseUrl/detail,{"webView":true}',
+      );
+
+      expect(webViewExecutor.callCount, 1);
+      expect(result.detail.title, 'HTTP详情页');
+      expect(result.chapters, hasLength(1));
+      expect(result.chapters.first.chapterUrl, '$baseUrl/detail/c1');
+
+      await server.close(force: true);
+    });
   });
 }
 
@@ -1006,5 +1478,36 @@ class _FakeSourceRepository implements SourceRepository {
   @override
   Stream<List<SourceDefinition>> watchAll() {
     return Stream.value(List.unmodifiable(sources));
+  }
+}
+
+class _FakeWebViewExecutor extends WebViewExecutor {
+  _FakeWebViewExecutor({
+    required this.body,
+    this.matchedResourceUrl,
+    this.error,
+  });
+
+  final String body;
+  final String? matchedResourceUrl;
+  final Object? error;
+  int callCount = 0;
+  WebViewRequestPayload? lastRequest;
+
+  @override
+  Future<WebViewResponsePayload> load({
+    required WebViewRequestPayload request,
+  }) async {
+    callCount += 1;
+    lastRequest = request;
+    if (error != null) {
+      throw error!;
+    }
+    return WebViewResponsePayload(
+      statusCode: 200,
+      body: body,
+      finalUrl: request.url,
+      matchedResourceUrl: matchedResourceUrl,
+    );
   }
 }

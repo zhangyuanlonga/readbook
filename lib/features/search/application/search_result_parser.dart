@@ -1,6 +1,7 @@
 import '../../../core/errors/app_exception.dart';
 import '../../../core/errors/error_codes.dart';
 import '../../../core/errors/error_stage.dart';
+import '../../../core/rule_engine/executors/js_executor.dart';
 import '../../../core/rule_engine/rule_engine.dart';
 import '../../../core/rule_engine/processors/legacy_link_post_processor.dart';
 import '../../../core/rule_engine/processors/legacy_rule_compat.dart';
@@ -14,6 +15,7 @@ class SearchParseRules {
     required this.listRule,
     required this.titleRule,
     required this.detailUrlRule,
+    this.listReversed = false,
     this.rawListRule,
     this.rawTitleRule,
     this.rawDetailUrlRule,
@@ -30,6 +32,7 @@ class SearchParseRules {
   final String listRule;
   final String titleRule;
   final String detailUrlRule;
+  final bool listReversed;
   final String? rawListRule;
   final String? rawTitleRule;
   final String? rawDetailUrlRule;
@@ -49,12 +52,13 @@ class SearchResultParser {
 
   final RuleEngine _ruleEngine;
 
-  List<Book> parse({
+  Future<List<Book>> parse({
     required String htmlContent,
     required String sourceId,
     required String baseUrl,
     required SearchParseRules rules,
-  }) {
+    JsExecutionContext? jsContext,
+  }) async {
     if (sourceId.trim().isEmpty) {
       throw AppException(
         code: ErrorCode.validation,
@@ -69,21 +73,25 @@ class SearchResultParser {
 
     final listExpressions = _splitFallbackExpressions(rules.listRule);
     for (final listExpression in listExpressions) {
-      final chunks = _executeAllSingleExpression(
+      final chunks = await _executeAllSingleExpression(
         content: htmlContent,
         expression: listExpression,
         stage: ErrorStage.search,
         rawRule: rules.rawListRule,
+        jsContext: jsContext,
       );
       if (chunks.isEmpty) {
         continue;
       }
 
-      final parsedBooks = _parseBooksFromChunks(
-        chunks: chunks,
+      final orderedChunks =
+          rules.listReversed ? chunks.reversed.toList(growable: false) : chunks;
+      final parsedBooks = await _parseBooksFromChunks(
+        chunks: orderedChunks,
         sourceId: sourceId,
         baseUri: baseUri,
         rules: rules,
+        jsContext: jsContext,
       );
       for (final book in parsedBooks) {
         booksById[book.id] = book;
@@ -105,31 +113,34 @@ class SearchResultParser {
     return booksById.values.toList(growable: false);
   }
 
-  List<Book> _parseBooksFromChunks({
+  Future<List<Book>> _parseBooksFromChunks({
     required List<String> chunks,
     required String sourceId,
     required Uri? baseUri,
     required SearchParseRules rules,
-  }) {
+    JsExecutionContext? jsContext,
+  }) async {
     final output = <Book>[];
 
     for (final chunk in chunks) {
       final variableState = <String, String>{};
 
-      final title = _tryRequired(
+      final title = await _tryRequired(
         content: chunk,
         expression: rules.titleRule,
         rawRule: rules.rawTitleRule,
         variables: variableState,
         fallbackExtractor: 'text',
+        jsContext: jsContext,
       );
-      final detailUrlRaw = _tryRequired(
+      final detailUrlRaw = await _tryRequired(
         content: chunk,
         expression: rules.detailUrlRule,
         rawRule: rules.rawDetailUrlRule,
         variables: variableState,
         fallbackExtractor: 'attr(href)',
         preferredAttribute: 'href',
+        jsContext: jsContext,
       );
 
       if (title == null || detailUrlRaw == null) {
@@ -137,7 +148,9 @@ class SearchResultParser {
       }
 
       final detailUrlValue =
-          rules.detailUrlRule == LegacyScriptRuleFallback.fieldExpression
+          rules.detailUrlRule == LegacyScriptRuleFallback.fieldExpression ||
+                  rules.detailUrlRule.startsWith('js:') ||
+                  rules.detailUrlRule.startsWith('@js:')
               ? detailUrlRaw.trim()
               : LegacyLinkPostProcessor.apply(
                 value: detailUrlRaw,
@@ -152,13 +165,14 @@ class SearchResultParser {
         continue;
       }
 
-      final coverUrl = _tryOptional(
+      final coverUrl = await _tryOptional(
         content: chunk,
         expression: rules.coverUrlRule,
         rawRule: rules.rawCoverUrlRule,
         variables: variableState,
         fallbackExtractor: 'attr(src)',
         preferredAttribute: 'src',
+        jsContext: jsContext,
       );
 
       output.add(
@@ -167,26 +181,29 @@ class SearchResultParser {
           sourceId: sourceId,
           title: title,
           detailUrl: detailUrl,
-          author: _tryOptional(
+          author: await _tryOptional(
             content: chunk,
             expression: rules.authorRule,
             rawRule: rules.rawAuthorRule,
             variables: variableState,
             fallbackExtractor: 'text',
+            jsContext: jsContext,
           ),
-          intro: _tryOptional(
+          intro: await _tryOptional(
             content: chunk,
             expression: rules.introRule,
             rawRule: rules.rawIntroRule,
             variables: variableState,
             fallbackExtractor: 'text',
+            jsContext: jsContext,
           ),
-          latestChapter: _tryOptional(
+          latestChapter: await _tryOptional(
             content: chunk,
             expression: rules.latestChapterRule,
             rawRule: rules.rawLatestChapterRule,
             variables: variableState,
             fallbackExtractor: 'text',
+            jsContext: jsContext,
           ),
           coverUrl: coverUrl == null ? null : _resolveUrl(baseUri, coverUrl),
         ),
@@ -196,38 +213,42 @@ class SearchResultParser {
     return output;
   }
 
-  String? _tryRequired({
+  Future<String?> _tryRequired({
     required String content,
     required String expression,
     required Map<String, String> variables,
     required String fallbackExtractor,
     String? preferredAttribute,
     String? rawRule,
-  }) {
+    JsExecutionContext? jsContext,
+  }) async {
     final variableAwareRaw =
         LegacyRuleVariableProcessor.containsVariableSyntax(rawRule)
             ? rawRule!.trim()
             : null;
 
     if (variableAwareRaw != null) {
-      final resolvedRaw = LegacyRuleVariableProcessor.resolveExpression(
-        expression: variableAwareRaw,
-        variables: variables,
-        resolvePutValue:
-            (valueExpression) => _evaluatePutValue(
-              content: content,
-              valueExpression: valueExpression,
-              fallbackExtractor: fallbackExtractor,
-              preferredAttribute: preferredAttribute,
-            ),
-      );
+      final resolvedRaw =
+          await LegacyRuleVariableProcessor.resolveExpressionAsync(
+            expression: variableAwareRaw,
+            variables: variables,
+            resolvePutValue:
+                (valueExpression) => _evaluatePutValue(
+                  content: content,
+                  valueExpression: valueExpression,
+                  fallbackExtractor: fallbackExtractor,
+                  preferredAttribute: preferredAttribute,
+                  jsContext: jsContext,
+                ),
+          );
 
-      final variableRawResult = _executeRuleLikeExpression(
+      final variableRawResult = await _executeRuleLikeExpression(
         content: content,
         expression: resolvedRaw,
         fallbackExtractor: fallbackExtractor,
         preferredAttribute: preferredAttribute,
         treatLiteralAsValue: true,
+        jsContext: jsContext,
       );
       if (variableRawResult != null) {
         return variableRawResult;
@@ -248,10 +269,11 @@ class SearchResultParser {
       variableAwareExpression,
     )) {
       try {
-        final value = _ruleEngine.executeFirst(
+        final value = await _ruleEngine.executeFirst(
           content: content,
           expression: candidate,
           stage: ErrorStage.search,
+          jsContext: jsContext,
         );
         final normalized = value.trim();
         if (normalized.isNotEmpty) {
@@ -268,14 +290,15 @@ class SearchResultParser {
     );
   }
 
-  String? _tryOptional({
+  Future<String?> _tryOptional({
     required String content,
     required String? expression,
     required String fallbackExtractor,
     required Map<String, String> variables,
     String? preferredAttribute,
     String? rawRule,
-  }) {
+    JsExecutionContext? jsContext,
+  }) async {
     if (expression == null || expression.trim().isEmpty) {
       final variableAwareRaw =
           LegacyRuleVariableProcessor.containsVariableSyntax(rawRule)
@@ -293,6 +316,7 @@ class SearchResultParser {
         variables: variables,
         fallbackExtractor: fallbackExtractor,
         preferredAttribute: preferredAttribute,
+        jsContext: jsContext,
       );
     }
 
@@ -303,15 +327,17 @@ class SearchResultParser {
       variables: variables,
       fallbackExtractor: fallbackExtractor,
       preferredAttribute: preferredAttribute,
+      jsContext: jsContext,
     );
   }
 
-  String? _evaluatePutValue({
+  Future<String?> _evaluatePutValue({
     required String content,
     required String valueExpression,
     required String fallbackExtractor,
     String? preferredAttribute,
-  }) {
+    JsExecutionContext? jsContext,
+  }) async {
     final text = valueExpression.trim();
     if (text.isEmpty) {
       return null;
@@ -323,16 +349,18 @@ class SearchResultParser {
       fallbackExtractor: fallbackExtractor,
       preferredAttribute: preferredAttribute,
       treatLiteralAsValue: true,
+      jsContext: jsContext,
     );
   }
 
-  String? _executeRuleLikeExpression({
+  Future<String?> _executeRuleLikeExpression({
     required String content,
     required String expression,
     required String fallbackExtractor,
     String? preferredAttribute,
     bool treatLiteralAsValue = false,
-  }) {
+    JsExecutionContext? jsContext,
+  }) async {
     final text = expression.trim();
     if (text.isEmpty) {
       return null;
@@ -356,10 +384,11 @@ class SearchResultParser {
 
     for (final candidate in _splitFallbackExpressions(normalizedExpression)) {
       try {
-        final value = _ruleEngine.executeFirst(
+        final value = await _ruleEngine.executeFirst(
           content: content,
           expression: candidate,
           stage: ErrorStage.search,
+          jsContext: jsContext,
         );
         final normalized = value.trim();
         if (normalized.isNotEmpty) {
@@ -382,6 +411,9 @@ class SearchResultParser {
     if (text.isEmpty) {
       return null;
     }
+    if (text.startsWith('js:') || text.startsWith('@js:')) {
+      return text;
+    }
 
     final staticRule = LegacyRuleCompat.extractStaticRuleExpression(text);
     if (staticRule == null || staticRule.isEmpty) {
@@ -390,11 +422,13 @@ class SearchResultParser {
 
     if (staticRule.startsWith('html:') ||
         staticRule.startsWith('json:') ||
-        staticRule.startsWith('regex:')) {
+        staticRule.startsWith('regex:') ||
+        staticRule.startsWith('js:') ||
+        staticRule.startsWith('@js:')) {
       return staticRule;
     }
 
-    final xpathCandidate = LegacyXPathCompat.buildRuleExpression(
+    final xpathCandidate = LegacyXPathCompat.buildNativeRuleExpression(
       expression: staticRule,
       fallbackExtractor: fallbackExtractor,
       preferredAttribute: preferredAttribute,
@@ -414,6 +448,19 @@ class SearchResultParser {
         staticRule.startsWith(r'$[') ||
         staticRule == r'$') {
       return 'json:$staticRule';
+    }
+
+    if (LegacyRuleCompat.looksLikeAllInOneRegexExpression(staticRule) ||
+        LegacyRuleCompat.looksLikeRegexGroupReference(staticRule)) {
+      return staticRule;
+    }
+
+    if (staticRule.contains('{{@@') ||
+        staticRule.contains('{{@css:') ||
+        staticRule.contains('{{@json:') ||
+        staticRule.contains('{{@xpath:') ||
+        staticRule.contains('{{@js:')) {
+      return staticRule;
     }
 
     final htmlCandidate = LegacyRuleCompat.buildHtmlRuleExpression(
@@ -442,22 +489,34 @@ class SearchResultParser {
       return true;
     }
 
+    if (LegacyRuleCompat.looksLikeAllInOneRegexExpression(text) ||
+        LegacyRuleCompat.looksLikeRegexGroupReference(text)) {
+      return true;
+    }
+
     if (text.contains('@') ||
         text.contains('##') ||
         text.contains('||') ||
-        text.contains('&&')) {
+        text.contains('&&') ||
+        text.contains('%%') ||
+        text.contains('{{@@') ||
+        text.contains('{{@css:') ||
+        text.contains('{{@json:') ||
+        text.contains('{{@xpath:') ||
+        text.contains('{{@js:')) {
       return true;
     }
 
     return false;
   }
 
-  List<String> _executeAllSingleExpression({
+  Future<List<String>> _executeAllSingleExpression({
     required String content,
     required String expression,
     required ErrorStage stage,
     String? rawRule,
-  }) {
+    JsExecutionContext? jsContext,
+  }) async {
     if (expression == LegacyScriptRuleFallback.listExpression) {
       return LegacyScriptRuleFallback.evaluateListChunks(
         content: content,
@@ -465,11 +524,22 @@ class SearchResultParser {
       );
     }
 
+    if (LegacyScriptRuleFallback.isScriptOnlyRule(rawRule)) {
+      final fallbackValues = LegacyScriptRuleFallback.evaluateListChunks(
+        content: content,
+        rawRule: rawRule,
+      );
+      if (fallbackValues.isNotEmpty) {
+        return fallbackValues;
+      }
+    }
+
     try {
-      return _ruleEngine.executeAll(
+      return await _ruleEngine.executeAll(
         content: content,
         expression: expression,
         stage: stage,
+        jsContext: jsContext,
       );
     } on AppException {
       return const [];

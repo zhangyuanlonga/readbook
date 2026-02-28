@@ -16,6 +16,135 @@
 
 ---
 
+## 执行进度梳理（2026-02-27，已复跑）
+
+> 口径已统一：**核心目标是适配 Legado 兼容引擎/数据链路，不以 UI 改造为主线**。
+> - 主线验收：规则映射、执行结果、领域模型、持久化、回归稳定性。
+> - UI 展示：作为可选增强，不阻塞兼容主线推进（除非影响核心功能可用性）。
+
+### 主线原则（本次确认）
+
+1. 以 Legado 规则兼容为第一优先级，不做“为兼容而改现有 UI 设计”。
+2. 任务完成标准以“解析正确 + 数据正确 + 回归通过”为准。
+3. UI 断言/文案波动默认不阻塞 Phase 里程碑。
+4. 既有书源测试资产必须保留并持续复用，新增能力先补 fixture 再改逻辑。
+5. 涉及提示文案/徽标/页面展示的改动统一归入可选增强，不纳入兼容主线任务验收。
+
+### 兼容验证资产（必须保留）
+
+| 资产 | 作用 |
+|------|------|
+| `test/compatibility/legacy_source_compatibility_test.dart` | 端到端兼容回归（搜索→详情→目录→正文） |
+| `test/fixtures/compatibility/legacy_sources_manifest.json` | 兼容样本清单与期望基线 |
+| `test/regression/source_baseline_regression_test.dart` | 大样本导入后的核心规则链路基线 |
+| `test/data/adapters/legado_source_adapter_test.dart` | 规则字段映射与兼容降级逻辑 |
+| `test/features/search/application/search_service_test.dart` | 搜索链路规则执行与网络选项解析 |
+
+### 状态判定标准
+
+- `已完成`：兼容引擎/数据目标已达成，回归路径覆盖到位。
+- `部分完成`：主流程已落地，但核心语义或回归样本仍有缺口。
+- `未开始`：仓库中未发现对应实现。
+
+### 分阶段汇总（兼容主线口径）
+
+| Phase | 已完成 | 部分完成 | 未开始 | 备注 |
+|------|------:|--------:|------:|------|
+| Phase 0（14） | 14 | 0 | 0 | `0-1 ~ 0-14` 已收口，核心语义补齐完成 |
+| Phase 1（12） | 12 | 0 | 0 | QuickJS + Bridge + 变量持久化主链路已闭环 |
+| Phase 2（4） | 4 | 0 | 0 | XPath / `%%` / `{{}}` 全链路已完成并保留兼容降级 |
+| Phase 3（4） | 4 | 0 | 0 | WebView 执行器 + `webView:true` 路由 + `sourceRegex` 回填已完成 |
+
+### Phase 0 逐任务状态
+
+| Task | 状态 | 进展与差距 |
+|------|------|-----------|
+| 0-1 `replaceRegex` | 已完成 | 字段/映射/正文接入 + 单条规则 200ms 超时保护 + v4 迁移均已落地 |
+| 0-2 `nextTocUrl` | 已完成 | 目录翻页循环、`visited` 去重、`emptyRounds` 兜底与 `maxPages=50` 已接入 |
+| 0-3 `nextContentUrl` | 已完成 | 正文翻页、下一章 URL 截断、重复内容去重与 `maxPages=30` 已接入 |
+| 0-4 `&&` 合并 | 已完成 | `rule1&&rule2||rule3` 优先级与回退语义已补齐并回归通过 |
+| 0-5 URL `,{options}` | 已完成 | `UrlOption` 抽象与 `method/charset/body/headers/retry` 全链路接入完成 |
+| 0-6 `concurrentRate` | 已完成 | 字段映射 + `SourceRateLimiter` + `AppHttpClient.acquire` 已全链路生效 |
+| 0-7 `:` AllInOne | 已完成 | `:` / `+` 前缀 AllInOne 与 `$n` 分组引用执行链路已闭环 |
+| 0-8 `###` OnlyOne | 已完成 | `json_executor` 与 `legacy_link_post_processor` 均支持首命中提取 |
+| 0-9 `[n:m:step]` 切片 | 已完成 | 选择器索引提取与 `HtmlExecutor` 切片执行（含负索引/排除）已落地 |
+| 0-10 `<...>` 条件 URL | 已完成 | `UrlTemplateResolver` 已支持 page=1 省略、page>1 保留语义 |
+| 0-11 JSONPath 高级特性 | 已完成 | `$..`、`$[?()]`、`$[n:m(:step)]` 已实现 |
+| 0-12 列表 `-` 反转 | 已完成 | `SearchService` + `SearchResultParser` + `BookDetailService` 已支持 `-` 前缀；`ExploreService` 通过映射到搜索链路自动对齐 |
+| 0-13 `@textNodes/@ownText` | 已完成 | Parser/Executor/Compat 三层语义已打通 |
+| 0-14 元数据字段补齐 | 已完成 | `canReName` 语义已在服务层闭环，入口字段仅在规则允许时被详情覆盖（仅引擎/数据层） |
+
+### Phase 1 逐任务状态（仅引擎/数据）
+
+| Task | 状态 | 进展与差距 |
+|------|------|-----------|
+| 1-1 `flutter_js` 依赖接入 | 已完成 | 多平台工程已接入，`JsExecutor` 可正常初始化并执行 |
+| 1-2 `JsExecutor` 核心封装 | 已完成 | 已具备执行、基础超时保护与失败日志，关键单测已覆盖 |
+| 1-3 RuleParser/RuleEngine JS 接入 | 已完成 | `@js:` 与 `<js>...</js>` 链路已接入执行器 |
+| 1-4 Bridge Tier-1 | 已完成 | `put/get/log/base64/md5/encodeURI/htmlFormat/timeFormat` 已可用 |
+| 1-5 Bridge Tier-2（网络） | 已完成 | 已补齐“静态提取 + 运行时探测 + 多轮预取 + `__ajax_cache` 注入 + 动态变量 URL/Body/Headers 归一化 + 深链路多轮探测” |
+| 1-6 Bridge Tier-3（AES） | 已完成 | 已补齐 transformation 兼容（`PKCS5/PKCS7/NoPadding/ZeroPadding`、`CBC/ECB`）与 hex key/iv 输入兼容，并补向量回归 |
+| 1-7 Bridge Tier-4（规则回调） | 已完成 | 已补齐 `java.setContent/getString/getElements/getStringList` 深层嵌套解析与递归深度保护（含诊断日志） |
+| 1-8 JS 上下文变量注入 | 已完成 | `book/chapter/source` 与 `cookie/cache` 对象均已注入 QuickJS 全局作用域（内存态） |
+| 1-9 `executeAll` 异步化 | 已完成 | `RuleEngine.executeAll/executeFirst` 已异步化并完成主链路迁移 |
+| 1-10 JS 能力诊断与降级 | 已完成 | `jsCapability` 分级、`js_bridge_unsupported/js_timeout_guard/js_fallback_legacy` 诊断与降级链路断言均已落地并回归通过 |
+| 1-11 `jsLib` 全量注入 | 已完成 | 导入层已透传 `jsLib`，执行器在用户脚本前完成注入（失败仅记诊断，不阻塞主流程） |
+| 1-12 variable 持久化 | 已完成 | 已实现 source/book 双作用域变量持久化（`_appread_js_variables` / `_appread_js_book_variables`），并在搜索→详情→正文主链路接入；chapter 级保持单次加载内存态 |
+
+### Phase 2 逐任务状态（仅引擎/数据）
+
+| Task | 状态 | 进展与差距 |
+|------|------|-----------|
+| 2-1 引入 XPath 库 | 已完成 | 已确定并接入 `xml`（direct dependency），支持 XPath 1.0 求值能力 |
+| 2-2 `XPathExecutor` | 已完成 | 新增原生执行器并接入 `RuleParser/RuleEngine`，支持轴/谓词/函数，异常与空结果均保留 Legacy 降级 |
+| 2-3 `%%` 交错操作符 | 已完成 | `RuleEngine` 已支持 `%%` 分段执行与 round-robin 交错输出，`LegacyRuleCompat` 已保持 `%%` 归一化语义 |
+| 2-4 `{{}}` 内嵌规则完整求值 | 已完成 | `RuleEngine` 已支持 `{{@@...}}`/`{{@css:...}}`/`{{@json:...}}`/`{{@xpath:...}}` 嵌套规则求值与模板替换 |
+
+### Phase 3 逐任务状态（仅引擎/数据）
+
+| Task | 状态 | 进展与差距 |
+|------|------|-----------|
+| 3-1 引入 `flutter_inappwebview` | 已完成 | 依赖与平台插件已接入工程 |
+| 3-2 `WebViewExecutor` 封装 | 已完成 | 已落地 2-worker 池化复用、串行队列、超时/异常后会话重建与可测试会话抽象 |
+| 3-3 `webView:true` 路由 | 已完成 | `SearchService` / `BookDetailService` / `ChapterContentService` 均支持在请求选项标记后走 WebView 执行器 |
+| 3-4 `sourceRegex` 资源嗅探 | 已完成 | `WebViewExecutor` 已采集命中资源 URL，且搜索/详情消费链路已回填 `matchedResourceUrl` 并补齐回归断言 |
+
+### 当前测试状态（按主线阻塞级别）
+
+| 分组 | 用例 | 失败数 | 阻塞级别 |
+|------|------|------:|---------|
+| 兼容主线 | `test/core/rule_engine/rule_engine_test.dart` + `test/core/rule_engine/executors/js_executor_test.dart` + `test/features/search/application/search_result_parser_test.dart` + `test/features/search/application/search_service_test.dart` + `test/features/book/application/book_detail_service_test.dart` + `test/features/reader/application/chapter_content_service_test.dart` + `test/compatibility/legacy_source_compatibility_test.dart` + `test/data/adapters/legado_source_adapter_test.dart` + `test/features/manga/application/manga_inline_js_source_test.dart` | 0 | 已通过（主线可回归） |
+| 兼容主线 | `test/features/manga/application/manga_inline_js_source_test.dart` | 0 | 已通过（fixture 已补齐） |
+| 兼容主线 | `test/data/adapters/legado_source_adapter_test.dart` | 0 | 已通过（含 server-proxy 降级映射） |
+| UI 回归 | `test/features/discover/presentation/discover_page_test.dart` | 2 | 非阻塞（文案断言与当前界面差异） |
+| UI 回归 | `test/features/book/presentation/book_detail_primary_actions_test.dart` | 2 | 非阻塞（按钮文案/图标断言差异） |
+
+### 下一轮优先收敛项（兼容主线）
+
+1. 继续扩充高频复杂源 fixture，覆盖更多真实书源组合语法（不改 UI）。
+2. 固化并扩展兼容基线回归：`legacy_source_compatibility_test` + `source_baseline_regression_test` 常态化执行。
+3. `已完成（2026-02-28）`：针对 `webView:true` 源补充跨平台稳定性回归（超时、重建、资源嗅探一致性、WebView 失败后 HTTP 回退）。
+4. `已完成（2026-02-28）`：补齐高频 `java.*` 兼容别名（`connect/getElement/getCookie/toNumChapter/timeFormatUTC/t2s/s2t/strToBytes/bytesToString/createSymmetricCrypto`）并新增 no-op UI 桥接（`toast/longToast/startBrowser/startBrowserAwait/webView`），诊断能力判定与回归测试同步收敛。
+5. `已完成（2026-02-28）`：补齐第二批高频桥接（`deviceID/HMacBase64/aesDecodeArgsBase64Str/initUrl/getStrResponse/toURL/toUrl/reGetBook/cacheFile/importScript/removeCookie/getVerificationCode`），并将预取识别扩展到 `cacheFile/importScript`；`3000 书源` 矩阵 `non_full` 从 `82` 降到 `75`（相对首轮 `122` 已降到 `75`）。
+
+本轮 `webView:true` 稳定性回归补充：
+- 主链路（搜索 / 详情 / 正文）均新增 “WebView 抛错 -> HTTP 回退成功” 回归用例。
+- `WebViewExecutor` 增加活跃请求安全完成封装，避免重复 `complete`/`completeError` 触发 `Future already completed`。
+- 诊断链路新增批量回归：`diagnoseBatch` 在 WebView 失败回退场景下保持进度统计一致且不丢主线结果。
+
+端侧回归执行入口（Android / iOS / Desktop）：
+- `scripts/run_webview_platform_regression.sh`
+- `dart run tool/run_webview_platform_regression.dart`
+- 集成用例：`integration_test/webview_true_platform_regression_test.dart`
+- 日志与汇总输出：`build/webview_platform_regression/<timestamp>/summary.json`
+
+常用命令：
+- `./scripts/run_webview_platform_regression.sh`
+- `./scripts/run_webview_platform_regression.sh --platforms=android,ios`
+- `dart run tool/run_webview_platform_regression.dart --allow-missing-platforms=false`
+
+---
+
 ## Phase 0：不依赖 JS 引擎的规则补齐（65% → 78%）
 
 ---
@@ -789,29 +918,39 @@
 
 ---
 
-### Task 1-10：JS 前置拦截与用户提示
+### Task 1-10：JS 兼容能力探测与诊断标记（非 UI）
 
 **depends: [1-1]**
 
-**目标**：对 JS 兼容度不同的源给出前置提示。
+**目标**：对 JS 依赖等级与执行失败原因形成结构化诊断，供引擎侧决策与回归定位使用。
+
+**当前进展（2026-02-27）**：
+- [x] 导入层 `jsCapability` 分级覆盖已实装/未知/不支持桥接能力。
+- [x] 执行链路诊断码已补齐：`js_bridge_unsupported`、`js_timeout_guard`、`js_fallback_legacy`。
+- [x] 兼容回归已补断言并通过：失败路径可定位、降级路径可验证。
 
 **步骤**：
 
-1. **搜索入口增加提示**
-   - 文件：`lib/features/search/presentation/search_page.dart`
-   - 搜索执行前检查目标源 `jsCapability`：
-     - `unsupported` → Snackbar "此书源依赖复杂 JS 规则，部分功能可能不可用"
-     - `partial` → 轻提示 "此书源部分依赖 JS 规则"
+1. **源级能力探测**
+   - 文件：`lib/data/adapters/legado_source_adapter.dart`
+   - 导入书源时基于规则内容标记 `jsCapability`：
+     - `full`：仅依赖已实装 Bridge 能力。
+     - `partial`：包含可降级能力或高风险能力。
+     - `unsupported`：依赖明确未实装能力（如 `Packages.java.xxx`、文件操作）。
 
-2. **书源卡片兼容度徽标**
-   - 在书源列表卡片上显示兼容度标记：🟢 full / 🟡 partial / 🔴 unsupported。
+2. **执行链路诊断码落盘**
+   - 文件：`lib/core/rule_engine/rule_engine.dart`、`lib/core/rule_engine/executors/js_executor.dart`
+   - JS 执行失败/超时/降级时记录标准诊断码（如 `js_timeout`、`js_bridge_unsupported`、`js_fallback_legacy`）。
+   - 诊断信息写入日志与调试态状态对象，禁止直接耦合 UI 展示逻辑。
 
-3. **搜索失败文案增强**
-   - 失败时检查源的 JS 依赖级别，补充提示 "可能因 JS 规则不兼容导致"。
+3. **兼容回归断言补充**
+   - 文件：`test/compatibility/legacy_source_compatibility_test.dart`
+   - 对典型 JS 源增加断言：触发降级时必须有对应诊断码，且结果满足预期兜底行为。
 
 **验收标准**：
-- 导入 JS 依赖源 → 搜索前看到提示。
-- 非 JS 源无提示。
+- 导入后每个源都有稳定 `jsCapability` 分级结果。
+- JS 失败路径能稳定产出诊断码，回归测试可断言。
+- 兼容主线不依赖任何 UI 提示实现。
 
 ---
 
@@ -823,6 +962,10 @@
 
 **depends: [Phase 1]**
 
+**当前进展（2026-02-27）**：
+- [x] 已选定 `xml` 方案并升级为 direct dependency。
+- [x] 已完成冒烟验证并接入主回归链路。
+
 **步骤**：
 1. 评估 `xpath_selector_html_parser` 或 `xml` 包。
 2. pubspec.yaml 添加依赖。
@@ -833,6 +976,11 @@
 ### Task 2-2：XPathExecutor
 
 **depends: [2-1]**
+
+**当前进展（2026-02-27）**：
+- [x] 已新增 `lib/core/rule_engine/executors/xpath_executor.dart`。
+- [x] 已接入 `RuleParser + RuleEngine`，支持 `xpath:` / `@xpath:` / 裸 XPath。
+- [x] 已支持轴/谓词/函数，并保留 `LegacyXPathCompat` 作为失败与空结果降级。
 
 **步骤**：
 1. 新建 `lib/core/rule_engine/executors/xpath_executor.dart`。
@@ -847,6 +995,11 @@
 
 **depends: []**
 
+**当前进展（2026-02-27）**：
+- [x] `RuleEngine.executeAll()` 已支持按 `%%` 分段执行并 round-robin 交错合并结果。
+- [x] 已补充 `RuleEngine` 回归测试覆盖不等长列表交错场景。
+- [x] `LegacyRuleCompat.buildHtmlRuleExpression()` 已支持保留 `%%` 归一化语义。
+
 **步骤**：
 1. RuleEngine.executeAll() 中按 `%%` 分割。
 2. 多列表轮询取值（round-robin）。
@@ -856,6 +1009,11 @@
 ### Task 2-4：`{{}}` 内嵌规则完整求值
 
 **depends: [1-3]**
+
+**当前进展（2026-02-27）**：
+- [x] `RuleEngine` 模板解析已识别 `{{@@...}}` / `{{@css:...}}` / `{{@json:...}}` / `{{@xpath:...}}`。
+- [x] 已通过递归调用 RuleEngine 执行内嵌规则并替换回模板文本。
+- [x] 已补充 `RuleEngine` 回归测试覆盖 `{{@@...}}` 与 `{{@json:...}}`。
 
 **步骤**：
 1. 在模板解析中识别 `{{@@rule}}`/`{{@css:rule}}`/`{{@json:rule}}`。
@@ -900,6 +1058,11 @@
 
 **depends: [3-2]**
 
+**当前进展（2026-02-27）**：
+- [x] WebView 层已拦截 `sourceRegex` 命中资源 URL。
+- [x] 搜索/详情请求消费链路已回填 `matchedResourceUrl`。
+- [x] 回归测试已覆盖搜索与详情路径。
+
 1. 在 WebView 加载过程中拦截匹配 `sourceRegex` 的资源 URL。
 2. 将匹配的 URL 作为 content 规则的 `result`。
 
@@ -941,6 +1104,224 @@ Phase 3:
 
 ---
 
+## 终版检查补遗（2026-02-27）
+
+> 以下为逐项比对 Legado 官方规范后发现的遗漏，按影响分为"补入计划"与"明确排除"。
+
+### 补入 Phase 0 的遗漏
+
+| 编号 | 遗漏项 | 说明 | 归入任务 |
+|------|--------|------|----------|
+| GAP-1 | **JSONPath `$..` 递归下降** | 当前 JsonExecutor 仅支持单层 `$.field`，不支持 `$..books[*]` 递归搜索。在野源中有使用。 | **新增 Task 0-11** |
+| GAP-2 | **JSONPath `$[?(@.field)]` 过滤表达式** | 条件过滤，如 `$[?(@.type==1)]`。当前完全不支持。 | **合并到 Task 0-11** |
+| GAP-3 | **JSONPath `$[start:end]` 数组切片** | 如 `$[0:10]`。当前仅支持 `$[n]` 单索引。 | **合并到 Task 0-11** |
+| GAP-4 | **`chapterList` / `bookList` 的 `-` 前缀反转** | Legado 规范：列表规则前加 `-` 反转结果。当前 `tocReversed` 仅从布尔字段读取，未解析规则本身的 `-` 前缀。 | **新增 Task 0-12** |
+| GAP-5 | **`+` 前缀 AllInOne 模式** | 搜索列表/发现列表/目录列表规则前加 `+` 启用 AllInOne 正则模式（和 Task 0-7 的 `:` 前缀联动）。 | **合并到 Task 0-7** |
+| GAP-6 | **`@textNodes` 提取器语义丢失** | 当前归一化为 `text`，但 Legado 中 `textNodes` 仅提取直接文本节点（不含子元素文本）。 | **新增 Task 0-13** |
+| GAP-7 | **`@ownText` 提取器** | 与 `@textNodes` 类似，仅提取元素自身文本。当前未识别。 | **合并到 Task 0-13** |
+
+### 补入 Phase 1 的遗漏
+
+| 编号 | 遗漏项 | 说明 | 归入任务 |
+|------|--------|------|----------|
+| GAP-8 | **JS 上下文缺少 `cookie` / `cache` 变量** | Task 1-8 仅列了 `book`/`chapter`/`source`，遗漏了 `cookie`（CookieStore）和 `cache`（CacheManager）。 | **补入 Task 1-8** |
+| GAP-9 | **`java.base64Decode(str, flags)` 带 flags 变体** | Task 1-4 仅列了无参版本。Legado 支持带 `flags: Int` 的重载（如 `NO_WRAP`/`URL_SAFE`）。 | **补入 Task 1-4** |
+| GAP-10 | **`java.base64DecodeToByteArray` 系列** | 返回 ByteArray 的变体函数。部分加密源使用。 | **补入 Task 1-4** |
+| GAP-11 | **`jsLib` 字段完整支持** | 当前仅从 `jsLib` 提取 API base URL 和 LZ helper 检测。Legado 中 `jsLib` 是全局 JS 库代码，应在 QuickJS 执行前注入。 | **新增 Task 1-11** |
+| GAP-12 | **`source.variable` / `book.variable` / `chapter.variable` 持久化** | Legado 支持 per-source/book/chapter 的自定义变量，由 JS 通过 `java.put`/`java.get` 读写并持久化。当前 `@put/@get` 仅内存态。 | **新增 Task 1-12** |
+
+### 补入 Phase 0 的源字段遗漏
+
+| 编号 | 遗漏项 | 说明 | 归入任务 |
+|------|--------|------|----------|
+| GAP-13 | **`ruleBookInfo.kind` / `wordCount` / `lastChapter`** | 领域模型缺少分类、字数、最新章节元数据提取，导致合并/持久化信息不完整。 | **新增 Task 0-14** |
+| GAP-14 | **`ruleBookInfo.canReName`** | 控制是否用详情链路拿到的书名/作者覆盖入口链路结果。 | **合并到 Task 0-14** |
+| GAP-15 | **`ruleToc.isVip` / `updateTime`** | 章节元数据缺少 VIP 与更新时间语义，影响目录数据完整性与下游规则判断。 | **合并到 Task 0-14** |
+| GAP-16 | **`ruleSearch.kind` / `wordCount`** | 搜索链路缺少分类与字数字段提取，影响结果合并与排序策略。 | **合并到 Task 0-14** |
+
+### 明确排除（不纳入计划）
+
+| 遗漏项 | 排除原因 |
+|--------|----------|
+| `loginUrl` / `loginUi` / `loginCheckJs` | 登录体系完整实装成本极高，在野需登录源占比 <5%，MVP 不覆盖 |
+| `java.readFile` / `deleteFile` / 文件操作系列 | 安全风险高，在野使用率 <1% |
+| `java.queryTTF` / `replaceFont` 字体反爬 | 实装成本极高（需 TTF 解析库），在野使用率 <2% |
+| `java.downloadFile` / `unzipFile` / `getTxtInFolder` | 极低频，安全风险 |
+| `Packages.java.xxx` Java 类导入 | Rhino 特有能力，QuickJS 无法复制 |
+| `bookUrlPattern` | URL 匹配路由，影响极小 |
+| `weight` / `customOrder` | UI 排序字段，不影响规则执行 |
+| `headers` 中的 `proxy` 支持 | 代理功能需额外网络层改造，MVP 不覆盖 |
+| `ruleContent.payAction` | 付费内容处理，需完整登录体系支撑 |
+| `ruleContent.imageStyle` | 漫画已有独立图片处理，该字段影响极小 |
+| `{}` 旧版 JSONPath 简写（Legado 2.0） | 已废弃语法，新源不使用 |
+
+---
+
+### 补充任务详情
+
+#### Task 0-11：JSONPath 高级特性（`$..` 递归 / `$[?()]` 过滤 / `$[n:m]` 切片）
+
+**depends: []**
+
+**目标**：补齐 JSONPath 规范中的三个缺失特性。
+
+**步骤**：
+
+1. **`$..` 递归下降**
+   - 文件：`lib/core/rule_engine/executors/json_executor.dart`
+   - 在 `_queryPath()` 中识别 `..` 段 → 递归遍历所有层级匹配字段名。
+
+2. **`$[?(@.field==value)]` 过滤表达式**
+   - 在 `_expandByBracket()` 中识别 `?()` 语法 → 对数组元素逐个求值条件表达式。
+   - 支持：`==`、`!=`、`>`、`<`、`=~`（正则匹配）。
+
+3. **`$[start:end]` 数组切片**
+   - 在 `_expandByBracket()` 中识别 `n:m` 格式 → 列表切片。
+   - 支持负数索引和省略形式（`[:3]`、`[2:]`、`[::2]`）。
+
+**验收标准**：
+- `$..title` 递归提取所有层级的 title 字段。
+- `$.books[?(@.type==1)]` 过滤 type==1 的元素。
+- `$.list[0:5]` 返回前 5 个元素。
+
+---
+
+#### Task 0-12：列表规则 `-` 前缀反转
+
+**depends: []**
+
+**目标**：`chapterList` / `bookList` 规则前加 `-` 反转结果列表。
+
+**当前进展（2026-02-27）**：
+- [x] `SearchService` 已识别并剥离列表规则 `-` 前缀，透传 `listReversed` 到 `SearchResultParser`。
+- [x] `SearchResultParser` 已在 chunk 级别执行反转，确保搜索/发现链路顺序一致。
+- [x] `BookDetailService` 已识别目录列表 `-` 前缀并与 `tocReversed` 布尔语义合并。
+- [x] 已补充 Search/Detail/Explore 对应回归测试（含 `ExploreService` 映射链路）。
+
+**步骤**：
+
+1. 在 `BookDetailService._parseChapters()` 解析 `listRule` 前检测并 strip `-` 前缀。
+2. 如果检测到 `-`，在结果列表上做 `.reversed.toList()`。
+3. 同理适配 `SearchService` 和 `ExploreService` 的 list 规则。
+
+**验收标准**：
+- `-class.chapter@tag.a` 返回反转后的章节列表。
+- 无 `-` 前缀的规则行为不变。
+
+---
+
+#### Task 0-13：`@textNodes` / `@ownText` 提取器精确语义
+
+**depends: []**
+
+**目标**：`@textNodes` 仅提取直接文本节点（不含子元素文本），`@ownText` 仅提取元素自身文本。
+
+**步骤**：
+
+1. 文件：`lib/core/rule_engine/executors/html_executor.dart`
+2. 在提取器分支中新增 `textNodes` 和 `ownText` case。
+3. `textNodes` → 遍历 `element.nodes`，仅取 `Text` 类型节点的内容。
+4. `ownText` → 使用 `element.text` 但排除子元素（遍历直接子 Text 节点）。
+5. 更新 `LegacyRuleCompat` 中的归一化逻辑，不再将 `textNodes` 强制映射为 `text`。
+
+**验收标准**：
+- `<div>Hello<span>World</span>!</div>` 用 `@textNodes` 返回 `Hello!`（不含 `World`）。
+- 用 `@text` 返回 `HelloWorld!`。
+
+---
+
+#### Task 0-14：元数据字段补齐（引擎 / 数据层）
+
+**depends: []**
+
+**目标**：补齐 Legado 元数据字段映射与覆盖语义，保证搜索/详情/目录链路的数据一致性，不要求 UI 改造。
+
+**步骤**：
+
+1. **SourceRuleSet 新增字段**：
+   - `detailKindRule`、`detailWordCountRule`、`detailLastChapterRule`、`detailCanReNameRule`
+   - `searchKindRule`、`searchWordCountRule`
+   - `tocIsVipRule`、`tocUpdateTimeRule`
+
+2. **LegadoSourceAdapter 映射**：
+   - `ruleBookInfo` → `kind`/`wordCount`/`lastChapter`/`canReName`
+   - `ruleSearch` → `kind`/`wordCount`
+   - `ruleToc` → `isVip`/`updateTime`
+
+3. **领域模型透传**（非 UI）：
+   - `BookMeta` / `SearchItem` / `ChapterMeta` 增加 `kind`、`wordCount`、`lastChapter`、`isVip`、`updateTime` 字段透传。
+   - 持久化层按需落盘，未使用字段可保留空值但不可丢失映射能力。
+
+4. **canReName 逻辑**：
+   - 在数据合并阶段处理：若 `canReName` 规则求值为真，且详情链路拿到有效书名/作者，则覆盖入口链路同字段。
+
+**验收标准**：
+- 含 `kind`/`wordCount`/`lastChapter`/`isVip`/`updateTime` 的源均能在领域模型中正确取值。
+- `canReName` 为 true 时，入口数据会被详情数据按规则覆盖（通过服务层测试断言）。
+- 全流程无需新增或修改 UI 才能通过兼容主线验收。
+
+---
+
+#### Task 1-11：`jsLib` 全局 JS 库注入
+
+**depends: [1-2]**
+
+**目标**：`jsLib` 字段包含源作者定义的全局 JS 函数库，应在每次 JS 执行前注入到 QuickJS 上下文。
+
+**步骤**：
+
+1. **SourceDefinition 新增字段**：`final String? jsLib;`
+2. **LegadoSourceAdapter 映射**：从 `raw.rawData['jsLib']` 读取完整内容（不再仅做子串提取）。
+3. **JsExecutor 注入**：在执行用户脚本之前，先 `runtime.evaluate(jsLib)` 注入库代码。
+4. **安全兜底**：jsLib 执行同样受 3s 超时约束；注入失败不阻塞后续规则执行。
+
+**验收标准**：
+- 含 `jsLib` 定义了 `function decrypt(s) { ... }` 的源，在 `@js:decrypt(result)` 中可调用。
+
+---
+
+#### Task 1-12：`variable` 字段持久化（source / book / chapter 级）
+
+**depends: [1-4, 1-8]**
+
+**目标**：Legado 支持 per-source/book/chapter 的自定义变量持久化，JS 中通过 `java.put`/`java.get` 读写。
+
+**当前进展（2026-02-27）**：
+- [x] 已在 `JsExecutor` 增加 `java.put` 回调上报能力，并接入 `SearchService` / `BookDetailService` / `ChapterContentService`。
+- [x] Source 级变量持久化：`SourceDefinition.originalSource['_appread_js_variables']`。
+- [x] Book 级变量持久化：`SourceDefinition.originalSource['_appread_js_book_variables'][bookId]`。
+- [x] Chapter 级变量：单次加载内存态（不持久化）。
+- [x] 已覆盖回归：`search_service_test` / `book_detail_service_test` / `chapter_content_service_test` 新增 `java.put/java.get` 作用域持久化用例。
+
+**步骤**：
+
+1. **Sources 表新增 `variable` 列**（Drift migration version 5，独立于 Phase 0 的 version 4）。
+2. **Book 本地模型新增 `variable` 字段**。
+3. **`java.put(key, val)` 写入时**：同步更新内存 + 异步落盘（debounce 500ms 防高频写入）。
+4. **`java.get(key)` 读取时**：优先从内存读取。
+5. **作用域**：
+   - Source 级变量：跨所有书籍共享。
+   - Book 级变量：单本书范围。
+   - Chapter 级变量：单章节范围（仅内存态，不持久化）。
+
+**验收标准**：
+- JS 中 `java.put('token', 'abc')` 后退出并重进 → `java.get('token')` 返回 `'abc'`。
+- 不同书籍的 book 级变量互不干扰。
+
+---
+
+## 更新后的任务总表
+
+| Phase | 任务数 | 编号范围 |
+|-------|--------|----------|
+| Phase 0 | **14** | 0-1 ~ 0-14 |
+| Phase 1 | **12** | 1-1 ~ 1-12 |
+| Phase 2 | **4** | 2-1 ~ 2-4 |
+| Phase 3 | **4** | 3-1 ~ 3-4 |
+| **总计** | **34** | |
+
+---
+
 ## 风险清单
 
 | 风险 | 影响 | 应对 |
@@ -949,5 +1330,6 @@ Phase 3:
 | `executeAll` 异步化影响面过大 | 大量文件需修改 | Task 1-9 必须在 1-3 之后立即做，用 `grep` 全量扫描 |
 | QuickJS 同步阻塞 Dart Isolate | 3s 超时不够用 | 分析在野源 JS 执行耗时，按需调整 |
 | Bridge 网络请求安全风险 | 恶意源发起内网请求 | 域名白名单 + 内网 IP 段拦截 |
-| Drift schema 迁移冲突 | 用户升级时数据丢失 | Phase 0 合并一次迁移；Phase 1 不改表结构 |
+| Drift schema 迁移冲突 | 用户升级时数据丢失 | Phase 0 合并一次迁移（v4）；Phase 1 变量持久化单独一次（v5） |
 | `java.getString` 递归死循环 | 栈溢出崩溃 | 递归深度上限 3 层 |
+| JSONPath `$..` 递归性能 | 深层 JSON 遍历慢 | 设递归深度上限 10 层 + 结果数上限 1000 |

@@ -4,6 +4,7 @@ import 'dart:io';
 import 'package:flutter_appread/core/errors/app_exception.dart';
 import 'package:flutter_appread/core/network/http_client.dart';
 import 'package:flutter_appread/core/network/request_context.dart';
+import 'package:flutter_appread/core/network/source_rate_limiter.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
@@ -131,5 +132,44 @@ void main() {
 
       await server.close(force: true);
     });
+
+    test('delegates acquire to source rate limiter', () async {
+      final limiter = _SpyRateLimiter();
+      final server = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
+      server.listen((request) async {
+        request.response
+          ..statusCode = 200
+          ..write('ok');
+        await request.response.close();
+      });
+
+      final client = AppHttpClient(rateLimiter: limiter);
+      await client.get(
+        RequestContext(
+          url: 'http://${server.address.host}:${server.port}/rate',
+          sourceId: 's_rate',
+          sourceConcurrentRate: '1/1000',
+        ),
+      );
+
+      expect(limiter.callCount, 1);
+      expect(limiter.lastSourceId, 's_rate');
+      expect(limiter.lastConcurrentRate, '1/1000');
+
+      await server.close(force: true);
+    });
   });
+}
+
+class _SpyRateLimiter extends SourceRateLimiter {
+  int callCount = 0;
+  String? lastSourceId;
+  String? lastConcurrentRate;
+
+  @override
+  Future<void> acquire({String? sourceId, String? concurrentRate}) async {
+    callCount += 1;
+    lastSourceId = sourceId;
+    lastConcurrentRate = concurrentRate;
+  }
 }

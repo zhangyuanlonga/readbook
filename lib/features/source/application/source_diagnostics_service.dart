@@ -14,6 +14,8 @@ import '../../search/application/search_service.dart';
 
 enum SourceDiagnosticMode { probe, searchOnly, fullChainQuick }
 
+enum SourceDiagnosticRawPolicy { none, failedOnly, all }
+
 enum SourceDiagnosticStage { search, detail, toc, content }
 
 class SourceDiagnosticStageResult {
@@ -184,6 +186,7 @@ class SourceDiagnosticsService {
     required SourceDefinition source,
     required String keyword,
     SourceDiagnosticMode mode = SourceDiagnosticMode.fullChainQuick,
+    SourceDiagnosticRawPolicy rawPolicy = SourceDiagnosticRawPolicy.failedOnly,
   }) async {
     final startedAt = DateTime.now();
     final normalizedKeyword = keyword.trim();
@@ -199,7 +202,11 @@ class SourceDiagnosticsService {
         startedAt: startedAt,
         finishedAt: DateTime.now(),
         stages: List.unmodifiable(stages),
-        sourceRaw: source.originalSource,
+        sourceRaw: _resolveSourceRaw(
+          source: source,
+          stages: stages,
+          rawPolicy: rawPolicy,
+        ),
       );
     }
 
@@ -208,6 +215,7 @@ class SourceDiagnosticsService {
       mode: mode,
       keyword: normalizedKeyword,
       startedAt: startedAt,
+      rawPolicy: rawPolicy,
     );
     if (staticPrecheck != null) {
       return staticPrecheck;
@@ -223,7 +231,7 @@ class SourceDiagnosticsService {
       final report = await _searchService.search(
         keyword: normalizedKeyword,
         sourceIds: [source.id],
-        pageSize: 5,
+        pageSize: 1,
         contentMode:
             source.isMangaSource
                 ? SearchContentMode.manga
@@ -277,7 +285,11 @@ class SourceDiagnosticsService {
             stages: List.unmodifiable(stages),
             sampleBookTitle: sampleBookTitle,
             sampleDetailUrl: sampleDetailUrl,
-            sourceRaw: source.originalSource,
+            sourceRaw: _resolveSourceRaw(
+              source: source,
+              stages: stages,
+              rawPolicy: rawPolicy,
+            ),
           );
         }
 
@@ -463,7 +475,11 @@ class SourceDiagnosticsService {
       sampleDetailUrl: sampleDetailUrl,
       sampleChapterTitle: sampleChapterTitle,
       sampleChapterUrl: sampleChapterUrl,
-      sourceRaw: source.originalSource,
+      sourceRaw: _resolveSourceRaw(
+        source: source,
+        stages: stages,
+        rawPolicy: rawPolicy,
+      ),
     );
   }
 
@@ -471,6 +487,7 @@ class SourceDiagnosticsService {
     required List<SourceDefinition> sources,
     required String keyword,
     SourceDiagnosticMode mode = SourceDiagnosticMode.fullChainQuick,
+    SourceDiagnosticRawPolicy rawPolicy = SourceDiagnosticRawPolicy.failedOnly,
     int concurrency = 2,
     SourceBatchDiagnosticToken? cancellationToken,
     SourceBatchDiagnosticProgressCallback? onProgress,
@@ -495,6 +512,7 @@ class SourceDiagnosticsService {
           source: source,
           keyword: normalizedKeyword,
           mode: mode,
+          rawPolicy: rawPolicy,
         );
         reports.add(report);
         processed += 1;
@@ -531,11 +549,12 @@ class SourceDiagnosticsService {
     required SourceDiagnosticMode mode,
     required String keyword,
     required DateTime startedAt,
+    required SourceDiagnosticRawPolicy rawPolicy,
   }) {
     final searchValidation = _searchService.validateSearchConfig(
       source: source,
       keyword: keyword,
-      pageSize: 5,
+      pageSize: 1,
     );
     if (searchValidation != null) {
       return _buildPrecheckFailureReport(
@@ -547,6 +566,7 @@ class SourceDiagnosticsService {
         message: searchValidation.briefMessage,
         code: searchValidation.code,
         requestUrl: searchValidation.requestUrl,
+        rawPolicy: rawPolicy,
       );
     }
 
@@ -566,6 +586,7 @@ class SourceDiagnosticsService {
         startedAt: startedAt,
         stage: SourceDiagnosticStage.toc,
         message: '书源缺少目录规则（chapterList/chapterName/chapterUrl）。',
+        rawPolicy: rawPolicy,
       );
     }
 
@@ -580,6 +601,7 @@ class SourceDiagnosticsService {
         startedAt: startedAt,
         stage: SourceDiagnosticStage.content,
         message: '书源缺少正文规则（ruleContent）。',
+        rawPolicy: rawPolicy,
       );
     }
 
@@ -595,7 +617,19 @@ class SourceDiagnosticsService {
     required String message,
     ErrorCode code = ErrorCode.validation,
     String? requestUrl,
+    required SourceDiagnosticRawPolicy rawPolicy,
   }) {
+    final stages = <SourceDiagnosticStageResult>[
+      SourceDiagnosticStageResult(
+        stage: stage,
+        success: false,
+        durationMs: 0,
+        code: code,
+        message: message,
+        requestUrl: requestUrl,
+      ),
+    ];
+
     return SourceDiagnosticReport(
       sourceId: source.id,
       sourceName: source.name,
@@ -603,18 +637,29 @@ class SourceDiagnosticsService {
       keyword: keyword,
       startedAt: startedAt,
       finishedAt: DateTime.now(),
-      stages: [
-        SourceDiagnosticStageResult(
-          stage: stage,
-          success: false,
-          durationMs: 0,
-          code: code,
-          message: message,
-          requestUrl: requestUrl,
-        ),
-      ],
-      sourceRaw: source.originalSource,
+      stages: stages,
+      sourceRaw: _resolveSourceRaw(
+        source: source,
+        stages: stages,
+        rawPolicy: rawPolicy,
+      ),
     );
+  }
+
+  Map<String, dynamic>? _resolveSourceRaw({
+    required SourceDefinition source,
+    required List<SourceDiagnosticStageResult> stages,
+    required SourceDiagnosticRawPolicy rawPolicy,
+  }) {
+    switch (rawPolicy) {
+      case SourceDiagnosticRawPolicy.none:
+        return null;
+      case SourceDiagnosticRawPolicy.failedOnly:
+        final hasFailure = stages.any((item) => !item.success);
+        return hasFailure ? source.originalSource : null;
+      case SourceDiagnosticRawPolicy.all:
+        return source.originalSource;
+    }
   }
 
   bool _hasRuleText(String? value) {

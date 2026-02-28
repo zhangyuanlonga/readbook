@@ -6,6 +6,8 @@ import '../../../core/errors/error_stage.dart';
 import '../../../core/logging/app_logger.dart';
 import '../../../core/network/http_client.dart';
 import '../../../core/network/request_context.dart';
+import '../../../core/network/url_option.dart';
+import '../../../core/rule_engine/executors/js_executor.dart';
 import '../../../core/rule_engine/rule_engine.dart';
 import '../../../core/rule_engine/processors/url_template_resolver.dart';
 import '../../../core/rule_engine/processors/legacy_rule_compat.dart';
@@ -13,7 +15,10 @@ import '../../../core/rule_engine/processors/legacy_rule_variable_processor.dart
 import '../../../core/rule_engine/processors/legacy_xpath_compat.dart';
 import '../../../core/rule_engine/processors/legacy_link_post_processor.dart';
 import '../../../core/rule_engine/processors/legacy_script_rule_fallback.dart';
+import '../../../core/rule_engine/processors/replace_regex_executor.dart';
+import '../../../core/rule_engine/processors/source_js_variable_store.dart';
 import '../../../core/source/source_response_processor.dart';
+import '../../../core/webview/webview_executor.dart';
 import '../../../data/datasources/local/app_database.dart';
 import '../../../data/repositories/source_repository_impl.dart';
 import '../../../domain/entities/search_request_context.dart';
@@ -42,8 +47,10 @@ class ChapterContentService {
     AppDatabase? database,
     SourceRepository? sourceRepository,
     AppHttpClient? httpClient,
+    WebViewExecutor? webViewExecutor,
     RuleEngine? ruleEngine,
     ContentTextCleaner? cleaner,
+    ReplaceRegexExecutor? replaceRegexExecutor,
     AppLogger? logger,
     UrlTemplateResolver? urlTemplateResolver,
     SourceResponseProcessor? responseProcessor,
@@ -52,8 +59,10 @@ class ChapterContentService {
            sourceRepository ??
            SourceRepositoryImpl(database ?? AppDatabase.instance),
        _httpClient = httpClient ?? AppHttpClient(),
+       _webViewExecutor = webViewExecutor ?? WebViewExecutor(),
        _ruleEngine = ruleEngine ?? RuleEngine(),
        _cleaner = cleaner ?? const ContentTextCleaner(),
+       _replaceRegexExecutor = replaceRegexExecutor ?? ReplaceRegexExecutor(),
        _logger = logger ?? AppLogger.instance,
        _urlTemplateResolver =
            urlTemplateResolver ?? const UrlTemplateResolver(),
@@ -63,8 +72,10 @@ class ChapterContentService {
   final AppDatabase _database;
   final SourceRepository _sourceRepository;
   final AppHttpClient _httpClient;
+  final WebViewExecutor _webViewExecutor;
   final RuleEngine _ruleEngine;
   final ContentTextCleaner _cleaner;
+  final ReplaceRegexExecutor _replaceRegexExecutor;
   final AppLogger _logger;
   final UrlTemplateResolver _urlTemplateResolver;
   final SourceResponseProcessor _responseProcessor;
@@ -78,6 +89,7 @@ class ChapterContentService {
     String? bookId,
     int? chapterIndex,
     String? chapterTitle,
+    String? nextChapterUrl,
   }) async {
     final normalizedSourceId = sourceId.trim();
     final normalizedChapterUrl = chapterUrl.trim();
@@ -127,6 +139,29 @@ class ChapterContentService {
     }
 
     final source = await _findSource(normalizedSourceId);
+    final normalizedBookId = bookId?.trim() ?? '';
+    final sourceVariableUpdates = <String, String>{};
+    final bookVariableUpdates = <String, String>{};
+    final runtimeJsVariables = <String, String>{
+      ...SourceJsVariableStore.load(source),
+      if (normalizedBookId.isNotEmpty)
+        ...SourceJsVariableStore.loadBook(source, bookId: normalizedBookId),
+    };
+
+    void collectPutVariables(Map<String, String> variables) {
+      if (variables.isEmpty) {
+        return;
+      }
+      if (normalizedBookId.isEmpty) {
+        sourceVariableUpdates.addAll(variables);
+      } else {
+        bookVariableUpdates.addAll(variables);
+      }
+      runtimeJsVariables.addAll(
+        SourceJsVariableStore.toRuntimeVariables(variables),
+      );
+    }
+
     var contentRule = _normalizeRuleExpression(
       source.rules.contentRule,
       fallbackExtractor: 'html',
@@ -148,11 +183,22 @@ class ChapterContentService {
       sourceId: normalizedSourceId,
       extraParams: {'chapterUrl': normalizedChapterUrl},
     );
+    final initialJsContext = _buildContentJsContext(
+      source: source,
+      runtimeContext: templateContext,
+      bookId: normalizedBookId,
+      chapterUrl: normalizedChapterUrl,
+      chapterIndex: chapterIndex,
+      chapterTitle: chapterTitle,
+      seedVariables: runtimeJsVariables,
+      onBridgePutVariables: collectPutVariables,
+    );
 
     final initVariables = await _loadInitVariables(
       source: source,
       initRule: source.rules.contentInitRule,
       context: templateContext,
+      jsContext: initialJsContext,
     );
 
     final runtimeContext =
@@ -205,18 +251,15 @@ class ChapterContentService {
       },
     );
 
-    final response = await _httpClient.get(
-      RequestContext(
-        url: requestUrl,
-        method: requestSpec.method,
-        body: requestBody,
-        contentType: contentType,
-        responseCharset: requestSpec.responseCharset,
-        headers: requestHeaders,
-        maxRetries: 1,
-        stage: ErrorStage.content,
-        sourceId: normalizedSourceId,
-      ),
+    final response = await _executeRequest(
+      source: source,
+      requestSpec: requestSpec,
+      requestUrl: requestUrl,
+      requestBody: requestBody,
+      contentType: contentType,
+      requestHeaders: requestHeaders,
+      stage: ErrorStage.content,
+      sourceId: normalizedSourceId,
     );
 
     final normalizedResponseBody =
@@ -230,26 +273,42 @@ class ChapterContentService {
             .body;
 
     final variableState = <String, String>{...runtimeContext.extraParams};
+    final runtimeJsContext = _buildContentJsContext(
+      source: source,
+      runtimeContext: runtimeContext,
+      bookId: normalizedBookId,
+      chapterUrl: normalizedChapterUrl,
+      chapterIndex: chapterIndex,
+      chapterTitle: chapterTitle,
+      requestUrl: requestUrl,
+      seedVariables: runtimeJsVariables,
+      onBridgePutVariables: collectPutVariables,
+    );
 
     final contentExpression = _resolveRuntimeRuleTemplate(
       expression: contentRule,
       context: runtimeContext,
     );
-    final resolvedContentExpression = _resolveLegacyVariableExpression(
+    final resolvedContentExpression = await _resolveLegacyVariableExpression(
       content: normalizedResponseBody,
       expression: contentExpression,
       rawRule: source.rules.contentRule,
       stage: ErrorStage.content,
       variables: variableState,
       fallbackExtractor: 'html',
+      jsContext: _mergeJsContextVariables(runtimeJsContext, variableState),
     );
 
     final extractedSegments =
         _looksLikeRuleExpression(resolvedContentExpression)
-            ? _executeAllWithFallback(
+            ? await _executeAllWithFallback(
               content: normalizedResponseBody,
               expression: resolvedContentExpression,
               stage: ErrorStage.content,
+              jsContext: _mergeJsContextVariables(
+                runtimeJsContext,
+                variableState,
+              ),
             )
             : <String>[
               resolvedContentExpression.trim(),
@@ -275,8 +334,6 @@ class ChapterContentService {
         sourceId: normalizedSourceId,
       );
     }
-
-    final normalizedBookId = bookId?.trim() ?? '';
 
     if (imageUrls.isNotEmpty) {
       final payload = _encodeImageCachePayload(
@@ -309,6 +366,12 @@ class ChapterContentService {
         }
       }
 
+      await _persistJsVariables(
+        source: source,
+        bookId: normalizedBookId,
+        sourceVariables: sourceVariableUpdates,
+        bookVariables: bookVariableUpdates,
+      );
       return ChapterContentResult(
         content: '',
         fromCache: false,
@@ -322,7 +385,31 @@ class ChapterContentService {
         .where((item) => item.isNotEmpty)
         .join('\n\n');
 
-    final cleaned = _cleaner.clean(extracted);
+    var cleaned = _cleaner.clean(extracted);
+    cleaned = await _applyContentReplaceRegex(
+      content: cleaned,
+      source: source,
+      sourceId: normalizedSourceId,
+    );
+
+    cleaned = await _appendNextContentPages(
+      source: source,
+      sourceId: normalizedSourceId,
+      initialContent: cleaned,
+      initialPageHtml: normalizedResponseBody,
+      initialPageUrl: requestUrl,
+      requestContext: runtimeContext,
+      contentExpression: contentRule,
+      variableState: variableState,
+      runtimeJsVariables: runtimeJsVariables,
+      bookId: normalizedBookId,
+      chapterUrl: normalizedChapterUrl,
+      chapterIndex: chapterIndex,
+      chapterTitle: chapterTitle,
+      nextChapterUrl: nextChapterUrl,
+      onBridgePutVariables: collectPutVariables,
+    );
+
     if (cleaned.isEmpty) {
       throw RuleMatchEmptyException(
         briefMessage: '正文清洗后为空，请检查正文规则。',
@@ -357,6 +444,12 @@ class ChapterContentService {
       }
     }
 
+    await _persistJsVariables(
+      source: source,
+      bookId: normalizedBookId,
+      sourceVariables: sourceVariableUpdates,
+      bookVariables: bookVariableUpdates,
+    );
     return ChapterContentResult(content: cleaned, fromCache: false);
   }
 
@@ -413,6 +506,392 @@ class ChapterContentService {
     );
   }
 
+  Future<void> _persistJsVariables({
+    required SourceDefinition source,
+    required String bookId,
+    required Map<String, String> sourceVariables,
+    required Map<String, String> bookVariables,
+  }) async {
+    await _persistSourceJsVariables(source: source, variables: sourceVariables);
+    await _persistBookJsVariables(
+      source: source,
+      bookId: bookId,
+      variables: bookVariables,
+    );
+  }
+
+  Future<void> _persistSourceJsVariables({
+    required SourceDefinition source,
+    required Map<String, String> variables,
+  }) async {
+    if (variables.isEmpty) {
+      return;
+    }
+
+    final nextSource = SourceJsVariableStore.merge(
+      source: source,
+      updates: variables,
+    );
+    try {
+      await _sourceRepository.upsertAll([nextSource]);
+    } catch (error) {
+      _logger.warn(
+        'Persist source js variables failed',
+        context: <String, Object?>{
+          'sourceId': source.id,
+          'sourceName': source.name,
+          'stage': ErrorStage.content.name,
+          'error': error.toString(),
+        },
+      );
+    }
+  }
+
+  Future<void> _persistBookJsVariables({
+    required SourceDefinition source,
+    required String bookId,
+    required Map<String, String> variables,
+  }) async {
+    if (bookId.trim().isEmpty || variables.isEmpty) {
+      return;
+    }
+
+    final nextSource = SourceJsVariableStore.mergeBook(
+      source: source,
+      bookId: bookId,
+      updates: variables,
+    );
+    try {
+      await _sourceRepository.upsertAll([nextSource]);
+    } catch (error) {
+      _logger.warn(
+        'Persist book js variables failed',
+        context: <String, Object?>{
+          'sourceId': source.id,
+          'sourceName': source.name,
+          'bookId': bookId,
+          'stage': ErrorStage.content.name,
+          'error': error.toString(),
+        },
+      );
+    }
+  }
+
+  Future<String> _applyContentReplaceRegex({
+    required String content,
+    required SourceDefinition source,
+    required String sourceId,
+  }) async {
+    final replaceRule = source.rules.contentReplaceRegex?.trim();
+    if (replaceRule == null || replaceRule.isEmpty || content.isEmpty) {
+      return content;
+    }
+    return _replaceRegexExecutor.execute(
+      content: content,
+      replaceRegex: replaceRule,
+      sourceId: sourceId,
+    );
+  }
+
+  Future<String> _appendNextContentPages({
+    required SourceDefinition source,
+    required String sourceId,
+    required String initialContent,
+    required String initialPageHtml,
+    required String initialPageUrl,
+    required SearchRequestContext requestContext,
+    required String contentExpression,
+    required Map<String, String> variableState,
+    required Map<String, String> runtimeJsVariables,
+    required String bookId,
+    required String chapterUrl,
+    required int? chapterIndex,
+    required String? chapterTitle,
+    required String? nextChapterUrl,
+    JsBridgePutCallback? onBridgePutVariables,
+  }) async {
+    final normalizedInitial = initialContent.trim();
+    if (normalizedInitial.isEmpty) {
+      return initialContent;
+    }
+
+    final rawNextRule = source.rules.contentNextUrlRule;
+    final nextRuleExpression = _normalizeNextContentRuleExpression(rawNextRule);
+    if (nextRuleExpression == null || nextRuleExpression.trim().isEmpty) {
+      return initialContent;
+    }
+
+    final contentParts = <String>[normalizedInitial];
+    final rollingVariables = <String, String>{...variableState};
+    final visitedUrls = <String>{_stripRequestOptions(initialPageUrl)};
+    var currentHtml = initialPageHtml;
+    var currentUrl = initialPageUrl;
+    const maxPages = 30;
+
+    for (var page = 0; page < maxPages; page += 1) {
+      final pageContext = requestContext.copyWith(
+        extraParams: {
+          ...requestContext.extraParams,
+          ...rollingVariables,
+          'chapterUrl': currentUrl,
+        },
+      );
+      final pageJsContext = _buildContentJsContext(
+        source: source,
+        runtimeContext: pageContext,
+        bookId: bookId,
+        chapterUrl: chapterUrl,
+        chapterIndex: chapterIndex,
+        chapterTitle: chapterTitle,
+        requestUrl: currentUrl,
+        seedVariables: runtimeJsVariables,
+        onBridgePutVariables: onBridgePutVariables,
+      );
+
+      final nextUrl = await _extractNextContentUrl(
+        sourceId: sourceId,
+        pageHtml: currentHtml,
+        pageUrl: currentUrl,
+        context: pageContext,
+        nextRuleExpression: nextRuleExpression,
+        rawNextRule: rawNextRule,
+        variables: rollingVariables,
+        jsContext: _mergeJsContextVariables(pageJsContext, rollingVariables),
+      );
+      if (nextUrl == null || nextUrl.trim().isEmpty) {
+        break;
+      }
+      if (_isNextChapterUrl(nextUrl: nextUrl, nextChapterUrl: nextChapterUrl)) {
+        break;
+      }
+
+      final normalizedNextUrl = _stripRequestOptions(nextUrl);
+      if (!visitedUrls.add(normalizedNextUrl)) {
+        break;
+      }
+
+      final nextRequestInput = _normalizeChapterRequestInput(nextUrl);
+      final nextSpec = _parseChapterRequestSpec(chapterUrl: nextRequestInput);
+      final nextRequestContext = pageContext.copyWith(
+        extraParams: {...pageContext.extraParams, 'chapterUrl': nextUrl},
+      );
+      final nextRequestUrl = _resolveContentRequestUrl(
+        source: source,
+        template: nextSpec.urlTemplate,
+        context: nextRequestContext,
+      );
+      _validateResolvedRequestUrl(
+        requestUrl: nextRequestUrl,
+        sourceId: sourceId,
+      );
+
+      final nextContentType = _resolveContentType(nextSpec);
+      final nextBody = _resolveBodyTemplate(
+        nextSpec.bodyTemplate,
+        context: nextRequestContext,
+        encodeKeywordByDefault: _shouldEncodeKeywordInBody(
+          bodyTemplate: nextSpec.bodyTemplate,
+          contentType: nextContentType,
+        ),
+      );
+      final nextHeaders = _resolveRequestHeaders(
+        sourceHeaders: source.headers,
+        requestHeaders: nextSpec.headers,
+        context: nextRequestContext,
+      );
+
+      final nextResponse = await _executeRequest(
+        source: source,
+        requestSpec: nextSpec,
+        requestUrl: nextRequestUrl,
+        requestBody: nextBody,
+        contentType: nextContentType,
+        requestHeaders: nextHeaders,
+        stage: ErrorStage.content,
+        sourceId: sourceId,
+      );
+      final normalizedNextHtml =
+          _responseProcessor
+              .process(
+                body: nextResponse.body,
+                requestUrl: nextRequestUrl,
+                fallbackUrl: nextUrl,
+                decryptRule: source.rules.contentDecryptRule,
+              )
+              .body;
+
+      final nextChunk = await _extractContentFromPage(
+        source: source,
+        sourceId: sourceId,
+        content: normalizedNextHtml,
+        contentExpression: contentExpression,
+        context: nextRequestContext,
+        variables: rollingVariables,
+        bookId: bookId,
+        chapterUrl: chapterUrl,
+        chapterIndex: chapterIndex,
+        chapterTitle: chapterTitle,
+        requestUrl: nextRequestUrl,
+        runtimeJsVariables: runtimeJsVariables,
+        onBridgePutVariables: onBridgePutVariables,
+      );
+      if (nextChunk.isEmpty) {
+        break;
+      }
+      if (_isDuplicateContent(contentParts.last, nextChunk)) {
+        break;
+      }
+
+      contentParts.add(nextChunk);
+      currentHtml = normalizedNextHtml;
+      currentUrl = nextRequestUrl;
+    }
+
+    variableState.addAll(rollingVariables);
+    return contentParts.join('\n\n');
+  }
+
+  Future<String?> _extractNextContentUrl({
+    required String sourceId,
+    required String pageHtml,
+    required String pageUrl,
+    required SearchRequestContext context,
+    required String nextRuleExpression,
+    required String? rawNextRule,
+    required Map<String, String> variables,
+    JsExecutionContext? jsContext,
+  }) async {
+    final resolvedExpression = _resolveRuntimeRuleTemplate(
+      expression: nextRuleExpression,
+      context: context,
+    );
+
+    String? nextRaw;
+    if (_looksLikeRequestRule(resolvedExpression)) {
+      nextRaw = resolvedExpression;
+    } else {
+      final resolvedValue = await _resolveLegacyVariableExpression(
+        content: pageHtml,
+        expression: resolvedExpression,
+        rawRule: rawNextRule,
+        stage: ErrorStage.content,
+        variables: variables,
+        fallbackExtractor: 'attr(href)',
+        preferredAttribute: 'href',
+        jsContext: _mergeJsContextVariables(jsContext, variables),
+      );
+      if (_looksLikeRuleExpression(resolvedValue)) {
+        final candidates = await _executeAllWithFallback(
+          content: pageHtml,
+          expression: resolvedValue,
+          stage: ErrorStage.content,
+          jsContext: _mergeJsContextVariables(jsContext, variables),
+        );
+        if (candidates.isNotEmpty) {
+          nextRaw = candidates.first.trim();
+        }
+      } else {
+        nextRaw = resolvedValue.trim();
+      }
+    }
+
+    if (nextRaw == null || nextRaw.trim().isEmpty) {
+      return null;
+    }
+
+    final shouldBypassPostProcess =
+        nextRuleExpression == LegacyScriptRuleFallback.fieldExpression ||
+        nextRuleExpression.startsWith('js:') ||
+        nextRuleExpression.startsWith('@js:');
+    final nextValue =
+        shouldBypassPostProcess
+            ? nextRaw.trim()
+            : LegacyLinkPostProcessor.apply(
+              value: nextRaw,
+              rawRule: rawNextRule,
+            );
+    if (nextValue.trim().isEmpty) {
+      return null;
+    }
+
+    final resolvedUrl = _resolveMaybeUrl(pageUrl: pageUrl, rawUrl: nextValue);
+    if (resolvedUrl == null || resolvedUrl.trim().isEmpty) {
+      return null;
+    }
+    _validateResolvedRequestUrl(requestUrl: resolvedUrl, sourceId: sourceId);
+    return resolvedUrl;
+  }
+
+  Future<String> _extractContentFromPage({
+    required SourceDefinition source,
+    required String sourceId,
+    required String content,
+    required String contentExpression,
+    required SearchRequestContext context,
+    required Map<String, String> variables,
+    required String bookId,
+    required String chapterUrl,
+    required int? chapterIndex,
+    required String? chapterTitle,
+    required String requestUrl,
+    required Map<String, String> runtimeJsVariables,
+    JsBridgePutCallback? onBridgePutVariables,
+  }) async {
+    final runtimeJsContext = _buildContentJsContext(
+      source: source,
+      runtimeContext: context,
+      bookId: bookId,
+      chapterUrl: chapterUrl,
+      chapterIndex: chapterIndex,
+      chapterTitle: chapterTitle,
+      requestUrl: requestUrl,
+      seedVariables: runtimeJsVariables,
+      onBridgePutVariables: onBridgePutVariables,
+    );
+    final contentRule = _resolveRuntimeRuleTemplate(
+      expression: contentExpression,
+      context: context,
+    );
+    final resolvedContentExpression = await _resolveLegacyVariableExpression(
+      content: content,
+      expression: contentRule,
+      rawRule: source.rules.contentRule,
+      stage: ErrorStage.content,
+      variables: variables,
+      fallbackExtractor: 'html',
+      jsContext: _mergeJsContextVariables(runtimeJsContext, variables),
+    );
+    final extractedSegments =
+        _looksLikeRuleExpression(resolvedContentExpression)
+            ? await _executeAllWithFallback(
+              content: content,
+              expression: resolvedContentExpression,
+              stage: ErrorStage.content,
+              jsContext: _mergeJsContextVariables(runtimeJsContext, variables),
+            )
+            : <String>[
+              resolvedContentExpression.trim(),
+            ].where((item) => item.isNotEmpty).toList(growable: false);
+    if (extractedSegments.isEmpty) {
+      return '';
+    }
+
+    final rawContent = extractedSegments
+        .map((item) => item.trim())
+        .where((item) => item.isNotEmpty)
+        .join('\n\n');
+    if (rawContent.isEmpty) {
+      return '';
+    }
+
+    final cleaned = _cleaner.clean(rawContent);
+    return _applyContentReplaceRegex(
+      content: cleaned,
+      source: source,
+      sourceId: sourceId,
+    );
+  }
+
   String _normalizeChapterRequestInput(String chapterUrl) {
     final normalized = LegacyLinkPostProcessor.apply(value: chapterUrl);
     final candidate =
@@ -429,6 +908,158 @@ class ChapterContentService {
     }
 
     return candidate;
+  }
+
+  String? _normalizeNextContentRuleExpression(String? rawRule) {
+    final text = rawRule?.trim();
+    if (text == null || text.isEmpty) {
+      return null;
+    }
+
+    final containsJsonTemplate =
+        text.contains(r'{{$.') ||
+        text.contains(r'{{ $.') ||
+        text.contains(r'{{\$.') ||
+        text.contains(r'{{ \$.');
+    if (_looksLikeRequestRule(text) && !containsJsonTemplate) {
+      return text;
+    }
+
+    return _normalizeRuleExpression(
+      text,
+      fallbackExtractor: 'attr(href)',
+      preferredAttribute: 'href',
+    );
+  }
+
+  String? _resolveMaybeUrl({required String pageUrl, required String? rawUrl}) {
+    final text = rawUrl?.trim();
+    if (text == null || text.isEmpty) {
+      return null;
+    }
+
+    final requestSplit = _splitRequestOptions(text);
+    final rawUrlPart = requestSplit?.urlTemplate ?? text;
+    final urlPart = _normalizeCandidateUrl(rawUrlPart);
+    if (urlPart == null ||
+        _isInvalidChapterUrl(urlPart) ||
+        _looksLikeHtmlFragment(urlPart) ||
+        _looksLikeEncodedHtmlFragment(urlPart)) {
+      return null;
+    }
+
+    final resolvedUrl = _resolveAbsoluteHttpUrl(
+      pageUrl: pageUrl,
+      rawUrl: urlPart,
+    );
+    if (resolvedUrl == null) {
+      return null;
+    }
+
+    if (requestSplit == null) {
+      return resolvedUrl;
+    }
+
+    return '$resolvedUrl,${requestSplit.optionsText}';
+  }
+
+  String? _normalizeCandidateUrl(String rawUrl) {
+    var normalized = rawUrl.trim();
+    if (normalized.isEmpty) {
+      return null;
+    }
+
+    if ((normalized.startsWith('"') && normalized.endsWith('"')) ||
+        (normalized.startsWith("'") && normalized.endsWith("'"))) {
+      normalized = normalized.substring(1, normalized.length - 1).trim();
+    }
+
+    return normalized.isEmpty ? null : normalized;
+  }
+
+  bool _isInvalidChapterUrl(String url) {
+    final lower = url.toLowerCase();
+    return lower.startsWith('javascript:') ||
+        lower.startsWith('about:blank') ||
+        lower.startsWith('data:') ||
+        lower.startsWith('mailto:') ||
+        lower == '#' ||
+        lower.startsWith('#');
+  }
+
+  String? _resolveAbsoluteHttpUrl({
+    required String pageUrl,
+    required String rawUrl,
+  }) {
+    Uri? parsed = Uri.tryParse(rawUrl);
+    if (parsed == null) {
+      final encoded = Uri.encodeFull(rawUrl);
+      parsed = Uri.tryParse(encoded);
+      if (parsed == null) {
+        return null;
+      }
+    }
+
+    if (parsed.hasScheme) {
+      final scheme = parsed.scheme.toLowerCase();
+      if (scheme != 'http' && scheme != 'https') {
+        return null;
+      }
+      return parsed.toString();
+    }
+
+    final pageUri = Uri.tryParse(pageUrl);
+    if (pageUri == null || !pageUri.hasScheme) {
+      return null;
+    }
+
+    if (rawUrl.startsWith('//')) {
+      return '${pageUri.scheme}:$rawUrl';
+    }
+
+    try {
+      final resolved = pageUri.resolveUri(parsed);
+      final scheme = resolved.scheme.toLowerCase();
+      if (scheme != 'http' && scheme != 'https') {
+        return null;
+      }
+      return resolved.toString();
+    } on FormatException {
+      return null;
+    }
+  }
+
+  String _stripRequestOptions(String url) {
+    final split = _splitRequestOptions(url.trim());
+    return split?.urlTemplate ?? url.trim();
+  }
+
+  bool _isNextChapterUrl({required String nextUrl, String? nextChapterUrl}) {
+    final normalizedNext = _stripRequestOptions(nextUrl);
+    final normalizedChapter = _stripRequestOptions(
+      nextChapterUrl?.trim() ?? '',
+    );
+    if (normalizedChapter.isEmpty) {
+      return false;
+    }
+    return normalizedNext == normalizedChapter;
+  }
+
+  bool _isDuplicateContent(String lastPart, String nextPart) {
+    final normalizedLast = _normalizeContentForDuplicate(lastPart);
+    final normalizedNext = _normalizeContentForDuplicate(nextPart);
+    if (normalizedLast.isEmpty || normalizedNext.isEmpty) {
+      return false;
+    }
+    if (normalizedLast == normalizedNext) {
+      return true;
+    }
+    return normalizedLast.contains(normalizedNext) ||
+        normalizedNext.contains(normalizedLast);
+  }
+
+  String _normalizeContentForDuplicate(String content) {
+    return content.replaceAll(RegExp(r'\s+'), '').trim();
   }
 
   String _resolveContentRequestUrl({
@@ -526,33 +1157,28 @@ class ChapterContentService {
 
   _ContentRequestSpec _parseChapterRequestSpec({required String chapterUrl}) {
     final normalized = chapterUrl.trim();
-    final splitResult = _splitRequestOptions(normalized);
-    if (splitResult == null) {
+    final parsedRule = UrlOptionParser.parseRule(normalized);
+    if (parsedRule == null) {
       return _ContentRequestSpec(
         urlTemplate: normalized,
         method: HttpRequestMethod.get,
+        maxRetries: 1,
       );
     }
 
-    final options = _decodeOptionsMap(splitResult.optionsText);
-
-    final methodText = options['method']?.toString().toUpperCase();
-    final method =
-        methodText == 'POST' ? HttpRequestMethod.post : HttpRequestMethod.get;
+    final option = parsedRule.options;
 
     return _ContentRequestSpec(
-      urlTemplate: splitResult.urlTemplate,
-      method: method,
-      headers: _parseHeaders(options['headers'] ?? options['header']),
-      bodyTemplate: _normalizeBodyTemplate(options['body']),
-      contentType: _asNullableString(
-        options['contentType'] ?? options['content-type'],
-      ),
-      responseCharset: _asNullableString(
-        options['responseCharset'] ??
-            options['response-charset'] ??
-            options['charset'],
-      ),
+      urlTemplate: parsedRule.urlTemplate,
+      method: option.method,
+      headers: option.headers,
+      bodyTemplate: _normalizeBodyTemplate(option.body),
+      contentType: option.contentType,
+      responseCharset: option.responseCharset,
+      maxRetries: option.retry ?? 1,
+      useWebView: option.webView,
+      webJs: option.webJs,
+      sourceRegex: option.sourceRegex,
     );
   }
 
@@ -662,75 +1288,125 @@ class ChapterContentService {
     return null;
   }
 
-  Map<String, String> _parseHeaders(Object? source) {
-    if (source == null) {
-      return const {};
-    }
+  JsExecutionContext _buildContentJsContext({
+    required SourceDefinition source,
+    required SearchRequestContext runtimeContext,
+    required String bookId,
+    required String chapterUrl,
+    int? chapterIndex,
+    String? chapterTitle,
+    String? requestUrl,
+    Map<String, String> seedVariables = const <String, String>{},
+    JsBridgePutCallback? onBridgePutVariables,
+  }) {
+    final variables = <String, String>{
+      ...seedVariables,
+      ...runtimeContext.extraParams,
+    };
 
-    final rawHeaders = source is String ? _decodeOptionsMap(source) : source;
-
-    if (rawHeaders is! Map) {
-      return const {};
-    }
-
-    final headers = <String, String>{};
-    for (final entry in rawHeaders.entries) {
-      final key = entry.key.toString().trim();
-      final value = entry.value.toString().trim();
-      if (key.isNotEmpty && value.isNotEmpty) {
-        headers[key] = value;
+    void collectPutVariables(Map<String, String> updates) {
+      if (updates.isEmpty) {
+        return;
       }
+      variables.addAll(SourceJsVariableStore.toRuntimeVariables(updates));
+      onBridgePutVariables?.call(updates);
     }
 
-    return headers;
+    return JsExecutionContext(
+      sourceId: source.id,
+      baseUrl: source.baseUrl,
+      variables: variables,
+      sourceJson: _buildSourceJsJson(source),
+      bookJson: _buildBookJsJson(sourceId: source.id, bookId: bookId),
+      chapterJson: _buildChapterJsJson(
+        bookId: bookId,
+        chapterUrl: chapterUrl,
+        chapterIndex: chapterIndex,
+        chapterTitle: chapterTitle,
+        requestUrl: requestUrl,
+      ),
+      jsLibScript: source.jsLib,
+      onBridgePutVariables: collectPutVariables,
+    );
   }
 
-  Map<String, dynamic> _decodeOptionsMap(String source) {
-    try {
-      final decoded = jsonDecode(source);
-      if (decoded is Map<String, dynamic>) {
-        return decoded;
-      }
-      if (decoded is Map) {
-        return decoded.map((key, value) => MapEntry(key.toString(), value));
-      }
-    } on FormatException {
-      // fall through
+  JsExecutionContext? _mergeJsContextVariables(
+    JsExecutionContext? jsContext,
+    Map<String, String>? variables,
+  ) {
+    if (jsContext == null || variables == null || variables.isEmpty) {
+      return jsContext;
     }
 
-    final normalized = _normalizePseudoJson(source);
-    try {
-      final decoded = jsonDecode(normalized);
-      if (decoded is Map<String, dynamic>) {
-        return decoded;
-      }
-      if (decoded is Map) {
-        return decoded.map((key, value) => MapEntry(key.toString(), value));
-      }
-    } on FormatException {
-      return const {};
-    }
-
-    return const {};
+    return jsContext.copyWith(
+      variables: <String, String>{...jsContext.variables, ...variables},
+    );
   }
 
-  String _normalizePseudoJson(String source) {
-    return source.replaceAllMapped(RegExp(r"'([^'\\]*(?:\\.[^'\\]*)*)'"), (
-      match,
-    ) {
-      final inner = match.group(1) ?? '';
-      final escaped = inner
-          .replaceAll(r'\', r'\\')
-          .replaceAll('"', r'\"')
-          .replaceAll('\n', r'\n');
-      return '"$escaped"';
-    });
+  Map<String, dynamic> _buildSourceJsJson(SourceDefinition source) {
+    final payload = <String, dynamic>{...?source.originalSource};
+    payload.putIfAbsent('id', () => source.id);
+    payload.putIfAbsent('name', () => source.name);
+    payload.putIfAbsent('bookSourceName', () => source.name);
+    payload.putIfAbsent('baseUrl', () => source.baseUrl);
+    payload.putIfAbsent('bookSourceUrl', () => source.baseUrl);
+    payload.putIfAbsent('sourceType', () => source.sourceType);
+    payload.putIfAbsent('enabled', () => source.enabled);
+    return payload;
+  }
+
+  Map<String, dynamic> _buildBookJsJson({
+    required String sourceId,
+    required String bookId,
+  }) {
+    final normalizedBookId = bookId.trim();
+    if (normalizedBookId.isEmpty) {
+      return <String, dynamic>{'sourceId': sourceId};
+    }
+
+    return <String, dynamic>{
+      'id': normalizedBookId,
+      'bookId': normalizedBookId,
+      'sourceId': sourceId,
+    };
+  }
+
+  Map<String, dynamic> _buildChapterJsJson({
+    required String bookId,
+    required String chapterUrl,
+    int? chapterIndex,
+    String? chapterTitle,
+    String? requestUrl,
+  }) {
+    final payload = <String, dynamic>{
+      'bookId': bookId.trim(),
+      'chapterUrl': chapterUrl,
+      'url': chapterUrl,
+    };
+
+    final normalizedRequest = requestUrl?.trim() ?? '';
+    if (normalizedRequest.isNotEmpty) {
+      payload['requestUrl'] = normalizedRequest;
+    }
+
+    if (chapterIndex != null) {
+      payload['index'] = chapterIndex;
+    }
+
+    final normalizedTitle = chapterTitle?.trim() ?? '';
+    if (normalizedTitle.isNotEmpty) {
+      payload['title'] = normalizedTitle;
+      payload['name'] = normalizedTitle;
+    }
+
+    return payload;
   }
 
   Future<Map<String, String>> _loadInitVariables({
     required SourceDefinition source,
     required String? initRule,
     required SearchRequestContext context,
+    JsExecutionContext? jsContext,
   }) async {
     final rawInitRule = initRule?.trim();
     if (rawInitRule == null || rawInitRule.isEmpty) {
@@ -767,18 +1443,15 @@ class ChapterContentService {
       context: context,
     );
 
-    final response = await _httpClient.get(
-      RequestContext(
-        url: requestUrl,
-        method: requestSpec.method,
-        body: requestBody,
-        contentType: contentType,
-        responseCharset: requestSpec.responseCharset,
-        headers: requestHeaders,
-        maxRetries: 1,
-        stage: ErrorStage.content,
-        sourceId: source.id,
-      ),
+    final response = await _executeRequest(
+      source: source,
+      requestSpec: requestSpec,
+      requestUrl: requestUrl,
+      requestBody: requestBody,
+      contentType: contentType,
+      requestHeaders: requestHeaders,
+      stage: ErrorStage.content,
+      sourceId: source.id,
     );
 
     final normalizedInitBody =
@@ -799,10 +1472,11 @@ class ChapterContentService {
       return _flattenInitVariables(decoded);
     }();
 
-    final putVariables = _extractInitPutVariables(
+    final putVariables = await _extractInitPutVariables(
       content: normalizedInitBody,
       parseRule: initParts.parseRule,
       context: context,
+      jsContext: jsContext,
     );
 
     if (jsonVariables.isEmpty && putVariables.isEmpty) {
@@ -837,11 +1511,12 @@ class ChapterContentService {
     return _InitRuleParts(parseRule: normalized);
   }
 
-  Map<String, String> _extractInitPutVariables({
+  Future<Map<String, String>> _extractInitPutVariables({
     required String content,
     required String? parseRule,
     required SearchRequestContext context,
-  }) {
+    JsExecutionContext? jsContext,
+  }) async {
     if (!LegacyRuleVariableProcessor.containsVariableSyntax(parseRule)) {
       return const {};
     }
@@ -849,13 +1524,14 @@ class ChapterContentService {
     final working = <String, String>{...context.toVariables()};
     final baseline = Map<String, String>.from(working);
 
-    LegacyRuleVariableProcessor.resolveExpression(
+    await LegacyRuleVariableProcessor.resolveExpressionAsync(
       expression: parseRule!.trim(),
       variables: working,
       resolvePutValue:
           (valueExpression) => _evaluateInitPutValue(
             content: content,
             valueExpression: valueExpression,
+            jsContext: _mergeJsContextVariables(jsContext, working),
           ),
     );
 
@@ -873,10 +1549,11 @@ class ChapterContentService {
     return output;
   }
 
-  String? _evaluateInitPutValue({
+  Future<String?> _evaluateInitPutValue({
     required String content,
     required String valueExpression,
-  }) {
+    JsExecutionContext? jsContext,
+  }) async {
     final text = valueExpression.trim();
     if (text.isEmpty) {
       return null;
@@ -890,10 +1567,11 @@ class ChapterContentService {
     if (normalizedRule != null) {
       for (final candidate in _splitFallbackExpressions(normalizedRule)) {
         try {
-          final value = _ruleEngine.executeFirst(
+          final value = await _ruleEngine.executeFirst(
             content: content,
             expression: candidate,
             stage: ErrorStage.content,
+            jsContext: jsContext,
           );
           final normalized = value.trim();
           if (normalized.isNotEmpty) {
@@ -980,6 +1658,78 @@ class ChapterContentService {
     }
 
     return resolved;
+  }
+
+  Future<_NetworkLoadResult> _executeRequest({
+    required SourceDefinition source,
+    required _ContentRequestSpec requestSpec,
+    required String requestUrl,
+    required Object? requestBody,
+    required String? contentType,
+    required Map<String, String> requestHeaders,
+    required ErrorStage stage,
+    required String sourceId,
+  }) async {
+    if (requestSpec.useWebView) {
+      try {
+        final webViewResponse = await _webViewExecutor.load(
+          request: WebViewRequestPayload(
+            url: requestUrl,
+            method: requestSpec.method,
+            headers: requestHeaders,
+            body: requestBody,
+            contentType: contentType,
+            webJs: requestSpec.webJs,
+            sourceRegex: requestSpec.sourceRegex,
+            stage: stage,
+            sourceId: sourceId,
+          ),
+        );
+        final matchedResourceUrl =
+            webViewResponse.matchedResourceUrl?.trim() ?? '';
+        final shouldUseMatchedResourceUrl =
+            requestSpec.sourceRegex != null &&
+            requestSpec.sourceRegex!.trim().isNotEmpty &&
+            matchedResourceUrl.isNotEmpty;
+        return _NetworkLoadResult(
+          statusCode: webViewResponse.statusCode,
+          body:
+              shouldUseMatchedResourceUrl
+                  ? matchedResourceUrl
+                  : webViewResponse.body,
+        );
+      } catch (error) {
+        _logger.warn(
+          'WebView request failed and fallback to HTTP',
+          context: <String, Object?>{
+            'sourceId': sourceId,
+            'stage': stage.name,
+            'url': requestUrl,
+            'briefMessage': error.toString(),
+            'diagnostic': 'webview_fallback_http',
+          },
+        );
+      }
+    }
+
+    final response = await _httpClient.get(
+      RequestContext(
+        url: requestUrl,
+        method: requestSpec.method,
+        body: requestBody,
+        contentType: contentType,
+        responseCharset: requestSpec.responseCharset,
+        headers: requestHeaders,
+        maxRetries: requestSpec.maxRetries,
+        stage: stage,
+        sourceId: sourceId,
+        sourceConcurrentRate: source.concurrentRate,
+      ),
+    );
+    return _NetworkLoadResult(
+      statusCode: response.statusCode,
+      body: response.body,
+    );
   }
 
   Object? _resolveBodyTemplate(
@@ -1097,17 +1847,6 @@ class ChapterContentService {
     }
 
     return value;
-  }
-
-  String? _asNullableString(Object? value) {
-    if (value == null) {
-      return null;
-    }
-    final text = value.toString().trim();
-    if (text.isEmpty) {
-      return null;
-    }
-    return text;
   }
 
   List<String> _extractImageUrls({
@@ -1567,17 +2306,19 @@ class ChapterContentService {
     return _DecodedChapterCache(content: trimmed);
   }
 
-  List<String> _executeAllWithFallback({
+  Future<List<String>> _executeAllWithFallback({
     required String content,
     required String expression,
     required ErrorStage stage,
-  }) {
+    JsExecutionContext? jsContext,
+  }) async {
     for (final candidate in _splitFallbackExpressions(expression)) {
       try {
-        final values = _ruleEngine.executeAll(
+        final values = await _ruleEngine.executeAll(
           content: content,
           expression: candidate,
           stage: stage,
+          jsContext: jsContext,
         );
         if (values.isNotEmpty) {
           return values;
@@ -1587,10 +2328,11 @@ class ChapterContentService {
           final repaired = _repairJsonControlCharacters(content);
           if (repaired != content) {
             try {
-              final repairedValues = _ruleEngine.executeAll(
+              final repairedValues = await _ruleEngine.executeAll(
                 content: repaired,
                 expression: candidate,
                 stage: stage,
+                jsContext: jsContext,
               );
               if (repairedValues.isNotEmpty) {
                 return repairedValues;
@@ -1608,7 +2350,7 @@ class ChapterContentService {
     return const [];
   }
 
-  String _resolveLegacyVariableExpression({
+  Future<String> _resolveLegacyVariableExpression({
     required String content,
     required String expression,
     required ErrorStage stage,
@@ -1616,25 +2358,28 @@ class ChapterContentService {
     required String fallbackExtractor,
     String? preferredAttribute,
     String? rawRule,
-  }) {
+    JsExecutionContext? jsContext,
+  }) async {
     final variableAwareRaw =
         LegacyRuleVariableProcessor.containsVariableSyntax(rawRule)
             ? rawRule!.trim()
             : null;
 
     if (variableAwareRaw != null) {
-      final resolvedRaw = LegacyRuleVariableProcessor.resolveExpression(
-        expression: variableAwareRaw,
-        variables: variables,
-        resolvePutValue:
-            (valueExpression) => _evaluateLegacyPutValue(
-              content: content,
-              stage: stage,
-              valueExpression: valueExpression,
-              fallbackExtractor: fallbackExtractor,
-              preferredAttribute: preferredAttribute,
-            ),
-      );
+      final resolvedRaw =
+          await LegacyRuleVariableProcessor.resolveExpressionAsync(
+            expression: variableAwareRaw,
+            variables: variables,
+            resolvePutValue:
+                (valueExpression) => _evaluateLegacyPutValue(
+                  content: content,
+                  stage: stage,
+                  valueExpression: valueExpression,
+                  fallbackExtractor: fallbackExtractor,
+                  preferredAttribute: preferredAttribute,
+                  jsContext: _mergeJsContextVariables(jsContext, variables),
+                ),
+          );
 
       final rawLiteral = resolvedRaw.trim();
       if (rawLiteral.isNotEmpty && !_looksLikeRuleExpression(rawLiteral)) {
@@ -1657,23 +2402,25 @@ class ChapterContentService {
     return LegacyRuleVariableProcessor.replaceGetTokens(expression, variables);
   }
 
-  String? _evaluateLegacyPutValue({
+  Future<String?> _evaluateLegacyPutValue({
     required String content,
     required ErrorStage stage,
     required String valueExpression,
     required String fallbackExtractor,
     String? preferredAttribute,
-  }) {
+    JsExecutionContext? jsContext,
+  }) async {
     final normalizedRule = _normalizeRuleExpression(
       valueExpression,
       fallbackExtractor: fallbackExtractor,
       preferredAttribute: preferredAttribute,
     );
     if (normalizedRule != null && normalizedRule.trim().isNotEmpty) {
-      final values = _executeAllWithFallback(
+      final values = await _executeAllWithFallback(
         content: content,
         expression: normalizedRule,
         stage: stage,
+        jsContext: jsContext,
       );
       if (values.isNotEmpty) {
         return values.first.trim();
@@ -1707,10 +2454,21 @@ class ChapterContentService {
       return true;
     }
 
+    if (LegacyRuleCompat.looksLikeAllInOneRegexExpression(text) ||
+        LegacyRuleCompat.looksLikeRegexGroupReference(text)) {
+      return true;
+    }
+
     if (text.contains('@') ||
         text.contains('##') ||
         text.contains('||') ||
-        text.contains('&&')) {
+        text.contains('&&') ||
+        text.contains('%%') ||
+        text.contains('{{@@') ||
+        text.contains('{{@css:') ||
+        text.contains('{{@json:') ||
+        text.contains('{{@xpath:') ||
+        text.contains('{{@js:')) {
       return true;
     }
 
@@ -1905,6 +2663,9 @@ class ChapterContentService {
     if (text == null || text.isEmpty) {
       return null;
     }
+    if (text.startsWith('js:') || text.startsWith('@js:')) {
+      return text;
+    }
 
     final staticRule = LegacyRuleCompat.extractStaticRuleExpression(text);
     if (staticRule == null || staticRule.isEmpty) {
@@ -1913,11 +2674,13 @@ class ChapterContentService {
 
     if (staticRule.startsWith('html:') ||
         staticRule.startsWith('regex:') ||
-        staticRule.startsWith('json:')) {
+        staticRule.startsWith('json:') ||
+        staticRule.startsWith('js:') ||
+        staticRule.startsWith('@js:')) {
       return staticRule;
     }
 
-    final xpathCandidate = LegacyXPathCompat.buildRuleExpression(
+    final xpathCandidate = LegacyXPathCompat.buildNativeRuleExpression(
       expression: staticRule,
       fallbackExtractor: fallbackExtractor,
       preferredAttribute: preferredAttribute,
@@ -1932,11 +2695,24 @@ class ChapterContentService {
       return 'json:$staticRule';
     }
 
+    if (LegacyRuleCompat.looksLikeAllInOneRegexExpression(staticRule) ||
+        LegacyRuleCompat.looksLikeRegexGroupReference(staticRule)) {
+      return staticRule;
+    }
+
     if (staticRule.contains(r'{{$.') ||
         staticRule.contains(r'{{ $.') ||
         staticRule.contains(r'{{\$.') ||
         staticRule.contains(r'{{ \$.')) {
       return 'json:\$\n$staticRule';
+    }
+
+    if (staticRule.contains('{{@@') ||
+        staticRule.contains('{{@css:') ||
+        staticRule.contains('{{@json:') ||
+        staticRule.contains('{{@xpath:') ||
+        staticRule.contains('{{@js:')) {
+      return staticRule;
     }
 
     final jsonCandidate = _normalizeJsonShorthandExpression(staticRule);
@@ -2081,6 +2857,13 @@ class _RequestRuleSplit {
   final String optionsText;
 }
 
+class _NetworkLoadResult {
+  const _NetworkLoadResult({required this.statusCode, required this.body});
+
+  final int statusCode;
+  final String body;
+}
+
 class _ContentRequestSpec {
   const _ContentRequestSpec({
     required this.urlTemplate,
@@ -2089,6 +2872,10 @@ class _ContentRequestSpec {
     this.bodyTemplate,
     this.contentType,
     this.responseCharset,
+    this.maxRetries = 1,
+    this.useWebView = false,
+    this.webJs,
+    this.sourceRegex,
   });
 
   final String urlTemplate;
@@ -2097,6 +2884,10 @@ class _ContentRequestSpec {
   final Object? bodyTemplate;
   final String? contentType;
   final String? responseCharset;
+  final int maxRetries;
+  final bool useWebView;
+  final String? webJs;
+  final String? sourceRegex;
 }
 
 class _InitRuleParts {

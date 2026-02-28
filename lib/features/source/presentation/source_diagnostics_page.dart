@@ -12,6 +12,7 @@ import '../../../core/errors/app_exception.dart';
 import '../../../core/errors/error_codes.dart';
 import '../../../data/datasources/local/app_database.dart';
 import '../../../data/repositories/source_repository_impl.dart';
+import '../../../domain/entities/source_definition.dart';
 import '../../../domain/repositories/source_repository.dart';
 import 'source_filter_sheet.dart';
 import '../application/source_diagnostics_service.dart';
@@ -36,6 +37,7 @@ class _SourceDiagnosticsPageState extends State<SourceDiagnosticsPage> {
   late final SourceDiagnosticsService _diagnosticsService;
 
   SourceDiagnosticMode _mode = SourceDiagnosticMode.fullChainQuick;
+  bool _enableStagedPipeline = true;
   double _concurrency = 2;
 
   bool _isRunning = false;
@@ -44,11 +46,18 @@ class _SourceDiagnosticsPageState extends State<SourceDiagnosticsPage> {
   bool _isLoadingSourceCount = false;
   SourceBatchDiagnosticToken? _activeToken;
   SourceBatchDiagnosticProgress? _progress;
+  String? _pipelineStageLabel;
   List<SourceDiagnosticReport> _reports = const [];
+  SourceBatchDiagnosticProgress? _pendingProgress;
+  final List<SourceDiagnosticReport> _pendingReports =
+      <SourceDiagnosticReport>[];
+  Timer? _progressFlushTimer;
   int _availableSourceCount = 0;
   Set<String> _selectedSourceIds = <String>{};
 
   static const Duration _kSourceCountLoadTimeout = Duration(seconds: 8);
+  static const Duration _kProgressFlushInterval = Duration(milliseconds: 220);
+  static const int _kProgressFlushBatchSize = 20;
   static final RegExp _kHardInvalidStatusPattern = RegExp(
     r'(?:(?:状态码)|(?:status\s*code)|(?:statuscode))\s*[:：=]?\s*(404|410)\b',
     caseSensitive: false,
@@ -66,6 +75,7 @@ class _SourceDiagnosticsPageState extends State<SourceDiagnosticsPage> {
   @override
   void dispose() {
     _activeToken?.cancel();
+    _stopProgressFlushTimer();
     _keywordController.dispose();
     super.dispose();
   }
@@ -182,6 +192,24 @@ class _SourceDiagnosticsPageState extends State<SourceDiagnosticsPage> {
                         });
                       },
             ),
+            if (_mode == SourceDiagnosticMode.fullChainQuick) ...[
+              const SizedBox(height: 8),
+              SwitchListTile.adaptive(
+                contentPadding: EdgeInsets.zero,
+                dense: true,
+                title: const Text('三阶段流水线（推荐）'),
+                subtitle: const Text('自动按 探活→搜索→全链路 执行，逐层筛掉失败源'),
+                value: _enableStagedPipeline,
+                onChanged:
+                    _isRunning
+                        ? null
+                        : (value) {
+                          setState(() {
+                            _enableStagedPipeline = value;
+                          });
+                        },
+              ),
+            ],
             const SizedBox(height: 10),
             _buildSourceFilterRow(),
             const SizedBox(height: 10),
@@ -406,6 +434,13 @@ class _SourceDiagnosticsPageState extends State<SourceDiagnosticsPage> {
               '进度 ${progress.processed}/${progress.total} | 成功 ${progress.successCount} | 失败 ${progress.failedCount}',
               style: Theme.of(context).textTheme.bodySmall,
             ),
+            if (_pipelineStageLabel != null) ...[
+              const SizedBox(height: 4),
+              Text(
+                '阶段: $_pipelineStageLabel',
+                style: Theme.of(context).textTheme.bodySmall,
+              ),
+            ],
             if (progress.currentSourceName != null) ...[
               const SizedBox(height: 4),
               Text(
@@ -475,6 +510,149 @@ class _SourceDiagnosticsPageState extends State<SourceDiagnosticsPage> {
     );
   }
 
+  void _startProgressFlushTimer() {
+    _stopProgressFlushTimer();
+    _progressFlushTimer = Timer.periodic(_kProgressFlushInterval, (_) {
+      _flushPendingProgress();
+    });
+  }
+
+  void _stopProgressFlushTimer() {
+    _progressFlushTimer?.cancel();
+    _progressFlushTimer = null;
+  }
+
+  void _enqueueProgress(SourceBatchDiagnosticProgress progress) {
+    _pendingProgress = progress;
+    final latest = progress.latestReport;
+    if (latest != null) {
+      _pendingReports.add(latest);
+    }
+    if (_pendingReports.length >= _kProgressFlushBatchSize) {
+      _flushPendingProgress(force: true);
+    }
+  }
+
+  void _flushPendingProgress({bool force = false}) {
+    if (!mounted) {
+      _pendingReports.clear();
+      _pendingProgress = null;
+      return;
+    }
+    if (_pendingProgress == null && _pendingReports.isEmpty) {
+      return;
+    }
+
+    final shouldSkip =
+        !force &&
+        _pendingReports.isEmpty &&
+        _pendingProgress != null &&
+        _progress != null &&
+        _pendingProgress!.processed == _progress!.processed;
+    if (shouldSkip) {
+      return;
+    }
+
+    setState(() {
+      if (_pendingProgress != null) {
+        _progress = _pendingProgress;
+        _pendingProgress = null;
+      }
+      if (_pendingReports.isNotEmpty) {
+        _reports.addAll(_pendingReports);
+        _pendingReports.clear();
+      }
+    });
+  }
+
+  Future<List<SourceDiagnosticReport>> _runBatchStep({
+    required String stageLabel,
+    required List<SourceDefinition> sources,
+    required String keyword,
+    required SourceDiagnosticMode mode,
+    required SourceBatchDiagnosticToken token,
+    required bool streamStepReports,
+  }) async {
+    if (!mounted || !_isRunning) {
+      return const <SourceDiagnosticReport>[];
+    }
+
+    setState(() {
+      _pipelineStageLabel = stageLabel;
+      _progress = SourceBatchDiagnosticProgress(
+        total: sources.length,
+        processed: 0,
+        successCount: 0,
+        failedCount: 0,
+      );
+    });
+
+    if (sources.isEmpty) {
+      return const <SourceDiagnosticReport>[];
+    }
+
+    final reports = await _diagnosticsService.diagnoseBatch(
+      sources: sources,
+      keyword: keyword,
+      mode: mode,
+      rawPolicy: SourceDiagnosticRawPolicy.failedOnly,
+      concurrency: _concurrency.toInt(),
+      cancellationToken: token,
+      onProgress: (progress) {
+        if (!mounted || !_isRunning) {
+          return;
+        }
+        if (streamStepReports) {
+          _enqueueProgress(progress);
+          return;
+        }
+        _enqueueProgress(
+          SourceBatchDiagnosticProgress(
+            total: progress.total,
+            processed: progress.processed,
+            successCount: progress.successCount,
+            failedCount: progress.failedCount,
+            currentSourceId: progress.currentSourceId,
+            currentSourceName: progress.currentSourceName,
+          ),
+        );
+      },
+    );
+    _flushPendingProgress(force: true);
+    return reports;
+  }
+
+  List<SourceDefinition> _filterSucceededSources({
+    required List<SourceDefinition> sourceScope,
+    required List<SourceDiagnosticReport> reports,
+  }) {
+    final succeededIds =
+        reports
+            .where((item) => item.isSuccess)
+            .map((item) => item.sourceId)
+            .toSet();
+    if (succeededIds.isEmpty) {
+      return const <SourceDefinition>[];
+    }
+    return sourceScope
+        .where((item) => succeededIds.contains(item.id))
+        .toList(growable: false);
+  }
+
+  List<SourceDiagnosticReport> _orderedReportsBySource({
+    required List<SourceDefinition> sourceOrder,
+    required List<SourceDiagnosticReport> reports,
+  }) {
+    final byId = <String, SourceDiagnosticReport>{};
+    for (final report in reports) {
+      byId[report.sourceId] = report;
+    }
+    return sourceOrder
+        .map((item) => byId[item.id])
+        .whereType<SourceDiagnosticReport>()
+        .toList(growable: false);
+  }
+
   Future<void> _runDiagnostics() async {
     final keyword = _keywordController.text.trim();
     if (keyword.isEmpty) {
@@ -498,11 +676,14 @@ class _SourceDiagnosticsPageState extends State<SourceDiagnosticsPage> {
     }
 
     final token = SourceBatchDiagnosticToken();
+    _pendingReports.clear();
+    _pendingProgress = null;
 
     setState(() {
       _isRunning = true;
       _activeToken = token;
-      _reports = const [];
+      _reports = <SourceDiagnosticReport>[];
+      _pipelineStageLabel = null;
       _progress = SourceBatchDiagnosticProgress(
         total: targetSources.length,
         processed: 0,
@@ -510,33 +691,86 @@ class _SourceDiagnosticsPageState extends State<SourceDiagnosticsPage> {
         failedCount: 0,
       );
     });
+    _startProgressFlushTimer();
 
     try {
-      final result = await _diagnosticsService.diagnoseBatch(
-        sources: targetSources,
-        keyword: keyword,
-        mode: _mode,
-        concurrency: _concurrency.toInt(),
-        cancellationToken: token,
-        onProgress: (progress) {
-          if (!mounted) {
-            return;
+      List<SourceDiagnosticReport> result;
+      final usePipeline =
+          _enableStagedPipeline && _mode == SourceDiagnosticMode.fullChainQuick;
+      if (usePipeline) {
+        final mergedBySource = <String, SourceDiagnosticReport>{};
+
+        final probeReports = await _runBatchStep(
+          stageLabel: '探活（1/3）',
+          sources: targetSources,
+          keyword: keyword,
+          mode: SourceDiagnosticMode.probe,
+          token: token,
+          streamStepReports: false,
+        );
+        for (final report in probeReports) {
+          mergedBySource[report.sourceId] = report;
+        }
+
+        if (!token.isCancelled) {
+          final probePassedSources = _filterSucceededSources(
+            sourceScope: targetSources,
+            reports: probeReports,
+          );
+          final searchReports = await _runBatchStep(
+            stageLabel: '搜索（2/3）',
+            sources: probePassedSources,
+            keyword: keyword,
+            mode: SourceDiagnosticMode.searchOnly,
+            token: token,
+            streamStepReports: false,
+          );
+          for (final report in searchReports) {
+            mergedBySource[report.sourceId] = report;
           }
-          setState(() {
-            _progress = progress;
-            if (progress.latestReport != null) {
-              _reports = [..._reports, progress.latestReport!];
+
+          if (!token.isCancelled) {
+            final searchPassedSources = _filterSucceededSources(
+              sourceScope: probePassedSources,
+              reports: searchReports,
+            );
+            final fullReports = await _runBatchStep(
+              stageLabel: '全链路（3/3）',
+              sources: searchPassedSources,
+              keyword: keyword,
+              mode: SourceDiagnosticMode.fullChainQuick,
+              token: token,
+              streamStepReports: true,
+            );
+            for (final report in fullReports) {
+              mergedBySource[report.sourceId] = report;
             }
-          });
-        },
-      );
+          }
+        }
+
+        result = _orderedReportsBySource(
+          sourceOrder: targetSources,
+          reports: mergedBySource.values.toList(growable: false),
+        );
+      } else {
+        result = await _runBatchStep(
+          stageLabel: _modeLabel(_mode),
+          sources: targetSources,
+          keyword: keyword,
+          mode: _mode,
+          token: token,
+          streamStepReports: true,
+        );
+      }
+
+      _flushPendingProgress(force: true);
 
       if (!mounted) {
         return;
       }
 
       setState(() {
-        _reports = result;
+        _reports = List<SourceDiagnosticReport>.of(result);
       });
 
       if (token.isCancelled) {
@@ -550,10 +784,14 @@ class _SourceDiagnosticsPageState extends State<SourceDiagnosticsPage> {
     } catch (error) {
       _showMessage('批量诊断失败：$error');
     } finally {
+      _stopProgressFlushTimer();
+      _pendingReports.clear();
+      _pendingProgress = null;
       if (mounted) {
         setState(() {
           _isRunning = false;
           _activeToken = null;
+          _pipelineStageLabel = null;
         });
       }
     }
@@ -738,7 +976,7 @@ class _SourceDiagnosticsPageState extends State<SourceDiagnosticsPage> {
               ListTile(
                 leading: const Icon(Icons.description_outlined),
                 title: const Text('导出完整报告'),
-                subtitle: const Text('包含每个书源的完整诊断结果与原始源数据'),
+                subtitle: const Text('包含每个书源的诊断结果；原始源数据默认仅失败源保留'),
                 onTap: () {
                   Navigator.of(context).pop(_ExportPayloadKind.fullReport);
                 },

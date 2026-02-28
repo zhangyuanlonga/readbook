@@ -46,6 +46,40 @@ void main() {
       expect(rule.expression, r'$.booklist[*]');
     });
 
+    test('parses ":" all-in-one regex rule', () {
+      final parsed = parser.parse(':book-(\\d+)');
+
+      expect(parsed, isA<ParsedAllInOneRegexRule>());
+      final rule = parsed as ParsedAllInOneRegexRule;
+      expect(rule.pattern, 'book-(\\d+)');
+    });
+
+    test('parses regex group reference rule', () {
+      final parsed = parser.parse(r'$1');
+
+      expect(parsed, isA<ParsedRegexGroupReferenceRule>());
+      final rule = parsed as ParsedRegexGroupReferenceRule;
+      expect(rule.group, 1);
+    });
+
+    test('parses xpath rule with explicit extractor', () {
+      final parsed = parser.parse('xpath://div[@class="book"]@outerhtml');
+
+      expect(parsed, isA<ParsedXPathRule>());
+      final rule = parsed as ParsedXPathRule;
+      expect(rule.expression, '//div[@class="book"]');
+      expect(rule.extractor.type, HtmlExtractorType.outerHtml);
+    });
+
+    test('parses bare xpath expression', () {
+      final parsed = parser.parse('//h1[@class="title"]/text()');
+
+      expect(parsed, isA<ParsedXPathRule>());
+      final rule = parsed as ParsedXPathRule;
+      expect(rule.expression, '//h1[@class="title"]/text()');
+      expect(rule.extractor.type, HtmlExtractorType.text);
+    });
+
     test('throws on unsupported prefix', () {
       expect(() => parser.parse('css:.item'), throwsA(isA<AppException>()));
     });

@@ -31,8 +31,8 @@ void main() {
       latestChapterRule: 'html:.latest@text',
     );
 
-    test('parses and normalizes books from html content', () {
-      final books = parser.parse(
+    test('parses and normalizes books from html content', () async {
+      final books = await parser.parse(
         htmlContent: html,
         sourceId: 'source-a',
         baseUrl: 'https://example.com/root/',
@@ -53,13 +53,13 @@ void main() {
       expect(second.coverUrl, isNull);
     });
 
-    test('deduplicates by sourceId + detailUrl', () {
+    test('deduplicates by sourceId + detailUrl', () async {
       const duplicatedHtml = '''
       <div class="result-item"><a class="title" href="/book/1001">凡人修仙传</a></div>
       <div class="result-item"><a class="title" href="/book/1001">凡人修仙传（重复）</a></div>
       ''';
 
-      final books = parser.parse(
+      final books = await parser.parse(
         htmlContent: duplicatedHtml,
         sourceId: 'source-a',
         baseUrl: 'https://example.com',
@@ -74,7 +74,25 @@ void main() {
       expect(books.first.detailUrl, 'https://example.com/book/1001');
     });
 
-    test('allows invalid baseUrl when result links are absolute', () {
+    test('supports reversed list chunks from parse rules', () async {
+      final books = await parser.parse(
+        htmlContent: html,
+        sourceId: 'source-a',
+        baseUrl: 'https://example.com/root/',
+        rules: const SearchParseRules(
+          listRule: 'html:.result-item@html',
+          listReversed: true,
+          titleRule: 'html:.title@text',
+          detailUrlRule: 'html:.title@attr(href)',
+        ),
+      );
+
+      expect(books, hasLength(2));
+      expect(books.first.title, '诛仙');
+      expect(books.last.title, '凡人修仙传');
+    });
+
+    test('allows invalid baseUrl when result links are absolute', () async {
       const absoluteHtml = '''
       <div class="result-item">
         <a class="title" href="https://book.example.com/book/1">剑来</a>
@@ -85,7 +103,7 @@ void main() {
       </div>
       ''';
 
-      final books = parser.parse(
+      final books = await parser.parse(
         htmlContent: absoluteHtml,
         sourceId: 'source-a',
         baseUrl: 'bbnnfgh',
@@ -103,10 +121,10 @@ void main() {
       expect(books.first.coverUrl, 'https://img.example.com/1.jpg');
     });
 
-    test('falls back between json/html/regex rules when one fails', () {
+    test('falls back between json/html/regex rules when one fails', () async {
       const jsonContent = '{"items":[{"title":"凡人修仙传","url":"/book/1001"}]}';
 
-      final books = parser.parse(
+      final books = await parser.parse(
         htmlContent: jsonContent,
         sourceId: 'source-a',
         baseUrl: 'https://example.com',
@@ -122,9 +140,30 @@ void main() {
       expect(books.first.detailUrl, 'https://example.com/book/1001');
     });
 
-    test('throws when no valid search result exists', () {
-      expect(
-        () => parser.parse(
+    test(r'supports all-in-one regex list with $n group fields', () async {
+      const content = 'title=凡人修仙传,url=/book/1;title=诛仙,url=/book/2;';
+
+      final books = await parser.parse(
+        htmlContent: content,
+        sourceId: 'source-a',
+        baseUrl: 'https://example.com',
+        rules: const SearchParseRules(
+          listRule: r':title=(.*?),url=(.*?);',
+          titleRule: r'$1',
+          detailUrlRule: r'$2',
+        ),
+      );
+
+      expect(books, hasLength(2));
+      expect(books.first.title, '凡人修仙传');
+      expect(books.first.detailUrl, 'https://example.com/book/1');
+      expect(books.last.title, '诛仙');
+      expect(books.last.detailUrl, 'https://example.com/book/2');
+    });
+
+    test('throws when no valid search result exists', () async {
+      await expectLater(
+        parser.parse(
           htmlContent: '<div class="empty">no data</div>',
           sourceId: 'source-a',
           baseUrl: 'https://example.com',

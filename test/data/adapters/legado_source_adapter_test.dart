@@ -41,6 +41,7 @@ void main() {
       expect(source.headers['User-Agent'], 'appread');
       expect(source.headers['Referer'], 'https://example.com');
       expect(source.lastCheckStatus, SourceHealthStatus.unknown);
+      expect(source.jsCapability, SourceJsCapability.full);
       expect(source.originalSource?['bookSourceName'], '测试书源');
       expect(source.originalSource?['ruleSearch'], '.book-list');
     });
@@ -77,10 +78,12 @@ void main() {
       final raw = LegadoSourceRaw.fromJson({
         'bookSourceName': '详情目录源',
         'bookSourceUrl': 'https://detail.example.com',
+        'concurrentRate': '1/1500',
         'searchUrl': '/search?key={{key}}',
         'ruleBookInfo': {
           'name': '.book-title@text',
           'author': '.book-author@text',
+          'canReName': 'false',
           'intro': '.book-intro@text',
           'coverUrl': '.cover@src',
           'tocUrl': '.toc@href',
@@ -89,6 +92,7 @@ void main() {
           'chapterList': '.chapter-item@html',
           'chapterName': '.chapter-title@text',
           'chapterUrl': '.chapter-title@href',
+          'nextTocUrl': '.next@href',
           'isReverse': true,
         },
       });
@@ -97,25 +101,34 @@ void main() {
 
       expect(source.rules.detailTitleRule, '.book-title@text');
       expect(source.rules.detailAuthorRule, '.book-author@text');
+      expect(source.rules.detailCanRenameRule, 'false');
       expect(source.rules.detailIntroRule, '.book-intro@text');
       expect(source.rules.detailCoverUrlRule, '.cover@src');
       expect(source.rules.detailTocUrlRule, '.toc@href');
       expect(source.rules.tocListRule, '.chapter-item@html');
       expect(source.rules.tocTitleRule, '.chapter-title@text');
       expect(source.rules.tocChapterUrlRule, '.chapter-title@href');
+      expect(source.rules.tocNextUrlRule, '.next@href');
       expect(source.rules.tocReversed, isTrue);
+      expect(source.concurrentRate, '1/1500');
     });
 
     test('maps nested ruleContent fields', () {
       final raw = LegadoSourceRaw.fromJson({
         'bookSourceName': '正文源',
         'bookSourceUrl': 'https://content.example.com',
-        'ruleContent': {'content': '4.data.content'},
+        'ruleContent': {
+          'content': '4.data.content',
+          'replaceRegex': '广告##',
+          'nextContentUrl': '.next@href',
+        },
       });
 
       final source = adapter.adapt(raw);
 
       expect(source.rules.contentRule, '4.data.content');
+      expect(source.rules.contentReplaceRegex, '广告##');
+      expect(source.rules.contentNextUrlRule, '.next@href');
     });
 
     test('maps init rules for search/detail/toc/content stages', () {
@@ -190,6 +203,8 @@ void main() {
       final source = adapter.adapt(raw);
 
       expect(source.baseUrl, 'https://fq.vv9v.cn');
+      expect(source.jsLib, isNotNull);
+      expect(source.jsLib, contains('getApiUrl'));
       expect(source.headers['x-sec-token'], '{{sourceToken}}');
       expect(source.headers['x-android-id'], '{{androidId}}');
       expect(source.requiresServerTokenAuth, isTrue);
@@ -264,7 +279,125 @@ void main() {
       expect(source.headers['Accept'], 'application/json, text/plain, */*');
       expect(source.headers['origin'], 'https://example.com');
       expect(source.headers['referer'], 'https://example.com/');
+      expect(source.jsCapability, SourceJsCapability.full);
     });
+
+    test('marks jsCapability as full for supported network bridge calls', () {
+      final raw = LegadoSourceRaw.fromJson({
+        'bookSourceName': '桥接网络源',
+        'bookSourceUrl': 'https://example.com',
+        'searchUrl': '/search?key={{key}}',
+        'ruleContent': {
+          'content': '@js:java.ajax("https://example.com/api");result',
+        },
+      });
+
+      final source = adapter.adapt(raw);
+
+      expect(source.jsCapability, SourceJsCapability.full);
+    });
+
+    test(
+      'marks jsCapability as full for legacy helper bridge aliases and no-op calls',
+      () {
+        final raw = LegadoSourceRaw.fromJson({
+          'bookSourceName': '桥接兼容源',
+          'bookSourceUrl': 'https://example.com',
+          'searchUrl': '/search?key={{key}}',
+          'ruleContent': {
+            'content': '''
+@js:
+java.toast("hint");
+java.longToast("hint");
+java.startBrowser("https://example.com");
+java.startBrowserAwait("https://example.com");
+java.webView("https://example.com");
+java.connect("https://example.com/api").get().body();
+java.getCookie("host","token");
+java.getElement("li@text");
+java.toNumChapter("第十二章");
+java.timeFormatUTC(1700000000);
+java.getWebViewUA();
+java.randomUUID();
+java.androidId();
+java.deviceID();
+java.refreshTocUrl();
+java.t2s("繁體");
+java.s2t("简体");
+java.strToBytes("abc");
+java.bytesToString([97,98,99]);
+java.hexEncodeToString("abc");
+java.hexDecodeToString("616263");
+java.hexDecodeToByteArray("616263");
+java.digestHex("abc","SHA-1");
+java.HMacHex("abc","HmacSHA256","k");
+java.HMacBase64("abc","HmacSHA256","k");
+java.desEncodeToBase64String("abc","12345678","DES/ECB/PKCS5Padding","");
+java.initUrl("https://example.com/book/1");
+java.getStrResponse("https://example.com/api","body");
+java.toURL("https://example.com/a").host;
+java.toUrl("/chapter/1","https://example.com/book/1");
+java.reGetBook();
+java.aesDecodeArgsBase64Str("x","a2V5","CBC","PKCS7Padding","aXY=");
+java.cacheFile("https://example.com/rules.js");
+java.importScript("https://example.com/lib.js");
+java.removeCookie("example.com");
+java.getVerificationCode("https://example.com/captcha");
+java.createSymmetricCrypto("AES/CBC/PKCS7Padding", java.strToBytes("k"), [1,2,3]);
+result
+''',
+          },
+        });
+
+        final source = adapter.adapt(raw);
+
+        expect(source.jsCapability, SourceJsCapability.full);
+      },
+    );
+
+    test('marks jsCapability as partial for unknown bridge calls', () {
+      final raw = LegadoSourceRaw.fromJson({
+        'bookSourceName': '桥接未知源',
+        'bookSourceUrl': 'https://example.com',
+        'searchUrl': '/search?key={{key}}',
+        'ruleContent': {
+          'content': '@js:java.customBridge("https://example.com/api");result',
+        },
+      });
+
+      final source = adapter.adapt(raw);
+
+      expect(source.jsCapability, SourceJsCapability.partial);
+    });
+
+    test('marks jsCapability as unsupported for Packages bridge usage', () {
+      final raw = LegadoSourceRaw.fromJson({
+        'bookSourceName': 'Packages桥接源',
+        'bookSourceUrl': 'https://example.com',
+        'searchUrl': '/search?key={{key}}',
+        'loginCheckJs': 'Packages.java.lang.System.currentTimeMillis()',
+      });
+
+      final source = adapter.adapt(raw);
+
+      expect(source.jsCapability, SourceJsCapability.unsupported);
+    });
+
+    test(
+      'marks jsCapability as unsupported for security-risk bridge calls',
+      () {
+        final raw = LegadoSourceRaw.fromJson({
+          'bookSourceName': '风险桥接源',
+          'bookSourceUrl': 'https://example.com',
+          'searchUrl': '/search?key={{key}}',
+          'ruleContent': {'content': '@js:java.queryTTF("font-data");result'},
+        });
+
+        final source = adapter.adapt(raw);
+
+        expect(source.jsCapability, SourceJsCapability.unsupported);
+      },
+    );
 
     test('extracts legacy chapter decrypt config from loginCheckJs', () {
       final raw = LegadoSourceRaw.fromJson({

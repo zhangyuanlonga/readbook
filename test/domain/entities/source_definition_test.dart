@@ -20,6 +20,7 @@ void main() {
       expect(source.rules.searchRule, isNull);
       expect(source.rules.tocReversed, isFalse);
       expect(source.lastCheckMessage, isNull);
+      expect(source.jsCapability, SourceJsCapability.full);
       expect(source.originalSource, isNull);
     });
 
@@ -36,6 +37,7 @@ void main() {
           searchInitRule: '/search/init',
           detailRule: '.book-detail',
           detailInitRule: '/detail/init',
+          detailCanRenameRule: 'false',
           detailIntroRule: '.intro@text',
           tocRule: '.toc-item',
           tocInitRule: '/toc/init',
@@ -45,12 +47,17 @@ void main() {
           tocReversed: true,
           contentRule: '#content',
           contentInitRule: '/content/init',
+          contentReplaceRegex: r'广告##',
+          tocNextUrlRule: '.next@href',
+          contentNextUrlRule: '.next-page@href',
         ),
         headers: const {'User-Agent': 'AppRead'},
         lastCheckStatus: SourceHealthStatus.healthy,
         lastCheckedAt: DateTime.parse('2026-01-01T12:00:00.000Z'),
         lastCheckMessage: '连通性测试通过',
         comment: 'sample',
+        concurrentRate: '1/1000',
+        jsLib: 'function decrypt(v){return v;}',
         originalSource: const {
           'bookSourceName': 'Legacy Source A',
           'searchUrl': '/search?key={{key}}',
@@ -69,8 +76,12 @@ void main() {
       expect(restored.isMangaSource, isTrue);
       expect(restored.rules.contentRule, '#content');
       expect(restored.rules.contentInitRule, '/content/init');
+      expect(restored.rules.contentReplaceRegex, r'广告##');
+      expect(restored.rules.tocNextUrlRule, '.next@href');
+      expect(restored.rules.contentNextUrlRule, '.next-page@href');
       expect(restored.rules.searchInitRule, '/search/init');
       expect(restored.rules.detailInitRule, '/detail/init');
+      expect(restored.rules.detailCanRenameRule, 'false');
       expect(restored.rules.tocInitRule, '/toc/init');
       expect(restored.rules.detailIntroRule, '.intro@text');
       expect(restored.rules.tocChapterUrlRule, '.chapter-title@href');
@@ -83,6 +94,9 @@ void main() {
       );
       expect(restored.lastCheckMessage, '连通性测试通过');
       expect(restored.comment, 'sample');
+      expect(restored.concurrentRate, '1/1000');
+      expect(restored.jsLib, 'function decrypt(v){return v;}');
+      expect(restored.jsCapability, SourceJsCapability.full);
       expect(restored.originalSource?['bookSourceName'], 'Legacy Source A');
       expect(restored.originalSource?['searchUrl'], '/search?key={{key}}');
     });
@@ -106,6 +120,7 @@ void main() {
         lastCheckedAt: DateTime.parse('2026-01-01T12:00:00.000Z'),
         lastCheckMessage: '上次失败：超时',
         comment: 'keep',
+        concurrentRate: '2/1000',
       );
 
       final updated = source.copyWith(
@@ -113,12 +128,14 @@ void main() {
         clearLastCheckedAt: true,
         clearLastCheckMessage: true,
         clearComment: true,
+        clearConcurrentRate: true,
       );
 
       expect(updated.name, 'Source B');
       expect(updated.lastCheckedAt, isNull);
       expect(updated.lastCheckMessage, isNull);
       expect(updated.comment, isNull);
+      expect(updated.concurrentRate, isNull);
       expect(updated.baseUrl, source.baseUrl);
     });
 
@@ -161,5 +178,22 @@ void main() {
         expect(cleared.originalSource, isNull);
       },
     );
+
+    test('supports jsCapability override in copyWith and json', () {
+      final source = SourceDefinition(
+        id: 'source-1',
+        name: 'Source A',
+        baseUrl: 'https://example.com',
+        jsCapability: SourceJsCapability.partial,
+      );
+
+      final updated = source.copyWith(
+        jsCapability: SourceJsCapability.unsupported,
+      );
+      final restored = SourceDefinition.fromJson(updated.toJson());
+
+      expect(updated.jsCapability, SourceJsCapability.unsupported);
+      expect(restored.jsCapability, SourceJsCapability.unsupported);
+    });
   });
 }

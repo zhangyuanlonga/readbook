@@ -1,8 +1,11 @@
 import 'dart:io';
 
 import 'package:flutter_appread/core/errors/error_codes.dart';
+import 'package:flutter_appread/core/webview/webview_executor.dart';
 import 'package:flutter_appread/domain/entities/source_definition.dart';
 import 'package:flutter_appread/domain/repositories/source_repository.dart';
+import 'package:flutter_appread/features/book/application/book_detail_service.dart';
+import 'package:flutter_appread/features/reader/application/chapter_content_service.dart';
 import 'package:flutter_appread/features/search/application/search_service.dart';
 import 'package:flutter_appread/features/source/application/source_diagnostics_service.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -127,6 +130,143 @@ eval(String(source.bookSourceComment))
       expect(report.stages.first.success, isTrue);
       expect(report.stages.first.stage, SourceDiagnosticStage.search);
     });
+
+    test(
+      'keeps batch progress stable when webView search requests fallback to HTTP',
+      () async {
+        final server = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
+        server.listen((request) async {
+          if (request.uri.path == '/search') {
+            request.response
+              ..statusCode = 200
+              ..write('''
+                <div class="item">
+                  <a class="name" href="/detail">回退测试书</a>
+                </div>
+              ''');
+          } else if (request.uri.path == '/detail') {
+            request.response
+              ..statusCode = 200
+              ..write('''
+                <h1 class="title">回退详情页</h1>
+                <a class="toc" href="/toc">目录</a>
+              ''');
+          } else if (request.uri.path == '/toc') {
+            request.response
+              ..statusCode = 200
+              ..write('''
+                <div class="chapter">
+                  <a class="link" href="/chapter-1">第一章</a>
+                </div>
+              ''');
+          } else if (request.uri.path == '/chapter-1') {
+            request.response
+              ..statusCode = 200
+              ..write('<div class="content">回退正文内容</div>');
+          } else {
+            request.response
+              ..statusCode = 404
+              ..write('not found');
+          }
+          await request.response.close();
+        });
+
+        final baseUrl = 'http://${server.address.host}:${server.port}';
+        final sources = <SourceDefinition>[
+          SourceDefinition(
+            id: 'webview_diag_1',
+            name: 'WebView诊断源1',
+            baseUrl: baseUrl,
+            rules: const SourceRuleSet(
+              searchRule: '/search?keyword={{key}},{"webView":true}',
+              searchListRule: '.item@html',
+              searchTitleRule: '.name@text',
+              searchDetailUrlRule: '.name@href',
+              detailTitleRule: '.title@text',
+              detailTocUrlRule: '.toc@href',
+              tocListRule: '.chapter@html',
+              tocTitleRule: '.link@text',
+              tocChapterUrlRule: '.link@href',
+              contentRule: '.content@text',
+            ),
+          ),
+          SourceDefinition(
+            id: 'webview_diag_2',
+            name: 'WebView诊断源2',
+            baseUrl: baseUrl,
+            rules: const SourceRuleSet(
+              searchRule: '/search?keyword={{key}},{"webView":true}',
+              searchListRule: '.item@html',
+              searchTitleRule: '.name@text',
+              searchDetailUrlRule: '.name@href',
+              detailTitleRule: '.title@text',
+              detailTocUrlRule: '.toc@href',
+              tocListRule: '.chapter@html',
+              tocTitleRule: '.link@text',
+              tocChapterUrlRule: '.link@href',
+              contentRule: '.content@text',
+            ),
+          ),
+        ];
+
+        final repository = _FakeSourceRepository(sources);
+        final webViewExecutor = _FakeWebViewExecutor(
+          error: StateError('webview unavailable'),
+        );
+        final searchService = SearchService(
+          sourceRepository: repository,
+          webViewExecutor: webViewExecutor,
+        );
+        final bookDetailService = BookDetailService(
+          sourceRepository: repository,
+          webViewExecutor: webViewExecutor,
+        );
+        final chapterContentService = ChapterContentService(
+          sourceRepository: repository,
+          webViewExecutor: webViewExecutor,
+        );
+        final service = SourceDiagnosticsService(
+          sourceRepository: repository,
+          searchService: searchService,
+          bookDetailService: bookDetailService,
+          chapterContentService: chapterContentService,
+        );
+
+        final progressEvents = <SourceBatchDiagnosticProgress>[];
+        final reports = await service.diagnoseBatch(
+          sources: sources,
+          keyword: '回退',
+          mode: SourceDiagnosticMode.fullChainQuick,
+          concurrency: 2,
+          onProgress: progressEvents.add,
+        );
+
+        expect(webViewExecutor.callCount, 2);
+        expect(reports, hasLength(2));
+        expect(reports.every((item) => item.isSuccess), isTrue);
+
+        for (final report in reports) {
+          expect(
+            report.stages.map((item) => item.stage).toList(growable: false),
+            <SourceDiagnosticStage>[
+              SourceDiagnosticStage.search,
+              SourceDiagnosticStage.detail,
+              SourceDiagnosticStage.toc,
+              SourceDiagnosticStage.content,
+            ],
+          );
+          expect(report.stages.every((item) => item.success), isTrue);
+        }
+
+        expect(progressEvents, hasLength(2));
+        expect(progressEvents.last.total, 2);
+        expect(progressEvents.last.processed, 2);
+        expect(progressEvents.last.successCount, 2);
+        expect(progressEvents.last.failedCount, 0);
+
+        await server.close(force: true);
+      },
+    );
   });
 }
 
@@ -184,5 +324,29 @@ class _FakeSourceRepository implements SourceRepository {
   @override
   Stream<List<SourceDefinition>> watchAll() {
     return Stream.value(List.unmodifiable(sources));
+  }
+}
+
+class _FakeWebViewExecutor extends WebViewExecutor {
+  _FakeWebViewExecutor({this.error});
+
+  final Object? error;
+  int callCount = 0;
+  WebViewRequestPayload? lastRequest;
+
+  @override
+  Future<WebViewResponsePayload> load({
+    required WebViewRequestPayload request,
+  }) async {
+    callCount += 1;
+    lastRequest = request;
+    if (error != null) {
+      throw error!;
+    }
+    return WebViewResponsePayload(
+      statusCode: 200,
+      body: '<html></html>',
+      finalUrl: request.url,
+    );
   }
 }

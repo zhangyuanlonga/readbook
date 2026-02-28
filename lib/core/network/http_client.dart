@@ -7,6 +7,7 @@ import '../errors/app_exception.dart';
 import '../logging/app_logger.dart';
 import 'interceptors.dart';
 import 'request_context.dart';
+import 'source_rate_limiter.dart';
 
 class HttpResponsePayload {
   const HttpResponsePayload({
@@ -24,6 +25,7 @@ class AppHttpClient {
   AppHttpClient({
     Dio? dio,
     AppLogger? logger,
+    SourceRateLimiter? rateLimiter,
     Duration defaultConnectTimeout = const Duration(seconds: 8),
     Duration defaultReceiveTimeout = const Duration(seconds: 12),
     Map<String, String> defaultHeaders = const {
@@ -35,6 +37,7 @@ class AppHttpClient {
     },
   }) : _dio = dio ?? Dio(),
        _logger = logger ?? AppLogger.instance,
+       _rateLimiter = rateLimiter ?? SourceRateLimiter(),
        _defaultConnectTimeout = defaultConnectTimeout,
        _defaultReceiveTimeout = defaultReceiveTimeout,
        _defaultHeaders = Map.unmodifiable({...defaultHeaders}) {
@@ -45,6 +48,7 @@ class AppHttpClient {
 
   final Dio _dio;
   final AppLogger _logger;
+  final SourceRateLimiter _rateLimiter;
   final Duration _defaultConnectTimeout;
   final Duration _defaultReceiveTimeout;
   final Map<String, String> _defaultHeaders;
@@ -53,6 +57,10 @@ class AppHttpClient {
     final totalAttempts = context.maxRetries + 1;
 
     for (var attempt = 1; attempt <= totalAttempts; attempt++) {
+      await _rateLimiter.acquire(
+        sourceId: context.sourceId,
+        concurrentRate: context.sourceConcurrentRate,
+      );
       final responseOrError = await _send(context, attempt);
 
       if (responseOrError case _Success(:final response)) {

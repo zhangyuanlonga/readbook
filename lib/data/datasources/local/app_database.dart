@@ -158,7 +158,7 @@ class AppDatabase extends _$AppDatabase {
   static final AppDatabase instance = AppDatabase();
 
   @override
-  int get schemaVersion => 3;
+  int get schemaVersion => 4;
 
   static const String _mangaSourceMatcherSql =
       '(raw_json LIKE \'%"sourceType":2,%\' OR '
@@ -177,6 +177,9 @@ class AppDatabase extends _$AppDatabase {
         if (from < 3) {
           await migrator.createTable(storedLocalBooks);
           await migrator.createTable(storedLocalChapters);
+        }
+        if (from < 4) {
+          // rulesJson stores serialized SourceRuleSet; no table migration required.
         }
       },
     );
@@ -884,6 +887,10 @@ class AppDatabase extends _$AppDatabase {
         _nullableString(raw['exploreUrl']) ??
         _nullableString(originalSource?['exploreUrl']) ??
         _nullableString(originalSource?['discoverUrl']);
+    final jsCapability = SourceJsCapability.values.firstWhere(
+      (item) => item.name == _nullableString(raw['jsCapability']),
+      orElse: () => SourceJsCapability.full,
+    );
 
     return SourceDefinition(
       id: row.id,
@@ -900,6 +907,7 @@ class AppDatabase extends _$AppDatabase {
       lastCheckMessage: _nullableString(raw['lastCheckMessage']),
       exploreEnabled: exploreEnabled,
       exploreUrl: exploreUrl,
+      jsCapability: jsCapability,
       originalSource: originalSource,
     );
   }

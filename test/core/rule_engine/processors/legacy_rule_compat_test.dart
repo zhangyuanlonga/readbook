@@ -63,6 +63,15 @@ void main() {
       expect(expression, 'html:#main a@html||html:.recommend.mybook a@html');
     });
 
+    test('builds expression with %% interleave branches', () {
+      final expression = LegacyRuleCompat.buildHtmlRuleExpression(
+        expression: '.left@text%%.right@text',
+        fallbackExtractor: 'text',
+      );
+
+      expect(expression, 'html:.left@text%%html:.right@text');
+    });
+
     test('treats title and alt as attribute extractors in legacy chains', () {
       final titleRule = LegacyRuleCompat.buildHtmlRuleExpression(
         expression: 'tag.a@title',
@@ -85,11 +94,11 @@ void main() {
       expect(selector, '.s2 a');
     });
 
-    test('rule engine retries with compatibility selector', () {
+    test('rule engine retries with compatibility selector', () async {
       final engine = RuleEngine();
       const html = '<div class="s2"><a href="/book/1">Book</a></div>';
 
-      final values = engine.executeAll(
+      final values = await engine.executeAll(
         content: html,
         expression: 'html:.s2 a.0@attr(href)',
       );
@@ -125,9 +134,11 @@ void main() {
       expect(selector, '.listmain a[href]:nth-child(1)');
     });
 
-    test('rule engine supports jquery pseudo selector via compat fallback', () {
-      final engine = RuleEngine();
-      const html = '''
+    test(
+      'rule engine supports jquery pseudo selector via compat fallback',
+      () async {
+        final engine = RuleEngine();
+        const html = '''
         <ul class="list">
           <li>第一章</li>
           <li>第二章</li>
@@ -135,12 +146,13 @@ void main() {
         </ul>
       ''';
 
-      final values = engine.executeAll(
-        content: html,
-        expression: 'html:.list li:eq(1)@text',
-      );
+        final values = await engine.executeAll(
+          content: html,
+          expression: 'html:.list li:eq(1)@text',
+        );
 
-      expect(values, ['第二章']);
-    });
+        expect(values, ['第二章']);
+      },
+    );
   });
 }

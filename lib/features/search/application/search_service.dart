@@ -8,13 +8,17 @@ import '../../../core/errors/error_stage.dart';
 import '../../../core/logging/app_logger.dart';
 import '../../../core/network/http_client.dart';
 import '../../../core/network/request_context.dart';
+import '../../../core/network/url_option.dart';
+import '../../../core/rule_engine/executors/js_executor.dart';
 import '../../../core/rule_engine/rule_engine.dart';
 import '../../../core/rule_engine/processors/url_template_resolver.dart';
 import '../../../core/rule_engine/processors/legacy_rule_compat.dart';
 import '../../../core/rule_engine/processors/legacy_xpath_compat.dart';
 import '../../../core/rule_engine/processors/legacy_rule_variable_processor.dart';
 import '../../../core/rule_engine/processors/legacy_script_rule_fallback.dart';
+import '../../../core/rule_engine/processors/source_js_variable_store.dart';
 import '../../../core/source/source_response_processor.dart';
+import '../../../core/webview/webview_executor.dart';
 import '../../../data/datasources/local/app_database.dart';
 import '../../../data/repositories/source_repository_impl.dart';
 import '../../../domain/entities/book.dart';
@@ -128,6 +132,7 @@ class SearchService {
   SearchService({
     SourceRepository? sourceRepository,
     AppHttpClient? httpClient,
+    WebViewExecutor? webViewExecutor,
     UrlTemplateResolver? urlTemplateResolver,
     SearchResultParser? parser,
     RuleEngine? ruleEngine,
@@ -137,6 +142,7 @@ class SearchService {
   }) : _sourceRepository =
            sourceRepository ?? SourceRepositoryImpl(AppDatabase.instance),
        _httpClient = httpClient ?? AppHttpClient(),
+       _webViewExecutor = webViewExecutor ?? WebViewExecutor(),
        _urlTemplateResolver =
            urlTemplateResolver ?? const UrlTemplateResolver(),
        _parser = parser ?? SearchResultParser(),
@@ -150,6 +156,7 @@ class SearchService {
 
   final SourceRepository _sourceRepository;
   final AppHttpClient _httpClient;
+  final WebViewExecutor _webViewExecutor;
   final UrlTemplateResolver _urlTemplateResolver;
   final SearchResultParser _parser;
   final RuleEngine _ruleEngine;
@@ -694,52 +701,194 @@ class SearchService {
       );
     }
 
-    final runtimeContext =
-        skipInit
-            ? context
-            : await _buildRuntimeContext(
-              source: source,
-              context: context,
-              initRule: source.rules.searchInitRule,
-            );
+    final sourceVariableUpdates = <String, String>{};
+    final runtimeJsVariables = <String, String>{
+      ...SourceJsVariableStore.load(source),
+    };
 
-    final requestSpec = _parseRequestSpec(
-      rawSearchRule,
-      sourceBaseUrl: source.baseUrl,
-    );
+    void collectPutVariables(Map<String, String> variables) {
+      if (variables.isEmpty) {
+        return;
+      }
+      sourceVariableUpdates.addAll(variables);
+      runtimeJsVariables.addAll(
+        SourceJsVariableStore.toRuntimeVariables(variables),
+      );
+    }
 
-    final requestUrl = _urlTemplateResolver.resolve(
-      template: requestSpec.urlTemplate,
-      context: runtimeContext,
-      baseUrl: source.baseUrl,
-    );
+    try {
+      final initJsContext = _buildSourceJsContext(
+        source: source,
+        runtimeContext: context,
+        seedVariables: runtimeJsVariables,
+        onBridgePutVariables: collectPutVariables,
+      );
 
-    final contentType = _resolveContentType(requestSpec);
-    final requestBody = _resolveBodyTemplate(
-      requestSpec.bodyTemplate,
-      context: runtimeContext,
-      encodeKeywordByDefault: _shouldEncodeKeywordInBody(
-        bodyTemplate: requestSpec.bodyTemplate,
+      final runtimeContext =
+          skipInit
+              ? context
+              : await _buildRuntimeContext(
+                source: source,
+                context: context,
+                initRule: source.rules.searchInitRule,
+                jsContext: initJsContext,
+              );
+
+      final requestSpec = _parseRequestSpec(
+        rawSearchRule,
+        sourceBaseUrl: source.baseUrl,
+      );
+
+      final requestUrl = _urlTemplateResolver.resolve(
+        template: requestSpec.urlTemplate,
+        context: runtimeContext,
+        baseUrl: source.baseUrl,
+      );
+
+      final contentType = _resolveContentType(requestSpec);
+      final requestBody = _resolveBodyTemplate(
+        requestSpec.bodyTemplate,
+        context: runtimeContext,
+        encodeKeywordByDefault: _shouldEncodeKeywordInBody(
+          bodyTemplate: requestSpec.bodyTemplate,
+          contentType: contentType,
+        ),
+      );
+
+      final requestHeaders = _resolveRequestHeaders(
+        sourceHeaders: source.headers,
+        requestHeaders: requestSpec.headers,
+        context: runtimeContext,
+      );
+
+      _logger.info(
+        'Search source request',
+        context: {
+          'sourceId': source.id,
+          'sourceName': source.name,
+          'method': requestSpec.method.name,
+          'requestUrl': requestUrl,
+          if (requestBody != null) 'requestBody': requestBody,
+        },
+      );
+
+      final response = await _executeRequest(
+        source: source,
+        stage: ErrorStage.search,
+        requestSpec: requestSpec,
+        requestUrl: requestUrl,
+        requestBody: requestBody,
         contentType: contentType,
-      ),
-    );
+        requestHeaders: requestHeaders,
+        connectTimeout: connectTimeout,
+        receiveTimeout: receiveTimeout,
+      );
 
-    final requestHeaders = _resolveRequestHeaders(
-      sourceHeaders: source.headers,
-      requestHeaders: requestSpec.headers,
-      context: runtimeContext,
-    );
+      final processedResponse = _responseProcessor.process(
+        body: response.body,
+        requestUrl: requestUrl,
+      );
 
-    _logger.info(
-      'Search source request',
-      context: {
-        'sourceId': source.id,
-        'sourceName': source.name,
-        'method': requestSpec.method.name,
-        'requestUrl': requestUrl,
-        if (requestBody != null) 'requestBody': requestBody,
-      },
+      final parseRules = validateRules ? _buildParseRules(source) : null;
+      final parseJsContext = _buildSourceJsContext(
+        source: source,
+        runtimeContext: runtimeContext,
+        seedVariables: runtimeJsVariables,
+        onBridgePutVariables: collectPutVariables,
+      );
+
+      final books =
+          validateRules
+              ? await _parseSearchBooks(
+                source: source,
+                responseBody: processedResponse.body,
+                rules: parseRules!,
+                jsContext: parseJsContext,
+              )
+              : const <Book>[];
+
+      return _SourceSearchOutput(
+        requestUrl: requestUrl,
+        method: requestSpec.method,
+        statusCode: response.statusCode,
+        books: books,
+      );
+    } finally {
+      await _persistSourceJsVariables(
+        source: source,
+        variables: sourceVariableUpdates,
+        stage: ErrorStage.search,
+      );
+    }
+  }
+
+  Future<List<Book>> _parseSearchBooks({
+    required SourceDefinition source,
+    required String responseBody,
+    required SearchParseRules rules,
+    required JsExecutionContext jsContext,
+  }) {
+    return _parser.parse(
+      htmlContent: responseBody,
+      sourceId: source.id,
+      baseUrl: source.baseUrl,
+      rules: rules,
+      jsContext: jsContext,
     );
+  }
+
+  Future<_NetworkLoadResult> _executeRequest({
+    required SourceDefinition source,
+    required ErrorStage stage,
+    required _SearchRequestSpec requestSpec,
+    required String requestUrl,
+    required Object? requestBody,
+    required String? contentType,
+    required Map<String, String> requestHeaders,
+    Duration? connectTimeout,
+    Duration? receiveTimeout,
+  }) async {
+    if (requestSpec.useWebView) {
+      try {
+        final webViewResponse = await _webViewExecutor.load(
+          request: WebViewRequestPayload(
+            url: requestUrl,
+            method: requestSpec.method,
+            headers: requestHeaders,
+            body: requestBody,
+            contentType: contentType,
+            webJs: requestSpec.webJs,
+            sourceRegex: requestSpec.sourceRegex,
+            stage: stage,
+            sourceId: source.id,
+          ),
+        );
+        final matchedResourceUrl =
+            webViewResponse.matchedResourceUrl?.trim() ?? '';
+        final shouldUseMatchedResourceUrl =
+            requestSpec.sourceRegex != null &&
+            requestSpec.sourceRegex!.trim().isNotEmpty &&
+            matchedResourceUrl.isNotEmpty;
+        return _NetworkLoadResult(
+          statusCode: webViewResponse.statusCode,
+          body:
+              shouldUseMatchedResourceUrl
+                  ? matchedResourceUrl
+                  : webViewResponse.body,
+        );
+      } catch (error) {
+        _logger.warn(
+          'WebView request failed and fallback to HTTP',
+          context: <String, Object?>{
+            'sourceId': source.id,
+            'stage': stage.name,
+            'url': requestUrl,
+            'briefMessage': error.toString(),
+            'diagnostic': 'webview_fallback_http',
+          },
+        );
+      }
+    }
 
     final response = await _httpClient.get(
       RequestContext(
@@ -749,48 +898,17 @@ class SearchService {
         contentType: contentType,
         responseCharset: requestSpec.responseCharset,
         headers: requestHeaders,
-        maxRetries: 1,
+        maxRetries: requestSpec.maxRetries,
         connectTimeout: connectTimeout,
         receiveTimeout: receiveTimeout,
-        stage: ErrorStage.search,
+        stage: stage,
         sourceId: source.id,
+        sourceConcurrentRate: source.concurrentRate,
       ),
     );
-
-    final processedResponse = _responseProcessor.process(
-      body: response.body,
-      requestUrl: requestUrl,
-    );
-
-    final parseRules = validateRules ? _buildParseRules(source) : null;
-
-    final books =
-        validateRules
-            ? _parseSearchBooks(
-              source: source,
-              responseBody: processedResponse.body,
-              rules: parseRules!,
-            )
-            : const <Book>[];
-
-    return _SourceSearchOutput(
-      requestUrl: requestUrl,
-      method: requestSpec.method,
+    return _NetworkLoadResult(
       statusCode: response.statusCode,
-      books: books,
-    );
-  }
-
-  List<Book> _parseSearchBooks({
-    required SourceDefinition source,
-    required String responseBody,
-    required SearchParseRules rules,
-  }) {
-    return _parser.parse(
-      htmlContent: responseBody,
-      sourceId: source.id,
-      baseUrl: source.baseUrl,
-      rules: rules,
+      body: response.body,
     );
   }
 
@@ -798,12 +916,14 @@ class SearchService {
     required SourceDefinition source,
     required SearchRequestContext context,
     required String? initRule,
+    JsExecutionContext? jsContext,
   }) async {
     final initVariables = await _loadInitVariables(
       source: source,
       stage: ErrorStage.search,
       initRule: initRule,
       context: context,
+      jsContext: jsContext,
     );
 
     if (initVariables.isEmpty) {
@@ -813,6 +933,34 @@ class SearchService {
     return context.copyWith(
       extraParams: {...context.extraParams, ...initVariables},
     );
+  }
+
+  Future<void> _persistSourceJsVariables({
+    required SourceDefinition source,
+    required Map<String, String> variables,
+    required ErrorStage stage,
+  }) async {
+    if (variables.isEmpty) {
+      return;
+    }
+
+    final nextSource = SourceJsVariableStore.merge(
+      source: source,
+      updates: variables,
+    );
+    try {
+      await _sourceRepository.upsertAll([nextSource]);
+    } catch (error) {
+      _logger.warn(
+        'Persist source js variables failed',
+        context: <String, Object?>{
+          'sourceId': source.id,
+          'sourceName': source.name,
+          'stage': stage.name,
+          'error': error.toString(),
+        },
+      );
+    }
   }
 
   Future<void> _persistSourceHealth(
@@ -855,23 +1003,23 @@ class SearchService {
   }
 
   SearchParseRules _buildParseRules(SourceDefinition source) {
+    final listRuleRaw = _normalizeListRuleReversePrefix(
+      source.rules.searchListRule,
+    );
     final preferCurrentNodeChunk =
         _isBareCurrentNodeExtractorRule(source.rules.searchTitleRule) ||
         _isBareCurrentNodeExtractorRule(source.rules.searchDetailUrlRule);
 
     var listRule = _normalizeRuleExpression(
-      source.rules.searchListRule,
+      listRuleRaw.rule,
       fallbackExtractor: preferCurrentNodeChunk ? 'outerhtml' : 'html',
     );
     if (preferCurrentNodeChunk) {
       listRule = _upgradeListRuleToOuterHtml(listRule);
     }
     listRule = _appendListRuleOuterHtmlFallback(listRule);
-    listRule ??= _buildVariableExpressionFallback(source.rules.searchListRule);
-    listRule ??= _buildScriptFallbackExpression(
-      source.rules.searchListRule,
-      list: true,
-    );
+    listRule ??= _buildVariableExpressionFallback(listRuleRaw.rule);
+    listRule ??= _buildScriptFallbackExpression(listRuleRaw.rule, list: true);
 
     final listRuleIsJson = listRule?.startsWith('json:') ?? false;
     final fieldPreferJson = listRuleIsJson;
@@ -910,6 +1058,7 @@ class SearchService {
 
     return SearchParseRules(
       listRule: listRule,
+      listReversed: listRuleRaw.reversed,
       titleRule: titleRule,
       detailUrlRule: detailUrlRule,
       rawListRule: source.rules.searchListRule,
@@ -940,6 +1089,22 @@ class SearchService {
         preferJsonShorthand: fieldPreferJson,
       ),
       rawLatestChapterRule: source.rules.searchLatestChapterRule,
+    );
+  }
+
+  _ListRuleNormalization _normalizeListRuleReversePrefix(String? rawRule) {
+    final text = rawRule?.trim();
+    if (text == null || text.isEmpty) {
+      return const _ListRuleNormalization();
+    }
+    if (!text.startsWith('-')) {
+      return _ListRuleNormalization(rule: text);
+    }
+
+    final normalized = text.substring(1).trim();
+    return _ListRuleNormalization(
+      rule: normalized.isEmpty ? null : normalized,
+      reversed: true,
     );
   }
 
@@ -1052,6 +1217,7 @@ class SearchService {
     required ErrorStage stage,
     required String? initRule,
     required SearchRequestContext context,
+    JsExecutionContext? jsContext,
   }) async {
     final rawInitRule = initRule?.trim();
     if (rawInitRule == null || rawInitRule.isEmpty) {
@@ -1099,18 +1265,14 @@ class SearchService {
       },
     );
 
-    final response = await _httpClient.get(
-      RequestContext(
-        url: requestUrl,
-        method: requestSpec.method,
-        body: requestBody,
-        contentType: contentType,
-        responseCharset: requestSpec.responseCharset,
-        headers: requestHeaders,
-        maxRetries: 1,
-        stage: stage,
-        sourceId: source.id,
-      ),
+    final response = await _executeRequest(
+      source: source,
+      stage: stage,
+      requestSpec: requestSpec,
+      requestUrl: requestUrl,
+      requestBody: requestBody,
+      contentType: contentType,
+      requestHeaders: requestHeaders,
     );
 
     final normalizedInitBody =
@@ -1126,11 +1288,12 @@ class SearchService {
       return _flattenInitVariables(decoded);
     }();
 
-    final putVariables = _extractInitPutVariables(
+    final putVariables = await _extractInitPutVariables(
       content: normalizedInitBody,
       stage: stage,
       parseRule: initParts.parseRule,
       context: context,
+      jsContext: jsContext,
     );
 
     if (jsonVariables.isEmpty && putVariables.isEmpty) {
@@ -1165,12 +1328,13 @@ class SearchService {
     return _InitRuleParts(parseRule: normalized);
   }
 
-  Map<String, String> _extractInitPutVariables({
+  Future<Map<String, String>> _extractInitPutVariables({
     required String content,
     required ErrorStage stage,
     required String? parseRule,
     required SearchRequestContext context,
-  }) {
+    JsExecutionContext? jsContext,
+  }) async {
     if (!LegacyRuleVariableProcessor.containsVariableSyntax(parseRule)) {
       return const {};
     }
@@ -1178,7 +1342,7 @@ class SearchService {
     final working = <String, String>{...context.toVariables()};
     final baseline = Map<String, String>.from(working);
 
-    LegacyRuleVariableProcessor.resolveExpression(
+    await LegacyRuleVariableProcessor.resolveExpressionAsync(
       expression: parseRule!.trim(),
       variables: working,
       resolvePutValue:
@@ -1186,6 +1350,7 @@ class SearchService {
             content: content,
             stage: stage,
             valueExpression: valueExpression,
+            jsContext: _mergeJsContextVariables(jsContext, working),
           ),
     );
 
@@ -1203,11 +1368,12 @@ class SearchService {
     return output;
   }
 
-  String? _evaluateInitPutValue({
+  Future<String?> _evaluateInitPutValue({
     required String content,
     required ErrorStage stage,
     required String valueExpression,
-  }) {
+    JsExecutionContext? jsContext,
+  }) async {
     final text = valueExpression.trim();
     if (text.isEmpty) {
       return null;
@@ -1221,10 +1387,11 @@ class SearchService {
     if (normalizedRule != null) {
       for (final candidate in _splitFallbackExpressions(normalizedRule)) {
         try {
-          final value = _ruleEngine.executeFirst(
+          final value = await _ruleEngine.executeFirst(
             content: content,
             expression: candidate,
             stage: stage,
+            jsContext: jsContext,
           );
           final normalized = value.trim();
           if (normalized.isNotEmpty) {
@@ -1241,6 +1408,60 @@ class SearchService {
     }
 
     return text;
+  }
+
+  JsExecutionContext _buildSourceJsContext({
+    required SourceDefinition source,
+    required SearchRequestContext runtimeContext,
+    Map<String, String> seedVariables = const <String, String>{},
+    JsBridgePutCallback? onBridgePutVariables,
+  }) {
+    final variables = <String, String>{
+      ...seedVariables,
+      ...runtimeContext.extraParams,
+    };
+
+    void collectPutVariables(Map<String, String> updates) {
+      if (updates.isEmpty) {
+        return;
+      }
+      variables.addAll(SourceJsVariableStore.toRuntimeVariables(updates));
+      onBridgePutVariables?.call(updates);
+    }
+
+    return JsExecutionContext(
+      sourceId: source.id,
+      baseUrl: source.baseUrl,
+      variables: variables,
+      sourceJson: _buildSourceJsJson(source),
+      jsLibScript: source.jsLib,
+      onBridgePutVariables: collectPutVariables,
+    );
+  }
+
+  JsExecutionContext? _mergeJsContextVariables(
+    JsExecutionContext? jsContext,
+    Map<String, String>? variables,
+  ) {
+    if (jsContext == null || variables == null || variables.isEmpty) {
+      return jsContext;
+    }
+
+    return jsContext.copyWith(
+      variables: <String, String>{...jsContext.variables, ...variables},
+    );
+  }
+
+  Map<String, dynamic> _buildSourceJsJson(SourceDefinition source) {
+    final payload = <String, dynamic>{...?source.originalSource};
+    payload.putIfAbsent('id', () => source.id);
+    payload.putIfAbsent('name', () => source.name);
+    payload.putIfAbsent('bookSourceName', () => source.name);
+    payload.putIfAbsent('baseUrl', () => source.baseUrl);
+    payload.putIfAbsent('bookSourceUrl', () => source.baseUrl);
+    payload.putIfAbsent('sourceType', () => source.sourceType);
+    payload.putIfAbsent('enabled', () => source.enabled);
+    return payload;
   }
 
   bool _looksLikeRuleExpression(String expression) {
@@ -1262,10 +1483,21 @@ class SearchService {
       return true;
     }
 
+    if (LegacyRuleCompat.looksLikeAllInOneRegexExpression(text) ||
+        LegacyRuleCompat.looksLikeRegexGroupReference(text)) {
+      return true;
+    }
+
     return text.contains('@') ||
         text.contains('##') ||
         text.contains('||') ||
-        text.contains('&&');
+        text.contains('&&') ||
+        text.contains('%%') ||
+        text.contains('{{@@') ||
+        text.contains('{{@css:') ||
+        text.contains('{{@json:') ||
+        text.contains('{{@xpath:') ||
+        text.contains('{{@js:');
   }
 
   List<String> _splitFallbackExpressions(String expression) {
@@ -1394,25 +1626,12 @@ class SearchService {
       return _SearchRequestSpec(
         urlTemplate: urlTemplate,
         method: HttpRequestMethod.get,
+        maxRetries: 1,
       );
     }
 
     final options = _decodeOptionsMap(splitResult.optionsText);
-    final methodText = options['method']?.toString().toUpperCase();
-    final method =
-        methodText == 'POST' ? HttpRequestMethod.post : HttpRequestMethod.get;
-
-    final bodyTemplate = _normalizeBodyTemplate(options['body']);
-    final contentType = _asNullableString(
-      options['contentType'] ?? options['content-type'],
-    );
-    final responseCharset = _asNullableString(
-      options['responseCharset'] ??
-          options['response-charset'] ??
-          options['charset'],
-    );
-
-    final headers = _parseHeaders(options['headers'] ?? options['header']);
+    final option = UrlOption.fromMap(options);
     var urlTemplate = _normalizeLegacyUrlTemplate(splitResult.urlTemplate);
     if (_looksLikeUnresolvedDynamicRequestTemplate(urlTemplate) &&
         _isUsableBaseUrl(sourceBaseUrl) &&
@@ -1423,11 +1642,15 @@ class SearchService {
 
     return _SearchRequestSpec(
       urlTemplate: urlTemplate,
-      method: method,
-      bodyTemplate: bodyTemplate,
-      contentType: contentType,
-      responseCharset: responseCharset,
-      headers: headers,
+      method: option.method,
+      bodyTemplate: _normalizeBodyTemplate(option.body),
+      contentType: option.contentType,
+      responseCharset: option.responseCharset,
+      headers: option.headers,
+      maxRetries: option.retry ?? 1,
+      useWebView: option.webView,
+      webJs: option.webJs,
+      sourceRegex: option.sourceRegex,
     );
   }
 
@@ -1460,20 +1683,7 @@ class SearchService {
       return null;
     }
 
-    final methodText = options['method']?.toString().toUpperCase();
-    final method =
-        methodText == 'POST' ? HttpRequestMethod.post : HttpRequestMethod.get;
-
-    final bodyTemplate = _normalizeBodyTemplate(options['body']);
-    final contentType = _asNullableString(
-      options['contentType'] ?? options['content-type'],
-    );
-    final responseCharset = _asNullableString(
-      options['responseCharset'] ??
-          options['response-charset'] ??
-          options['charset'],
-    );
-    final headers = _parseHeaders(options['headers'] ?? options['header']);
+    final option = UrlOption.fromMap(options);
 
     var urlTemplate = _normalizeLegacyUrlTemplate(legacyUrl);
     if (_looksLikeUnresolvedDynamicRequestTemplate(urlTemplate) &&
@@ -1486,11 +1696,15 @@ class SearchService {
 
     return _SearchRequestSpec(
       urlTemplate: urlTemplate,
-      method: method,
-      bodyTemplate: bodyTemplate,
-      contentType: contentType,
-      responseCharset: responseCharset,
-      headers: headers,
+      method: option.method,
+      bodyTemplate: _normalizeBodyTemplate(option.body),
+      contentType: option.contentType,
+      responseCharset: option.responseCharset,
+      headers: option.headers,
+      maxRetries: option.retry ?? 1,
+      useWebView: option.webView,
+      webJs: option.webJs,
+      sourceRegex: option.sourceRegex,
     );
   }
 
@@ -1884,6 +2098,43 @@ class SearchService {
           );
           if (resolved is Map<String, String> && resolved.isNotEmpty) {
             result[key] = resolved;
+          }
+          break;
+        case 'webView':
+        case 'webview':
+          final resolved = _evaluateLegacyScriptValue(
+            valueExpression,
+            variables,
+          );
+          final parsed = _asNullableBool(resolved);
+          if (parsed != null) {
+            result[key] = parsed;
+          }
+          break;
+        case 'js':
+        case 'webJs':
+        case 'webjs':
+        case 'sourceRegex':
+        case 'source_regex':
+          final resolved = _evaluateLegacyScriptValue(
+            valueExpression,
+            variables,
+          );
+          final text = _asNullableString(resolved);
+          if (text != null) {
+            result[key] = text;
+          }
+          break;
+        case 'retry':
+          final resolved = _evaluateLegacyScriptValue(
+            valueExpression,
+            variables,
+          );
+          final parsed =
+              int.tryParse((resolved ?? '').toString().trim()) ??
+              int.tryParse(valueExpression.trim());
+          if (parsed != null && parsed >= 0) {
+            result[key] = parsed;
           }
           break;
       }
@@ -2759,29 +3010,6 @@ class SearchService {
         normalized.endsWith('.html');
   }
 
-  Map<String, String> _parseHeaders(Object? source) {
-    if (source == null) {
-      return const {};
-    }
-
-    final rawHeaders = source is String ? _decodeOptionsMap(source) : source;
-
-    if (rawHeaders is! Map) {
-      return const {};
-    }
-
-    final headers = <String, String>{};
-    for (final entry in rawHeaders.entries) {
-      final key = entry.key.toString().trim();
-      final value = entry.value.toString().trim();
-      if (key.isNotEmpty && value.isNotEmpty) {
-        headers[key] = value;
-      }
-    }
-
-    return headers;
-  }
-
   Map<String, String> _resolveRequestHeaders({
     required Map<String, String> sourceHeaders,
     required Map<String, String> requestHeaders,
@@ -2943,6 +3171,27 @@ class SearchService {
     });
   }
 
+  bool? _asNullableBool(Object? value) {
+    if (value == null) {
+      return null;
+    }
+    if (value is bool) {
+      return value;
+    }
+
+    final text = value.toString().trim().toLowerCase();
+    if (text.isEmpty) {
+      return null;
+    }
+    if (text == 'true' || text == '1' || text == 'yes') {
+      return true;
+    }
+    if (text == 'false' || text == '0' || text == 'no') {
+      return false;
+    }
+    return null;
+  }
+
   String? _asNullableString(Object? value) {
     if (value == null) {
       return null;
@@ -2964,6 +3213,9 @@ class SearchService {
     if (text == null || text.isEmpty) {
       return null;
     }
+    if (text.startsWith('js:') || text.startsWith('@js:')) {
+      return text;
+    }
 
     final staticRule = LegacyRuleCompat.extractStaticRuleExpression(text);
     if (staticRule == null || staticRule.isEmpty) {
@@ -2972,11 +3224,13 @@ class SearchService {
 
     if (staticRule.startsWith('html:') ||
         staticRule.startsWith('regex:') ||
-        staticRule.startsWith('json:')) {
+        staticRule.startsWith('json:') ||
+        staticRule.startsWith('js:') ||
+        staticRule.startsWith('@js:')) {
       return staticRule;
     }
 
-    final xpathCandidate = LegacyXPathCompat.buildRuleExpression(
+    final xpathCandidate = LegacyXPathCompat.buildNativeRuleExpression(
       expression: staticRule,
       fallbackExtractor: fallbackExtractor,
       preferredAttribute: preferredAttribute,
@@ -2991,11 +3245,24 @@ class SearchService {
       return 'json:$staticRule';
     }
 
+    if (LegacyRuleCompat.looksLikeAllInOneRegexExpression(staticRule) ||
+        LegacyRuleCompat.looksLikeRegexGroupReference(staticRule)) {
+      return staticRule;
+    }
+
     if (staticRule.contains(r'{{$.') ||
         staticRule.contains(r'{{ $.') ||
         staticRule.contains(r'{{\$.') ||
         staticRule.contains(r'{{ \$.')) {
       return 'json:\$\n$staticRule';
+    }
+
+    if (staticRule.contains('{{@@') ||
+        staticRule.contains('{{@css:') ||
+        staticRule.contains('{{@json:') ||
+        staticRule.contains('{{@xpath:') ||
+        staticRule.contains('{{@js:')) {
+      return staticRule;
     }
 
     final jsonCandidate = _normalizeJsonShorthandExpression(staticRule);
@@ -3126,6 +3393,13 @@ class _SourceSearchOutput {
   final List<Book> books;
 }
 
+class _NetworkLoadResult {
+  const _NetworkLoadResult({required this.statusCode, required this.body});
+
+  final int statusCode;
+  final String body;
+}
+
 class _RequestRuleSplit {
   const _RequestRuleSplit({
     required this.urlTemplate,
@@ -3144,6 +3418,10 @@ class _SearchRequestSpec {
     this.contentType,
     this.responseCharset,
     this.headers = const {},
+    this.maxRetries = 1,
+    this.useWebView = false,
+    this.webJs,
+    this.sourceRegex,
   });
 
   final String urlTemplate;
@@ -3152,6 +3430,10 @@ class _SearchRequestSpec {
   final String? contentType;
   final String? responseCharset;
   final Map<String, String> headers;
+  final int maxRetries;
+  final bool useWebView;
+  final String? webJs;
+  final String? sourceRegex;
 }
 
 class _InitRuleParts {
@@ -3159,4 +3441,11 @@ class _InitRuleParts {
 
   final String? requestRule;
   final String? parseRule;
+}
+
+class _ListRuleNormalization {
+  const _ListRuleNormalization({this.rule, this.reversed = false});
+
+  final String? rule;
+  final bool reversed;
 }
