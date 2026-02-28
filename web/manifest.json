@@ -1,11 +1,11 @@
 {
-    "name": "源阅",
-    "short_name": "源阅",
+    "name": "书享阅读",
+    "short_name": "书享阅读",
     "start_url": ".",
     "display": "standalone",
     "background_color": "#0175C2",
     "theme_color": "#0175C2",
-    "description": "源阅 - 多源小说与漫画阅读器",
+    "description": "书享阅读 - 多源小说与漫画阅读器",
     "orientation": "portrait-primary",
     "prefer_related_applications": false,
     "icons": [

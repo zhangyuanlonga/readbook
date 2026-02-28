@@ -33,7 +33,7 @@ class App extends ConsumerWidget {
     );
 
     return MaterialApp.router(
-      title: '源阅',
+      title: '书享阅读',
       theme: AppTheme.build(lightScheme),
       darkTheme: AppTheme.build(darkScheme),
       themeMode: themeMode,
@@ -255,7 +255,7 @@ class _StartupGuardPage extends StatelessWidget {
             ),
             const SizedBox(height: 12),
             Text(
-              '源阅启动中',
+              '书享阅读启动中',
               style: Theme.of(
                 context,
               ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700),
