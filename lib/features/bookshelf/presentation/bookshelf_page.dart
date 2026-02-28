@@ -16,7 +16,7 @@ import '../../reader/application/reader_preferences_service.dart';
 import '../../book/application/book_detail_service.dart';
 import 'widgets/bookshelf_grid_sliver.dart';
 
-enum _BookshelfAppBarAction { importLocalBook }
+enum _BookshelfAppBarAction { enterSelection, importLocalBook }
 
 class BookshelfPage extends StatefulWidget {
   const BookshelfPage({super.key});
@@ -131,21 +131,37 @@ class _BookshelfPageState extends State<BookshelfPage> {
               icon: const Icon(Icons.add),
               onSelected: (action) {
                 switch (action) {
+                  case _BookshelfAppBarAction.enterSelection:
+                    _enterSelectionModeFromMenu();
+                    break;
                   case _BookshelfAppBarAction.importLocalBook:
                     _importLocalBook();
+                    break;
                 }
               },
-              itemBuilder:
-                  (context) => const [
-                    PopupMenuItem<_BookshelfAppBarAction>(
-                      value: _BookshelfAppBarAction.importLocalBook,
-                      child: ListTile(
-                        contentPadding: EdgeInsets.zero,
-                        leading: Icon(Icons.upload_file_outlined),
-                        title: Text('导入本地书籍'),
-                      ),
+              itemBuilder: (context) {
+                final canEnterSelection =
+                    !_isLoading && !_isBatchDeleting && _books.isNotEmpty;
+                return [
+                  PopupMenuItem<_BookshelfAppBarAction>(
+                    value: _BookshelfAppBarAction.enterSelection,
+                    enabled: canEnterSelection,
+                    child: const ListTile(
+                      contentPadding: EdgeInsets.zero,
+                      leading: Icon(Icons.checklist_rounded),
+                      title: Text('选择书籍'),
                     ),
-                  ],
+                  ),
+                  const PopupMenuItem<_BookshelfAppBarAction>(
+                    value: _BookshelfAppBarAction.importLocalBook,
+                    child: ListTile(
+                      contentPadding: EdgeInsets.zero,
+                      leading: Icon(Icons.upload_file_outlined),
+                      title: Text('导入本地书籍'),
+                    ),
+                  ),
+                ];
+              },
             ),
           ],
         ],
@@ -459,7 +475,13 @@ class _BookshelfPageState extends State<BookshelfPage> {
       color: Colors.transparent,
       child: InkWell(
         borderRadius: BorderRadius.circular(14),
-        onLongPress: () => _enterSelectionMode(book),
+        onLongPress: () {
+          if (_isSelectionMode) {
+            _enterSelectionMode(book);
+            return;
+          }
+          _openBookDetail(book);
+        },
         onTap:
             _isSelectionMode
                 ? () => _toggleBookSelection(book)
@@ -621,7 +643,13 @@ class _BookshelfPageState extends State<BookshelfPage> {
       margin: const EdgeInsets.only(bottom: 6),
       clipBehavior: Clip.antiAlias,
       child: InkWell(
-        onLongPress: () => _enterSelectionMode(book),
+        onLongPress: () {
+          if (_isSelectionMode) {
+            _enterSelectionMode(book);
+            return;
+          }
+          _openBookDetail(book);
+        },
         onTap:
             _isSelectionMode
                 ? () => _toggleBookSelection(book)
@@ -740,6 +768,17 @@ class _BookshelfPageState extends State<BookshelfPage> {
       _selectedBookKeys
         ..clear()
         ..add(key);
+    });
+  }
+
+  void _enterSelectionModeFromMenu() {
+    if (_isLoading || _isBatchDeleting || _books.isEmpty) {
+      return;
+    }
+
+    setState(() {
+      _isSelectionMode = true;
+      _selectedBookKeys.clear();
     });
   }
 
@@ -1161,6 +1200,28 @@ class _BookshelfPageState extends State<BookshelfPage> {
           },
         ).toString();
 
+    context.push(route);
+  }
+
+  void _openBookDetail(BookshelfBook book) {
+    if (_isBatchDeleting) {
+      return;
+    }
+
+    if (book.sourceId == _kLocalBookSourceId) {
+      context.push('/local/book/${book.bookId}');
+      return;
+    }
+
+    final route =
+        Uri(
+          path: '/book/${book.bookId}',
+          queryParameters: {
+            'sourceId': book.sourceId,
+            'detailUrl': book.detailUrl,
+            'title': book.title,
+          },
+        ).toString();
     context.push(route);
   }
 
