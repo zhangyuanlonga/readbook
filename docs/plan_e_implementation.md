@@ -131,6 +131,8 @@
    说明：旧口径把部分 `stub/no-op` 计为 full，因此历史统计为 `non_full=75`；2026-02-28 已切换源码对齐口径（`full/partial/unsupported`），同一批 `3000 书源` 最新统计为 `non_full=176`（其中 `partial=109`，`unsupported=67`），用于真实反映剩余兼容差距。
 6. `已完成（2026-02-28）`：`webView` 系列 JS bridge 与业务层执行器一致化，`java.webView/webViewGetSource/webViewGetOverrideUrl/startBrowserAwait` 已通过 `WebViewExecutor` 执行并补回归。
 7. `已完成（2026-02-28）`：`startBrowser/startBrowserAwait` 新增交互验证执行器（真实页面人工验证 + 结果回传），并在无可用 Navigator 场景自动回退到现有 headless WebView。
+8. `已完成（2026-02-28）`：发现链路入口解析与执行内核统一，`ExploreService.parseCategories` 已改为异步规则执行（`RuleEngine + QuickJS + webView/startBrowser bridge`），发现列表继续复用 `SearchService.searchSingleSource`，UI 层无结构改动。
+9. `已完成（2026-02-28）`：发现页稳定性护栏：后台兼容探测默认跳过脚本执行；前台分类解析默认禁用复杂 WebView/startBrowser bridge（必要时可按源启用）；封面 URL 增加图片地址判定，避免误把详情页 URL 当图片加载。
 
 本轮 `webView:true` 稳定性回归补充：
 - 主链路（搜索 / 详情 / 正文）均新增 “WebView 抛错 -> HTTP 回退成功” 回归用例。

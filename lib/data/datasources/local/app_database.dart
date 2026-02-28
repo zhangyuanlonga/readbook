@@ -963,11 +963,9 @@ class AppDatabase extends _$AppDatabase {
       final pattern = '%$normalizedKeyword%';
       const keywordClause =
           "(LOWER(name) LIKE ? "
-          "OR LOWER(base_url) LIKE ? "
-          "OR LOWER(COALESCE(\"group\", '')) LIKE ? "
-          "OR LOWER(COALESCE(comment, '')) LIKE ?)";
+          "OR LOWER(base_url) LIKE ?)";
       clauses.add(keywordClause);
-      for (var i = 0; i < 4; i++) {
+      for (var i = 0; i < 2; i++) {
         variables.add(Variable<String>(pattern));
       }
     }

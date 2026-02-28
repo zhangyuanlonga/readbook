@@ -54,7 +54,7 @@ void main() {
       expect(summary.discoverSources.map((item) => item.id), <String>['s1']);
     });
 
-    test('parseCategories supports json array style', () {
+    test('parseCategories supports json array style', () async {
       final source = _buildExploreSource(
         id: 'json',
         exploreUrl: '''
@@ -69,7 +69,7 @@ void main() {
         sourceRepository: _FakeSourceRepository(<SourceDefinition>[source]),
         searchService: _FakeSearchService(),
       );
-      final categories = service.parseCategories(source);
+      final categories = await service.parseCategories(source);
 
       expect(categories, hasLength(2));
       expect(categories.first.title, '男频');
@@ -80,7 +80,7 @@ void main() {
       expect(categories.last.isActionable, isTrue);
     });
 
-    test('parseCategories supports title::url lines', () {
+    test('parseCategories supports title::url lines', () async {
       final source = _buildExploreSource(
         id: 'line',
         exploreUrl: '''
@@ -94,7 +94,7 @@ void main() {
         sourceRepository: _FakeSourceRepository(<SourceDefinition>[source]),
         searchService: _FakeSearchService(),
       );
-      final categories = service.parseCategories(source);
+      final categories = await service.parseCategories(source);
 
       expect(categories, hasLength(3));
       expect(categories[0].title, '男频');
@@ -104,7 +104,7 @@ void main() {
       expect(categories[2].isActionable, isFalse);
     });
 
-    test('parseCategories keeps invalid template handling resilient', () {
+    test('parseCategories keeps invalid template handling resilient', () async {
       final source = _buildExploreSource(
         id: 'invalid',
         exploreUrl: '{{id|bad}}',
@@ -115,8 +115,8 @@ void main() {
         searchService: _FakeSearchService(),
       );
 
-      expect(
-        () => service.parseCategories(source),
+      await expectLater(
+        service.parseCategories(source),
         throwsA(
           isA<AppException>().having(
             (error) => error.code,

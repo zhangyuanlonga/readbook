@@ -726,17 +726,13 @@ class _SourcePageState extends State<SourcePage> {
                   focusNode: _searchFocusNode,
                   textInputAction: TextInputAction.search,
                   textAlignVertical: TextAlignVertical.center,
-                  style: Theme.of(
-                    context,
-                  ).textTheme.bodyMedium?.copyWith(
+                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                     fontSize: 13.5,
                     height: 1.25,
                   ),
                   decoration: InputDecoration(
                     hintText: '搜索书源名称或域名',
-                    hintStyle: Theme.of(
-                      context,
-                    ).textTheme.bodyMedium?.copyWith(
+                    hintStyle: Theme.of(context).textTheme.bodyMedium?.copyWith(
                       fontSize: 13.5,
                       height: 1.25,
                       color: colorScheme.onSurfaceVariant,
@@ -896,7 +892,8 @@ class _SourcePageState extends State<SourcePage> {
   }
 
   Widget _buildSourceCard(SourceListItem source) {
-    final hasTestedTime = source.lastCheckStatus != SourceHealthStatus.unknown &&
+    final hasTestedTime =
+        source.lastCheckStatus != SourceHealthStatus.unknown &&
         source.lastCheckedAt != null;
     final isTesting = _testingSourceIds.contains(source.id);
     final isChangingEnabled = _changingEnabledSourceIds.contains(source.id);
@@ -2350,55 +2347,11 @@ class _SourcePageState extends State<SourcePage> {
   }
 
   Future<String?> _showPasteDialog() async {
-    final controller = TextEditingController();
-
-    final result = await showDialog<String>(
-      context: context,
-      builder: (dialogContext) {
-        final maxWidth = AppLayout.dialogMaxWidth(dialogContext);
-        final keyboardInset = AppLayout.keyboardInset(dialogContext);
-
-        return AnimatedPadding(
-          duration: const Duration(milliseconds: 180),
-          curve: Curves.easeOutCubic,
-          padding: EdgeInsets.only(bottom: keyboardInset),
-          child: AlertDialog(
-            insetPadding: AppSpacing.dialogInsetPadding(dialogContext),
-            scrollable: true,
-            title: const Text('粘贴 JSON 内容'),
-            content: ConstrainedBox(
-              constraints: BoxConstraints(maxWidth: maxWidth),
-              child: TextField(
-                controller: controller,
-                minLines: 10,
-                maxLines: 16,
-                keyboardType: TextInputType.multiline,
-                textInputAction: TextInputAction.newline,
-                autofocus: false,
-                decoration: const InputDecoration(
-                  hintText: '{...} 或 [{...}]',
-                  border: OutlineInputBorder(),
-                ),
-              ),
-            ),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.of(dialogContext).pop(),
-                child: const Text('取消'),
-              ),
-              FilledButton(
-                onPressed:
-                    () => Navigator.of(dialogContext).pop(controller.text),
-                child: const Text('导入'),
-              ),
-            ],
-          ),
-        );
-      },
+    return Navigator.of(context).push<String>(
+      MaterialPageRoute<String>(
+        builder: (pageContext) => const _PasteImportPage(),
+      ),
     );
-
-    controller.dispose();
-    return result;
   }
 
   Future<String?> _showUrlImportDialog() async {
@@ -2477,6 +2430,103 @@ class _SourcePageState extends State<SourcePage> {
           ],
         );
       },
+    );
+  }
+}
+
+class _PasteImportPage extends StatefulWidget {
+  const _PasteImportPage();
+
+  @override
+  State<_PasteImportPage> createState() => _PasteImportPageState();
+}
+
+class _PasteImportPageState extends State<_PasteImportPage> {
+  final TextEditingController _controller = TextEditingController();
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  void _submit() {
+    Navigator.of(context).pop(_controller.text);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final horizontal = AppSpacing.pageHorizontal(context);
+    final maxWidth = AppLayout.pageContentMaxWidth(context, maxWidth: 920);
+    final keyboardInset = AppLayout.keyboardInset(context);
+    final bottomSafe = MediaQuery.viewPaddingOf(context).bottom;
+    final canSubmit = _controller.text.trim().isNotEmpty;
+
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text('粘贴导入 JSON'),
+        actions: [
+          TextButton(
+            onPressed: canSubmit ? _submit : null,
+            child: const Text('导入'),
+          ),
+          const SizedBox(width: 8),
+        ],
+      ),
+      body: AnimatedPadding(
+        duration: const Duration(milliseconds: 180),
+        curve: Curves.easeOutCubic,
+        padding: EdgeInsets.only(bottom: keyboardInset),
+        child: SafeArea(
+          top: false,
+          child: Center(
+            child: ConstrainedBox(
+              constraints: BoxConstraints(maxWidth: maxWidth),
+              child: Padding(
+                padding: EdgeInsets.fromLTRB(
+                  horizontal,
+                  12,
+                  horizontal,
+                  12 + bottomSafe,
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    Text(
+                      '粘贴书源 JSON 内容（对象或数组）',
+                      style: Theme.of(context).textTheme.bodyMedium,
+                    ),
+                    const SizedBox(height: 8),
+                    Expanded(
+                      child: TextField(
+                        controller: _controller,
+                        expands: true,
+                        minLines: null,
+                        maxLines: null,
+                        keyboardType: TextInputType.multiline,
+                        textInputAction: TextInputAction.newline,
+                        autofocus: true,
+                        onChanged: (_) => setState(() {}),
+                        decoration: const InputDecoration(
+                          hintText: '{...} 或 [{...}]',
+                          border: OutlineInputBorder(),
+                          alignLabelWithHint: true,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    FilledButton.icon(
+                      onPressed: canSubmit ? _submit : null,
+                      icon: const Icon(Icons.file_download_rounded),
+                      label: const Text('导入'),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
     );
   }
 }

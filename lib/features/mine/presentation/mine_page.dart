@@ -160,7 +160,7 @@ class _MinePageState extends ConsumerState<MinePage> {
                         ),
                         _MineActionItem(
                           icon: Icons.feedback_outlined,
-                          label: '反馈',
+                          label: '加入官方群',
                           onTap: _openSourceFeedback,
                         ),
                         _MineActionItem(

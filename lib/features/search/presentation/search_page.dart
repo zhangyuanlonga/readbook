@@ -41,14 +41,43 @@ class _SearchPageState extends State<SearchPage> {
   static final RegExp _preciseSpaceRegex = RegExp(r'[\u3000\s]+');
   static final RegExp _htmlTagRegex = RegExp(r'<[^>]+>');
   static const Set<String> _preciseTitleSeparators = <String>{
-    ' ', '-', '_', '.', '·', ':', '：', '/', '|',
-    '(', '（', '[', '【', '<', '《',
+    ' ',
+    '-',
+    '_',
+    '.',
+    '·',
+    ':',
+    '：',
+    '/',
+    '|',
+    '(',
+    '（',
+    '[',
+    '【',
+    '<',
+    '《',
   };
   static const Set<String> _preciseLeadingWrappers = <String>{
-    '《', '〈', '<', '「', '『', '【', '[', '(', '（',
+    '《',
+    '〈',
+    '<',
+    '「',
+    '『',
+    '【',
+    '[',
+    '(',
+    '（',
   };
   static const Set<String> _preciseTrailingWrappers = <String>{
-    '》', '〉', '>', '」', '』', '】', ']', ')', '）',
+    '》',
+    '〉',
+    '>',
+    '」',
+    '』',
+    '】',
+    ']',
+    ')',
+    '）',
   };
   static const Duration _progressUiThrottleWindow = Duration(milliseconds: 120);
   static const Duration _sourceCountLoadTimeout = Duration(seconds: 8);
@@ -61,6 +90,7 @@ class _SearchPageState extends State<SearchPage> {
     PointerDeviceKind.unknown,
   };
   static const int _searchResultPageSize = 40;
+  static const double _paginationTriggerDistance = 280;
 
   bool _isSearching = false;
   bool _isLoadingSourceCount = false;
@@ -172,10 +202,7 @@ class _SearchPageState extends State<SearchPage> {
                   onClearSourceFilter: _clearSourceFilter,
                 ),
                 if (_isSearching)
-                  SearchProgressCard(
-                    report: report,
-                    isSearching: _isSearching,
-                  ),
+                  SearchProgressCard(report: report, isSearching: _isSearching),
                 if (report != null) ...[
                   const SizedBox(height: 8),
                   SearchReportSummary(
@@ -277,10 +304,9 @@ class _SearchPageState extends State<SearchPage> {
     );
     // Optimistic UI: remove immediately
     setState(() {
-      _searchHistory =
-          _searchHistory
-              .where((item) => item != keyword)
-              .toList(growable: false);
+      _searchHistory = _searchHistory
+          .where((item) => item != keyword)
+          .toList(growable: false);
     });
   }
 
@@ -354,7 +380,10 @@ class _SearchPageState extends State<SearchPage> {
     if (!_pageScrollController.hasClients || _isSearching) return;
 
     final position = _pageScrollController.position;
-    if (position.pixels + 280 < position.maxScrollExtent) return;
+    if (position.pixels + _paginationTriggerDistance <
+        position.maxScrollExtent) {
+      return;
+    }
 
     _appendMoreRenderedResults();
   }
@@ -367,10 +396,29 @@ class _SearchPageState extends State<SearchPage> {
 
     _isAppendingResults = true;
     setState(() {
-      _renderedResultCount =
-          (_renderedResultCount + _searchResultPageSize).clamp(0, total);
+      _renderedResultCount = (_renderedResultCount + _searchResultPageSize)
+          .clamp(0, total);
     });
     _isAppendingResults = false;
+    _scheduleAutoAppendIfNeeded();
+  }
+
+  void _scheduleAutoAppendIfNeeded() {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted || _isSearching || _isAppendingResults) return;
+      if (!_pageScrollController.hasClients) return;
+      if (_renderedResultCount >= _visibleBooks.length) return;
+
+      final position = _pageScrollController.position;
+      final isNearBottom =
+          position.pixels + _paginationTriggerDistance >=
+          position.maxScrollExtent;
+      final isScrollable = position.maxScrollExtent > 0;
+
+      if (!isScrollable || isNearBottom) {
+        _appendMoreRenderedResults();
+      }
+    });
   }
 
   // ── Report & snippet pre-processing ──
@@ -408,6 +456,7 @@ class _SearchPageState extends State<SearchPage> {
             ? _searchResultPageSize
             : _visibleBooks.length;
     _renderedResultCount = target;
+    _scheduleAutoAppendIfNeeded();
   }
 
   // ── Result list ──
@@ -429,7 +478,6 @@ class _SearchPageState extends State<SearchPage> {
     }
 
     final visibleCount = _renderedResultCount.clamp(0, books.length);
-    final hasMoreResults = visibleCount < books.length;
 
     return Column(
       children: [
@@ -470,34 +518,11 @@ class _SearchPageState extends State<SearchPage> {
             );
           },
         ),
-        if (hasMoreResults)
-          Padding(
-            padding: const EdgeInsets.only(top: 4),
-            child: Column(
-              children: [
-                Text(
-                  '继续滚动或点击加载更多（$visibleCount/${books.length}）',
-                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                    color: Theme.of(context).colorScheme.onSurfaceVariant,
-                  ),
-                ),
-                const SizedBox(height: 4),
-                OutlinedButton.icon(
-                  onPressed: _appendMoreRenderedResults,
-                  icon: const Icon(Icons.expand_more_rounded),
-                  label: const Text('加载下一批'),
-                ),
-              ],
-            ),
-          ),
       ],
     );
   }
 
-  String _buildBookCoverHeroTag({
-    required Book book,
-    required int listIndex,
-  }) {
+  String _buildBookCoverHeroTag({required Book book, required int listIndex}) {
     return 'book_cover_${book.sourceId}_${book.id}_${book.detailUrl.hashCode}_$listIndex';
   }
 

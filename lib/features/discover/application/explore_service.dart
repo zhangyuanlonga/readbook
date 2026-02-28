@@ -3,8 +3,14 @@ import 'dart:convert';
 import '../../../core/errors/app_exception.dart';
 import '../../../core/errors/error_codes.dart';
 import '../../../core/errors/error_stage.dart';
+import '../../../core/logging/app_logger.dart';
+import '../../../core/rule_engine/executors/js_executor.dart';
+import '../../../core/rule_engine/processors/source_js_variable_store.dart';
 import '../../../core/rule_engine/processors/legacy_script_rule_fallback.dart';
+import '../../../core/rule_engine/rule_engine.dart';
 import '../../../core/rule_engine/processors/url_template_resolver.dart';
+import '../../../core/webview/interactive_verification_browser_executor.dart';
+import '../../../core/webview/webview_executor.dart';
 import '../../../data/datasources/local/app_database.dart';
 import '../../../data/repositories/source_repository_impl.dart';
 import '../../../domain/entities/book.dart';
@@ -72,16 +78,30 @@ class ExploreService {
   ExploreService({
     SourceRepository? sourceRepository,
     SearchService? searchService,
+    WebViewExecutor? webViewExecutor,
+    InteractiveVerificationBrowserExecutor? interactiveVerificationExecutor,
+    RuleEngine? ruleEngine,
     UrlTemplateResolver? urlTemplateResolver,
+    AppLogger? logger,
   }) : _sourceRepository =
            sourceRepository ?? SourceRepositoryImpl(AppDatabase.instance),
        _searchService = searchService ?? SearchService(),
+       _webViewExecutor = webViewExecutor ?? WebViewExecutor(),
+       _interactiveVerificationExecutor =
+           interactiveVerificationExecutor ??
+           InteractiveVerificationBrowserExecutor.instance,
+       _ruleEngine = ruleEngine ?? RuleEngine(),
        _urlTemplateResolver =
-           urlTemplateResolver ?? const UrlTemplateResolver();
+           urlTemplateResolver ?? const UrlTemplateResolver(),
+       _logger = logger ?? AppLogger.instance;
 
   final SourceRepository _sourceRepository;
   final SearchService _searchService;
+  final WebViewExecutor _webViewExecutor;
+  final InteractiveVerificationBrowserExecutor _interactiveVerificationExecutor;
+  final RuleEngine _ruleEngine;
   final UrlTemplateResolver _urlTemplateResolver;
+  final AppLogger _logger;
 
   Future<DiscoverSourceSummary> loadDiscoverSourceSummary() async {
     final sources = await _sourceRepository.getAll();
@@ -102,7 +122,11 @@ class ExploreService {
     return summary.discoverSources;
   }
 
-  List<ExploreCategoryItem> parseCategories(SourceDefinition source) {
+  Future<List<ExploreCategoryItem>> parseCategories(
+    SourceDefinition source, {
+    bool evaluateScript = true,
+    bool allowComplexJs = false,
+  }) async {
     final rawExploreUrl = source.exploreUrl?.trim();
     if (rawExploreUrl == null || rawExploreUrl.isEmpty) {
       throw AppException(
@@ -118,7 +142,20 @@ class ExploreService {
       return categories;
     }
 
-    final fromScript = _tryResolveExploreScript(rawExploreUrl);
+    if (!evaluateScript) {
+      throw AppException(
+        code: ErrorCode.ruleParse,
+        stage: ErrorStage.source,
+        sourceId: source.id,
+        briefMessage: '发现入口依赖脚本执行，快速探测阶段已跳过。',
+      );
+    }
+
+    final fromScript = await _tryResolveExploreScript(
+      source: source,
+      rawExploreUrl: rawExploreUrl,
+      allowComplexJs: allowComplexJs,
+    );
     if (fromScript != null) {
       final scriptCategories = _parseCategoriesFromText(fromScript);
       if (scriptCategories.isNotEmpty) {
@@ -303,29 +340,279 @@ class ExploreService {
     return categories;
   }
 
-  String? _tryResolveExploreScript(String rawExploreUrl) {
+  Future<String?> _tryResolveExploreScript({
+    required SourceDefinition source,
+    required String rawExploreUrl,
+    required bool allowComplexJs,
+  }) async {
     final normalized = rawExploreUrl.trim();
     final isScript =
         normalized.startsWith('@js:') ||
+        normalized.startsWith('js:') ||
         normalized.startsWith('<js>') ||
+        normalized.startsWith('html:') ||
+        normalized.startsWith('regex:') ||
+        normalized.startsWith('json:') ||
+        normalized.startsWith('xpath:') ||
+        normalized.startsWith('@xpath:') ||
         normalized.toLowerCase().contains('\n@js:') ||
         normalized.toLowerCase().contains('\r@js:');
     if (!isScript) {
       return null;
     }
 
+    final sourceVariableUpdates = <String, String>{};
+    final runtimeVariables = <String, String>{
+      ...SourceJsVariableStore.load(source),
+    };
+
+    void collectPutVariables(Map<String, String> updates) {
+      if (updates.isEmpty) {
+        return;
+      }
+      sourceVariableUpdates.addAll(updates);
+      runtimeVariables.addAll(
+        SourceJsVariableStore.toRuntimeVariables(updates),
+      );
+    }
+
     try {
-      final result = LegacyScriptRuleFallback.evaluateFieldValue(
+      final baseContext = SearchRequestContext(
+        keyword: 'discover',
+        page: 1,
+        pageSize: 20,
+        sourceId: source.id,
+      );
+      final runtimeContext =
+          allowComplexJs
+              ? await _searchService.buildRuntimeContextWithInit(
+                source: source,
+                context: baseContext,
+                initRule: source.rules.exploreInitRule,
+                jsContext: _buildSourceJsContext(
+                  source: source,
+                  runtimeContext: baseContext,
+                  seedVariables: runtimeVariables,
+                  onBridgePutVariables: collectPutVariables,
+                  includeWebViewBridge: true,
+                ),
+              )
+              : baseContext;
+      final jsContext = _buildSourceJsContext(
+        source: source,
+        runtimeContext: runtimeContext,
+        seedVariables: runtimeVariables,
+        onBridgePutVariables: collectPutVariables,
+        includeWebViewBridge: allowComplexJs,
+      );
+
+      final expression = _normalizeExploreScriptExpression(normalized);
+      if (expression != null) {
+        try {
+          final resolvedList = await _ruleEngine.executeAll(
+            content: '',
+            expression: expression,
+            stage: ErrorStage.search,
+            jsContext: jsContext,
+          );
+          final output = resolvedList
+              .map((item) => item.trim())
+              .firstWhere((item) => item.isNotEmpty, orElse: () => '');
+          if (output.isNotEmpty) {
+            return output;
+          }
+        } on AppException {
+          // Fall through to legacy fallback to keep parser resilient.
+        }
+      }
+
+      final fallback = LegacyScriptRuleFallback.evaluateFieldValue(
         content: '',
         rawRule: rawExploreUrl,
       );
-      final output = result?.trim();
+      final output = fallback?.trim();
       if (output == null || output.isEmpty) {
         return null;
       }
       return output;
-    } catch (_) {
+    } catch (error) {
+      _logger.warn(
+        'Explore entry script evaluation failed',
+        context: <String, Object?>{
+          'sourceId': source.id,
+          'sourceName': source.name,
+          'briefMessage': error.toString(),
+          'diagnostic': 'explore_script_eval_failed',
+        },
+      );
       return null;
+    } finally {
+      await _persistSourceJsVariables(
+        source: source,
+        variables: sourceVariableUpdates,
+      );
+    }
+  }
+
+  String? _normalizeExploreScriptExpression(String script) {
+    final normalized = script.trim();
+    if (normalized.isEmpty) {
+      return null;
+    }
+
+    if ((normalized.startsWith('<js>') ||
+            normalized.toLowerCase().startsWith('<js>')) &&
+        (normalized.endsWith('</js>') ||
+            normalized.toLowerCase().endsWith('</js>'))) {
+      final start = normalized.indexOf('>');
+      final end = normalized.toLowerCase().lastIndexOf('</js>');
+      if (start >= 0 && end > start + 1) {
+        final body = normalized.substring(start + 1, end).trim();
+        if (body.isNotEmpty) {
+          return '@js:$body';
+        }
+      }
+    }
+
+    return normalized;
+  }
+
+  JsExecutionContext _buildSourceJsContext({
+    required SourceDefinition source,
+    required SearchRequestContext runtimeContext,
+    Map<String, String> seedVariables = const <String, String>{},
+    JsBridgePutCallback? onBridgePutVariables,
+    bool includeWebViewBridge = true,
+  }) {
+    final variables = <String, String>{
+      ...seedVariables,
+      ...runtimeContext.extraParams,
+    };
+
+    void collectPutVariables(Map<String, String> updates) {
+      if (updates.isEmpty) {
+        return;
+      }
+      variables.addAll(SourceJsVariableStore.toRuntimeVariables(updates));
+      onBridgePutVariables?.call(updates);
+    }
+
+    return JsExecutionContext(
+      sourceId: source.id,
+      stage: ErrorStage.search,
+      baseUrl: source.baseUrl,
+      variables: variables,
+      sourceJson: _buildSourceJsJson(source),
+      jsLibScript: source.jsLib,
+      onBridgePutVariables: collectPutVariables,
+      onWebViewBridgeCall:
+          includeWebViewBridge
+              ? (request) =>
+                  _executeJsWebViewBridge(source: source, request: request)
+              : null,
+    );
+  }
+
+  Future<JsWebViewBridgeResponse> _executeJsWebViewBridge({
+    required SourceDefinition source,
+    required JsWebViewBridgeRequest request,
+  }) async {
+    final candidateUrl = request.url.trim();
+    final fallbackUrl = source.baseUrl.trim();
+    final targetUrl =
+        candidateUrl.isNotEmpty
+            ? candidateUrl
+            : (fallbackUrl.isNotEmpty ? fallbackUrl : 'about:blank');
+    final bridgeCall = request.bridgeCall.trim().toLowerCase();
+    final webViewRequest = WebViewRequestPayload(
+      url: targetUrl,
+      headers: source.headers,
+      html: request.html,
+      webJs: request.js,
+      sourceRegex: request.sourceRegex,
+      overrideUrlRegex: request.overrideUrlRegex,
+      stage: ErrorStage.search,
+      sourceId: source.id,
+    );
+
+    WebViewResponsePayload response;
+    if (bridgeCall == 'startbrowser' || bridgeCall == 'startbrowserawait') {
+      try {
+        response = await _interactiveVerificationExecutor.open(
+          request: webViewRequest,
+          awaitUserResult: bridgeCall == 'startbrowserawait',
+          title: request.title,
+          refetchAfterSuccess: request.refetchAfterSuccess ?? true,
+        );
+      } catch (error) {
+        final allowFallback =
+            error is StateError &&
+            error.toString().contains('Navigator is unavailable');
+        if (!allowFallback) {
+          rethrow;
+        }
+        _logger.warn(
+          'Explore interactive verification fallback to headless WebView',
+          context: <String, Object?>{
+            'sourceId': source.id,
+            'bridgeCall': bridgeCall,
+            'url': targetUrl,
+            'briefMessage': error.toString(),
+            'diagnostic': 'explore_webview_interactive_fallback_headless',
+          },
+        );
+        response = await _webViewExecutor.load(request: webViewRequest);
+      }
+    } else {
+      response = await _webViewExecutor.load(request: webViewRequest);
+    }
+
+    return JsWebViewBridgeResponse(
+      statusCode: response.statusCode,
+      body: response.body,
+      finalUrl: response.finalUrl,
+      matchedResourceUrl: response.matchedResourceUrl,
+      matchedOverrideUrl: response.matchedOverrideUrl,
+      scriptResult: response.scriptResult,
+    );
+  }
+
+  Map<String, dynamic> _buildSourceJsJson(SourceDefinition source) {
+    final payload = <String, dynamic>{...?source.originalSource};
+    payload.putIfAbsent('id', () => source.id);
+    payload.putIfAbsent('name', () => source.name);
+    payload.putIfAbsent('bookSourceName', () => source.name);
+    payload.putIfAbsent('baseUrl', () => source.baseUrl);
+    payload.putIfAbsent('bookSourceUrl', () => source.baseUrl);
+    payload.putIfAbsent('sourceType', () => source.sourceType);
+    payload.putIfAbsent('enabled', () => source.enabled);
+    return payload;
+  }
+
+  Future<void> _persistSourceJsVariables({
+    required SourceDefinition source,
+    required Map<String, String> variables,
+  }) async {
+    if (variables.isEmpty) {
+      return;
+    }
+
+    final nextSource = SourceJsVariableStore.merge(
+      source: source,
+      updates: variables,
+    );
+    try {
+      await _sourceRepository.upsertAll([nextSource]);
+    } catch (error) {
+      _logger.warn(
+        'Persist discover source js variables failed',
+        context: <String, Object?>{
+          'sourceId': source.id,
+          'sourceName': source.name,
+          'error': error.toString(),
+          'diagnostic': 'explore_source_js_persist_failed',
+        },
+      );
     }
   }
 

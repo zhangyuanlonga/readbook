@@ -689,6 +689,20 @@ class SearchService {
     );
   }
 
+  Future<SearchRequestContext> buildRuntimeContextWithInit({
+    required SourceDefinition source,
+    required SearchRequestContext context,
+    required String? initRule,
+    JsExecutionContext? jsContext,
+  }) {
+    return _buildRuntimeContext(
+      source: source,
+      context: context,
+      initRule: initRule,
+      jsContext: jsContext,
+    );
+  }
+
   Future<_SourceSearchOutput> _searchSingleSource({
     required SourceDefinition source,
     required SearchRequestContext context,

@@ -474,7 +474,11 @@ class _DiscoverPageState extends State<DiscoverPage> {
               scrollDirection: Axis.horizontal,
               child: Row(
                 children: <Widget>[
-                  for (var index = 0; index < previewCount; index++) ...<Widget>[
+                  for (
+                    var index = 0;
+                    index < previewCount;
+                    index++
+                  ) ...<Widget>[
                     if (index > 0) const SizedBox(width: 8),
                     _buildCategoryChip(
                       context,
@@ -894,7 +898,7 @@ class _DiscoverPageState extends State<DiscoverPage> {
 
   Widget _buildCoverPreview(String? coverUrl, {required String heroTag}) {
     final trimmed = coverUrl?.trim();
-    if (trimmed == null || trimmed.isEmpty) {
+    if (trimmed == null || trimmed.isEmpty || !_looksLikeImageUrl(trimmed)) {
       return Hero(tag: heroTag, child: _buildCoverFallback());
     }
 
@@ -911,6 +915,41 @@ class _DiscoverPageState extends State<DiscoverPage> {
         ),
       ),
     );
+  }
+
+  bool _looksLikeImageUrl(String value) {
+    final uri = Uri.tryParse(value);
+    if (uri == null) {
+      return false;
+    }
+    final scheme = uri.scheme.toLowerCase();
+    if (scheme != 'http' && scheme != 'https') {
+      return false;
+    }
+
+    final path = uri.path.toLowerCase();
+    if (path.isEmpty || path.endsWith('/')) {
+      return false;
+    }
+
+    const imageExtensions = <String>[
+      '.jpg',
+      '.jpeg',
+      '.png',
+      '.webp',
+      '.gif',
+      '.bmp',
+      '.avif',
+      '.svg',
+    ];
+    if (imageExtensions.any(path.endsWith)) {
+      return true;
+    }
+
+    return path.contains('/cover') ||
+        path.contains('/covers/') ||
+        path.contains('/img/') ||
+        path.contains('/images/');
   }
 
   Widget _buildCoverFallback() {
@@ -1250,7 +1289,10 @@ class _DiscoverPageState extends State<DiscoverPage> {
 
       String? parseError;
       try {
-        final categories = _exploreService.parseCategories(source);
+        final categories = await _exploreService.parseCategories(
+          source,
+          evaluateScript: false,
+        );
         if (!categories.any((item) => item.isActionable)) {
           parseError = '发现分类均不可点击。';
         }
@@ -1304,7 +1346,11 @@ class _DiscoverPageState extends State<DiscoverPage> {
     });
 
     try {
-      final parsedCategories = _exploreService.parseCategories(source);
+      final parsedCategories = await _exploreService.parseCategories(
+        source,
+        evaluateScript: true,
+        allowComplexJs: false,
+      );
       if (!mounted || requestToken != _categoryRequestToken) {
         return;
       }
@@ -1845,11 +1891,11 @@ class _SourcePickerSheetState extends State<_SourcePickerSheet> {
           if (keyword.isEmpty) {
             return true;
           }
-          final host = _extractHost(source.baseUrl).toLowerCase();
-          final group = (source.group ?? '').toLowerCase();
           final name = source.name.toLowerCase();
+          final baseUrl = source.baseUrl.toLowerCase();
+          final host = _extractHost(source.baseUrl).toLowerCase();
           return name.contains(keyword) ||
-              group.contains(keyword) ||
+              baseUrl.contains(keyword) ||
               host.contains(keyword);
         })
         .toList(growable: true);
@@ -1909,9 +1955,7 @@ class _SourcePickerSheetState extends State<_SourcePickerSheet> {
                 children: <Widget>[
                   Text(
                     '切换发现书源',
-                    style: Theme.of(
-                      context,
-                    ).textTheme.titleMedium?.copyWith(
+                    style: Theme.of(context).textTheme.titleMedium?.copyWith(
                       fontWeight: FontWeight.w700,
                     ),
                   ),
@@ -1931,7 +1975,7 @@ class _SourcePickerSheetState extends State<_SourcePickerSheet> {
               onChanged: (_) => setState(() {}),
               decoration: InputDecoration(
                 isDense: true,
-                hintText: '搜索书源名称、分组或域名',
+                hintText: '搜索书源名称或域名',
                 prefixIcon: const Icon(Icons.search_rounded, size: 18),
                 border: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(12),
@@ -1967,11 +2011,10 @@ class _SourcePickerSheetState extends State<_SourcePickerSheet> {
                           return ListTile(
                             onTap: () => Navigator.of(context).pop(source),
                             selected: selected,
-                            selectedTileColor: Theme.of(
-                              context,
-                            ).colorScheme.secondaryContainer.withValues(
-                              alpha: 0.5,
-                            ),
+                            selectedTileColor: Theme.of(context)
+                                .colorScheme
+                                .secondaryContainer
+                                .withValues(alpha: 0.5),
                             title: Row(
                               children: <Widget>[
                                 Expanded(
@@ -1979,13 +2022,14 @@ class _SourcePickerSheetState extends State<_SourcePickerSheet> {
                                     source.name,
                                     maxLines: 1,
                                     overflow: TextOverflow.ellipsis,
-                                    style: selected
-                                        ? Theme.of(
-                                            context,
-                                          ).textTheme.bodyLarge?.copyWith(
-                                            fontWeight: FontWeight.w700,
-                                          )
-                                        : null,
+                                    style:
+                                        selected
+                                            ? Theme.of(
+                                              context,
+                                            ).textTheme.bodyLarge?.copyWith(
+                                              fontWeight: FontWeight.w700,
+                                            )
+                                            : null,
                                   ),
                                 ),
                                 const SizedBox(width: 8),
@@ -2010,11 +2054,10 @@ class _SourcePickerSheetState extends State<_SourcePickerSheet> {
                                         const SizedBox(width: 3),
                                         Text(
                                           _sourceStatusLabel(status),
-                                          style: Theme.of(
-                                            context,
-                                          ).textTheme.labelSmall?.copyWith(
-                                            color: statusColor,
-                                          ),
+                                          style: Theme.of(context)
+                                              .textTheme
+                                              .labelSmall
+                                              ?.copyWith(color: statusColor),
                                         ),
                                       ],
                                     ),
@@ -2233,9 +2276,7 @@ class _CategoryPickerSheetState extends State<_CategoryPickerSheet> {
                 children: <Widget>[
                   Text(
                     '选择分类',
-                    style: Theme.of(
-                      context,
-                    ).textTheme.titleMedium?.copyWith(
+                    style: Theme.of(context).textTheme.titleMedium?.copyWith(
                       fontWeight: FontWeight.w700,
                     ),
                   ),
@@ -2283,22 +2324,22 @@ class _CategoryPickerSheetState extends State<_CategoryPickerSheet> {
                           return ListTile(
                             onTap: () => Navigator.of(context).pop(index),
                             selected: selected,
-                            selectedTileColor: Theme.of(
-                              context,
-                            ).colorScheme.secondaryContainer.withValues(
-                              alpha: 0.5,
-                            ),
+                            selectedTileColor: Theme.of(context)
+                                .colorScheme
+                                .secondaryContainer
+                                .withValues(alpha: 0.5),
                             title: Text(
                               item.title,
                               maxLines: 1,
                               overflow: TextOverflow.ellipsis,
-                              style: selected
-                                  ? Theme.of(
-                                      context,
-                                    ).textTheme.bodyLarge?.copyWith(
-                                      fontWeight: FontWeight.w700,
-                                    )
-                                  : null,
+                              style:
+                                  selected
+                                      ? Theme.of(
+                                        context,
+                                      ).textTheme.bodyLarge?.copyWith(
+                                        fontWeight: FontWeight.w700,
+                                      )
+                                      : null,
                             ),
                             trailing:
                                 selected
