@@ -15,9 +15,11 @@ import '../../../domain/repositories/source_repository.dart';
 import '../../source/presentation/source_filter_sheet.dart';
 import '../application/search_history_service.dart';
 import '../application/search_service.dart';
+import '../application/search_system_settings_service.dart';
 import 'widgets/search_book_card.dart';
 import 'widgets/search_empty_state.dart';
 import 'widgets/search_failure_banner.dart';
+import 'widgets/search_grouped_empty_fallback_card.dart';
 import 'widgets/search_input_card.dart';
 import 'widgets/search_progress_card.dart';
 import 'widgets/search_report_summary.dart';
@@ -37,6 +39,8 @@ class _SearchPageState extends State<SearchPage> {
   );
   late final SearchService _searchService;
   final SearchHistoryService _historyService = SearchHistoryService();
+  final SearchSystemSettingsService _searchSystemSettingsService =
+      SearchSystemSettingsService();
 
   static final RegExp _preciseSpaceRegex = RegExp(r'[\u3000\s]+');
   static final RegExp _htmlTagRegex = RegExp(r'<[^>]+>');
@@ -100,6 +104,7 @@ class _SearchPageState extends State<SearchPage> {
   int _searchSessionId = 0;
   SearchContentMode _searchContentMode = SearchContentMode.novel;
   bool _isPreciseBookMatch = false;
+  bool _aggregateByTitleAuthorEnabled = true;
   int _availableSourceCount = 0;
   Set<String> _selectedSourceIds = <String>{};
   final ScrollController _pageScrollController = ScrollController();
@@ -125,6 +130,7 @@ class _SearchPageState extends State<SearchPage> {
       if (!mounted) return;
       unawaited(_refreshSourceCount());
       unawaited(_loadSearchHistory());
+      unawaited(_loadSearchSystemSettings());
     });
   }
 
@@ -274,6 +280,22 @@ class _SearchPageState extends State<SearchPage> {
   }
 
   // ── Search History ──
+
+  Future<void> _loadSearchSystemSettings() async {
+    try {
+      final enabled =
+          await _searchSystemSettingsService
+              .loadAggregateByTitleAuthorEnabled();
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _aggregateByTitleAuthorEnabled = enabled;
+      });
+    } catch (_) {
+      // Keep default when settings loading fails.
+    }
+  }
 
   Future<void> _loadSearchHistory() async {
     final history = await _historyService.getAll();
@@ -463,17 +485,13 @@ class _SearchPageState extends State<SearchPage> {
 
   Widget _buildResultList(SearchExecutionReport report, List<Book> books) {
     if (books.isEmpty) {
-      final theme = Theme.of(context);
-      final emptyTip =
-          _isPreciseBookMatch && report.books.isNotEmpty
-              ? '已开启精准匹配，当前关键词未命中精准书名。'
-              : '暂无可展示结果，请检查书源规则或更换关键词。';
-
-      return Card(
-        child: Padding(
-          padding: const EdgeInsets.all(16),
-          child: Text(emptyTip, style: theme.textTheme.bodyMedium),
-        ),
+      final canDisablePrecise = _isPreciseBookMatch && report.books.isNotEmpty;
+      final canSwitchAllSources = _selectedSourceIds.isNotEmpty;
+      return SearchGroupedEmptyFallbackCard(
+        canDisablePrecise: canDisablePrecise,
+        canSwitchAllSources: canSwitchAllSources,
+        onDisablePreciseMatch: _disablePreciseMatchFallback,
+        onSwitchAllSources: () => unawaited(_switchToAllSourcesFallback()),
       );
     }
 
@@ -499,21 +517,26 @@ class _SearchPageState extends State<SearchPage> {
             return SearchBookCard(
               book: book,
               sourceName: sourceName,
+              sourceHitCount: report.sourceHitCountOf(book),
               heroTag: heroTag,
               normalizedIntro: _normalizedIntros[snippetKey],
               normalizedLatestChapter: _normalizedLatestChapters[snippetKey],
-              onTap: () {
-                final route =
-                    Uri(
-                      path: '/book/${book.id}',
-                      queryParameters: {
-                        'sourceId': book.sourceId,
-                        'detailUrl': book.detailUrl,
-                        'title': book.title,
-                        'heroTag': heroTag,
-                      },
-                    ).toString();
-                context.push(route);
+              onTap: () async {
+                final selected = await _pickSearchResultSource(
+                  report: report,
+                  primaryBook: book,
+                );
+                if (selected == null || !mounted) {
+                  return;
+                }
+                final selectedHeroTag =
+                    selected.id == book.id
+                        ? heroTag
+                        : _buildBookCoverHeroTag(
+                          book: selected,
+                          listIndex: index,
+                        );
+                _openBookDetail(selected, heroTag: selectedHeroTag);
               },
             );
           },
@@ -524,6 +547,104 @@ class _SearchPageState extends State<SearchPage> {
 
   String _buildBookCoverHeroTag({required Book book, required int listIndex}) {
     return 'book_cover_${book.sourceId}_${book.id}_${book.detailUrl.hashCode}_$listIndex';
+  }
+
+  Future<Book?> _pickSearchResultSource({
+    required SearchExecutionReport report,
+    required Book primaryBook,
+  }) async {
+    final candidates = report.sourceHitsOf(primaryBook);
+    if (candidates.length <= 1) {
+      return primaryBook;
+    }
+
+    return showModalBottomSheet<Book>(
+      context: context,
+      showDragHandle: true,
+      builder: (context) {
+        return SafeArea(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Padding(
+                padding: const EdgeInsets.fromLTRB(16, 8, 16, 12),
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: Text(
+                        '选择来源（${candidates.length}）',
+                        style: Theme.of(context).textTheme.titleMedium,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              Flexible(
+                child: ListView.separated(
+                  shrinkWrap: true,
+                  itemCount: candidates.length,
+                  separatorBuilder:
+                      (context, _) => const Divider(height: 1, thickness: 0.5),
+                  itemBuilder: (context, index) {
+                    final candidate = candidates[index];
+                    final sourceName =
+                        report.sourceNames[candidate.sourceId] ??
+                        candidate.sourceId;
+                    final subtitle = candidate.latestChapter?.trim();
+                    return ListTile(
+                      title: Text(sourceName),
+                      subtitle:
+                          subtitle == null || subtitle.isEmpty
+                              ? null
+                              : Text(
+                                '最新：$subtitle',
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                      onTap: () => Navigator.of(context).pop(candidate),
+                    );
+                  },
+                ),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  void _openBookDetail(Book book, {required String heroTag}) {
+    final route =
+        Uri(
+          path: '/book/${book.id}',
+          queryParameters: {
+            'sourceId': book.sourceId,
+            'detailUrl': book.detailUrl,
+            'title': book.title,
+            'heroTag': heroTag,
+          },
+        ).toString();
+    context.push(route);
+  }
+
+  void _disablePreciseMatchFallback() {
+    if (!_isPreciseBookMatch) {
+      return;
+    }
+    setState(() {
+      _isPreciseBookMatch = false;
+      _setReport(_report);
+    });
+  }
+
+  Future<void> _switchToAllSourcesFallback() async {
+    if (_selectedSourceIds.isEmpty || _isSearching) {
+      return;
+    }
+    setState(() {
+      _selectedSourceIds = <String>{};
+    });
+    await _runSearch();
   }
 
   // ── Snippet normalization (used at _setReport time, not during build) ──
@@ -699,6 +820,7 @@ class _SearchPageState extends State<SearchPage> {
             _selectedSourceIds.isEmpty
                 ? null
                 : _selectedSourceIds.toList(growable: false),
+        aggregateByTitleAuthor: _aggregateByTitleAuthorEnabled,
         cancellationToken: token,
         onProgress: (progress) {
           if (!mounted || token.isCancelled || sessionId != _searchSessionId) {

@@ -43,6 +43,7 @@ class ReaderSettings {
     this.mangaImageSpacing = 10,
     this.mangaImagePadding = 8,
     this.mangaLoadStrategy = ReaderMangaLoadStrategy.balanced,
+    this.switchSourceScoreRankingEnabled = true,
   });
 
   static const double minAutoReadSpeed = 20;
@@ -69,6 +70,7 @@ class ReaderSettings {
   final double mangaImageSpacing;
   final double mangaImagePadding;
   final ReaderMangaLoadStrategy mangaLoadStrategy;
+  final bool switchSourceScoreRankingEnabled;
 
   ReaderSettings copyWith({
     double? fontSize,
@@ -91,6 +93,7 @@ class ReaderSettings {
     double? mangaImageSpacing,
     double? mangaImagePadding,
     ReaderMangaLoadStrategy? mangaLoadStrategy,
+    bool? switchSourceScoreRankingEnabled,
     bool clearBackgroundImage = false,
   }) {
     return ReaderSettings(
@@ -120,6 +123,9 @@ class ReaderSettings {
       mangaImageSpacing: mangaImageSpacing ?? this.mangaImageSpacing,
       mangaImagePadding: mangaImagePadding ?? this.mangaImagePadding,
       mangaLoadStrategy: mangaLoadStrategy ?? this.mangaLoadStrategy,
+      switchSourceScoreRankingEnabled:
+          switchSourceScoreRankingEnabled ??
+          this.switchSourceScoreRankingEnabled,
     );
   }
 
@@ -145,6 +151,7 @@ class ReaderSettings {
       'mangaImageSpacing': mangaImageSpacing,
       'mangaImagePadding': mangaImagePadding,
       'mangaLoadStrategy': mangaLoadStrategy.name,
+      'switchSourceScoreRankingEnabled': switchSourceScoreRankingEnabled,
     };
   }
 
@@ -230,6 +237,8 @@ class ReaderSettings {
       mangaImagePadding:
           _asDouble(json['mangaImagePadding'])?.clamp(0.0, 24.0) ?? 8,
       mangaLoadStrategy: mangaLoadStrategy,
+      switchSourceScoreRankingEnabled:
+          _asBool(json['switchSourceScoreRankingEnabled']) ?? true,
     );
   }
 

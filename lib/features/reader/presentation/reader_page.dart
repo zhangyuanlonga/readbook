@@ -29,6 +29,9 @@ import '../../search/application/search_service.dart';
 import '../application/chapter_content_service.dart';
 import '../application/reader_preferences_service.dart';
 import '../application/reader_error_center_service.dart';
+import '../application/reader_system_settings_service.dart';
+import '../application/source_switch_score_service.dart';
+import '../application/switch_source_position_resolver.dart';
 import 'chapter_cache_sheets.dart';
 
 class ReaderPage extends ConsumerStatefulWidget {
@@ -61,10 +64,16 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
   final ChapterContentService _contentService = ChapterContentService();
   final ReaderPreferencesService _preferencesService =
       ReaderPreferencesService();
+  final ReaderSystemSettingsService _systemSettingsService =
+      ReaderSystemSettingsService();
   final ReaderErrorCenterService _readerErrorCenterService =
       ReaderErrorCenterService.instance;
   final BookshelfService _bookshelfService = BookshelfService();
   final SearchService _switchSourceSearchService = SearchService();
+  final SourceSwitchScoreService _switchSourceScoreService =
+      SourceSwitchScoreService();
+  final SwitchSourcePositionResolver _switchSourcePositionResolver =
+      const SwitchSourcePositionResolver();
   final ScrollController _scrollController = ScrollController();
   final PageController _mangaPageController = PageController();
 
@@ -89,6 +98,8 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
   bool _isCurrentChapterCached = false;
   bool _isShelfActionLoading = false;
   bool _isSwitchSourceLoading = false;
+  bool _isAutoSwitchingSource = false;
+  bool _autoSwitchSourceOnFailureEnabled = false;
   String? _errorText;
   String _content = '';
   List<String> _paragraphs = const [];
@@ -157,6 +168,8 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
   static const Duration _kAutoReadResumeDelay = Duration(milliseconds: 420);
   static const int _kSwitchSourceCandidateLimit = 24;
   static const int _kSwitchSourceLagTolerance = 20;
+  static const int _kSwitchSourceScoreStep = 6;
+  static const int _kAutoSwitchSourceTryLimit = 3;
   static const int _kForwardPreloadChapterCount = 2;
   static const int _kBackwardPreloadChapterCount = 1;
   static final RegExp _kSwitchSourceSpacePattern = RegExp(r'[\u3000\s]+');
@@ -2092,9 +2105,17 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
       return;
     }
 
+    final scoreStore = await _loadSwitchSourceScoreStoreSafely();
+
+    if (!mounted) {
+      return;
+    }
+
+    final scoreRankingEnabled = _settings.switchSourceScoreRankingEnabled;
     final lookupStateNotifier = ValueNotifier<_ReaderSwitchSourceLookupState>(
       _ReaderSwitchSourceLookupState.loading(
         sourceCount: scope.sourceIds.length,
+        scoreRankingEnabled: scoreRankingEnabled,
       ),
     );
     final cancellationToken = SearchCancellationToken();
@@ -2109,6 +2130,8 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
       currentSourceId: currentSourceId,
       lookupStateNotifier: lookupStateNotifier,
       cancellationToken: cancellationToken,
+      scoreStore: scoreStore,
+      scoreRankingEnabled: scoreRankingEnabled,
     );
 
     if (!mounted) {
@@ -2117,7 +2140,11 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
       return;
     }
 
-    final selected = await _showSwitchSourceCandidateSheet(lookupStateNotifier);
+    final selected = await _showSwitchSourceCandidateSheet(
+      lookupStateNotifier,
+      scoreStore: scoreStore,
+      scoreRankingEnabled: scoreRankingEnabled,
+    );
     cancellationToken.cancel();
     unawaited(searchFuture.whenComplete(lookupStateNotifier.dispose));
 
@@ -2170,6 +2197,8 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
     required String currentSourceId,
     required ValueNotifier<_ReaderSwitchSourceLookupState> lookupStateNotifier,
     required SearchCancellationToken cancellationToken,
+    required SourceSwitchScoreStore scoreStore,
+    required bool scoreRankingEnabled,
   }) async {
     try {
       final report = await _switchSourceSearchService.search(
@@ -2190,6 +2219,8 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
             currentChapterCount: _chapters.length,
             targetTitle: keyword,
             targetAuthor: _bookAuthor,
+            scoreStore: scoreStore,
+            scoreRankingEnabled: scoreRankingEnabled,
           );
 
           lookupStateNotifier.value = _ReaderSwitchSourceLookupState(
@@ -2198,6 +2229,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
             processedSourceCount: progress.processedSourceCount,
             candidates: candidates,
             errorText: null,
+            scoreRankingEnabled: scoreRankingEnabled,
           );
         },
       );
@@ -2213,6 +2245,8 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
         currentChapterCount: _chapters.length,
         targetTitle: keyword,
         targetAuthor: _bookAuthor,
+        scoreStore: scoreStore,
+        scoreRankingEnabled: scoreRankingEnabled,
       );
       lookupStateNotifier.value = _ReaderSwitchSourceLookupState(
         isLoading: false,
@@ -2220,6 +2254,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
         processedSourceCount: report.processedSourceCount,
         candidates: candidates,
         errorText: candidates.isEmpty ? '没有检索到可切换书源，请稍后重试。' : null,
+        scoreRankingEnabled: scoreRankingEnabled,
       );
     } on AppException catch (error) {
       if (cancellationToken.isCancelled) {
@@ -2231,6 +2266,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
         processedSourceCount: 0,
         candidates: const <_ReaderSourceSwitchCandidate>[],
         errorText: '查找可切换书源失败：${error.briefMessage}',
+        scoreRankingEnabled: scoreRankingEnabled,
       );
     } catch (_) {
       if (cancellationToken.isCancelled) {
@@ -2242,6 +2278,18 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
         processedSourceCount: 0,
         candidates: const <_ReaderSourceSwitchCandidate>[],
         errorText: '查找可切换书源失败，请稍后重试。',
+        scoreRankingEnabled: scoreRankingEnabled,
+      );
+    }
+  }
+
+  Future<SourceSwitchScoreStore> _loadSwitchSourceScoreStoreSafely() async {
+    try {
+      return await _switchSourceScoreService.loadStore();
+    } catch (_) {
+      return SourceSwitchScoreStore(
+        sourceScores: <String, int>{},
+        bookScores: <String, int>{},
       );
     }
   }
@@ -2253,6 +2301,8 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
     required int currentChapterCount,
     required String targetTitle,
     required String? targetAuthor,
+    required SourceSwitchScoreStore scoreStore,
+    required bool scoreRankingEnabled,
   }) {
     final normalizedTargetTitle = _normalizeSwitchSourceText(targetTitle);
     final normalizedTargetAuthor = _normalizeSwitchSourceText(
@@ -2265,10 +2315,24 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
         continue;
       }
 
-      final score = _scoreSwitchSourceCandidate(
+      final baseScore = _scoreSwitchSourceCandidate(
         book,
         normalizedTargetTitle: normalizedTargetTitle,
         normalizedTargetAuthor: normalizedTargetAuthor,
+      );
+      final sourceScore = scoreStore.sourceScores[book.sourceId] ?? 0;
+      final bookScore =
+          scoreStore.bookScores[_switchSourceScoreService.buildBookScoreKey(
+            sourceId: book.sourceId,
+            title: book.title,
+            author: book.author,
+          )] ??
+          0;
+      final score = _composeSwitchSourceCandidateScore(
+        baseScore: baseScore,
+        sourceScore: sourceScore,
+        bookScore: bookScore,
+        scoreRankingEnabled: scoreRankingEnabled,
       );
       final latestChapterLabel = _formatSwitchSourceLatestChapter(
         book.latestChapter,
@@ -2285,7 +2349,10 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
       final candidate = _ReaderSourceSwitchCandidate(
         book: book,
         sourceName: sourceNames[book.sourceId] ?? book.sourceId,
+        baseScore: baseScore,
         score: score,
+        sourceScore: sourceScore,
+        bookScore: bookScore,
         latestChapterLabel: latestChapterLabel,
         latestChapterNumber: latestChapterNumber,
         isPotentiallyOutdated: isPotentiallyOutdated,
@@ -2297,20 +2364,9 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
       }
     }
 
-    final candidates = bestBySource.values.toList(growable: false)
-      ..sort((a, b) {
-        final scoreDiff = b.score.compareTo(a.score);
-        if (scoreDiff != 0) {
-          return scoreDiff;
-        }
-        final latestDiff = (b.latestChapterNumber ?? -1).compareTo(
-          a.latestChapterNumber ?? -1,
-        );
-        if (latestDiff != 0) {
-          return latestDiff;
-        }
-        return a.sourceName.compareTo(b.sourceName);
-      });
+    final candidates = _sortSwitchSourceCandidates(
+      bestBySource.values.toList(growable: false),
+    );
 
     if (candidates.length <= _kSwitchSourceCandidateLimit) {
       return candidates;
@@ -2318,6 +2374,37 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
     return candidates
         .take(_kSwitchSourceCandidateLimit)
         .toList(growable: false);
+  }
+
+  List<_ReaderSourceSwitchCandidate> _sortSwitchSourceCandidates(
+    List<_ReaderSourceSwitchCandidate> candidates,
+  ) {
+    candidates.sort((a, b) {
+      final scoreDiff = b.score.compareTo(a.score);
+      if (scoreDiff != 0) {
+        return scoreDiff;
+      }
+      final latestDiff = (b.latestChapterNumber ?? -1).compareTo(
+        a.latestChapterNumber ?? -1,
+      );
+      if (latestDiff != 0) {
+        return latestDiff;
+      }
+      return a.sourceName.compareTo(b.sourceName);
+    });
+    return candidates;
+  }
+
+  int _composeSwitchSourceCandidateScore({
+    required int baseScore,
+    required int sourceScore,
+    required int bookScore,
+    required bool scoreRankingEnabled,
+  }) {
+    if (!scoreRankingEnabled) {
+      return baseScore;
+    }
+    return baseScore + sourceScore + bookScore;
   }
 
   int _scoreSwitchSourceCandidate(
@@ -2446,8 +2533,10 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
   }
 
   Future<_ReaderSourceSwitchCandidate?> _showSwitchSourceCandidateSheet(
-    ValueListenable<_ReaderSwitchSourceLookupState> lookupStateListenable,
-  ) async {
+    ValueNotifier<_ReaderSwitchSourceLookupState> lookupStateNotifier, {
+    required SourceSwitchScoreStore scoreStore,
+    required bool scoreRankingEnabled,
+  }) async {
     _stopAutoReadSession();
     final shouldRestoreOverlay = _showOverlayControls;
     if (shouldRestoreOverlay) {
@@ -2478,7 +2567,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
             child: Padding(
               padding: EdgeInsets.fromLTRB(horizontal, 4, horizontal, 12),
               child: ValueListenableBuilder<_ReaderSwitchSourceLookupState>(
-                valueListenable: lookupStateListenable,
+                valueListenable: lookupStateNotifier,
                 builder: (context, lookupState, _) {
                   final candidates = lookupState.candidates;
                   final colorScheme = Theme.of(context).colorScheme;
@@ -2522,6 +2611,17 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
                         alignment: Alignment.centerLeft,
                         child: Text(
                           progressText,
+                          style: Theme.of(context).textTheme.bodySmall
+                              ?.copyWith(color: colorScheme.onSurfaceVariant),
+                        ),
+                      ),
+                      const SizedBox(height: 2),
+                      Align(
+                        alignment: Alignment.centerLeft,
+                        child: Text(
+                          lookupState.scoreRankingEnabled
+                              ? '评分排序：已启用（匹配分 + 源评分 + 本书评分）'
+                              : '评分排序：已关闭（仅按匹配分排序）',
                           style: Theme.of(context).textTheme.bodySmall
                               ?.copyWith(color: colorScheme.onSurfaceVariant),
                         ),
@@ -2600,6 +2700,20 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
                                                       : FontWeight.w500,
                                             ),
                                           ),
+                                          const SizedBox(height: 2),
+                                          Text(
+                                            lookupState.scoreRankingEnabled
+                                                ? '匹配:${candidate.baseScore} · 源评:${_formatSignedScore(candidate.sourceScore)} · 书评:${_formatSignedScore(candidate.bookScore)}'
+                                                : '匹配:${candidate.baseScore}（评分排序关闭）',
+                                            maxLines: 1,
+                                            overflow: TextOverflow.ellipsis,
+                                            style: Theme.of(
+                                              context,
+                                            ).textTheme.bodySmall?.copyWith(
+                                              color:
+                                                  colorScheme.onSurfaceVariant,
+                                            ),
+                                          ),
                                         ],
                                       ),
                                       trailing: Row(
@@ -2614,6 +2728,49 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
                                             ),
                                             const SizedBox(width: 2),
                                           ],
+                                          PopupMenuButton<
+                                            _ReaderSwitchSourceScoreAction
+                                          >(
+                                            tooltip: '评分',
+                                            icon: const Icon(
+                                              Icons.thumb_up_alt_outlined,
+                                              size: 18,
+                                            ),
+                                            onSelected: (action) {
+                                              unawaited(
+                                                _applySwitchSourceScoreAction(
+                                                  candidate: candidate,
+                                                  action: action,
+                                                  lookupStateNotifier:
+                                                      lookupStateNotifier,
+                                                  scoreStore: scoreStore,
+                                                  scoreRankingEnabled:
+                                                      scoreRankingEnabled,
+                                                ),
+                                              );
+                                            },
+                                            itemBuilder:
+                                                (context) => const [
+                                                  PopupMenuItem(
+                                                    value:
+                                                        _ReaderSwitchSourceScoreAction
+                                                            .upvote,
+                                                    child: Text('推荐 +1'),
+                                                  ),
+                                                  PopupMenuItem(
+                                                    value:
+                                                        _ReaderSwitchSourceScoreAction
+                                                            .downvote,
+                                                    child: Text('降权 -1'),
+                                                  ),
+                                                  PopupMenuItem(
+                                                    value:
+                                                        _ReaderSwitchSourceScoreAction
+                                                            .reset,
+                                                    child: Text('重置本书评分'),
+                                                  ),
+                                                ],
+                                          ),
                                           const Icon(Icons.chevron_right),
                                         ],
                                       ),
@@ -2669,6 +2826,207 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
     return selected;
   }
 
+  Future<void> _applySwitchSourceScoreAction({
+    required _ReaderSourceSwitchCandidate candidate,
+    required _ReaderSwitchSourceScoreAction action,
+    required ValueNotifier<_ReaderSwitchSourceLookupState> lookupStateNotifier,
+    required SourceSwitchScoreStore scoreStore,
+    required bool scoreRankingEnabled,
+  }) async {
+    try {
+      final update = switch (action) {
+        _ReaderSwitchSourceScoreAction.upvote => _switchSourceScoreService
+            .adjustBookScore(
+              sourceId: candidate.book.sourceId,
+              title: candidate.book.title,
+              author: candidate.book.author,
+              delta: _kSwitchSourceScoreStep,
+            ),
+        _ReaderSwitchSourceScoreAction.downvote => _switchSourceScoreService
+            .adjustBookScore(
+              sourceId: candidate.book.sourceId,
+              title: candidate.book.title,
+              author: candidate.book.author,
+              delta: -_kSwitchSourceScoreStep,
+            ),
+        _ReaderSwitchSourceScoreAction.reset => _switchSourceScoreService
+            .resetBookScore(
+              sourceId: candidate.book.sourceId,
+              title: candidate.book.title,
+              author: candidate.book.author,
+            ),
+      };
+      final resolved = await update;
+
+      if (resolved.sourceScore == 0) {
+        scoreStore.sourceScores.remove(candidate.book.sourceId);
+      } else {
+        scoreStore.sourceScores[candidate.book.sourceId] = resolved.sourceScore;
+      }
+      if (resolved.bookScore == 0) {
+        scoreStore.bookScores.remove(resolved.bookScoreKey);
+      } else {
+        scoreStore.bookScores[resolved.bookScoreKey] = resolved.bookScore;
+      }
+
+      final current = lookupStateNotifier.value;
+      final nextCandidates = current.candidates
+          .map(
+            (item) => _rebuildSwitchSourceCandidateScore(
+              item,
+              scoreStore: scoreStore,
+              scoreRankingEnabled: scoreRankingEnabled,
+            ),
+          )
+          .toList(growable: false);
+      lookupStateNotifier.value = current.copyWith(
+        candidates: _sortSwitchSourceCandidates(nextCandidates),
+      );
+
+      if (!mounted) {
+        return;
+      }
+
+      final actionLabel = switch (action) {
+        _ReaderSwitchSourceScoreAction.upvote => '已推荐',
+        _ReaderSwitchSourceScoreAction.downvote => '已降权',
+        _ReaderSwitchSourceScoreAction.reset => '已重置',
+      };
+      _showMessage(
+        '$actionLabel ${candidate.sourceName}（源评 ${_formatSignedScore(resolved.sourceScore)}，书评 ${_formatSignedScore(resolved.bookScore)}）',
+      );
+    } catch (_) {
+      _showMessage('更新评分失败，请稍后重试。');
+    }
+  }
+
+  _ReaderSourceSwitchCandidate _rebuildSwitchSourceCandidateScore(
+    _ReaderSourceSwitchCandidate candidate, {
+    required SourceSwitchScoreStore scoreStore,
+    required bool scoreRankingEnabled,
+  }) {
+    final sourceScore = scoreStore.sourceScores[candidate.book.sourceId] ?? 0;
+    final bookScore =
+        scoreStore.bookScores[_switchSourceScoreService.buildBookScoreKey(
+          sourceId: candidate.book.sourceId,
+          title: candidate.book.title,
+          author: candidate.book.author,
+        )] ??
+        0;
+    return candidate.copyWith(
+      sourceScore: sourceScore,
+      bookScore: bookScore,
+      score: _composeSwitchSourceCandidateScore(
+        baseScore: candidate.baseScore,
+        sourceScore: sourceScore,
+        bookScore: bookScore,
+        scoreRankingEnabled: scoreRankingEnabled,
+      ),
+    );
+  }
+
+  String _formatSignedScore(int score) {
+    if (score > 0) {
+      return '+$score';
+    }
+    return '$score';
+  }
+
+  bool _canAutoSwitchSourceOnFailure() {
+    if (!_autoSwitchSourceOnFailureEnabled) {
+      return false;
+    }
+    if (_isAutoSwitchingSource || _isSwitchSourceLoading) {
+      return false;
+    }
+    final sourceId = _sourceId?.trim();
+    final detailUrl = _detailUrl?.trim();
+    if (sourceId == null ||
+        sourceId.isEmpty ||
+        detailUrl == null ||
+        detailUrl.isEmpty) {
+      return false;
+    }
+    return true;
+  }
+
+  Future<bool> _tryAutoSwitchSourceOnFailure() async {
+    if (!_canAutoSwitchSourceOnFailure() || !mounted) {
+      return false;
+    }
+
+    final currentSourceId = _sourceId!.trim();
+    final currentDetailUrl = _detailUrl!.trim();
+
+    final keyword = await _resolveSwitchSourceSearchKeyword(
+      currentSourceId: currentSourceId,
+      currentDetailUrl: currentDetailUrl,
+    );
+    if (!mounted || keyword == null || keyword.isEmpty) {
+      return false;
+    }
+
+    _isAutoSwitchingSource = true;
+    try {
+      final scope = await _buildSwitchSourceScope(
+        currentSourceId: currentSourceId,
+      );
+      if (scope.sourceIds.isEmpty) {
+        return false;
+      }
+
+      final scoreStore = await _loadSwitchSourceScoreStoreSafely();
+      final report = await _switchSourceSearchService.search(
+        keyword: keyword,
+        pageSize: 16,
+        contentMode: scope.contentMode,
+        sourceIds: scope.sourceIds,
+      );
+
+      final candidates = _buildSwitchSourceCandidates(
+        books: report.books,
+        sourceNames: report.sourceNames,
+        currentSourceId: currentSourceId,
+        currentChapterCount: _chapters.length,
+        targetTitle: keyword,
+        targetAuthor: _bookAuthor,
+        scoreStore: scoreStore,
+        scoreRankingEnabled: _settings.switchSourceScoreRankingEnabled,
+      );
+      if (candidates.isEmpty) {
+        return false;
+      }
+
+      final upToDateCandidates = candidates
+          .where((candidate) => !candidate.isPotentiallyOutdated)
+          .toList(growable: false);
+      final orderedCandidates =
+          upToDateCandidates.isNotEmpty ? upToDateCandidates : candidates;
+
+      for (final candidate in orderedCandidates.take(
+        _kAutoSwitchSourceTryLimit,
+      )) {
+        final switched = await _applySwitchSourceCandidate(
+          candidate,
+          showResultMessage: false,
+          promptWhenCoverageGap: false,
+        );
+        if (switched) {
+          if (mounted) {
+            _showMessage('检测到当前书源异常，已自动切换到 ${candidate.sourceName}。');
+          }
+          return true;
+        }
+      }
+    } catch (_) {
+      return false;
+    } finally {
+      _isAutoSwitchingSource = false;
+    }
+
+    return false;
+  }
+
   Widget _buildSwitchSourceLoadingPlaceholderList(ColorScheme colorScheme) {
     final placeholderColor = colorScheme.surfaceContainerHigh;
     return ListView.separated(
@@ -2715,11 +3073,13 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
     );
   }
 
-  Future<void> _applySwitchSourceCandidate(
-    _ReaderSourceSwitchCandidate candidate,
-  ) async {
+  Future<bool> _applySwitchSourceCandidate(
+    _ReaderSourceSwitchCandidate candidate, {
+    bool showResultMessage = true,
+    bool promptWhenCoverageGap = true,
+  }) async {
     if (_isSwitchSourceLoading) {
-      return;
+      return false;
     }
 
     final snapshot = _ReaderSourceSnapshot(
@@ -2756,38 +3116,36 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
       );
 
       final chapters = detailResult.chapters;
-      if (chapters.isEmpty) {
-        throw StateError('新书源目录为空。');
-      }
+      final positionDecision = _switchSourcePositionResolver.resolve(
+        currentChapters: snapshot.chapters,
+        targetChapters: chapters,
+        previousChapterTitle: snapshot.chapterTitle,
+        previousChapterIndex: snapshot.currentIndex,
+        lagTolerance: _kSwitchSourceLagTolerance,
+      );
 
-      final currentChapterCount = snapshot.chapters.length;
-      final currentReadingChapterNo = (snapshot.currentIndex ?? 0) + 1;
-      final targetChapterCount = chapters.length;
-      final isBehindCurrentReading =
-          targetChapterCount < currentReadingChapterNo;
-      final isSignificantlyBehind =
-          currentChapterCount > 0 &&
-          targetChapterCount + _kSwitchSourceLagTolerance < currentChapterCount;
-      if ((isBehindCurrentReading || isSignificantlyBehind) && mounted) {
+      if ((positionDecision.isBehindCurrentReading ||
+              positionDecision.isSignificantlyBehind) &&
+          mounted) {
+        if (!promptWhenCoverageGap) {
+          return false;
+        }
         final shouldContinue = await _confirmSwitchSourceCoverage(
           sourceName: candidate.sourceName,
-          currentChapterCount: currentChapterCount,
-          currentReadingChapterNo: currentReadingChapterNo,
-          targetChapterCount: targetChapterCount,
-          isBehindCurrentReading: isBehindCurrentReading,
+          currentChapterCount: snapshot.chapters.length,
+          currentReadingChapterNo: positionDecision.currentReadingChapterNo,
+          targetChapterCount: positionDecision.targetChapterCount,
+          isBehindCurrentReading: positionDecision.isBehindCurrentReading,
         );
         if (!shouldContinue) {
-          _showMessage('已取消切换：目标书源章节较少。');
-          return;
+          if (showResultMessage) {
+            _showMessage('已取消切换：目标书源章节较少。');
+          }
+          return false;
         }
       }
 
-      final targetIndex = _resolveSwitchChapterIndex(
-        chapters: chapters,
-        previousChapterTitle: snapshot.chapterTitle,
-        previousChapterIndex: snapshot.currentIndex,
-      );
-      final targetChapter = chapters[targetIndex];
+      final targetChapter = chapters[positionDecision.targetIndex];
 
       setState(() {
         _sourceId = candidate.book.sourceId;
@@ -2796,7 +3154,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
         _bookAuthor = detailResult.detail.author;
         _bookCoverUrl = detailResult.detail.coverUrl;
         _chapters = chapters;
-        _currentIndex = targetIndex;
+        _currentIndex = positionDecision.targetIndex;
         _chapterId = targetChapter.id;
         _chapterUrl = targetChapter.chapterUrl;
         _chapterTitle = targetChapter.title;
@@ -2842,23 +3200,34 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
           }
         } catch (_) {
           await _refreshBookshelfState();
-          _showMessage('已换源，但书架同步失败，请稍后重试。');
+          if (showResultMessage) {
+            _showMessage('已换源，但书架同步失败，请稍后重试。');
+          }
         }
       } else {
         await _refreshBookshelfState();
       }
 
-      _showMessage('已切换到 ${candidate.sourceName}。');
+      if (showResultMessage) {
+        _showMessage('已切换到 ${candidate.sourceName}。');
+      }
+      return true;
     } on AppException catch (error) {
       if (mounted) {
         _restoreSourceSnapshot(snapshot);
       }
-      _showMessage('换源失败：${_toUserReadableError(error)}');
+      if (showResultMessage) {
+        _showMessage('换源失败：${_toUserReadableError(error)}');
+      }
+      return false;
     } catch (_) {
       if (mounted) {
         _restoreSourceSnapshot(snapshot);
       }
-      _showMessage('换源失败，请稍后重试。');
+      if (showResultMessage) {
+        _showMessage('换源失败，请稍后重试。');
+      }
+      return false;
     } finally {
       if (mounted) {
         setState(() {
@@ -2911,56 +3280,6 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
     );
 
     return confirmed == true;
-  }
-
-  int _resolveSwitchChapterIndex({
-    required List<Chapter> chapters,
-    required String? previousChapterTitle,
-    required int? previousChapterIndex,
-  }) {
-    final normalizedPreviousTitle = _normalizeSwitchSourceText(
-      previousChapterTitle ?? '',
-    );
-
-    if (normalizedPreviousTitle.isNotEmpty) {
-      var bestIndex = -1;
-      var bestScore = -1;
-
-      for (var index = 0; index < chapters.length; index++) {
-        final normalizedTitle = _normalizeSwitchSourceText(
-          chapters[index].title,
-        );
-        if (normalizedTitle.isEmpty) {
-          continue;
-        }
-
-        var score = 0;
-        if (normalizedTitle == normalizedPreviousTitle) {
-          score = 1000;
-        } else if (normalizedTitle.startsWith(normalizedPreviousTitle) ||
-            normalizedPreviousTitle.startsWith(normalizedTitle)) {
-          score = 800;
-        } else if (normalizedTitle.contains(normalizedPreviousTitle) ||
-            normalizedPreviousTitle.contains(normalizedTitle)) {
-          score = 600;
-        }
-
-        if (score > bestScore) {
-          bestScore = score;
-          bestIndex = index;
-        }
-      }
-
-      if (bestIndex >= 0) {
-        return bestIndex;
-      }
-    }
-
-    if (previousChapterIndex != null) {
-      return previousChapterIndex.clamp(0, chapters.length - 1);
-    }
-
-    return 0;
   }
 
   void _restoreSourceSnapshot(_ReaderSourceSnapshot snapshot) {
@@ -3364,9 +3683,13 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
   Future<void> _bootstrap() async {
     try {
       _settings = await _preferencesService.loadSettings();
-      _settings = _settings.copyWith(
-        autoReadEnabled: false,
-      );
+      _settings = _settings.copyWith(autoReadEnabled: false);
+      try {
+        _autoSwitchSourceOnFailureEnabled =
+            await _systemSettingsService.loadAutoSwitchSourceOnFailureEnabled();
+      } catch (_) {
+        _autoSwitchSourceOnFailureEnabled = false;
+      }
 
       final progress = await _preferencesService.loadProgress(widget.bookId);
       _bootstrapProgress = progress;
@@ -3966,7 +4289,8 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
       setState(() {
         _errorText = readableError;
       });
-      return false;
+      final switched = await _tryAutoSwitchSourceOnFailure();
+      return switched;
     } catch (_) {
       if (!mounted) {
         return false;
@@ -3976,7 +4300,8 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
       setState(() {
         _errorText = fallbackError;
       });
-      return false;
+      final switched = await _tryAutoSwitchSourceOnFailure();
+      return switched;
     } finally {
       if (mounted) {
         setState(() {
@@ -5581,8 +5906,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
                                       ),
                                     ),
                                   ),
-                                if (!isMangaChapter)
-                                  const Divider(height: 1),
+                                if (!isMangaChapter) const Divider(height: 1),
                                 _buildSettingLine(
                                   context: context,
                                   label: !isMangaChapter ? '动画' : '翻页',
@@ -5610,6 +5934,41 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
                                           ),
                                         ),
                                       buildPageAnimationSelector(),
+                                    ],
+                                  ),
+                                ),
+                                const Divider(height: 1),
+                                _buildSettingLine(
+                                  context: context,
+                                  label: '评分',
+                                  labelWidth: 42,
+                                  helpText: '控制换源列表是否叠加历史评分参与排序',
+                                  child: Row(
+                                    children: [
+                                      Expanded(
+                                        child: Text(
+                                          draft.switchSourceScoreRankingEnabled
+                                              ? '已启用评分排序'
+                                              : '仅按匹配度排序',
+                                          style:
+                                              Theme.of(
+                                                context,
+                                              ).textTheme.bodyMedium,
+                                        ),
+                                      ),
+                                      Switch.adaptive(
+                                        value:
+                                            draft
+                                                .switchSourceScoreRankingEnabled,
+                                        onChanged: (enabled) {
+                                          setModalState(() {
+                                            draft = draft.copyWith(
+                                              switchSourceScoreRankingEnabled:
+                                                  enabled,
+                                            );
+                                          });
+                                        },
+                                      ),
                                     ],
                                   ),
                                 ),
@@ -6022,9 +6381,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
       return;
     }
 
-    final appliedResult = result.copyWith(
-      autoReadEnabled: false,
-    );
+    final appliedResult = result.copyWith(autoReadEnabled: false);
 
     setState(() {
       _settings = appliedResult;
@@ -6499,7 +6856,10 @@ class _ReaderSourceSwitchCandidate {
   const _ReaderSourceSwitchCandidate({
     required this.book,
     required this.sourceName,
+    required this.baseScore,
     required this.score,
+    required this.sourceScore,
+    required this.bookScore,
     required this.latestChapterLabel,
     required this.latestChapterNumber,
     required this.isPotentiallyOutdated,
@@ -6507,10 +6867,31 @@ class _ReaderSourceSwitchCandidate {
 
   final Book book;
   final String sourceName;
+  final int baseScore;
   final int score;
+  final int sourceScore;
+  final int bookScore;
   final String latestChapterLabel;
   final int? latestChapterNumber;
   final bool isPotentiallyOutdated;
+
+  _ReaderSourceSwitchCandidate copyWith({
+    int? score,
+    int? sourceScore,
+    int? bookScore,
+  }) {
+    return _ReaderSourceSwitchCandidate(
+      book: book,
+      sourceName: sourceName,
+      baseScore: baseScore,
+      score: score ?? this.score,
+      sourceScore: sourceScore ?? this.sourceScore,
+      bookScore: bookScore ?? this.bookScore,
+      latestChapterLabel: latestChapterLabel,
+      latestChapterNumber: latestChapterNumber,
+      isPotentiallyOutdated: isPotentiallyOutdated,
+    );
+  }
 }
 
 class _ReaderSwitchSourceLookupState {
@@ -6520,23 +6901,49 @@ class _ReaderSwitchSourceLookupState {
     required this.processedSourceCount,
     required this.candidates,
     required this.errorText,
+    required this.scoreRankingEnabled,
   });
 
-  const _ReaderSwitchSourceLookupState.loading({required int sourceCount})
-    : this(
-        isLoading: true,
-        sourceCount: sourceCount,
-        processedSourceCount: 0,
-        candidates: const <_ReaderSourceSwitchCandidate>[],
-        errorText: null,
-      );
+  const _ReaderSwitchSourceLookupState.loading({
+    required int sourceCount,
+    required bool scoreRankingEnabled,
+  }) : this(
+         isLoading: true,
+         sourceCount: sourceCount,
+         processedSourceCount: 0,
+         candidates: const <_ReaderSourceSwitchCandidate>[],
+         errorText: null,
+         scoreRankingEnabled: scoreRankingEnabled,
+       );
 
   final bool isLoading;
   final int sourceCount;
   final int processedSourceCount;
   final List<_ReaderSourceSwitchCandidate> candidates;
   final String? errorText;
+  final bool scoreRankingEnabled;
+
+  _ReaderSwitchSourceLookupState copyWith({
+    bool? isLoading,
+    int? sourceCount,
+    int? processedSourceCount,
+    List<_ReaderSourceSwitchCandidate>? candidates,
+    String? errorText,
+    bool clearErrorText = false,
+    bool? scoreRankingEnabled,
+  }) {
+    return _ReaderSwitchSourceLookupState(
+      isLoading: isLoading ?? this.isLoading,
+      sourceCount: sourceCount ?? this.sourceCount,
+      processedSourceCount: processedSourceCount ?? this.processedSourceCount,
+      candidates: candidates ?? this.candidates,
+      errorText: clearErrorText ? null : (errorText ?? this.errorText),
+      scoreRankingEnabled: scoreRankingEnabled ?? this.scoreRankingEnabled,
+    );
+  }
 }
+
+enum _ReaderSwitchSourceScoreAction { upvote, downvote, reset }
 
 class _ReaderSourceSnapshot {
   const _ReaderSourceSnapshot({

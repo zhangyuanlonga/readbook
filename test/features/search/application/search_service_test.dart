@@ -2327,6 +2327,211 @@ url+so+JSON.stringify(post)
       await server.close(force: true);
     });
 
+    test('aggregates same title+author across sources when enabled', () async {
+      final server = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
+      server.listen((request) async {
+        final sourcePath = request.uri.path;
+        request.response
+          ..statusCode = 200
+          ..write('''
+            <div class="item">
+              <a class="title" href="$sourcePath/book/shared">这游戏也太真实了</a>
+              <span class="author">晨星LL</span>
+            </div>
+          ''');
+        await request.response.close();
+      });
+
+      final baseUrl = 'http://${server.address.host}:${server.port}';
+      final sources = List<SourceDefinition>.generate(5, (index) {
+        final sourceNo = index + 1;
+        return SourceDefinition(
+          id: 'source_$sourceNo',
+          name: '源$sourceNo',
+          baseUrl: baseUrl,
+          rules: SourceRuleSet(
+            searchRule: '/s$sourceNo?key={{key}}',
+            searchListRule: '.item@html',
+            searchTitleRule: '.title@text',
+            searchAuthorRule: '.author@text',
+            searchDetailUrlRule: '.title@href',
+          ),
+        );
+      });
+
+      final service = SearchService(
+        sourceRepository: _FakeSourceRepository(sources),
+      );
+
+      final rawReport = await service.search(keyword: '游戏');
+      expect(rawReport.books, hasLength(5));
+
+      final aggregatedReport = await service.search(
+        keyword: '游戏',
+        aggregateByTitleAuthor: true,
+      );
+      expect(aggregatedReport.books, hasLength(1));
+      final book = aggregatedReport.books.first;
+      expect(book.title, '这游戏也太真实了');
+      expect(aggregatedReport.sourceHitCountOf(book), 5);
+      expect(aggregatedReport.sourceHitsOf(book), hasLength(5));
+
+      await server.close(force: true);
+    });
+
+    test('ranks exact match before contains match when aggregated', () async {
+      final server = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
+      server.listen((request) async {
+        if (request.uri.path == '/exact') {
+          request.response
+            ..statusCode = 200
+            ..write('''
+              <div class="item">
+                <a class="title" href="/book/exact">凡人</a>
+                <span class="author">匿名</span>
+              </div>
+            ''');
+        } else if (request.uri.path == '/contains') {
+          request.response
+            ..statusCode = 200
+            ..write('''
+              <div class="item">
+                <a class="title" href="/book/contains">凡人修仙传</a>
+                <span class="author">忘语</span>
+              </div>
+            ''');
+        } else {
+          request.response
+            ..statusCode = 200
+            ..write('<div class="empty">no data</div>');
+        }
+        await request.response.close();
+      });
+
+      final baseUrl = 'http://${server.address.host}:${server.port}';
+      final service = SearchService(
+        sourceRepository: _FakeSourceRepository([
+          SourceDefinition(
+            id: 'source_exact',
+            name: '精准源',
+            baseUrl: baseUrl,
+            rules: const SourceRuleSet(
+              searchRule: '/exact?key={{key}}',
+              searchListRule: '.item@html',
+              searchTitleRule: '.title@text',
+              searchAuthorRule: '.author@text',
+              searchDetailUrlRule: '.title@href',
+            ),
+          ),
+          SourceDefinition(
+            id: 'source_contains',
+            name: '包含源',
+            baseUrl: baseUrl,
+            rules: const SourceRuleSet(
+              searchRule: '/contains?key={{key}}',
+              searchListRule: '.item@html',
+              searchTitleRule: '.title@text',
+              searchAuthorRule: '.author@text',
+              searchDetailUrlRule: '.title@href',
+            ),
+          ),
+        ]),
+      );
+
+      final report = await service.search(
+        keyword: '凡人',
+        aggregateByTitleAuthor: true,
+      );
+
+      expect(report.books, hasLength(2));
+      expect(report.books.first.title, '凡人');
+
+      await server.close(force: true);
+    });
+
+    test(
+      'splits aggregation when same title+author has conflicting intro and latest chapter',
+      () async {
+        final server = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
+        server.listen((request) async {
+          if (request.uri.path == '/s1') {
+            request.response
+              ..statusCode = 200
+              ..write('''
+                <div class="item">
+                  <a class="title" href="/book/a">长夜余火</a>
+                  <span class="author">爱潜水的乌贼</span>
+                  <span class="intro">修真大陆少年一路修仙逆袭</span>
+                  <span class="latest">第12章 入门</span>
+                </div>
+              ''');
+          } else if (request.uri.path == '/s2') {
+            request.response
+              ..statusCode = 200
+              ..write('''
+                <div class="item">
+                  <a class="title" href="/book/b">长夜余火</a>
+                  <span class="author">爱潜水的乌贼</span>
+                  <span class="intro">末日机甲战争与星际政治阴谋</span>
+                  <span class="latest">第980章 终局之战</span>
+                </div>
+              ''');
+          } else {
+            request.response
+              ..statusCode = 200
+              ..write('<div class="empty">no data</div>');
+          }
+          await request.response.close();
+        });
+
+        final baseUrl = 'http://${server.address.host}:${server.port}';
+        final service = SearchService(
+          sourceRepository: _FakeSourceRepository([
+            SourceDefinition(
+              id: 'source_a',
+              name: '源A',
+              baseUrl: baseUrl,
+              rules: const SourceRuleSet(
+                searchRule: '/s1?key={{key}}',
+                searchListRule: '.item@html',
+                searchTitleRule: '.title@text',
+                searchAuthorRule: '.author@text',
+                searchIntroRule: '.intro@text',
+                searchLatestChapterRule: '.latest@text',
+                searchDetailUrlRule: '.title@href',
+              ),
+            ),
+            SourceDefinition(
+              id: 'source_b',
+              name: '源B',
+              baseUrl: baseUrl,
+              rules: const SourceRuleSet(
+                searchRule: '/s2?key={{key}}',
+                searchListRule: '.item@html',
+                searchTitleRule: '.title@text',
+                searchAuthorRule: '.author@text',
+                searchIntroRule: '.intro@text',
+                searchLatestChapterRule: '.latest@text',
+                searchDetailUrlRule: '.title@href',
+              ),
+            ),
+          ]),
+        );
+
+        final report = await service.search(
+          keyword: '长夜',
+          aggregateByTitleAuthor: true,
+        );
+
+        expect(report.books, hasLength(2));
+        for (final book in report.books) {
+          expect(report.sourceHitCountOf(book), 1);
+        }
+
+        await server.close(force: true);
+      },
+    );
+
     test('throws when there is no enabled source', () async {
       final repository = _FakeSourceRepository([
         SourceDefinition(

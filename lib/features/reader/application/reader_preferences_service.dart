@@ -41,6 +41,8 @@ class ReaderPreferencesService {
       'reader.settings.mangaImagePadding';
   static const String _mangaLoadStrategyKey =
       'reader.settings.mangaLoadStrategy';
+  static const String _switchSourceScoreRankingEnabledKey =
+      'reader.settings.switchSourceScoreRankingEnabled';
   static const String _progressPrefix = 'reader.progress.';
 
   Future<ReaderSettings> loadSettings() async {
@@ -131,6 +133,8 @@ class ReaderPreferencesService {
         24,
       ),
       mangaLoadStrategy: mangaLoadStrategy,
+      switchSourceScoreRankingEnabled:
+          prefs.getBool(_switchSourceScoreRankingEnabledKey) ?? true,
     );
   }
 
@@ -161,6 +165,10 @@ class ReaderPreferencesService {
     await prefs.setString(
       _mangaLoadStrategyKey,
       settings.mangaLoadStrategy.name,
+    );
+    await prefs.setBool(
+      _switchSourceScoreRankingEnabledKey,
+      settings.switchSourceScoreRankingEnabled,
     );
     final backgroundImageBase64 = settings.backgroundImageBase64;
     if (backgroundImageBase64 == null || backgroundImageBase64.isEmpty) {

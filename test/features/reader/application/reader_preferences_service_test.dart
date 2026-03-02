@@ -32,6 +32,7 @@ void main() {
         mangaImageSpacing: 14,
         mangaImagePadding: 12,
         mangaLoadStrategy: ReaderMangaLoadStrategy.saveData,
+        switchSourceScoreRankingEnabled: false,
       );
 
       await service.saveSettings(settings);
@@ -56,6 +57,7 @@ void main() {
       expect(restored.mangaImageSpacing, 14);
       expect(restored.mangaImagePadding, 12);
       expect(restored.mangaLoadStrategy, ReaderMangaLoadStrategy.saveData);
+      expect(restored.switchSourceScoreRankingEnabled, isFalse);
     });
 
     test('saves and loads reading progress', () async {

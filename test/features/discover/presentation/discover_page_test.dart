@@ -38,7 +38,7 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    expect(find.textContaining('已启用书源：1 · 支持发现：0'), findsOneWidget);
+    expect(find.textContaining('当前已启用：1，支持发现：0'), findsOneWidget);
     expect(find.text('暂无支持发现的已启用书源'), findsOneWidget);
   });
 
@@ -93,7 +93,7 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    expect(find.textContaining('已启用书源：1 · 支持发现：1'), findsOneWidget);
+    expect(find.text('发现源A'), findsOneWidget);
     expect(find.text('发现测试书籍'), findsOneWidget);
   });
 

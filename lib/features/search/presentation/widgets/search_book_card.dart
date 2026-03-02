@@ -8,6 +8,7 @@ class SearchBookCard extends StatelessWidget {
     super.key,
     required this.book,
     required this.sourceName,
+    this.sourceHitCount = 1,
     required this.heroTag,
     this.normalizedIntro,
     this.normalizedLatestChapter,
@@ -16,6 +17,7 @@ class SearchBookCard extends StatelessWidget {
 
   final Book book;
   final String sourceName;
+  final int sourceHitCount;
   final String heroTag;
   final String? normalizedIntro;
   final String? normalizedLatestChapter;
@@ -26,6 +28,7 @@ class SearchBookCard extends StatelessWidget {
     final theme = Theme.of(context);
     final colorScheme = theme.colorScheme;
     final author = book.author?.trim();
+    final showHitCount = sourceHitCount > 1;
 
     return Card(
       margin: const EdgeInsets.only(bottom: 10),
@@ -100,7 +103,19 @@ class SearchBookCard extends StatelessWidget {
                 ),
               ),
               const SizedBox(width: 8),
-              Icon(Icons.chevron_right, color: colorScheme.onSurfaceVariant),
+              Column(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  if (showHitCount)
+                    _SourceHitBadge(count: sourceHitCount)
+                  else
+                    const SizedBox(height: 20),
+                  Icon(
+                    Icons.chevron_right,
+                    color: colorScheme.onSurfaceVariant,
+                  ),
+                ],
+              ),
             ],
           ),
         ),
@@ -178,6 +193,34 @@ class _InfoPill extends StatelessWidget {
         borderRadius: BorderRadius.circular(8),
       ),
       child: Text('$label: $value', style: theme.textTheme.labelSmall),
+    );
+  }
+}
+
+class _SourceHitBadge extends StatelessWidget {
+  const _SourceHitBadge({required this.count});
+
+  final int count;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
+    return Container(
+      constraints: const BoxConstraints(minWidth: 24),
+      padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
+      decoration: BoxDecoration(
+        color: colorScheme.primary,
+        borderRadius: BorderRadius.circular(999),
+      ),
+      alignment: Alignment.center,
+      child: Text(
+        '$count',
+        style: theme.textTheme.labelSmall?.copyWith(
+          color: colorScheme.onPrimary,
+          fontWeight: FontWeight.w700,
+        ),
+      ),
     );
   }
 }

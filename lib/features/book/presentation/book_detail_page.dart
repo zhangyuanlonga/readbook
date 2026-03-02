@@ -9,10 +9,12 @@ import '../../../app/widgets/disk_cached_cover_image.dart';
 import '../../../core/errors/app_exception.dart';
 import '../../../core/errors/error_codes.dart';
 import '../../../data/datasources/local/app_database.dart';
+import '../../../domain/entities/book.dart';
 import '../../../domain/entities/bookshelf_book.dart';
 import '../../../domain/entities/chapter.dart';
 import '../../bookshelf/application/bookshelf_service.dart';
 import '../../reader/presentation/chapter_cache_sheets.dart';
+import '../../search/application/search_service.dart';
 import '../application/book_detail_service.dart';
 import 'widgets/book_detail_primary_actions.dart';
 
@@ -24,6 +26,10 @@ class BookDetailPage extends StatefulWidget {
     this.detailUrl,
     this.title,
     this.heroTag,
+    this.bookDetailService,
+    this.bookshelfService,
+    this.switchSourceSearchService,
+    this.cachedChapterCountStreamBuilder,
   });
 
   final String bookId;
@@ -31,28 +37,51 @@ class BookDetailPage extends StatefulWidget {
   final String? detailUrl;
   final String? title;
   final String? heroTag;
+  final BookDetailService? bookDetailService;
+  final BookshelfService? bookshelfService;
+  final SearchService? switchSourceSearchService;
+  final Stream<int> Function(String bookId)? cachedChapterCountStreamBuilder;
 
   @override
   State<BookDetailPage> createState() => _BookDetailPageState();
 }
 
 class _BookDetailPageState extends State<BookDetailPage> {
-  final BookDetailService _service = BookDetailService();
-  final BookshelfService _bookshelfService = BookshelfService();
+  late final BookDetailService _service;
+  late final BookshelfService _bookshelfService;
+  late final SearchService _switchSourceSearchService;
+  late final Stream<int> Function(String bookId)
+  _cachedChapterCountStreamBuilder;
 
   static const int _tocPreviewLimit = 80;
 
   bool _isLoading = false;
+  bool _isSwitchingSource = false;
   bool _manualTocReversed = false;
   bool _isShelfActionLoading = false;
   bool _isInBookshelf = false;
   String? _errorText;
   String? _tocWarningText;
+  String? _activeSourceId;
+  String? _activeDetailUrl;
+  String _activeBookId = '';
+  String? _displayTitle;
   BookDetailLoadResult? _result;
 
   @override
   void initState() {
     super.initState();
+    _service = widget.bookDetailService ?? BookDetailService();
+    _bookshelfService = widget.bookshelfService ?? BookshelfService();
+    _switchSourceSearchService =
+        widget.switchSourceSearchService ?? SearchService();
+    _cachedChapterCountStreamBuilder =
+        widget.cachedChapterCountStreamBuilder ??
+        AppDatabase.instance.watchCachedChapterCount;
+    _activeSourceId = _normalizeRouteParam(widget.sourceId);
+    _activeDetailUrl = _normalizeRouteParam(widget.detailUrl);
+    _activeBookId = widget.bookId.trim();
+    _displayTitle = _normalizeRouteParam(widget.title);
     _load();
   }
 
@@ -79,9 +108,24 @@ class _BookDetailPageState extends State<BookDetailPage> {
             icon: const Icon(Icons.arrow_back),
           ),
           title: Text(
-            widget.title?.trim().isNotEmpty == true ? widget.title! : '书籍详情',
+            _displayTitle?.isNotEmpty == true ? _displayTitle! : '书籍详情',
           ),
           actions: [
+            IconButton(
+              onPressed:
+                  (_isLoading || _isSwitchingSource || _isMissingParams)
+                      ? null
+                      : _handleSwitchSource,
+              tooltip: '切换来源',
+              icon:
+                  _isSwitchingSource
+                      ? const SizedBox(
+                        width: 18,
+                        height: 18,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
+                      : const Icon(Icons.swap_horiz_rounded),
+            ),
             IconButton(
               onPressed: _isLoading ? null : () => _load(forceRefresh: true),
               tooltip: '刷新目录',
@@ -191,10 +235,10 @@ class _BookDetailPageState extends State<BookDetailPage> {
   }
 
   bool get _isMissingParams {
-    return widget.sourceId == null ||
-        widget.sourceId!.trim().isEmpty ||
-        widget.detailUrl == null ||
-        widget.detailUrl!.trim().isEmpty;
+    return _activeSourceId == null ||
+        _activeSourceId!.isEmpty ||
+        _activeDetailUrl == null ||
+        _activeDetailUrl!.isEmpty;
   }
 
   Widget _buildDetailCard(BookDetailLoadResult result) {
@@ -445,14 +489,13 @@ class _BookDetailPageState extends State<BookDetailPage> {
     final totalChapters = result.chapters.length;
     final colorScheme = Theme.of(context).colorScheme;
 
-    if (widget.sourceId == null || widget.sourceId!.trim().isEmpty) {
+    final sourceId = _activeSourceId;
+    if (sourceId == null || sourceId.isEmpty) {
       return const SizedBox.shrink();
     }
 
-    final sourceId = widget.sourceId!.trim();
-
     return StreamBuilder<int>(
-      stream: AppDatabase.instance.watchCachedChapterCount(widget.bookId),
+      stream: _cachedChapterCountStreamBuilder(_activeBookId),
       builder: (context, snapshot) {
         final cached = snapshot.data ?? 0;
         final cappedCached = cached.clamp(0, totalChapters);
@@ -479,7 +522,7 @@ class _BookDetailPageState extends State<BookDetailPage> {
 
                       showChapterCacheFlow(
                         context: context,
-                        bookId: widget.bookId,
+                        bookId: _activeBookId,
                         sourceId: sourceId,
                         chapters: result.chapters,
                         initialStartIndex: startIndex,
@@ -853,15 +896,325 @@ class _BookDetailPageState extends State<BookDetailPage> {
     );
   }
 
+  String? _normalizeRouteParam(String? value) {
+    final trimmed = value?.trim();
+    if (trimmed == null || trimmed.isEmpty) {
+      return null;
+    }
+    return trimmed;
+  }
+
+  Future<void> _handleSwitchSource() async {
+    final currentSourceId = _activeSourceId;
+    if (currentSourceId == null || currentSourceId.isEmpty) {
+      _showMessage('缺少当前来源信息，暂时无法切换。');
+      return;
+    }
+
+    final baseDetail = _result?.detail;
+    final title = (baseDetail?.title ?? _displayTitle ?? '').trim();
+    if (title.isEmpty) {
+      _showMessage('当前书名为空，暂时无法切换来源。');
+      return;
+    }
+    final author = baseDetail?.author?.trim();
+
+    setState(() {
+      _isSwitchingSource = true;
+    });
+
+    try {
+      final candidates = await _loadSwitchSourceCandidates(
+        title: title,
+        author: author,
+        currentSourceId: currentSourceId,
+      );
+      if (!mounted) {
+        return;
+      }
+      if (candidates.isEmpty) {
+        _showMessage('没有检索到可切换来源，请稍后重试。');
+        return;
+      }
+
+      final selected = await _showSwitchSourceSheet(candidates);
+      if (!mounted || selected == null) {
+        return;
+      }
+
+      final switched = await _switchToCandidateSource(selected);
+      if (switched) {
+        _showMessage('已切换到 ${selected.sourceName}。');
+      } else {
+        _showMessage('切换来源失败，已保留当前来源。');
+      }
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isSwitchingSource = false;
+        });
+      }
+    }
+  }
+
+  Future<List<_DetailSwitchSourceCandidate>> _loadSwitchSourceCandidates({
+    required String title,
+    required String? author,
+    required String currentSourceId,
+  }) async {
+    final reports = <SearchExecutionReport>[];
+    for (final mode in SearchContentMode.values) {
+      try {
+        final report = await _switchSourceSearchService.search(
+          keyword: title,
+          contentMode: mode,
+        );
+        reports.add(report);
+      } on UnknownSourceException {
+        // Skip unavailable content mode.
+      } on AppException {
+        // Skip failed mode and continue with other mode.
+      }
+    }
+
+    final sourceNames = <String, String>{};
+    final books = <Book>[];
+    for (final report in reports) {
+      sourceNames.addAll(report.sourceNames);
+      books.addAll(report.books);
+    }
+
+    final normalizedTargetTitle = _normalizeSwitchSourceText(title);
+    final normalizedTargetAuthor = _normalizeSwitchSourceText(author ?? '');
+    final bestBySource = <String, _DetailSwitchSourceCandidate>{};
+    for (final book in books) {
+      if (book.sourceId == currentSourceId) {
+        continue;
+      }
+      final score = _scoreSwitchSourceCandidate(
+        book,
+        normalizedTargetTitle: normalizedTargetTitle,
+        normalizedTargetAuthor: normalizedTargetAuthor,
+      );
+      if (score < 0) {
+        continue;
+      }
+      final candidate = _DetailSwitchSourceCandidate(
+        book: book,
+        sourceName: sourceNames[book.sourceId] ?? book.sourceId,
+        score: score,
+      );
+      final existing = bestBySource[book.sourceId];
+      if (existing == null || candidate.score > existing.score) {
+        bestBySource[book.sourceId] = candidate;
+      }
+    }
+
+    final candidates = bestBySource.values.toList(growable: false)
+      ..sort((a, b) {
+        final scoreDiff = b.score.compareTo(a.score);
+        if (scoreDiff != 0) {
+          return scoreDiff;
+        }
+        return a.sourceName.compareTo(b.sourceName);
+      });
+    return candidates;
+  }
+
+  int _scoreSwitchSourceCandidate(
+    Book book, {
+    required String normalizedTargetTitle,
+    required String normalizedTargetAuthor,
+  }) {
+    final normalizedTitle = _normalizeSwitchSourceText(book.title);
+    if (normalizedTitle.isEmpty) {
+      return -1;
+    }
+
+    var score = 0;
+    if (normalizedTargetTitle.isEmpty) {
+      score += 40;
+    } else if (normalizedTitle == normalizedTargetTitle) {
+      score += 140;
+    } else if (normalizedTitle.startsWith(normalizedTargetTitle) ||
+        normalizedTargetTitle.startsWith(normalizedTitle)) {
+      score += 110;
+    } else if (normalizedTitle.contains(normalizedTargetTitle) ||
+        normalizedTargetTitle.contains(normalizedTitle)) {
+      score += 85;
+    } else {
+      return -1;
+    }
+
+    final normalizedAuthor = _normalizeSwitchSourceText(book.author ?? '');
+    if (normalizedTargetAuthor.isNotEmpty && normalizedAuthor.isNotEmpty) {
+      if (normalizedAuthor == normalizedTargetAuthor) {
+        score += 24;
+      } else if (normalizedAuthor.contains(normalizedTargetAuthor) ||
+          normalizedTargetAuthor.contains(normalizedAuthor)) {
+        score += 12;
+      }
+    }
+
+    if (book.latestChapter?.trim().isNotEmpty == true) {
+      score += 3;
+    }
+    if (book.coverUrl?.trim().isNotEmpty == true) {
+      score += 1;
+    }
+    return score;
+  }
+
+  String _normalizeSwitchSourceText(String text) {
+    var normalized = text.trim().toLowerCase();
+    if (normalized.isEmpty) {
+      return '';
+    }
+    normalized =
+        normalized
+            .replaceAll(RegExp(r'<[^>]+>'), '')
+            .replaceAll(RegExp(r'[\u3000\s]+'), ' ')
+            .replaceAll(RegExp(r'[《》〈〉【】\[\]()（）<>「」『』]'), '')
+            .trim();
+    return normalized;
+  }
+
+  Future<_DetailSwitchSourceCandidate?> _showSwitchSourceSheet(
+    List<_DetailSwitchSourceCandidate> candidates,
+  ) async {
+    if (candidates.isEmpty) {
+      return null;
+    }
+
+    return showModalBottomSheet<_DetailSwitchSourceCandidate>(
+      context: context,
+      showDragHandle: true,
+      useSafeArea: true,
+      builder: (context) {
+        final horizontal = AppSpacing.pageHorizontal(context);
+        return Padding(
+          padding: EdgeInsets.fromLTRB(horizontal, 4, horizontal, 12),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      '切换来源（${candidates.length}）',
+                      style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 8),
+              Flexible(
+                child: ListView.separated(
+                  shrinkWrap: true,
+                  itemCount: candidates.length,
+                  separatorBuilder:
+                      (context, _) => const Divider(height: 1, thickness: 0.6),
+                  itemBuilder: (context, index) {
+                    final candidate = candidates[index];
+                    final author = candidate.book.author?.trim();
+                    final latestChapter = candidate.book.latestChapter?.trim();
+                    return ListTile(
+                      contentPadding: EdgeInsets.zero,
+                      title: Text(candidate.sourceName),
+                      subtitle: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          if (author != null && author.isNotEmpty)
+                            Text(
+                              '作者：$author',
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          if (latestChapter != null && latestChapter.isNotEmpty)
+                            Text(
+                              '最新：$latestChapter',
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                        ],
+                      ),
+                      onTap: () => Navigator.of(context).pop(candidate),
+                    );
+                  },
+                ),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  Future<bool> _switchToCandidateSource(
+    _DetailSwitchSourceCandidate candidate,
+  ) async {
+    final previousSourceId = _activeSourceId;
+    final previousDetailUrl = _activeDetailUrl;
+    final previousBookId = _activeBookId;
+    final previousTitle = _displayTitle;
+    final previousResult = _result;
+    final previousErrorText = _errorText;
+    final previousTocWarning = _tocWarningText;
+    final previousInBookshelf = _isInBookshelf;
+
+    setState(() {
+      _activeSourceId = candidate.book.sourceId.trim();
+      _activeDetailUrl = candidate.book.detailUrl.trim();
+      _activeBookId = candidate.book.id.trim();
+      _displayTitle = candidate.book.title.trim();
+    });
+
+    final switched = await _load(forceRefresh: true);
+    if (switched) {
+      if (mounted) {
+        setState(() {
+          _manualTocReversed = false;
+        });
+      }
+      return true;
+    }
+
+    if (mounted) {
+      setState(() {
+        _activeSourceId = previousSourceId;
+        _activeDetailUrl = previousDetailUrl;
+        _activeBookId = previousBookId;
+        _displayTitle = previousTitle;
+        _result = previousResult;
+        _errorText = previousErrorText;
+        _tocWarningText = previousTocWarning;
+        _isInBookshelf = previousInBookshelf;
+      });
+    }
+    return false;
+  }
+
   void _openChapter(Chapter chapter) {
+    final sourceId = _activeSourceId;
+    final detailUrl = _activeDetailUrl;
+    if (sourceId == null ||
+        sourceId.isEmpty ||
+        detailUrl == null ||
+        detailUrl.isEmpty) {
+      _showMessage('来源信息缺失，暂时无法开始阅读。');
+      return;
+    }
     final route =
         Uri(
-          path: '/reader/${widget.bookId}/${chapter.id}',
+          path: '/reader/$_activeBookId/${chapter.id}',
           queryParameters: {
             'chapterUrl': chapter.chapterUrl,
             'chapterTitle': chapter.title,
-            'sourceId': widget.sourceId,
-            'detailUrl': widget.detailUrl,
+            'sourceId': sourceId,
+            'detailUrl': detailUrl,
             'chapterIndex': chapter.index.toString(),
           },
         ).toString();
@@ -869,9 +1222,9 @@ class _BookDetailPageState extends State<BookDetailPage> {
     context.push(route);
   }
 
-  Future<void> _load({bool forceRefresh = false}) async {
+  Future<bool> _load({bool forceRefresh = false}) async {
     if (!mounted || _isMissingParams) {
-      return;
+      return false;
     }
 
     setState(() {
@@ -885,39 +1238,46 @@ class _BookDetailPageState extends State<BookDetailPage> {
 
     try {
       final result = await _service.load(
-        sourceId: widget.sourceId!,
-        bookId: widget.bookId,
-        detailUrl: widget.detailUrl!,
-        fallbackTitle: widget.title,
+        sourceId: _activeSourceId!,
+        bookId: _activeBookId,
+        detailUrl: _activeDetailUrl!,
+        fallbackTitle: _displayTitle ?? widget.title,
         forceRefresh: forceRefresh,
       );
 
       if (!mounted) {
-        return;
+        return false;
       }
 
       setState(() {
         _result = result;
         _tocWarningText = _toTocWarningText(result.tocError);
+        _activeBookId = result.detail.id.trim();
+        _activeSourceId = result.detail.sourceId.trim();
+        _activeDetailUrl = result.detail.detailUrl.trim();
+        _displayTitle = result.detail.title.trim();
       });
 
       await _refreshBookshelfState(result);
+      return true;
     } on AppException catch (error) {
       if (!mounted) {
-        return;
+        return false;
       }
       setState(() {
         _errorText = _toUserReadableError(error);
         _tocWarningText = null;
       });
+      return false;
     } catch (_) {
       if (!mounted) {
-        return;
+        return false;
       }
       setState(() {
         _errorText = '加载失败，请稍后重试。';
         _tocWarningText = null;
       });
+      return false;
     } finally {
       if (mounted) {
         setState(() {
@@ -1058,4 +1418,16 @@ class _BookDetailPageState extends State<BookDetailPage> {
 
     ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(text)));
   }
+}
+
+class _DetailSwitchSourceCandidate {
+  const _DetailSwitchSourceCandidate({
+    required this.book,
+    required this.sourceName,
+    required this.score,
+  });
+
+  final Book book;
+  final String sourceName;
+  final int score;
 }
