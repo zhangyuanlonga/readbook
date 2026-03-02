@@ -7,6 +7,7 @@ import 'package:go_router/go_router.dart';
 
 import '../../../app/layout/app_layout.dart';
 import '../../../app/layout/app_spacing.dart';
+import '../../../app/widgets/disk_cached_cover_image.dart';
 import '../../../core/errors/app_exception.dart';
 import '../../../domain/entities/book.dart';
 import '../../../domain/entities/source_definition.dart';
@@ -909,12 +910,12 @@ class _DiscoverPageState extends State<DiscoverPage> {
       tag: heroTag,
       child: ClipRRect(
         borderRadius: BorderRadius.circular(8),
-        child: Image.network(
-          trimmed,
+        child: DiskCachedCoverImage(
+          imageUrl: trimmed,
           width: 52,
           height: 72,
           fit: BoxFit.cover,
-          errorBuilder: (_, __, ___) => _buildCoverFallback(),
+          fallback: _buildCoverFallback(),
         ),
       ),
     );

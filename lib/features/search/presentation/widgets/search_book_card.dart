@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../../../app/widgets/disk_cached_cover_image.dart';
 import '../../../../domain/entities/book.dart';
 
 class SearchBookCard extends StatelessWidget {
@@ -71,8 +72,7 @@ class SearchBookCard extends StatelessWidget {
                           style: theme.textTheme.bodySmall,
                         ),
                       ),
-                    if (normalizedIntro != null &&
-                        normalizedIntro!.isNotEmpty)
+                    if (normalizedIntro != null && normalizedIntro!.isNotEmpty)
                       Padding(
                         padding: const EdgeInsets.only(top: 6),
                         child: Container(
@@ -100,10 +100,7 @@ class SearchBookCard extends StatelessWidget {
                 ),
               ),
               const SizedBox(width: 8),
-              Icon(
-                Icons.chevron_right,
-                color: colorScheme.onSurfaceVariant,
-              ),
+              Icon(Icons.chevron_right, color: colorScheme.onSurfaceVariant),
             ],
           ),
         ),
@@ -129,18 +126,14 @@ class _CoverPreview extends StatelessWidget {
       tag: heroTag,
       child: ClipRRect(
         borderRadius: BorderRadius.circular(8),
-        child: Image.network(
-          coverUrl!,
+        child: DiskCachedCoverImage(
+          imageUrl: coverUrl,
           width: 56,
           height: 80,
           fit: BoxFit.cover,
           cacheWidth: 112,
           cacheHeight: 160,
-          loadingBuilder: (_, child, loadingProgress) {
-            if (loadingProgress == null) return child;
-            return const _CoverFallback();
-          },
-          errorBuilder: (_, __, ___) => const _CoverFallback(),
+          fallback: const _CoverFallback(),
         ),
       ),
     );
@@ -162,10 +155,7 @@ class _CoverFallback extends StatelessWidget {
         color: colorScheme.surfaceContainerHighest,
         borderRadius: BorderRadius.circular(8),
       ),
-      child: Text(
-        '封面',
-        style: Theme.of(context).textTheme.labelSmall,
-      ),
+      child: Text('封面', style: Theme.of(context).textTheme.labelSmall),
     );
   }
 }
@@ -187,10 +177,7 @@ class _InfoPill extends StatelessWidget {
         color: colorScheme.surfaceContainerHighest,
         borderRadius: BorderRadius.circular(8),
       ),
-      child: Text(
-        '$label: $value',
-        style: theme.textTheme.labelSmall,
-      ),
+      child: Text('$label: $value', style: theme.textTheme.labelSmall),
     );
   }
 }

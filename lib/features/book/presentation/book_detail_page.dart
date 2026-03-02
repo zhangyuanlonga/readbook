@@ -4,6 +4,7 @@ import 'package:html/parser.dart' as html_parser;
 
 import '../../../app/layout/app_layout.dart';
 import '../../../app/layout/app_spacing.dart';
+import '../../../app/widgets/disk_cached_cover_image.dart';
 
 import '../../../core/errors/app_exception.dart';
 import '../../../core/errors/error_codes.dart';
@@ -306,13 +307,12 @@ class _BookDetailPageState extends State<BookDetailPage> {
         tag: heroTag,
         child: ClipRRect(
           borderRadius: BorderRadius.circular(14),
-          child: Image.network(
-            coverUrl!,
+          child: DiskCachedCoverImage(
+            imageUrl: coverUrl,
             width: 84,
             height: 120,
             fit: BoxFit.cover,
-            errorBuilder:
-                (context, error, stackTrace) => _buildCoverFallback('封面加载失败'),
+            fallback: _buildCoverFallback('封面加载失败'),
           ),
         ),
       );

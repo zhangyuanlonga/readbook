@@ -105,9 +105,13 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
   Timer? _progressDebounceTimer;
   Timer? _autoReadResumeTimer;
   int _autoReadTaskToken = 0;
+  int _preloadTaskToken = 0;
   bool _isAutoReadRunning = false;
   bool _isAutoReadSessionEnabled = false;
   bool _isAutoReadAdvancingChapter = false;
+  double? _swipeDragStartDx;
+  double? _swipeDragCurrentDx;
+  ReaderPageTurnMode _pageTurnModeBeforeAutoRead = ReaderPageTurnMode.tap;
   String? _dayModeBackgroundImageBackup;
   String? _cachedBackgroundImageKey;
   MemoryImage? _cachedBackgroundImage;
@@ -144,10 +148,17 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
   static const double _kBottomProgressReserve = 24;
   static const double _kBackgroundTileWidth = 84;
   static const double _kBackgroundTileHeight = 52;
+  static const double _kSwipeTurnDistanceThreshold = 42;
+  static const double _kSwipeTurnVelocityThreshold = 120;
+  static const double _kCoverEdgeShadowWidth = 20;
+  static const double _kCoverEdgeShadowMaxAlpha = 0.22;
+  static const Duration _kCurlAutoTurnDuration = Duration(milliseconds: 460);
   static const Duration _kAutoReadStepDuration = Duration(milliseconds: 520);
   static const Duration _kAutoReadResumeDelay = Duration(milliseconds: 420);
   static const int _kSwitchSourceCandidateLimit = 24;
   static const int _kSwitchSourceLagTolerance = 20;
+  static const int _kForwardPreloadChapterCount = 2;
+  static const int _kBackwardPreloadChapterCount = 1;
   static final RegExp _kSwitchSourceSpacePattern = RegExp(r'[\u3000\s]+');
   static final RegExp _kSwitchSourceSymbolPattern = RegExp(
     r'''[·•\-_:：|/\\\(\)\[\]【】<>《》"'‘’,.，。!?！？]''',
@@ -155,11 +166,27 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
   static final RegExp _kSwitchSourceChapterPattern = RegExp(
     r'第?\s*(\d{1,5})\s*章',
   );
+  static final RegExp _kSwitchSourceChapterEnglishPattern = RegExp(
+    r'^(chapter|chap)\s*\d{1,5}\b',
+  );
   static final RegExp _kSwitchSourceNumberPattern = RegExp(r'(\d{1,5})');
 
+  bool _isPagedTextReaderEnabled() {
+    if (_chapterImageUrls.isNotEmpty) {
+      return false;
+    }
+    return _settings.pageTurnMode == ReaderPageTurnMode.tap ||
+        _settings.pageTurnMode == ReaderPageTurnMode.swipe;
+  }
+
   bool _isTapPaginationEnabled() {
-    return _settings.pageTurnMode == ReaderPageTurnMode.tap &&
-        _chapterImageUrls.isEmpty;
+    return _isPagedTextReaderEnabled() &&
+        _settings.pageTurnMode == ReaderPageTurnMode.tap;
+  }
+
+  bool _isSwipePaginationEnabled() {
+    return _isPagedTextReaderEnabled() &&
+        _settings.pageTurnMode == ReaderPageTurnMode.swipe;
   }
 
   bool get _isMangaChapter => _chapterImageUrls.isNotEmpty;
@@ -207,7 +234,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
     _currentIndex = widget.chapterIndex;
     _curlAutoTurnController = AnimationController(
       vsync: this,
-      duration: const Duration(milliseconds: 320),
+      duration: _kCurlAutoTurnDuration,
     );
     _curlAutoTurnController.addListener(_onCurlAutoTurnTick);
     _curlAutoTurnController.addStatusListener(_onCurlAutoTurnStatus);
@@ -377,7 +404,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
   }
 
   Widget _buildReaderContent(_ReaderThemeColors colors) {
-    final isPaged = _isTapPaginationEnabled();
+    final isPaged = _isPagedTextReaderEnabled();
 
     return Column(
       children: [
@@ -503,7 +530,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
       child:
           _chapterImageUrls.isNotEmpty
               ? _buildMangaReader(colors)
-              : _isTapPaginationEnabled()
+              : _isPagedTextReaderEnabled()
               ? _buildPagedReader(colors)
               : _buildReaderList(colors),
     );
@@ -573,7 +600,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
               builder: (context, _) {
                 if (!_scrollController.hasClients ||
                     _isMangaChapter ||
-                    _isTapPaginationEnabled()) {
+                    _isPagedTextReaderEnabled()) {
                   return const SizedBox.shrink();
                 }
 
@@ -632,7 +659,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
   }
 
   bool _onReaderScrollNotification(ScrollNotification notification) {
-    if (!_isAutoReadSessionEnabled || _isTapPaginationEnabled()) {
+    if (!_isAutoReadSessionEnabled || _isPagedTextReaderEnabled()) {
       return false;
     }
 
@@ -856,6 +883,34 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
     return _settings.pageAnimationStyle;
   }
 
+  Duration _pageSwitchDurationForStyle(ReaderPageAnimationStyle style) {
+    return switch (style) {
+      ReaderPageAnimationStyle.curl => _kCurlAutoTurnDuration,
+      ReaderPageAnimationStyle.cover => const Duration(milliseconds: 420),
+      ReaderPageAnimationStyle.translate => const Duration(milliseconds: 330),
+      ReaderPageAnimationStyle.vertical => const Duration(milliseconds: 360),
+      ReaderPageAnimationStyle.fade => const Duration(milliseconds: 300),
+      ReaderPageAnimationStyle.none => Duration.zero,
+    };
+  }
+
+  Curve _pageSwitchInCurveForStyle(ReaderPageAnimationStyle style) {
+    return switch (style) {
+      ReaderPageAnimationStyle.cover => Curves.linearToEaseOut,
+      ReaderPageAnimationStyle.fade => Curves.easeInOut,
+      ReaderPageAnimationStyle.none => Curves.linear,
+      _ => Curves.easeInOutCubic,
+    };
+  }
+
+  Curve _pageSwitchOutCurveForStyle(ReaderPageAnimationStyle style) {
+    return switch (style) {
+      ReaderPageAnimationStyle.fade => Curves.easeInOut,
+      ReaderPageAnimationStyle.none => Curves.linear,
+      _ => Curves.easeInOutCubic,
+    };
+  }
+
   Widget _buildPagedReader(_ReaderThemeColors colors) {
     final paragraphs =
         _paragraphs.isEmpty ? <String>[_content.trim()] : _paragraphs;
@@ -913,6 +968,9 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
         _pageCurlPaperSize = pagedSize;
 
         final animationStyle = _effectivePageAnimationStyle();
+        final switchDuration = _pageSwitchDurationForStyle(animationStyle);
+        final switchInCurve = _pageSwitchInCurveForStyle(animationStyle);
+        final switchOutCurve = _pageSwitchOutCurveForStyle(animationStyle);
 
         if (animationStyle == ReaderPageAnimationStyle.curl) {
           final controller = _ensurePageCurlController(
@@ -976,8 +1034,8 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
         Widget transitionBuilder(Widget child, Animation<double> animation) {
           final curved = CurvedAnimation(
             parent: animation,
-            curve: Curves.easeOutCubic,
-            reverseCurve: Curves.easeInCubic,
+            curve: switchInCurve,
+            reverseCurve: switchOutCurve,
           );
           final direction = _pageSwitchDirection.toDouble().clamp(-1.0, 1.0);
 
@@ -986,12 +1044,10 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
               if (animation.status == AnimationStatus.reverse) {
                 return child;
               }
-              return SlideTransition(
-                position: Tween<Offset>(
-                  begin: Offset(direction, 0),
-                  end: Offset.zero,
-                ).animate(curved),
+              return _buildCoverInTransition(
                 child: child,
+                animation: curved,
+                direction: direction,
               );
             case ReaderPageAnimationStyle.translate:
               final begin =
@@ -1030,9 +1086,9 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
             Positioned.fill(
               child: ClipRect(
                 child: AnimatedSwitcher(
-                  duration: const Duration(milliseconds: 220),
-                  switchInCurve: Curves.easeOutCubic,
-                  switchOutCurve: Curves.easeInCubic,
+                  duration: switchDuration,
+                  switchInCurve: switchInCurve,
+                  switchOutCurve: switchOutCurve,
                   layoutBuilder: (currentChild, previousChildren) {
                     return Stack(
                       fit: StackFit.expand,
@@ -1055,6 +1111,60 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
                 bottomInset: bottomInset,
               ),
           ],
+        );
+      },
+    );
+  }
+
+  Widget _buildCoverInTransition({
+    required Widget child,
+    required Animation<double> animation,
+    required double direction,
+  }) {
+    final normalizedDirection = direction >= 0 ? 1.0 : -1.0;
+    final fromRight = normalizedDirection > 0;
+
+    return AnimatedBuilder(
+      animation: animation,
+      child: child,
+      builder: (context, animatedChild) {
+        final progress = animation.value.clamp(0.0, 1.0);
+        final translateX = normalizedDirection * (1 - progress);
+        final shadowAlpha = (1 - progress) * _kCoverEdgeShadowMaxAlpha;
+
+        return FractionalTranslation(
+          translation: Offset(translateX, 0),
+          child: Stack(
+            fit: StackFit.expand,
+            children: [
+              if (animatedChild != null) animatedChild,
+              IgnorePointer(
+                child: Align(
+                  alignment:
+                      fromRight ? Alignment.centerLeft : Alignment.centerRight,
+                  child: Container(
+                    width: _kCoverEdgeShadowWidth,
+                    decoration: BoxDecoration(
+                      gradient: LinearGradient(
+                        begin:
+                            fromRight
+                                ? Alignment.centerLeft
+                                : Alignment.centerRight,
+                        end:
+                            fromRight
+                                ? Alignment.centerRight
+                                : Alignment.centerLeft,
+                        colors: [
+                          Colors.black.withValues(alpha: shadowAlpha),
+                          Colors.transparent,
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
         );
       },
     );
@@ -1336,7 +1446,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
     if (controller == null || size == null) {
       return;
     }
-    final t = Curves.easeOutCubic.transform(_curlAutoTurnController.value);
+    final t = Curves.easeInOutCubic.transform(_curlAutoTurnController.value);
     final x = _curlAutoStartX + (_curlAutoEndX - _curlAutoStartX) * t;
 
     try {
@@ -1493,7 +1603,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
       return;
     }
 
-    if (!_isTapPaginationEnabled()) {
+    if (!_isPagedTextReaderEnabled()) {
       return;
     }
 
@@ -1789,6 +1899,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
     return LayoutBuilder(
       builder: (context, constraints) {
         final gestureInsets = MediaQuery.systemGestureInsetsOf(context);
+        final enableSwipeTurn = _isSwipePaginationEnabled();
 
         return GestureDetector(
           behavior: HitTestBehavior.opaque,
@@ -1798,6 +1909,31 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
                 constraints.biggest,
                 gestureInsets,
               ),
+          onHorizontalDragStart:
+              enableSwipeTurn
+                  ? (details) {
+                    _swipeDragStartDx = details.localPosition.dx;
+                    _swipeDragCurrentDx = details.localPosition.dx;
+                  }
+                  : null,
+          onHorizontalDragUpdate:
+              enableSwipeTurn
+                  ? (details) {
+                    _swipeDragCurrentDx = details.localPosition.dx;
+                  }
+                  : null,
+          onHorizontalDragCancel:
+              enableSwipeTurn
+                  ? () {
+                    _swipeDragStartDx = null;
+                    _swipeDragCurrentDx = null;
+                  }
+                  : null,
+          onHorizontalDragEnd:
+              enableSwipeTurn
+                  ? (details) =>
+                      _onSwipePaginationDragEnd(details, constraints.biggest)
+                  : null,
           onLongPress:
               _isMangaChapter
                   ? () => unawaited(_openMangaPositionSheet())
@@ -1806,6 +1942,44 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
         );
       },
     );
+  }
+
+  void _onSwipePaginationDragEnd(DragEndDetails details, Size viewportSize) {
+    final startDx = _swipeDragStartDx;
+    final currentDx = _swipeDragCurrentDx;
+    _swipeDragStartDx = null;
+    _swipeDragCurrentDx = null;
+
+    if (!_isSwipePaginationEnabled() || startDx == null || currentDx == null) {
+      return;
+    }
+
+    if (_isAutoReadSessionEnabled) {
+      _stopAutoReadSession(showMessage: true);
+      return;
+    }
+
+    if (_showOverlayControls) {
+      _hideOverlayControls(resumeAutoRead: true);
+    }
+
+    final delta = currentDx - startDx;
+    final velocity = details.primaryVelocity ?? 0;
+    final isLeftTurn =
+        delta <= -_kSwipeTurnDistanceThreshold ||
+        velocity <= -_kSwipeTurnVelocityThreshold;
+    final isRightTurn =
+        delta >= _kSwipeTurnDistanceThreshold ||
+        velocity >= _kSwipeTurnVelocityThreshold;
+
+    if (isLeftTurn && !isRightTurn) {
+      unawaited(_goToNextPage(viewportSize.height));
+      return;
+    }
+
+    if (isRightTurn && !isLeftTurn) {
+      unawaited(_goToPreviousPage(viewportSize.height));
+    }
   }
 
   TextStyle _paragraphTextStyle(_ReaderThemeColors colors) {
@@ -1891,12 +2065,15 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
       return;
     }
 
-    final keyword =
-        _bookTitle.trim().isNotEmpty
-            ? _bookTitle.trim()
-            : (widget.chapterTitle?.trim() ?? '');
-    if (keyword.isEmpty) {
-      _showMessage('当前书名为空，暂时无法换源。');
+    final keyword = await _resolveSwitchSourceSearchKeyword(
+      currentSourceId: currentSourceId,
+      currentDetailUrl: currentDetailUrl,
+    );
+    if (!mounted) {
+      return;
+    }
+    if (keyword == null) {
+      _showMessage('当前书名为空或仍在加载，暂时无法换源。');
       return;
     }
 
@@ -2180,6 +2357,60 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
     }
 
     return score;
+  }
+
+  Future<String?> _resolveSwitchSourceSearchKeyword({
+    required String currentSourceId,
+    required String currentDetailUrl,
+  }) async {
+    final currentTitle = _bookTitle.trim();
+    if (_isSwitchSourceBookTitleUsable(currentTitle)) {
+      return currentTitle;
+    }
+
+    try {
+      final detailResult = await _detailService.load(
+        sourceId: currentSourceId,
+        bookId: widget.bookId,
+        detailUrl: currentDetailUrl,
+        fallbackTitle: currentTitle.isEmpty ? null : currentTitle,
+      );
+      final refreshedTitle = detailResult.detail.title.trim();
+      if (_isSwitchSourceBookTitleUsable(refreshedTitle)) {
+        if (mounted && refreshedTitle != _bookTitle) {
+          setState(() {
+            _bookTitle = refreshedTitle;
+          });
+        } else {
+          _bookTitle = refreshedTitle;
+        }
+        return refreshedTitle;
+      }
+    } catch (_) {
+      // Fall through to null and let caller show user-facing message.
+    }
+
+    return null;
+  }
+
+  bool _isSwitchSourceBookTitleUsable(String title) {
+    final trimmed = title.trim();
+    if (trimmed.isEmpty) {
+      return false;
+    }
+    return !_looksLikeSwitchSourceChapterTitle(trimmed);
+  }
+
+  bool _looksLikeSwitchSourceChapterTitle(String text) {
+    final trimmed = text.trim();
+    if (trimmed.isEmpty) {
+      return false;
+    }
+    if (_kSwitchSourceChapterPattern.hasMatch(trimmed)) {
+      return true;
+    }
+    final lower = trimmed.toLowerCase();
+    return _kSwitchSourceChapterEnglishPattern.hasMatch(lower);
   }
 
   String _normalizeSwitchSourceText(String text) {
@@ -3134,7 +3365,6 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
     try {
       _settings = await _preferencesService.loadSettings();
       _settings = _settings.copyWith(
-        pageTurnMode: ReaderPageTurnMode.tap,
         autoReadEnabled: false,
       );
 
@@ -3352,7 +3582,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
         return;
       }
 
-      if (_isTapPaginationEnabled()) {
+      if (_isPagedTextReaderEnabled()) {
         final pages = _pagedPages;
         if (pages.isEmpty) {
           _pendingPageRestoreRatio = normalized;
@@ -3405,7 +3635,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
   bool _canRunAutoReadNow() {
     if (!_isAutoReadSessionEnabled ||
         _isMangaChapter ||
-        _isTapPaginationEnabled() ||
+        _isPagedTextReaderEnabled() ||
         _showOverlayControls ||
         _isBootstrapping ||
         _isLoadingContent ||
@@ -3538,7 +3768,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
     if (!_isAutoReadSessionEnabled ||
         _isAutoReadAdvancingChapter ||
         _isMangaChapter ||
-        _isTapPaginationEnabled() ||
+        _isPagedTextReaderEnabled() ||
         _showOverlayControls ||
         _isBootstrapping ||
         _isLoadingContent ||
@@ -3578,7 +3808,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
   }
 
   void _onScrollChanged() {
-    if (_isTapPaginationEnabled()) {
+    if (_isPagedTextReaderEnabled()) {
       return;
     }
     if (_isBootstrapping || _isLoadingContent || _errorText != null) {
@@ -3614,7 +3844,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
   }
 
   double _currentScrollRatio() {
-    if (_isTapPaginationEnabled()) {
+    if (_isPagedTextReaderEnabled()) {
       final pages = _pagedPages;
       if (pages.length <= 1) {
         return 0;
@@ -3724,7 +3954,8 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
       _restoreScrollPosition(targetRatio);
 
       await _saveProgress();
-      await _preloadNeighbors();
+      final preloadTaskToken = ++_preloadTaskToken;
+      unawaited(_preloadNeighbors(taskToken: preloadTaskToken));
       return true;
     } on AppException catch (error) {
       if (!mounted) {
@@ -3865,22 +4096,69 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
     context.push(route);
   }
 
-  Future<void> _preloadNeighbors() async {
+  Future<void> _preloadNeighbors({required int taskToken}) async {
     final sourceId = _sourceId;
     final currentIndex = _currentIndex;
     if (sourceId == null || currentIndex == null || _chapters.isEmpty) {
       return;
     }
 
-    final urls = <String>[];
-    if (currentIndex > 0) {
-      urls.add(_chapters[currentIndex - 1].chapterUrl);
-    }
-    if (currentIndex < _chapters.length - 1) {
-      urls.add(_chapters[currentIndex + 1].chapterUrl);
+    final normalizedSourceId = sourceId.trim();
+    if (normalizedSourceId.isEmpty) {
+      return;
     }
 
-    await _contentService.preload(sourceId: sourceId, chapterUrls: urls);
+    final preloadIndexes = <int>{};
+
+    for (var offset = 1; offset <= _kBackwardPreloadChapterCount; offset++) {
+      final index = currentIndex - offset;
+      if (index >= 0) {
+        preloadIndexes.add(index);
+      }
+    }
+
+    for (var offset = 1; offset <= _kForwardPreloadChapterCount; offset++) {
+      final index = currentIndex + offset;
+      if (index < _chapters.length) {
+        preloadIndexes.add(index);
+      }
+    }
+
+    if (preloadIndexes.isEmpty) {
+      return;
+    }
+
+    final orderedIndexes = preloadIndexes.toList(growable: false)..sort();
+
+    for (final index in orderedIndexes) {
+      if (!mounted || taskToken != _preloadTaskToken) {
+        return;
+      }
+
+      final chapter = _chapters[index];
+      final chapterUrl = chapter.chapterUrl.trim();
+      if (chapterUrl.isEmpty) {
+        continue;
+      }
+
+      final nextChapterUrl =
+          index < _chapters.length - 1
+              ? _chapters[index + 1].chapterUrl.trim()
+              : '';
+
+      try {
+        await _contentService.load(
+          sourceId: normalizedSourceId,
+          chapterUrl: chapterUrl,
+          bookId: widget.bookId,
+          chapterIndex: index,
+          chapterTitle: chapter.title,
+          nextChapterUrl: nextChapterUrl.isEmpty ? null : nextChapterUrl,
+        );
+      } catch (_) {
+        // Preload failures should not interrupt active reading.
+      }
+    }
   }
 
   Future<void> _saveProgress() async {
@@ -3914,7 +4192,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
   }
 
   Future<void> _goToPreviousPage(double viewportHeight) async {
-    if (!_isTapPaginationEnabled()) {
+    if (!_isPagedTextReaderEnabled()) {
       return;
     }
 
@@ -3951,7 +4229,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
   }
 
   Future<void> _goToNextPage(double viewportHeight) async {
-    if (!_isTapPaginationEnabled()) {
+    if (!_isPagedTextReaderEnabled()) {
       return;
     }
 
@@ -4695,6 +4973,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
     }
 
     _autoReadResumeTimer?.cancel();
+    _pageTurnModeBeforeAutoRead = _settings.pageTurnMode;
     setState(() {
       _isAutoReadSessionEnabled = true;
       _settings = _settings.copyWith(
@@ -4709,7 +4988,9 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
   }
 
   void _stopAutoReadSession({bool showMessage = false}) {
-    final hadSession = _isAutoReadSessionEnabled;
+    if (!_isAutoReadSessionEnabled) {
+      return;
+    }
     _isAutoReadAdvancingChapter = false;
     _autoReadResumeTimer?.cancel();
     _stopAutoRead();
@@ -4718,7 +4999,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
       setState(() {
         _isAutoReadSessionEnabled = false;
         _settings = _settings.copyWith(
-          pageTurnMode: ReaderPageTurnMode.tap,
+          pageTurnMode: _pageTurnModeBeforeAutoRead,
           autoReadEnabled: false,
         );
       });
@@ -4726,7 +5007,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
       _isAutoReadSessionEnabled = false;
     }
 
-    if (showMessage && hadSession) {
+    if (showMessage) {
       _showMessage('已停止自动阅读。');
     }
   }
@@ -4877,6 +5158,43 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
                 large: 0.62,
               );
               final sheetHorizontal = AppSpacing.pageHorizontal(context);
+              Widget buildPageAnimationSelector() {
+                return SingleChildScrollView(
+                  scrollDirection: Axis.horizontal,
+                  child: Row(
+                    children: const [
+                          ReaderPageAnimationStyle.curl,
+                          ReaderPageAnimationStyle.cover,
+                          ReaderPageAnimationStyle.translate,
+                          ReaderPageAnimationStyle.vertical,
+                          ReaderPageAnimationStyle.fade,
+                          ReaderPageAnimationStyle.none,
+                        ]
+                        .map(
+                          (style) => Padding(
+                            padding: const EdgeInsets.only(right: 8),
+                            child: ChoiceChip(
+                              label: Text(_pageAnimationLabel(style)),
+                              selected: draft.pageAnimationStyle == style,
+                              onSelected:
+                                  (!isMangaChapter &&
+                                          draft.pageTurnMode ==
+                                              ReaderPageTurnMode.scroll)
+                                      ? null
+                                      : (_) {
+                                        setModalState(() {
+                                          draft = draft.copyWith(
+                                            pageAnimationStyle: style,
+                                          );
+                                        });
+                                      },
+                            ),
+                          ),
+                        )
+                        .toList(growable: false),
+                  ),
+                );
+              }
 
               return AnimatedPadding(
                 duration: const Duration(milliseconds: 180),
@@ -5129,6 +5447,21 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
                                             });
                                           },
                                         ),
+                                        _buildThemeColorDot(
+                                          draft: draft,
+                                          color: const Color(0xFF000000),
+                                          label: '纯黑',
+                                          mode: ReaderThemeMode.dark,
+                                          backgroundStyle:
+                                              ReaderBackgroundStyle.plain,
+                                          backgroundTone:
+                                              ReaderBackgroundTone.pureBlack,
+                                          onChanged: (next) {
+                                            setModalState(() {
+                                              draft = next;
+                                            });
+                                          },
+                                        ),
                                       ],
                                     ),
                                   ),
@@ -5192,44 +5525,92 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
                                   ),
                                 ),
                                 const Divider(height: 1),
+                                if (!isMangaChapter)
+                                  _buildSettingLine(
+                                    context: context,
+                                    label: '触发',
+                                    child: SingleChildScrollView(
+                                      scrollDirection: Axis.horizontal,
+                                      child: Row(
+                                        children: [
+                                          ChoiceChip(
+                                            label: const Text('点按'),
+                                            selected:
+                                                draft.pageTurnMode ==
+                                                ReaderPageTurnMode.tap,
+                                            onSelected: (_) {
+                                              setModalState(() {
+                                                draft = draft.copyWith(
+                                                  pageTurnMode:
+                                                      ReaderPageTurnMode.tap,
+                                                );
+                                              });
+                                            },
+                                          ),
+                                          const SizedBox(width: 8),
+                                          ChoiceChip(
+                                            label: const Text('滑动'),
+                                            selected:
+                                                draft.pageTurnMode ==
+                                                ReaderPageTurnMode.swipe,
+                                            onSelected: (_) {
+                                              setModalState(() {
+                                                draft = draft.copyWith(
+                                                  pageTurnMode:
+                                                      ReaderPageTurnMode.swipe,
+                                                );
+                                              });
+                                            },
+                                          ),
+                                          const SizedBox(width: 8),
+                                          ChoiceChip(
+                                            label: const Text('滚动'),
+                                            selected:
+                                                draft.pageTurnMode ==
+                                                ReaderPageTurnMode.scroll,
+                                            onSelected: (_) {
+                                              setModalState(() {
+                                                draft = draft.copyWith(
+                                                  pageTurnMode:
+                                                      ReaderPageTurnMode.scroll,
+                                                );
+                                              });
+                                            },
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                  ),
+                                if (!isMangaChapter)
+                                  const Divider(height: 1),
                                 _buildSettingLine(
                                   context: context,
-                                  label: '翻页',
-                                  child: SingleChildScrollView(
-                                    scrollDirection: Axis.horizontal,
-                                    child: Row(
-                                      children: const [
-                                            ReaderPageAnimationStyle.curl,
-                                            ReaderPageAnimationStyle.cover,
-                                            ReaderPageAnimationStyle.translate,
-                                            ReaderPageAnimationStyle.vertical,
-                                            ReaderPageAnimationStyle.fade,
-                                            ReaderPageAnimationStyle.none,
-                                          ]
-                                          .map(
-                                            (style) => Padding(
-                                              padding: const EdgeInsets.only(
-                                                right: 8,
-                                              ),
-                                              child: ChoiceChip(
-                                                label: Text(
-                                                  _pageAnimationLabel(style),
-                                                ),
-                                                selected:
-                                                    draft.pageAnimationStyle ==
-                                                    style,
-                                                onSelected: (_) {
-                                                  setModalState(() {
-                                                    draft = draft.copyWith(
-                                                      pageAnimationStyle: style,
-                                                    );
-                                                  });
-                                                },
-                                              ),
+                                  label: !isMangaChapter ? '动画' : '翻页',
+                                  child: Column(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
+                                    children: [
+                                      if (!isMangaChapter &&
+                                          draft.pageTurnMode ==
+                                              ReaderPageTurnMode.scroll)
+                                        Padding(
+                                          padding: const EdgeInsets.only(
+                                            bottom: 6,
+                                          ),
+                                          child: Text(
+                                            '滚动触发模式下不使用分页动画',
+                                            style: Theme.of(
+                                              context,
+                                            ).textTheme.labelSmall?.copyWith(
+                                              color:
+                                                  Theme.of(context)
+                                                      .colorScheme
+                                                      .onSurfaceVariant,
                                             ),
-                                          )
-                                          .toList(growable: false),
-                                    ),
+                                          ),
+                                        ),
+                                      buildPageAnimationSelector(),
+                                    ],
                                   ),
                                 ),
                                 const Divider(height: 1),
@@ -5454,6 +5835,33 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
                                                       });
                                                     },
                                                   ),
+                                                  ChoiceChip(
+                                                    label: const Text('纯黑'),
+                                                    selected:
+                                                        draft.themeMode ==
+                                                            ReaderThemeMode
+                                                                .dark &&
+                                                        draft.backgroundTone ==
+                                                            ReaderBackgroundTone
+                                                                .pureBlack,
+                                                    onSelected: (_) {
+                                                      setModalState(() {
+                                                        draft = draft.copyWith(
+                                                          themeMode:
+                                                              ReaderThemeMode
+                                                                  .dark,
+                                                          backgroundStyle:
+                                                              ReaderBackgroundStyle
+                                                                  .plain,
+                                                          backgroundTone:
+                                                              ReaderBackgroundTone
+                                                                  .pureBlack,
+                                                          clearBackgroundImage:
+                                                              true,
+                                                        );
+                                                      });
+                                                    },
+                                                  ),
                                                 ],
                                               ),
                                               const SizedBox(height: 10),
@@ -5615,7 +6023,6 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
     }
 
     final appliedResult = result.copyWith(
-      pageTurnMode: ReaderPageTurnMode.tap,
       autoReadEnabled: false,
     );
 
@@ -6056,6 +6463,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
       ReaderBackgroundTone.container => scheme.surfaceContainer,
       ReaderBackgroundTone.containerHigh => scheme.surfaceContainerHigh,
       ReaderBackgroundTone.containerHighest => scheme.surfaceContainerHighest,
+      ReaderBackgroundTone.pureBlack => const Color(0xFF000000),
     };
   }
 
@@ -6066,6 +6474,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
       ReaderBackgroundTone.container => scheme.surfaceContainerHigh,
       ReaderBackgroundTone.containerHigh => scheme.surfaceContainerHighest,
       ReaderBackgroundTone.containerHighest => scheme.surfaceContainerHighest,
+      ReaderBackgroundTone.pureBlack => const Color(0xFF0A0A0A),
     };
   }
 

@@ -1,4 +1,4 @@
-package com.example.flutter_appread
+package com.jiangyan.shuxiangread
 
 import android.content.ComponentName
 import android.content.Intent
@@ -14,12 +14,12 @@ import io.flutter.plugin.common.MethodChannel
 
 class MainActivity : FlutterActivity() {
     private companion object {
-        private const val SOURCE_IMPORT_CHANNEL_NAME = "com.example.flutter_appread/source_import_intent"
+        private const val SOURCE_IMPORT_CHANNEL_NAME = "com.jiangyan.shuxiangread/source_import_intent"
         private const val METHOD_GET_INITIAL_IMPORT_PAYLOAD = "getInitialImportPayload"
         private const val METHOD_ON_IMPORT_PAYLOAD = "onImportPayload"
         private const val DEFAULT_PAYLOAD_LABEL = "外部书源"
 
-        private const val APP_ICON_CHANNEL_NAME = "com.example.flutter_appread/app_icon"
+        private const val APP_ICON_CHANNEL_NAME = "com.jiangyan.shuxiangread/app_icon"
         private const val METHOD_IS_SUPPORTED = "isSupported"
         private const val METHOD_GET_CURRENT_ICON = "getCurrentIcon"
         private const val METHOD_SET_APP_ICON = "setAppIcon"

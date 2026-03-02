@@ -1346,7 +1346,7 @@ class _SourcePageState extends State<SourcePage> {
   }
 
   Future<void> _importFromUrl() async {
-    final input = await _showUrlImportDialog();
+    final input = await _showUrlImportPage();
     if (!mounted || input == null) {
       return;
     }
@@ -2369,56 +2369,12 @@ class _SourcePageState extends State<SourcePage> {
     );
   }
 
-  Future<String?> _showUrlImportDialog() async {
-    final controller = TextEditingController(
-      text: 'https://www.yck.email/yuedu/shuyuan/json/id/6930.json',
+  Future<String?> _showUrlImportPage() async {
+    return Navigator.of(context).push<String>(
+      MaterialPageRoute<String>(
+        builder: (pageContext) => const _UrlImportPage(),
+      ),
     );
-
-    final result = await showDialog<String>(
-      context: context,
-      builder: (dialogContext) {
-        final maxWidth = AppLayout.dialogMaxWidth(dialogContext);
-        final keyboardInset = AppLayout.keyboardInset(dialogContext);
-
-        return AnimatedPadding(
-          duration: const Duration(milliseconds: 180),
-          curve: Curves.easeOutCubic,
-          padding: EdgeInsets.only(bottom: keyboardInset),
-          child: AlertDialog(
-            insetPadding: AppSpacing.dialogInsetPadding(dialogContext),
-            scrollable: true,
-            title: const Text('链接导入书源'),
-            content: ConstrainedBox(
-              constraints: BoxConstraints(maxWidth: maxWidth),
-              child: TextField(
-                controller: controller,
-                autofocus: true,
-                keyboardType: TextInputType.url,
-                textInputAction: TextInputAction.done,
-                decoration: const InputDecoration(
-                  hintText: 'https://example.com/source.json',
-                  border: OutlineInputBorder(),
-                ),
-              ),
-            ),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.of(dialogContext).pop(),
-                child: const Text('取消'),
-              ),
-              FilledButton(
-                onPressed:
-                    () => Navigator.of(dialogContext).pop(controller.text),
-                child: const Text('导入'),
-              ),
-            ],
-          ),
-        );
-      },
-    );
-
-    controller.dispose();
-    return result;
   }
 
   Future<bool?> _showConfirmDialog({
@@ -2530,6 +2486,109 @@ class _PasteImportPageState extends State<_PasteImportPage> {
                       ),
                     ),
                     const SizedBox(height: 12),
+                    FilledButton.icon(
+                      onPressed: canSubmit ? _submit : null,
+                      icon: const Icon(Icons.file_download_rounded),
+                      label: const Text('导入'),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _UrlImportPage extends StatefulWidget {
+  const _UrlImportPage();
+
+  @override
+  State<_UrlImportPage> createState() => _UrlImportPageState();
+}
+
+class _UrlImportPageState extends State<_UrlImportPage> {
+  final TextEditingController _controller = TextEditingController();
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  void _submit() {
+    Navigator.of(context).pop(_controller.text);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final horizontal = AppSpacing.pageHorizontal(context);
+    final maxWidth = AppLayout.pageContentMaxWidth(context, maxWidth: 760);
+    final keyboardInset = AppLayout.keyboardInset(context);
+    final bottomSafe = MediaQuery.viewPaddingOf(context).bottom;
+    final canSubmit = _controller.text.trim().isNotEmpty;
+
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text('链接导入书源'),
+        actions: [
+          TextButton(
+            onPressed: canSubmit ? _submit : null,
+            child: const Text('导入'),
+          ),
+          const SizedBox(width: 8),
+        ],
+      ),
+      body: AnimatedPadding(
+        duration: const Duration(milliseconds: 180),
+        curve: Curves.easeOutCubic,
+        padding: EdgeInsets.only(bottom: keyboardInset),
+        child: SafeArea(
+          top: false,
+          child: Center(
+            child: ConstrainedBox(
+              constraints: BoxConstraints(maxWidth: maxWidth),
+              child: Padding(
+                padding: EdgeInsets.fromLTRB(
+                  horizontal,
+                  12,
+                  horizontal,
+                  12 + bottomSafe,
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    Text(
+                      '请输入书源 JSON 链接（http/https）',
+                      style: Theme.of(context).textTheme.bodyMedium,
+                    ),
+                    const SizedBox(height: 8),
+                    TextField(
+                      controller: _controller,
+                      autofocus: true,
+                      keyboardType: TextInputType.url,
+                      textInputAction: TextInputAction.done,
+                      onChanged: (_) => setState(() {}),
+                      onSubmitted: (_) {
+                        if (canSubmit) {
+                          _submit();
+                        }
+                      },
+                      decoration: const InputDecoration(
+                        hintText: 'https://example.com/source.json',
+                        border: OutlineInputBorder(),
+                      ),
+                    ),
+                    const SizedBox(height: 10),
+                    Text(
+                      '支持直接粘贴链接，返回后会自动校验并开始导入。',
+                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                        color: Theme.of(context).colorScheme.onSurfaceVariant,
+                      ),
+                    ),
+                    const Spacer(),
                     FilledButton.icon(
                       onPressed: canSubmit ? _submit : null,
                       icon: const Icon(Icons.file_download_rounded),

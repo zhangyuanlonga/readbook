@@ -18,7 +18,7 @@ class ExternalSourceImportBridge {
       ExternalSourceImportBridge._();
 
   static const MethodChannel _channel = MethodChannel(
-    'com.example.flutter_appread/source_import_intent',
+    'com.jiangyan.shuxiangread/source_import_intent',
   );
 
   final StreamController<IncomingSourceImportPayload> _payloadController =

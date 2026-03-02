@@ -3,11 +3,11 @@ import UIKit
 
 @main
 @objc class AppDelegate: FlutterAppDelegate {
-  private let sourceImportChannelName = "com.example.flutter_appread/source_import_intent"
+  private let sourceImportChannelName = "com.jiangyan.shuxiangread/source_import_intent"
   private let methodGetInitialImportPayload = "getInitialImportPayload"
   private let methodOnImportPayload = "onImportPayload"
   private let defaultPayloadLabel = "外部书源"
-  private let appIconChannelName = "com.example.flutter_appread/app_icon"
+  private let appIconChannelName = "com.jiangyan.shuxiangread/app_icon"
   private let methodIsSupported = "isSupported"
   private let methodGetCurrentIcon = "getCurrentIcon"
   private let methodSetAppIcon = "setAppIcon"

@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../app/layout/app_spacing.dart';
+import '../../../app/widgets/disk_cached_cover_image.dart';
 import '../../../core/errors/app_exception.dart';
 
 import '../../../data/datasources/local/app_database.dart';
@@ -919,14 +920,12 @@ class _BookshelfPageState extends State<BookshelfPage> {
 
     return ClipRRect(
       borderRadius: BorderRadius.circular(12),
-      child: Image.network(
-        coverUrl!,
+      child: DiskCachedCoverImage(
+        imageUrl: coverUrl,
         width: width,
         height: height,
         fit: BoxFit.cover,
-        errorBuilder:
-            (context, error, stackTrace) =>
-                _buildCoverFallback(width: width, height: height),
+        fallback: _buildCoverFallback(width: width, height: height),
       ),
     );
   }

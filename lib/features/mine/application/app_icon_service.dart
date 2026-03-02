@@ -22,7 +22,7 @@ class AppIconService {
   AppIconService({MethodChannel? channel})
     : _channel = channel ?? _methodChannel;
 
-  static const String _channelName = 'com.example.flutter_appread/app_icon';
+  static const String _channelName = 'com.jiangyan.shuxiangread/app_icon';
   static const MethodChannel _methodChannel = MethodChannel(_channelName);
 
   static const String _methodIsSupported = 'isSupported';

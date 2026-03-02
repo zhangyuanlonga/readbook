@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../app/layout/app_spacing.dart';
+import '../../../app/widgets/disk_cached_cover_image.dart';
+import '../../../core/cache/cover_image_disk_cache.dart';
 import '../../../data/datasources/local/app_database.dart';
 import '../../../domain/entities/bookshelf_book.dart';
 import '../../bookshelf/application/bookshelf_service.dart';
@@ -92,8 +94,7 @@ class _CacheManagementPageState extends State<CacheManagementPage> {
                         context,
                         cachedBookCount: summaries.length,
                         cachedChapterCount: totalCachedChapters,
-                        canClearAll: summaries.isNotEmpty,
-                        onClearAll: summaries.isEmpty ? null : _confirmClearAll,
+                        onClearAll: _confirmClearAll,
                       ),
                       const SizedBox(height: 12),
                       Text(
@@ -133,7 +134,6 @@ class _CacheManagementPageState extends State<CacheManagementPage> {
     BuildContext context, {
     required int cachedBookCount,
     required int cachedChapterCount,
-    required bool canClearAll,
     required VoidCallback? onClearAll,
   }) {
     final colorScheme = Theme.of(context).colorScheme;
@@ -191,7 +191,7 @@ class _CacheManagementPageState extends State<CacheManagementPage> {
               ),
               const SizedBox(height: 8),
               Text(
-                '提示：缓存仅用于离线/弱网阅读。后续会在这里扩展漫画缓存、下载管理等能力。',
+                '提示：这里会统一清理章节缓存与封面缓存，用于离线/弱网加速。',
                 style: Theme.of(context).textTheme.bodySmall?.copyWith(
                   color: colorScheme.onSurfaceVariant,
                 ),
@@ -267,14 +267,12 @@ class _CacheManagementPageState extends State<CacheManagementPage> {
     if (uri != null && uri.hasScheme) {
       return ClipRRect(
         borderRadius: BorderRadius.circular(12),
-        child: Image.network(
-          coverUrl!,
+        child: DiskCachedCoverImage(
+          imageUrl: coverUrl,
           width: 42,
           height: 56,
           fit: BoxFit.cover,
-          errorBuilder: (context, error, stackTrace) {
-            return _buildCoverFallback(title);
-          },
+          fallback: _buildCoverFallback(title),
         ),
       );
     }
@@ -309,7 +307,7 @@ class _CacheManagementPageState extends State<CacheManagementPage> {
       builder: (context) {
         return AlertDialog(
           title: const Text('清理全部缓存？'),
-          content: const Text('将删除所有已缓存的章节正文。此操作不可恢复。'),
+          content: const Text('将删除所有已缓存的章节正文和封面缓存。此操作不可恢复。'),
           actions: [
             TextButton(
               onPressed: () => Navigator.of(context).pop(false),
@@ -329,14 +327,15 @@ class _CacheManagementPageState extends State<CacheManagementPage> {
     }
 
     await AppDatabase.instance.clearChapterCaches();
+    final clearedCoverCount = await CoverImageDiskCache.instance.clearAll();
 
     if (!mounted) {
       return;
     }
 
-    ScaffoldMessenger.of(
-      context,
-    ).showSnackBar(const SnackBar(content: Text('已清理全部缓存。')));
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text('已清理全部缓存（封面 $clearedCoverCount 张）。')),
+    );
   }
 
   Future<void> _confirmClearBook(
@@ -350,7 +349,9 @@ class _CacheManagementPageState extends State<CacheManagementPage> {
       builder: (context) {
         return AlertDialog(
           title: const Text('清理本书缓存？'),
-          content: Text('将删除《$title》的已缓存章节（${summary.cachedCount} 章）。'),
+          content: Text(
+            '将删除《$title》的已缓存章节（${summary.cachedCount} 章），并尝试清理该书封面缓存。',
+          ),
           actions: [
             TextButton(
               onPressed: () => Navigator.of(context).pop(false),
@@ -370,13 +371,18 @@ class _CacheManagementPageState extends State<CacheManagementPage> {
     }
 
     await AppDatabase.instance.deleteChapterCachesByBookId(summary.bookId);
+    final clearedCover = await CoverImageDiskCache.instance.clearByUrl(
+      bookshelfBook?.coverUrl ?? '',
+    );
 
     if (!mounted) {
       return;
     }
 
-    ScaffoldMessenger.of(
-      context,
-    ).showSnackBar(SnackBar(content: Text('已清理《$title》的缓存。')));
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(clearedCover ? '已清理《$title》的缓存与封面。' : '已清理《$title》的缓存。'),
+      ),
+    );
   }
 }

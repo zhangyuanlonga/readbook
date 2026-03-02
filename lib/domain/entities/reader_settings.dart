@@ -1,6 +1,6 @@
 enum ReaderThemeMode { light, sepia, dark }
 
-enum ReaderPageTurnMode { tap, scroll }
+enum ReaderPageTurnMode { tap, swipe, scroll }
 
 enum ReaderBackgroundStyle { plain, paper, warm }
 
@@ -10,6 +10,7 @@ enum ReaderBackgroundTone {
   container,
   containerHigh,
   containerHighest,
+  pureBlack,
 }
 
 enum ReaderFontWeightLevel { light, regular, medium }
