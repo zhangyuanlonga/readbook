@@ -31,14 +31,6 @@
 			<key>CFBundleIconName</key>
 			<string>AppIcon</string>
 		</dict>
-		<key>CFBundleAlternateIcons</key>
-		<dict>
-			<key>AppIconAlt</key>
-			<dict>
-				<key>CFBundleIconName</key>
-				<string>AppIconAlt</string>
-			</dict>
-		</dict>
 	</dict>
 	<key>CFBundleIcons~ipad</key>
 	<dict>
@@ -46,14 +38,6 @@
 		<dict>
 			<key>CFBundleIconName</key>
 			<string>AppIcon</string>
-		</dict>
-		<key>CFBundleAlternateIcons</key>
-		<dict>
-			<key>AppIconAlt</key>
-			<dict>
-				<key>CFBundleIconName</key>
-				<string>AppIconAlt</string>
-			</dict>
 		</dict>
 	</dict>
 	<key>CFBundleDocumentTypes</key>

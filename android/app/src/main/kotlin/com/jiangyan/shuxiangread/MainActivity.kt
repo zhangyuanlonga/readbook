@@ -1,12 +1,10 @@
 package com.jiangyan.shuxiangread
 
-import android.content.ComponentName
 import android.content.Intent
 import android.database.Cursor
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
-import android.content.pm.PackageManager
 import android.provider.OpenableColumns
 import io.flutter.embedding.android.FlutterActivity
 import io.flutter.embedding.engine.FlutterEngine
@@ -18,19 +16,9 @@ class MainActivity : FlutterActivity() {
         private const val METHOD_GET_INITIAL_IMPORT_PAYLOAD = "getInitialImportPayload"
         private const val METHOD_ON_IMPORT_PAYLOAD = "onImportPayload"
         private const val DEFAULT_PAYLOAD_LABEL = "外部书源"
-
-        private const val APP_ICON_CHANNEL_NAME = "com.jiangyan.shuxiangread/app_icon"
-        private const val METHOD_IS_SUPPORTED = "isSupported"
-        private const val METHOD_GET_CURRENT_ICON = "getCurrentIcon"
-        private const val METHOD_SET_APP_ICON = "setAppIcon"
-        private const val ICON_KEY_DEFAULT = "default"
-        private const val ICON_KEY_ALT = "alt"
-        private const val DEFAULT_ALIAS_CLASS = ".MainActivityDefault"
-        private const val ALT_ALIAS_CLASS = ".MainActivityAlt"
     }
 
     private var sourceImportMethodChannel: MethodChannel? = null
-    private var appIconMethodChannel: MethodChannel? = null
     private var pendingInitialPayload: Map<String, Any>? = null
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -60,33 +48,6 @@ class MainActivity : FlutterActivity() {
         if (pendingInitialPayload == null) {
             pendingInitialPayload = extractPayloadFromIntent(intent)
         }
-
-        appIconMethodChannel = MethodChannel(
-            flutterEngine.dartExecutor.binaryMessenger,
-            APP_ICON_CHANNEL_NAME
-        ).also { channel ->
-            channel.setMethodCallHandler { call, result ->
-                when (call.method) {
-                    METHOD_IS_SUPPORTED -> result.success(true)
-                    METHOD_GET_CURRENT_ICON -> result.success(resolveCurrentIconKey())
-                    METHOD_SET_APP_ICON -> {
-                        val icon = (call.arguments as? Map<*, *>)?.get("icon") as? String
-                        if (icon.isNullOrEmpty()) {
-                            result.error("INVALID_ARGUMENT", "Missing icon argument.", null)
-                            return@setMethodCallHandler
-                        }
-                        try {
-                            setAppIcon(icon)
-                            result.success(null)
-                        } catch (error: Exception) {
-                            result.error("SET_ICON_FAILED", error.message, null)
-                        }
-                    }
-
-                    else -> result.notImplemented()
-                }
-            }
-        }
     }
 
     override fun onNewIntent(intent: Intent) {
@@ -101,8 +62,6 @@ class MainActivity : FlutterActivity() {
     override fun onDestroy() {
         sourceImportMethodChannel?.setMethodCallHandler(null)
         sourceImportMethodChannel = null
-        appIconMethodChannel?.setMethodCallHandler(null)
-        appIconMethodChannel = null
         super.onDestroy()
     }
 
@@ -217,71 +176,5 @@ class MainActivity : FlutterActivity() {
         }
 
         return list ?: emptyList()
-    }
-
-    private fun setAppIcon(iconKey: String) {
-        val normalized = if (iconKey == ICON_KEY_ALT) ICON_KEY_ALT else ICON_KEY_DEFAULT
-        val packageName = packageName
-        val defaultAlias = ComponentName(packageName, "$packageName$DEFAULT_ALIAS_CLASS")
-        val altAlias = ComponentName(packageName, "$packageName$ALT_ALIAS_CLASS")
-        val packageManager = packageManager
-
-        when (normalized) {
-            ICON_KEY_ALT -> {
-                setAliasEnabled(packageManager, altAlias, true)
-                setAliasEnabled(packageManager, defaultAlias, false)
-            }
-
-            else -> {
-                setAliasEnabled(packageManager, defaultAlias, true)
-                setAliasEnabled(packageManager, altAlias, false)
-            }
-        }
-    }
-
-    private fun resolveCurrentIconKey(): String {
-        val packageName = packageName
-        val defaultAlias = ComponentName(packageName, "$packageName$DEFAULT_ALIAS_CLASS")
-        val altAlias = ComponentName(packageName, "$packageName$ALT_ALIAS_CLASS")
-        val packageManager = packageManager
-        val defaultEnabled = isAliasEnabled(packageManager, defaultAlias, defaultEnabled = true)
-        val altEnabled = isAliasEnabled(packageManager, altAlias, defaultEnabled = false)
-
-        if (altEnabled && !defaultEnabled) {
-            return ICON_KEY_ALT
-        }
-        return ICON_KEY_DEFAULT
-    }
-
-    private fun isAliasEnabled(
-        packageManager: PackageManager,
-        componentName: ComponentName,
-        defaultEnabled: Boolean
-    ): Boolean {
-        return when (packageManager.getComponentEnabledSetting(componentName)) {
-            PackageManager.COMPONENT_ENABLED_STATE_ENABLED -> true
-            PackageManager.COMPONENT_ENABLED_STATE_DISABLED -> false
-            else -> defaultEnabled
-        }
-    }
-
-    private fun setAliasEnabled(
-        packageManager: PackageManager,
-        componentName: ComponentName,
-        enabled: Boolean
-    ) {
-        val newState = if (enabled) {
-            PackageManager.COMPONENT_ENABLED_STATE_ENABLED
-        } else {
-            PackageManager.COMPONENT_ENABLED_STATE_DISABLED
-        }
-        if (packageManager.getComponentEnabledSetting(componentName) == newState) {
-            return
-        }
-        packageManager.setComponentEnabledSetting(
-            componentName,
-            newState,
-            PackageManager.DONT_KILL_APP
-        )
     }
 }
