@@ -25,6 +25,7 @@ import '../../../domain/entities/reading_progress.dart';
 import '../../../domain/entities/source_definition.dart';
 import '../../book/application/book_detail_service.dart';
 import '../../bookshelf/application/bookshelf_service.dart';
+import '../../search/application/search_hit_cache_service.dart';
 import '../../search/application/search_service.dart';
 import '../application/chapter_content_service.dart';
 import '../application/reader_preferences_service.dart';
@@ -70,6 +71,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
       ReaderErrorCenterService.instance;
   final BookshelfService _bookshelfService = BookshelfService();
   final SearchService _switchSourceSearchService = SearchService();
+  final SearchHitCacheService _searchHitCacheService = SearchHitCacheService();
   final SourceSwitchScoreService _switchSourceScoreService =
       SourceSwitchScoreService();
   final SwitchSourcePositionResolver _switchSourcePositionResolver =
@@ -169,6 +171,8 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
   static const int _kSwitchSourceCandidateLimit = 24;
   static const int _kSwitchSourceLagTolerance = 20;
   static const int _kSwitchSourceScoreStep = 6;
+  static const int _kSwitchSourceHitCountCap = 12;
+  static const int _kSwitchSourceHitCountWeight = 3;
   static const int _kAutoSwitchSourceTryLimit = 3;
   static const int _kForwardPreloadChapterCount = 2;
   static const int _kBackwardPreloadChapterCount = 1;
@@ -2201,6 +2205,10 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
     required bool scoreRankingEnabled,
   }) async {
     try {
+      final hitCountBySource = await _loadSwitchSourceHitCountsSafely(
+        title: keyword,
+        author: _bookAuthor,
+      );
       final report = await _switchSourceSearchService.search(
         keyword: keyword,
         pageSize: 16,
@@ -2219,6 +2227,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
             currentChapterCount: _chapters.length,
             targetTitle: keyword,
             targetAuthor: _bookAuthor,
+            hitCountBySource: hitCountBySource,
             scoreStore: scoreStore,
             scoreRankingEnabled: scoreRankingEnabled,
           );
@@ -2245,6 +2254,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
         currentChapterCount: _chapters.length,
         targetTitle: keyword,
         targetAuthor: _bookAuthor,
+        hitCountBySource: hitCountBySource,
         scoreStore: scoreStore,
         scoreRankingEnabled: scoreRankingEnabled,
       );
@@ -2294,6 +2304,20 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
     }
   }
 
+  Future<Map<String, int>> _loadSwitchSourceHitCountsSafely({
+    required String title,
+    required String? author,
+  }) async {
+    try {
+      return await _searchHitCacheService.loadSourceHitCounts(
+        title: title,
+        author: author,
+      );
+    } catch (_) {
+      return <String, int>{};
+    }
+  }
+
   List<_ReaderSourceSwitchCandidate> _buildSwitchSourceCandidates({
     required List<Book> books,
     required Map<String, String> sourceNames,
@@ -2301,6 +2325,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
     required int currentChapterCount,
     required String targetTitle,
     required String? targetAuthor,
+    required Map<String, int> hitCountBySource,
     required SourceSwitchScoreStore scoreStore,
     required bool scoreRankingEnabled,
   }) {
@@ -2320,6 +2345,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
         normalizedTargetTitle: normalizedTargetTitle,
         normalizedTargetAuthor: normalizedTargetAuthor,
       );
+      final hitCount = hitCountBySource[book.sourceId] ?? 0;
       final sourceScore = scoreStore.sourceScores[book.sourceId] ?? 0;
       final bookScore =
           scoreStore.bookScores[_switchSourceScoreService.buildBookScoreKey(
@@ -2330,6 +2356,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
           0;
       final score = _composeSwitchSourceCandidateScore(
         baseScore: baseScore,
+        hitCount: hitCount,
         sourceScore: sourceScore,
         bookScore: bookScore,
         scoreRankingEnabled: scoreRankingEnabled,
@@ -2351,6 +2378,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
         sourceName: sourceNames[book.sourceId] ?? book.sourceId,
         baseScore: baseScore,
         score: score,
+        hitCount: hitCount,
         sourceScore: sourceScore,
         bookScore: bookScore,
         latestChapterLabel: latestChapterLabel,
@@ -2397,14 +2425,22 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
 
   int _composeSwitchSourceCandidateScore({
     required int baseScore,
+    required int hitCount,
     required int sourceScore,
     required int bookScore,
     required bool scoreRankingEnabled,
   }) {
+    final hitBonus = _resolveSwitchSourceHitBonus(hitCount);
     if (!scoreRankingEnabled) {
-      return baseScore;
+      return baseScore + hitBonus;
     }
-    return baseScore + sourceScore + bookScore;
+    return baseScore + hitBonus + sourceScore + bookScore;
+  }
+
+  int _resolveSwitchSourceHitBonus(int hitCount) {
+    final normalizedCount = max(0, hitCount);
+    final capped = min(_kSwitchSourceHitCountCap, normalizedCount);
+    return capped * _kSwitchSourceHitCountWeight;
   }
 
   int _scoreSwitchSourceCandidate(
@@ -2703,8 +2739,8 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
                                           const SizedBox(height: 2),
                                           Text(
                                             lookupState.scoreRankingEnabled
-                                                ? '匹配:${candidate.baseScore} · 源评:${_formatSignedScore(candidate.sourceScore)} · 书评:${_formatSignedScore(candidate.bookScore)}'
-                                                : '匹配:${candidate.baseScore}（评分排序关闭）',
+                                                ? '匹配:${candidate.baseScore} · 命中:${candidate.hitCount} · 源评:${_formatSignedScore(candidate.sourceScore)} · 书评:${_formatSignedScore(candidate.bookScore)}'
+                                                : '匹配:${candidate.baseScore} · 命中:${candidate.hitCount}（评分排序关闭）',
                                             maxLines: 1,
                                             overflow: TextOverflow.ellipsis,
                                             style: Theme.of(
@@ -2918,6 +2954,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
       bookScore: bookScore,
       score: _composeSwitchSourceCandidateScore(
         baseScore: candidate.baseScore,
+        hitCount: candidate.hitCount,
         sourceScore: sourceScore,
         bookScore: bookScore,
         scoreRankingEnabled: scoreRankingEnabled,
@@ -2976,6 +3013,10 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
       }
 
       final scoreStore = await _loadSwitchSourceScoreStoreSafely();
+      final hitCountBySource = await _loadSwitchSourceHitCountsSafely(
+        title: keyword,
+        author: _bookAuthor,
+      );
       final report = await _switchSourceSearchService.search(
         keyword: keyword,
         pageSize: 16,
@@ -2990,6 +3031,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
         currentChapterCount: _chapters.length,
         targetTitle: keyword,
         targetAuthor: _bookAuthor,
+        hitCountBySource: hitCountBySource,
         scoreStore: scoreStore,
         scoreRankingEnabled: _settings.switchSourceScoreRankingEnabled,
       );
@@ -6858,6 +6900,7 @@ class _ReaderSourceSwitchCandidate {
     required this.sourceName,
     required this.baseScore,
     required this.score,
+    required this.hitCount,
     required this.sourceScore,
     required this.bookScore,
     required this.latestChapterLabel,
@@ -6869,6 +6912,7 @@ class _ReaderSourceSwitchCandidate {
   final String sourceName;
   final int baseScore;
   final int score;
+  final int hitCount;
   final int sourceScore;
   final int bookScore;
   final String latestChapterLabel;
@@ -6885,6 +6929,7 @@ class _ReaderSourceSwitchCandidate {
       sourceName: sourceName,
       baseScore: baseScore,
       score: score ?? this.score,
+      hitCount: hitCount,
       sourceScore: sourceScore ?? this.sourceScore,
       bookScore: bookScore ?? this.bookScore,
       latestChapterLabel: latestChapterLabel,

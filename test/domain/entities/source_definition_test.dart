@@ -20,6 +20,9 @@ void main() {
       expect(source.rules.searchRule, isNull);
       expect(source.rules.tocReversed, isFalse);
       expect(source.lastCheckMessage, isNull);
+      expect(source.lastResponseDurationMs, isNull);
+      expect(source.lastResponseStage, isNull);
+      expect(source.stageFailureCounts, isEmpty);
       expect(source.jsCapability, SourceJsCapability.full);
       expect(source.originalSource, isNull);
     });
@@ -55,6 +58,9 @@ void main() {
         lastCheckStatus: SourceHealthStatus.healthy,
         lastCheckedAt: DateTime.parse('2026-01-01T12:00:00.000Z'),
         lastCheckMessage: '连通性测试通过',
+        lastResponseDurationMs: 618,
+        lastResponseStage: 'search',
+        stageFailureCounts: const {'search': 2, 'content': 1},
         comment: 'sample',
         concurrentRate: '1/1000',
         jsLib: 'function decrypt(v){return v;}',
@@ -93,6 +99,10 @@ void main() {
         '2026-01-01T12:00:00.000Z',
       );
       expect(restored.lastCheckMessage, '连通性测试通过');
+      expect(restored.lastResponseDurationMs, 618);
+      expect(restored.lastResponseStage, 'search');
+      expect(restored.stageFailureCounts['search'], 2);
+      expect(restored.stageFailureCounts['content'], 1);
       expect(restored.comment, 'sample');
       expect(restored.concurrentRate, '1/1000');
       expect(restored.jsLib, 'function decrypt(v){return v;}');

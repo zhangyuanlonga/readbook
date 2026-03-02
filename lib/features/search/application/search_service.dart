@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:collection';
 import 'dart:convert';
 import 'dart:math';
@@ -26,6 +27,8 @@ import '../../../domain/entities/book.dart';
 import '../../../domain/entities/search_request_context.dart';
 import '../../../domain/entities/source_definition.dart';
 import '../../../domain/repositories/source_repository.dart';
+import '../../source/application/source_health_metrics_service.dart';
+import 'search_hit_cache_service.dart';
 import 'search_result_parser.dart';
 
 class SourceSearchFailure {
@@ -154,6 +157,8 @@ class SearchService {
     RuleEngine? ruleEngine,
     AppLogger? logger,
     SourceResponseProcessor? responseProcessor,
+    SearchHitCacheService? searchHitCacheService,
+    SourceHealthMetricsService? sourceHealthMetricsService,
     int maxConcurrentSources = 4,
   }) : _sourceRepository =
            sourceRepository ?? SourceRepositoryImpl(AppDatabase.instance),
@@ -169,6 +174,11 @@ class SearchService {
        _logger = logger ?? AppLogger.instance,
        _responseProcessor =
            responseProcessor ?? const SourceResponseProcessor(),
+       _searchHitCacheService =
+           searchHitCacheService ?? SearchHitCacheService(),
+       _sourceHealthMetricsService =
+           sourceHealthMetricsService ??
+           SourceHealthMetricsService(sourceRepository: sourceRepository),
        _maxConcurrentSources = max(1, maxConcurrentSources);
 
   final int _maxConcurrentSources;
@@ -182,6 +192,8 @@ class SearchService {
   final RuleEngine _ruleEngine;
   final AppLogger _logger;
   final SourceResponseProcessor _responseProcessor;
+  final SearchHitCacheService _searchHitCacheService;
+  final SourceHealthMetricsService _sourceHealthMetricsService;
 
   Future<SearchExecutionReport> search({
     required String keyword,
@@ -293,6 +305,13 @@ class SearchService {
           for (final book in report.books) {
             booksById[book.id] = book;
           }
+          unawaited(
+            _sourceHealthMetricsService.recordRequestSuccess(
+              source: source,
+              stage: ErrorStage.search,
+              durationMs: DateTime.now().difference(startAt).inMilliseconds,
+            ),
+          );
 
           _logger.info(
             'Search source success',
@@ -317,6 +336,13 @@ class SearchService {
             debugMessage: error.briefMessage,
           );
           failures.add(failure);
+          unawaited(
+            _sourceHealthMetricsService.recordRequestFailure(
+              source: source,
+              stage: error.stage,
+              durationMs: DateTime.now().difference(startAt).inMilliseconds,
+            ),
+          );
 
           _logger.warn(
             'Search source failed',
@@ -349,6 +375,13 @@ class SearchService {
               stage: exception.stage,
               requestUrl: exception.requestUrl,
               debugMessage: rawDetail.isEmpty ? null : rawDetail,
+            ),
+          );
+          unawaited(
+            _sourceHealthMetricsService.recordRequestFailure(
+              source: source,
+              stage: ErrorStage.search,
+              durationMs: DateTime.now().difference(startAt).inMilliseconds,
             ),
           );
 
@@ -385,6 +418,10 @@ class SearchService {
       sourceOrderById: sourceOrderById,
       aggregateByTitleAuthor: aggregateByTitleAuthor,
     );
+    await _persistSearchHitCache(
+      books: booksById.values,
+      sourceNames: sourceNames,
+    );
 
     if (cancellationToken?.isCancelled ?? false) {
       _logger.info(
@@ -410,6 +447,24 @@ class SearchService {
     );
 
     return finalReport;
+  }
+
+  Future<void> _persistSearchHitCache({
+    required Iterable<Book> books,
+    required Map<String, String> sourceNames,
+  }) async {
+    if (books.isEmpty) {
+      return;
+    }
+
+    try {
+      await _searchHitCacheService.recordBooks(books, sourceNames: sourceNames);
+    } catch (error) {
+      _logger.warn(
+        'Persist search hit cache failed',
+        context: <String, Object?>{'error': error.toString()},
+      );
+    }
   }
 
   SearchExecutionReport _buildExecutionReport({
@@ -782,6 +837,13 @@ class SearchService {
         SourceHealthStatus.healthy,
         summary: successSummary,
       );
+      unawaited(
+        _sourceHealthMetricsService.recordRequestSuccess(
+          source: source,
+          stage: ErrorStage.search,
+          durationMs: DateTime.now().difference(startAt).inMilliseconds,
+        ),
+      );
 
       _logger.info(
         'Source connectivity test success',
@@ -813,6 +875,13 @@ class SearchService {
         source,
         _toHealthStatus(error),
         summary: _toUserReadableMessage(error),
+      );
+      unawaited(
+        _sourceHealthMetricsService.recordRequestFailure(
+          source: source,
+          stage: error.stage,
+          durationMs: DateTime.now().difference(startAt).inMilliseconds,
+        ),
       );
 
       _logger.warn(
@@ -854,6 +923,13 @@ class SearchService {
         SourceHealthStatus.unavailable,
         summary: _toUserReadableMessage(exception),
       );
+      unawaited(
+        _sourceHealthMetricsService.recordRequestFailure(
+          source: source,
+          stage: ErrorStage.search,
+          durationMs: DateTime.now().difference(startAt).inMilliseconds,
+        ),
+      );
 
       _logger.error(
         'Source connectivity test crashed',
@@ -894,29 +970,57 @@ class SearchService {
       );
     }
 
-    final output = await _searchSingleSource(
-      source: source,
-      context: SearchRequestContext(
-        keyword: normalizedKeyword,
-        page: page,
-        pageSize: pageSize,
-        sourceId: source.id,
-      ),
-      validateRules: validateRules,
-      skipInit: skipInit,
-      connectTimeout: connectTimeout,
-      receiveTimeout: receiveTimeout,
-    );
+    final startAt = DateTime.now();
+    try {
+      final output = await _searchSingleSource(
+        source: source,
+        context: SearchRequestContext(
+          keyword: normalizedKeyword,
+          page: page,
+          pageSize: pageSize,
+          sourceId: source.id,
+        ),
+        validateRules: validateRules,
+        skipInit: skipInit,
+        connectTimeout: connectTimeout,
+        receiveTimeout: receiveTimeout,
+      );
+      unawaited(
+        _sourceHealthMetricsService.recordRequestSuccess(
+          source: source,
+          stage: ErrorStage.search,
+          durationMs: DateTime.now().difference(startAt).inMilliseconds,
+        ),
+      );
 
-    return SingleSourceSearchResult(
-      sourceId: source.id,
-      sourceName: source.name,
-      keyword: normalizedKeyword,
-      requestUrl: output.requestUrl,
-      method: output.method,
-      statusCode: output.statusCode,
-      books: output.books,
-    );
+      return SingleSourceSearchResult(
+        sourceId: source.id,
+        sourceName: source.name,
+        keyword: normalizedKeyword,
+        requestUrl: output.requestUrl,
+        method: output.method,
+        statusCode: output.statusCode,
+        books: output.books,
+      );
+    } on AppException catch (error) {
+      unawaited(
+        _sourceHealthMetricsService.recordRequestFailure(
+          source: source,
+          stage: error.stage,
+          durationMs: DateTime.now().difference(startAt).inMilliseconds,
+        ),
+      );
+      rethrow;
+    } catch (_) {
+      unawaited(
+        _sourceHealthMetricsService.recordRequestFailure(
+          source: source,
+          stage: ErrorStage.search,
+          durationMs: DateTime.now().difference(startAt).inMilliseconds,
+        ),
+      );
+      rethrow;
+    }
   }
 
   Future<SearchRequestContext> buildRuntimeContextWithInit({
@@ -1107,6 +1211,8 @@ class SearchService {
             headers: requestHeaders,
             body: requestBody,
             contentType: contentType,
+            webViewDelay: requestSpec.webViewDelay,
+            enabledCookieJar: requestSpec.enabledCookieJar,
             webJs: requestSpec.webJs,
             sourceRegex: requestSpec.sourceRegex,
             stage: stage,
@@ -1149,6 +1255,7 @@ class SearchService {
         responseCharset: requestSpec.responseCharset,
         headers: requestHeaders,
         maxRetries: requestSpec.maxRetries,
+        enabledCookieJar: requestSpec.enabledCookieJar,
         connectTimeout: connectTimeout,
         receiveTimeout: receiveTimeout,
         stage: stage,
@@ -1972,6 +2079,8 @@ class SearchService {
       headers: option.headers,
       maxRetries: option.retry ?? 1,
       useWebView: option.webView,
+      webViewDelay: option.webViewDelay,
+      enabledCookieJar: option.enabledCookieJar ?? false,
       webJs: option.webJs,
       sourceRegex: option.sourceRegex,
     );
@@ -2026,6 +2135,8 @@ class SearchService {
       headers: option.headers,
       maxRetries: option.retry ?? 1,
       useWebView: option.webView,
+      webViewDelay: option.webViewDelay,
+      enabledCookieJar: option.enabledCookieJar ?? false,
       webJs: option.webJs,
       sourceRegex: option.sourceRegex,
     );
@@ -2425,6 +2536,32 @@ class SearchService {
           break;
         case 'webView':
         case 'webview':
+          final resolved = _evaluateLegacyScriptValue(
+            valueExpression,
+            variables,
+          );
+          final parsed = _asNullableBool(resolved);
+          if (parsed != null) {
+            result[key] = parsed;
+          }
+          break;
+        case 'webViewDelay':
+        case 'webviewDelay':
+        case 'web_view_delay':
+          final resolved = _evaluateLegacyScriptValue(
+            valueExpression,
+            variables,
+          );
+          final parsed =
+              int.tryParse((resolved ?? '').toString().trim()) ??
+              int.tryParse(valueExpression.trim());
+          if (parsed != null && parsed >= 0) {
+            result[key] = parsed;
+          }
+          break;
+        case 'enabledCookieJar':
+        case 'enabledcookiejar':
+        case 'enabled_cookie_jar':
           final resolved = _evaluateLegacyScriptValue(
             valueExpression,
             variables,
@@ -3794,6 +3931,8 @@ class _SearchRequestSpec {
     this.headers = const {},
     this.maxRetries = 1,
     this.useWebView = false,
+    this.webViewDelay,
+    this.enabledCookieJar = false,
     this.webJs,
     this.sourceRegex,
   });
@@ -3806,6 +3945,8 @@ class _SearchRequestSpec {
   final Map<String, String> headers;
   final int maxRetries;
   final bool useWebView;
+  final Duration? webViewDelay;
+  final bool enabledCookieJar;
   final String? webJs;
   final String? sourceRegex;
 }

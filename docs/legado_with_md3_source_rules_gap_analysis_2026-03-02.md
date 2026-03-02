@@ -163,10 +163,10 @@
 
 ## P0（先补最影响体验的闭环）
 
-- [ ] 新增“搜索命中缓存表”（按 `title+author+sourceId` 存储最近命中），用于换源快速候选。
-- [ ] 换源候选排序加入“命中次数/源评分/最新章节完整度”综合分。
-- [ ] 书源健康指标增加响应时长与阶段失败计数持久化。
-- [ ] URL 选项补齐 `webViewDelay`、`enabledCookieJar` 的解析与请求链透传。
+- [x] 新增“搜索命中缓存表”（按 `title+author+sourceId` 存储最近命中），用于换源快速候选。
+- [x] 换源候选排序加入“命中次数/源评分/最新章节完整度”综合分（已接入命中次数 + 源评分 + 书评分；“完整度”仍沿用现有最新章节启发式判定，后续可再补持久化完整度指标）。
+- [x] 书源健康指标增加响应时长与阶段失败计数持久化（已新增 `lastResponseDurationMs`、`lastResponseStage`、`stageFailureCounts` 并接入搜索/详情/目录/正文请求链路写入）。
+- [x] URL 选项补齐 `webViewDelay`、`enabledCookieJar` 的解析与请求链透传（已打通 `UrlOption -> RequestContext/WebViewPayload -> HTTP/WebView`，并补充 cookie 复用与延迟执行）。
 - [ ] 补一组 Legado 对照回归样本（搜索、目录、正文、换源）。
 
 ## P1（能力对齐）

@@ -2171,7 +2171,7 @@ url+so+JSON.stringify(post)
           baseUrl: 'https://example.com',
           rules: const SourceRuleSet(
             searchRule:
-                '/search,{"webView":true,"webJs":"window.__x=1;","sourceRegex":"cdn\\\\.example\\\\.com"}',
+                '/search,{"webView":true,"webViewDelay":1500,"enabledCookieJar":true,"webJs":"window.__x=1;","sourceRegex":"cdn\\\\.example\\\\.com"}',
             searchListRule: '.item@html',
             searchTitleRule: '.name@text',
             searchDetailUrlRule: '.name@href',
@@ -2187,6 +2187,11 @@ url+so+JSON.stringify(post)
 
       expect(report.books, hasLength(1));
       expect(webViewExecutor.callCount, 1);
+      expect(
+        webViewExecutor.lastRequest?.webViewDelay,
+        const Duration(milliseconds: 1500),
+      );
+      expect(webViewExecutor.lastRequest?.enabledCookieJar, isTrue);
       expect(webViewExecutor.lastRequest?.webJs, 'window.__x=1;');
       expect(webViewExecutor.lastRequest?.sourceRegex, r'cdn\.example\.com');
     });
@@ -2450,7 +2455,7 @@ url+so+JSON.stringify(post)
     });
 
     test(
-      'splits aggregation when same title+author has conflicting intro and latest chapter',
+      'keeps strict aggregation by title+author even when intro/latest chapter conflict',
       () async {
         final server = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
         server.listen((request) async {
@@ -2523,10 +2528,9 @@ url+so+JSON.stringify(post)
           aggregateByTitleAuthor: true,
         );
 
-        expect(report.books, hasLength(2));
-        for (final book in report.books) {
-          expect(report.sourceHitCountOf(book), 1);
-        }
+        expect(report.books, hasLength(1));
+        expect(report.books.first.title, '长夜余火');
+        expect(report.sourceHitCountOf(report.books.first), 2);
 
         await server.close(force: true);
       },

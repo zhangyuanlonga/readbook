@@ -19,6 +19,7 @@ class RequestContext {
     this.stage = ErrorStage.search,
     this.sourceId,
     this.sourceConcurrentRate,
+    this.enabledCookieJar = false,
   });
 
   final String url;
@@ -36,6 +37,7 @@ class RequestContext {
   final ErrorStage stage;
   final String? sourceId;
   final String? sourceConcurrentRate;
+  final bool enabledCookieJar;
 
   bool shouldRetryStatusCode(int statusCode) {
     return retryStatusCodes.contains(statusCode);

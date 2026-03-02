@@ -95,6 +95,27 @@ class StoredLocalChapters extends Table {
   ];
 }
 
+class SearchSourceHits extends Table {
+  TextColumn get titleNorm => text()();
+  TextColumn get authorNorm => text()();
+  TextColumn get sourceId => text()();
+  TextColumn get sourceName => text().withDefault(const Constant(''))();
+  TextColumn get title => text().withDefault(const Constant(''))();
+  TextColumn get author => text().nullable()();
+  TextColumn get latestChapter => text().nullable()();
+  IntColumn get latestChapterNo => integer().nullable()();
+  IntColumn get hitCount => integer().withDefault(const Constant(0))();
+  DateTimeColumn get lastHitAt => dateTime().withDefault(currentDateAndTime)();
+  DateTimeColumn get createdAt => dateTime().withDefault(currentDateAndTime)();
+  DateTimeColumn get updatedAt => dateTime().withDefault(currentDateAndTime)();
+
+  @override
+  String get tableName => 'search_source_hits';
+
+  @override
+  Set<Column<Object>> get primaryKey => {titleNorm, authorNorm, sourceId};
+}
+
 class SourceListCountSummary {
   const SourceListCountSummary({
     required this.totalCount,
@@ -149,8 +170,38 @@ class ChapterCacheBookSummary {
   final DateTime updatedAt;
 }
 
+class SearchSourceHitUpsert {
+  const SearchSourceHitUpsert({
+    required this.titleNorm,
+    required this.authorNorm,
+    required this.sourceId,
+    required this.sourceName,
+    required this.title,
+    this.author,
+    this.latestChapter,
+    this.latestChapterNo,
+    this.hitIncrement = 1,
+  });
+
+  final String titleNorm;
+  final String authorNorm;
+  final String sourceId;
+  final String sourceName;
+  final String title;
+  final String? author;
+  final String? latestChapter;
+  final int? latestChapterNo;
+  final int hitIncrement;
+}
+
 @DriftDatabase(
-  tables: [Sources, ChapterCaches, StoredLocalBooks, StoredLocalChapters],
+  tables: [
+    Sources,
+    ChapterCaches,
+    StoredLocalBooks,
+    StoredLocalChapters,
+    SearchSourceHits,
+  ],
 )
 class AppDatabase extends _$AppDatabase {
   AppDatabase({QueryExecutor? executor}) : super(executor ?? _openConnection());
@@ -158,7 +209,7 @@ class AppDatabase extends _$AppDatabase {
   static final AppDatabase instance = AppDatabase();
 
   @override
-  int get schemaVersion => 4;
+  int get schemaVersion => 5;
 
   static const String _mangaSourceMatcherSql =
       '(raw_json LIKE \'%"sourceType":2,%\' OR '
@@ -180,6 +231,9 @@ class AppDatabase extends _$AppDatabase {
         }
         if (from < 4) {
           // rulesJson stores serialized SourceRuleSet; no table migration required.
+        }
+        if (from < 5) {
+          await migrator.createTable(searchSourceHits);
         }
       },
     );
@@ -527,6 +581,121 @@ class AppDatabase extends _$AppDatabase {
         .whereType<String>()
         .toSet();
   }
+
+  Future<void> upsertSearchSourceHits(List<SearchSourceHitUpsert> items) async {
+    if (items.isEmpty) {
+      return;
+    }
+
+    await transaction(() async {
+      for (final item in items) {
+        final normalizedTitleNorm = item.titleNorm.trim();
+        final normalizedAuthorNorm = item.authorNorm.trim();
+        final normalizedSourceId = item.sourceId.trim();
+        final normalizedSourceName = item.sourceName.trim();
+        final normalizedTitle = item.title.trim();
+        final normalizedAuthor = _nullableString(item.author);
+        final normalizedLatestChapter = _nullableString(item.latestChapter);
+        final increment = item.hitIncrement <= 0 ? 1 : item.hitIncrement;
+
+        if (normalizedTitleNorm.isEmpty || normalizedSourceId.isEmpty) {
+          continue;
+        }
+
+        final now = DateTime.now();
+        final existing =
+            await (select(searchSourceHits)..where(
+              (table) =>
+                  table.titleNorm.equals(normalizedTitleNorm) &
+                  table.authorNorm.equals(normalizedAuthorNorm) &
+                  table.sourceId.equals(normalizedSourceId),
+            )).getSingleOrNull();
+
+        if (existing == null) {
+          await into(searchSourceHits).insert(
+            SearchSourceHitsCompanion(
+              titleNorm: Value(normalizedTitleNorm),
+              authorNorm: Value(normalizedAuthorNorm),
+              sourceId: Value(normalizedSourceId),
+              sourceName: Value(
+                normalizedSourceName.isEmpty
+                    ? normalizedSourceId
+                    : normalizedSourceName,
+              ),
+              title: Value(
+                normalizedTitle.isEmpty ? normalizedTitleNorm : normalizedTitle,
+              ),
+              author: Value(normalizedAuthor),
+              latestChapter: Value(normalizedLatestChapter),
+              latestChapterNo: Value(item.latestChapterNo),
+              hitCount: Value(increment),
+              lastHitAt: Value(now),
+              createdAt: Value(now),
+              updatedAt: Value(now),
+            ),
+          );
+          continue;
+        }
+
+        await (update(searchSourceHits)..where(
+          (table) =>
+              table.titleNorm.equals(normalizedTitleNorm) &
+              table.authorNorm.equals(normalizedAuthorNorm) &
+              table.sourceId.equals(normalizedSourceId),
+        )).write(
+          SearchSourceHitsCompanion(
+            sourceName: Value(
+              normalizedSourceName.isEmpty
+                  ? existing.sourceName
+                  : normalizedSourceName,
+            ),
+            title: Value(
+              normalizedTitle.isEmpty ? existing.title : normalizedTitle,
+            ),
+            author: Value(normalizedAuthor),
+            latestChapter: Value(normalizedLatestChapter),
+            latestChapterNo: Value(item.latestChapterNo),
+            hitCount: Value(existing.hitCount + increment),
+            lastHitAt: Value(now),
+            updatedAt: Value(now),
+          ),
+        );
+      }
+    });
+  }
+
+  Future<Map<String, int>> getSearchSourceHitCounts({
+    required String titleNorm,
+    required String authorNorm,
+  }) async {
+    final normalizedTitleNorm = titleNorm.trim();
+    final normalizedAuthorNorm = authorNorm.trim();
+    if (normalizedTitleNorm.isEmpty) {
+      return <String, int>{};
+    }
+
+    final rows =
+        await (select(searchSourceHits)..where(
+          (table) =>
+              table.titleNorm.equals(normalizedTitleNorm) &
+              table.authorNorm.equals(normalizedAuthorNorm),
+        )).get();
+
+    final result = <String, int>{};
+    for (final row in rows) {
+      final sourceId = row.sourceId.trim();
+      if (sourceId.isEmpty) {
+        continue;
+      }
+      final count = row.hitCount < 0 ? 0 : row.hitCount;
+      if (count > 0) {
+        result[sourceId] = count;
+      }
+    }
+    return result;
+  }
+
+  Future<void> clearSearchSourceHits() => delete(searchSourceHits).go();
 
   int _decodeCount(Object? value) {
     if (value is int) {
@@ -905,6 +1074,15 @@ class AppDatabase extends _$AppDatabase {
       lastCheckStatus: status,
       lastCheckedAt: row.lastCheckedAt,
       lastCheckMessage: _nullableString(raw['lastCheckMessage']),
+      lastResponseDurationMs:
+          _decodeInt(raw['lastResponseDurationMs']) ??
+          _decodeInt(originalSource?['lastResponseDurationMs']),
+      lastResponseStage:
+          _nullableString(raw['lastResponseStage']) ??
+          _nullableString(originalSource?['lastResponseStage']),
+      stageFailureCounts: _decodeStringIntMap(
+        raw['stageFailureCounts'] ?? originalSource?['stageFailureCounts'],
+      ),
       exploreEnabled: exploreEnabled,
       exploreUrl: exploreUrl,
       jsCapability: jsCapability,
@@ -1075,6 +1253,26 @@ class AppDatabase extends _$AppDatabase {
     }
 
     return value.map((key, item) => MapEntry(key.toString(), item));
+  }
+
+  Map<String, int> _decodeStringIntMap(Object? value) {
+    if (value is! Map) {
+      return const <String, int>{};
+    }
+
+    final result = <String, int>{};
+    for (final entry in value.entries) {
+      final key = entry.key.toString().trim();
+      if (key.isEmpty) {
+        continue;
+      }
+      final decoded = _decodeInt(entry.value);
+      if (decoded == null || decoded < 0) {
+        continue;
+      }
+      result[key] = decoded;
+    }
+    return result;
   }
 
   String? _nullableString(Object? value) {

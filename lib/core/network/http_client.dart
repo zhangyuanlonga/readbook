@@ -52,6 +52,8 @@ class AppHttpClient {
   final Duration _defaultConnectTimeout;
   final Duration _defaultReceiveTimeout;
   final Map<String, String> _defaultHeaders;
+  final Map<String, Map<String, String>> _cookieStoreByHost =
+      <String, Map<String, String>>{};
 
   Future<HttpResponsePayload> get(RequestContext context) async {
     final totalAttempts = context.maxRetries + 1;
@@ -128,6 +130,7 @@ class AppHttpClient {
       ..._defaultHeaders,
       ...context.headers,
     };
+    _applyCookieHeader(context: context, headers: mergedHeaders);
 
     if (context.contentType != null && context.contentType!.trim().isNotEmpty) {
       mergedHeaders['Content-Type'] = context.contentType!;
@@ -159,10 +162,112 @@ class AppHttpClient {
               (statusCode) => statusCode != null && statusCode < 600,
         ),
       );
+      _storeResponseCookies(context: context, headers: response.headers.map);
       return _Success(response);
     } on DioException catch (error) {
       return _Failure(error);
     }
+  }
+
+  void _applyCookieHeader({
+    required RequestContext context,
+    required Map<String, String> headers,
+  }) {
+    if (!context.enabledCookieJar) {
+      return;
+    }
+    final hasCookieHeader = headers.keys.any(
+      (key) => key.toLowerCase() == 'cookie',
+    );
+    if (hasCookieHeader) {
+      return;
+    }
+
+    final host = _resolveCookieHost(context.url);
+    if (host.isEmpty) {
+      return;
+    }
+    final bucket = _cookieStoreByHost[host];
+    if (bucket == null || bucket.isEmpty) {
+      return;
+    }
+
+    headers['Cookie'] = bucket.entries
+        .map((entry) => '${entry.key}=${entry.value}')
+        .join('; ');
+  }
+
+  void _storeResponseCookies({
+    required RequestContext context,
+    required Map<String, List<String>> headers,
+  }) {
+    if (!context.enabledCookieJar) {
+      return;
+    }
+
+    final host = _resolveCookieHost(context.url);
+    if (host.isEmpty) {
+      return;
+    }
+
+    final setCookieValues = <String>[];
+    for (final entry in headers.entries) {
+      if (entry.key.toLowerCase() == 'set-cookie') {
+        setCookieValues.addAll(entry.value);
+      }
+    }
+    if (setCookieValues.isEmpty) {
+      return;
+    }
+
+    final bucket = _cookieStoreByHost.putIfAbsent(
+      host,
+      () => <String, String>{},
+    );
+
+    for (final rawCookie in setCookieValues) {
+      final pair = _parseSetCookiePair(rawCookie);
+      if (pair == null) {
+        continue;
+      }
+      if (pair.$2.isEmpty) {
+        bucket.remove(pair.$1);
+      } else {
+        bucket[pair.$1] = pair.$2;
+      }
+    }
+  }
+
+  String _resolveCookieHost(String requestUrl) {
+    final uri = Uri.tryParse(requestUrl.trim());
+    if (uri == null || uri.host.trim().isEmpty) {
+      return '';
+    }
+    return uri.host.toLowerCase();
+  }
+
+  (String, String)? _parseSetCookiePair(String rawCookie) {
+    final normalized = rawCookie.trim();
+    if (normalized.isEmpty) {
+      return null;
+    }
+
+    final firstPart = normalized.split(';').first.trim();
+    if (firstPart.isEmpty) {
+      return null;
+    }
+
+    final separator = firstPart.indexOf('=');
+    if (separator <= 0) {
+      return null;
+    }
+
+    final key = firstPart.substring(0, separator).trim();
+    final value = firstPart.substring(separator + 1).trim();
+    if (key.isEmpty) {
+      return null;
+    }
+    return (key, value);
   }
 
   String _decodeResponseBody({

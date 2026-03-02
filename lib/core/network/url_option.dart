@@ -11,6 +11,8 @@ class UrlOption {
     this.contentType,
     this.retry,
     this.webView = false,
+    this.webViewDelay,
+    this.enabledCookieJar,
     this.webJs,
     this.sourceRegex,
   });
@@ -22,6 +24,8 @@ class UrlOption {
   final String? contentType;
   final int? retry;
   final bool webView;
+  final Duration? webViewDelay;
+  final bool? enabledCookieJar;
   final String? webJs;
   final String? sourceRegex;
 
@@ -45,6 +49,16 @@ class UrlOption {
     final retry = _asNullableInt(options['retry']);
     final webView =
         _asNullableBool(options['webView'] ?? options['webview']) ?? false;
+    final webViewDelayMs = _asNullableInt(
+      options['webViewDelay'] ??
+          options['webviewDelay'] ??
+          options['web_view_delay'],
+    );
+    final enabledCookieJar = _asNullableBool(
+      options['enabledCookieJar'] ??
+          options['enabledcookiejar'] ??
+          options['enabled_cookie_jar'],
+    );
     final webJs = _asNullableString(
       options['webJs'] ?? options['webjs'] ?? options['js'],
     );
@@ -62,6 +76,11 @@ class UrlOption {
       contentType: contentType,
       retry: retry,
       webView: webView,
+      webViewDelay:
+          webViewDelayMs == null || webViewDelayMs < 0
+              ? null
+              : Duration(milliseconds: webViewDelayMs),
+      enabledCookieJar: enabledCookieJar,
       webJs: webJs,
       sourceRegex: sourceRegex,
     );

@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 
 import '../../../core/errors/app_exception.dart';
@@ -25,6 +26,7 @@ import '../../../data/repositories/source_repository_impl.dart';
 import '../../../domain/entities/search_request_context.dart';
 import '../../../domain/entities/source_definition.dart';
 import '../../../domain/repositories/source_repository.dart';
+import '../../source/application/source_health_metrics_service.dart';
 import 'content_text_cleaner.dart';
 
 class ChapterContentResult {
@@ -56,6 +58,7 @@ class ChapterContentService {
     AppLogger? logger,
     UrlTemplateResolver? urlTemplateResolver,
     SourceResponseProcessor? responseProcessor,
+    SourceHealthMetricsService? sourceHealthMetricsService,
   }) : _database = database ?? AppDatabase.instance,
        _sourceRepository =
            sourceRepository ??
@@ -72,7 +75,10 @@ class ChapterContentService {
        _urlTemplateResolver =
            urlTemplateResolver ?? const UrlTemplateResolver(),
        _responseProcessor =
-           responseProcessor ?? const SourceResponseProcessor();
+           responseProcessor ?? const SourceResponseProcessor(),
+       _sourceHealthMetricsService =
+           sourceHealthMetricsService ??
+           SourceHealthMetricsService(sourceRepository: sourceRepository);
 
   final AppDatabase _database;
   final SourceRepository _sourceRepository;
@@ -85,6 +91,7 @@ class ChapterContentService {
   final AppLogger _logger;
   final UrlTemplateResolver _urlTemplateResolver;
   final SourceResponseProcessor _responseProcessor;
+  final SourceHealthMetricsService _sourceHealthMetricsService;
 
   static final Map<String, String> _chapterCache = <String, String>{};
   static const String _imageCachePrefix = '__appread_image_payload__:';
@@ -1193,6 +1200,8 @@ class ChapterContentService {
       responseCharset: option.responseCharset,
       maxRetries: option.retry ?? 1,
       useWebView: option.webView,
+      webViewDelay: option.webViewDelay,
+      enabledCookieJar: option.enabledCookieJar ?? false,
       webJs: option.webJs,
       sourceRegex: option.sourceRegex,
     );
@@ -1759,6 +1768,7 @@ class ChapterContentService {
     required ErrorStage stage,
     required String sourceId,
   }) async {
+    final startedAt = DateTime.now();
     if (requestSpec.useWebView) {
       try {
         final webViewResponse = await _webViewExecutor.load(
@@ -1768,6 +1778,8 @@ class ChapterContentService {
             headers: requestHeaders,
             body: requestBody,
             contentType: contentType,
+            webViewDelay: requestSpec.webViewDelay,
+            enabledCookieJar: requestSpec.enabledCookieJar,
             webJs: requestSpec.webJs,
             sourceRegex: requestSpec.sourceRegex,
             stage: stage,
@@ -1780,6 +1792,13 @@ class ChapterContentService {
             requestSpec.sourceRegex != null &&
             requestSpec.sourceRegex!.trim().isNotEmpty &&
             matchedResourceUrl.isNotEmpty;
+        unawaited(
+          _sourceHealthMetricsService.recordRequestSuccess(
+            source: source,
+            stage: stage,
+            durationMs: DateTime.now().difference(startedAt).inMilliseconds,
+          ),
+        );
         return _NetworkLoadResult(
           statusCode: webViewResponse.statusCode,
           body:
@@ -1801,24 +1820,52 @@ class ChapterContentService {
       }
     }
 
-    final response = await _httpClient.get(
-      RequestContext(
-        url: requestUrl,
-        method: requestSpec.method,
-        body: requestBody,
-        contentType: contentType,
-        responseCharset: requestSpec.responseCharset,
-        headers: requestHeaders,
-        maxRetries: requestSpec.maxRetries,
-        stage: stage,
-        sourceId: sourceId,
-        sourceConcurrentRate: source.concurrentRate,
-      ),
-    );
-    return _NetworkLoadResult(
-      statusCode: response.statusCode,
-      body: response.body,
-    );
+    try {
+      final response = await _httpClient.get(
+        RequestContext(
+          url: requestUrl,
+          method: requestSpec.method,
+          body: requestBody,
+          contentType: contentType,
+          responseCharset: requestSpec.responseCharset,
+          headers: requestHeaders,
+          maxRetries: requestSpec.maxRetries,
+          enabledCookieJar: requestSpec.enabledCookieJar,
+          stage: stage,
+          sourceId: sourceId,
+          sourceConcurrentRate: source.concurrentRate,
+        ),
+      );
+      unawaited(
+        _sourceHealthMetricsService.recordRequestSuccess(
+          source: source,
+          stage: stage,
+          durationMs: DateTime.now().difference(startedAt).inMilliseconds,
+        ),
+      );
+      return _NetworkLoadResult(
+        statusCode: response.statusCode,
+        body: response.body,
+      );
+    } on AppException {
+      unawaited(
+        _sourceHealthMetricsService.recordRequestFailure(
+          source: source,
+          stage: stage,
+          durationMs: DateTime.now().difference(startedAt).inMilliseconds,
+        ),
+      );
+      rethrow;
+    } catch (_) {
+      unawaited(
+        _sourceHealthMetricsService.recordRequestFailure(
+          source: source,
+          stage: stage,
+          durationMs: DateTime.now().difference(startedAt).inMilliseconds,
+        ),
+      );
+      rethrow;
+    }
   }
 
   Object? _resolveBodyTemplate(
@@ -2993,6 +3040,8 @@ class _ContentRequestSpec {
     this.responseCharset,
     this.maxRetries = 1,
     this.useWebView = false,
+    this.webViewDelay,
+    this.enabledCookieJar = false,
     this.webJs,
     this.sourceRegex,
   });
@@ -3005,6 +3054,8 @@ class _ContentRequestSpec {
   final String? responseCharset;
   final int maxRetries;
   final bool useWebView;
+  final Duration? webViewDelay;
+  final bool enabledCookieJar;
   final String? webJs;
   final String? sourceRegex;
 }

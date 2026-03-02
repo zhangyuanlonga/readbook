@@ -6,7 +6,7 @@ void main() {
   group('UrlOptionParser', () {
     test('parses url with option object', () {
       final parsed = UrlOptionParser.parseRule(
-        'https://example.com/search,{"method":"POST","body":"k=v","charset":"GBK","retry":2,"webView":true}',
+        'https://example.com/search,{"method":"POST","body":"k=v","charset":"GBK","retry":2,"webView":true,"webViewDelay":1800,"enabledCookieJar":true}',
       );
 
       expect(parsed, isNotNull);
@@ -16,6 +16,8 @@ void main() {
       expect(parsed.options.responseCharset, 'GBK');
       expect(parsed.options.retry, 2);
       expect(parsed.options.webView, isTrue);
+      expect(parsed.options.webViewDelay, const Duration(milliseconds: 1800));
+      expect(parsed.options.enabledCookieJar, isTrue);
     });
 
     test('supports pseudo json single quotes', () {

@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 
 import '../../../core/errors/app_exception.dart';
@@ -26,6 +27,7 @@ import '../../../domain/entities/chapter.dart';
 import '../../../domain/entities/search_request_context.dart';
 import '../../../domain/entities/source_definition.dart';
 import '../../../domain/repositories/source_repository.dart';
+import '../../source/application/source_health_metrics_service.dart';
 
 class BookDetailLoadResult {
   const BookDetailLoadResult({
@@ -53,6 +55,7 @@ class BookDetailService {
     RuleEngine? ruleEngine,
     UrlTemplateResolver? urlTemplateResolver,
     SourceResponseProcessor? responseProcessor,
+    SourceHealthMetricsService? sourceHealthMetricsService,
   }) : _sourceRepository =
            sourceRepository ?? SourceRepositoryImpl(AppDatabase.instance),
        _httpClient = httpClient ?? AppHttpClient(),
@@ -65,7 +68,10 @@ class BookDetailService {
        _urlTemplateResolver =
            urlTemplateResolver ?? const UrlTemplateResolver(),
        _responseProcessor =
-           responseProcessor ?? const SourceResponseProcessor();
+           responseProcessor ?? const SourceResponseProcessor(),
+       _sourceHealthMetricsService =
+           sourceHealthMetricsService ??
+           SourceHealthMetricsService(sourceRepository: sourceRepository);
 
   final SourceRepository _sourceRepository;
   final AppHttpClient _httpClient;
@@ -75,6 +81,7 @@ class BookDetailService {
   final RuleEngine _ruleEngine;
   final UrlTemplateResolver _urlTemplateResolver;
   final SourceResponseProcessor _responseProcessor;
+  final SourceHealthMetricsService _sourceHealthMetricsService;
 
   static final Map<String, List<Chapter>> _tocCache = <String, List<Chapter>>{};
 
@@ -632,6 +639,7 @@ class BookDetailService {
     required String? contentType,
     required Map<String, String> requestHeaders,
   }) async {
+    final startedAt = DateTime.now();
     if (requestSpec.useWebView) {
       try {
         final webViewResponse = await _webViewExecutor.load(
@@ -641,6 +649,8 @@ class BookDetailService {
             headers: requestHeaders,
             body: requestBody,
             contentType: contentType,
+            webViewDelay: requestSpec.webViewDelay,
+            enabledCookieJar: requestSpec.enabledCookieJar,
             webJs: requestSpec.webJs,
             sourceRegex: requestSpec.sourceRegex,
             stage: stage,
@@ -653,6 +663,13 @@ class BookDetailService {
             requestSpec.sourceRegex != null &&
             requestSpec.sourceRegex!.trim().isNotEmpty &&
             matchedResourceUrl.isNotEmpty;
+        unawaited(
+          _sourceHealthMetricsService.recordRequestSuccess(
+            source: source,
+            stage: stage,
+            durationMs: DateTime.now().difference(startedAt).inMilliseconds,
+          ),
+        );
         return _NetworkLoadResult(
           statusCode: webViewResponse.statusCode,
           body:
@@ -674,24 +691,52 @@ class BookDetailService {
       }
     }
 
-    final response = await _httpClient.get(
-      RequestContext(
-        url: requestUrl,
-        method: requestSpec.method,
-        body: requestBody,
-        contentType: contentType,
-        responseCharset: requestSpec.responseCharset,
-        headers: requestHeaders,
-        maxRetries: requestSpec.maxRetries,
-        stage: stage,
-        sourceId: source.id,
-        sourceConcurrentRate: source.concurrentRate,
-      ),
-    );
-    return _NetworkLoadResult(
-      statusCode: response.statusCode,
-      body: response.body,
-    );
+    try {
+      final response = await _httpClient.get(
+        RequestContext(
+          url: requestUrl,
+          method: requestSpec.method,
+          body: requestBody,
+          contentType: contentType,
+          responseCharset: requestSpec.responseCharset,
+          headers: requestHeaders,
+          maxRetries: requestSpec.maxRetries,
+          enabledCookieJar: requestSpec.enabledCookieJar,
+          stage: stage,
+          sourceId: source.id,
+          sourceConcurrentRate: source.concurrentRate,
+        ),
+      );
+      unawaited(
+        _sourceHealthMetricsService.recordRequestSuccess(
+          source: source,
+          stage: stage,
+          durationMs: DateTime.now().difference(startedAt).inMilliseconds,
+        ),
+      );
+      return _NetworkLoadResult(
+        statusCode: response.statusCode,
+        body: response.body,
+      );
+    } on AppException {
+      unawaited(
+        _sourceHealthMetricsService.recordRequestFailure(
+          source: source,
+          stage: stage,
+          durationMs: DateTime.now().difference(startedAt).inMilliseconds,
+        ),
+      );
+      rethrow;
+    } catch (_) {
+      unawaited(
+        _sourceHealthMetricsService.recordRequestFailure(
+          source: source,
+          stage: stage,
+          durationMs: DateTime.now().difference(startedAt).inMilliseconds,
+        ),
+      );
+      rethrow;
+    }
   }
 
   _DetailParseRules _buildDetailRules(SourceDefinition source) {
@@ -2452,6 +2497,8 @@ class BookDetailService {
       headers: option.headers,
       maxRetries: option.retry ?? 1,
       useWebView: option.webView,
+      webViewDelay: option.webViewDelay,
+      enabledCookieJar: option.enabledCookieJar ?? false,
       webJs: option.webJs,
       sourceRegex: option.sourceRegex,
     );
@@ -2950,6 +2997,8 @@ class _SearchRequestSpec {
     this.headers = const {},
     this.maxRetries = 1,
     this.useWebView = false,
+    this.webViewDelay,
+    this.enabledCookieJar = false,
     this.webJs,
     this.sourceRegex,
   });
@@ -2962,6 +3011,8 @@ class _SearchRequestSpec {
   final Map<String, String> headers;
   final int maxRetries;
   final bool useWebView;
+  final Duration? webViewDelay;
+  final bool enabledCookieJar;
   final String? webJs;
   final String? sourceRegex;
 }

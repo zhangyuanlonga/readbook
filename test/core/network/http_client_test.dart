@@ -158,6 +158,37 @@ void main() {
 
       await server.close(force: true);
     });
+
+    test('reuses cookies when enabledCookieJar is true', () async {
+      var requestCount = 0;
+      String? secondRequestCookie;
+
+      final server = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
+      server.listen((request) async {
+        requestCount += 1;
+        if (requestCount == 1) {
+          request.response.headers.add('set-cookie', 'sid=abc123; Path=/');
+          request.response
+            ..statusCode = 200
+            ..write('seed');
+        } else {
+          secondRequestCookie = request.headers.value('cookie');
+          request.response
+            ..statusCode = 200
+            ..write('ok');
+        }
+        await request.response.close();
+      });
+
+      final client = AppHttpClient();
+      final baseUrl = 'http://${server.address.host}:${server.port}/cookie';
+      await client.get(RequestContext(url: baseUrl, enabledCookieJar: true));
+      await client.get(RequestContext(url: baseUrl, enabledCookieJar: true));
+
+      expect(secondRequestCookie, contains('sid=abc123'));
+
+      await server.close(force: true);
+    });
   });
 }
 

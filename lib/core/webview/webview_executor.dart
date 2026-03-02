@@ -16,6 +16,8 @@ class WebViewRequestPayload {
     this.body,
     this.contentType,
     this.html,
+    this.webViewDelay,
+    this.enabledCookieJar = false,
     this.webJs,
     this.sourceRegex,
     this.overrideUrlRegex,
@@ -30,6 +32,8 @@ class WebViewRequestPayload {
   final Object? body;
   final String? contentType;
   final String? html;
+  final Duration? webViewDelay;
+  final bool enabledCookieJar;
   final String? webJs;
   final String? sourceRegex;
   final String? overrideUrlRegex;
@@ -174,6 +178,8 @@ class WebViewExecutor {
         body: request.body,
         contentType: request.contentType,
         html: request.html,
+        webViewDelay: request.webViewDelay,
+        enabledCookieJar: request.enabledCookieJar,
         webJs: request.webJs,
         sourceRegex: request.sourceRegex,
         overrideUrlRegex: request.overrideUrlRegex,
@@ -478,6 +484,13 @@ class _HeadlessWebViewSession implements WebViewSession {
         }
 
         try {
+          final webViewDelay = activeLoad.request.webViewDelay;
+          if (webViewDelay != null &&
+              webViewDelay.inMilliseconds > 0 &&
+              !activeLoad.completer.isCompleted) {
+            await Future<void>.delayed(webViewDelay);
+          }
+
           String? scriptResult;
           final webJs = activeLoad.request.webJs?.trim();
           if (webJs != null && webJs.isNotEmpty) {
