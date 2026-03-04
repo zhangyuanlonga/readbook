@@ -311,9 +311,6 @@ class SourceDefinition {
     this.lastCheckStatus = SourceHealthStatus.unknown,
     this.lastCheckedAt,
     this.lastCheckMessage,
-    this.lastResponseDurationMs,
-    this.lastResponseStage,
-    Map<String, int> stageFailureCounts = const {},
     this.comment,
     this.exploreEnabled = false,
     this.exploreUrl,
@@ -322,9 +319,6 @@ class SourceDefinition {
     this.jsCapability = SourceJsCapability.full,
     Map<String, dynamic>? originalSource,
   }) : headers = Map.unmodifiable({...headers}),
-       stageFailureCounts = Map.unmodifiable(
-         _normalizeStageFailureCounts(stageFailureCounts),
-       ),
        originalSource = _deepCopyMap(originalSource);
 
   final String id;
@@ -338,9 +332,6 @@ class SourceDefinition {
   final SourceHealthStatus lastCheckStatus;
   final DateTime? lastCheckedAt;
   final String? lastCheckMessage;
-  final int? lastResponseDurationMs;
-  final String? lastResponseStage;
-  final Map<String, int> stageFailureCounts;
   final String? comment;
   final bool exploreEnabled;
   final String? exploreUrl;
@@ -385,11 +376,6 @@ class SourceDefinition {
     bool clearLastCheckedAt = false,
     String? lastCheckMessage,
     bool clearLastCheckMessage = false,
-    int? lastResponseDurationMs,
-    bool clearLastResponseDurationMs = false,
-    String? lastResponseStage,
-    bool clearLastResponseStage = false,
-    Map<String, int>? stageFailureCounts,
     String? comment,
     bool clearComment = false,
     bool? exploreEnabled,
@@ -419,15 +405,6 @@ class SourceDefinition {
           clearLastCheckMessage
               ? null
               : (lastCheckMessage ?? this.lastCheckMessage),
-      lastResponseDurationMs:
-          clearLastResponseDurationMs
-              ? null
-              : (lastResponseDurationMs ?? this.lastResponseDurationMs),
-      lastResponseStage:
-          clearLastResponseStage
-              ? null
-              : (lastResponseStage ?? this.lastResponseStage),
-      stageFailureCounts: stageFailureCounts ?? this.stageFailureCounts,
       comment: clearComment ? null : (comment ?? this.comment),
       exploreEnabled: exploreEnabled ?? this.exploreEnabled,
       exploreUrl: clearExploreUrl ? null : (exploreUrl ?? this.exploreUrl),
@@ -453,9 +430,6 @@ class SourceDefinition {
       'lastCheckStatus': lastCheckStatus.name,
       'lastCheckedAt': lastCheckedAt?.toIso8601String(),
       'lastCheckMessage': lastCheckMessage,
-      'lastResponseDurationMs': lastResponseDurationMs,
-      'lastResponseStage': lastResponseStage,
-      'stageFailureCounts': stageFailureCounts,
       'comment': comment,
       'exploreEnabled': exploreEnabled,
       'exploreUrl': exploreUrl,
@@ -490,9 +464,6 @@ class SourceDefinition {
       lastCheckStatus: _parseStatus(json['lastCheckStatus']),
       lastCheckedAt: _parseDateTime(json['lastCheckedAt']),
       lastCheckMessage: _nullableString(json['lastCheckMessage']),
-      lastResponseDurationMs: _asInt(json['lastResponseDurationMs']),
-      lastResponseStage: _nullableString(json['lastResponseStage']),
-      stageFailureCounts: _parseStageFailureCounts(json['stageFailureCounts']),
       comment: _nullableString(json['comment']),
       exploreEnabled: _asBool(json['exploreEnabled']) ?? false,
       exploreUrl: _nullableString(json['exploreUrl']),
@@ -552,44 +523,6 @@ class SourceDefinition {
       return int.tryParse(value.trim());
     }
     return null;
-  }
-
-  static Map<String, int> _parseStageFailureCounts(Object? value) {
-    if (value is! Map) {
-      return const <String, int>{};
-    }
-
-    final counts = <String, int>{};
-    for (final entry in value.entries) {
-      final key = entry.key.toString().trim();
-      if (key.isEmpty) {
-        continue;
-      }
-      final count = _asInt(entry.value);
-      if (count == null || count < 0) {
-        continue;
-      }
-      counts[key] = count;
-    }
-    return counts;
-  }
-
-  static Map<String, int> _normalizeStageFailureCounts(
-    Map<String, int> values,
-  ) {
-    if (values.isEmpty) {
-      return const <String, int>{};
-    }
-
-    final normalized = <String, int>{};
-    for (final entry in values.entries) {
-      final key = entry.key.trim();
-      if (key.isEmpty || entry.value < 0) {
-        continue;
-      }
-      normalized[key] = entry.value;
-    }
-    return normalized;
   }
 
   static Map<String, dynamic>? _deepCopyMap(Object? value) {

@@ -3481,14 +3481,9 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
   }
 
   Widget _buildBottomOverlay(_ReaderThemeColors colors) {
-    final middleLabel =
-        _isMangaChapter ? '定位' : (_isAutoReadSessionEnabled ? '停止' : '自动读');
+    final middleLabel = _isMangaChapter ? '定位' : '界面';
     final middleIcon =
-        _isMangaChapter
-            ? Icons.gps_fixed_rounded
-            : (_isAutoReadSessionEnabled
-                ? Icons.pause_circle_outline_rounded
-                : Icons.play_circle_outline_rounded);
+        _isMangaChapter ? Icons.gps_fixed_rounded : Icons.palette_outlined;
     final isDarkMode = _settings.themeMode == ReaderThemeMode.dark;
     final dayNightLabel = isDarkMode ? '日间' : '夜间';
     final dayNightIcon =
@@ -3549,10 +3544,8 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
                               onTap:
                                   _isMangaChapter
                                       ? _openMangaPositionSheet
-                                      : _toggleAutoReadSession,
+                                      : _showSettingsSheet,
                               colors: colors,
-                              active:
-                                  !_isMangaChapter && _isAutoReadSessionEnabled,
                             ),
                           ),
                           Expanded(
@@ -5446,6 +5439,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
     }
 
     var draft = _settings;
+    final isMangaChapter = _chapterImageUrls.isNotEmpty;
 
     await _ensureBackgroundPresetsReady();
     if (!mounted) {
@@ -5515,7 +5509,6 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
                   ),
                 );
               }
-              final isMangaChapter = _chapterImageUrls.isNotEmpty;
               final keyboardInset = MediaQuery.viewInsetsOf(context).bottom;
               final safeBottom = _bottomSafeInset(context);
               final sheetHeightFactor = _adaptiveReaderSheetHeightFactor(
@@ -6017,7 +6010,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
                                 const Divider(height: 1),
                                 _buildSettingLine(
                                   context: context,
-                                  label: '其他',
+                                  label: isMangaChapter ? '其他' : '自动读',
                                   child:
                                       isMangaChapter
                                           ? Column(
@@ -6313,6 +6306,34 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
                                             crossAxisAlignment:
                                                 CrossAxisAlignment.start,
                                             children: [
+                                              Row(
+                                                children: [
+                                                  Expanded(
+                                                    child: Text(
+                                                      draft.autoReadEnabled
+                                                          ? '应用后自动开始阅读'
+                                                          : '应用后不自动开始',
+                                                      style:
+                                                          Theme.of(context)
+                                                              .textTheme
+                                                              .bodyMedium,
+                                                    ),
+                                                  ),
+                                                  Switch.adaptive(
+                                                    value:
+                                                        draft.autoReadEnabled,
+                                                    onChanged: (enabled) {
+                                                      setModalState(() {
+                                                        draft = draft.copyWith(
+                                                          autoReadEnabled:
+                                                              enabled,
+                                                        );
+                                                      });
+                                                    },
+                                                  ),
+                                                ],
+                                              ),
+                                              const SizedBox(height: 4),
                                               Text(
                                                 '自动阅读速度：${_autoReadSpeedLevelLabel(draft.autoReadSpeed)} · ${draft.autoReadSpeed.round()} px/s',
                                                 style: Theme.of(context)
@@ -6423,12 +6444,17 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
       return;
     }
 
+    final shouldEnableAutoRead = !isMangaChapter && result.autoReadEnabled;
     final appliedResult = result.copyWith(autoReadEnabled: false);
 
     setState(() {
       _settings = appliedResult;
     });
     await _preferencesService.saveSettings(appliedResult);
+
+    if (shouldEnableAutoRead && mounted) {
+      await _toggleAutoReadSession();
+    }
   }
 
   Future<void> _ensureBackgroundPresetsReady() async {

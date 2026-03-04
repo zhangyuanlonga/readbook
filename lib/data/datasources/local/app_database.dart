@@ -1074,15 +1074,6 @@ class AppDatabase extends _$AppDatabase {
       lastCheckStatus: status,
       lastCheckedAt: row.lastCheckedAt,
       lastCheckMessage: _nullableString(raw['lastCheckMessage']),
-      lastResponseDurationMs:
-          _decodeInt(raw['lastResponseDurationMs']) ??
-          _decodeInt(originalSource?['lastResponseDurationMs']),
-      lastResponseStage:
-          _nullableString(raw['lastResponseStage']) ??
-          _nullableString(originalSource?['lastResponseStage']),
-      stageFailureCounts: _decodeStringIntMap(
-        raw['stageFailureCounts'] ?? originalSource?['stageFailureCounts'],
-      ),
       exploreEnabled: exploreEnabled,
       exploreUrl: exploreUrl,
       jsCapability: jsCapability,
@@ -1253,26 +1244,6 @@ class AppDatabase extends _$AppDatabase {
     }
 
     return value.map((key, item) => MapEntry(key.toString(), item));
-  }
-
-  Map<String, int> _decodeStringIntMap(Object? value) {
-    if (value is! Map) {
-      return const <String, int>{};
-    }
-
-    final result = <String, int>{};
-    for (final entry in value.entries) {
-      final key = entry.key.toString().trim();
-      if (key.isEmpty) {
-        continue;
-      }
-      final decoded = _decodeInt(entry.value);
-      if (decoded == null || decoded < 0) {
-        continue;
-      }
-      result[key] = decoded;
-    }
-    return result;
   }
 
   String? _nullableString(Object? value) {

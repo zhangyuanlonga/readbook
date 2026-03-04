@@ -84,6 +84,7 @@ class _DiscoverPageState extends State<DiscoverPage> {
   int _categoryRequestToken = 0;
   int _bookRequestToken = 0;
   String? _rememberedSourceId;
+  bool _isSwitchingSource = false;
 
   ExploreCategoryItem? get _selectedCategory {
     if (_selectedCategoryIndex < 0 ||
@@ -394,7 +395,7 @@ class _DiscoverPageState extends State<DiscoverPage> {
                       icon: Icons.chevron_left_rounded,
                       label: '上一源',
                       compact: true,
-                      onPressed: () => _switchSourceByOffset(-1),
+                      onPressed: () => _handleSourceSwitch(-1),
                     ),
                   ),
                   const SizedBox(width: 8),
@@ -404,7 +405,7 @@ class _DiscoverPageState extends State<DiscoverPage> {
                       icon: Icons.chevron_right_rounded,
                       label: '下一源',
                       compact: true,
-                      onPressed: () => _switchSourceByOffset(1),
+                      onPressed: () => _handleSourceSwitch(1),
                     ),
                   ),
                 ],
@@ -1574,22 +1575,62 @@ class _DiscoverPageState extends State<DiscoverPage> {
     _selectCategory(selectedIndex);
   }
 
+  Future<void> _handleSourceSwitch(int offset) async {
+    await _runSourceSwitchAction(
+      action: () => _switchSourceByOffset(offset),
+      fallback: '切换书源失败',
+    );
+  }
+
+  Future<void> _runSourceSwitchAction({
+    required Future<void> Function() action,
+    required String fallback,
+  }) async {
+    if (_isSwitchingSource || !mounted) {
+      return;
+    }
+    _isSwitchingSource = true;
+    try {
+      await action();
+    } catch (error) {
+      if (!mounted) {
+        return;
+      }
+      final message = _toReadableError(error, fallback: fallback);
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(message)));
+    } finally {
+      _isSwitchingSource = false;
+    }
+  }
+
   Future<void> _switchSourceByOffset(int offset) async {
-    if (_discoverSources.length < 2 || _isLoadingCategories) {
+    if (_isLoadingSources || _isLoadingCategories) {
       return;
     }
 
-    final currentIndex = _discoverSources.indexWhere(
+    final sources = List<SourceDefinition>.of(
+      _discoverSources,
+      growable: false,
+    );
+    if (sources.length < 2) {
+      return;
+    }
+
+    final currentIndex = sources.indexWhere(
       (item) => item.id == _selectedSource?.id,
     );
     final baseIndex = currentIndex >= 0 ? currentIndex : 0;
-    final nextIndex = _wrapIndex(baseIndex + offset, _discoverSources.length);
-    if (nextIndex == baseIndex) {
+    final nextIndex = _wrapIndex(baseIndex + offset, sources.length);
+    if (nextIndex == baseIndex ||
+        nextIndex < 0 ||
+        nextIndex >= sources.length) {
       return;
     }
 
     await _loadCategoriesForSource(
-      _discoverSources[nextIndex],
+      sources[nextIndex],
       preserveCurrentCategory: false,
     );
   }
@@ -1604,18 +1645,36 @@ class _DiscoverPageState extends State<DiscoverPage> {
   }
 
   Future<void> _switchToNextHealthySource() async {
-    if (_discoverSources.length < 2 || _isLoadingCategories) {
+    await _runSourceSwitchAction(
+      action: _switchToNextHealthySourceInternal,
+      fallback: '切换到下一个可用源失败',
+    );
+  }
+
+  Future<void> _switchToNextHealthySourceInternal() async {
+    if (_isLoadingSources || _isLoadingCategories) {
       return;
     }
 
-    final currentIndex = _discoverSources.indexWhere(
+    final sources = List<SourceDefinition>.of(
+      _discoverSources,
+      growable: false,
+    );
+    if (sources.length < 2) {
+      return;
+    }
+
+    final currentIndex = sources.indexWhere(
       (item) => item.id == _selectedSource?.id,
     );
     final baseIndex = currentIndex >= 0 ? currentIndex : 0;
 
-    for (var step = 1; step < _discoverSources.length; step++) {
-      final index = _wrapIndex(baseIndex + step, _discoverSources.length);
-      final candidate = _discoverSources[index];
+    for (var step = 1; step < sources.length; step++) {
+      final index = _wrapIndex(baseIndex + step, sources.length);
+      if (index < 0 || index >= sources.length) {
+        continue;
+      }
+      final candidate = sources[index];
       if (_sourceParseErrorById.containsKey(candidate.id)) {
         continue;
       }
@@ -1623,7 +1682,14 @@ class _DiscoverPageState extends State<DiscoverPage> {
       return;
     }
 
-    await _switchSourceByOffset(1);
+    final fallbackIndex = _wrapIndex(baseIndex + 1, sources.length);
+    if (fallbackIndex < 0 || fallbackIndex >= sources.length) {
+      return;
+    }
+    await _loadCategoriesForSource(
+      sources[fallbackIndex],
+      preserveCurrentCategory: false,
+    );
   }
 
   int _wrapIndex(int value, int length) {

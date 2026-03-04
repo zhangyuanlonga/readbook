@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:collection';
 import 'dart:convert';
+import 'dart:isolate';
 import 'dart:math';
 
 import '../../../core/errors/app_exception.dart';
@@ -27,9 +28,9 @@ import '../../../domain/entities/book.dart';
 import '../../../domain/entities/search_request_context.dart';
 import '../../../domain/entities/source_definition.dart';
 import '../../../domain/repositories/source_repository.dart';
-import '../../source/application/source_health_metrics_service.dart';
 import 'search_hit_cache_service.dart';
 import 'search_result_parser.dart';
+import 'search_system_settings_service.dart';
 
 class SourceSearchFailure {
   const SourceSearchFailure({
@@ -92,11 +93,44 @@ enum SearchContentMode { novel, manga }
 
 class SearchCancellationToken {
   bool _cancelled = false;
+  bool _paused = false;
+  Completer<void>? _resumeCompleter;
 
   bool get isCancelled => _cancelled;
+  bool get isPaused => _paused && !_cancelled;
+
+  void pause() {
+    if (_cancelled || _paused) {
+      return;
+    }
+    _paused = true;
+    _resumeCompleter ??= Completer<void>();
+  }
+
+  void resume() {
+    if (_cancelled || !_paused) {
+      return;
+    }
+    _paused = false;
+    _resumeCompleter?.complete();
+    _resumeCompleter = null;
+  }
+
+  Future<void> waitIfPaused() async {
+    while (!_cancelled && _paused) {
+      final completer = _resumeCompleter ??= Completer<void>();
+      await completer.future;
+    }
+  }
 
   void cancel() {
+    if (_cancelled) {
+      return;
+    }
     _cancelled = true;
+    _paused = false;
+    _resumeCompleter?.complete();
+    _resumeCompleter = null;
   }
 }
 
@@ -158,8 +192,8 @@ class SearchService {
     AppLogger? logger,
     SourceResponseProcessor? responseProcessor,
     SearchHitCacheService? searchHitCacheService,
-    SourceHealthMetricsService? sourceHealthMetricsService,
-    int maxConcurrentSources = 4,
+    SearchSystemSettingsService? searchSystemSettingsService,
+    int maxConcurrentSources = 8,
   }) : _sourceRepository =
            sourceRepository ?? SourceRepositoryImpl(AppDatabase.instance),
        _httpClient = httpClient ?? AppHttpClient(),
@@ -176,9 +210,8 @@ class SearchService {
            responseProcessor ?? const SourceResponseProcessor(),
        _searchHitCacheService =
            searchHitCacheService ?? SearchHitCacheService(),
-       _sourceHealthMetricsService =
-           sourceHealthMetricsService ??
-           SourceHealthMetricsService(sourceRepository: sourceRepository),
+       _searchSystemSettingsService =
+           searchSystemSettingsService ?? SearchSystemSettingsService(),
        _maxConcurrentSources = max(1, maxConcurrentSources);
 
   final int _maxConcurrentSources;
@@ -193,7 +226,34 @@ class SearchService {
   final AppLogger _logger;
   final SourceResponseProcessor _responseProcessor;
   final SearchHitCacheService _searchHitCacheService;
-  final SourceHealthMetricsService _sourceHealthMetricsService;
+  final SearchSystemSettingsService _searchSystemSettingsService;
+  final Map<String, _SourceScopedCachedSearchRequestSpec>
+  _searchRequestSpecCache = <String, _SourceScopedCachedSearchRequestSpec>{};
+  final Map<String, _SourceScopedCachedSearchParseRules>
+  _searchParseRulesCache = <String, _SourceScopedCachedSearchParseRules>{};
+  static const Duration _progressAggregationInterval = Duration(
+    milliseconds: 900,
+  );
+  static const Set<String> _searchRequestBuiltinVariableKeys = <String>{
+    'key',
+    'keyword',
+    'page',
+    'pagesize',
+    'sourceid',
+  };
+  static final RegExp _templatePlaceholderPattern = RegExp(
+    r'\{\{\s*([^}|]+?)(?:\|([a-zA-Z]+))?\s*\}\}',
+  );
+  static final RegExp _templateOffsetExpressionPattern = RegExp(
+    r'^([a-zA-Z0-9_]+)\s*([+-])\s*(\d+)$',
+  );
+  bool _searchDebugLoggingEnabled = false;
+  bool _searchDebugLoggingSettingLoaded = false;
+
+  void setSearchDebugLoggingEnabled(bool enabled) {
+    _searchDebugLoggingEnabled = enabled;
+    _searchDebugLoggingSettingLoaded = true;
+  }
 
   Future<SearchExecutionReport> search({
     required String keyword,
@@ -205,6 +265,7 @@ class SearchService {
     List<String>? sourceIds,
     bool aggregateByTitleAuthor = false,
   }) async {
+    await _syncSearchDebugLoggingSetting();
     final normalizedKeyword = keyword.trim();
     if (normalizedKeyword.isEmpty) {
       throw AppException(
@@ -249,7 +310,7 @@ class SearchService {
 
     final concurrency = min(_maxConcurrentSources, enabledSources.length);
 
-    _logger.info(
+    _searchDebugInfo(
       'Search started',
       context: {
         'keyword': normalizedKeyword,
@@ -273,6 +334,7 @@ class SearchService {
     final booksById = <String, Book>{};
     final failures = <SourceSearchFailure>[];
     var successSourceCount = 0;
+    var progressAggregationState = const _ProgressAggregationState();
 
     final pendingSources = Queue<SourceDefinition>.from(enabledSources);
     final workerCount = min(concurrency, pendingSources.length);
@@ -281,6 +343,13 @@ class SearchService {
       while (true) {
         if (cancellationToken?.isCancelled ?? false) {
           return;
+        }
+
+        if (cancellationToken != null) {
+          await cancellationToken.waitIfPaused();
+          if (cancellationToken.isCancelled) {
+            return;
+          }
         }
 
         if (pendingSources.isEmpty) {
@@ -305,15 +374,8 @@ class SearchService {
           for (final book in report.books) {
             booksById[book.id] = book;
           }
-          unawaited(
-            _sourceHealthMetricsService.recordRequestSuccess(
-              source: source,
-              stage: ErrorStage.search,
-              durationMs: DateTime.now().difference(startAt).inMilliseconds,
-            ),
-          );
 
-          _logger.info(
+          _searchDebugInfo(
             'Search source success',
             context: {
               'sourceId': source.id,
@@ -336,13 +398,6 @@ class SearchService {
             debugMessage: error.briefMessage,
           );
           failures.add(failure);
-          unawaited(
-            _sourceHealthMetricsService.recordRequestFailure(
-              source: source,
-              stage: error.stage,
-              durationMs: DateTime.now().difference(startAt).inMilliseconds,
-            ),
-          );
 
           _logger.warn(
             'Search source failed',
@@ -377,13 +432,6 @@ class SearchService {
               debugMessage: rawDetail.isEmpty ? null : rawDetail,
             ),
           );
-          unawaited(
-            _sourceHealthMetricsService.recordRequestFailure(
-              source: source,
-              stage: ErrorStage.search,
-              durationMs: DateTime.now().difference(startAt).inMilliseconds,
-            ),
-          );
 
           _logger.error(
             'Search source crashed',
@@ -392,7 +440,7 @@ class SearchService {
           );
         }
 
-        _emitProgress(
+        progressAggregationState = await _emitProgress(
           keyword: normalizedKeyword,
           sourceCount: enabledSources.length,
           successSourceCount: successSourceCount,
@@ -402,13 +450,14 @@ class SearchService {
           sourceOrderById: sourceOrderById,
           aggregateByTitleAuthor: aggregateByTitleAuthor,
           onProgress: onProgress,
+          progressAggregationState: progressAggregationState,
         );
       }
     }
 
     await Future.wait(List.generate(workerCount, (_) => worker()));
 
-    final finalReport = _buildExecutionReport(
+    final finalReport = await _buildExecutionReport(
       keyword: normalizedKeyword,
       sourceCount: enabledSources.length,
       successSourceCount: successSourceCount,
@@ -424,7 +473,7 @@ class SearchService {
     );
 
     if (cancellationToken?.isCancelled ?? false) {
-      _logger.info(
+      _searchDebugInfo(
         'Search cancelled',
         context: {
           'keyword': normalizedKeyword,
@@ -436,7 +485,7 @@ class SearchService {
       return finalReport;
     }
 
-    _logger.info(
+    _searchDebugInfo(
       'Search finished',
       context: {
         'keyword': normalizedKeyword,
@@ -467,7 +516,7 @@ class SearchService {
     }
   }
 
-  SearchExecutionReport _buildExecutionReport({
+  Future<SearchExecutionReport> _buildExecutionReport({
     required String keyword,
     required int sourceCount,
     required int successSourceCount,
@@ -476,14 +525,14 @@ class SearchService {
     required Map<String, String> sourceNames,
     required Map<String, int> sourceOrderById,
     required bool aggregateByTitleAuthor,
-  }) {
+  }) async {
     final books = booksById.values.toList(growable: false);
     final hitCounts = <String, int>{};
     final hitBooks = <String, List<Book>>{};
 
     late final List<Book> outputBooks;
     if (aggregateByTitleAuthor) {
-      final aggregated = _aggregateAndRankBooks(
+      final aggregated = await _aggregateAndRankBooksAsync(
         keyword: keyword,
         books: books,
         sourceOrderById: sourceOrderById,
@@ -511,7 +560,7 @@ class SearchService {
     );
   }
 
-  void _emitProgress({
+  Future<_ProgressAggregationState> _emitProgress({
     required String keyword,
     required int sourceCount,
     required int successSourceCount,
@@ -521,24 +570,68 @@ class SearchService {
     required Map<String, int> sourceOrderById,
     required bool aggregateByTitleAuthor,
     required SearchProgressCallback? onProgress,
-  }) {
+    required _ProgressAggregationState progressAggregationState,
+  }) async {
     if (onProgress == null) {
-      return;
+      return progressAggregationState;
+    }
+
+    final processedSourceCount = successSourceCount + failures.length;
+    final now = DateTime.now();
+    final lastProgressEmittedAt =
+        progressAggregationState.lastProgressEmittedAt;
+    final shouldEmitProgress =
+        processedSourceCount >= sourceCount ||
+        lastProgressEmittedAt == null ||
+        now.difference(lastProgressEmittedAt) >= _progressAggregationInterval;
+    if (!shouldEmitProgress) {
+      return progressAggregationState;
+    }
+
+    final shouldRefreshAggregatedBooks =
+        !aggregateByTitleAuthor ||
+        progressAggregationState.cachedAggregatedReport == null ||
+        processedSourceCount >= sourceCount ||
+        progressAggregationState.lastAggregatedAt == null ||
+        now.difference(progressAggregationState.lastAggregatedAt!) >=
+            _progressAggregationInterval;
+
+    final SearchExecutionReport report;
+    var nextState = progressAggregationState;
+    if (shouldRefreshAggregatedBooks) {
+      report = await _buildExecutionReport(
+        keyword: keyword,
+        sourceCount: sourceCount,
+        successSourceCount: successSourceCount,
+        booksById: booksById,
+        failures: failures,
+        sourceNames: sourceNames,
+        sourceOrderById: sourceOrderById,
+        aggregateByTitleAuthor: aggregateByTitleAuthor,
+      );
+      if (aggregateByTitleAuthor) {
+        nextState = _ProgressAggregationState(
+          cachedAggregatedReport: report,
+          lastAggregatedAt: now,
+        );
+      }
+    } else {
+      final cachedReport = progressAggregationState.cachedAggregatedReport!;
+      report = SearchExecutionReport(
+        keyword: keyword,
+        sourceCount: sourceCount,
+        successSourceCount: successSourceCount,
+        books: cachedReport.books,
+        failures: List.unmodifiable(failures),
+        sourceNames: Map.unmodifiable(sourceNames),
+        bookSourceHitCounts: cachedReport.bookSourceHitCounts,
+        bookSourceHits: cachedReport.bookSourceHits,
+      );
     }
 
     try {
-      onProgress(
-        _buildExecutionReport(
-          keyword: keyword,
-          sourceCount: sourceCount,
-          successSourceCount: successSourceCount,
-          booksById: booksById,
-          failures: failures,
-          sourceNames: sourceNames,
-          sourceOrderById: sourceOrderById,
-          aggregateByTitleAuthor: aggregateByTitleAuthor,
-        ),
-      );
+      onProgress(report);
+      return nextState.copyWith(lastProgressEmittedAt: now);
     } catch (error, stackTrace) {
       final exception = AppException(
         code: ErrorCode.unknown,
@@ -550,6 +643,40 @@ class SearchService {
       _logger.warn(
         'Search progress callback failed',
         context: {'message': exception.briefMessage},
+      );
+      return nextState.copyWith(lastProgressEmittedAt: lastProgressEmittedAt);
+    }
+  }
+
+  Future<_AggregatedBookReport> _aggregateAndRankBooksAsync({
+    required String keyword,
+    required Iterable<Book> books,
+    required Map<String, int> sourceOrderById,
+  }) async {
+    final candidateBooks = books.toList(growable: false);
+    if (candidateBooks.length < 160) {
+      return _aggregateAndRankBooks(
+        keyword: keyword,
+        books: candidateBooks,
+        sourceOrderById: sourceOrderById,
+      );
+    }
+
+    try {
+      return await Isolate.run(
+        () => _aggregateAndRankBooksInIsolate(
+          _AggregateAndRankInput(
+            keyword: keyword,
+            books: candidateBooks,
+            sourceOrderById: sourceOrderById,
+          ),
+        ),
+      );
+    } catch (_) {
+      return _aggregateAndRankBooks(
+        keyword: keyword,
+        books: candidateBooks,
+        sourceOrderById: sourceOrderById,
       );
     }
   }
@@ -801,6 +928,7 @@ class SearchService {
     Duration? connectTimeout,
     Duration? receiveTimeout,
   }) async {
+    await _syncSearchDebugLoggingSetting();
     final normalizedKeyword = keyword.trim();
     if (normalizedKeyword.isEmpty) {
       throw AppException(
@@ -837,15 +965,8 @@ class SearchService {
         SourceHealthStatus.healthy,
         summary: successSummary,
       );
-      unawaited(
-        _sourceHealthMetricsService.recordRequestSuccess(
-          source: source,
-          stage: ErrorStage.search,
-          durationMs: DateTime.now().difference(startAt).inMilliseconds,
-        ),
-      );
 
-      _logger.info(
+      _searchDebugInfo(
         'Source connectivity test success',
         context: {
           'sourceId': source.id,
@@ -875,13 +996,6 @@ class SearchService {
         source,
         _toHealthStatus(error),
         summary: _toUserReadableMessage(error),
-      );
-      unawaited(
-        _sourceHealthMetricsService.recordRequestFailure(
-          source: source,
-          stage: error.stage,
-          durationMs: DateTime.now().difference(startAt).inMilliseconds,
-        ),
       );
 
       _logger.warn(
@@ -923,13 +1037,6 @@ class SearchService {
         SourceHealthStatus.unavailable,
         summary: _toUserReadableMessage(exception),
       );
-      unawaited(
-        _sourceHealthMetricsService.recordRequestFailure(
-          source: source,
-          stage: ErrorStage.search,
-          durationMs: DateTime.now().difference(startAt).inMilliseconds,
-        ),
-      );
 
       _logger.error(
         'Source connectivity test crashed',
@@ -960,6 +1067,7 @@ class SearchService {
     Duration? connectTimeout,
     Duration? receiveTimeout,
   }) async {
+    await _syncSearchDebugLoggingSetting();
     final normalizedKeyword = keyword.trim();
     if (normalizedKeyword.isEmpty) {
       throw AppException(
@@ -970,57 +1078,29 @@ class SearchService {
       );
     }
 
-    final startAt = DateTime.now();
-    try {
-      final output = await _searchSingleSource(
-        source: source,
-        context: SearchRequestContext(
-          keyword: normalizedKeyword,
-          page: page,
-          pageSize: pageSize,
-          sourceId: source.id,
-        ),
-        validateRules: validateRules,
-        skipInit: skipInit,
-        connectTimeout: connectTimeout,
-        receiveTimeout: receiveTimeout,
-      );
-      unawaited(
-        _sourceHealthMetricsService.recordRequestSuccess(
-          source: source,
-          stage: ErrorStage.search,
-          durationMs: DateTime.now().difference(startAt).inMilliseconds,
-        ),
-      );
-
-      return SingleSourceSearchResult(
-        sourceId: source.id,
-        sourceName: source.name,
+    final output = await _searchSingleSource(
+      source: source,
+      context: SearchRequestContext(
         keyword: normalizedKeyword,
-        requestUrl: output.requestUrl,
-        method: output.method,
-        statusCode: output.statusCode,
-        books: output.books,
-      );
-    } on AppException catch (error) {
-      unawaited(
-        _sourceHealthMetricsService.recordRequestFailure(
-          source: source,
-          stage: error.stage,
-          durationMs: DateTime.now().difference(startAt).inMilliseconds,
-        ),
-      );
-      rethrow;
-    } catch (_) {
-      unawaited(
-        _sourceHealthMetricsService.recordRequestFailure(
-          source: source,
-          stage: ErrorStage.search,
-          durationMs: DateTime.now().difference(startAt).inMilliseconds,
-        ),
-      );
-      rethrow;
-    }
+        page: page,
+        pageSize: pageSize,
+        sourceId: source.id,
+      ),
+      validateRules: validateRules,
+      skipInit: skipInit,
+      connectTimeout: connectTimeout,
+      receiveTimeout: receiveTimeout,
+    );
+
+    return SingleSourceSearchResult(
+      sourceId: source.id,
+      sourceName: source.name,
+      keyword: normalizedKeyword,
+      requestUrl: output.requestUrl,
+      method: output.method,
+      statusCode: output.statusCode,
+      books: output.books,
+    );
   }
 
   Future<SearchRequestContext> buildRuntimeContextWithInit({
@@ -1071,27 +1151,31 @@ class SearchService {
     }
 
     try {
-      final initJsContext = _buildSourceJsContext(
+      final requestSpec = _resolveCachedSearchRequestSpec(
         source: source,
-        runtimeContext: context,
-        seedVariables: runtimeJsVariables,
-        onBridgePutVariables: collectPutVariables,
+        rawSearchRule: rawSearchRule,
       );
+      final shouldRunInit =
+          !skipInit &&
+          _shouldRunSearchInitRequest(
+            requestSpec: requestSpec,
+            initRule: source.rules.searchInitRule,
+          );
 
       final runtimeContext =
-          skipInit
-              ? context
-              : await _buildRuntimeContext(
+          shouldRunInit
+              ? await _buildRuntimeContext(
                 source: source,
                 context: context,
                 initRule: source.rules.searchInitRule,
-                jsContext: initJsContext,
-              );
-
-      final requestSpec = _parseRequestSpec(
-        rawSearchRule,
-        sourceBaseUrl: source.baseUrl,
-      );
+                jsContext: _buildSourceJsContext(
+                  source: source,
+                  runtimeContext: context,
+                  seedVariables: runtimeJsVariables,
+                  onBridgePutVariables: collectPutVariables,
+                ),
+              )
+              : context;
 
       final requestUrl = _urlTemplateResolver.resolve(
         template: requestSpec.urlTemplate,
@@ -1115,7 +1199,7 @@ class SearchService {
         context: runtimeContext,
       );
 
-      _logger.info(
+      _searchDebugInfo(
         'Search source request',
         context: {
           'sourceId': source.id,
@@ -1143,7 +1227,8 @@ class SearchService {
         requestUrl: requestUrl,
       );
 
-      final parseRules = validateRules ? _buildParseRules(source) : null;
+      final parseRules =
+          validateRules ? _resolveCachedSearchParseRules(source) : null;
       final parseJsContext = _buildSourceJsContext(
         source: source,
         runtimeContext: runtimeContext,
@@ -1612,7 +1697,7 @@ class SearchService {
       context: context,
     );
 
-    _logger.info(
+    _searchDebugInfo(
       'Init request',
       context: {
         'sourceId': source.id,
@@ -2033,6 +2118,191 @@ class SearchService {
       ErrorStage.reader => '阅读阶段：',
       ErrorStage.unknown => '未知阶段：',
     };
+  }
+
+  Future<void> _syncSearchDebugLoggingSetting() async {
+    if (_searchDebugLoggingSettingLoaded) {
+      return;
+    }
+    try {
+      _searchDebugLoggingEnabled =
+          await _searchSystemSettingsService.loadSearchDebugLogEnabled();
+      _searchDebugLoggingSettingLoaded = true;
+    } catch (_) {
+      // Keep in-memory fallback value when setting read fails.
+    }
+  }
+
+  void _searchDebugInfo(
+    String message, {
+    Map<String, Object?> context = const {},
+  }) {
+    if (!_searchDebugLoggingEnabled) {
+      return;
+    }
+    _logger.info(message, context: context);
+  }
+
+  _SearchRequestSpec _resolveCachedSearchRequestSpec({
+    required SourceDefinition source,
+    required String rawSearchRule,
+  }) {
+    final cacheKey = _buildSearchRequestSpecCacheKey(
+      source: source,
+      rawSearchRule: rawSearchRule,
+    );
+    final cached = _searchRequestSpecCache[source.id];
+    if (cached != null && cached.cacheKey == cacheKey) {
+      return cached.value;
+    }
+
+    final parsed = _parseRequestSpec(
+      rawSearchRule,
+      sourceBaseUrl: source.baseUrl,
+    );
+    _searchRequestSpecCache[source.id] = _SourceScopedCachedSearchRequestSpec(
+      cacheKey: cacheKey,
+      value: parsed,
+    );
+    return parsed;
+  }
+
+  SearchParseRules _resolveCachedSearchParseRules(SourceDefinition source) {
+    final cacheKey = _buildSearchParseRulesCacheKey(source);
+    final cached = _searchParseRulesCache[source.id];
+    if (cached != null && cached.cacheKey == cacheKey) {
+      return cached.value;
+    }
+
+    final parsed = _buildParseRules(source);
+    _searchParseRulesCache[source.id] = _SourceScopedCachedSearchParseRules(
+      cacheKey: cacheKey,
+      value: parsed,
+    );
+    return parsed;
+  }
+
+  String _buildSearchRequestSpecCacheKey({
+    required SourceDefinition source,
+    required String rawSearchRule,
+  }) {
+    return '${source.baseUrl}\u0001${rawSearchRule.trim()}';
+  }
+
+  String _buildSearchParseRulesCacheKey(SourceDefinition source) {
+    final rules = source.rules;
+    return [
+      source.baseUrl,
+      rules.searchListRule ?? '',
+      rules.searchTitleRule ?? '',
+      rules.searchDetailUrlRule ?? '',
+      rules.searchAuthorRule ?? '',
+      rules.searchIntroRule ?? '',
+      rules.searchCoverUrlRule ?? '',
+      rules.searchLatestChapterRule ?? '',
+    ].join('\u0001');
+  }
+
+  bool _shouldRunSearchInitRequest({
+    required _SearchRequestSpec requestSpec,
+    required String? initRule,
+  }) {
+    final normalized = initRule?.trim();
+    if (normalized == null || normalized.isEmpty) {
+      return false;
+    }
+
+    final initParts = _splitInitRuleParts(normalized);
+    final initRequestRule = initParts.requestRule?.trim();
+    if (initRequestRule == null || initRequestRule.isEmpty) {
+      return false;
+    }
+
+    final parseRule = initParts.parseRule?.trim();
+    if (parseRule != null && parseRule.isNotEmpty) {
+      return true;
+    }
+
+    return _requestSpecDependsOnExtraParams(requestSpec);
+  }
+
+  bool _requestSpecDependsOnExtraParams(_SearchRequestSpec requestSpec) {
+    final dependencies = <String>{};
+    _collectTemplateDependenciesFromValue(
+      requestSpec.urlTemplate,
+      dependencies,
+    );
+    _collectTemplateDependenciesFromValue(
+      requestSpec.bodyTemplate,
+      dependencies,
+    );
+    if (requestSpec.headers.isNotEmpty) {
+      for (final value in requestSpec.headers.values) {
+        _collectTemplateDependenciesFromValue(value, dependencies);
+      }
+    }
+
+    for (final key in dependencies) {
+      if (_isBuiltinRequestVariableKey(key)) {
+        continue;
+      }
+      return true;
+    }
+    return false;
+  }
+
+  void _collectTemplateDependenciesFromValue(
+    Object? value,
+    Set<String> output,
+  ) {
+    if (value == null) {
+      return;
+    }
+
+    if (value is String) {
+      _collectTemplateDependenciesFromTemplate(value, output);
+      return;
+    }
+
+    if (value is List) {
+      for (final item in value) {
+        _collectTemplateDependenciesFromValue(item, output);
+      }
+      return;
+    }
+
+    if (value is Map) {
+      for (final entry in value.entries) {
+        _collectTemplateDependenciesFromValue(entry.value, output);
+      }
+    }
+  }
+
+  void _collectTemplateDependenciesFromTemplate(
+    String template,
+    Set<String> output,
+  ) {
+    for (final match in _templatePlaceholderPattern.allMatches(template)) {
+      final rawToken = match.group(1)?.trim();
+      if (rawToken == null || rawToken.isEmpty) {
+        continue;
+      }
+      final normalized = _normalizePlaceholderBaseKey(rawToken);
+      if (normalized.isEmpty) {
+        continue;
+      }
+      output.add(normalized);
+    }
+  }
+
+  String _normalizePlaceholderBaseKey(String rawToken) {
+    final offsetMatch = _templateOffsetExpressionPattern.firstMatch(rawToken);
+    final candidate = offsetMatch?.group(1) ?? rawToken;
+    return candidate.trim().toLowerCase();
+  }
+
+  bool _isBuiltinRequestVariableKey(String key) {
+    return _searchRequestBuiltinVariableKeys.contains(key);
   }
 
   _SearchRequestSpec _parseRequestSpec(
@@ -3963,4 +4233,239 @@ class _ListRuleNormalization {
 
   final String? rule;
   final bool reversed;
+}
+
+class _ProgressAggregationState {
+  const _ProgressAggregationState({
+    this.cachedAggregatedReport,
+    this.lastAggregatedAt,
+    this.lastProgressEmittedAt,
+  });
+
+  final SearchExecutionReport? cachedAggregatedReport;
+  final DateTime? lastAggregatedAt;
+  final DateTime? lastProgressEmittedAt;
+
+  _ProgressAggregationState copyWith({
+    SearchExecutionReport? cachedAggregatedReport,
+    DateTime? lastAggregatedAt,
+    DateTime? lastProgressEmittedAt,
+  }) {
+    return _ProgressAggregationState(
+      cachedAggregatedReport:
+          cachedAggregatedReport ?? this.cachedAggregatedReport,
+      lastAggregatedAt: lastAggregatedAt ?? this.lastAggregatedAt,
+      lastProgressEmittedAt:
+          lastProgressEmittedAt ?? this.lastProgressEmittedAt,
+    );
+  }
+}
+
+class _SourceScopedCachedSearchRequestSpec {
+  const _SourceScopedCachedSearchRequestSpec({
+    required this.cacheKey,
+    required this.value,
+  });
+
+  final String cacheKey;
+  final _SearchRequestSpec value;
+}
+
+class _SourceScopedCachedSearchParseRules {
+  const _SourceScopedCachedSearchParseRules({
+    required this.cacheKey,
+    required this.value,
+  });
+
+  final String cacheKey;
+  final SearchParseRules value;
+}
+
+class _AggregateAndRankInput {
+  const _AggregateAndRankInput({
+    required this.keyword,
+    required this.books,
+    required this.sourceOrderById,
+  });
+
+  final String keyword;
+  final List<Book> books;
+  final Map<String, int> sourceOrderById;
+}
+
+_AggregatedBookReport _aggregateAndRankBooksInIsolate(
+  _AggregateAndRankInput input,
+) {
+  final normalizedKeyword = _normalizeAggregateTextForIsolate(input.keyword);
+  final groupsByKey = <_BookAggregateKey, _BookAggregateGroup>{};
+
+  for (final book in input.books) {
+    final key = _BookAggregateKey(title: book.title, author: book.author);
+    final group = groupsByKey.putIfAbsent(key, () => _BookAggregateGroup());
+
+    final existing = group.hitsBySourceId[book.sourceId];
+    if (existing == null) {
+      group.hitsBySourceId[book.sourceId] = book;
+    } else {
+      final candidateScore = _bookQualityScoreForIsolate(
+        book,
+        normalizedKeyword: normalizedKeyword,
+        sourceOrderById: input.sourceOrderById,
+      );
+      final existingScore = _bookQualityScoreForIsolate(
+        existing,
+        normalizedKeyword: normalizedKeyword,
+        sourceOrderById: input.sourceOrderById,
+      );
+      if (candidateScore > existingScore) {
+        group.hitsBySourceId[book.sourceId] = book;
+      }
+    }
+    final tier = _resolveBookRelevanceTierForIsolate(
+      book,
+      normalizedKeyword: normalizedKeyword,
+    );
+    if (tier > group.relevanceTier) {
+      group.relevanceTier = tier;
+    }
+  }
+
+  final aggregates = <_RankedAggregateBook>[];
+  for (final group in groupsByKey.values) {
+    final hits = group.hitsBySourceId.values.toList(growable: false);
+    if (hits.isEmpty) {
+      continue;
+    }
+    final sortedHits = hits.toList(growable: false)..sort((a, b) {
+      final qualityDiff =
+          _bookQualityScoreForIsolate(
+            b,
+            normalizedKeyword: normalizedKeyword,
+            sourceOrderById: input.sourceOrderById,
+          ) -
+          _bookQualityScoreForIsolate(
+            a,
+            normalizedKeyword: normalizedKeyword,
+            sourceOrderById: input.sourceOrderById,
+          );
+      if (qualityDiff != 0) {
+        return qualityDiff;
+      }
+      final sourceOrderDiff = (input.sourceOrderById[a.sourceId] ?? 1 << 20)
+          .compareTo(input.sourceOrderById[b.sourceId] ?? 1 << 20);
+      if (sourceOrderDiff != 0) {
+        return sourceOrderDiff;
+      }
+      return a.title.compareTo(b.title);
+    });
+    final primaryBook = sortedHits.first;
+    aggregates.add(
+      _RankedAggregateBook(
+        primaryBook: primaryBook,
+        hits: List.unmodifiable(sortedHits),
+        relevanceTier: group.relevanceTier,
+        primaryQualityScore: _bookQualityScoreForIsolate(
+          primaryBook,
+          normalizedKeyword: normalizedKeyword,
+          sourceOrderById: input.sourceOrderById,
+        ),
+        primarySourceOrder:
+            input.sourceOrderById[primaryBook.sourceId] ?? 1 << 20,
+      ),
+    );
+  }
+
+  aggregates.sort((a, b) {
+    final tierDiff = b.relevanceTier.compareTo(a.relevanceTier);
+    if (tierDiff != 0) {
+      return tierDiff;
+    }
+    final hitCountDiff = b.hits.length.compareTo(a.hits.length);
+    if (hitCountDiff != 0) {
+      return hitCountDiff;
+    }
+    final qualityDiff = b.primaryQualityScore.compareTo(a.primaryQualityScore);
+    if (qualityDiff != 0) {
+      return qualityDiff;
+    }
+    final sourceOrderDiff = a.primarySourceOrder.compareTo(
+      b.primarySourceOrder,
+    );
+    if (sourceOrderDiff != 0) {
+      return sourceOrderDiff;
+    }
+    return a.primaryBook.title.compareTo(b.primaryBook.title);
+  });
+
+  final booksOut = <Book>[];
+  final hitCounts = <String, int>{};
+  final hitsByPrimaryBookId = <String, List<Book>>{};
+  for (final aggregate in aggregates) {
+    booksOut.add(aggregate.primaryBook);
+    hitCounts[aggregate.primaryBook.id] = aggregate.hits.length;
+    hitsByPrimaryBookId[aggregate.primaryBook.id] = aggregate.hits;
+  }
+
+  return _AggregatedBookReport(
+    books: List.unmodifiable(booksOut),
+    hitCountsByPrimaryBookId: Map.unmodifiable(hitCounts),
+    hitsByPrimaryBookId: Map.unmodifiable(hitsByPrimaryBookId),
+  );
+}
+
+int _resolveBookRelevanceTierForIsolate(
+  Book book, {
+  required String normalizedKeyword,
+}) {
+  if (normalizedKeyword.isEmpty) {
+    return 1;
+  }
+  final normalizedTitle = _normalizeAggregateTextForIsolate(book.title);
+  final normalizedAuthor = _normalizeAggregateTextForIsolate(book.author ?? '');
+
+  if (normalizedTitle == normalizedKeyword ||
+      normalizedAuthor == normalizedKeyword) {
+    return 3;
+  }
+  if (normalizedTitle.contains(normalizedKeyword) ||
+      normalizedAuthor.contains(normalizedKeyword)) {
+    return 2;
+  }
+  return 1;
+}
+
+int _bookQualityScoreForIsolate(
+  Book book, {
+  required String normalizedKeyword,
+  required Map<String, int> sourceOrderById,
+}) {
+  var score =
+      _resolveBookRelevanceTierForIsolate(
+        book,
+        normalizedKeyword: normalizedKeyword,
+      ) *
+      1000;
+  if (book.coverUrl?.trim().isNotEmpty == true) {
+    score += 40;
+  }
+  if (book.latestChapter?.trim().isNotEmpty == true) {
+    score += 24;
+  }
+  if (book.intro?.trim().isNotEmpty == true) {
+    score += 12;
+  }
+  final sourceOrder = sourceOrderById[book.sourceId] ?? 200;
+  score += max(0, 200 - min(sourceOrder, 200));
+  return score;
+}
+
+String _normalizeAggregateTextForIsolate(String raw) {
+  var normalized = raw.trim().toLowerCase();
+  if (normalized.isEmpty) {
+    return '';
+  }
+  normalized = normalized.replaceAll(RegExp(r'<[^>]+>'), ' ');
+  normalized = normalized.replaceAll(RegExp(r'[\u3000\s]+'), ' ');
+  normalized = normalized.replaceAll(RegExp(r'[《》〈〉【】\[\]()（）<>「」『』]'), '');
+  return normalized.trim();
 }

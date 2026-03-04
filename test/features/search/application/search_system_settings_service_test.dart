@@ -22,5 +22,23 @@ void main() {
       final enabledValue = await service.loadAggregateByTitleAuthorEnabled();
       expect(enabledValue, isTrue);
     });
+
+    test(
+      'loads false by default and persists search debug log toggle',
+      () async {
+        final service = SearchSystemSettingsService();
+
+        final defaultValue = await service.loadSearchDebugLogEnabled();
+        expect(defaultValue, isFalse);
+
+        await service.saveSearchDebugLogEnabled(true);
+        final enabledValue = await service.loadSearchDebugLogEnabled();
+        expect(enabledValue, isTrue);
+
+        await service.saveSearchDebugLogEnabled(false);
+        final disabledValue = await service.loadSearchDebugLogEnabled();
+        expect(disabledValue, isFalse);
+      },
+    );
   });
 }

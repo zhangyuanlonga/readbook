@@ -1,7 +1,9 @@
 import 'dart:async';
+import 'dart:isolate';
 
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart';
 import 'package:go_router/go_router.dart';
 import 'package:html/parser.dart' as html_parser;
 
@@ -42,48 +44,9 @@ class _SearchPageState extends State<SearchPage> {
   final SearchSystemSettingsService _searchSystemSettingsService =
       SearchSystemSettingsService();
 
-  static final RegExp _preciseSpaceRegex = RegExp(r'[\u3000\s]+');
-  static final RegExp _htmlTagRegex = RegExp(r'<[^>]+>');
-  static const Set<String> _preciseTitleSeparators = <String>{
-    ' ',
-    '-',
-    '_',
-    '.',
-    '·',
-    ':',
-    '：',
-    '/',
-    '|',
-    '(',
-    '（',
-    '[',
-    '【',
-    '<',
-    '《',
-  };
-  static const Set<String> _preciseLeadingWrappers = <String>{
-    '《',
-    '〈',
-    '<',
-    '「',
-    '『',
-    '【',
-    '[',
-    '(',
-    '（',
-  };
-  static const Set<String> _preciseTrailingWrappers = <String>{
-    '》',
-    '〉',
-    '>',
-    '」',
-    '』',
-    '】',
-    ']',
-    ')',
-    '）',
-  };
-  static const Duration _progressUiThrottleWindow = Duration(milliseconds: 120);
+  static const Duration _progressUiThrottleWindow = Duration(
+    milliseconds: 1500,
+  );
   static const Duration _sourceCountLoadTimeout = Duration(seconds: 8);
   static const Set<PointerDeviceKind> _dragDevices = <PointerDeviceKind>{
     PointerDeviceKind.touch,
@@ -95,28 +58,34 @@ class _SearchPageState extends State<SearchPage> {
   };
   static const int _searchResultPageSize = 40;
   static const double _paginationTriggerDistance = 280;
+  static const Duration _scrollUiResumeDelay = Duration(milliseconds: 180);
+  static const Duration _scrollUiMaxDeferredWindow = Duration(seconds: 2);
 
   bool _isSearching = false;
   bool _isLoadingSourceCount = false;
-  SearchExecutionReport? _report;
-  List<Book> _visibleBooks = const <Book>[];
+  final ValueNotifier<SearchExecutionReport?> _progressReportNotifier =
+      ValueNotifier<SearchExecutionReport?>(null);
+  final ValueNotifier<_SearchRenderState?> _renderStateNotifier =
+      ValueNotifier<_SearchRenderState?>(null);
   SearchCancellationToken? _activeSearchToken;
   int _searchSessionId = 0;
+  int _renderPrepareTicket = 0;
   SearchContentMode _searchContentMode = SearchContentMode.novel;
   bool _isPreciseBookMatch = false;
   bool _aggregateByTitleAuthorEnabled = true;
   int _availableSourceCount = 0;
   Set<String> _selectedSourceIds = <String>{};
   final ScrollController _pageScrollController = ScrollController();
-  int _renderedResultCount = 0;
   bool _isAppendingResults = false;
   SearchExecutionReport? _pendingProgressReport;
   Timer? _progressUiTimer;
   DateTime? _lastProgressUiUpdateAt;
-
-  // Pre-processed snippet caches
-  Map<String, String?> _normalizedIntros = const <String, String?>{};
-  Map<String, String?> _normalizedLatestChapters = const <String, String?>{};
+  bool _isListScrollActive = false;
+  Timer? _scrollUiResumeTimer;
+  Timer? _scrollUiForceFlushTimer;
+  _DeferredProgressUiUpdate? _deferredProgressUiUpdate;
+  int? _pendingSearchCompletionSessionId;
+  SearchCancellationToken? _pendingSearchCompletionToken;
 
   // Search history
   List<String> _searchHistory = const <String>[];
@@ -138,8 +107,12 @@ class _SearchPageState extends State<SearchPage> {
   void dispose() {
     _activeSearchToken?.cancel();
     _clearProgressUiThrottle();
+    _clearDeferredProgressUiUpdate();
+    _clearPendingSearchCompletion();
     _pageScrollController.removeListener(_onPageScroll);
     _pageScrollController.dispose();
+    _progressReportNotifier.dispose();
+    _renderStateNotifier.dispose();
     _searchFocusNode.dispose();
     _keywordController.dispose();
     super.dispose();
@@ -152,7 +125,6 @@ class _SearchPageState extends State<SearchPage> {
     final horizontal = AppSpacing.pageHorizontal(context);
     final bottomSafe = MediaQuery.viewPaddingOf(context).bottom;
     final canPopRoute = context.canPop();
-    final report = _report;
 
     return PopScope<void>(
       canPop: canPopRoute,
@@ -181,55 +153,187 @@ class _SearchPageState extends State<SearchPage> {
             behavior: const MaterialScrollBehavior().copyWith(
               dragDevices: _dragDevices,
             ),
-            child: ListView(
-              controller: _pageScrollController,
-              keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
-              padding: EdgeInsets.fromLTRB(
-                horizontal,
-                12,
-                horizontal,
-                16 + bottomSafe,
+            child: NotificationListener<ScrollNotification>(
+              onNotification: _onScrollNotification,
+              child: CustomScrollView(
+                controller: _pageScrollController,
+                keyboardDismissBehavior:
+                    ScrollViewKeyboardDismissBehavior.onDrag,
+                slivers: [
+                  SliverPadding(
+                    padding: EdgeInsets.fromLTRB(horizontal, 12, horizontal, 0),
+                    sliver: SliverToBoxAdapter(
+                      child: SearchInputCard(
+                        keywordController: _keywordController,
+                        focusNode: _searchFocusNode,
+                        isSearching: _isSearching,
+                        searchContentMode: _searchContentMode,
+                        isPreciseBookMatch: _isPreciseBookMatch,
+                        selectedSourceCount: _selectedSourceIds.length,
+                        availableSourceCount: _availableSourceCount,
+                        isLoadingSourceCount: _isLoadingSourceCount,
+                        onSearch: _runSearch,
+                        onClearResults: _clearResults,
+                        onContentModeChanged: _onContentModeChanged,
+                        onPreciseMatchChanged: _onPreciseMatchChanged,
+                        onOpenSourceFilter:
+                            () => unawaited(_showSourceFilterSheet()),
+                        onClearSourceFilter: _clearSourceFilter,
+                      ),
+                    ),
+                  ),
+                  SliverPadding(
+                    padding: EdgeInsets.fromLTRB(horizontal, 0, horizontal, 0),
+                    sliver: SliverToBoxAdapter(
+                      child: ValueListenableBuilder<SearchExecutionReport?>(
+                        valueListenable: _progressReportNotifier,
+                        builder: (context, report, _) {
+                          if (!_isSearching) {
+                            return const SizedBox.shrink();
+                          }
+                          return SearchProgressCard(
+                            report: report,
+                            isSearching: _isSearching,
+                          );
+                        },
+                      ),
+                    ),
+                  ),
+                  ValueListenableBuilder<_SearchRenderState?>(
+                    valueListenable: _renderStateNotifier,
+                    builder: (context, renderState, _) {
+                      if (renderState == null) {
+                        if (_isSearching) {
+                          return SliverPadding(
+                            padding: EdgeInsets.only(bottom: 16 + bottomSafe),
+                            sliver: const SliverToBoxAdapter(
+                              child: SizedBox.shrink(),
+                            ),
+                          );
+                        }
+                        return SliverPadding(
+                          padding: EdgeInsets.fromLTRB(
+                            horizontal,
+                            8,
+                            horizontal,
+                            16 + bottomSafe,
+                          ),
+                          sliver: SliverToBoxAdapter(
+                            child: SearchEmptyState(
+                              history: _searchHistory,
+                              onHistoryTap: _onHistoryTap,
+                              onClearHistory: _onClearHistory,
+                              onRemoveHistoryItem: _onRemoveHistoryItem,
+                            ),
+                          ),
+                        );
+                      }
+
+                      final report = renderState.report;
+                      final books = renderState.visibleBooks;
+                      final visibleCount = renderState.renderedResultCount
+                          .clamp(0, books.length);
+
+                      if (books.isEmpty) {
+                        return SliverPadding(
+                          padding: EdgeInsets.fromLTRB(
+                            horizontal,
+                            8,
+                            horizontal,
+                            16 + bottomSafe,
+                          ),
+                          sliver: SliverToBoxAdapter(
+                            child: SearchGroupedEmptyFallbackCard(
+                              canDisablePrecise:
+                                  _isPreciseBookMatch &&
+                                  report.books.isNotEmpty,
+                              canSwitchAllSources:
+                                  _selectedSourceIds.isNotEmpty,
+                              onDisablePreciseMatch:
+                                  _disablePreciseMatchFallback,
+                              onSwitchAllSources:
+                                  () =>
+                                      unawaited(_switchToAllSourcesFallback()),
+                            ),
+                          ),
+                        );
+                      }
+
+                      return SliverPadding(
+                        padding: EdgeInsets.fromLTRB(
+                          horizontal,
+                          8,
+                          horizontal,
+                          16 + bottomSafe,
+                        ),
+                        sliver: SliverList(
+                          delegate: SliverChildBuilderDelegate((
+                            context,
+                            index,
+                          ) {
+                            if (index == 0) {
+                              return Column(
+                                children: [
+                                  SearchReportSummary(
+                                    report: report,
+                                    visibleBookCount: books.length,
+                                    isPreciseBookMatch: _isPreciseBookMatch,
+                                  ),
+                                  if (report.failures.isNotEmpty) ...[
+                                    const SizedBox(height: 8),
+                                    SearchFailureBanner(report: report),
+                                  ],
+                                  const SizedBox(height: 10),
+                                ],
+                              );
+                            }
+
+                            final book = books[index - 1];
+                            final sourceName =
+                                report.sourceNames[book.sourceId] ??
+                                book.sourceId;
+                            final heroTag = _buildBookCoverHeroTag(
+                              book: book,
+                              listIndex: index - 1,
+                            );
+
+                            return SearchBookCard(
+                              book: book,
+                              sourceName: sourceName,
+                              sourceHitCount: report.sourceHitCountOf(book),
+                              heroTag: heroTag,
+                              normalizedIntro:
+                                  renderState.normalizedIntros[book.id],
+                              normalizedLatestChapter:
+                                  renderState.normalizedLatestChapters[book.id],
+                              onTap: () async {
+                                final selected = await _pickSearchResultSource(
+                                  report: report,
+                                  primaryBook: book,
+                                );
+                                if (selected == null || !mounted) {
+                                  return;
+                                }
+                                final selectedHeroTag =
+                                    selected.id == book.id
+                                        ? heroTag
+                                        : _buildBookCoverHeroTag(
+                                          book: selected,
+                                          listIndex: index - 1,
+                                        );
+                                await _openBookDetail(
+                                  selected,
+                                  heroTag: selectedHeroTag,
+                                );
+                              },
+                            );
+                          }, childCount: visibleCount + 1),
+                        ),
+                      );
+                    },
+                  ),
+                ],
               ),
-              children: [
-                SearchInputCard(
-                  keywordController: _keywordController,
-                  focusNode: _searchFocusNode,
-                  isSearching: _isSearching,
-                  searchContentMode: _searchContentMode,
-                  isPreciseBookMatch: _isPreciseBookMatch,
-                  selectedSourceCount: _selectedSourceIds.length,
-                  availableSourceCount: _availableSourceCount,
-                  isLoadingSourceCount: _isLoadingSourceCount,
-                  onSearch: _runSearch,
-                  onClearResults: _clearResults,
-                  onContentModeChanged: _onContentModeChanged,
-                  onPreciseMatchChanged: _onPreciseMatchChanged,
-                  onOpenSourceFilter: () => unawaited(_showSourceFilterSheet()),
-                  onClearSourceFilter: _clearSourceFilter,
-                ),
-                if (_isSearching)
-                  SearchProgressCard(report: report, isSearching: _isSearching),
-                if (report != null) ...[
-                  const SizedBox(height: 8),
-                  SearchReportSummary(
-                    report: report,
-                    visibleBookCount: _visibleBooks.length,
-                    isPreciseBookMatch: _isPreciseBookMatch,
-                  ),
-                  if (report.failures.isNotEmpty) ...[
-                    const SizedBox(height: 8),
-                    SearchFailureBanner(report: report),
-                  ],
-                  const SizedBox(height: 10),
-                  _buildResultList(report, _visibleBooks),
-                ] else if (!_isSearching)
-                  SearchEmptyState(
-                    history: _searchHistory,
-                    onHistoryTap: _onHistoryTap,
-                    onClearHistory: _onClearHistory,
-                    onRemoveHistoryItem: _onRemoveHistoryItem,
-                  ),
-              ],
             ),
           ),
         ),
@@ -253,30 +357,41 @@ class _SearchPageState extends State<SearchPage> {
     setState(() {
       _searchContentMode = mode;
       _selectedSourceIds = <String>{};
-      _setReport(null);
     });
+    _clearSearchOutput();
     unawaited(_refreshSourceCount());
   }
 
   void _onPreciseMatchChanged(bool value) {
+    if (_isPreciseBookMatch == value) {
+      return;
+    }
     setState(() {
       _isPreciseBookMatch = value;
-      _setReport(_report);
     });
+    final report = _progressReportNotifier.value;
+    if (report != null) {
+      final sessionId = _searchSessionId;
+      final token = _activeSearchToken;
+      _schedulePrepareRenderState(
+        report: report,
+        sessionId: sessionId,
+        token: token,
+        force: true,
+      );
+    }
   }
 
   void _clearResults() {
     _keywordController.clear();
-    setState(() {
-      _setReport(null);
-    });
+    _clearSearchOutput();
   }
 
   void _clearSourceFilter() {
     setState(() {
       _selectedSourceIds = <String>{};
-      _setReport(null);
     });
+    _clearSearchOutput();
   }
 
   // ── Search History ──
@@ -286,6 +401,9 @@ class _SearchPageState extends State<SearchPage> {
       final enabled =
           await _searchSystemSettingsService
               .loadAggregateByTitleAuthorEnabled();
+      final debugLogEnabled =
+          await _searchSystemSettingsService.loadSearchDebugLogEnabled();
+      _searchService.setSearchDebugLoggingEnabled(debugLogEnabled);
       if (!mounted) {
         return;
       }
@@ -392,8 +510,8 @@ class _SearchPageState extends State<SearchPage> {
 
     setState(() {
       _selectedSourceIds = selected;
-      _setReport(null);
     });
+    _clearSearchOutput();
   }
 
   // ── Scroll pagination ──
@@ -413,14 +531,19 @@ class _SearchPageState extends State<SearchPage> {
   void _appendMoreRenderedResults() {
     if (_isAppendingResults) return;
 
-    final total = _visibleBooks.length;
-    if (total == 0 || _renderedResultCount >= total) return;
+    final renderState = _renderStateNotifier.value;
+    if (renderState == null) return;
+
+    final total = renderState.visibleBooks.length;
+    if (total == 0 || renderState.renderedResultCount >= total) return;
 
     _isAppendingResults = true;
-    setState(() {
-      _renderedResultCount = (_renderedResultCount + _searchResultPageSize)
-          .clamp(0, total);
-    });
+    final nextRenderedCount = (renderState.renderedResultCount +
+            _searchResultPageSize)
+        .clamp(0, total);
+    _renderStateNotifier.value = renderState.copyWith(
+      renderedResultCount: nextRenderedCount,
+    );
     _isAppendingResults = false;
     _scheduleAutoAppendIfNeeded();
   }
@@ -429,7 +552,11 @@ class _SearchPageState extends State<SearchPage> {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted || _isSearching || _isAppendingResults) return;
       if (!_pageScrollController.hasClients) return;
-      if (_renderedResultCount >= _visibleBooks.length) return;
+      final renderState = _renderStateNotifier.value;
+      if (renderState == null) return;
+      if (renderState.renderedResultCount >= renderState.visibleBooks.length) {
+        return;
+      }
 
       final position = _pageScrollController.position;
       final isNearBottom =
@@ -443,106 +570,104 @@ class _SearchPageState extends State<SearchPage> {
     });
   }
 
-  // ── Report & snippet pre-processing ──
+  // ── Report preparation ──
 
-  void _setReport(SearchExecutionReport? report) {
-    _report = report;
-    _visibleBooks =
-        report == null
-            ? const <Book>[]
-            : _applyPreciseFilter(report.books, report.keyword);
+  void _clearSearchOutput() {
+    _renderPrepareTicket += 1;
+    _clearProgressUiThrottle();
+    _clearDeferredProgressUiUpdate();
+    _clearPendingSearchCompletion();
+    _progressReportNotifier.value = null;
+    _renderStateNotifier.value = null;
+  }
 
-    // Pre-process snippets to avoid regex work during build
-    if (report != null && _visibleBooks.isNotEmpty) {
-      final intros = <String, String?>{};
-      final chapters = <String, String?>{};
-      for (final book in _visibleBooks) {
-        final key = '${book.sourceId}_${book.id}_${book.detailUrl.hashCode}';
-        intros[key] = _normalizeSnippet(book.intro);
-        chapters[key] = _normalizeSnippet(book.latestChapter);
+  Future<void> _prepareRenderState({
+    required SearchExecutionReport report,
+    required int sessionId,
+    SearchCancellationToken? token,
+    bool force = false,
+  }) async {
+    final preciseMatch = _isPreciseBookMatch;
+    final currentState = _renderStateNotifier.value;
+    if (!force &&
+        currentState != null &&
+        identical(currentState.booksIdentity, report.books) &&
+        currentState.preciseMatch == preciseMatch &&
+        currentState.keyword == report.keyword) {
+      if (!identical(currentState.report, report)) {
+        _renderStateNotifier.value = currentState.copyWith(report: report);
       }
-      _normalizedIntros = intros;
-      _normalizedLatestChapters = chapters;
-    } else {
-      _normalizedIntros = const <String, String?>{};
-      _normalizedLatestChapters = const <String, String?>{};
-    }
-
-    if (_visibleBooks.isEmpty) {
-      _renderedResultCount = 0;
       return;
     }
 
-    final target =
-        _visibleBooks.length > _searchResultPageSize
-            ? _searchResultPageSize
-            : _visibleBooks.length;
-    _renderedResultCount = target;
-    _scheduleAutoAppendIfNeeded();
-  }
-
-  // ── Result list ──
-
-  Widget _buildResultList(SearchExecutionReport report, List<Book> books) {
-    if (books.isEmpty) {
-      final canDisablePrecise = _isPreciseBookMatch && report.books.isNotEmpty;
-      final canSwitchAllSources = _selectedSourceIds.isNotEmpty;
-      return SearchGroupedEmptyFallbackCard(
-        canDisablePrecise: canDisablePrecise,
-        canSwitchAllSources: canSwitchAllSources,
-        onDisablePreciseMatch: _disablePreciseMatchFallback,
-        onSwitchAllSources: () => unawaited(_switchToAllSourcesFallback()),
+    final ticket = ++_renderPrepareTicket;
+    final request = _SearchRenderPrepareRequest(
+      keyword: report.keyword,
+      preciseMatch: preciseMatch,
+      books: report.books
+          .map(
+            (book) => _SearchRenderBookPayload(
+              id: book.id,
+              title: book.title,
+              intro: book.intro,
+              latestChapter: book.latestChapter,
+            ),
+          )
+          .toList(growable: false),
+    );
+    late final _SearchRenderPrepareResult prepared;
+    try {
+      prepared = await _prepareSearchRenderDataInIsolate(request);
+    } catch (error) {
+      // Fallback to main isolate to avoid crashing when isolate payload checks fail.
+      debugPrint(
+        'Search render isolate failed, fallback to UI isolate: $error',
       );
+      prepared = _prepareSearchRenderData(request);
     }
 
-    final visibleCount = _renderedResultCount.clamp(0, books.length);
+    if (!mounted || ticket != _renderPrepareTicket) {
+      return;
+    }
+    if (sessionId != _searchSessionId) {
+      return;
+    }
+    if (token?.isCancelled ?? false) {
+      return;
+    }
 
-    return Column(
-      children: [
-        ListView.builder(
-          shrinkWrap: true,
-          physics: const NeverScrollableScrollPhysics(),
-          itemCount: visibleCount,
-          itemBuilder: (context, index) {
-            final book = books[index];
-            final sourceName =
-                report.sourceNames[book.sourceId] ?? book.sourceId;
-            final heroTag = _buildBookCoverHeroTag(
-              book: book,
-              listIndex: index,
-            );
-            final snippetKey =
-                '${book.sourceId}_${book.id}_${book.detailUrl.hashCode}';
+    final booksById = <String, Book>{
+      for (final book in report.books) book.id: book,
+    };
+    final visibleBooks = <Book>[];
+    for (final id in prepared.visibleBookIds) {
+      final book = booksById[id];
+      if (book != null) {
+        visibleBooks.add(book);
+      }
+    }
 
-            return SearchBookCard(
-              book: book,
-              sourceName: sourceName,
-              sourceHitCount: report.sourceHitCountOf(book),
-              heroTag: heroTag,
-              normalizedIntro: _normalizedIntros[snippetKey],
-              normalizedLatestChapter: _normalizedLatestChapters[snippetKey],
-              onTap: () async {
-                final selected = await _pickSearchResultSource(
-                  report: report,
-                  primaryBook: book,
-                );
-                if (selected == null || !mounted) {
-                  return;
-                }
-                final selectedHeroTag =
-                    selected.id == book.id
-                        ? heroTag
-                        : _buildBookCoverHeroTag(
-                          book: selected,
-                          listIndex: index,
-                        );
-                _openBookDetail(selected, heroTag: selectedHeroTag);
-              },
-            );
-          },
-        ),
-      ],
+    final renderedResultCount =
+        visibleBooks.length > _searchResultPageSize
+            ? _searchResultPageSize
+            : visibleBooks.length;
+
+    _renderStateNotifier.value = _SearchRenderState(
+      report: report,
+      booksIdentity: report.books,
+      keyword: report.keyword,
+      preciseMatch: preciseMatch,
+      visibleBooks: List<Book>.unmodifiable(visibleBooks),
+      normalizedIntros: Map<String, String?>.unmodifiable(
+        prepared.normalizedIntros,
+      ),
+      normalizedLatestChapters: Map<String, String?>.unmodifiable(
+        prepared.normalizedLatestChapters,
+      ),
+      renderedResultCount: renderedResultCount,
     );
+
+    _scheduleAutoAppendIfNeeded();
   }
 
   String _buildBookCoverHeroTag({required Book book, required int listIndex}) {
@@ -613,7 +738,7 @@ class _SearchPageState extends State<SearchPage> {
     );
   }
 
-  void _openBookDetail(Book book, {required String heroTag}) {
+  Future<void> _openBookDetail(Book book, {required String heroTag}) async {
     final route =
         Uri(
           path: '/book/${book.id}',
@@ -624,17 +749,37 @@ class _SearchPageState extends State<SearchPage> {
             'heroTag': heroTag,
           },
         ).toString();
-    context.push(route);
+    _pauseActiveSearchIfNeeded();
+    try {
+      await context.push(route);
+    } finally {
+      if (mounted) {
+        _resumeActiveSearchIfNeeded();
+      }
+    }
+  }
+
+  void _pauseActiveSearchIfNeeded() {
+    final token = _activeSearchToken;
+    if (token == null || token.isCancelled || token.isPaused) {
+      return;
+    }
+    token.pause();
+  }
+
+  void _resumeActiveSearchIfNeeded() {
+    final token = _activeSearchToken;
+    if (token == null || token.isCancelled || !token.isPaused) {
+      return;
+    }
+    token.resume();
   }
 
   void _disablePreciseMatchFallback() {
     if (!_isPreciseBookMatch) {
       return;
     }
-    setState(() {
-      _isPreciseBookMatch = false;
-      _setReport(_report);
-    });
+    _onPreciseMatchChanged(false);
   }
 
   Future<void> _switchToAllSourcesFallback() async {
@@ -645,91 +790,6 @@ class _SearchPageState extends State<SearchPage> {
       _selectedSourceIds = <String>{};
     });
     await _runSearch();
-  }
-
-  // ── Snippet normalization (used at _setReport time, not during build) ──
-
-  String? _normalizeSnippet(String? raw) {
-    final text = raw?.trim();
-    if (text == null || text.isEmpty) return null;
-
-    var normalized = text
-        .replaceAll(r'\r\n', '\n')
-        .replaceAll(r'\n', '\n')
-        .replaceAll('\r\n', '\n')
-        .replaceAll('\r', '\n');
-
-    normalized = normalized
-        .replaceAll(RegExp(r'<\s*br\s*/?>', caseSensitive: false), '\n')
-        .replaceAll(RegExp(r'\{\{[^{}]*\}\}'), '')
-        .replaceAll(RegExp(r'\{\{[^\n\r]*'), '');
-
-    if (RegExp(r'<[^>]+>').hasMatch(normalized)) {
-      normalized = html_parser.parseFragment(normalized).text ?? '';
-    }
-
-    normalized =
-        normalized
-            .replaceAll(RegExp(r'[ \t\u00A0]+'), ' ')
-            .replaceAll(RegExp(r'\n{3,}'), '\n\n')
-            .trim();
-
-    return normalized.isEmpty ? null : normalized;
-  }
-
-  // ── Precise matching ──
-
-  List<Book> _applyPreciseFilter(List<Book> books, String keyword) {
-    if (!_isPreciseBookMatch) return books;
-
-    final normalizedKeyword = _normalizePreciseText(keyword);
-    if (normalizedKeyword.isEmpty) return books;
-
-    return books
-        .where((book) => _isPreciseTitleMatch(book.title, normalizedKeyword))
-        .toList(growable: false);
-  }
-
-  bool _isPreciseTitleMatch(String title, String normalizedKeyword) {
-    final normalizedTitle = _normalizePreciseText(title);
-    if (normalizedTitle.isEmpty) return false;
-
-    if (normalizedTitle == normalizedKeyword) return true;
-
-    if (!normalizedTitle.startsWith(normalizedKeyword) ||
-        normalizedTitle.length <= normalizedKeyword.length) {
-      return false;
-    }
-
-    final nextChar = normalizedTitle[normalizedKeyword.length];
-    return _preciseTitleSeparators.contains(nextChar);
-  }
-
-  String _normalizePreciseText(String raw) {
-    var normalized = raw.trim().toLowerCase();
-    if (normalized.isEmpty) return '';
-
-    if (normalized.contains('<') && normalized.contains('>')) {
-      normalized = normalized.replaceAll(_htmlTagRegex, ' ');
-    }
-
-    normalized = normalized.replaceAll(_preciseSpaceRegex, ' ').trim();
-    return _trimPreciseWrappers(normalized);
-  }
-
-  String _trimPreciseWrappers(String value) {
-    var normalized = value;
-    while (normalized.isNotEmpty &&
-        _preciseLeadingWrappers.contains(normalized[0])) {
-      normalized = normalized.substring(1).trimLeft();
-    }
-
-    while (normalized.isNotEmpty &&
-        _preciseTrailingWrappers.contains(normalized[normalized.length - 1])) {
-      normalized = normalized.substring(0, normalized.length - 1).trimRight();
-    }
-
-    return normalized;
   }
 
   // ── Progress throttling ──
@@ -758,9 +818,7 @@ class _SearchPageState extends State<SearchPage> {
       _progressUiTimer = null;
       _pendingProgressReport = null;
       _lastProgressUiUpdateAt = now;
-      setState(() {
-        _setReport(report);
-      });
+      _applyProgressReport(report: report, token: token, sessionId: sessionId);
       return;
     }
 
@@ -780,10 +838,132 @@ class _SearchPageState extends State<SearchPage> {
       }
 
       _lastProgressUiUpdateAt = DateTime.now();
-      setState(() {
-        _setReport(pending);
-      });
+      _applyProgressReport(report: pending, token: token, sessionId: sessionId);
     });
+  }
+
+  void _applyProgressReport({
+    required SearchExecutionReport report,
+    required SearchCancellationToken token,
+    required int sessionId,
+    bool forceRenderState = false,
+  }) {
+    if (!mounted || token.isCancelled || sessionId != _searchSessionId) {
+      return;
+    }
+    if (_isListScrollActive) {
+      _deferredProgressUiUpdate = _DeferredProgressUiUpdate(
+        report: report,
+        token: token,
+        sessionId: sessionId,
+        forceRenderState:
+            forceRenderState ||
+            (_deferredProgressUiUpdate?.forceRenderState ?? false),
+        isFinalReport: false,
+      );
+      _ensureDeferredProgressFlushDeadline();
+      return;
+    }
+    _applyProgressReportNow(
+      report: report,
+      token: token,
+      sessionId: sessionId,
+      forceRenderState: forceRenderState,
+    );
+  }
+
+  Future<bool> _applyFinalProgressReport({
+    required SearchExecutionReport report,
+    required SearchCancellationToken token,
+    required int sessionId,
+  }) async {
+    if (!mounted || token.isCancelled || sessionId != _searchSessionId) {
+      return true;
+    }
+    if (_isListScrollActive) {
+      _deferredProgressUiUpdate = _DeferredProgressUiUpdate(
+        report: report,
+        token: token,
+        sessionId: sessionId,
+        forceRenderState: false,
+        isFinalReport: true,
+      );
+      _ensureDeferredProgressFlushDeadline();
+      return false;
+    }
+    await _applyFinalProgressReportNow(
+      report: report,
+      token: token,
+      sessionId: sessionId,
+      forceRenderState: false,
+    );
+    return true;
+  }
+
+  void _applyProgressReportNow({
+    required SearchExecutionReport report,
+    required SearchCancellationToken token,
+    required int sessionId,
+    required bool forceRenderState,
+  }) {
+    if (!mounted || token.isCancelled || sessionId != _searchSessionId) {
+      return;
+    }
+    _progressReportNotifier.value = report;
+    _schedulePrepareRenderState(
+      report: report,
+      sessionId: sessionId,
+      token: token,
+      force: forceRenderState,
+    );
+  }
+
+  Future<void> _applyFinalProgressReportNow({
+    required SearchExecutionReport report,
+    required SearchCancellationToken token,
+    required int sessionId,
+    required bool forceRenderState,
+  }) async {
+    if (!mounted || token.isCancelled || sessionId != _searchSessionId) {
+      return;
+    }
+    _progressReportNotifier.value = report;
+    await _prepareRenderState(
+      report: report,
+      sessionId: sessionId,
+      token: token,
+      force: forceRenderState,
+    );
+    _completePendingSearchIfMatch(sessionId: sessionId, token: token);
+  }
+
+  void _ensureDeferredProgressFlushDeadline() {
+    if (_scrollUiForceFlushTimer?.isActive ?? false) {
+      return;
+    }
+    _scrollUiForceFlushTimer = Timer(_scrollUiMaxDeferredWindow, () {
+      _scrollUiForceFlushTimer = null;
+      _isListScrollActive = false;
+      unawaited(_flushDeferredProgressUiUpdate());
+    });
+  }
+
+  void _schedulePrepareRenderState({
+    required SearchExecutionReport report,
+    required int sessionId,
+    SearchCancellationToken? token,
+    bool force = false,
+  }) {
+    unawaited(
+      _prepareRenderState(
+        report: report,
+        sessionId: sessionId,
+        token: token,
+        force: force,
+      ).catchError((error, stackTrace) {
+        debugPrint('Prepare render state failed: $error');
+      }),
+    );
   }
 
   // ── Search execution ──
@@ -805,11 +985,11 @@ class _SearchPageState extends State<SearchPage> {
     final sessionId = ++_searchSessionId;
     final token = SearchCancellationToken();
     _activeSearchToken = token;
+    var pendingFinalUiCompletion = false;
 
-    _clearProgressUiThrottle();
+    _clearSearchOutput();
     setState(() {
       _isSearching = true;
-      _setReport(null);
     });
 
     try {
@@ -838,9 +1018,16 @@ class _SearchPageState extends State<SearchPage> {
         return;
       }
 
-      setState(() {
-        _setReport(report);
-      });
+      final finalApplied = await _applyFinalProgressReport(
+        report: report,
+        sessionId: sessionId,
+        token: token,
+      );
+      pendingFinalUiCompletion = !finalApplied;
+      if (pendingFinalUiCompletion) {
+        _pendingSearchCompletionSessionId = sessionId;
+        _pendingSearchCompletionToken = token;
+      }
 
       // Save to search history
       unawaited(_historyService.add(keyword).then((_) => _loadSearchHistory()));
@@ -862,12 +1049,19 @@ class _SearchPageState extends State<SearchPage> {
     } finally {
       _clearProgressUiThrottle();
       if (mounted && sessionId == _searchSessionId) {
-        setState(() {
-          _isSearching = false;
-          if (identical(_activeSearchToken, token)) {
-            _activeSearchToken = null;
-          }
-        });
+        final shouldDelayCompletion =
+            pendingFinalUiCompletion &&
+            _pendingSearchCompletionSessionId == sessionId &&
+            identical(_pendingSearchCompletionToken, token);
+        if (!shouldDelayCompletion) {
+          setState(() {
+            _isSearching = false;
+            if (identical(_activeSearchToken, token)) {
+              _activeSearchToken = null;
+            }
+          });
+          _clearPendingSearchCompletion();
+        }
       }
     }
   }
@@ -877,6 +1071,8 @@ class _SearchPageState extends State<SearchPage> {
 
     _activeSearchToken?.cancel();
     _clearProgressUiThrottle();
+    _clearDeferredProgressUiUpdate();
+    _clearPendingSearchCompletion();
     setState(() {
       _isSearching = false;
       _activeSearchToken = null;
@@ -888,4 +1084,453 @@ class _SearchPageState extends State<SearchPage> {
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(text)));
   }
+
+  bool _onScrollNotification(ScrollNotification notification) {
+    if (notification.depth != 0) {
+      return false;
+    }
+    if (notification is ScrollStartNotification ||
+        notification is ScrollUpdateNotification ||
+        notification is OverscrollNotification ||
+        (notification is UserScrollNotification &&
+            notification.direction != ScrollDirection.idle)) {
+      _isListScrollActive = true;
+      _scrollUiResumeTimer?.cancel();
+      _scrollUiResumeTimer = null;
+      return false;
+    }
+    if (notification is ScrollEndNotification ||
+        (notification is UserScrollNotification &&
+            notification.direction == ScrollDirection.idle)) {
+      _scheduleApplyDeferredUiUpdate();
+    }
+    return false;
+  }
+
+  void _scheduleApplyDeferredUiUpdate() {
+    _scrollUiResumeTimer?.cancel();
+    _scrollUiResumeTimer = Timer(_scrollUiResumeDelay, () {
+      _scrollUiResumeTimer = null;
+      _isListScrollActive = false;
+      unawaited(_flushDeferredProgressUiUpdate());
+    });
+  }
+
+  Future<void> _flushDeferredProgressUiUpdate() async {
+    _scrollUiResumeTimer?.cancel();
+    _scrollUiResumeTimer = null;
+    _scrollUiForceFlushTimer?.cancel();
+    _scrollUiForceFlushTimer = null;
+    final deferred = _deferredProgressUiUpdate;
+    if (deferred == null) {
+      return;
+    }
+    _deferredProgressUiUpdate = null;
+    if (!mounted ||
+        deferred.token.isCancelled ||
+        deferred.sessionId != _searchSessionId) {
+      return;
+    }
+    if (deferred.isFinalReport) {
+      await _applyFinalProgressReportNow(
+        report: deferred.report,
+        token: deferred.token,
+        sessionId: deferred.sessionId,
+        forceRenderState: deferred.forceRenderState,
+      );
+      return;
+    }
+    _applyProgressReportNow(
+      report: deferred.report,
+      token: deferred.token,
+      sessionId: deferred.sessionId,
+      forceRenderState: deferred.forceRenderState,
+    );
+  }
+
+  void _completePendingSearchIfMatch({
+    required int sessionId,
+    required SearchCancellationToken token,
+  }) {
+    if (!mounted || sessionId != _searchSessionId) {
+      return;
+    }
+    if (_pendingSearchCompletionSessionId != sessionId ||
+        !identical(_pendingSearchCompletionToken, token)) {
+      return;
+    }
+    setState(() {
+      _isSearching = false;
+      if (identical(_activeSearchToken, token)) {
+        _activeSearchToken = null;
+      }
+    });
+    _clearPendingSearchCompletion();
+  }
+
+  void _clearPendingSearchCompletion() {
+    _pendingSearchCompletionSessionId = null;
+    _pendingSearchCompletionToken = null;
+  }
+
+  void _clearDeferredProgressUiUpdate() {
+    _scrollUiResumeTimer?.cancel();
+    _scrollUiResumeTimer = null;
+    _scrollUiForceFlushTimer?.cancel();
+    _scrollUiForceFlushTimer = null;
+    _deferredProgressUiUpdate = null;
+    _isListScrollActive = false;
+  }
+}
+
+class _DeferredProgressUiUpdate {
+  const _DeferredProgressUiUpdate({
+    required this.report,
+    required this.token,
+    required this.sessionId,
+    required this.forceRenderState,
+    required this.isFinalReport,
+  });
+
+  final SearchExecutionReport report;
+  final SearchCancellationToken token;
+  final int sessionId;
+  final bool forceRenderState;
+  final bool isFinalReport;
+}
+
+class _SearchRenderState {
+  const _SearchRenderState({
+    required this.report,
+    required this.booksIdentity,
+    required this.keyword,
+    required this.preciseMatch,
+    required this.visibleBooks,
+    required this.normalizedIntros,
+    required this.normalizedLatestChapters,
+    required this.renderedResultCount,
+  });
+
+  final SearchExecutionReport report;
+  final Object booksIdentity;
+  final String keyword;
+  final bool preciseMatch;
+  final List<Book> visibleBooks;
+  final Map<String, String?> normalizedIntros;
+  final Map<String, String?> normalizedLatestChapters;
+  final int renderedResultCount;
+
+  _SearchRenderState copyWith({
+    SearchExecutionReport? report,
+    int? renderedResultCount,
+  }) {
+    return _SearchRenderState(
+      report: report ?? this.report,
+      booksIdentity: booksIdentity,
+      keyword: keyword,
+      preciseMatch: preciseMatch,
+      visibleBooks: visibleBooks,
+      normalizedIntros: normalizedIntros,
+      normalizedLatestChapters: normalizedLatestChapters,
+      renderedResultCount: renderedResultCount ?? this.renderedResultCount,
+    );
+  }
+}
+
+class _SearchRenderPrepareRequest {
+  const _SearchRenderPrepareRequest({
+    required this.keyword,
+    required this.preciseMatch,
+    required this.books,
+  });
+
+  final String keyword;
+  final bool preciseMatch;
+  final List<_SearchRenderBookPayload> books;
+}
+
+class _SearchRenderBookPayload {
+  const _SearchRenderBookPayload({
+    required this.id,
+    required this.title,
+    this.intro,
+    this.latestChapter,
+  });
+
+  final String id;
+  final String title;
+  final String? intro;
+  final String? latestChapter;
+}
+
+class _SearchRenderPrepareResult {
+  const _SearchRenderPrepareResult({
+    required this.visibleBookIds,
+    required this.normalizedIntros,
+    required this.normalizedLatestChapters,
+  });
+
+  final List<String> visibleBookIds;
+  final Map<String, String?> normalizedIntros;
+  final Map<String, String?> normalizedLatestChapters;
+}
+
+final RegExp _renderPreciseSpaceRegex = RegExp(r'[\u3000\s]+');
+final RegExp _renderHtmlTagRegex = RegExp(r'<[^>]+>');
+const Set<String> _renderPreciseTitleSeparators = <String>{
+  ' ',
+  '-',
+  '_',
+  '.',
+  '·',
+  ':',
+  '：',
+  '/',
+  '|',
+  '(',
+  '（',
+  '[',
+  '【',
+  '<',
+  '《',
+};
+const Set<String> _renderPreciseLeadingWrappers = <String>{
+  '《',
+  '〈',
+  '<',
+  '「',
+  '『',
+  '【',
+  '[',
+  '(',
+  '（',
+};
+const Set<String> _renderPreciseTrailingWrappers = <String>{
+  '》',
+  '〉',
+  '>',
+  '」',
+  '』',
+  '】',
+  ']',
+  ')',
+  '）',
+};
+
+_SearchRenderPrepareResult _prepareSearchRenderData(
+  _SearchRenderPrepareRequest request,
+) {
+  final normalizedKeyword = _normalizeRenderPreciseText(request.keyword);
+  final hasPreciseKeyword =
+      request.preciseMatch && normalizedKeyword.isNotEmpty;
+
+  final visibleBookIds = <String>[];
+  final normalizedIntros = <String, String?>{};
+  final normalizedLatestChapters = <String, String?>{};
+
+  for (final book in request.books) {
+    if (hasPreciseKeyword &&
+        !_isRenderPreciseTitleMatch(book.title, normalizedKeyword)) {
+      continue;
+    }
+    visibleBookIds.add(book.id);
+    normalizedIntros[book.id] = _normalizeRenderSnippet(book.intro);
+    normalizedLatestChapters[book.id] = _normalizeRenderSnippet(
+      book.latestChapter,
+    );
+  }
+
+  return _SearchRenderPrepareResult(
+    visibleBookIds: visibleBookIds,
+    normalizedIntros: normalizedIntros,
+    normalizedLatestChapters: normalizedLatestChapters,
+  );
+}
+
+String? _normalizeRenderSnippet(String? raw) {
+  final text = raw?.trim();
+  if (text == null || text.isEmpty) return null;
+
+  var normalized = text
+      .replaceAll(r'\r\n', '\n')
+      .replaceAll(r'\n', '\n')
+      .replaceAll('\r\n', '\n')
+      .replaceAll('\r', '\n');
+
+  normalized = normalized
+      .replaceAll(RegExp(r'<\s*br\s*/?>', caseSensitive: false), '\n')
+      .replaceAll(RegExp(r'\{\{[^{}]*\}\}'), '')
+      .replaceAll(RegExp(r'\{\{[^\n\r]*'), '');
+
+  if (_renderHtmlTagRegex.hasMatch(normalized)) {
+    normalized = html_parser.parseFragment(normalized).text ?? '';
+  }
+
+  normalized =
+      normalized
+          .replaceAll(RegExp(r'[ \t\u00A0]+'), ' ')
+          .replaceAll(RegExp(r'\n{3,}'), '\n\n')
+          .trim();
+
+  return normalized.isEmpty ? null : normalized;
+}
+
+bool _isRenderPreciseTitleMatch(String title, String normalizedKeyword) {
+  final normalizedTitle = _normalizeRenderPreciseText(title);
+  if (normalizedTitle.isEmpty) return false;
+
+  if (normalizedTitle == normalizedKeyword) return true;
+
+  if (!normalizedTitle.startsWith(normalizedKeyword) ||
+      normalizedTitle.length <= normalizedKeyword.length) {
+    return false;
+  }
+
+  final nextChar = normalizedTitle[normalizedKeyword.length];
+  return _renderPreciseTitleSeparators.contains(nextChar);
+}
+
+String _normalizeRenderPreciseText(String raw) {
+  var normalized = raw.trim().toLowerCase();
+  if (normalized.isEmpty) return '';
+
+  if (normalized.contains('<') && normalized.contains('>')) {
+    normalized = normalized.replaceAll(_renderHtmlTagRegex, ' ');
+  }
+
+  normalized = normalized.replaceAll(_renderPreciseSpaceRegex, ' ').trim();
+  return _trimRenderPreciseWrappers(normalized);
+}
+
+String _trimRenderPreciseWrappers(String value) {
+  var normalized = value;
+  while (normalized.isNotEmpty &&
+      _renderPreciseLeadingWrappers.contains(normalized[0])) {
+    normalized = normalized.substring(1).trimLeft();
+  }
+
+  while (normalized.isNotEmpty &&
+      _renderPreciseTrailingWrappers.contains(
+        normalized[normalized.length - 1],
+      )) {
+    normalized = normalized.substring(0, normalized.length - 1).trimRight();
+  }
+
+  return normalized;
+}
+
+Future<_SearchRenderPrepareResult> _prepareSearchRenderDataInIsolate(
+  _SearchRenderPrepareRequest request,
+) async {
+  final message = _searchRenderPrepareRequestToMessage(request);
+  final resultMessage = await Isolate.run(
+    () => _prepareSearchRenderDataInIsolateEntry(message),
+  );
+  return _searchRenderPrepareResultFromMessage(resultMessage);
+}
+
+Map<String, Object?> _prepareSearchRenderDataInIsolateEntry(
+  Map<String, Object?> message,
+) {
+  final request = _searchRenderPrepareRequestFromMessage(message);
+  final result = _prepareSearchRenderData(request);
+  return _searchRenderPrepareResultToMessage(result);
+}
+
+Map<String, Object?> _searchRenderPrepareRequestToMessage(
+  _SearchRenderPrepareRequest request,
+) {
+  return <String, Object?>{
+    'keyword': request.keyword,
+    'preciseMatch': request.preciseMatch,
+    'books': request.books
+        .map(
+          (book) => <String, Object?>{
+            'id': book.id,
+            'title': book.title,
+            'intro': book.intro,
+            'latestChapter': book.latestChapter,
+          },
+        )
+        .toList(growable: false),
+  };
+}
+
+_SearchRenderPrepareRequest _searchRenderPrepareRequestFromMessage(
+  Map<String, Object?> message,
+) {
+  final rawBooks = message['books'];
+  final books = <_SearchRenderBookPayload>[];
+  if (rawBooks is List) {
+    for (final entry in rawBooks) {
+      if (entry is! Map) {
+        continue;
+      }
+      final id = entry['id'];
+      final title = entry['title'];
+      books.add(
+        _SearchRenderBookPayload(
+          id: id is String ? id : '',
+          title: title is String ? title : '',
+          intro: entry['intro'] as String?,
+          latestChapter: entry['latestChapter'] as String?,
+        ),
+      );
+    }
+  }
+  return _SearchRenderPrepareRequest(
+    keyword: (message['keyword'] as String?) ?? '',
+    preciseMatch: message['preciseMatch'] == true,
+    books: books,
+  );
+}
+
+Map<String, Object?> _searchRenderPrepareResultToMessage(
+  _SearchRenderPrepareResult result,
+) {
+  return <String, Object?>{
+    'visibleBookIds': result.visibleBookIds,
+    'normalizedIntros': result.normalizedIntros,
+    'normalizedLatestChapters': result.normalizedLatestChapters,
+  };
+}
+
+_SearchRenderPrepareResult _searchRenderPrepareResultFromMessage(
+  Map<String, Object?> message,
+) {
+  final visibleBookIds = <String>[];
+  final rawVisibleBookIds = message['visibleBookIds'];
+  if (rawVisibleBookIds is List) {
+    for (final id in rawVisibleBookIds) {
+      if (id is String) {
+        visibleBookIds.add(id);
+      }
+    }
+  }
+
+  final normalizedIntros = <String, String?>{};
+  final rawIntros = message['normalizedIntros'];
+  if (rawIntros is Map) {
+    rawIntros.forEach((key, value) {
+      if (key is String) {
+        normalizedIntros[key] = value as String?;
+      }
+    });
+  }
+
+  final normalizedLatestChapters = <String, String?>{};
+  final rawLatestChapters = message['normalizedLatestChapters'];
+  if (rawLatestChapters is Map) {
+    rawLatestChapters.forEach((key, value) {
+      if (key is String) {
+        normalizedLatestChapters[key] = value as String?;
+      }
+    });
+  }
+
+  return _SearchRenderPrepareResult(
+    visibleBookIds: visibleBookIds,
+    normalizedIntros: normalizedIntros,
+    normalizedLatestChapters: normalizedLatestChapters,
+  );
 }

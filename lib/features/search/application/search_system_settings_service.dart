@@ -11,6 +11,8 @@ class SearchSystemSettingsService {
 
   static const String _aggregateByTitleAuthorEnabledKey =
       'search.system.aggregateByTitleAuthorEnabled';
+  static const String _searchDebugLogEnabledKey =
+      'search.system.debugLogEnabled';
 
   Future<bool> loadAggregateByTitleAuthorEnabled() async {
     final prefs = await _preferencesFuture;
@@ -20,5 +22,15 @@ class SearchSystemSettingsService {
   Future<void> saveAggregateByTitleAuthorEnabled(bool enabled) async {
     final prefs = await _preferencesFuture;
     await prefs.setBool(_aggregateByTitleAuthorEnabledKey, enabled);
+  }
+
+  Future<bool> loadSearchDebugLogEnabled() async {
+    final prefs = await _preferencesFuture;
+    return prefs.getBool(_searchDebugLogEnabledKey) ?? false;
+  }
+
+  Future<void> saveSearchDebugLogEnabled(bool enabled) async {
+    final prefs = await _preferencesFuture;
+    await prefs.setBool(_searchDebugLogEnabledKey, enabled);
   }
 }

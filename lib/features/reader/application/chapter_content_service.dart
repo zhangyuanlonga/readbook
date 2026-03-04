@@ -26,7 +26,6 @@ import '../../../data/repositories/source_repository_impl.dart';
 import '../../../domain/entities/search_request_context.dart';
 import '../../../domain/entities/source_definition.dart';
 import '../../../domain/repositories/source_repository.dart';
-import '../../source/application/source_health_metrics_service.dart';
 import 'content_text_cleaner.dart';
 
 class ChapterContentResult {
@@ -58,7 +57,6 @@ class ChapterContentService {
     AppLogger? logger,
     UrlTemplateResolver? urlTemplateResolver,
     SourceResponseProcessor? responseProcessor,
-    SourceHealthMetricsService? sourceHealthMetricsService,
   }) : _database = database ?? AppDatabase.instance,
        _sourceRepository =
            sourceRepository ??
@@ -75,10 +73,7 @@ class ChapterContentService {
        _urlTemplateResolver =
            urlTemplateResolver ?? const UrlTemplateResolver(),
        _responseProcessor =
-           responseProcessor ?? const SourceResponseProcessor(),
-       _sourceHealthMetricsService =
-           sourceHealthMetricsService ??
-           SourceHealthMetricsService(sourceRepository: sourceRepository);
+           responseProcessor ?? const SourceResponseProcessor();
 
   final AppDatabase _database;
   final SourceRepository _sourceRepository;
@@ -91,7 +86,6 @@ class ChapterContentService {
   final AppLogger _logger;
   final UrlTemplateResolver _urlTemplateResolver;
   final SourceResponseProcessor _responseProcessor;
-  final SourceHealthMetricsService _sourceHealthMetricsService;
 
   static final Map<String, String> _chapterCache = <String, String>{};
   static const String _imageCachePrefix = '__appread_image_payload__:';
@@ -1768,7 +1762,6 @@ class ChapterContentService {
     required ErrorStage stage,
     required String sourceId,
   }) async {
-    final startedAt = DateTime.now();
     if (requestSpec.useWebView) {
       try {
         final webViewResponse = await _webViewExecutor.load(
@@ -1792,13 +1785,6 @@ class ChapterContentService {
             requestSpec.sourceRegex != null &&
             requestSpec.sourceRegex!.trim().isNotEmpty &&
             matchedResourceUrl.isNotEmpty;
-        unawaited(
-          _sourceHealthMetricsService.recordRequestSuccess(
-            source: source,
-            stage: stage,
-            durationMs: DateTime.now().difference(startedAt).inMilliseconds,
-          ),
-        );
         return _NetworkLoadResult(
           statusCode: webViewResponse.statusCode,
           body:
@@ -1836,34 +1822,13 @@ class ChapterContentService {
           sourceConcurrentRate: source.concurrentRate,
         ),
       );
-      unawaited(
-        _sourceHealthMetricsService.recordRequestSuccess(
-          source: source,
-          stage: stage,
-          durationMs: DateTime.now().difference(startedAt).inMilliseconds,
-        ),
-      );
       return _NetworkLoadResult(
         statusCode: response.statusCode,
         body: response.body,
       );
     } on AppException {
-      unawaited(
-        _sourceHealthMetricsService.recordRequestFailure(
-          source: source,
-          stage: stage,
-          durationMs: DateTime.now().difference(startedAt).inMilliseconds,
-        ),
-      );
       rethrow;
     } catch (_) {
-      unawaited(
-        _sourceHealthMetricsService.recordRequestFailure(
-          source: source,
-          stage: stage,
-          durationMs: DateTime.now().difference(startedAt).inMilliseconds,
-        ),
-      );
       rethrow;
     }
   }

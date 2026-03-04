@@ -27,7 +27,6 @@ import '../../../domain/entities/chapter.dart';
 import '../../../domain/entities/search_request_context.dart';
 import '../../../domain/entities/source_definition.dart';
 import '../../../domain/repositories/source_repository.dart';
-import '../../source/application/source_health_metrics_service.dart';
 
 class BookDetailLoadResult {
   const BookDetailLoadResult({
@@ -55,7 +54,6 @@ class BookDetailService {
     RuleEngine? ruleEngine,
     UrlTemplateResolver? urlTemplateResolver,
     SourceResponseProcessor? responseProcessor,
-    SourceHealthMetricsService? sourceHealthMetricsService,
   }) : _sourceRepository =
            sourceRepository ?? SourceRepositoryImpl(AppDatabase.instance),
        _httpClient = httpClient ?? AppHttpClient(),
@@ -68,10 +66,7 @@ class BookDetailService {
        _urlTemplateResolver =
            urlTemplateResolver ?? const UrlTemplateResolver(),
        _responseProcessor =
-           responseProcessor ?? const SourceResponseProcessor(),
-       _sourceHealthMetricsService =
-           sourceHealthMetricsService ??
-           SourceHealthMetricsService(sourceRepository: sourceRepository);
+           responseProcessor ?? const SourceResponseProcessor();
 
   final SourceRepository _sourceRepository;
   final AppHttpClient _httpClient;
@@ -81,7 +76,6 @@ class BookDetailService {
   final RuleEngine _ruleEngine;
   final UrlTemplateResolver _urlTemplateResolver;
   final SourceResponseProcessor _responseProcessor;
-  final SourceHealthMetricsService _sourceHealthMetricsService;
 
   static final Map<String, List<Chapter>> _tocCache = <String, List<Chapter>>{};
 
@@ -639,7 +633,6 @@ class BookDetailService {
     required String? contentType,
     required Map<String, String> requestHeaders,
   }) async {
-    final startedAt = DateTime.now();
     if (requestSpec.useWebView) {
       try {
         final webViewResponse = await _webViewExecutor.load(
@@ -663,13 +656,6 @@ class BookDetailService {
             requestSpec.sourceRegex != null &&
             requestSpec.sourceRegex!.trim().isNotEmpty &&
             matchedResourceUrl.isNotEmpty;
-        unawaited(
-          _sourceHealthMetricsService.recordRequestSuccess(
-            source: source,
-            stage: stage,
-            durationMs: DateTime.now().difference(startedAt).inMilliseconds,
-          ),
-        );
         return _NetworkLoadResult(
           statusCode: webViewResponse.statusCode,
           body:
@@ -707,34 +693,13 @@ class BookDetailService {
           sourceConcurrentRate: source.concurrentRate,
         ),
       );
-      unawaited(
-        _sourceHealthMetricsService.recordRequestSuccess(
-          source: source,
-          stage: stage,
-          durationMs: DateTime.now().difference(startedAt).inMilliseconds,
-        ),
-      );
       return _NetworkLoadResult(
         statusCode: response.statusCode,
         body: response.body,
       );
     } on AppException {
-      unawaited(
-        _sourceHealthMetricsService.recordRequestFailure(
-          source: source,
-          stage: stage,
-          durationMs: DateTime.now().difference(startedAt).inMilliseconds,
-        ),
-      );
       rethrow;
     } catch (_) {
-      unawaited(
-        _sourceHealthMetricsService.recordRequestFailure(
-          source: source,
-          stage: stage,
-          durationMs: DateTime.now().difference(startedAt).inMilliseconds,
-        ),
-      );
       rethrow;
     }
   }

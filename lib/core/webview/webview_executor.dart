@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:convert';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_inappwebview/flutter_inappwebview.dart';
 
@@ -75,16 +76,28 @@ class WebViewExecutor {
   WebViewExecutor({
     AppLogger? logger,
     this.defaultTimeout = const Duration(seconds: 30),
-    int poolSize = 2,
+    int? poolSize,
     WebViewSessionFactory? sessionFactory,
   }) : _logger = logger ?? AppLogger.instance,
-       poolSize = poolSize < 1 ? 1 : poolSize,
+       poolSize = _resolvePoolSize(poolSize),
        _sessionFactory = sessionFactory ?? ((_) => _HeadlessWebViewSession());
 
   final AppLogger _logger;
   final Duration defaultTimeout;
   final int poolSize;
   final WebViewSessionFactory _sessionFactory;
+
+  static int _resolvePoolSize(int? configuredPoolSize) {
+    final defaultPoolSize =
+        !kIsWeb &&
+                (defaultTargetPlatform == TargetPlatform.macOS ||
+                    defaultTargetPlatform == TargetPlatform.windows ||
+                    defaultTargetPlatform == TargetPlatform.linux)
+            ? 1
+            : 2;
+    final resolved = configuredPoolSize ?? defaultPoolSize;
+    return resolved < 1 ? 1 : resolved;
+  }
 
   final List<_WebViewWorker> _workers = <_WebViewWorker>[];
   var _nextWorkerCursor = 0;
@@ -414,7 +427,6 @@ class _HeadlessWebViewSession implements WebViewSession {
     _startFuture = completer.future;
 
     final headless = HeadlessInAppWebView(
-      initialUrlRequest: URLRequest(url: WebUri('about:blank')),
       onWebViewCreated: (controller) {
         _controller = controller;
         if (!completer.isCompleted) {
@@ -423,7 +435,7 @@ class _HeadlessWebViewSession implements WebViewSession {
       },
       onReceivedHttpError: (controller, resourceRequest, errorResponse) {
         final activeLoad = _activeLoad;
-        if (activeLoad == null) {
+        if (activeLoad == null || resourceRequest.isForMainFrame == false) {
           return;
         }
 
@@ -437,9 +449,15 @@ class _HeadlessWebViewSession implements WebViewSession {
         if (activeLoad == null || activeLoad.completer.isCompleted) {
           return;
         }
+        if (_isIgnorableWebViewError(request: resourceRequest, error: error)) {
+          return;
+        }
         activeLoad.completer.completeError(
           StateError('WebView load failed: ${error.description}'),
         );
+      },
+      onReceivedServerTrustAuthRequest: (controller, challenge) async {
+        return _buildServerTrustAuthResponse(challenge);
       },
       onLoadResource: (controller, loadedResource) {
         final activeLoad = _activeLoad;
@@ -596,6 +614,36 @@ class _HeadlessWebViewSession implements WebViewSession {
     } catch (_) {
       return null;
     }
+  }
+
+  bool _isIgnorableWebViewError({
+    required WebResourceRequest request,
+    required WebResourceError error,
+  }) {
+    final requestUrl = request.url.toString().trim().toLowerCase();
+    if (requestUrl == 'about:blank') {
+      return true;
+    }
+    if (error.type == WebResourceErrorType.CANCELLED) {
+      return true;
+    }
+    final isMainFrame = request.isForMainFrame;
+    if (isMainFrame != null && !isMainFrame) {
+      return true;
+    }
+    final normalizedDescription = error.description.trim().toLowerCase();
+    return normalizedDescription.contains('cancel');
+  }
+
+  ServerTrustAuthResponse _buildServerTrustAuthResponse(
+    URLAuthenticationChallenge challenge,
+  ) {
+    final sslErrorCode = challenge.protectionSpace.sslError?.code;
+    final action =
+        sslErrorCode == null || sslErrorCode == SslErrorType.UNSPECIFIED
+            ? ServerTrustAuthResponseAction.PROCEED
+            : ServerTrustAuthResponseAction.CANCEL;
+    return ServerTrustAuthResponse(action: action);
   }
 }
 

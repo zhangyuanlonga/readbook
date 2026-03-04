@@ -297,6 +297,9 @@ class _InteractiveVerificationPageState
                 }
               },
               onReceivedError: (controller, request, error) {
+                if (_isIgnorableWebViewError(request, error)) {
+                  return;
+                }
                 _lastError = error.description;
                 _statusCode = 0;
                 if (mounted) {
@@ -467,6 +470,20 @@ class _InteractiveVerificationPageState
     } catch (_) {
       // Ignore script evaluation failures and keep page available for user.
     }
+  }
+
+  bool _isIgnorableWebViewError(
+    WebResourceRequest request,
+    WebResourceError error,
+  ) {
+    if (error.type == WebResourceErrorType.CANCELLED) {
+      return true;
+    }
+    final isMainFrame = request.isForMainFrame;
+    if (isMainFrame != null && !isMainFrame) {
+      return true;
+    }
+    return error.description.trim().toLowerCase().contains('cancel');
   }
 
   Future<void> _finishVerification() async {
