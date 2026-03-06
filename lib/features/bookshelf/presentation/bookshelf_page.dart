@@ -17,8 +17,6 @@ import '../../reader/application/reader_preferences_service.dart';
 import '../../book/application/book_detail_service.dart';
 import 'widgets/bookshelf_grid_sliver.dart';
 
-enum _BookshelfAppBarAction { enterSelection, importLocalBook }
-
 class BookshelfPage extends StatefulWidget {
   const BookshelfPage({super.key});
 
@@ -127,42 +125,10 @@ class _BookshelfPageState extends State<BookshelfPage> {
                     : Icons.grid_view_rounded,
               ),
             ),
-            PopupMenuButton<_BookshelfAppBarAction>(
-              tooltip: '更多操作',
-              icon: const Icon(Icons.add),
-              onSelected: (action) {
-                switch (action) {
-                  case _BookshelfAppBarAction.enterSelection:
-                    _enterSelectionModeFromMenu();
-                    break;
-                  case _BookshelfAppBarAction.importLocalBook:
-                    _importLocalBook();
-                    break;
-                }
-              },
-              itemBuilder: (context) {
-                final canEnterSelection =
-                    !_isLoading && !_isBatchDeleting && _books.isNotEmpty;
-                return [
-                  PopupMenuItem<_BookshelfAppBarAction>(
-                    value: _BookshelfAppBarAction.enterSelection,
-                    enabled: canEnterSelection,
-                    child: const ListTile(
-                      contentPadding: EdgeInsets.zero,
-                      leading: Icon(Icons.checklist_rounded),
-                      title: Text('选择书籍'),
-                    ),
-                  ),
-                  const PopupMenuItem<_BookshelfAppBarAction>(
-                    value: _BookshelfAppBarAction.importLocalBook,
-                    child: ListTile(
-                      contentPadding: EdgeInsets.zero,
-                      leading: Icon(Icons.upload_file_outlined),
-                      title: Text('导入本地书籍'),
-                    ),
-                  ),
-                ];
-              },
+            IconButton(
+              tooltip: '导入本地书籍',
+              onPressed: _importLocalBook,
+              icon: const Icon(Icons.upload_file_outlined),
             ),
           ],
         ],
@@ -644,13 +610,6 @@ class _BookshelfPageState extends State<BookshelfPage> {
       margin: const EdgeInsets.only(bottom: 6),
       clipBehavior: Clip.antiAlias,
       child: InkWell(
-        onLongPress: () {
-          if (_isSelectionMode) {
-            _enterSelectionMode(book);
-            return;
-          }
-          _openBookDetail(book);
-        },
         onTap:
             _isSelectionMode
                 ? () => _toggleBookSelection(book)
@@ -673,69 +632,80 @@ class _BookshelfPageState extends State<BookshelfPage> {
                     visualDensity: VisualDensity.compact,
                   ),
                 ),
-              _buildCover(book.coverUrl, width: 58, height: 84),
+              InkResponse(
+                onLongPress:
+                    _isBatchDeleting ? null : () => _openBookDetail(book),
+                containedInkWell: true,
+                borderRadius: BorderRadius.circular(12),
+                child: _buildCover(book.coverUrl, width: 58, height: 84),
+              ),
               const SizedBox(width: 10),
               Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(
-                      crossAxisAlignment: CrossAxisAlignment.center,
-                      children: [
-                        Expanded(
-                          child: Text(
-                            titleText,
-                            style: Theme.of(context).textTheme.titleSmall
-                                ?.copyWith(fontWeight: FontWeight.w700),
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
+                child: GestureDetector(
+                  behavior: HitTestBehavior.opaque,
+                  onLongPress:
+                      _isBatchDeleting ? null : () => _enterSelectionMode(book),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        crossAxisAlignment: CrossAxisAlignment.center,
+                        children: [
+                          Expanded(
+                            child: Text(
+                              titleText,
+                              style: Theme.of(context).textTheme.titleSmall
+                                  ?.copyWith(fontWeight: FontWeight.w700),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
                           ),
-                        ),
-                        if (!_isSelectionMode) ...[
-                          const SizedBox(width: 8),
-                          SizedBox(
-                            width: 18,
-                            height: 18,
-                            child:
-                                isOpening
-                                    ? const CircularProgressIndicator(
-                                      strokeWidth: 2,
-                                    )
-                                    : Icon(
-                                      Icons.chevron_right_rounded,
-                                      size: 20,
-                                      color: colorScheme.onSurfaceVariant,
-                                    ),
-                          ),
+                          if (!_isSelectionMode) ...[
+                            const SizedBox(width: 8),
+                            SizedBox(
+                              width: 18,
+                              height: 18,
+                              child:
+                                  isOpening
+                                      ? const CircularProgressIndicator(
+                                        strokeWidth: 2,
+                                      )
+                                      : Icon(
+                                        Icons.chevron_right_rounded,
+                                        size: 20,
+                                        color: colorScheme.onSurfaceVariant,
+                                      ),
+                            ),
+                          ],
                         ],
-                      ],
-                    ),
-                    const SizedBox(height: 5),
-                    Text(
-                      authorText.isNotEmpty ? '作者: $authorText' : '作者: 未知',
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                        color: colorScheme.onSurfaceVariant,
                       ),
-                    ),
-                    const SizedBox(height: 4),
-                    Text(
-                      lastReadLine,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: Theme.of(context).textTheme.bodySmall,
-                    ),
-                    const SizedBox(height: 4),
-                    Text(
-                      latestLine,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                        color: colorScheme.onSurfaceVariant,
+                      const SizedBox(height: 5),
+                      Text(
+                        authorText.isNotEmpty ? '作者: $authorText' : '作者: 未知',
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                          color: colorScheme.onSurfaceVariant,
+                        ),
                       ),
-                    ),
-                  ],
+                      const SizedBox(height: 4),
+                      Text(
+                        lastReadLine,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: Theme.of(context).textTheme.bodySmall,
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        latestLine,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                          color: colorScheme.onSurfaceVariant,
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
               ),
             ],
@@ -769,17 +739,6 @@ class _BookshelfPageState extends State<BookshelfPage> {
       _selectedBookKeys
         ..clear()
         ..add(key);
-    });
-  }
-
-  void _enterSelectionModeFromMenu() {
-    if (_isLoading || _isBatchDeleting || _books.isEmpty) {
-      return;
-    }
-
-    setState(() {
-      _isSelectionMode = true;
-      _selectedBookKeys.clear();
     });
   }
 

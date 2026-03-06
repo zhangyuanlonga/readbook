@@ -278,6 +278,8 @@ class AppDatabase extends _$AppDatabase {
     String keyword = '',
     bool? enabledOnly,
     bool? isMangaSource,
+    String? groupEquals,
+    bool includeUngroupedOnly = false,
   }) async {
     final safeLimit = limit < 1 ? 1 : limit;
     final safeOffset = offset < 0 ? 0 : offset;
@@ -285,6 +287,8 @@ class AppDatabase extends _$AppDatabase {
       keyword: keyword,
       enabledOnly: enabledOnly,
       isMangaSource: isMangaSource,
+      groupEquals: groupEquals,
+      includeUngroupedOnly: includeUngroupedOnly,
     );
 
     final rows =
@@ -312,11 +316,15 @@ class AppDatabase extends _$AppDatabase {
     String keyword = '',
     bool? enabledOnly,
     bool? isMangaSource,
+    String? groupEquals,
+    bool includeUngroupedOnly = false,
   }) async {
     final filter = _buildSourceListSqlFilter(
       keyword: keyword,
       enabledOnly: enabledOnly,
       isMangaSource: isMangaSource,
+      groupEquals: groupEquals,
+      includeUngroupedOnly: includeUngroupedOnly,
     );
 
     final row =
@@ -347,10 +355,14 @@ class AppDatabase extends _$AppDatabase {
   Future<SourceListCountSummary> summarizeSourceListItems({
     String keyword = '',
     bool? isMangaSource,
+    String? groupEquals,
+    bool includeUngroupedOnly = false,
   }) async {
     final filter = _buildSourceListSqlFilter(
       keyword: keyword,
       isMangaSource: isMangaSource,
+      groupEquals: groupEquals,
+      includeUngroupedOnly: includeUngroupedOnly,
     );
 
     final row =
@@ -420,6 +432,35 @@ class AppDatabase extends _$AppDatabase {
         updatedAt: Value(DateTime.now()),
       ),
     );
+  }
+
+  Future<void> setSourceGroup(String id, String? group) {
+    final normalized = group?.trim();
+    return (update(sources)..where((table) => table.id.equals(id))).write(
+      SourcesCompanion(
+        group: Value(
+          normalized == null || normalized.isEmpty ? null : normalized,
+        ),
+        updatedAt: Value(DateTime.now()),
+      ),
+    );
+  }
+
+  Future<List<String>> listSourceGroups() async {
+    final query = await customSelect(
+      'SELECT DISTINCT "group" FROM sources',
+      readsFrom: {sources},
+    ).get();
+    final groups = <String>{};
+    for (final row in query) {
+      final value = row.data['group'] as String?;
+      final normalized = value?.trim() ?? '';
+      if (normalized.isNotEmpty) {
+        groups.add(normalized);
+      }
+    }
+    final sorted = groups.toList()..sort((a, b) => a.compareTo(b));
+    return sorted;
   }
 
   Future<void> deleteSource(String id) {
@@ -1123,6 +1164,8 @@ class AppDatabase extends _$AppDatabase {
     required String keyword,
     bool? enabledOnly,
     bool? isMangaSource,
+    String? groupEquals,
+    bool includeUngroupedOnly = false,
   }) {
     final clauses = <String>[];
     final variables = <Variable<Object>>[];
@@ -1150,6 +1193,13 @@ class AppDatabase extends _$AppDatabase {
             ? _mangaSourceMatcherSql
             : 'NOT ($_mangaSourceMatcherSql)',
       );
+    }
+
+    if (groupEquals != null && groupEquals.trim().isNotEmpty) {
+      clauses.add('"group" = ?');
+      variables.add(Variable<String>(groupEquals.trim()));
+    } else if (includeUngroupedOnly) {
+      clauses.add('("group" IS NULL OR TRIM("group") = \'\')');
     }
 
     final whereClause = clauses.isEmpty ? '' : 'WHERE ${clauses.join(' AND ')}';

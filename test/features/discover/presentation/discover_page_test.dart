@@ -462,6 +462,9 @@ class _FakeSourceRepository implements SourceRepository {
   }) async {}
 
   @override
+  Future<void> setGroup({required String sourceId, String? group}) async {}
+
+  @override
   Future<void> upsertAll(List<SourceDefinition> sources) async {}
 
   @override

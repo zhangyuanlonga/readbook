@@ -26,6 +26,11 @@ class SourceRepositoryImpl implements SourceRepository {
   }
 
   @override
+  Future<void> setGroup({required String sourceId, String? group}) {
+    return _database.setSourceGroup(sourceId, group);
+  }
+
+  @override
   Future<void> upsertAll(List<SourceDefinition> sources) {
     return _database.upsertSources(sources);
   }

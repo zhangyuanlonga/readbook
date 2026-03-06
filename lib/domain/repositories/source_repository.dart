@@ -14,4 +14,6 @@ abstract class SourceRepository {
   Future<void> deleteByIds(List<String> sourceIds);
 
   Future<void> clear();
+
+  Future<void> setGroup({required String sourceId, String? group});
 }

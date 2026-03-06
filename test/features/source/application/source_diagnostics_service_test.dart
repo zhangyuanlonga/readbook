@@ -9,8 +9,13 @@ import 'package:flutter_appread/features/reader/application/chapter_content_serv
 import 'package:flutter_appread/features/search/application/search_service.dart';
 import 'package:flutter_appread/features/source/application/source_diagnostics_service.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 void main() {
+  setUp(() {
+    SharedPreferences.setMockInitialValues(<String, Object>{});
+  });
+
   group('SourceDiagnosticsService', () {
     test(
       'short-circuits dynamic js search rule before network in searchOnly mode',
@@ -307,6 +312,15 @@ class _FakeSourceRepository implements SourceRepository {
     }
     final current = sources[index];
     sources[index] = current.copyWith(enabled: enabled);
+  }
+
+  @override
+  Future<void> setGroup({required String sourceId, String? group}) async {
+    final index = sources.indexWhere((source) => source.id == sourceId);
+    if (index < 0) {
+      return;
+    }
+    sources[index] = sources[index].copyWith(group: group);
   }
 
   @override

@@ -9,8 +9,13 @@ import 'package:flutter_appread/features/reader/application/chapter_content_serv
 import 'package:flutter_appread/features/search/application/search_service.dart';
 import 'package:flutter_appread/features/source/application/source_import_service.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 void main() {
+  setUp(() {
+    SharedPreferences.setMockInitialValues(<String, Object>{});
+  });
+
   group('Inline-js manga source fallback', () {
     test('supports 1771173829 source without reload runtime', () async {
       final payload =
@@ -154,6 +159,15 @@ class _FakeSourceRepository implements SourceRepository {
     }
 
     sources[index] = sources[index].copyWith(enabled: enabled);
+  }
+
+  @override
+  Future<void> setGroup({required String sourceId, String? group}) async {
+    final index = sources.indexWhere((source) => source.id == sourceId);
+    if (index == -1) {
+      return;
+    }
+    sources[index] = sources[index].copyWith(group: group);
   }
 
   @override

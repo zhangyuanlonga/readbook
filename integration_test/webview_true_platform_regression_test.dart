@@ -261,6 +261,15 @@ class _FakeSourceRepository implements SourceRepository {
   }
 
   @override
+  Future<void> setGroup({required String sourceId, String? group}) async {
+    final index = sources.indexWhere((source) => source.id == sourceId);
+    if (index < 0) {
+      return;
+    }
+    sources[index] = sources[index].copyWith(group: group);
+  }
+
+  @override
   Future<void> upsertAll(List<SourceDefinition> incoming) async {
     for (final source in incoming) {
       final index = sources.indexWhere((item) => item.id == source.id);

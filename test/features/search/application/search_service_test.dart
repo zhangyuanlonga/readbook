@@ -10,8 +10,13 @@ import 'package:flutter_appread/domain/entities/source_definition.dart';
 import 'package:flutter_appread/domain/repositories/source_repository.dart';
 import 'package:flutter_appread/features/search/application/search_service.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 void main() {
+  setUp(() {
+    SharedPreferences.setMockInitialValues(<String, Object>{});
+  });
+
   group('SearchService', () {
     test('filters sources by content mode (novel/manga)', () async {
       final repository = _FakeSourceRepository([
@@ -2593,6 +2598,15 @@ class _FakeSourceRepository implements SourceRepository {
       return;
     }
     sources[index] = sources[index].copyWith(enabled: enabled);
+  }
+
+  @override
+  Future<void> setGroup({required String sourceId, String? group}) async {
+    final index = sources.indexWhere((source) => source.id == sourceId);
+    if (index == -1) {
+      return;
+    }
+    sources[index] = sources[index].copyWith(group: group);
   }
 
   @override

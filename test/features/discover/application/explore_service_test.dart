@@ -9,8 +9,13 @@ import 'package:flutter_appread/domain/repositories/source_repository.dart';
 import 'package:flutter_appread/features/discover/application/explore_service.dart';
 import 'package:flutter_appread/features/search/application/search_service.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 void main() {
+  setUp(() {
+    SharedPreferences.setMockInitialValues(<String, Object>{});
+  });
+
   group('ExploreService', () {
     test(
       'loadDiscoverSources filters disabled and unsupported sources',
@@ -315,6 +320,9 @@ class _FakeSourceRepository implements SourceRepository {
     required String sourceId,
     required bool enabled,
   }) async {}
+
+  @override
+  Future<void> setGroup({required String sourceId, String? group}) async {}
 
   @override
   Future<void> upsertAll(List<SourceDefinition> sources) async {}

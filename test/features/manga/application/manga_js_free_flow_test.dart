@@ -9,8 +9,13 @@ import 'package:flutter_appread/features/search/application/search_service.dart'
 import 'package:flutter_appread/features/source/application/source_capability_analyzer.dart';
 import 'package:flutter_appread/features/source/application/source_import_service.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 void main() {
+  setUp(() {
+    SharedPreferences.setMockInitialValues(<String, Object>{});
+  });
+
   group('Manga JS-free regression', () {
     test(
       'fixture keeps three JS-free manga samples with no unsupported hint',
@@ -257,6 +262,15 @@ class _FakeSourceRepository implements SourceRepository {
     }
 
     sources[index] = sources[index].copyWith(enabled: enabled);
+  }
+
+  @override
+  Future<void> setGroup({required String sourceId, String? group}) async {
+    final index = sources.indexWhere((source) => source.id == sourceId);
+    if (index == -1) {
+      return;
+    }
+    sources[index] = sources[index].copyWith(group: group);
   }
 
   @override

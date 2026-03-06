@@ -12,8 +12,13 @@ import 'package:flutter_appread/features/book/application/book_detail_service.da
 import 'package:flutter_appread/features/reader/application/chapter_content_service.dart';
 import 'package:flutter_appread/features/search/application/search_service.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 void main() {
+  setUp(() {
+    SharedPreferences.setMockInitialValues(<String, Object>{});
+  });
+
   group('Legacy source compatibility fixtures', () {
     final manifest =
         jsonDecode(
@@ -259,6 +264,15 @@ class _FixtureSourceRepository implements SourceRepository {
     }
 
     _items[index] = _items[index].copyWith(enabled: enabled);
+  }
+
+  @override
+  Future<void> setGroup({required String sourceId, String? group}) async {
+    final index = _items.indexWhere((item) => item.id == sourceId);
+    if (index < 0) {
+      return;
+    }
+    _items[index] = _items[index].copyWith(group: group);
   }
 
   @override

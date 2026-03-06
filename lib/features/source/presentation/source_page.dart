@@ -44,6 +44,7 @@ class _SourcePageState extends State<SourcePage> {
   bool _isBatchDeleting = false;
   final Set<String> _testingSourceIds = <String>{};
   final Set<String> _changingEnabledSourceIds = <String>{};
+  final Set<String> _changingGroupSourceIds = <String>{};
   final Set<String> _deletingSourceIds = <String>{};
   final Set<String> _exportingSourceIds = <String>{};
   final Set<String> _selectedSourceIds = <String>{};
@@ -62,12 +63,22 @@ class _SourcePageState extends State<SourcePage> {
   String? _listErrorText;
   int _nextOffset = 0;
   int _totalCount = 0;
+  int _filteredNovelCount = 0;
+  int _filteredMangaCount = 0;
   int _totalImportedCount = 0;
   int _novelCount = 0;
   int _mangaCount = 0;
   int _queryTicket = 0;
   bool _loadMoreScheduledFromBuild = false;
   bool _isConsumingExternalImportPayloads = false;
+  String? _selectedGroupFilter;
+  bool _filterUngroupedOnly = false;
+  bool _isGroupFilterLoading = false;
+
+  bool get _hasSearchKeyword => _searchKeyword.trim().isNotEmpty;
+  bool get _isGroupFilterActive =>
+      _selectedGroupFilter != null || _filterUngroupedOnly;
+  bool get _hasActiveFilters => _hasSearchKeyword || _isGroupFilterActive;
 
   static const int _kPageSize = 60;
   static const String _defaultConnectivityKeyword = '凡人修仙传';
@@ -128,6 +139,8 @@ class _SourcePageState extends State<SourcePage> {
   Future<void> _reloadSourceList({required bool reset}) async {
     final keyword = _searchKeyword.trim();
     final ticket = ++_queryTicket;
+    final groupEquals = _selectedGroupFilter;
+    final includeUngroupedOnly = _filterUngroupedOnly;
     final refreshLimit =
         reset
             ? _kPageSize
@@ -153,14 +166,19 @@ class _SourcePageState extends State<SourcePage> {
         offset: 0,
         limit: refreshLimit,
         keyword: keyword,
+        groupEquals: groupEquals,
+        includeUngroupedOnly: includeUngroupedOnly,
       );
       final summaryFuture = AppDatabase.instance.summarizeSourceListItems(
         keyword: keyword,
+        groupEquals: groupEquals,
+        includeUngroupedOnly: includeUngroupedOnly,
       );
+      final needsOverviewSummary = keyword.isNotEmpty || _isGroupFilterActive;
       final overviewSummaryFuture =
-          keyword.isEmpty
-              ? Future<SourceListCountSummary?>.value(null)
-              : AppDatabase.instance.summarizeSourceListItems();
+          needsOverviewSummary
+              ? AppDatabase.instance.summarizeSourceListItems()
+              : Future<SourceListCountSummary?>.value(null);
 
       final results = await Future.wait<Object?>([
         pageFuture,
@@ -180,6 +198,8 @@ class _SourcePageState extends State<SourcePage> {
       setState(() {
         _visibleSources = page;
         _totalCount = summary.totalCount;
+        _filteredNovelCount = summary.novelCount;
+        _filteredMangaCount = summary.mangaCount;
         _totalImportedCount = overview.totalCount;
         _novelCount = overview.novelCount;
         _mangaCount = overview.mangaCount;
@@ -220,6 +240,8 @@ class _SourcePageState extends State<SourcePage> {
 
     final keyword = _searchKeyword.trim();
     final ticket = _queryTicket;
+    final groupEquals = _selectedGroupFilter;
+    final includeUngroupedOnly = _filterUngroupedOnly;
 
     setState(() {
       _isPageLoading = true;
@@ -231,6 +253,8 @@ class _SourcePageState extends State<SourcePage> {
             offset: _nextOffset,
             limit: _kPageSize,
             keyword: keyword,
+            groupEquals: groupEquals,
+            includeUngroupedOnly: includeUngroupedOnly,
           )
           .timeout(_kSourceListLoadTimeout);
 
@@ -323,7 +347,7 @@ class _SourcePageState extends State<SourcePage> {
     final colorScheme = Theme.of(context).colorScheme;
     final horizontal = AppSpacing.pageHorizontal(context);
     final bottomSafe = MediaQuery.viewPaddingOf(context).bottom;
-    final isSearchActive = _showSearchBar || _searchKeyword.isNotEmpty;
+    final isSearchActive = _showSearchBar || _hasActiveFilters;
 
     return Scaffold(
       appBar: AppBar(
@@ -428,8 +452,8 @@ class _SourcePageState extends State<SourcePage> {
     required double horizontal,
     required double bottomSafe,
   }) {
-    final hasKeyword = _searchKeyword.trim().isNotEmpty;
-    final showSearchPanel = _showSearchBar || hasKeyword;
+    final hasFilters = _hasActiveFilters;
+    final showSearchPanel = _showSearchBar || hasFilters;
     final showEmpty = !_isInitialLoading && _visibleSources.isEmpty;
     final showErrorCard = _listErrorText != null && _visibleSources.isEmpty;
     final showLoadingCard = _isInitialLoading;
@@ -456,9 +480,13 @@ class _SourcePageState extends State<SourcePage> {
       itemBuilder: (context, index) {
         if (index == 0) {
           return _buildOverviewCard(
-            totalSourceCount: _totalImportedCount,
-            novelCount: _novelCount,
-            mangaCount: _mangaCount,
+            totalSourceCount: _totalCount,
+            novelCount: _filteredNovelCount,
+            mangaCount: _filteredMangaCount,
+            overallSourceCount: _totalImportedCount,
+            overallNovelCount: _novelCount,
+            overallMangaCount: _mangaCount,
+            hasActiveFilters: hasFilters,
           );
         }
 
@@ -492,7 +520,7 @@ class _SourcePageState extends State<SourcePage> {
           if (itemListIndex == 0) {
             return Padding(
               padding: const EdgeInsets.only(top: 10, bottom: 10),
-              child: _buildEmptySourceCard(hasKeyword: hasKeyword),
+              child: _buildEmptySourceCard(),
             );
           }
           return const SizedBox.shrink();
@@ -630,7 +658,7 @@ class _SourcePageState extends State<SourcePage> {
 
   Widget _buildListErrorCard(String message) {
     final colorScheme = Theme.of(context).colorScheme;
-    final hasKeyword = _searchKeyword.trim().isNotEmpty;
+    final hasFilters = _hasActiveFilters;
 
     return Card(
       shape: _buildOutlinedCardShape(context),
@@ -663,10 +691,8 @@ class _SourcePageState extends State<SourcePage> {
                 ),
                 OutlinedButton(
                   onPressed:
-                      hasKeyword
-                          ? _clearSourceSearchFilter
-                          : _showImportActionSheet,
-                  child: Text(hasKeyword ? '清空筛选' : '导入书源'),
+                      hasFilters ? _clearSourceSearchFilter : _showImportActionSheet,
+                  child: Text(hasFilters ? '清空筛选' : '导入书源'),
                 ),
               ],
             ),
@@ -680,7 +706,12 @@ class _SourcePageState extends State<SourcePage> {
     required int totalSourceCount,
     required int novelCount,
     required int mangaCount,
+    required int overallSourceCount,
+    required int overallNovelCount,
+    required int overallMangaCount,
+    required bool hasActiveFilters,
   }) {
+    final colorScheme = Theme.of(context).colorScheme;
     return Card(
       margin: const EdgeInsets.only(bottom: 8),
       shape: _buildOutlinedCardShape(context),
@@ -714,6 +745,15 @@ class _SourcePageState extends State<SourcePage> {
                 _buildOverviewChip('漫画源', '$mangaCount'),
               ],
             ),
+            if (hasActiveFilters) ...[
+              const SizedBox(height: 10),
+              Text(
+                '全部书源：$overallSourceCount（小说源 $overallNovelCount，漫画源 $overallMangaCount）',
+                style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                  color: colorScheme.onSurfaceVariant,
+                ),
+              ),
+            ],
           ],
         ),
       ),
@@ -783,12 +823,59 @@ class _SourcePageState extends State<SourcePage> {
                 ),
               ),
             ),
+            const SizedBox(width: 8),
+            _buildGroupFilterButton(),
             IconButton(
               tooltip: '收起搜索',
               onPressed: _toggleSearchBar,
               icon: const Icon(Icons.expand_less_rounded),
             ),
           ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildGroupFilterButton() {
+    final colorScheme = Theme.of(context).colorScheme;
+    final isActive = _isGroupFilterActive;
+    final label =
+        _filterUngroupedOnly
+            ? '未分组'
+            : (_selectedGroupFilter ?? '全部分组');
+    final textColor =
+        isActive ? colorScheme.primary : colorScheme.onSurfaceVariant;
+
+    return OutlinedButton.icon(
+      onPressed: _isGroupFilterLoading ? null : _showGroupFilterSheet,
+      style: OutlinedButton.styleFrom(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+        minimumSize: const Size(0, 40),
+        side: BorderSide(
+          color: isActive ? colorScheme.primary : colorScheme.outlineVariant,
+        ),
+        foregroundColor: textColor,
+      ),
+      icon:
+          _isGroupFilterLoading
+              ? SizedBox(
+                  width: 14,
+                  height: 14,
+                  child: CircularProgressIndicator(
+                    strokeWidth: 2,
+                    color: colorScheme.primary,
+                  ),
+                )
+              : Icon(
+                  Icons.filter_alt_rounded,
+                  size: 16,
+                  color: textColor,
+                ),
+      label: Text(
+        label,
+        style: Theme.of(context).textTheme.labelMedium?.copyWith(
+          color: textColor,
+          fontWeight: FontWeight.w600,
         ),
       ),
     );
@@ -813,8 +900,9 @@ class _SourcePageState extends State<SourcePage> {
     );
   }
 
-  Widget _buildEmptySourceCard({required bool hasKeyword}) {
+  Widget _buildEmptySourceCard() {
     final colorScheme = Theme.of(context).colorScheme;
+    final hasFilters = _hasActiveFilters;
 
     return Card(
       shape: _buildOutlinedCardShape(context),
@@ -829,14 +917,14 @@ class _SourcePageState extends State<SourcePage> {
             ),
             const SizedBox(height: 10),
             Text(
-              hasKeyword ? '未匹配到书源' : '当前没有书源',
+              hasFilters ? '未匹配到书源' : '当前没有书源',
               style: Theme.of(
                 context,
               ).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w700),
             ),
             const SizedBox(height: 6),
             Text(
-              hasKeyword ? '可以清空筛选后再查看。' : '点击下方按钮开始导入书源。',
+              hasFilters ? '可以清空筛选后再查看。' : '点击下方按钮开始导入书源。',
               style: Theme.of(context).textTheme.bodySmall?.copyWith(
                 color: colorScheme.onSurfaceVariant,
               ),
@@ -848,17 +936,17 @@ class _SourcePageState extends State<SourcePage> {
               children: [
                 FilledButton.icon(
                   onPressed:
-                      hasKeyword
+                      hasFilters
                           ? _clearSourceSearchFilter
                           : _showImportActionSheet,
                   icon: Icon(
-                    hasKeyword
+                    hasFilters
                         ? Icons.filter_alt_off_rounded
                         : Icons.upload_file_rounded,
                   ),
-                  label: Text(hasKeyword ? '清空筛选' : '导入书源'),
+                  label: Text(hasFilters ? '清空筛选' : '导入书源'),
                 ),
-                if (hasKeyword)
+                if (hasFilters)
                   OutlinedButton(
                     onPressed: _showImportActionSheet,
                     child: const Text('继续导入'),
@@ -968,36 +1056,51 @@ class _SourcePageState extends State<SourcePage> {
                           ),
                       ],
                     ),
-                    const SizedBox(height: 4),
+                    const SizedBox(height: 3),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: Text(
+                            _buildSourceSecondaryLine(source),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                              color: colorScheme.onSurfaceVariant,
+                            ),
+                          ),
+                        ),
+                        if (hasTestedTime) ...[
+                          const SizedBox(width: 8),
+                          ConstrainedBox(
+                            constraints: const BoxConstraints(maxWidth: 150),
+                            child: Text(
+                              '测试: ${_buildConnectivityTestTimeText(source)}',
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              textAlign: TextAlign.right,
+                              style: Theme.of(
+                                context,
+                              ).textTheme.labelSmall?.copyWith(
+                                color: colorScheme.onSurfaceVariant,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ],
+                    ),
+                    const SizedBox(height: 5),
                     Wrap(
                       spacing: 6,
                       runSpacing: 4,
                       crossAxisAlignment: WrapCrossAlignment.center,
                       children: [
                         _buildHealthStatusPill(source.lastCheckStatus),
-                        Text(
-                          _buildSourceSecondaryLine(source),
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: Theme.of(context).textTheme.bodySmall
-                              ?.copyWith(color: colorScheme.onSurfaceVariant),
-                        ),
+                        _buildGroupChip(source),
                       ],
                     ),
-                    if (hasTestedTime) ...[
-                      const SizedBox(height: 2),
-                      Text(
-                        '测试时间: ${_buildConnectivityTestTimeText(source)}',
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                          color: colorScheme.onSurfaceVariant,
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
-                    ],
                     if (hasComment) ...[
-                      const SizedBox(height: 3),
+                      const SizedBox(height: 5),
                       InkWell(
                         borderRadius: BorderRadius.circular(8),
                         onTap: () => _toggleCommentExpanded(source.id),
@@ -1063,34 +1166,30 @@ class _SourcePageState extends State<SourcePage> {
                         child:
                             isCommentExpanded
                                 ? Padding(
-                                  key: ValueKey<String>(
-                                    'source_comment_open_${source.id}',
-                                  ),
-                                  padding: const EdgeInsets.only(top: 4),
-                                  child: Container(
-                                    width: double.infinity,
-                                    padding: const EdgeInsets.symmetric(
-                                      horizontal: 8,
-                                      vertical: 6,
+                                key: ValueKey<String>(
+                                  'source_comment_open_${source.id}',
+                                ),
+                                padding: const EdgeInsets.only(top: 4),
+                                child: Container(
+                                  width: double.infinity,
+                                  padding: const EdgeInsets.symmetric(
+                                      horizontal: 10,
+                                      vertical: 8,
                                     ),
                                     decoration: BoxDecoration(
-                                      color:
-                                          colorScheme.surfaceContainerHighest,
+                                      color: colorScheme.surfaceContainerHighest,
                                       borderRadius: BorderRadius.circular(8),
                                     ),
                                     child: Text(
                                       commentText,
                                       maxLines: 3,
                                       overflow: TextOverflow.ellipsis,
-                                      style:
-                                          Theme.of(context).textTheme.bodySmall,
+                                      style: Theme.of(context).textTheme.bodySmall,
                                     ),
                                   ),
                                 )
                                 : const SizedBox.shrink(
-                                  key: ValueKey<String>(
-                                    'source_comment_closed',
-                                  ),
+                                  key: ValueKey<String>('source_comment_closed'),
                                 ),
                       ),
                     ],
@@ -1234,10 +1333,82 @@ class _SourcePageState extends State<SourcePage> {
 
   String _buildSourceSecondaryLine(SourceListItem source) {
     final host = _resolveSourceHost(source.baseUrl);
-    final group = (source.group ?? '').trim();
-    final groupText = group.isEmpty ? '未分组' : group;
     final typeText = source.isMangaSource ? '漫画' : '小说';
-    return '$host · $typeText · $groupText';
+    return '$host · $typeText';
+  }
+
+  Widget _buildGroupChip(SourceListItem source) {
+    final colorScheme = Theme.of(context).colorScheme;
+    final theme = Theme.of(context);
+    final normalized = _normalizeGroupLabel(source.group);
+    final label = normalized ?? '未分组';
+    final isUpdating = _changingGroupSourceIds.contains(source.id);
+    final isLocked = _isSelectionMode || _isBatchDeleting;
+
+    return InkWell(
+      borderRadius: BorderRadius.circular(999),
+      onTap: isLocked ? null : () => _onGroupChipTapped(source),
+      child: DecoratedBox(
+        decoration: BoxDecoration(
+          color: colorScheme.surfaceContainerHighest,
+          borderRadius: BorderRadius.circular(999),
+          border: Border.all(
+            color:
+                isLocked
+                    ? colorScheme.outlineVariant
+                    : colorScheme.primary.withValues(alpha: 0.6),
+          ),
+        ),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(
+                Icons.folder_open_rounded,
+                size: 14,
+                color:
+                    isLocked
+                        ? colorScheme.onSurfaceVariant
+                        : colorScheme.primary,
+              ),
+              const SizedBox(width: 4),
+              ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 160),
+                child: Text(
+                  label,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: theme.textTheme.labelSmall?.copyWith(
+                    color:
+                        isLocked
+                            ? colorScheme.onSurfaceVariant
+                            : colorScheme.primary,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ),
+              const SizedBox(width: 4),
+              if (isUpdating)
+                SizedBox(
+                  width: 14,
+                  height: 14,
+                  child: CircularProgressIndicator(
+                    strokeWidth: 2,
+                    color: colorScheme.primary,
+                  ),
+                )
+              else if (!isLocked)
+                Icon(
+                  Icons.expand_more_rounded,
+                  size: 14,
+                  color: colorScheme.primary,
+                ),
+            ],
+          ),
+        ),
+      ),
+    );
   }
 
   String _resolveSourceHost(String baseUrl) {
@@ -1261,6 +1432,14 @@ class _SourcePageState extends State<SourcePage> {
     return (comment ?? '').trim().replaceAll(RegExp(r'\s+'), ' ');
   }
 
+  String? _normalizeGroupLabel(String? group) {
+    final normalized = group?.trim();
+    if (normalized == null || normalized.isEmpty) {
+      return null;
+    }
+    return normalized;
+  }
+
   void _handleSourceAction({
     required _SourceAction action,
     required SourceListItem source,
@@ -1279,6 +1458,171 @@ class _SourcePageState extends State<SourcePage> {
         _deleteSource(source.id);
         return;
     }
+  }
+
+  Future<void> _showGroupFilterSheet() async {
+    if (_isGroupFilterLoading) {
+      return;
+    }
+
+    setState(() {
+      _isGroupFilterLoading = true;
+    });
+
+    List<String> groups = const <String>[];
+    try {
+      groups = await AppDatabase.instance.listSourceGroups();
+    } catch (error) {
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _isGroupFilterLoading = false;
+      });
+      _showMessage('加载分组失败：$error');
+      return;
+    }
+
+    if (!mounted) {
+      return;
+    }
+
+    setState(() {
+      _isGroupFilterLoading = false;
+    });
+
+    final selection = await showModalBottomSheet<_GroupFilterResult>(
+      context: context,
+      useSafeArea: true,
+      showDragHandle: true,
+      builder: (sheetContext) {
+        return _SourceGroupFilterSheet(
+          availableGroups: groups,
+          initialGroup: _selectedGroupFilter,
+          initialUngrouped: _filterUngroupedOnly,
+        );
+      },
+    );
+
+    if (!mounted || selection == null) {
+      return;
+    }
+
+    if (_selectedGroupFilter == selection.group &&
+        _filterUngroupedOnly == selection.ungrouped) {
+      return;
+    }
+
+    setState(() {
+      _selectedGroupFilter = selection.group;
+      _filterUngroupedOnly = selection.ungrouped;
+    });
+    unawaited(_reloadSourceList(reset: true));
+  }
+
+  Future<void> _onGroupChipTapped(SourceListItem source) async {
+    if (_isSelectionMode || _isBatchDeleting) {
+      return;
+    }
+
+    List<String> groups = const <String>[];
+    try {
+      groups = await AppDatabase.instance.listSourceGroups();
+    } catch (error) {
+      if (!mounted) {
+        return;
+      }
+      _showMessage('加载分组失败：$error');
+      return;
+    }
+
+    if (!mounted) {
+      return;
+    }
+
+    final normalizedGroups =
+        groups.map(_normalizeGroupLabel).whereType<String>().toSet().toList()
+          ..sort((a, b) => a.toLowerCase().compareTo(b.toLowerCase()));
+
+    final selection = await showModalBottomSheet<_SourceGroupPickerResult>(
+      context: context,
+      useSafeArea: true,
+      isScrollControlled: true,
+      showDragHandle: true,
+      builder: (sheetContext) {
+        return _SourceGroupPickerSheet(
+          availableGroups: normalizedGroups,
+          initialGroup: _normalizeGroupLabel(source.group),
+        );
+      },
+    );
+
+    if (!mounted || selection == null) {
+      return;
+    }
+
+    final currentGroup = _normalizeGroupLabel(source.group);
+    final nextGroup = _normalizeGroupLabel(selection.group);
+
+    if (currentGroup == nextGroup) {
+      return;
+    }
+
+    await _updateSourceGroup(source: source, nextGroup: nextGroup);
+  }
+
+  Future<void> _updateSourceGroup({
+    required SourceListItem source,
+    required String? nextGroup,
+  }) async {
+    if (_changingGroupSourceIds.contains(source.id)) {
+      return;
+    }
+
+    setState(() {
+      _changingGroupSourceIds.add(source.id);
+    });
+
+    try {
+      await _repository.setGroup(sourceId: source.id, group: nextGroup);
+    } catch (error) {
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _changingGroupSourceIds.remove(source.id);
+      });
+      _showMessage('更新分组失败：$error');
+      return;
+    }
+
+    if (!mounted) {
+      return;
+    }
+
+    setState(() {
+      _changingGroupSourceIds.remove(source.id);
+      final index = _visibleSources.indexWhere((item) => item.id == source.id);
+      if (index == -1) {
+        return;
+      }
+
+      final updated = SourceListItem(
+        id: source.id,
+        name: source.name,
+        baseUrl: source.baseUrl,
+        group: nextGroup,
+        enabled: source.enabled,
+        comment: source.comment,
+        sourceType: source.sourceType,
+        lastCheckStatus: source.lastCheckStatus,
+        lastCheckedAt: source.lastCheckedAt,
+      );
+
+      final nextList = [..._visibleSources];
+      nextList[index] = updated;
+      _visibleSources = nextList;
+    });
   }
 
   void _openBatchDiagnostics() {
@@ -1737,9 +2081,10 @@ class _SourcePageState extends State<SourcePage> {
   }
 
   void _clearSourceSearchFilter() {
-    if (!_showSearchBar &&
-        _searchKeyword.isEmpty &&
-        _searchController.text.isEmpty) {
+    final hasPendingInput = _searchController.text.isNotEmpty;
+    final hasVisibleSearch = _showSearchBar;
+    final hasFilters = _hasActiveFilters;
+    if (!hasPendingInput && !hasVisibleSearch && !hasFilters) {
       return;
     }
 
@@ -1749,12 +2094,14 @@ class _SourcePageState extends State<SourcePage> {
     setState(() {
       _showSearchBar = false;
       _searchKeyword = '';
+      _selectedGroupFilter = null;
+      _filterUngroupedOnly = false;
     });
     unawaited(_reloadSourceList(reset: true));
   }
 
   void _toggleSearchBar() {
-    if (_showSearchBar || _searchKeyword.isNotEmpty) {
+    if (_showSearchBar || _hasActiveFilters) {
       _clearSourceSearchFilter();
       return;
     }
@@ -2317,10 +2664,7 @@ class _SourcePageState extends State<SourcePage> {
     final year = local.year.toString().padLeft(4, '0');
     final month = local.month.toString().padLeft(2, '0');
     final day = local.day.toString().padLeft(2, '0');
-    final hour = local.hour.toString().padLeft(2, '0');
-    final minute = local.minute.toString().padLeft(2, '0');
-    final second = local.second.toString().padLeft(2, '0');
-    return '$year-$month-$day $hour:$minute:$second';
+    return '$year-$month-$day';
   }
 
   String _timestampToken() {
@@ -2637,3 +2981,475 @@ class _SourceLoadingCard extends StatelessWidget {
 enum _ImportAction { paste, url, file, batchSample }
 
 enum _SourceAction { export, test, delete }
+
+class _SourceGroupPickerResult {
+  const _SourceGroupPickerResult({required this.group});
+
+  final String? group;
+}
+
+class _SourceGroupPickerSheet extends StatefulWidget {
+  const _SourceGroupPickerSheet({
+    required this.availableGroups,
+    required this.initialGroup,
+  });
+
+  final List<String> availableGroups;
+  final String? initialGroup;
+
+  @override
+  State<_SourceGroupPickerSheet> createState() =>
+      _SourceGroupPickerSheetState();
+}
+
+class _SourceGroupPickerSheetState extends State<_SourceGroupPickerSheet> {
+  late final TextEditingController _controller;
+  late final List<String> _groups;
+  String? _selectedGroup;
+
+  @override
+  void initState() {
+    super.initState();
+    _selectedGroup = _normalizeGroup(widget.initialGroup);
+    _groups = [...widget.availableGroups];
+    _insertGroupIfMissing(_selectedGroup);
+    _controller = TextEditingController();
+    _controller.addListener(() {
+      setState(() {});
+    });
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final bottomInset = MediaQuery.viewInsetsOf(context).bottom;
+    final canApplyInput = _controller.text.trim().isNotEmpty;
+    final sectionStyle = theme.textTheme.labelLarge?.copyWith(
+      color: theme.colorScheme.onSurfaceVariant,
+      fontWeight: FontWeight.w600,
+    );
+
+    return SafeArea(
+      child: AnimatedPadding(
+        duration: const Duration(milliseconds: 180),
+        curve: Curves.easeOut,
+        padding: EdgeInsets.only(bottom: bottomInset),
+        child: ConstrainedBox(
+          constraints: BoxConstraints(
+            maxHeight: MediaQuery.sizeOf(context).height * 0.78,
+          ),
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(20, 12, 20, 16),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  '选择分组',
+                  style: theme.textTheme.titleMedium?.copyWith(
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+                const SizedBox(height: 8),
+                DecoratedBox(
+                  decoration: BoxDecoration(
+                    color: theme.colorScheme.surfaceContainerHighest,
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 12,
+                      vertical: 10,
+                    ),
+                    child: Row(
+                      children: [
+                        Icon(
+                          Icons.folder_open_rounded,
+                          size: 18,
+                          color: theme.colorScheme.onSurfaceVariant,
+                        ),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: Text(
+                            '当前：${_displayGroup(_selectedGroup)}',
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: theme.textTheme.bodyMedium?.copyWith(
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 16),
+                Text('新建分组', style: sectionStyle),
+                const SizedBox(height: 8),
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Expanded(
+                      child: TextField(
+                        controller: _controller,
+                        textInputAction: TextInputAction.done,
+                        decoration: const InputDecoration(
+                          hintText: '输入分组名称',
+                          border: OutlineInputBorder(),
+                          isDense: true,
+                        ),
+                        onSubmitted:
+                            (_) =>
+                                canApplyInput
+                                    ? _applyInputGroup()
+                                    : FocusScope.of(context).unfocus(),
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    FilledButton.tonal(
+                      onPressed: canApplyInput ? _applyInputGroup : null,
+                      style: FilledButton.styleFrom(
+                        minimumSize: const Size(72, 48),
+                      ),
+                      child: const Text('确认'),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 16),
+                Text('快速选择', style: sectionStyle),
+                const SizedBox(height: 8),
+                Flexible(
+                  fit: FlexFit.loose,
+                  child: SingleChildScrollView(
+                    child: Column(
+                      children: [
+                        _buildGroupOption(
+                          context: context,
+                          label: '未分组',
+                          value: null,
+                          icon: Icons.folder_off_rounded,
+                        ),
+                        if (_groups.isEmpty) ...[
+                          const SizedBox(height: 8),
+                          DecoratedBox(
+                            decoration: BoxDecoration(
+                              color: theme.colorScheme.surfaceContainerHighest,
+                              borderRadius: BorderRadius.circular(10),
+                            ),
+                            child: Padding(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 12,
+                                vertical: 10,
+                              ),
+                              child: Row(
+                                children: [
+                                  Icon(
+                                    Icons.info_outline_rounded,
+                                    size: 18,
+                                    color: theme.colorScheme.onSurfaceVariant,
+                                  ),
+                                  const SizedBox(width: 8),
+                                  Expanded(
+                                    child: Text(
+                                      '暂无历史分组，可在上方创建。',
+                                      style: theme.textTheme.bodySmall?.copyWith(
+                                        color:
+                                            theme
+                                                .colorScheme
+                                                .onSurfaceVariant,
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ),
+                        ] else
+                          for (final group in _groups) ...[
+                            const SizedBox(height: 8),
+                            _buildGroupOption(
+                              context: context,
+                              label: group,
+                              value: group,
+                              icon: Icons.folder_rounded,
+                            ),
+                          ],
+                      ],
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 12),
+                const Divider(height: 1),
+                const SizedBox(height: 12),
+                Row(
+                  children: [
+                    Expanded(
+                      child: OutlinedButton(
+                        onPressed: () => Navigator.of(context).pop(),
+                        child: const Text('取消'),
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: FilledButton(
+                        onPressed: _confirmSelection,
+                        child: const Text('确定'),
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildGroupOption({
+    required BuildContext context,
+    required String label,
+    required String? value,
+    required IconData icon,
+  }) {
+    final theme = Theme.of(context);
+    final selected = _normalizeGroup(value) == _selectedGroup;
+    final backgroundColor =
+        selected
+            ? theme.colorScheme.primaryContainer
+            : theme.colorScheme.surfaceContainerLowest;
+    final borderColor =
+        selected
+            ? theme.colorScheme.primary.withValues(alpha: 0.45)
+            : theme.colorScheme.outlineVariant;
+
+    return Material(
+      color: backgroundColor,
+      borderRadius: BorderRadius.circular(10),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(10),
+        onTap: () {
+          setState(() {
+            _selectedGroup = _normalizeGroup(value);
+          });
+          FocusScope.of(context).unfocus();
+        },
+        child: Ink(
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(10),
+            border: Border.all(color: borderColor),
+          ),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+            child: Row(
+              children: [
+                Icon(
+                  icon,
+                  size: 18,
+                  color:
+                      selected
+                          ? theme.colorScheme.primary
+                          : theme.colorScheme.onSurfaceVariant,
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Text(
+                    label,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: theme.textTheme.bodyMedium?.copyWith(
+                      fontWeight: selected ? FontWeight.w600 : FontWeight.w500,
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Icon(
+                  selected
+                      ? Icons.check_circle_rounded
+                      : Icons.radio_button_unchecked_rounded,
+                  size: 18,
+                  color:
+                      selected
+                          ? theme.colorScheme.primary
+                          : theme.colorScheme.onSurfaceVariant,
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  void _applyInputGroup() {
+    final text = _controller.text.trim();
+    if (text.isEmpty) {
+      return;
+    }
+    _insertGroupIfMissing(text);
+    setState(() {
+      _selectedGroup = text;
+      _controller.clear();
+    });
+    FocusScope.of(context).unfocus();
+  }
+
+  void _confirmSelection() {
+    Navigator.of(context).pop(_SourceGroupPickerResult(group: _selectedGroup));
+  }
+
+  void _insertGroupIfMissing(String? group) {
+    final normalized = _normalizeGroup(group);
+    if (normalized == null) {
+      return;
+    }
+    final exists = _groups.any(
+      (item) => item.toLowerCase() == normalized.toLowerCase(),
+    );
+    if (exists) {
+      return;
+    }
+    _groups.add(normalized);
+    _groups.sort((a, b) => a.toLowerCase().compareTo(b.toLowerCase()));
+  }
+
+  String _displayGroup(String? group) {
+    return _normalizeGroup(group) ?? '未分组';
+  }
+
+  String? _normalizeGroup(String? group) {
+    final normalized = group?.trim();
+    if (normalized == null || normalized.isEmpty) {
+      return null;
+    }
+    return normalized;
+  }
+}
+
+class _GroupFilterResult {
+  const _GroupFilterResult({this.group, this.ungrouped = false});
+
+  final String? group;
+  final bool ungrouped;
+}
+
+class _SourceGroupFilterSheet extends StatelessWidget {
+  const _SourceGroupFilterSheet({
+    required this.availableGroups,
+    required this.initialGroup,
+    required this.initialUngrouped,
+  });
+
+  final List<String> availableGroups;
+  final String? initialGroup;
+  final bool initialUngrouped;
+
+  static const String _kAllValue = '__group_filter_all__';
+  static const String _kUngroupedValue = '__group_filter_ungrouped__';
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final selectedValue =
+        initialUngrouped
+            ? _kUngroupedValue
+            : (initialGroup ?? _kAllValue);
+    final tiles = <Widget>[
+      RadioListTile<String>(
+        value: _kAllValue,
+        groupValue: selectedValue,
+        title: const Text('全部分组'),
+        onChanged: (_) {
+          Navigator.of(context).pop(
+            const _GroupFilterResult(group: null, ungrouped: false),
+          );
+        },
+      ),
+      RadioListTile<String>(
+        value: _kUngroupedValue,
+        groupValue: selectedValue,
+        title: const Text('仅未分组'),
+        onChanged: (_) {
+          Navigator.of(context).pop(
+            const _GroupFilterResult(group: null, ungrouped: true),
+          );
+        },
+      ),
+    ];
+
+    if (availableGroups.isEmpty) {
+      tiles.add(
+        ListTile(
+          enabled: false,
+          leading: const Icon(Icons.info_outline_rounded),
+          title: Text(
+            '暂无已命名分组',
+            style: theme.textTheme.bodyMedium,
+          ),
+          subtitle: Text(
+            '可以先在书源卡片上设置分组。',
+            style: theme.textTheme.bodySmall?.copyWith(
+              color: theme.colorScheme.onSurfaceVariant,
+            ),
+          ),
+        ),
+      );
+    } else {
+      for (final group in availableGroups) {
+        tiles.add(
+          RadioListTile<String>(
+            value: group,
+            groupValue: selectedValue,
+            title: Text(group),
+            onChanged: (_) {
+              Navigator.of(context).pop(
+                _GroupFilterResult(group: group, ungrouped: false),
+              );
+            },
+          ),
+        );
+      }
+    }
+
+    return SafeArea(
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(16, 12, 16, 20),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Text(
+              '按分组筛选',
+              style: theme.textTheme.titleMedium?.copyWith(
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+            const SizedBox(height: 6),
+            Text(
+              '筛选特定分组或仅查看未分组书源。',
+              style: theme.textTheme.bodySmall?.copyWith(
+                color: theme.colorScheme.onSurfaceVariant,
+              ),
+            ),
+            const SizedBox(height: 12),
+            ConstrainedBox(
+              constraints: BoxConstraints(
+                maxHeight: MediaQuery.sizeOf(context).height * 0.6,
+              ),
+              child: ListView(
+                shrinkWrap: true,
+                children: tiles,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
