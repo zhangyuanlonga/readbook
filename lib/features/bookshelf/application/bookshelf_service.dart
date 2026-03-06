@@ -146,8 +146,7 @@ class BookshelfService {
       map[key] = normalized;
     }
 
-    final prefs = await _preferencesFuture;
-    await prefs.setString(_tagStorageKey, jsonEncode(map));
+    await _saveTagMap(map);
   }
 
   Future<void> removeBookTags({
@@ -157,13 +156,94 @@ class BookshelfService {
     await setBookTags(sourceId: sourceId, detailUrl: detailUrl, tags: const []);
   }
 
+  Future<int> renameTag({
+    required String fromTag,
+    required String toTag,
+  }) async {
+    final fromValues = _normalizeTags([fromTag]);
+    final toValues = _normalizeTags([toTag]);
+    if (fromValues.isEmpty || toValues.isEmpty) {
+      return 0;
+    }
+
+    final from = fromValues.first;
+    final to = toValues.first;
+    if (from == to) {
+      return 0;
+    }
+
+    final map = Map<String, List<String>>.from(await getTagMap());
+    var affectedCount = 0;
+    for (final entry in map.entries.toList(growable: false)) {
+      final tags = _normalizeTags(entry.value);
+      if (!tags.contains(from)) {
+        continue;
+      }
+      affectedCount += 1;
+      final updated = _normalizeTags(tags.map((tag) => tag == from ? to : tag));
+      if (updated.isEmpty) {
+        map.remove(entry.key);
+      } else {
+        map[entry.key] = updated;
+      }
+    }
+
+    if (affectedCount <= 0) {
+      return 0;
+    }
+
+    await _saveTagMap(map);
+    return affectedCount;
+  }
+
+  Future<int> deleteTag(String tagName) async {
+    final values = _normalizeTags([tagName]);
+    if (values.isEmpty) {
+      return 0;
+    }
+    final target = values.first;
+
+    final map = Map<String, List<String>>.from(await getTagMap());
+    var affectedCount = 0;
+    for (final entry in map.entries.toList(growable: false)) {
+      final tags = _normalizeTags(entry.value);
+      if (!tags.contains(target)) {
+        continue;
+      }
+      affectedCount += 1;
+      final updated = tags
+          .where((tag) => tag != target)
+          .toList(growable: false);
+      if (updated.isEmpty) {
+        map.remove(entry.key);
+      } else {
+        map[entry.key] = updated;
+      }
+    }
+
+    if (affectedCount <= 0) {
+      return 0;
+    }
+
+    await _saveTagMap(map);
+    return affectedCount;
+  }
+
   Future<void> _save(List<BookshelfBook> books) async {
     final prefs = await _preferencesFuture;
     final encoded = jsonEncode(books.map((item) => item.toJson()).toList());
     await prefs.setString(_storageKey, encoded);
   }
 
-  static String _bookKey({required String sourceId, required String detailUrl}) {
+  Future<void> _saveTagMap(Map<String, List<String>> map) async {
+    final prefs = await _preferencesFuture;
+    await prefs.setString(_tagStorageKey, jsonEncode(map));
+  }
+
+  static String _bookKey({
+    required String sourceId,
+    required String detailUrl,
+  }) {
     final source = sourceId.trim();
     final detail = detailUrl.trim();
     if (source.isEmpty || detail.isEmpty) {

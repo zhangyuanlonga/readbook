@@ -18,7 +18,10 @@ import '../../book/application/book_detail_service.dart';
 import 'widgets/bookshelf_grid_sliver.dart';
 
 enum _BookshelfSheetAction { read, detail, select, tag, delete }
+
 enum _BookshelfFilter { all, local, novel, manga, custom }
+
+enum _TagManageSheetAction { rename, delete }
 
 class BookshelfPage extends StatefulWidget {
   const BookshelfPage({super.key});
@@ -104,21 +107,21 @@ class _BookshelfPageState extends State<BookshelfPage> {
           _isSelectionMode ? '已选择 ${_selectedBookKeys.length} 项' : '书架',
         ),
         actions: [
-          if (_isSelectionMode) ...[
-            IconButton(
-              onPressed: filteredBooks.isEmpty ? null : _selectAllBooks,
-              tooltip: '全选',
-              icon: const Icon(Icons.select_all),
-            ),
-            IconButton(
-              onPressed:
-                  _selectedBookKeys.isEmpty || _isBatchDeleting
-                      ? null
-                      : _deleteSelectedBooks,
-              tooltip: '删除已选',
-              icon: const Icon(Icons.delete_outline),
-            ),
-          ] else ...[
+          if (_isSelectionMode)
+            if (_isBatchDeleting)
+              const Padding(
+                padding: EdgeInsets.only(right: 16),
+                child: Center(
+                  child: SizedBox(
+                    width: 18,
+                    height: 18,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  ),
+                ),
+              )
+            else
+              const SizedBox.shrink()
+          else ...[
             IconButton(
               onPressed:
                   _isLoading || filteredBooks.isEmpty || _isBatchDeleting
@@ -135,6 +138,10 @@ class _BookshelfPageState extends State<BookshelfPage> {
           ],
         ],
       ),
+      bottomNavigationBar:
+          _isSelectionMode
+              ? _buildSelectionActionBar(filteredBooks: filteredBooks)
+              : null,
       body: DecoratedBox(
         decoration: BoxDecoration(
           gradient: LinearGradient(
@@ -438,15 +445,16 @@ class _BookshelfPageState extends State<BookshelfPage> {
                       showCheckmark: false,
                       onSelected: (_) => _activateFilter(filter),
                       selectedColor: colorScheme.primaryContainer,
-                      labelStyle: Theme.of(context).textTheme.labelMedium
-                          ?.copyWith(
-                            color:
-                                selected
-                                    ? colorScheme.onPrimaryContainer
-                                    : colorScheme.onSurfaceVariant,
-                            fontWeight:
-                                selected ? FontWeight.w700 : FontWeight.w600,
-                          ),
+                      labelStyle: Theme.of(
+                        context,
+                      ).textTheme.labelMedium?.copyWith(
+                        color:
+                            selected
+                                ? colorScheme.onPrimaryContainer
+                                : colorScheme.onSurfaceVariant,
+                        fontWeight:
+                            selected ? FontWeight.w700 : FontWeight.w600,
+                      ),
                       side: BorderSide(color: colorScheme.outlineVariant),
                     ),
                   );
@@ -458,26 +466,33 @@ class _BookshelfPageState extends State<BookshelfPage> {
                   final label = '#$tag';
                   return Padding(
                     padding: const EdgeInsets.only(right: 8),
-                    child: ChoiceChip(
-                      label: Text(label),
-                      selected: selected,
-                      showCheckmark: false,
-                      onSelected:
-                          (_) => _activateFilter(
-                            _BookshelfFilter.custom,
-                            customTag: tag,
-                          ),
-                      selectedColor: colorScheme.secondaryContainer,
-                      labelStyle: Theme.of(context).textTheme.labelMedium
-                          ?.copyWith(
-                            color:
-                                selected
-                                    ? colorScheme.onSecondaryContainer
-                                    : colorScheme.onSurfaceVariant,
-                            fontWeight:
-                                selected ? FontWeight.w700 : FontWeight.w600,
-                          ),
-                      side: BorderSide(color: colorScheme.outlineVariant),
+                    child: GestureDetector(
+                      onLongPress:
+                          _isBatchDeleting
+                              ? null
+                              : () => unawaited(_showTagManageSheet(tag)),
+                      child: ChoiceChip(
+                        label: Text(label),
+                        selected: selected,
+                        showCheckmark: false,
+                        onSelected:
+                            (_) => _activateFilter(
+                              _BookshelfFilter.custom,
+                              customTag: tag,
+                            ),
+                        selectedColor: colorScheme.secondaryContainer,
+                        labelStyle: Theme.of(
+                          context,
+                        ).textTheme.labelMedium?.copyWith(
+                          color:
+                              selected
+                                  ? colorScheme.onSecondaryContainer
+                                  : colorScheme.onSurfaceVariant,
+                          fontWeight:
+                              selected ? FontWeight.w700 : FontWeight.w600,
+                        ),
+                        side: BorderSide(color: colorScheme.outlineVariant),
+                      ),
                     ),
                   );
                 }),
@@ -492,12 +507,61 @@ class _BookshelfPageState extends State<BookshelfPage> {
               padding: EdgeInsets.zero,
               constraints: const BoxConstraints.tightFor(width: 38, height: 38),
               icon: Icon(
-                _useGridView ? Icons.view_list_rounded : Icons.grid_view_rounded,
+                _useGridView
+                    ? Icons.view_list_rounded
+                    : Icons.grid_view_rounded,
                 size: 20,
               ),
             ),
           ),
         ],
+      ),
+    );
+  }
+
+  Widget _buildSelectionActionBar({
+    required List<BookshelfBook> filteredBooks,
+  }) {
+    final colorScheme = Theme.of(context).colorScheme;
+    return SafeArea(
+      top: false,
+      child: DecoratedBox(
+        decoration: BoxDecoration(
+          color: colorScheme.surface,
+          border: Border(
+            top: BorderSide(
+              color: colorScheme.outlineVariant.withValues(alpha: 0.5),
+            ),
+          ),
+        ),
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(12, 8, 12, 8),
+          child: Row(
+            children: [
+              Expanded(
+                child: OutlinedButton.icon(
+                  onPressed:
+                      _isBatchDeleting || filteredBooks.isEmpty
+                          ? null
+                          : _selectAllBooks,
+                  icon: const Icon(Icons.select_all_rounded),
+                  label: const Text('全选'),
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: FilledButton.icon(
+                  onPressed:
+                      _isBatchDeleting || _selectedBookKeys.isEmpty
+                          ? null
+                          : _deleteSelectedBooks,
+                  icon: const Icon(Icons.delete_outline_rounded),
+                  label: const Text('删除'),
+                ),
+              ),
+            ],
+          ),
+        ),
       ),
     );
   }
@@ -794,7 +858,11 @@ class _BookshelfPageState extends State<BookshelfPage> {
                   child: Stack(
                     children: [
                       Positioned.fill(
-                        child: _buildCover(book.coverUrl, width: 58, height: 84),
+                        child: _buildCover(
+                          book.coverUrl,
+                          width: 58,
+                          height: 84,
+                        ),
                       ),
                       Positioned(
                         top: 4,
@@ -1062,7 +1130,6 @@ class _BookshelfPageState extends State<BookshelfPage> {
     });
   }
 
-
   Future<void> _showBookActionSheet(BookshelfBook book) async {
     if (_isBatchDeleting || !mounted) {
       return;
@@ -1084,7 +1151,12 @@ class _BookshelfPageState extends State<BookshelfPage> {
         final horizontal = AppSpacing.pageHorizontal(sheetContext);
         final bottomInset = MediaQuery.viewPaddingOf(sheetContext).bottom;
         return Padding(
-          padding: EdgeInsets.fromLTRB(horizontal, 4, horizontal, 10 + bottomInset),
+          padding: EdgeInsets.fromLTRB(
+            horizontal,
+            4,
+            horizontal,
+            10 + bottomInset,
+          ),
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
@@ -1108,7 +1180,9 @@ class _BookshelfPageState extends State<BookshelfPage> {
                                 _toSingleLineText(book.title),
                                 maxLines: 1,
                                 overflow: TextOverflow.ellipsis,
-                                style: Theme.of(sheetContext).textTheme.titleSmall
+                                style: Theme.of(sheetContext)
+                                    .textTheme
+                                    .titleSmall
                                     ?.copyWith(fontWeight: FontWeight.w700),
                               ),
                               const SizedBox(height: 6),
@@ -1116,20 +1190,22 @@ class _BookshelfPageState extends State<BookshelfPage> {
                                 authorLine,
                                 maxLines: 1,
                                 overflow: TextOverflow.ellipsis,
-                                style: Theme.of(sheetContext).textTheme.bodySmall
-                                    ?.copyWith(
-                                      color: colorScheme.onSurfaceVariant,
-                                    ),
+                                style: Theme.of(
+                                  sheetContext,
+                                ).textTheme.bodySmall?.copyWith(
+                                  color: colorScheme.onSurfaceVariant,
+                                ),
                               ),
                               const SizedBox(height: 4),
                               Text(
                                 latestLine,
                                 maxLines: 1,
                                 overflow: TextOverflow.ellipsis,
-                                style: Theme.of(sheetContext).textTheme.bodySmall
-                                    ?.copyWith(
-                                      color: colorScheme.onSurfaceVariant,
-                                    ),
+                                style: Theme.of(
+                                  sheetContext,
+                                ).textTheme.bodySmall?.copyWith(
+                                  color: colorScheme.onSurfaceVariant,
+                                ),
                               ),
                             ],
                           ),
@@ -1288,9 +1364,8 @@ class _BookshelfPageState extends State<BookshelfPage> {
                 children: [
                   Text(
                     '设置标签',
-                    style: Theme.of(
-                      sheetContext,
-                    ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700),
+                    style: Theme.of(sheetContext).textTheme.titleMedium
+                        ?.copyWith(fontWeight: FontWeight.w700),
                   ),
                   const SizedBox(height: 4),
                   Text(
@@ -1298,7 +1373,8 @@ class _BookshelfPageState extends State<BookshelfPage> {
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                     style: Theme.of(sheetContext).textTheme.bodySmall?.copyWith(
-                      color: Theme.of(sheetContext).colorScheme.onSurfaceVariant,
+                      color:
+                          Theme.of(sheetContext).colorScheme.onSurfaceVariant,
                     ),
                   ),
                   const SizedBox(height: 12),
@@ -1413,71 +1489,245 @@ class _BookshelfPageState extends State<BookshelfPage> {
     }
   }
 
+  Future<void> _showTagManageSheet(String tag) async {
+    if (_isSelectionMode || _isBatchDeleting || !mounted) {
+      return;
+    }
+
+    final selected = await showModalBottomSheet<_TagManageSheetAction>(
+      context: context,
+      useSafeArea: true,
+      showDragHandle: true,
+      builder: (sheetContext) {
+        return Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            ListTile(
+              leading: const Icon(Icons.edit_outlined),
+              title: const Text('重命名标签'),
+              subtitle: Text('#$tag'),
+              onTap:
+                  () => Navigator.of(
+                    sheetContext,
+                  ).pop(_TagManageSheetAction.rename),
+            ),
+            ListTile(
+              leading: Icon(
+                Icons.delete_outline_rounded,
+                color: Theme.of(sheetContext).colorScheme.error,
+              ),
+              title: Text(
+                '删除标签',
+                style: TextStyle(
+                  color: Theme.of(sheetContext).colorScheme.error,
+                ),
+              ),
+              subtitle: Text('#$tag'),
+              onTap:
+                  () => Navigator.of(
+                    sheetContext,
+                  ).pop(_TagManageSheetAction.delete),
+            ),
+            const SizedBox(height: 4),
+          ],
+        );
+      },
+    );
+    if (!mounted || selected == null) {
+      return;
+    }
+
+    switch (selected) {
+      case _TagManageSheetAction.rename:
+        await _renameTag(tag);
+        break;
+      case _TagManageSheetAction.delete:
+        await _deleteTag(tag);
+        break;
+    }
+  }
+
+  Future<void> _renameTag(String tag) async {
+    final nextTag = await _showRenameTagDialog(
+      context,
+      initialTag: tag,
+      existingTags: _userTags.toSet(),
+    );
+    if (!mounted || nextTag == null || nextTag == tag) {
+      return;
+    }
+
+    try {
+      final affectedCount = await _bookshelfService.renameTag(
+        fromTag: tag,
+        toTag: nextTag,
+      );
+      if (!mounted) {
+        return;
+      }
+      if (affectedCount <= 0) {
+        _showMessage('未找到可重命名的标签。');
+        return;
+      }
+
+      setState(() {
+        final nextMap = <String, List<String>>{};
+        for (final entry in _bookTagsByKey.entries) {
+          final tags = _normalizeTags(
+            entry.value.map((value) => value == tag ? nextTag : value),
+          );
+          if (tags.isNotEmpty) {
+            nextMap[entry.key] = tags;
+          }
+        }
+        _bookTagsByKey = nextMap;
+        if (_activeFilter == _BookshelfFilter.custom &&
+            _activeCustomTag == tag) {
+          _activeCustomTag = nextTag;
+        }
+        _ensureFilterStillValid();
+      });
+      _showMessage('标签已重命名为 #$nextTag。');
+    } catch (_) {
+      _showMessage('重命名失败，请重试。');
+    }
+  }
+
+  Future<void> _deleteTag(String tag) async {
+    final bindCount =
+        _bookTagsByKey.values.where((tags) => tags.contains(tag)).length;
+    final confirmed = await _showConfirmDialog(
+      title: '删除标签',
+      content:
+          bindCount > 0
+              ? '确定删除标签 #$tag 吗？会从 $bindCount 本书中移除。'
+              : '确定删除标签 #$tag 吗？',
+      confirmText: '删除',
+    );
+    if (!mounted || confirmed != true) {
+      return;
+    }
+
+    try {
+      final affectedCount = await _bookshelfService.deleteTag(tag);
+      if (!mounted) {
+        return;
+      }
+      if (affectedCount <= 0) {
+        _showMessage('标签已不存在。');
+        return;
+      }
+
+      setState(() {
+        final nextMap = <String, List<String>>{};
+        for (final entry in _bookTagsByKey.entries) {
+          final tags = entry.value
+              .where((value) => value != tag)
+              .toList(growable: false);
+          if (tags.isNotEmpty) {
+            nextMap[entry.key] = tags;
+          }
+        }
+        _bookTagsByKey = nextMap;
+        _ensureFilterStillValid();
+      });
+      _showMessage('已删除标签 #$tag。');
+    } catch (_) {
+      _showMessage('删除标签失败，请重试。');
+    }
+  }
+
   Future<String?> _showCreateTagDialog(
     BuildContext dialogContext, {
     required Set<String> existingTags,
+  }) {
+    return _showTagNameDialog(
+      dialogContext,
+      title: '新增标签',
+      confirmText: '创建',
+      hintText: '例如：在读 / 已完结',
+      existingTags: existingTags,
+    );
+  }
+
+  Future<String?> _showRenameTagDialog(
+    BuildContext dialogContext, {
+    required String initialTag,
+    required Set<String> existingTags,
+  }) {
+    return _showTagNameDialog(
+      dialogContext,
+      title: '重命名标签',
+      confirmText: '保存',
+      hintText: '输入新的标签名称',
+      initialValue: initialTag,
+      existingTags: existingTags,
+      originalTag: initialTag,
+    );
+  }
+
+  Future<String?> _showTagNameDialog(
+    BuildContext dialogContext, {
+    required String title,
+    required String confirmText,
+    required String hintText,
+    required Set<String> existingTags,
+    String initialValue = '',
+    String? originalTag,
   }) async {
-    final controller = TextEditingController();
+    final controller = TextEditingController(text: initialValue);
     String? errorText;
 
-    final created = await showDialog<String>(
+    final result = await showDialog<String>(
       context: dialogContext,
       builder: (context) {
         return StatefulBuilder(
           builder: (context, setDialogState) {
+            String? validate() {
+              final value = _normalizeTags([controller.text]);
+              if (value.isEmpty) {
+                return '请输入标签名称';
+              }
+              final tag = value.first;
+              if (originalTag != null && tag == originalTag) {
+                return null;
+              }
+              if (originalTag == null && existingTags.contains(tag)) {
+                return '该标签已存在';
+              }
+              return null;
+            }
+
+            void submit() {
+              final validation = validate();
+              if (validation != null) {
+                setDialogState(() {
+                  errorText = validation;
+                });
+                return;
+              }
+              final tag = _normalizeTags([controller.text]).first;
+              Navigator.of(context).pop(tag);
+            }
+
             return AlertDialog(
-              title: const Text('新增标签'),
+              title: Text(title),
               content: TextField(
                 controller: controller,
                 autofocus: true,
                 maxLength: 12,
                 decoration: InputDecoration(
-                  hintText: '例如：在读 / 已完结',
+                  hintText: hintText,
                   errorText: errorText,
                 ),
-                onSubmitted: (_) {
-                  final value = _normalizeTags([controller.text]);
-                  if (value.isEmpty) {
-                    setDialogState(() {
-                      errorText = '请输入标签名称';
-                    });
-                    return;
-                  }
-                  final tag = value.first;
-                  if (existingTags.contains(tag)) {
-                    setDialogState(() {
-                      errorText = '该标签已存在';
-                    });
-                    return;
-                  }
-                  Navigator.of(context).pop(tag);
-                },
+                onSubmitted: (_) => submit(),
               ),
               actions: [
                 TextButton(
                   onPressed: () => Navigator.of(context).pop(),
                   child: const Text('取消'),
                 ),
-                FilledButton(
-                  onPressed: () {
-                    final value = _normalizeTags([controller.text]);
-                    if (value.isEmpty) {
-                      setDialogState(() {
-                        errorText = '请输入标签名称';
-                      });
-                      return;
-                    }
-                    final tag = value.first;
-                    if (existingTags.contains(tag)) {
-                      setDialogState(() {
-                        errorText = '该标签已存在';
-                      });
-                      return;
-                    }
-                    Navigator.of(context).pop(tag);
-                  },
-                  child: const Text('创建'),
-                ),
+                FilledButton(onPressed: submit, child: Text(confirmText)),
               ],
             );
           },
@@ -1486,7 +1736,7 @@ class _BookshelfPageState extends State<BookshelfPage> {
     );
 
     controller.dispose();
-    return created;
+    return result;
   }
 
   Future<void> _confirmAndRemoveBook(BookshelfBook book) async {
@@ -1659,7 +1909,9 @@ class _BookshelfPageState extends State<BookshelfPage> {
             ? colorScheme.secondaryContainer.withValues(alpha: 0.94)
             : colorScheme.primaryContainer.withValues(alpha: 0.94);
     final foreground =
-        isLocal ? colorScheme.onSecondaryContainer : colorScheme.onPrimaryContainer;
+        isLocal
+            ? colorScheme.onSecondaryContainer
+            : colorScheme.onPrimaryContainer;
     final borderRadius = compact ? 6.0 : 7.0;
     final horizontalPadding = compact ? 8.0 : 10.0;
     final minWidth = compact ? 30.0 : 36.0;
@@ -1806,9 +2058,9 @@ class _BookshelfPageState extends State<BookshelfPage> {
 
   Future<Map<String, int>> _loadSourceTypeMap() async {
     try {
-      final sources = await AppDatabase.instance
-          .getAllSources()
-          .timeout(_kSourceMapLoadTimeout);
+      final sources = await AppDatabase.instance.getAllSources().timeout(
+        _kSourceMapLoadTimeout,
+      );
       final map = <String, int>{};
       for (final source in sources) {
         final sourceId = source.id.trim();

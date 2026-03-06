@@ -76,5 +76,53 @@ void main() {
       final all = await service.getAll();
       expect(all, isEmpty);
     });
+
+    test('renameTag renames across books and deduplicates tags', () async {
+      final service = BookshelfService();
+      await service.setBookTags(
+        sourceId: 'src_1',
+        detailUrl: 'detail_1',
+        tags: const ['在读', '收藏'],
+      );
+      await service.setBookTags(
+        sourceId: 'src_2',
+        detailUrl: 'detail_2',
+        tags: const ['在读', '已读'],
+      );
+      await service.setBookTags(
+        sourceId: 'src_3',
+        detailUrl: 'detail_3',
+        tags: const ['追更', '在读'],
+      );
+
+      final affectedCount = await service.renameTag(fromTag: '在读', toTag: '追更');
+      expect(affectedCount, 3);
+
+      final map = await service.getTagMap();
+      expect(map['src_1::detail_1'], orderedEquals(const ['追更', '收藏']));
+      expect(map['src_2::detail_2'], orderedEquals(const ['追更', '已读']));
+      expect(map['src_3::detail_3'], orderedEquals(const ['追更']));
+    });
+
+    test('deleteTag removes target tag and clears empty book tags', () async {
+      final service = BookshelfService();
+      await service.setBookTags(
+        sourceId: 'src_1',
+        detailUrl: 'detail_1',
+        tags: const ['在读'],
+      );
+      await service.setBookTags(
+        sourceId: 'src_2',
+        detailUrl: 'detail_2',
+        tags: const ['在读', '收藏'],
+      );
+
+      final affectedCount = await service.deleteTag('在读');
+      expect(affectedCount, 2);
+
+      final map = await service.getTagMap();
+      expect(map.containsKey('src_1::detail_1'), isFalse);
+      expect(map['src_2::detail_2'], orderedEquals(const ['收藏']));
+    });
   });
 }
