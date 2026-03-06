@@ -341,62 +341,60 @@ class _BookshelfPageState extends State<BookshelfPage> {
   }
 
   Widget _buildViewModeEditBar() {
+    final theme = Theme.of(context);
     final colorScheme = Theme.of(context).colorScheme;
+    final viewButtonEnabled = !_isLoading && !_isBatchDeleting;
+    final editButtonEnabled =
+        !_isBatchDeleting &&
+        (_isSelectionMode || (!_isLoading && _filteredBooks.isNotEmpty));
+    final summaryText =
+        _isSelectionMode
+            ? '已选择 ${_selectedBookKeys.length} 本'
+            : '${_activeFilterLabel()} · ${_filteredBooks.length} 本';
+
     return Row(
       children: [
+        Text(
+          summaryText,
+          style: theme.textTheme.labelMedium?.copyWith(
+            color: colorScheme.onSurfaceVariant,
+            fontWeight: FontWeight.w600,
+          ),
+        ),
         const Spacer(),
-        TextButton(
-          onPressed:
-              _isLoading || _isBatchDeleting ? null : _toggleBookshelfViewMode,
-          style: TextButton.styleFrom(
-            minimumSize: const Size(0, 34),
-            padding: const EdgeInsets.symmetric(horizontal: 6),
-            visualDensity: VisualDensity.compact,
-            tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-            foregroundColor: colorScheme.onSurfaceVariant,
-          ),
-          child: Text(
-            _useGridView ? '列表' : '网格',
-            style: Theme.of(
-              context,
-            ).textTheme.labelLarge?.copyWith(fontWeight: FontWeight.w600),
+        IconButton(
+          tooltip: _useGridView ? '网格模式' : '列表模式',
+          onPressed: viewButtonEnabled ? _toggleBookshelfViewMode : null,
+          visualDensity: VisualDensity.compact,
+          iconSize: 20,
+          color:
+              viewButtonEnabled
+                  ? (_useGridView
+                      ? colorScheme.primary
+                      : colorScheme.onSurfaceVariant)
+                  : colorScheme.onSurfaceVariant.withValues(alpha: 0.45),
+          icon: Icon(
+            _useGridView ? Icons.grid_view_rounded : Icons.view_list_rounded,
           ),
         ),
-        Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 4),
-          child: Text(
-            '|',
-            style: Theme.of(context).textTheme.bodySmall?.copyWith(
-              color: colorScheme.onSurfaceVariant,
-            ),
-          ),
-        ),
-        TextButton(
+        IconButton(
+          tooltip: _isSelectionMode ? '完成编辑' : '进入编辑',
           onPressed:
-              _isBatchDeleting
-                  ? null
-                  : _isSelectionMode
-                  ? _exitSelectionMode
-                  : _isLoading || _filteredBooks.isEmpty
-                  ? null
-                  : _startSelectionMode,
-          style: TextButton.styleFrom(
-            minimumSize: const Size(0, 34),
-            padding: const EdgeInsets.symmetric(horizontal: 6),
-            visualDensity: VisualDensity.compact,
-            tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-            foregroundColor:
-                _isSelectionMode
-                    ? colorScheme.primary
-                    : colorScheme.onSurfaceVariant,
-          ),
-          child: Text(
-            _isSelectionMode ? '完成' : '编辑',
-            style: Theme.of(
-              context,
-            ).textTheme.labelLarge?.copyWith(
-              fontWeight: _isSelectionMode ? FontWeight.w700 : FontWeight.w600,
-            ),
+              editButtonEnabled
+                  ? (_isSelectionMode
+                      ? _exitSelectionMode
+                      : _startSelectionMode)
+                  : null,
+          visualDensity: VisualDensity.compact,
+          iconSize: 20,
+          color:
+              editButtonEnabled
+                  ? (_isSelectionMode
+                      ? colorScheme.primary
+                      : colorScheme.onSurfaceVariant)
+                  : colorScheme.onSurfaceVariant.withValues(alpha: 0.45),
+          icon: Icon(
+            _isSelectionMode ? Icons.check_rounded : Icons.edit_outlined,
           ),
         ),
       ],
@@ -419,12 +417,13 @@ class _BookshelfPageState extends State<BookshelfPage> {
         !visibleBaseFilters.contains(_activeFilter);
     final hasHiddenTagSelected =
         _activeFilter == _BookshelfFilter.custom &&
-        (_activeCustomTag != null && !visibleCustomTags.contains(_activeCustomTag));
+        (_activeCustomTag != null &&
+            !visibleCustomTags.contains(_activeCustomTag));
     final highlightFilterAction =
         hasHiddenBaseFilterSelected || hasHiddenTagSelected;
-    final chipTextStyle = Theme.of(context).textTheme.labelMedium?.copyWith(
-      fontWeight: FontWeight.w600,
-    );
+    final chipTextStyle = Theme.of(
+      context,
+    ).textTheme.labelMedium?.copyWith(fontWeight: FontWeight.w600);
 
     return SizedBox(
       height: 38,
@@ -447,10 +446,11 @@ class _BookshelfPageState extends State<BookshelfPage> {
                       selected: selected,
                       showCheckmark: false,
                       onSelected:
-                          _isBatchDeleting ? null : (_) => _activateFilter(filter),
-                      backgroundColor: colorScheme.surfaceContainerLow.withValues(
-                        alpha: 0.35,
-                      ),
+                          _isBatchDeleting
+                              ? null
+                              : (_) => _activateFilter(filter),
+                      backgroundColor: colorScheme.surfaceContainerLow
+                          .withValues(alpha: 0.35),
                       selectedColor: colorScheme.primaryContainer.withValues(
                         alpha: 0.82,
                       ),
@@ -503,12 +503,10 @@ class _BookshelfPageState extends State<BookshelfPage> {
                                   _BookshelfFilter.custom,
                                   customTag: tag,
                                 ),
-                        backgroundColor: colorScheme.surfaceContainerLow.withValues(
-                          alpha: 0.35,
-                        ),
-                        selectedColor: colorScheme.secondaryContainer.withValues(
-                          alpha: 0.88,
-                        ),
+                        backgroundColor: colorScheme.surfaceContainerLow
+                            .withValues(alpha: 0.35),
+                        selectedColor: colorScheme.secondaryContainer
+                            .withValues(alpha: 0.88),
                         labelStyle: chipTextStyle?.copyWith(
                           color:
                               selected
@@ -523,7 +521,9 @@ class _BookshelfPageState extends State<BookshelfPage> {
                         side: BorderSide(
                           color:
                               selected
-                                  ? colorScheme.secondary.withValues(alpha: 0.26)
+                                  ? colorScheme.secondary.withValues(
+                                    alpha: 0.26,
+                                  )
                                   : colorScheme.outlineVariant.withValues(
                                     alpha: 0.72,
                                   ),
@@ -543,21 +543,21 @@ class _BookshelfPageState extends State<BookshelfPage> {
                     ? '当前筛选：${_activeFilterLabel()}'
                     : '打开完整筛选',
             child: TextButton.icon(
-            onPressed:
-                _isBatchDeleting ? null : () => unawaited(_showFilterSheet()),
-            style: TextButton.styleFrom(
-              minimumSize: const Size(0, 38),
-              padding: const EdgeInsets.symmetric(horizontal: 6),
-              visualDensity: VisualDensity.compact,
-              tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-              foregroundColor:
-                  highlightFilterAction
-                      ? colorScheme.primary
-                      : colorScheme.onSurfaceVariant,
+              onPressed:
+                  _isBatchDeleting ? null : () => unawaited(_showFilterSheet()),
+              style: TextButton.styleFrom(
+                minimumSize: const Size(0, 38),
+                padding: const EdgeInsets.symmetric(horizontal: 6),
+                visualDensity: VisualDensity.compact,
+                tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                foregroundColor:
+                    highlightFilterAction
+                        ? colorScheme.primary
+                        : colorScheme.onSurfaceVariant,
+              ),
+              icon: const Icon(Icons.filter_list_rounded, size: 18),
+              label: const Text('筛选'),
             ),
-            icon: const Icon(Icons.filter_list_rounded, size: 18),
-            label: const Text('筛选'),
-          ),
           ),
         ],
       ),
@@ -685,43 +685,89 @@ class _BookshelfPageState extends State<BookshelfPage> {
     required List<BookshelfBook> filteredBooks,
   }) {
     final colorScheme = Theme.of(context).colorScheme;
+    final selectedCount = _selectedBookKeys.length;
+
     return SafeArea(
       top: false,
-      child: DecoratedBox(
-        decoration: BoxDecoration(
-          color: colorScheme.surface,
-          border: Border(
-            top: BorderSide(
-              color: colorScheme.outlineVariant.withValues(alpha: 0.5),
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(10, 6, 10, 10),
+        child: DecoratedBox(
+          decoration: BoxDecoration(
+            color: colorScheme.surface,
+            borderRadius: const BorderRadius.vertical(top: Radius.circular(18)),
+            border: Border.all(
+              color: colorScheme.outlineVariant.withValues(alpha: 0.55),
             ),
-          ),
-        ),
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(12, 8, 12, 8),
-          child: Row(
-            children: [
-              Expanded(
-                child: OutlinedButton.icon(
-                  onPressed:
-                      _isBatchDeleting || filteredBooks.isEmpty
-                          ? null
-                          : _selectAllBooks,
-                  icon: const Icon(Icons.select_all_rounded),
-                  label: const Text('全选'),
-                ),
-              ),
-              const SizedBox(width: 10),
-              Expanded(
-                child: FilledButton.icon(
-                  onPressed:
-                      _isBatchDeleting || _selectedBookKeys.isEmpty
-                          ? null
-                          : _deleteSelectedBooks,
-                  icon: const Icon(Icons.delete_outline_rounded),
-                  label: const Text('删除'),
-                ),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withValues(alpha: 0.04),
+                blurRadius: 14,
+                offset: const Offset(0, -2),
               ),
             ],
+          ),
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(12, 10, 12, 10),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Row(
+                  children: [
+                    Icon(
+                      Icons.checklist_rounded,
+                      size: 18,
+                      color: colorScheme.primary,
+                    ),
+                    const SizedBox(width: 6),
+                    Text(
+                      '已选 $selectedCount / ${filteredBooks.length}',
+                      style: Theme.of(context).textTheme.labelLarge?.copyWith(
+                        color: colorScheme.onSurfaceVariant,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 8),
+                Row(
+                  children: [
+                    Expanded(
+                      child: OutlinedButton.icon(
+                        onPressed:
+                            _isBatchDeleting || filteredBooks.isEmpty
+                                ? null
+                                : _selectAllBooks,
+                        style: OutlinedButton.styleFrom(
+                          minimumSize: const Size(0, 42),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                        ),
+                        icon: const Icon(Icons.select_all_rounded),
+                        label: const Text('全选'),
+                      ),
+                    ),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: FilledButton.icon(
+                        onPressed:
+                            _isBatchDeleting || _selectedBookKeys.isEmpty
+                                ? null
+                                : _deleteSelectedBooks,
+                        style: FilledButton.styleFrom(
+                          minimumSize: const Size(0, 42),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                        ),
+                        icon: const Icon(Icons.delete_outline_rounded),
+                        label: const Text('删除'),
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
           ),
         ),
       ),
@@ -974,9 +1020,25 @@ class _BookshelfPageState extends State<BookshelfPage> {
     );
     final latestLine =
         latestChapterText.isNotEmpty ? '最新: $latestChapterText' : '最新: 暂无缓存章节';
+    final readingHint = _buildReadingHint(progress, fallback: latestLine);
+    final isEditingSelected = _isSelectionMode && isSelected;
 
     return Card(
-      margin: const EdgeInsets.only(bottom: 6),
+      margin: const EdgeInsets.only(bottom: 8),
+      color:
+          isEditingSelected
+              ? colorScheme.primaryContainer.withValues(alpha: 0.34)
+              : colorScheme.surfaceContainerLowest,
+      elevation: 0,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(14),
+        side: BorderSide(
+          color:
+              isEditingSelected
+                  ? colorScheme.primary.withValues(alpha: 0.38)
+                  : colorScheme.outlineVariant.withValues(alpha: 0.56),
+        ),
+      ),
       clipBehavior: Clip.antiAlias,
       child: InkWell(
         onTap:
@@ -987,18 +1049,18 @@ class _BookshelfPageState extends State<BookshelfPage> {
                 : () async {
                   await _openFromBookshelf(book, progress: progress);
                 },
+        borderRadius: BorderRadius.circular(14),
         child: Padding(
-          padding: const EdgeInsets.fromLTRB(10, 8, 10, 8),
+          padding: const EdgeInsets.fromLTRB(12, 10, 12, 10),
           child: Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               if (_isSelectionMode)
                 Padding(
-                  padding: const EdgeInsets.only(right: 6, top: 2),
-                  child: Checkbox(
-                    value: isSelected,
-                    onChanged: (_) => _toggleBookSelection(book),
-                    visualDensity: VisualDensity.compact,
+                  padding: const EdgeInsets.only(right: 8, top: 2),
+                  child: _buildListSelectionIndicator(
+                    selected: isSelected,
+                    onTap: () => _toggleBookSelection(book),
                   ),
                 ),
               InkResponse(
@@ -1015,15 +1077,15 @@ class _BookshelfPageState extends State<BookshelfPage> {
                 containedInkWell: true,
                 borderRadius: BorderRadius.circular(12),
                 child: SizedBox(
-                  width: 58,
-                  height: 84,
+                  width: 60,
+                  height: 88,
                   child: Stack(
                     children: [
                       Positioned.fill(
                         child: _buildCover(
                           book.coverUrl,
-                          width: 58,
-                          height: 84,
+                          width: 60,
+                          height: 88,
                         ),
                       ),
                       Positioned(
@@ -1058,7 +1120,7 @@ class _BookshelfPageState extends State<BookshelfPage> {
                           Expanded(
                             child: Text(
                               titleText,
-                              style: Theme.of(context).textTheme.titleSmall
+                              style: Theme.of(context).textTheme.titleMedium
                                   ?.copyWith(fontWeight: FontWeight.w700),
                               maxLines: 1,
                               overflow: TextOverflow.ellipsis,
@@ -1072,33 +1134,49 @@ class _BookshelfPageState extends State<BookshelfPage> {
                               child:
                                   isOpening
                                       ? const CircularProgressIndicator(
-                                        strokeWidth: 2,
+                                        strokeWidth: 1.9,
                                       )
-                                      : Icon(
-                                        Icons.chevron_right_rounded,
-                                        size: 20,
-                                        color: colorScheme.onSurfaceVariant,
+                                      : Container(
+                                        decoration: BoxDecoration(
+                                          color:
+                                              colorScheme.surfaceContainerHigh,
+                                          shape: BoxShape.circle,
+                                        ),
+                                        alignment: Alignment.center,
+                                        child: Icon(
+                                          Icons.chevron_right_rounded,
+                                          size: 18,
+                                          color: colorScheme.onSurfaceVariant,
+                                        ),
                                       ),
                             ),
                           ],
                         ],
                       ),
-                      const SizedBox(height: 5),
+                      const SizedBox(height: 6),
                       Text(
                         authorText.isNotEmpty ? '作者: $authorText' : '作者: 未知',
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                         style: Theme.of(context).textTheme.bodySmall?.copyWith(
                           color: colorScheme.onSurfaceVariant,
+                          fontWeight: FontWeight.w500,
                         ),
                       ),
-                      const SizedBox(height: 4),
+                      const SizedBox(height: 5),
                       Text(
-                        latestLine,
+                        readingHint,
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                         style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                          color: colorScheme.onSurfaceVariant,
+                          color:
+                              progress == null
+                                  ? colorScheme.onSurfaceVariant
+                                  : colorScheme.primary,
+                          fontWeight:
+                              progress == null
+                                  ? FontWeight.w500
+                                  : FontWeight.w600,
                         ),
                       ),
                     ],
@@ -1110,6 +1188,68 @@ class _BookshelfPageState extends State<BookshelfPage> {
         ),
       ),
     );
+  }
+
+  Widget _buildListSelectionIndicator({
+    required bool selected,
+    required VoidCallback onTap,
+  }) {
+    final colorScheme = Theme.of(context).colorScheme;
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        borderRadius: BorderRadius.circular(999),
+        onTap: onTap,
+        child: Padding(
+          padding: const EdgeInsets.all(2),
+          child: AnimatedContainer(
+            duration: const Duration(milliseconds: 160),
+            width: 22,
+            height: 22,
+            decoration: BoxDecoration(
+              color:
+                  selected
+                      ? colorScheme.primary
+                      : colorScheme.surface.withValues(alpha: 0.9),
+              shape: BoxShape.circle,
+              border: Border.all(
+                color:
+                    selected
+                        ? colorScheme.primary
+                        : colorScheme.outline.withValues(alpha: 0.68),
+              ),
+            ),
+            child: Icon(
+              Icons.check,
+              size: 14,
+              color:
+                  selected
+                      ? colorScheme.onPrimary
+                      : colorScheme.onSurfaceVariant.withValues(alpha: 0.7),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  String _buildReadingHint(
+    ReadingProgress? progress, {
+    required String fallback,
+  }) {
+    if (progress == null) {
+      return fallback;
+    }
+    final chapter = _toSingleLineText(progress.chapterTitle);
+    if (chapter.isEmpty) {
+      return fallback;
+    }
+    final ratio = progress.chapterPositionRatio.clamp(0.0, 1.0);
+    if (ratio <= 0.03) {
+      return '读到: $chapter';
+    }
+    final percent = (ratio * 100).round().clamp(1, 99);
+    return '读到: $chapter · 章内$percent%';
   }
 
   String _bookKey(BookshelfBook book) {

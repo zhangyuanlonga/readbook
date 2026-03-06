@@ -64,7 +64,6 @@ class _MinePageState extends ConsumerState<MinePage> {
   Widget build(BuildContext context) {
     final horizontal = AppSpacing.pageHorizontal(context);
     final bottomSafe = MediaQuery.viewPaddingOf(context).bottom;
-    final themeMode = ref.watch(appThemeModeProvider);
     final seedColor = ref.watch(appSeedColorProvider);
 
     return Scaffold(
@@ -105,7 +104,6 @@ class _MinePageState extends ConsumerState<MinePage> {
                         _MineActionItem(
                           icon: Icons.settings_outlined,
                           label: '主题设置',
-                          badgeText: _themeModeLabel(themeMode),
                           colorDot: seedColor,
                           onTap:
                               () => _showThemeSettingsSheet(
@@ -327,10 +325,6 @@ class _MinePageState extends ConsumerState<MinePage> {
     final colorScheme = theme.colorScheme;
     final iconSize = denseGrid ? 30.0 : 34.0;
     final iconGlyphSize = denseGrid ? 17.0 : 19.0;
-    final badgePadding =
-        denseGrid
-            ? const EdgeInsets.symmetric(horizontal: 6, vertical: 2)
-            : const EdgeInsets.symmetric(horizontal: 7, vertical: 3);
     final labelTextStyle =
         denseGrid
             ? theme.textTheme.labelMedium?.copyWith(
@@ -378,25 +372,6 @@ class _MinePageState extends ConsumerState<MinePage> {
               padding: const EdgeInsets.fromLTRB(9, 9, 9, 9),
               child: Stack(
                 children: [
-                  if (item.badgeText != null && item.badgeText!.isNotEmpty)
-                    Positioned(
-                      top: 0,
-                      right: 0,
-                      child: Container(
-                        padding: badgePadding,
-                        decoration: BoxDecoration(
-                          color: colorScheme.secondaryContainer,
-                          borderRadius: BorderRadius.circular(999),
-                        ),
-                        child: Text(
-                          item.badgeText!,
-                          style: theme.textTheme.labelSmall?.copyWith(
-                            color: colorScheme.onSecondaryContainer,
-                            fontWeight: FontWeight.w700,
-                          ),
-                        ),
-                      ),
-                    ),
                   Center(
                     child: Column(
                       mainAxisAlignment: MainAxisAlignment.center,
@@ -521,14 +496,6 @@ class _MinePageState extends ConsumerState<MinePage> {
         );
       },
     );
-  }
-
-  String _themeModeLabel(ThemeMode mode) {
-    return switch (mode) {
-      ThemeMode.light => '日间',
-      ThemeMode.dark => '夜间',
-      ThemeMode.system => '跟随系统',
-    };
   }
 
   Future<void> _showThemeSettingsSheet({
@@ -951,13 +918,11 @@ class _MineActionItem {
     required this.icon,
     required this.label,
     required this.onTap,
-    this.badgeText,
     this.colorDot,
   });
 
   final IconData icon;
   final String label;
   final VoidCallback onTap;
-  final String? badgeText;
   final Color? colorDot;
 }
