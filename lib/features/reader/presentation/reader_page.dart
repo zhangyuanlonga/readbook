@@ -6279,17 +6279,6 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
                                                 customBackgroundPreview == null,
                                             onTap: applyCustomBackgroundImage,
                                           ),
-                                          const SizedBox(width: 8),
-                                          OutlinedButton.icon(
-                                            onPressed:
-                                                applyCustomBackgroundImage,
-                                            icon: const Icon(
-                                              Icons
-                                                  .add_photo_alternate_outlined,
-                                              size: 16,
-                                            ),
-                                            label: const Text('上传'),
-                                          ),
                                           if (hasBackgroundImage) ...[
                                             const SizedBox(width: 8),
                                             OutlinedButton(
@@ -6976,10 +6965,25 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
   Future<void> _ensureBackgroundPresetsReady() async {
     if (_backgroundPresets.isEmpty) {
       final discoveredPaths = await _loadBackgroundPresetAssetPaths();
-      final presetPaths =
-          discoveredPaths.isNotEmpty
-              ? discoveredPaths
-              : _kFallbackBackgroundPresetPaths;
+      final presetPaths = <String>[];
+
+      void addPresetPath(String path) {
+        final normalized = path.trim();
+        if (normalized.isEmpty) {
+          return;
+        }
+        if (!presetPaths.contains(normalized)) {
+          presetPaths.add(normalized);
+        }
+      }
+
+      for (final fallbackPath in _kFallbackBackgroundPresetPaths) {
+        addPresetPath(fallbackPath);
+      }
+      for (final discoveredPath in discoveredPaths) {
+        addPresetPath(discoveredPath);
+      }
+
       for (var index = 0; index < presetPaths.length; index += 1) {
         _backgroundPresets.add(
           _ReaderBackgroundPreset(
@@ -7011,14 +7015,8 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
   }
 
   Future<List<String>> _loadBackgroundPresetAssetPaths() async {
-    try {
-      final rawManifest = await rootBundle.loadString('AssetManifest.json');
-      final decoded = jsonDecode(rawManifest);
-      if (decoded is! Map<String, dynamic>) {
-        return const <String>[];
-      }
-
-      final paths = decoded.keys
+    List<String> filterBackgroundPaths(Iterable<String> candidates) {
+      final filtered = candidates
           .where((path) => path.startsWith('assets/reader/backgrounds/'))
           .where((path) {
             final lowerPath = path.toLowerCase();
@@ -7028,7 +7026,27 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
                 lowerPath.endsWith('.webp');
           })
           .toList(growable: false);
-      return paths..sort();
+      filtered.sort();
+      return filtered;
+    }
+
+    try {
+      final manifest = await AssetManifest.loadFromAssetBundle(rootBundle);
+      final discovered = filterBackgroundPaths(manifest.listAssets());
+      if (discovered.isNotEmpty) {
+        return discovered;
+      }
+    } catch (_) {
+      // Keep backward compatibility with runtimes that only expose JSON manifest.
+    }
+
+    try {
+      final rawManifest = await rootBundle.loadString('AssetManifest.json');
+      final decoded = jsonDecode(rawManifest);
+      if (decoded is! Map<String, dynamic>) {
+        return const <String>[];
+      }
+      return filterBackgroundPaths(decoded.keys);
     } catch (_) {
       return const <String>[];
     }
