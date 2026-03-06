@@ -110,6 +110,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
   bool _isSwitchSourceLoading = false;
   bool _isAutoSwitchingSource = false;
   bool _autoSwitchSourceOnFailureEnabled = false;
+  SearchCancellationToken? _activeSwitchSourceCancellationToken;
   String? _errorText;
   String _content = '';
   List<String> _paragraphs = const [];
@@ -347,6 +348,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
 
   @override
   void dispose() {
+    _cancelActiveSwitchSourceSearch();
     _syncSystemUiVisibility(force: true, visible: true);
     _progressDebounceTimer?.cancel();
     _autoReadResumeTimer?.cancel();
@@ -2190,7 +2192,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
       return;
     }
 
-    final scoreRankingEnabled = _settings.switchSourceScoreRankingEnabled;
+    const scoreRankingEnabled = true;
     final lookupStateNotifier = ValueNotifier<_ReaderSwitchSourceLookupState>(
       _ReaderSwitchSourceLookupState.loading(
         sourceCount: scope.sourceIds.length,
@@ -2198,6 +2200,8 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
       ),
     );
     final cancellationToken = SearchCancellationToken();
+    _cancelActiveSwitchSourceSearch();
+    _activeSwitchSourceCancellationToken = cancellationToken;
 
     setState(() {
       _isSwitchSourceLoading = true;
@@ -2213,24 +2217,26 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
       scoreRankingEnabled: scoreRankingEnabled,
     );
 
-    if (!mounted) {
+    _ReaderSourceSwitchCandidate? selected;
+    try {
+      if (mounted) {
+        selected = await _showSwitchSourceCandidateSheet(
+          lookupStateNotifier,
+          scoreStore: scoreStore,
+          scoreRankingEnabled: scoreRankingEnabled,
+        );
+      }
+    } finally {
       cancellationToken.cancel();
+      if (identical(_activeSwitchSourceCancellationToken, cancellationToken)) {
+        _activeSwitchSourceCancellationToken = null;
+      }
       unawaited(searchFuture.whenComplete(lookupStateNotifier.dispose));
-      return;
-    }
-
-    final selected = await _showSwitchSourceCandidateSheet(
-      lookupStateNotifier,
-      scoreStore: scoreStore,
-      scoreRankingEnabled: scoreRankingEnabled,
-    );
-    cancellationToken.cancel();
-    unawaited(searchFuture.whenComplete(lookupStateNotifier.dispose));
-
-    if (mounted) {
-      setState(() {
-        _isSwitchSourceLoading = false;
-      });
+      if (mounted) {
+        setState(() {
+          _isSwitchSourceLoading = false;
+        });
+      }
     }
 
     if (selected == null || !mounted) {
@@ -3044,6 +3050,11 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
     return '$score';
   }
 
+  void _cancelActiveSwitchSourceSearch() {
+    _activeSwitchSourceCancellationToken?.cancel();
+    _activeSwitchSourceCancellationToken = null;
+  }
+
   bool _canAutoSwitchSourceOnFailure() {
     if (!_autoSwitchSourceOnFailureEnabled) {
       return false;
@@ -3108,7 +3119,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
         targetAuthor: _bookAuthor,
         hitCountBySource: hitCountBySource,
         scoreStore: scoreStore,
-        scoreRankingEnabled: _settings.switchSourceScoreRankingEnabled,
+        scoreRankingEnabled: true,
       );
       if (candidates.isEmpty) {
         return false;
@@ -3815,20 +3826,11 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
         );
       }
 
-      if (!normalizedSettings.switchSourceScoreRankingEnabled) {
-        normalizedSettings = normalizedSettings.copyWith(
-          switchSourceScoreRankingEnabled: true,
-        );
-      }
-
       final fontSettingsChanged =
           normalizedSettings.fontSource != loadedSettings.fontSource ||
           normalizedSettings.fontFamilyKey != loadedSettings.fontFamilyKey ||
           normalizedSettings.customFontPath != loadedSettings.customFontPath;
-      final scoreRankingChanged =
-          normalizedSettings.switchSourceScoreRankingEnabled !=
-          loadedSettings.switchSourceScoreRankingEnabled;
-      if (fontSettingsChanged || scoreRankingChanged) {
+      if (fontSettingsChanged) {
         await _preferencesService.saveSettings(normalizedSettings);
       }
 
@@ -6952,12 +6954,6 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
     if (result.fontSource == ReaderFontSource.custom &&
         appliedResult.fontSource != ReaderFontSource.custom) {
       _showMessage('自定义字体不可用，已自动切回系统字体。');
-    }
-
-    if (!appliedResult.switchSourceScoreRankingEnabled) {
-      appliedResult = appliedResult.copyWith(
-        switchSourceScoreRankingEnabled: true,
-      );
     }
 
     try {
