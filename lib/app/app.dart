@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import '../data/datasources/local/app_database.dart';
 import '../features/source/application/external_source_import_bridge.dart';
@@ -72,9 +73,12 @@ class _SystemUiOverlayWrapperState extends State<_SystemUiOverlayWrapper> {
   bool _startupAnnouncementScheduled = false;
   int _startupAnnouncementRetryCount = 0;
   bool _isStartupReady = false;
+  bool _skipStartupAnnouncement = false;
   Timer? _startupDelayTimer;
 
   static const Duration _kStartupMinDuration = Duration(seconds: 2);
+  static const String _kStartupAnnouncementSkipKey =
+      'startup_announcement_skip_v1';
 
   @override
   void initState() {
@@ -87,11 +91,20 @@ class _SystemUiOverlayWrapperState extends State<_SystemUiOverlayWrapper> {
 
   Future<void> _prepareStartup() async {
     final startedAt = DateTime.now();
+    final preferencesFuture = SharedPreferences.getInstance();
 
     try {
       await AppDatabase.instance.countSourceListItems();
     } catch (_) {
       // Ignore warmup failures and continue startup.
+    }
+
+    try {
+      final prefs = await preferencesFuture;
+      _skipStartupAnnouncement =
+          prefs.getBool(_kStartupAnnouncementSkipKey) ?? false;
+    } catch (_) {
+      _skipStartupAnnouncement = false;
     }
 
     final elapsed = DateTime.now().difference(startedAt);
@@ -159,6 +172,7 @@ class _SystemUiOverlayWrapperState extends State<_SystemUiOverlayWrapper> {
   void _showStartupAnnouncementIfNeeded() {
     if (!_isStartupReady ||
         _hasShownStartupAnnouncement ||
+        _skipStartupAnnouncement ||
         _startupAnnouncementScheduled) {
       return;
     }
@@ -188,6 +202,11 @@ class _SystemUiOverlayWrapperState extends State<_SystemUiOverlayWrapper> {
             title: const Text('公告'),
             content: const Text('每天高产更新，请在我的页面点击反馈进群及时使用最新版。'),
             actions: [
+              TextButton(
+                onPressed:
+                    () => _dismissStartupAnnouncementPermanently(context),
+                child: const Text('不再显示'),
+              ),
               FilledButton(
                 onPressed: () => Navigator.of(context).pop(),
                 child: const Text('我知道了'),
@@ -197,6 +216,19 @@ class _SystemUiOverlayWrapperState extends State<_SystemUiOverlayWrapper> {
         },
       );
     });
+  }
+
+  Future<void> _dismissStartupAnnouncementPermanently(
+    BuildContext dialogContext,
+  ) async {
+    Navigator.of(dialogContext).pop();
+    _skipStartupAnnouncement = true;
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setBool(_kStartupAnnouncementSkipKey, true);
+    } catch (_) {
+      // Ignore preference write failures; skip stays in-memory for this run.
+    }
   }
 
   void _onIncomingSourceImportPayload(IncomingSourceImportPayload _) {
@@ -210,17 +242,10 @@ class _SystemUiOverlayWrapperState extends State<_SystemUiOverlayWrapper> {
 
   @override
   Widget build(BuildContext context) {
-    final brightness = Theme.of(context).brightness;
-    final base =
-        brightness == Brightness.dark
-            ? SystemUiOverlayStyle.light
-            : SystemUiOverlayStyle.dark;
-
-    final style = base.copyWith(
-      statusBarColor: Colors.transparent,
-      systemNavigationBarColor: Colors.transparent,
-      systemNavigationBarDividerColor: Colors.transparent,
-    );
+    final style =
+        _isStartupReady
+            ? _adaptiveOverlayStyle(context)
+            : _startupOverlayStyle(context);
 
     return AnnotatedRegion<SystemUiOverlayStyle>(
       value: style,
@@ -233,45 +258,165 @@ class _SystemUiOverlayWrapperState extends State<_SystemUiOverlayWrapper> {
       ),
     );
   }
+
+  SystemUiOverlayStyle _adaptiveOverlayStyle(BuildContext context) {
+    final brightness = Theme.of(context).brightness;
+    final base =
+        brightness == Brightness.dark
+            ? SystemUiOverlayStyle.light
+            : SystemUiOverlayStyle.dark;
+    return base.copyWith(
+      statusBarColor: Colors.transparent,
+      systemNavigationBarColor: Colors.transparent,
+      systemNavigationBarDividerColor: Colors.transparent,
+    );
+  }
+
+  SystemUiOverlayStyle _startupOverlayStyle(BuildContext context) {
+    final brightness = Theme.of(context).brightness;
+    final base =
+        brightness == Brightness.dark
+            ? SystemUiOverlayStyle.light
+            : SystemUiOverlayStyle.dark;
+    final navColor = Theme.of(context).colorScheme.surface;
+    return base.copyWith(
+      statusBarColor: Colors.transparent,
+      systemNavigationBarColor: navColor,
+      systemNavigationBarDividerColor: Colors.transparent,
+    );
+  }
 }
 
 class _StartupGuardPage extends StatelessWidget {
   const _StartupGuardPage();
 
+  static const List<String> _brandTextChars = ['书', '享', '阅', '读'];
+  static const List<String> _sloganTextChars = [
+    '享',
+    '受',
+    '阅',
+    '读',
+    '生',
+    '活',
+  ];
+
   @override
   Widget build(BuildContext context) {
-    final colorScheme = Theme.of(context).colorScheme;
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
+    final isDark = theme.brightness == Brightness.dark;
+    final shortestSide = MediaQuery.sizeOf(context).shortestSide;
+    const brandGap = 2.0;
+    const brandLineHeight = 1.02;
+    final brandFontSize =
+        (shortestSide * 0.165).clamp(48.0, 66.0).toDouble();
+    final sloganFontSize =
+        (shortestSide * 0.08).clamp(23.0, 33.0).toDouble();
+    final sloganTopOffset = (brandFontSize * brandLineHeight + brandGap) * 2;
+    final fontFamilyFallback = const [
+      'STKaiti',
+      'Kaiti SC',
+      'KaiTi',
+      'Songti SC',
+      'Noto Serif CJK SC',
+      'serif',
+    ];
+    final backgroundTop = Color.alphaBlend(
+      colorScheme.primary.withValues(alpha: isDark ? 0.16 : 0.05),
+      colorScheme.surface,
+    );
+    final backgroundBottom = Color.alphaBlend(
+      colorScheme.secondary.withValues(alpha: isDark ? 0.14 : 0.04),
+      colorScheme.surface,
+    );
+    final brandColor =
+        isDark
+            ? const Color(0xFFF2EFE8)
+            : colorScheme.onSurface.withValues(alpha: 0.9);
+    final sloganColor = brandColor.withValues(alpha: isDark ? 0.88 : 0.72);
 
-    return ColoredBox(
-      color: colorScheme.surface,
-      child: Center(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [backgroundTop, backgroundBottom],
+        ),
+      ),
+      child: SafeArea(
+        child: Stack(
+          fit: StackFit.expand,
           children: [
-            Icon(
-              Icons.auto_stories_rounded,
-              size: 44,
-              color: colorScheme.primary,
-            ),
-            const SizedBox(height: 12),
-            Text(
-              '书享阅读启动中',
-              style: Theme.of(
-                context,
-              ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700),
-            ),
-            const SizedBox(height: 10),
-            SizedBox(
-              width: 20,
-              height: 20,
-              child: CircularProgressIndicator(
-                strokeWidth: 2.2,
-                color: colorScheme.primary,
+            Center(
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  _VerticalTextColumn(
+                    characters: _brandTextChars,
+                    gap: brandGap,
+                    style: TextStyle(
+                      color: brandColor,
+                      fontSize: brandFontSize,
+                      height: brandLineHeight,
+                      fontWeight: FontWeight.w600,
+                      decoration: TextDecoration.none,
+                      fontFamilyFallback: fontFamilyFallback,
+                    ),
+                  ),
+                  SizedBox(width: shortestSide * 0.048),
+                  Padding(
+                    padding: EdgeInsets.only(top: sloganTopOffset),
+                    child: _VerticalTextColumn(
+                      characters: _sloganTextChars,
+                      gap: 1,
+                      style: TextStyle(
+                        color: sloganColor,
+                        fontSize: sloganFontSize,
+                        height: 1.02,
+                        fontWeight: FontWeight.w500,
+                        decoration: TextDecoration.none,
+                        fontFamilyFallback: fontFamilyFallback,
+                      ),
+                    ),
+                  ),
+                ],
               ),
             ),
           ],
         ),
       ),
+    );
+  }
+}
+
+class _VerticalTextColumn extends StatelessWidget {
+  const _VerticalTextColumn({
+    required this.characters,
+    required this.style,
+    this.gap = 0,
+  });
+
+  final List<String> characters;
+  final TextStyle style;
+  final double gap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        for (final character in characters)
+          Padding(
+            padding: EdgeInsets.symmetric(vertical: gap / 2),
+            child: Text(
+              character,
+              style: style.copyWith(
+                decoration: TextDecoration.none,
+                decorationColor: Colors.transparent,
+              ),
+            ),
+          ),
+      ],
     );
   }
 }

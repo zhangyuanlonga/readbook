@@ -7,7 +7,9 @@ import '../../../domain/entities/reader_settings.dart';
 import '../../../domain/entities/reading_progress.dart';
 import '../../bookshelf/application/local_book_import_service.dart';
 import '../application/local/local_reader_service.dart';
+import '../application/reader_font_registry_service.dart';
 import '../application/reader_preferences_service.dart';
+import '../application/reader_typography_resolver.dart';
 
 class LocalReaderPage extends StatefulWidget {
   const LocalReaderPage({
@@ -27,6 +29,10 @@ class _LocalReaderPageState extends State<LocalReaderPage> {
   final LocalReaderService _readerService = LocalReaderService();
   final ReaderPreferencesService _readerPreferencesService =
       ReaderPreferencesService();
+  final ReaderFontRegistryService _fontRegistryService =
+      ReaderFontRegistryService();
+  final ReaderTypographyResolver _typographyResolver =
+      const ReaderTypographyResolver();
   final ScrollController _scrollController = ScrollController();
 
   ReaderSettings _settings = const ReaderSettings();
@@ -137,10 +143,9 @@ class _LocalReaderPageState extends State<LocalReaderPage> {
         ),
         child: SelectableText(
           chapter.content,
-          style: TextStyle(
-            fontSize: _settings.fontSize,
-            height: _settings.lineHeight,
-            fontWeight: _resolveFontWeight(_settings.fontWeightLevel),
+          style: _typographyResolver.resolveBodyStyle(
+            settings: _settings,
+            color: Theme.of(context).colorScheme.onSurface,
           ),
         ),
       ),
@@ -195,7 +200,28 @@ class _LocalReaderPageState extends State<LocalReaderPage> {
     });
 
     try {
-      final settings = await _readerPreferencesService.loadSettings();
+      final loadedSettings = await _readerPreferencesService.loadSettings();
+      var normalizedSettings = loadedSettings;
+      try {
+        await _fontRegistryService.restoreRegisteredFonts();
+        normalizedSettings = await _fontRegistryService
+            .normalizeCustomFontSettings(loadedSettings);
+      } catch (_) {
+        normalizedSettings = loadedSettings.copyWith(
+          fontSource: ReaderFontSource.system,
+          clearFontFamilyKey: true,
+          clearCustomFontPath: true,
+        );
+      }
+
+      final fontSettingsChanged =
+          normalizedSettings.fontSource != loadedSettings.fontSource ||
+          normalizedSettings.fontFamilyKey != loadedSettings.fontFamilyKey ||
+          normalizedSettings.customFontPath != loadedSettings.customFontPath;
+      if (fontSettingsChanged) {
+        await _readerPreferencesService.saveSettings(normalizedSettings);
+      }
+
       final result = await _readerService.load(
         bookId: widget.bookId,
         chapterId: widget.chapterId,
@@ -206,7 +232,7 @@ class _LocalReaderPageState extends State<LocalReaderPage> {
       }
 
       setState(() {
-        _settings = settings;
+        _settings = normalizedSettings;
         _result = result;
         _currentIndex = result.currentIndex;
       });
@@ -382,13 +408,5 @@ class _LocalReaderPageState extends State<LocalReaderPage> {
       return '本地阅读';
     }
     return result.chapters[_currentIndex].title;
-  }
-
-  FontWeight _resolveFontWeight(ReaderFontWeightLevel level) {
-    return switch (level) {
-      ReaderFontWeightLevel.light => FontWeight.w300,
-      ReaderFontWeightLevel.regular => FontWeight.w400,
-      ReaderFontWeightLevel.medium => FontWeight.w500,
-    };
   }
 }

@@ -14,6 +14,8 @@ class BookshelfService {
   final Future<SharedPreferences> _preferencesFuture;
 
   static const String _storageKey = 'bookshelf.books';
+  static const String _tagStorageKey = 'bookshelf.book_tags';
+  static const String _viewModeGridKey = 'bookshelf.view.useGrid';
 
   Future<List<BookshelfBook>> getAll() async {
     final prefs = await _preferencesFuture;
@@ -69,6 +71,7 @@ class BookshelfService {
         )
         .toList(growable: false);
     await _save(all);
+    await removeBookTags(sourceId: sourceId, detailUrl: detailUrl);
   }
 
   Future<bool> contains({
@@ -81,9 +84,105 @@ class BookshelfService {
     );
   }
 
+  Future<bool> loadUseGridView() async {
+    final prefs = await _preferencesFuture;
+    return prefs.getBool(_viewModeGridKey) ?? false;
+  }
+
+  Future<void> saveUseGridView(bool useGridView) async {
+    final prefs = await _preferencesFuture;
+    await prefs.setBool(_viewModeGridKey, useGridView);
+  }
+
+  Future<Map<String, List<String>>> getTagMap() async {
+    final prefs = await _preferencesFuture;
+    final raw = prefs.getString(_tagStorageKey);
+    if (raw == null || raw.trim().isEmpty) {
+      return const <String, List<String>>{};
+    }
+
+    try {
+      final decoded = jsonDecode(raw);
+      if (decoded is! Map) {
+        return const <String, List<String>>{};
+      }
+
+      final result = <String, List<String>>{};
+      for (final entry in decoded.entries) {
+        final key = entry.key.toString().trim();
+        if (key.isEmpty) {
+          continue;
+        }
+        if (entry.value is! List) {
+          continue;
+        }
+        final tags = _normalizeTags((entry.value as List).map((e) => '$e'));
+        if (tags.isEmpty) {
+          continue;
+        }
+        result[key] = tags;
+      }
+      return result;
+    } catch (_) {
+      return const <String, List<String>>{};
+    }
+  }
+
+  Future<void> setBookTags({
+    required String sourceId,
+    required String detailUrl,
+    required List<String> tags,
+  }) async {
+    final key = _bookKey(sourceId: sourceId, detailUrl: detailUrl);
+    if (key.isEmpty) {
+      return;
+    }
+
+    final normalized = _normalizeTags(tags);
+    final map = Map<String, List<String>>.from(await getTagMap());
+    if (normalized.isEmpty) {
+      map.remove(key);
+    } else {
+      map[key] = normalized;
+    }
+
+    final prefs = await _preferencesFuture;
+    await prefs.setString(_tagStorageKey, jsonEncode(map));
+  }
+
+  Future<void> removeBookTags({
+    required String sourceId,
+    required String detailUrl,
+  }) async {
+    await setBookTags(sourceId: sourceId, detailUrl: detailUrl, tags: const []);
+  }
+
   Future<void> _save(List<BookshelfBook> books) async {
     final prefs = await _preferencesFuture;
     final encoded = jsonEncode(books.map((item) => item.toJson()).toList());
     await prefs.setString(_storageKey, encoded);
+  }
+
+  static String _bookKey({required String sourceId, required String detailUrl}) {
+    final source = sourceId.trim();
+    final detail = detailUrl.trim();
+    if (source.isEmpty || detail.isEmpty) {
+      return '';
+    }
+    return '$source::$detail';
+  }
+
+  static List<String> _normalizeTags(Iterable<String> values) {
+    final result = <String>[];
+    for (final raw in values) {
+      final value = raw.trim();
+      if (value.isEmpty) {
+        continue;
+      }
+      if (!result.contains(value)) {
+        result.add(value);
+      }
+    }
+    return result;
   }
 }

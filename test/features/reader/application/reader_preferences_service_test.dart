@@ -18,14 +18,18 @@ void main() {
         horizontalPadding: 24,
         paragraphSpacing: 18,
         paragraphIndent: 4,
+        letterSpacing: 0.12,
         brightness: 0.75,
         themeMode: ReaderThemeMode.sepia,
-        pageTurnMode: ReaderPageTurnMode.scroll,
+        pageTurnMode: ReaderPageTurnMode.tapAndSwipe,
         autoReadEnabled: true,
         autoReadSpeed: 66,
         backgroundStyle: ReaderBackgroundStyle.paper,
         pageTurnStepRatio: 0.72,
         fontWeightLevel: ReaderFontWeightLevel.medium,
+        fontSource: ReaderFontSource.custom,
+        fontFamilyKey: 'reader_custom_foo',
+        customFontPath: '/tmp/reader_custom_foo.ttf',
         pageAnimationStyle: ReaderPageAnimationStyle.cover,
         backgroundImageBase64: 'dGVzdF9iZw==',
         mangaReadMode: ReaderMangaReadMode.horizontal,
@@ -43,14 +47,18 @@ void main() {
       expect(restored.horizontalPadding, 24);
       expect(restored.paragraphSpacing, 18);
       expect(restored.paragraphIndent, 4);
+      expect(restored.letterSpacing, closeTo(0.12, 0.0001));
       expect(restored.brightness, 0.75);
       expect(restored.themeMode, ReaderThemeMode.sepia);
-      expect(restored.pageTurnMode, ReaderPageTurnMode.scroll);
+      expect(restored.pageTurnMode, ReaderPageTurnMode.tapAndSwipe);
       expect(restored.autoReadEnabled, isTrue);
       expect(restored.autoReadSpeed, 66);
       expect(restored.backgroundStyle, ReaderBackgroundStyle.paper);
       expect(restored.pageTurnStepRatio, 0.72);
       expect(restored.fontWeightLevel, ReaderFontWeightLevel.medium);
+      expect(restored.fontSource, ReaderFontSource.custom);
+      expect(restored.fontFamilyKey, 'reader_custom_foo');
+      expect(restored.customFontPath, '/tmp/reader_custom_foo.ttf');
       expect(restored.pageAnimationStyle, ReaderPageAnimationStyle.cover);
       expect(restored.backgroundImageBase64, 'dGVzdF9iZw==');
       expect(restored.mangaReadMode, ReaderMangaReadMode.horizontal);

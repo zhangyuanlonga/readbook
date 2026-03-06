@@ -1,6 +1,6 @@
 enum ReaderThemeMode { light, sepia, dark }
 
-enum ReaderPageTurnMode { tap, swipe, scroll }
+enum ReaderPageTurnMode { tap, swipe, tapAndSwipe, scroll, tapAndScroll }
 
 enum ReaderBackgroundStyle { plain, paper, warm }
 
@@ -15,6 +15,8 @@ enum ReaderBackgroundTone {
 
 enum ReaderFontWeightLevel { light, regular, medium }
 
+enum ReaderFontSource { system, builtin, custom }
+
 enum ReaderPageAnimationStyle { curl, fade, cover, translate, vertical, none }
 
 enum ReaderMangaReadMode { continuous, paged, horizontal }
@@ -28,6 +30,7 @@ class ReaderSettings {
     this.horizontalPadding = 18,
     this.paragraphSpacing = 14,
     this.paragraphIndent = 0,
+    this.letterSpacing = defaultLetterSpacing,
     this.brightness = 1,
     this.themeMode = ReaderThemeMode.light,
     this.pageTurnMode = ReaderPageTurnMode.tap,
@@ -37,6 +40,9 @@ class ReaderSettings {
     this.backgroundTone = ReaderBackgroundTone.surface,
     this.pageTurnStepRatio = 0.88,
     this.fontWeightLevel = ReaderFontWeightLevel.regular,
+    this.fontSource = ReaderFontSource.system,
+    this.fontFamilyKey,
+    this.customFontPath,
     this.pageAnimationStyle = ReaderPageAnimationStyle.curl,
     this.backgroundImageBase64,
     this.mangaReadMode = ReaderMangaReadMode.continuous,
@@ -49,12 +55,16 @@ class ReaderSettings {
   static const double minAutoReadSpeed = 20;
   static const double maxAutoReadSpeed = 120;
   static const double defaultAutoReadSpeed = 48;
+  static const double minLetterSpacing = -0.05;
+  static const double maxLetterSpacing = 0.25;
+  static const double defaultLetterSpacing = 0;
 
   final double fontSize;
   final double lineHeight;
   final double horizontalPadding;
   final double paragraphSpacing;
   final double paragraphIndent;
+  final double letterSpacing;
   final double brightness;
   final ReaderThemeMode themeMode;
   final ReaderPageTurnMode pageTurnMode;
@@ -64,6 +74,9 @@ class ReaderSettings {
   final ReaderBackgroundTone backgroundTone;
   final double pageTurnStepRatio;
   final ReaderFontWeightLevel fontWeightLevel;
+  final ReaderFontSource fontSource;
+  final String? fontFamilyKey;
+  final String? customFontPath;
   final ReaderPageAnimationStyle pageAnimationStyle;
   final String? backgroundImageBase64;
   final ReaderMangaReadMode mangaReadMode;
@@ -78,6 +91,7 @@ class ReaderSettings {
     double? horizontalPadding,
     double? paragraphSpacing,
     double? paragraphIndent,
+    double? letterSpacing,
     double? brightness,
     ReaderThemeMode? themeMode,
     ReaderPageTurnMode? pageTurnMode,
@@ -87,6 +101,9 @@ class ReaderSettings {
     ReaderBackgroundTone? backgroundTone,
     double? pageTurnStepRatio,
     ReaderFontWeightLevel? fontWeightLevel,
+    ReaderFontSource? fontSource,
+    String? fontFamilyKey,
+    String? customFontPath,
     ReaderPageAnimationStyle? pageAnimationStyle,
     String? backgroundImageBase64,
     ReaderMangaReadMode? mangaReadMode,
@@ -95,6 +112,8 @@ class ReaderSettings {
     ReaderMangaLoadStrategy? mangaLoadStrategy,
     bool? switchSourceScoreRankingEnabled,
     bool clearBackgroundImage = false,
+    bool clearFontFamilyKey = false,
+    bool clearCustomFontPath = false,
   }) {
     return ReaderSettings(
       fontSize: fontSize ?? this.fontSize,
@@ -102,6 +121,10 @@ class ReaderSettings {
       horizontalPadding: horizontalPadding ?? this.horizontalPadding,
       paragraphSpacing: paragraphSpacing ?? this.paragraphSpacing,
       paragraphIndent: paragraphIndent ?? this.paragraphIndent,
+      letterSpacing:
+          (letterSpacing ?? this.letterSpacing)
+              .clamp(minLetterSpacing, maxLetterSpacing)
+              .toDouble(),
       brightness: brightness ?? this.brightness,
       themeMode: themeMode ?? this.themeMode,
       pageTurnMode: pageTurnMode ?? this.pageTurnMode,
@@ -114,6 +137,11 @@ class ReaderSettings {
       backgroundTone: backgroundTone ?? this.backgroundTone,
       pageTurnStepRatio: pageTurnStepRatio ?? this.pageTurnStepRatio,
       fontWeightLevel: fontWeightLevel ?? this.fontWeightLevel,
+      fontSource: fontSource ?? this.fontSource,
+      fontFamilyKey:
+          clearFontFamilyKey ? null : fontFamilyKey ?? this.fontFamilyKey,
+      customFontPath:
+          clearCustomFontPath ? null : customFontPath ?? this.customFontPath,
       pageAnimationStyle: pageAnimationStyle ?? this.pageAnimationStyle,
       backgroundImageBase64:
           clearBackgroundImage
@@ -136,6 +164,7 @@ class ReaderSettings {
       'horizontalPadding': horizontalPadding,
       'paragraphSpacing': paragraphSpacing,
       'paragraphIndent': paragraphIndent,
+      'letterSpacing': letterSpacing,
       'brightness': brightness,
       'themeMode': themeMode.name,
       'pageTurnMode': pageTurnMode.name,
@@ -145,6 +174,9 @@ class ReaderSettings {
       'backgroundTone': backgroundTone.name,
       'pageTurnStepRatio': pageTurnStepRatio,
       'fontWeightLevel': fontWeightLevel.name,
+      'fontSource': fontSource.name,
+      'fontFamilyKey': fontFamilyKey,
+      'customFontPath': customFontPath,
       'pageAnimationStyle': pageAnimationStyle.name,
       'backgroundImageBase64': backgroundImageBase64,
       'mangaReadMode': mangaReadMode.name,
@@ -186,6 +218,12 @@ class ReaderSettings {
       orElse: () => ReaderFontWeightLevel.regular,
     );
 
+    final fontSourceName = json['fontSource']?.toString();
+    final fontSource = ReaderFontSource.values.firstWhere(
+      (item) => item.name == fontSourceName,
+      orElse: () => ReaderFontSource.system,
+    );
+
     final animationName = json['pageAnimationStyle']?.toString();
     final pageAnimationStyle = ReaderPageAnimationStyle.values.firstWhere(
       (item) => item.name == animationName,
@@ -206,6 +244,8 @@ class ReaderSettings {
 
     final backgroundImageBase64 =
         json['backgroundImageBase64']?.toString().trim();
+    final fontFamilyKey = json['fontFamilyKey']?.toString().trim();
+    final customFontPath = json['customFontPath']?.toString().trim();
 
     return ReaderSettings(
       fontSize: _asDouble(json['fontSize']) ?? 18,
@@ -213,6 +253,10 @@ class ReaderSettings {
       horizontalPadding: _asDouble(json['horizontalPadding']) ?? 18,
       paragraphSpacing: _asDouble(json['paragraphSpacing']) ?? 14,
       paragraphIndent: _asDouble(json['paragraphIndent']) ?? 0,
+      letterSpacing:
+          (_asDouble(json['letterSpacing']) ?? defaultLetterSpacing)
+              .clamp(minLetterSpacing, maxLetterSpacing)
+              .toDouble(),
       brightness: _asDouble(json['brightness'])?.clamp(0.2, 1.0) ?? 1,
       themeMode: mode,
       pageTurnMode: pageTurnMode,
@@ -226,6 +270,13 @@ class ReaderSettings {
       pageTurnStepRatio:
           _asDouble(json['pageTurnStepRatio'])?.clamp(0.6, 1.0) ?? 0.88,
       fontWeightLevel: fontWeightLevel,
+      fontSource: fontSource,
+      fontFamilyKey:
+          fontFamilyKey == null || fontFamilyKey.isEmpty ? null : fontFamilyKey,
+      customFontPath:
+          customFontPath == null || customFontPath.isEmpty
+              ? null
+              : customFontPath,
       pageAnimationStyle: pageAnimationStyle,
       backgroundImageBase64:
           backgroundImageBase64 == null || backgroundImageBase64.isEmpty

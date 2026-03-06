@@ -20,6 +20,7 @@ class ReaderPreferencesService {
       'reader.settings.horizontalPadding';
   static const String _paragraphSpacingKey = 'reader.settings.paragraphSpacing';
   static const String _paragraphIndentKey = 'reader.settings.paragraphIndent';
+  static const String _letterSpacingKey = 'reader.settings.letterSpacing';
   static const String _brightnessKey = 'reader.settings.brightness';
   static const String _themeModeKey = 'reader.settings.themeMode';
   static const String _pageTurnModeKey = 'reader.settings.pageTurnMode';
@@ -30,6 +31,9 @@ class ReaderPreferencesService {
   static const String _pageTurnStepRatioKey =
       'reader.settings.pageTurnStepRatio';
   static const String _fontWeightLevelKey = 'reader.settings.fontWeightLevel';
+  static const String _fontSourceKey = 'reader.settings.fontSource';
+  static const String _fontFamilyKeyKey = 'reader.settings.fontFamilyKey';
+  static const String _customFontPathKey = 'reader.settings.customFontPath';
   static const String _pageAnimationStyleKey =
       'reader.settings.pageAnimationStyle';
   static const String _backgroundImageBase64Key =
@@ -78,6 +82,12 @@ class ReaderPreferencesService {
       orElse: () => ReaderFontWeightLevel.regular,
     );
 
+    final fontSourceName = prefs.getString(_fontSourceKey);
+    final fontSource = ReaderFontSource.values.firstWhere(
+      (item) => item.name == fontSourceName,
+      orElse: () => ReaderFontSource.system,
+    );
+
     final animationName = prefs.getString(_pageAnimationStyleKey);
     final pageAnimationStyle = ReaderPageAnimationStyle.values.firstWhere(
       (item) => item.name == animationName,
@@ -102,6 +112,14 @@ class ReaderPreferencesService {
       horizontalPadding: prefs.getDouble(_horizontalPaddingKey) ?? 18,
       paragraphSpacing: prefs.getDouble(_paragraphSpacingKey) ?? 14,
       paragraphIndent: prefs.getDouble(_paragraphIndentKey) ?? 0,
+      letterSpacing:
+          (prefs.getDouble(_letterSpacingKey) ??
+                  ReaderSettings.defaultLetterSpacing)
+              .clamp(
+                ReaderSettings.minLetterSpacing,
+                ReaderSettings.maxLetterSpacing,
+              )
+              .toDouble(),
       brightness: (prefs.getDouble(_brightnessKey) ?? 1).clamp(0.2, 1.0),
       themeMode: mode,
       pageTurnMode: pageTurnMode,
@@ -121,6 +139,9 @@ class ReaderPreferencesService {
         1.0,
       ),
       fontWeightLevel: fontWeightLevel,
+      fontSource: fontSource,
+      fontFamilyKey: prefs.getString(_fontFamilyKeyKey),
+      customFontPath: prefs.getString(_customFontPathKey),
       pageAnimationStyle: pageAnimationStyle,
       backgroundImageBase64: prefs.getString(_backgroundImageBase64Key),
       mangaReadMode: mangaReadMode,
@@ -146,6 +167,7 @@ class ReaderPreferencesService {
     await prefs.setDouble(_horizontalPaddingKey, settings.horizontalPadding);
     await prefs.setDouble(_paragraphSpacingKey, settings.paragraphSpacing);
     await prefs.setDouble(_paragraphIndentKey, settings.paragraphIndent);
+    await prefs.setDouble(_letterSpacingKey, settings.letterSpacing);
     await prefs.setDouble(_brightnessKey, settings.brightness);
     await prefs.setString(_themeModeKey, settings.themeMode.name);
     await prefs.setString(_pageTurnModeKey, settings.pageTurnMode.name);
@@ -155,6 +177,19 @@ class ReaderPreferencesService {
     await prefs.setString(_backgroundToneKey, settings.backgroundTone.name);
     await prefs.setDouble(_pageTurnStepRatioKey, settings.pageTurnStepRatio);
     await prefs.setString(_fontWeightLevelKey, settings.fontWeightLevel.name);
+    await prefs.setString(_fontSourceKey, settings.fontSource.name);
+    final fontFamilyKey = settings.fontFamilyKey;
+    if (fontFamilyKey == null || fontFamilyKey.isEmpty) {
+      await prefs.remove(_fontFamilyKeyKey);
+    } else {
+      await prefs.setString(_fontFamilyKeyKey, fontFamilyKey);
+    }
+    final customFontPath = settings.customFontPath;
+    if (customFontPath == null || customFontPath.isEmpty) {
+      await prefs.remove(_customFontPathKey);
+    } else {
+      await prefs.setString(_customFontPathKey, customFontPath);
+    }
     await prefs.setString(
       _pageAnimationStyleKey,
       settings.pageAnimationStyle.name,
