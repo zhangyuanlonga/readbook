@@ -103,12 +103,12 @@
   - `/Users/zhangyuanlong/storage/FlutterProject/flutter_appread/lib/features/reader/presentation/reader_page.dart:5673`
 - 该部分可与“上方 tab 行”整合（点击“字体”按钮后拉起），不冲突。
 
-## 5. 落地到 Flutter 的最小可执行改造建议
+## 5. 落地到 Flutter 的最小可执行改造建议（按“阅读设置弹窗”口径）
 
 1. 新增一个可复用组件（建议名 `ReaderDetailSliderRow`）  
 结构直接对齐 `DetailSeekBar`：左标题、减号、中间 `Slider`、加号、右值文本。
 
-2. 在“界面”弹层顶部新增一行“Tab样式按钮”  
+2. 在“阅读设置”弹层顶部新增一行“Tab样式按钮”  
 按钮建议：`中/粗/细`、`字体`、`缩进`、`简/繁`、`边距`、`信息`。  
 其中 `字体/边距/信息` 分别打开对应子弹层。
 
@@ -124,7 +124,42 @@
 5. 用“正文可视区 = 总高度 - header/footer占位 - 正文padding”统一计算  
 避免再出现“底部遮挡正文”。
 
-## 6. 备注
+## 6. 拆分执行清单（放在“阅读设置”弹窗内）
+
+### 6.1 包 1：阅读设置弹窗顶部按钮行
+- 目标：在 `reading` 分组顶部新增“Tab样式按钮行”，不动 `interface` 分组。
+- 位置：`lib/features/reader/presentation/reader_page.dart:6300` 附近（`if (showReadingSection)` 区块内）。
+- 按钮：`中/粗/细`、`字体`、`缩进`、`简/繁`、`边距`、`信息`。
+- 验收：点“设置”进入后即看到该按钮行；点“界面”入口不出现该行。
+
+### 6.2 包 2：统一滑条组件 + 四条滑条聚合
+- 目标：抽一个可复用行组件（建议 `ReaderDetailSliderRow`），结构对齐 `DetailSeekBar`。
+- 内容：将 `字号/字距/行距/段距` 聚合为连续四条滑条，替换当前分散项。
+- 位置：`lib/features/reader/presentation/reader_page.dart:6062`（字号）与 `lib/features/reader/presentation/reader_page.dart:6449`（字距）相关区域。
+- 验收：四条滑条在“阅读设置”中连续显示，均支持减号/滑动/加号/右侧数值。
+
+### 6.3 包 3：按钮动作接线（阅读设置内）
+- 目标：让按钮行可用，且尽量复用现有能力。
+- 接线：
+  - `字体`：复用 `openFontPickerSheet`（`lib/features/reader/presentation/reader_page.dart:5673`）。
+  - `中/粗/细`：映射 `ReaderFontWeightLevel`。
+  - `缩进`：映射 `paragraphIndent`。
+  - `边距`：映射 `horizontalPadding`。
+- 备注：`简/繁` 当前仓库尚无现成转换链路，先预留按钮与交互占位。
+
+### 6.4 包 4：信息（页眉页脚）配置补齐
+- 目标：补齐“信息”弹层的最小可用配置。
+- 需新增：`header/footer` 显隐、信息位（时间/电量/章节/进度）、`header/footer padding`。
+- 涉及：扩展 `ReaderSettings` 字段与序列化（`lib/domain/entities/reader_settings.dart`），并接入阅读页渲染。
+- 验收：开关实时生效，重启应用后配置可恢复。
+
+### 6.5 包 5：正文可视区统一计算与回归
+- 目标：统一正文可视区计算，规避“底部遮挡正文”。
+- 公式：`可视区 = 总高度 - header/footer占位 - 正文padding`。
+- 位置：优先收敛在分页/排版关键路径（如 `lib/features/reader/presentation/reader_page.dart:1019` 一带）。
+- 验收：极端边距和开启信息条时，文本/分页/自动读不出现遮挡与错位。
+
+## 7. 备注
 
 - 你之前提到的文档 `docs/legado_reader_page_ui_features_2026-03-05.md`，我在当前仓库未检索到同名文件。  
 - 本文档是基于你本地存在的两个仓库现状做的最新实现映射。

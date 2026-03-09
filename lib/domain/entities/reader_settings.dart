@@ -50,14 +50,40 @@ class ReaderSettings {
     this.mangaImagePadding = 8,
     this.mangaLoadStrategy = ReaderMangaLoadStrategy.balanced,
     this.switchSourceScoreRankingEnabled = true,
+    this.infoHeaderEnabled = false,
+    this.infoFooterEnabled = false,
+    this.infoShowTime = true,
+    this.infoShowBattery = false,
+    this.infoShowChapter = true,
+    this.infoShowProgress = true,
+    this.infoHeaderPadding = 8,
+    this.infoFooterPadding = 8,
+    this.infoHeaderDividerEnabled = true,
+    this.infoFooterDividerEnabled = true,
+    this.infoHeaderMarginTop = 0,
+    this.infoHeaderMarginBottom = 0,
+    this.infoHeaderMarginLeft = 18,
+    this.infoHeaderMarginRight = 18,
+    this.bodyMarginTop = 18,
+    this.bodyMarginBottom = 18,
+    this.bodyMarginLeft = 18,
+    this.bodyMarginRight = 18,
+    this.infoFooterMarginTop = 0,
+    this.infoFooterMarginBottom = 0,
+    this.infoFooterMarginLeft = 18,
+    this.infoFooterMarginRight = 18,
   });
 
   static const double minAutoReadSpeed = 20;
   static const double maxAutoReadSpeed = 120;
   static const double defaultAutoReadSpeed = 48;
-  static const double minLetterSpacing = -0.05;
-  static const double maxLetterSpacing = 0.25;
+  static const double minLetterSpacing = -0.5;
+  static const double maxLetterSpacing = 0.5;
   static const double defaultLetterSpacing = 0;
+  static const double minInfoBarPadding = 0;
+  static const double maxInfoBarPadding = 24;
+  static const double minLayoutMargin = 0;
+  static const double maxLayoutMargin = 40;
 
   final double fontSize;
   final double lineHeight;
@@ -84,6 +110,28 @@ class ReaderSettings {
   final double mangaImagePadding;
   final ReaderMangaLoadStrategy mangaLoadStrategy;
   final bool switchSourceScoreRankingEnabled;
+  final bool infoHeaderEnabled;
+  final bool infoFooterEnabled;
+  final bool infoShowTime;
+  final bool infoShowBattery;
+  final bool infoShowChapter;
+  final bool infoShowProgress;
+  final double infoHeaderPadding;
+  final double infoFooterPadding;
+  final bool infoHeaderDividerEnabled;
+  final bool infoFooterDividerEnabled;
+  final double infoHeaderMarginTop;
+  final double infoHeaderMarginBottom;
+  final double infoHeaderMarginLeft;
+  final double infoHeaderMarginRight;
+  final double bodyMarginTop;
+  final double bodyMarginBottom;
+  final double bodyMarginLeft;
+  final double bodyMarginRight;
+  final double infoFooterMarginTop;
+  final double infoFooterMarginBottom;
+  final double infoFooterMarginLeft;
+  final double infoFooterMarginRight;
 
   ReaderSettings copyWith({
     double? fontSize,
@@ -111,6 +159,28 @@ class ReaderSettings {
     double? mangaImagePadding,
     ReaderMangaLoadStrategy? mangaLoadStrategy,
     bool? switchSourceScoreRankingEnabled,
+    bool? infoHeaderEnabled,
+    bool? infoFooterEnabled,
+    bool? infoShowTime,
+    bool? infoShowBattery,
+    bool? infoShowChapter,
+    bool? infoShowProgress,
+    double? infoHeaderPadding,
+    double? infoFooterPadding,
+    bool? infoHeaderDividerEnabled,
+    bool? infoFooterDividerEnabled,
+    double? infoHeaderMarginTop,
+    double? infoHeaderMarginBottom,
+    double? infoHeaderMarginLeft,
+    double? infoHeaderMarginRight,
+    double? bodyMarginTop,
+    double? bodyMarginBottom,
+    double? bodyMarginLeft,
+    double? bodyMarginRight,
+    double? infoFooterMarginTop,
+    double? infoFooterMarginBottom,
+    double? infoFooterMarginLeft,
+    double? infoFooterMarginRight,
     bool clearBackgroundImage = false,
     bool clearFontFamilyKey = false,
     bool clearCustomFontPath = false,
@@ -154,6 +224,72 @@ class ReaderSettings {
       switchSourceScoreRankingEnabled:
           switchSourceScoreRankingEnabled ??
           this.switchSourceScoreRankingEnabled,
+      infoHeaderEnabled: infoHeaderEnabled ?? this.infoHeaderEnabled,
+      infoFooterEnabled: infoFooterEnabled ?? this.infoFooterEnabled,
+      infoShowTime: infoShowTime ?? this.infoShowTime,
+      infoShowBattery: infoShowBattery ?? this.infoShowBattery,
+      infoShowChapter: infoShowChapter ?? this.infoShowChapter,
+      infoShowProgress: infoShowProgress ?? this.infoShowProgress,
+      infoHeaderPadding:
+          (infoHeaderPadding ?? this.infoHeaderPadding)
+              .clamp(minInfoBarPadding, maxInfoBarPadding)
+              .toDouble(),
+      infoFooterPadding:
+          (infoFooterPadding ?? this.infoFooterPadding)
+              .clamp(minInfoBarPadding, maxInfoBarPadding)
+              .toDouble(),
+      infoHeaderDividerEnabled:
+          infoHeaderDividerEnabled ?? this.infoHeaderDividerEnabled,
+      infoFooterDividerEnabled:
+          infoFooterDividerEnabled ?? this.infoFooterDividerEnabled,
+      infoHeaderMarginTop:
+          (infoHeaderMarginTop ?? this.infoHeaderMarginTop)
+              .clamp(minLayoutMargin, maxLayoutMargin)
+              .toDouble(),
+      infoHeaderMarginBottom:
+          (infoHeaderMarginBottom ?? this.infoHeaderMarginBottom)
+              .clamp(minLayoutMargin, maxLayoutMargin)
+              .toDouble(),
+      infoHeaderMarginLeft:
+          (infoHeaderMarginLeft ?? this.infoHeaderMarginLeft)
+              .clamp(minLayoutMargin, maxLayoutMargin)
+              .toDouble(),
+      infoHeaderMarginRight:
+          (infoHeaderMarginRight ?? this.infoHeaderMarginRight)
+              .clamp(minLayoutMargin, maxLayoutMargin)
+              .toDouble(),
+      bodyMarginTop:
+          (bodyMarginTop ?? this.bodyMarginTop)
+              .clamp(minLayoutMargin, maxLayoutMargin)
+              .toDouble(),
+      bodyMarginBottom:
+          (bodyMarginBottom ?? this.bodyMarginBottom)
+              .clamp(minLayoutMargin, maxLayoutMargin)
+              .toDouble(),
+      bodyMarginLeft:
+          (bodyMarginLeft ?? this.bodyMarginLeft)
+              .clamp(minLayoutMargin, maxLayoutMargin)
+              .toDouble(),
+      bodyMarginRight:
+          (bodyMarginRight ?? this.bodyMarginRight)
+              .clamp(minLayoutMargin, maxLayoutMargin)
+              .toDouble(),
+      infoFooterMarginTop:
+          (infoFooterMarginTop ?? this.infoFooterMarginTop)
+              .clamp(minLayoutMargin, maxLayoutMargin)
+              .toDouble(),
+      infoFooterMarginBottom:
+          (infoFooterMarginBottom ?? this.infoFooterMarginBottom)
+              .clamp(minLayoutMargin, maxLayoutMargin)
+              .toDouble(),
+      infoFooterMarginLeft:
+          (infoFooterMarginLeft ?? this.infoFooterMarginLeft)
+              .clamp(minLayoutMargin, maxLayoutMargin)
+              .toDouble(),
+      infoFooterMarginRight:
+          (infoFooterMarginRight ?? this.infoFooterMarginRight)
+              .clamp(minLayoutMargin, maxLayoutMargin)
+              .toDouble(),
     );
   }
 
@@ -184,6 +320,28 @@ class ReaderSettings {
       'mangaImagePadding': mangaImagePadding,
       'mangaLoadStrategy': mangaLoadStrategy.name,
       'switchSourceScoreRankingEnabled': switchSourceScoreRankingEnabled,
+      'infoHeaderEnabled': infoHeaderEnabled,
+      'infoFooterEnabled': infoFooterEnabled,
+      'infoShowTime': infoShowTime,
+      'infoShowBattery': infoShowBattery,
+      'infoShowChapter': infoShowChapter,
+      'infoShowProgress': infoShowProgress,
+      'infoHeaderPadding': infoHeaderPadding,
+      'infoFooterPadding': infoFooterPadding,
+      'infoHeaderDividerEnabled': infoHeaderDividerEnabled,
+      'infoFooterDividerEnabled': infoFooterDividerEnabled,
+      'infoHeaderMarginTop': infoHeaderMarginTop,
+      'infoHeaderMarginBottom': infoHeaderMarginBottom,
+      'infoHeaderMarginLeft': infoHeaderMarginLeft,
+      'infoHeaderMarginRight': infoHeaderMarginRight,
+      'bodyMarginTop': bodyMarginTop,
+      'bodyMarginBottom': bodyMarginBottom,
+      'bodyMarginLeft': bodyMarginLeft,
+      'bodyMarginRight': bodyMarginRight,
+      'infoFooterMarginTop': infoFooterMarginTop,
+      'infoFooterMarginBottom': infoFooterMarginBottom,
+      'infoFooterMarginLeft': infoFooterMarginLeft,
+      'infoFooterMarginRight': infoFooterMarginRight,
     };
   }
 
@@ -246,6 +404,7 @@ class ReaderSettings {
         json['backgroundImageBase64']?.toString().trim();
     final fontFamilyKey = json['fontFamilyKey']?.toString().trim();
     final customFontPath = json['customFontPath']?.toString().trim();
+    final legacyHorizontalPadding = _asDouble(json['horizontalPadding']) ?? 18;
 
     return ReaderSettings(
       fontSize: _asDouble(json['fontSize']) ?? 18,
@@ -290,6 +449,72 @@ class ReaderSettings {
       mangaLoadStrategy: mangaLoadStrategy,
       switchSourceScoreRankingEnabled:
           _asBool(json['switchSourceScoreRankingEnabled']) ?? true,
+      infoHeaderEnabled: _asBool(json['infoHeaderEnabled']) ?? false,
+      infoFooterEnabled: _asBool(json['infoFooterEnabled']) ?? false,
+      infoShowTime: _asBool(json['infoShowTime']) ?? true,
+      infoShowBattery: _asBool(json['infoShowBattery']) ?? false,
+      infoShowChapter: _asBool(json['infoShowChapter']) ?? true,
+      infoShowProgress: _asBool(json['infoShowProgress']) ?? true,
+      infoHeaderPadding:
+          (_asDouble(json['infoHeaderPadding']) ?? 8)
+              .clamp(minInfoBarPadding, maxInfoBarPadding)
+              .toDouble(),
+      infoFooterPadding:
+          (_asDouble(json['infoFooterPadding']) ?? 8)
+              .clamp(minInfoBarPadding, maxInfoBarPadding)
+              .toDouble(),
+      infoHeaderDividerEnabled:
+          _asBool(json['infoHeaderDividerEnabled']) ?? true,
+      infoFooterDividerEnabled:
+          _asBool(json['infoFooterDividerEnabled']) ?? true,
+      infoHeaderMarginTop:
+          (_asDouble(json['infoHeaderMarginTop']) ?? 0)
+              .clamp(minLayoutMargin, maxLayoutMargin)
+              .toDouble(),
+      infoHeaderMarginBottom:
+          (_asDouble(json['infoHeaderMarginBottom']) ?? 0)
+              .clamp(minLayoutMargin, maxLayoutMargin)
+              .toDouble(),
+      infoHeaderMarginLeft:
+          (_asDouble(json['infoHeaderMarginLeft']) ?? legacyHorizontalPadding)
+              .clamp(minLayoutMargin, maxLayoutMargin)
+              .toDouble(),
+      infoHeaderMarginRight:
+          (_asDouble(json['infoHeaderMarginRight']) ?? legacyHorizontalPadding)
+              .clamp(minLayoutMargin, maxLayoutMargin)
+              .toDouble(),
+      bodyMarginTop:
+          (_asDouble(json['bodyMarginTop']) ?? 18)
+              .clamp(minLayoutMargin, maxLayoutMargin)
+              .toDouble(),
+      bodyMarginBottom:
+          (_asDouble(json['bodyMarginBottom']) ?? 18)
+              .clamp(minLayoutMargin, maxLayoutMargin)
+              .toDouble(),
+      bodyMarginLeft:
+          (_asDouble(json['bodyMarginLeft']) ?? legacyHorizontalPadding)
+              .clamp(minLayoutMargin, maxLayoutMargin)
+              .toDouble(),
+      bodyMarginRight:
+          (_asDouble(json['bodyMarginRight']) ?? legacyHorizontalPadding)
+              .clamp(minLayoutMargin, maxLayoutMargin)
+              .toDouble(),
+      infoFooterMarginTop:
+          (_asDouble(json['infoFooterMarginTop']) ?? 0)
+              .clamp(minLayoutMargin, maxLayoutMargin)
+              .toDouble(),
+      infoFooterMarginBottom:
+          (_asDouble(json['infoFooterMarginBottom']) ?? 0)
+              .clamp(minLayoutMargin, maxLayoutMargin)
+              .toDouble(),
+      infoFooterMarginLeft:
+          (_asDouble(json['infoFooterMarginLeft']) ?? legacyHorizontalPadding)
+              .clamp(minLayoutMargin, maxLayoutMargin)
+              .toDouble(),
+      infoFooterMarginRight:
+          (_asDouble(json['infoFooterMarginRight']) ?? legacyHorizontalPadding)
+              .clamp(minLayoutMargin, maxLayoutMargin)
+              .toDouble(),
     );
   }
 

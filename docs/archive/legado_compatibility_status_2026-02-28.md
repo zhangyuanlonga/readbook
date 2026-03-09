@@ -65,6 +65,6 @@
 
 ## 7. 你现在可以直接看的 md
 
-- 总览（这份）：`/Users/zhangyuanlong/storage/FlutterProject/flutter_appread/docs/legado_compatibility_status_2026-02-28.md`
+- 总览（这份）：`/Users/zhangyuanlong/storage/FlutterProject/flutter_appread/docs/archive/legado_compatibility_status_2026-02-28.md`
 - 桥接映射：`/Users/zhangyuanlong/storage/FlutterProject/flutter_appread/docs/legado_native_bridge_mapping.md`
 - 执行计划与阶段进度：`/Users/zhangyuanlong/storage/FlutterProject/flutter_appread/docs/plan_e_implementation.md`

@@ -47,6 +47,42 @@ class ReaderPreferencesService {
       'reader.settings.mangaLoadStrategy';
   static const String _switchSourceScoreRankingEnabledKey =
       'reader.settings.switchSourceScoreRankingEnabled';
+  static const String _infoHeaderEnabledKey =
+      'reader.settings.infoHeaderEnabled';
+  static const String _infoFooterEnabledKey =
+      'reader.settings.infoFooterEnabled';
+  static const String _infoShowTimeKey = 'reader.settings.infoShowTime';
+  static const String _infoShowBatteryKey = 'reader.settings.infoShowBattery';
+  static const String _infoShowChapterKey = 'reader.settings.infoShowChapter';
+  static const String _infoShowProgressKey = 'reader.settings.infoShowProgress';
+  static const String _infoHeaderPaddingKey =
+      'reader.settings.infoHeaderPadding';
+  static const String _infoFooterPaddingKey =
+      'reader.settings.infoFooterPadding';
+  static const String _infoHeaderDividerEnabledKey =
+      'reader.settings.infoHeaderDividerEnabled';
+  static const String _infoFooterDividerEnabledKey =
+      'reader.settings.infoFooterDividerEnabled';
+  static const String _infoHeaderMarginTopKey =
+      'reader.settings.infoHeaderMarginTop';
+  static const String _infoHeaderMarginBottomKey =
+      'reader.settings.infoHeaderMarginBottom';
+  static const String _infoHeaderMarginLeftKey =
+      'reader.settings.infoHeaderMarginLeft';
+  static const String _infoHeaderMarginRightKey =
+      'reader.settings.infoHeaderMarginRight';
+  static const String _bodyMarginTopKey = 'reader.settings.bodyMarginTop';
+  static const String _bodyMarginBottomKey = 'reader.settings.bodyMarginBottom';
+  static const String _bodyMarginLeftKey = 'reader.settings.bodyMarginLeft';
+  static const String _bodyMarginRightKey = 'reader.settings.bodyMarginRight';
+  static const String _infoFooterMarginTopKey =
+      'reader.settings.infoFooterMarginTop';
+  static const String _infoFooterMarginBottomKey =
+      'reader.settings.infoFooterMarginBottom';
+  static const String _infoFooterMarginLeftKey =
+      'reader.settings.infoFooterMarginLeft';
+  static const String _infoFooterMarginRightKey =
+      'reader.settings.infoFooterMarginRight';
   static const String _progressPrefix = 'reader.progress.';
 
   Future<ReaderSettings> loadSettings() async {
@@ -106,6 +142,9 @@ class ReaderPreferencesService {
       orElse: () => ReaderMangaLoadStrategy.balanced,
     );
 
+    final legacyHorizontalPadding =
+        prefs.getDouble(_horizontalPaddingKey) ?? 18;
+
     return ReaderSettings(
       fontSize: prefs.getDouble(_fontSizeKey) ?? 18,
       lineHeight: prefs.getDouble(_lineHeightKey) ?? 1.7,
@@ -156,6 +195,116 @@ class ReaderPreferencesService {
       mangaLoadStrategy: mangaLoadStrategy,
       switchSourceScoreRankingEnabled:
           prefs.getBool(_switchSourceScoreRankingEnabledKey) ?? true,
+      infoHeaderEnabled: prefs.getBool(_infoHeaderEnabledKey) ?? false,
+      infoFooterEnabled: prefs.getBool(_infoFooterEnabledKey) ?? false,
+      infoShowTime: prefs.getBool(_infoShowTimeKey) ?? true,
+      infoShowBattery: prefs.getBool(_infoShowBatteryKey) ?? false,
+      infoShowChapter: prefs.getBool(_infoShowChapterKey) ?? true,
+      infoShowProgress: prefs.getBool(_infoShowProgressKey) ?? true,
+      infoHeaderPadding:
+          (prefs.getDouble(_infoHeaderPaddingKey) ?? 8)
+              .clamp(
+                ReaderSettings.minInfoBarPadding,
+                ReaderSettings.maxInfoBarPadding,
+              )
+              .toDouble(),
+      infoFooterPadding:
+          (prefs.getDouble(_infoFooterPaddingKey) ?? 8)
+              .clamp(
+                ReaderSettings.minInfoBarPadding,
+                ReaderSettings.maxInfoBarPadding,
+              )
+              .toDouble(),
+      infoHeaderDividerEnabled:
+          prefs.getBool(_infoHeaderDividerEnabledKey) ?? true,
+      infoFooterDividerEnabled:
+          prefs.getBool(_infoFooterDividerEnabledKey) ?? true,
+      infoHeaderMarginTop:
+          (prefs.getDouble(_infoHeaderMarginTopKey) ?? 0)
+              .clamp(
+                ReaderSettings.minLayoutMargin,
+                ReaderSettings.maxLayoutMargin,
+              )
+              .toDouble(),
+      infoHeaderMarginBottom:
+          (prefs.getDouble(_infoHeaderMarginBottomKey) ?? 0)
+              .clamp(
+                ReaderSettings.minLayoutMargin,
+                ReaderSettings.maxLayoutMargin,
+              )
+              .toDouble(),
+      infoHeaderMarginLeft:
+          (prefs.getDouble(_infoHeaderMarginLeftKey) ?? legacyHorizontalPadding)
+              .clamp(
+                ReaderSettings.minLayoutMargin,
+                ReaderSettings.maxLayoutMargin,
+              )
+              .toDouble(),
+      infoHeaderMarginRight:
+          (prefs.getDouble(_infoHeaderMarginRightKey) ??
+                  legacyHorizontalPadding)
+              .clamp(
+                ReaderSettings.minLayoutMargin,
+                ReaderSettings.maxLayoutMargin,
+              )
+              .toDouble(),
+      bodyMarginTop:
+          (prefs.getDouble(_bodyMarginTopKey) ?? 18)
+              .clamp(
+                ReaderSettings.minLayoutMargin,
+                ReaderSettings.maxLayoutMargin,
+              )
+              .toDouble(),
+      bodyMarginBottom:
+          (prefs.getDouble(_bodyMarginBottomKey) ?? 18)
+              .clamp(
+                ReaderSettings.minLayoutMargin,
+                ReaderSettings.maxLayoutMargin,
+              )
+              .toDouble(),
+      bodyMarginLeft:
+          (prefs.getDouble(_bodyMarginLeftKey) ?? legacyHorizontalPadding)
+              .clamp(
+                ReaderSettings.minLayoutMargin,
+                ReaderSettings.maxLayoutMargin,
+              )
+              .toDouble(),
+      bodyMarginRight:
+          (prefs.getDouble(_bodyMarginRightKey) ?? legacyHorizontalPadding)
+              .clamp(
+                ReaderSettings.minLayoutMargin,
+                ReaderSettings.maxLayoutMargin,
+              )
+              .toDouble(),
+      infoFooterMarginTop:
+          (prefs.getDouble(_infoFooterMarginTopKey) ?? 0)
+              .clamp(
+                ReaderSettings.minLayoutMargin,
+                ReaderSettings.maxLayoutMargin,
+              )
+              .toDouble(),
+      infoFooterMarginBottom:
+          (prefs.getDouble(_infoFooterMarginBottomKey) ?? 0)
+              .clamp(
+                ReaderSettings.minLayoutMargin,
+                ReaderSettings.maxLayoutMargin,
+              )
+              .toDouble(),
+      infoFooterMarginLeft:
+          (prefs.getDouble(_infoFooterMarginLeftKey) ?? legacyHorizontalPadding)
+              .clamp(
+                ReaderSettings.minLayoutMargin,
+                ReaderSettings.maxLayoutMargin,
+              )
+              .toDouble(),
+      infoFooterMarginRight:
+          (prefs.getDouble(_infoFooterMarginRightKey) ??
+                  legacyHorizontalPadding)
+              .clamp(
+                ReaderSettings.minLayoutMargin,
+                ReaderSettings.maxLayoutMargin,
+              )
+              .toDouble(),
     );
   }
 
@@ -204,6 +353,58 @@ class ReaderPreferencesService {
     await prefs.setBool(
       _switchSourceScoreRankingEnabledKey,
       settings.switchSourceScoreRankingEnabled,
+    );
+    await prefs.setBool(_infoHeaderEnabledKey, settings.infoHeaderEnabled);
+    await prefs.setBool(_infoFooterEnabledKey, settings.infoFooterEnabled);
+    await prefs.setBool(_infoShowTimeKey, settings.infoShowTime);
+    await prefs.setBool(_infoShowBatteryKey, settings.infoShowBattery);
+    await prefs.setBool(_infoShowChapterKey, settings.infoShowChapter);
+    await prefs.setBool(_infoShowProgressKey, settings.infoShowProgress);
+    await prefs.setDouble(_infoHeaderPaddingKey, settings.infoHeaderPadding);
+    await prefs.setDouble(_infoFooterPaddingKey, settings.infoFooterPadding);
+    await prefs.setBool(
+      _infoHeaderDividerEnabledKey,
+      settings.infoHeaderDividerEnabled,
+    );
+    await prefs.setBool(
+      _infoFooterDividerEnabledKey,
+      settings.infoFooterDividerEnabled,
+    );
+    await prefs.setDouble(
+      _infoHeaderMarginTopKey,
+      settings.infoHeaderMarginTop,
+    );
+    await prefs.setDouble(
+      _infoHeaderMarginBottomKey,
+      settings.infoHeaderMarginBottom,
+    );
+    await prefs.setDouble(
+      _infoHeaderMarginLeftKey,
+      settings.infoHeaderMarginLeft,
+    );
+    await prefs.setDouble(
+      _infoHeaderMarginRightKey,
+      settings.infoHeaderMarginRight,
+    );
+    await prefs.setDouble(_bodyMarginTopKey, settings.bodyMarginTop);
+    await prefs.setDouble(_bodyMarginBottomKey, settings.bodyMarginBottom);
+    await prefs.setDouble(_bodyMarginLeftKey, settings.bodyMarginLeft);
+    await prefs.setDouble(_bodyMarginRightKey, settings.bodyMarginRight);
+    await prefs.setDouble(
+      _infoFooterMarginTopKey,
+      settings.infoFooterMarginTop,
+    );
+    await prefs.setDouble(
+      _infoFooterMarginBottomKey,
+      settings.infoFooterMarginBottom,
+    );
+    await prefs.setDouble(
+      _infoFooterMarginLeftKey,
+      settings.infoFooterMarginLeft,
+    );
+    await prefs.setDouble(
+      _infoFooterMarginRightKey,
+      settings.infoFooterMarginRight,
     );
     final backgroundImageBase64 = settings.backgroundImageBase64;
     if (backgroundImageBase64 == null || backgroundImageBase64.isEmpty) {

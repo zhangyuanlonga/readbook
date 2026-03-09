@@ -37,6 +37,28 @@ void main() {
         mangaImagePadding: 12,
         mangaLoadStrategy: ReaderMangaLoadStrategy.saveData,
         switchSourceScoreRankingEnabled: false,
+        infoHeaderEnabled: true,
+        infoFooterEnabled: true,
+        infoShowTime: true,
+        infoShowBattery: true,
+        infoShowChapter: true,
+        infoShowProgress: false,
+        infoHeaderPadding: 13,
+        infoFooterPadding: 9,
+        infoHeaderDividerEnabled: false,
+        infoFooterDividerEnabled: true,
+        infoHeaderMarginTop: 2,
+        infoHeaderMarginBottom: 1,
+        infoHeaderMarginLeft: 14,
+        infoHeaderMarginRight: 18,
+        bodyMarginTop: 8,
+        bodyMarginBottom: 11,
+        bodyMarginLeft: 19,
+        bodyMarginRight: 21,
+        infoFooterMarginTop: 7,
+        infoFooterMarginBottom: 3,
+        infoFooterMarginLeft: 15,
+        infoFooterMarginRight: 17,
       );
 
       await service.saveSettings(settings);
@@ -66,6 +88,28 @@ void main() {
       expect(restored.mangaImagePadding, 12);
       expect(restored.mangaLoadStrategy, ReaderMangaLoadStrategy.saveData);
       expect(restored.switchSourceScoreRankingEnabled, isFalse);
+      expect(restored.infoHeaderEnabled, isTrue);
+      expect(restored.infoFooterEnabled, isTrue);
+      expect(restored.infoShowTime, isTrue);
+      expect(restored.infoShowBattery, isTrue);
+      expect(restored.infoShowChapter, isTrue);
+      expect(restored.infoShowProgress, isFalse);
+      expect(restored.infoHeaderPadding, 13);
+      expect(restored.infoFooterPadding, 9);
+      expect(restored.infoHeaderDividerEnabled, isFalse);
+      expect(restored.infoFooterDividerEnabled, isTrue);
+      expect(restored.infoHeaderMarginTop, 2);
+      expect(restored.infoHeaderMarginBottom, 1);
+      expect(restored.infoHeaderMarginLeft, 14);
+      expect(restored.infoHeaderMarginRight, 18);
+      expect(restored.bodyMarginTop, 8);
+      expect(restored.bodyMarginBottom, 11);
+      expect(restored.bodyMarginLeft, 19);
+      expect(restored.bodyMarginRight, 21);
+      expect(restored.infoFooterMarginTop, 7);
+      expect(restored.infoFooterMarginBottom, 3);
+      expect(restored.infoFooterMarginLeft, 15);
+      expect(restored.infoFooterMarginRight, 17);
     });
 
     test('saves and loads reading progress', () async {

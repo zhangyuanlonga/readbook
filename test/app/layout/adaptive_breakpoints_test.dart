@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import 'package:flutter_appread/app/layout/app_layout.dart';
 import 'package:flutter_appread/app/layout/app_spacing.dart';
+import 'package:flutter_appread/app/shell_navigation_provider.dart';
 import 'package:flutter_appread/app/shell_scaffold.dart';
 
 void main() {
@@ -329,6 +331,29 @@ void main() {
     expect(labels, <String>['书架', '发现', '书源', '我的']);
     expect(bar.selectedIndex, 1);
   });
+
+  testWidgets('ShellScaffold hides disabled destinations', (tester) async {
+    await tester.pumpWidget(
+      _TestHarness(
+        width: 390,
+        overrides: [
+          appShellNavigationProvider.overrideWith(
+            _BookshelfMineNavigationNotifier.new,
+          ),
+        ],
+        child: const ShellScaffold(location: '/bookshelf', child: SizedBox()),
+      ),
+    );
+    await tester.pump();
+
+    final bar = tester.widget<NavigationBar>(find.byType(NavigationBar));
+    final labels = bar.destinations
+        .map((item) => (item as NavigationDestination).label)
+        .toList(growable: false);
+
+    expect(labels, <String>['书架', '我的']);
+    expect(bar.selectedIndex, 0);
+  });
 }
 
 Future<void> _pumpShellScaffold(
@@ -368,16 +393,35 @@ Future<T> _readFromContext<T>(
 }
 
 class _TestHarness extends StatelessWidget {
-  const _TestHarness({required this.width, required this.child});
+  const _TestHarness({
+    required this.width,
+    required this.child,
+    this.overrides = const [],
+  });
 
   final double width;
   final Widget child;
+  final List<Override> overrides;
 
   @override
   Widget build(BuildContext context) {
-    return MediaQuery(
-      data: MediaQueryData(size: Size(width, 844)),
-      child: MaterialApp(home: child),
+    return ProviderScope(
+      overrides: overrides,
+      child: MediaQuery(
+        data: MediaQueryData(size: Size(width, 844)),
+        child: MaterialApp(home: child),
+      ),
+    );
+  }
+}
+
+class _BookshelfMineNavigationNotifier extends AppShellNavigationNotifier {
+  @override
+  AppShellNavigationState build() {
+    return const AppShellNavigationState(
+      showBookshelf: true,
+      showDiscover: false,
+      showSource: false,
     );
   }
 }

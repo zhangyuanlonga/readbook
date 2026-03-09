@@ -1,26 +1,29 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import 'layout/app_layout.dart';
+import 'shell_navigation_provider.dart';
 
-class ShellScaffold extends StatefulWidget {
+class ShellScaffold extends ConsumerStatefulWidget {
   const ShellScaffold({super.key, required this.location, required this.child});
 
   final String location;
   final Widget child;
 
   @override
-  State<ShellScaffold> createState() => _ShellScaffoldState();
+  ConsumerState<ShellScaffold> createState() => _ShellScaffoldState();
 }
 
-class _ShellScaffoldState extends State<ShellScaffold> {
+class _ShellScaffoldState extends ConsumerState<ShellScaffold> {
   static const double _kSwipeVelocityThreshold = 420;
   static const bool _kEnableMobileTabSwitchAnimation = false;
 
-  late int _currentIndex;
+  late int _currentOrderIndex;
   bool _isForward = true;
   bool _hasTabSwitched = false;
+  String? _pendingRedirectLocation;
 
   bool get _enableMobileTabSwipe {
     if (kIsWeb) {
@@ -34,20 +37,20 @@ class _ShellScaffoldState extends State<ShellScaffold> {
   @override
   void initState() {
     super.initState();
-    _currentIndex = _locationIndex(widget.location);
+    _currentOrderIndex = _locationOrderIndex(widget.location);
   }
 
   @override
   void didUpdateWidget(covariant ShellScaffold oldWidget) {
     super.didUpdateWidget(oldWidget);
 
-    final nextIndex = _locationIndex(widget.location);
-    if (nextIndex == _currentIndex) {
+    final nextIndex = _locationOrderIndex(widget.location);
+    if (nextIndex == _currentOrderIndex) {
       return;
     }
 
-    _isForward = nextIndex > _currentIndex;
-    _currentIndex = nextIndex;
+    _isForward = nextIndex > _currentOrderIndex;
+    _currentOrderIndex = nextIndex;
     _hasTabSwitched = true;
   }
 
@@ -55,6 +58,20 @@ class _ShellScaffoldState extends State<ShellScaffold> {
   Widget build(BuildContext context) {
     final useNavigationRail = AppLayout.isMediumUp(context);
     final enableTabSwipe = _enableMobileTabSwipe && !useNavigationRail;
+    final navigationState = ref.watch(appShellNavigationProvider);
+    final visibleDestinations = visibleAppShellDestinations(navigationState);
+    final currentTab = _locationTab(widget.location);
+    final selectedIndex = visibleDestinations.indexWhere(
+      (destination) => destination.tab == currentTab,
+    );
+    final effectiveSelectedIndex = selectedIndex >= 0 ? selectedIndex : 0;
+    final canShowNavigation = visibleDestinations.length >= 2;
+
+    if (selectedIndex < 0 && visibleDestinations.isNotEmpty) {
+      _scheduleRedirectToVisibleTab(context, visibleDestinations.first.location);
+    } else {
+      _pendingRedirectLocation = null;
+    }
 
     final shouldAnimateSwitch =
         enableTabSwipe && _hasTabSwitched && _kEnableMobileTabSwitchAnimation;
@@ -66,7 +83,7 @@ class _ShellScaffoldState extends State<ShellScaffold> {
               switchInCurve: Curves.easeOutCubic,
               switchOutCurve: Curves.easeInCubic,
               transitionBuilder: (child, animation) {
-                final isIncoming = child.key == ValueKey<int>(_currentIndex);
+                final isIncoming = child.key == ValueKey<int>(_currentOrderIndex);
                 final beginX =
                     isIncoming
                         ? (_isForward ? 0.16 : -0.16)
@@ -84,12 +101,12 @@ class _ShellScaffoldState extends State<ShellScaffold> {
                 );
               },
               child: KeyedSubtree(
-                key: ValueKey<int>(_currentIndex),
+                key: ValueKey<int>(_currentOrderIndex),
                 child: widget.child,
               ),
             )
             : KeyedSubtree(
-              key: ValueKey<int>(_currentIndex),
+              key: ValueKey<int>(_currentOrderIndex),
               child: widget.child,
             );
 
@@ -100,12 +117,17 @@ class _ShellScaffoldState extends State<ShellScaffold> {
               onHorizontalDragEnd:
                   (details) => _onHorizontalDragEnd(
                     context,
-                    currentIndex: _currentIndex,
+                    currentIndex: effectiveSelectedIndex,
+                    destinations: visibleDestinations,
                     details: details,
                   ),
               child: switchedChild,
             )
             : switchedChild;
+
+    if (!canShowNavigation) {
+      return Scaffold(body: body);
+    }
 
     if (useNavigationRail) {
       return Scaffold(
@@ -113,26 +135,19 @@ class _ShellScaffoldState extends State<ShellScaffold> {
           children: [
             SafeArea(
               child: NavigationRail(
-                selectedIndex: _currentIndex,
-                onDestinationSelected: (index) => _goToIndex(context, index),
+                selectedIndex: effectiveSelectedIndex,
+                onDestinationSelected:
+                    (index) => _goToDestination(
+                      context,
+                      visibleDestinations[index],
+                    ),
                 labelType: NavigationRailLabelType.all,
-                destinations: const [
-                  NavigationRailDestination(
-                    icon: Icon(Icons.bookmarks_outlined),
-                    label: Text('书架'),
-                  ),
-                  NavigationRailDestination(
-                    icon: Icon(Icons.travel_explore_outlined),
-                    label: Text('发现'),
-                  ),
-                  NavigationRailDestination(
-                    icon: Icon(Icons.storage_outlined),
-                    label: Text('书源'),
-                  ),
-                  NavigationRailDestination(
-                    icon: Icon(Icons.person_outline),
-                    label: Text('我的'),
-                  ),
+                destinations: [
+                  for (final destination in visibleDestinations)
+                    NavigationRailDestination(
+                      icon: Icon(destination.icon),
+                      label: Text(destination.label),
+                    ),
                 ],
               ),
             ),
@@ -146,24 +161,16 @@ class _ShellScaffoldState extends State<ShellScaffold> {
     return Scaffold(
       body: body,
       bottomNavigationBar: NavigationBar(
-        selectedIndex: _currentIndex,
+        selectedIndex: effectiveSelectedIndex,
         onDestinationSelected: (index) {
-          _goToIndex(context, index);
+          _goToDestination(context, visibleDestinations[index]);
         },
-        destinations: const [
-          NavigationDestination(
-            icon: Icon(Icons.bookmarks_outlined),
-            label: '书架',
-          ),
-          NavigationDestination(
-            icon: Icon(Icons.travel_explore_outlined),
-            label: '发现',
-          ),
-          NavigationDestination(
-            icon: Icon(Icons.storage_outlined),
-            label: '书源',
-          ),
-          NavigationDestination(icon: Icon(Icons.person_outline), label: '我的'),
+        destinations: [
+          for (final destination in visibleDestinations)
+            NavigationDestination(
+              icon: Icon(destination.icon),
+              label: destination.label,
+            ),
         ],
       ),
     );
@@ -172,8 +179,13 @@ class _ShellScaffoldState extends State<ShellScaffold> {
   void _onHorizontalDragEnd(
     BuildContext context, {
     required int currentIndex,
+    required List<AppShellDestination> destinations,
     required DragEndDetails details,
   }) {
+    if (destinations.length < 2) {
+      return;
+    }
+
     final velocity = details.primaryVelocity ?? 0;
     if (velocity.abs() < _kSwipeVelocityThreshold) {
       return;
@@ -181,49 +193,63 @@ class _ShellScaffoldState extends State<ShellScaffold> {
 
     if (velocity < 0) {
       final next = currentIndex + 1;
-      if (next <= 3) {
-        _goToIndex(context, next);
+      if (next < destinations.length) {
+        _goToDestination(context, destinations[next]);
       }
       return;
     }
 
     final previous = currentIndex - 1;
     if (previous >= 0) {
-      _goToIndex(context, previous);
+      _goToDestination(context, destinations[previous]);
     }
   }
 
-  void _goToIndex(BuildContext context, int index) {
-    if (index == _currentIndex) {
+  void _goToDestination(BuildContext context, AppShellDestination destination) {
+    if (widget.location.startsWith(destination.location)) {
       return;
     }
 
-    switch (index) {
-      case 0:
-        context.go('/bookshelf');
-        return;
-      case 1:
-        context.go('/discover');
-        return;
-      case 2:
-        context.go('/source');
-        return;
-      case 3:
-        context.go('/mine');
-        return;
-    }
+    context.go(destination.location);
   }
 
-  int _locationIndex(String currentLocation) {
+  void _scheduleRedirectToVisibleTab(BuildContext context, String location) {
+    if (_pendingRedirectLocation == location) {
+      return;
+    }
+
+    _pendingRedirectLocation = location;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted || widget.location.startsWith(location)) {
+        return;
+      }
+      context.go(location);
+    });
+  }
+
+  int _locationOrderIndex(String currentLocation) {
+    return _tabOrderIndex(_locationTab(currentLocation));
+  }
+
+  int _tabOrderIndex(AppShellTab tab) {
+    return switch (tab) {
+      AppShellTab.bookshelf => 0,
+      AppShellTab.discover => 1,
+      AppShellTab.source => 2,
+      AppShellTab.mine => 3,
+    };
+  }
+
+  AppShellTab _locationTab(String currentLocation) {
     if (currentLocation.startsWith('/discover')) {
-      return 1;
+      return AppShellTab.discover;
     }
     if (currentLocation.startsWith('/source')) {
-      return 2;
+      return AppShellTab.source;
     }
     if (currentLocation.startsWith('/mine')) {
-      return 3;
+      return AppShellTab.mine;
     }
-    return 0;
+    return AppShellTab.bookshelf;
   }
 }

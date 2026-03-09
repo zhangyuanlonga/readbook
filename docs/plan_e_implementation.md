@@ -40,7 +40,7 @@
 | `test/data/adapters/legado_source_adapter_test.dart` | 规则字段映射与兼容降级逻辑 |
 | `test/features/search/application/search_service_test.dart` | 搜索链路规则执行与网络选项解析 |
 | `docs/legado_native_bridge_mapping.md` | Legado 原生 `java.*` 桥接语义对照、`full/partial/unsupported` 单一口径 |
-| `docs/legado_compatibility_status_2026-02-28.md` | 当前兼容度快照与差距清单（基于 3000 源矩阵） |
+| `docs/archive/legado_compatibility_status_2026-02-28.md` | 当前兼容度快照与差距清单（基于 3000 源矩阵） |
 
 ### 状态判定标准
 

@@ -54,6 +54,7 @@ dependencies:
   archive: ^3.6.1
   flutter_js: ^0.8.7
   flutter_inappwebview: ^6.1.5
+  battery_plus: ^6.2.1
 
 dev_dependencies:
   flutter_test:

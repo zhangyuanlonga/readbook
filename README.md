@@ -10,12 +10,11 @@
 
 ## 文档入口
 
-- 项目总览：`docs/project_overview.md`
-- 需求文档：`docs/requirements.md`
-- 架构设计：`docs/architecture.md`
-- 项目规范：`docs/project_conventions.md`
-- 实施步骤：`docs/implementation_steps.md`
-- 文档索引：`docs/README.md`
+- 统一入口：`docs/README.md`
+- AI 快速上下文：`docs/ai_core_context.md`
+- 文档治理规则：`docs/documentation_governance.md`
+- 文档整合映射：`docs/documentation_map_2026-03-07.md`
+- 核心基线：`docs/project_overview.md` / `docs/requirements.md` / `docs/architecture.md` / `docs/project_conventions.md`
 
 ## 快速开始
 
