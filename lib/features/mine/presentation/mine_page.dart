@@ -141,6 +141,11 @@ class _MinePageState extends ConsumerState<MinePage> {
                           label: '缓存管理',
                           onTap: () => context.push('/cache'),
                         ),
+                        _MineActionItem(
+                          icon: Icons.bookmarks_outlined,
+                          label: '书签',
+                          onTap: () => _showMessage('书签功能开发中。'),
+                        ),
                       ],
                     ),
                   ),
@@ -165,6 +170,11 @@ class _MinePageState extends ConsumerState<MinePage> {
                           icon: Icons.share_outlined,
                           label: '分享',
                           onTap: () => _showMessage('分享能力开发中。'),
+                        ),
+                        _MineActionItem(
+                          icon: Icons.volunteer_activism_outlined,
+                          label: '捐赠',
+                          onTap: _showDonateSheet,
                         ),
                         _MineActionItem(
                           icon: Icons.info_outline,
@@ -260,9 +270,7 @@ class _MinePageState extends ConsumerState<MinePage> {
           const SizedBox(height: 10),
           LayoutBuilder(
             builder: (context, constraints) {
-              final columns = _resolveGridColumns(
-                width: constraints.maxWidth,
-              );
+              final columns = _resolveGridColumns(width: constraints.maxWidth);
               final denseGrid = columns >= 4;
               final crossSpacing = denseGrid ? 9.0 : 10.0;
               final mainSpacing = denseGrid ? 9.0 : 10.0;
@@ -872,6 +880,77 @@ class _MinePageState extends ConsumerState<MinePage> {
       return;
     }
     _showMessage('跳转失败，请稍后重试。');
+  }
+
+  Future<void> _showDonateSheet() async {
+    if (!mounted) {
+      return;
+    }
+    await showModalBottomSheet<void>(
+      context: context,
+      showDragHandle: true,
+      useSafeArea: true,
+      isScrollControlled: true,
+      builder: (sheetContext) {
+        final colorScheme = Theme.of(sheetContext).colorScheme;
+        final maxHeight = MediaQuery.sizeOf(sheetContext).height * 0.75;
+        return ConstrainedBox(
+          constraints: BoxConstraints(maxHeight: maxHeight),
+          child: SingleChildScrollView(
+            padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  '感谢支持',
+                  textAlign: TextAlign.center,
+                  style: Theme.of(sheetContext).textTheme.titleMedium?.copyWith(
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+                const SizedBox(height: 6),
+                Text(
+                  '可通过下方二维码进行捐赠',
+                  textAlign: TextAlign.center,
+                  style: Theme.of(sheetContext).textTheme.bodySmall?.copyWith(
+                    color: colorScheme.onSurfaceVariant,
+                  ),
+                ),
+                const SizedBox(height: 12),
+                ClipRRect(
+                  borderRadius: BorderRadius.circular(14),
+                  child: Image.asset(
+                    'assets/mov/vx.png',
+                    fit: BoxFit.contain,
+                    errorBuilder: (context, error, stackTrace) {
+                      return Container(
+                        padding: const EdgeInsets.symmetric(vertical: 24),
+                        alignment: Alignment.center,
+                        decoration: BoxDecoration(
+                          color: colorScheme.surfaceContainerLow,
+                          borderRadius: BorderRadius.circular(14),
+                          border: Border.all(
+                            color: colorScheme.outlineVariant.withValues(
+                              alpha: 0.5,
+                            ),
+                          ),
+                        ),
+                        child: Text(
+                          '图片加载失败：assets/mov/vx.png',
+                          style: Theme.of(sheetContext).textTheme.bodySmall
+                              ?.copyWith(color: colorScheme.onSurfaceVariant),
+                        ),
+                      );
+                    },
+                  ),
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
   }
 
   void _showMessage(String message) {

@@ -1,4 +1,6 @@
 PODS:
+  - battery_plus (0.0.1):
+    - FlutterMacOS
   - file_selector_macos (0.0.1):
     - FlutterMacOS
   - flutter_inappwebview_macos (0.0.1):
@@ -43,6 +45,7 @@ PODS:
     - FlutterMacOS
 
 DEPENDENCIES:
+  - battery_plus (from `Flutter/ephemeral/.symlinks/plugins/battery_plus/macos`)
   - file_selector_macos (from `Flutter/ephemeral/.symlinks/plugins/file_selector_macos/macos`)
   - flutter_inappwebview_macos (from `Flutter/ephemeral/.symlinks/plugins/flutter_inappwebview_macos/macos`)
   - flutter_js (from `Flutter/ephemeral/.symlinks/plugins/flutter_js/macos`)
@@ -58,6 +61,8 @@ SPEC REPOS:
     - sqlite3
 
 EXTERNAL SOURCES:
+  battery_plus:
+    :path: Flutter/ephemeral/.symlinks/plugins/battery_plus/macos
   file_selector_macos:
     :path: Flutter/ephemeral/.symlinks/plugins/file_selector_macos/macos
   flutter_inappwebview_macos:
@@ -76,6 +81,7 @@ EXTERNAL SOURCES:
     :path: Flutter/ephemeral/.symlinks/plugins/url_launcher_macos/macos
 
 SPEC CHECKSUMS:
+  battery_plus: f51ad29136e025b714b96f7d096f44f604615da7
   file_selector_macos: 6280b52b459ae6c590af5d78fc35c7267a3c4b31
   flutter_inappwebview_macos: c2d68649f9f8f1831bfcd98d73fd6256366d9d1d
   flutter_js: 79c3c70d33ba464c67d8eb88639a61aa718cd8b8

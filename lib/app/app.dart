@@ -76,7 +76,7 @@ class _SystemUiOverlayWrapperState extends State<_SystemUiOverlayWrapper> {
   bool _skipStartupAnnouncement = false;
   Timer? _startupDelayTimer;
 
-  static const Duration _kStartupMinDuration = Duration(seconds: 2);
+  static const Duration _kStartupMinDuration = Duration(milliseconds: 500);
   static const String _kStartupAnnouncementSkipKey =
       'startup_announcement_skip_v1';
 

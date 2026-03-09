@@ -65,6 +65,12 @@ class _BookDetailPageState extends State<BookDetailPage> {
   static const int _kSwitchSourceScoreStep = 6;
   static const int _kSwitchSourceHitCountCap = 12;
   static const int _kSwitchSourceHitCountWeight = 3;
+  static const Duration _kSwitchSourceScopeLoadTimeout = Duration(
+    milliseconds: 1600,
+  );
+  static const Duration _kSwitchSourceHitCountLoadTimeout = Duration(
+    milliseconds: 1200,
+  );
   static final RegExp _kSwitchSourceSpacePattern = RegExp(r'[\u3000\s]+');
   static final RegExp _kSwitchSourceSymbolPattern = RegExp(
     r'''[·•\-_:：|/\\\(\)\[\]【】<>《》"'‘’,.，。!?！？]''',
@@ -967,7 +973,7 @@ class _BookDetailPageState extends State<BookDetailPage> {
     _DetailSwitchSourceScope scope;
     try {
       scope = await _buildSwitchSourceScope(currentSourceId: currentSourceId);
-      if (scope.sourceIds.isEmpty) {
+      if (scope.sourceIds.isEmpty && !scope.allowUnscopedSearch) {
         _showMessage('暂无可切换的同类型书源。');
         return;
       }
@@ -1063,7 +1069,26 @@ class _BookDetailPageState extends State<BookDetailPage> {
   Future<_DetailSwitchSourceScope> _buildSwitchSourceScope({
     required String currentSourceId,
   }) async {
-    final sources = await AppDatabase.instance.getAllSources();
+    List<SourceDefinition> sources;
+    try {
+      sources = await AppDatabase.instance.getAllSources().timeout(
+        _kSwitchSourceScopeLoadTimeout,
+      );
+    } catch (_) {
+      return const _DetailSwitchSourceScope(
+        sourceIds: <String>[],
+        contentMode: SearchContentMode.novel,
+        allowUnscopedSearch: true,
+      );
+    }
+    if (sources.isEmpty) {
+      return const _DetailSwitchSourceScope(
+        sourceIds: <String>[],
+        contentMode: SearchContentMode.novel,
+        allowUnscopedSearch: true,
+      );
+    }
+
     SourceDefinition? currentSource;
     for (final source in sources) {
       if (source.id == currentSourceId) {
@@ -1072,7 +1097,25 @@ class _BookDetailPageState extends State<BookDetailPage> {
       }
     }
 
-    final isMangaType = currentSource?.isMangaSource ?? false;
+    if (currentSource == null) {
+      final fallbackSourceIds = sources
+          .where((source) => source.enabled && source.id != currentSourceId)
+          .map((source) => source.id)
+          .toList(growable: false);
+      if (fallbackSourceIds.isEmpty) {
+        return const _DetailSwitchSourceScope(
+          sourceIds: <String>[],
+          contentMode: SearchContentMode.novel,
+          allowUnscopedSearch: true,
+        );
+      }
+      return _DetailSwitchSourceScope(
+        sourceIds: fallbackSourceIds,
+        contentMode: SearchContentMode.novel,
+      );
+    }
+
+    final isMangaType = currentSource.isMangaSource;
     final sourceIds = sources
         .where(
           (source) =>
@@ -1082,6 +1125,14 @@ class _BookDetailPageState extends State<BookDetailPage> {
         )
         .map((source) => source.id)
         .toList(growable: false);
+    if (sourceIds.isEmpty) {
+      return _DetailSwitchSourceScope(
+        sourceIds: const <String>[],
+        contentMode:
+            isMangaType ? SearchContentMode.manga : SearchContentMode.novel,
+        allowUnscopedSearch: true,
+      );
+    }
     return _DetailSwitchSourceScope(
       sourceIds: sourceIds,
       contentMode:
@@ -1099,6 +1150,10 @@ class _BookDetailPageState extends State<BookDetailPage> {
     required SourceSwitchScoreStore scoreStore,
     required bool scoreRankingEnabled,
   }) async {
+    final requestScopedSourceIds =
+        scope.allowUnscopedSearch && scope.sourceIds.isEmpty
+            ? null
+            : scope.sourceIds;
     try {
       final hitCountBySource = await _loadSwitchSourceHitCountsSafely(
         title: keyword,
@@ -1108,7 +1163,7 @@ class _BookDetailPageState extends State<BookDetailPage> {
         keyword: keyword,
         pageSize: 16,
         contentMode: scope.contentMode,
-        sourceIds: scope.sourceIds,
+        sourceIds: requestScopedSourceIds,
         cancellationToken: cancellationToken,
         onProgress: (progress) {
           if (cancellationToken.isCancelled) {
@@ -1166,7 +1221,8 @@ class _BookDetailPageState extends State<BookDetailPage> {
       }
       lookupStateNotifier.value = _DetailSwitchSourceLookupState(
         isLoading: false,
-        sourceCount: scope.sourceIds.length,
+        sourceCount:
+            requestScopedSourceIds == null ? 0 : requestScopedSourceIds.length,
         processedSourceCount: 0,
         candidates: const <_DetailSwitchSourceCandidate>[],
         errorText: '查找可切换书源失败：${error.briefMessage}',
@@ -1178,7 +1234,8 @@ class _BookDetailPageState extends State<BookDetailPage> {
       }
       lookupStateNotifier.value = _DetailSwitchSourceLookupState(
         isLoading: false,
-        sourceCount: scope.sourceIds.length,
+        sourceCount:
+            requestScopedSourceIds == null ? 0 : requestScopedSourceIds.length,
         processedSourceCount: 0,
         candidates: const <_DetailSwitchSourceCandidate>[],
         errorText: '查找可切换书源失败，请稍后重试。',
@@ -1203,10 +1260,9 @@ class _BookDetailPageState extends State<BookDetailPage> {
     required String? author,
   }) async {
     try {
-      return await _searchHitCacheService.loadSourceHitCounts(
-        title: title,
-        author: author,
-      );
+      return await _searchHitCacheService
+          .loadSourceHitCounts(title: title, author: author)
+          .timeout(_kSwitchSourceHitCountLoadTimeout);
     } catch (_) {
       return <String, int>{};
     }
@@ -1262,7 +1318,8 @@ class _BookDetailPageState extends State<BookDetailPage> {
       final isPotentiallyOutdated =
           currentChapterCount > 0 &&
           latestChapterNumber != null &&
-          latestChapterNumber + _kSwitchSourceLagTolerance < currentChapterCount;
+          latestChapterNumber + _kSwitchSourceLagTolerance <
+              currentChapterCount;
       final candidate = _DetailSwitchSourceCandidate(
         book: book,
         sourceName: sourceNames[book.sourceId] ?? book.sourceId,
@@ -1431,7 +1488,10 @@ class _BookDetailPageState extends State<BookDetailPage> {
   }
 
   String _formatSwitchSourceLatestChapter(String? latestChapter) {
-    final normalized = latestChapter?.replaceAll(_kSwitchSourceSpacePattern, ' ');
+    final normalized = latestChapter?.replaceAll(
+      _kSwitchSourceSpacePattern,
+      ' ',
+    );
     final text = normalized?.trim() ?? '';
     if (text.isEmpty) {
       return '未知';
@@ -1464,7 +1524,8 @@ class _BookDetailPageState extends State<BookDetailPage> {
       builder: (context) {
         final horizontal = AppSpacing.pageHorizontal(context);
         final bottomInset = MediaQuery.viewPaddingOf(context).bottom;
-        final currentTitle = (_result?.detail.title ?? _displayTitle ?? '').trim();
+        final currentTitle =
+            (_result?.detail.title ?? _displayTitle ?? '').trim();
         final currentChapterCount = _result?.chapters.length ?? 0;
 
         return FractionallySizedBox(
@@ -1547,12 +1608,11 @@ class _BookDetailPageState extends State<BookDetailPage> {
                                     child: Text(
                                       emptyMessage,
                                       textAlign: TextAlign.center,
-                                      style: Theme.of(context)
-                                          .textTheme
-                                          .bodyMedium
-                                          ?.copyWith(
-                                            color: colorScheme.onSurfaceVariant,
-                                          ),
+                                      style: Theme.of(
+                                        context,
+                                      ).textTheme.bodyMedium?.copyWith(
+                                        color: colorScheme.onSurfaceVariant,
+                                      ),
                                     ),
                                   )
                               : ListView.separated(
@@ -1573,12 +1633,11 @@ class _BookDetailPageState extends State<BookDetailPage> {
                                       candidate.book.title,
                                       maxLines: 1,
                                       overflow: TextOverflow.ellipsis,
-                                      style: Theme.of(context)
-                                          .textTheme
-                                          .titleSmall
-                                          ?.copyWith(
-                                            fontWeight: FontWeight.w600,
-                                          ),
+                                      style: Theme.of(
+                                        context,
+                                      ).textTheme.titleSmall?.copyWith(
+                                        fontWeight: FontWeight.w600,
+                                      ),
                                     ),
                                     subtitle: Column(
                                       crossAxisAlignment:
@@ -1594,22 +1653,19 @@ class _BookDetailPageState extends State<BookDetailPage> {
                                           '最新：${candidate.latestChapterLabel}',
                                           maxLines: 1,
                                           overflow: TextOverflow.ellipsis,
-                                          style: Theme.of(context)
-                                              .textTheme
-                                              .bodySmall
-                                              ?.copyWith(
-                                                color:
-                                                    candidate
-                                                            .isPotentiallyOutdated
-                                                        ? colorScheme.error
-                                                        : colorScheme
-                                                            .onSurfaceVariant,
-                                                fontWeight:
-                                                    candidate
-                                                            .isPotentiallyOutdated
-                                                        ? FontWeight.w700
-                                                        : FontWeight.w500,
-                                              ),
+                                          style: Theme.of(
+                                            context,
+                                          ).textTheme.bodySmall?.copyWith(
+                                            color:
+                                                candidate.isPotentiallyOutdated
+                                                    ? colorScheme.error
+                                                    : colorScheme
+                                                        .onSurfaceVariant,
+                                            fontWeight:
+                                                candidate.isPotentiallyOutdated
+                                                    ? FontWeight.w700
+                                                    : FontWeight.w500,
+                                          ),
                                         ),
                                         const SizedBox(height: 2),
                                         Text(
@@ -1618,14 +1674,11 @@ class _BookDetailPageState extends State<BookDetailPage> {
                                               : '匹配:${candidate.baseScore} · 命中:${candidate.hitCount}（评分排序关闭）',
                                           maxLines: 1,
                                           overflow: TextOverflow.ellipsis,
-                                          style: Theme.of(context)
-                                              .textTheme
-                                              .bodySmall
-                                              ?.copyWith(
-                                                color:
-                                                    colorScheme
-                                                        .onSurfaceVariant,
-                                              ),
+                                          style: Theme.of(
+                                            context,
+                                          ).textTheme.bodySmall?.copyWith(
+                                            color: colorScheme.onSurfaceVariant,
+                                          ),
                                         ),
                                       ],
                                     ),
@@ -1688,9 +1741,9 @@ class _BookDetailPageState extends State<BookDetailPage> {
                                       ],
                                     ),
                                     onTap:
-                                        () => Navigator.of(context).pop(
-                                          candidate,
-                                        ),
+                                        () => Navigator.of(
+                                          context,
+                                        ).pop(candidate),
                                   );
                                 },
                               ),
@@ -1711,10 +1764,11 @@ class _BookDetailPageState extends State<BookDetailPage> {
                           Expanded(
                             child: Text(
                               '正在继续检索其他书源...',
-                              style: Theme.of(context).textTheme.bodySmall
-                                  ?.copyWith(
-                                    color: colorScheme.onSurfaceVariant,
-                                  ),
+                              style: Theme.of(
+                                context,
+                              ).textTheme.bodySmall?.copyWith(
+                                color: colorScheme.onSurfaceVariant,
+                              ),
                             ),
                           ),
                         ],
@@ -1941,10 +1995,6 @@ class _BookDetailPageState extends State<BookDetailPage> {
     required String? previousDetailUrl,
     required bool previousInBookshelf,
   }) async {
-    if (!previousInBookshelf) {
-      return false;
-    }
-
     final result = _result;
     final normalizedPreviousSourceId = previousSourceId?.trim() ?? '';
     final normalizedPreviousDetailUrl = previousDetailUrl?.trim() ?? '';
@@ -1954,14 +2004,28 @@ class _BookDetailPageState extends State<BookDetailPage> {
       return false;
     }
 
+    var shouldReplace = previousInBookshelf;
+    if (!shouldReplace) {
+      try {
+        shouldReplace = await _bookshelfService.contains(
+          sourceId: normalizedPreviousSourceId,
+          detailUrl: normalizedPreviousDetailUrl,
+        );
+      } catch (_) {
+        shouldReplace = false;
+      }
+    }
+    if (!shouldReplace) {
+      return false;
+    }
+
     try {
-      await _bookshelfService.remove(
-        sourceId: normalizedPreviousSourceId,
-        detailUrl: normalizedPreviousDetailUrl,
-      );
       final detail = result.detail;
-      await _bookshelfService.upsert(
-        BookshelfBook(
+      await _bookshelfService.replace(
+        previousSourceId: normalizedPreviousSourceId,
+        previousDetailUrl: normalizedPreviousDetailUrl,
+        preserveTags: true,
+        nextBook: BookshelfBook(
           bookId: detail.id,
           sourceId: detail.sourceId,
           title: detail.title,
@@ -2221,10 +2285,12 @@ class _DetailSwitchSourceScope {
   const _DetailSwitchSourceScope({
     required this.sourceIds,
     required this.contentMode,
+    this.allowUnscopedSearch = false,
   });
 
   final List<String> sourceIds;
   final SearchContentMode contentMode;
+  final bool allowUnscopedSearch;
 }
 
 class _DetailSwitchSourceCandidate {

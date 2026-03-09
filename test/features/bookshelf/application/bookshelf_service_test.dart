@@ -124,5 +124,61 @@ void main() {
       expect(map.containsKey('src_1::detail_1'), isFalse);
       expect(map['src_2::detail_2'], orderedEquals(const ['收藏']));
     });
+
+    test(
+      'replace swaps old entry and migrates tags to new source entry',
+      () async {
+        final service = BookshelfService();
+        await service.upsert(
+          BookshelfBook(
+            bookId: 'book_old',
+            sourceId: 'src_old',
+            title: '旧书源',
+            detailUrl: 'https://example.com/old',
+            addedAt: DateTime.parse('2026-03-09T00:00:00.000Z'),
+          ),
+        );
+        await service.setBookTags(
+          sourceId: 'src_old',
+          detailUrl: 'https://example.com/old',
+          tags: const ['在读', '玄幻'],
+        );
+
+        await service.replace(
+          previousSourceId: 'src_old',
+          previousDetailUrl: 'https://example.com/old',
+          nextBook: BookshelfBook(
+            bookId: 'book_new',
+            sourceId: 'src_new',
+            title: '新书源',
+            detailUrl: 'https://example.com/new',
+            addedAt: DateTime.parse('2026-03-09T00:00:01.000Z'),
+          ),
+        );
+
+        final all = await service.getAll();
+        expect(all, hasLength(1));
+        expect(all.first.sourceId, 'src_new');
+        expect(all.first.detailUrl, 'https://example.com/new');
+
+        final oldExists = await service.contains(
+          sourceId: 'src_old',
+          detailUrl: 'https://example.com/old',
+        );
+        final newExists = await service.contains(
+          sourceId: 'src_new',
+          detailUrl: 'https://example.com/new',
+        );
+        expect(oldExists, isFalse);
+        expect(newExists, isTrue);
+
+        final tagMap = await service.getTagMap();
+        expect(tagMap['src_old::https://example.com/old'], isNull);
+        expect(
+          tagMap['src_new::https://example.com/new'],
+          orderedEquals(const ['在读', '玄幻']),
+        );
+      },
+    );
   });
 }

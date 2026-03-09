@@ -6,6 +6,7 @@ import 'package:battery_plus/battery_plus.dart';
 import 'package:file_selector/file_selector.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:page_curl_effect/page_curl_effect.dart';
@@ -111,6 +112,8 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
   bool _isSwitchSourceLoading = false;
   bool _isAutoSwitchingSource = false;
   bool _autoSwitchSourceOnFailureEnabled = false;
+  bool _isScrollEdgeAdvancingChapter = false;
+  bool _hasPromptedMissingSourceSwitch = false;
   SearchCancellationToken? _activeSwitchSourceCancellationToken;
   String? _errorText;
   String _content = '';
@@ -138,6 +141,8 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
   bool _isAutoReadRunning = false;
   bool _isAutoReadSessionEnabled = false;
   bool _isAutoReadAdvancingChapter = false;
+  double _scrollEdgeOverscrollDistance = 0;
+  bool _scrollEdgeAdvanceArmed = false;
   double? _swipeDragStartDx;
   double? _swipeDragCurrentDx;
   ReaderPageTurnMode _pageTurnModeBeforeAutoRead = ReaderPageTurnMode.tap;
@@ -192,6 +197,8 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
   static const int _kAutoSwitchSourceTryLimit = 3;
   static const int _kForwardPreloadChapterCount = 2;
   static const int _kBackwardPreloadChapterCount = 1;
+  static const double _kScrollAdvanceOverscrollTrigger = 56;
+  static const double _kScrollAdvanceEdgeTolerance = 2;
   static final RegExp _kSwitchSourceSpacePattern = RegExp(r'[\u3000\s]+');
   static final RegExp _kSwitchSourceSymbolPattern = RegExp(
     r'''[·•\-_:：|/\\\(\)\[\]【】<>《》"'‘’,.，。!?！？]''',
@@ -337,6 +344,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
     _chapterTitle = widget.chapterTitle?.trim();
     _sourceId = widget.sourceId?.trim();
     _detailUrl = widget.detailUrl?.trim();
+    _bookTitle = widget.chapterTitle?.trim() ?? '';
     _currentIndex = widget.chapterIndex;
     _curlAutoTurnController = AnimationController(
       vsync: this,
@@ -1000,16 +1008,113 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
   }
 
   bool _onReaderScrollNotification(ScrollNotification notification) {
-    if (!_isAutoReadSessionEnabled || _isPagedTextReaderEnabled()) {
+    if (_isPagedTextReaderEnabled()) {
       return false;
     }
 
     if (notification is ScrollStartNotification &&
-        notification.dragDetails != null) {
+        notification.dragDetails != null &&
+        _isAutoReadSessionEnabled) {
       _stopAutoReadSession();
     }
 
+    if (!_pageTurnUsesScroll(_settings.pageTurnMode) ||
+        _isMangaChapter ||
+        _isBootstrapping ||
+        _isLoadingContent ||
+        _errorText != null) {
+      if (notification is ScrollStartNotification ||
+          notification is ScrollEndNotification ||
+          (notification is UserScrollNotification &&
+              notification.direction == ScrollDirection.idle)) {
+        _scrollEdgeOverscrollDistance = 0;
+        _scrollEdgeAdvanceArmed = false;
+      }
+      return false;
+    }
+
+    final metrics = notification.metrics;
+    if (metrics.axis != Axis.vertical) {
+      return false;
+    }
+
+    if (notification is ScrollStartNotification) {
+      _scrollEdgeOverscrollDistance = 0;
+      _scrollEdgeAdvanceArmed = false;
+      return false;
+    }
+
+    if (notification is UserScrollNotification) {
+      if (notification.direction == ScrollDirection.reverse) {
+        _scrollEdgeAdvanceArmed = true;
+      } else if (notification.direction == ScrollDirection.forward) {
+        _scrollEdgeAdvanceArmed = false;
+      }
+    }
+
+    final atBottom =
+        metrics.maxScrollExtent > 0 &&
+        metrics.pixels >=
+            metrics.maxScrollExtent - _kScrollAdvanceEdgeTolerance;
+    if (!atBottom) {
+      _scrollEdgeOverscrollDistance = 0;
+      if (notification is ScrollEndNotification ||
+          (notification is UserScrollNotification &&
+              notification.direction == ScrollDirection.idle)) {
+        _scrollEdgeAdvanceArmed = false;
+      }
+      return false;
+    }
+
+    if (notification is ScrollUpdateNotification &&
+        notification.dragDetails != null &&
+        (notification.scrollDelta ?? 0) >= 0) {
+      _scrollEdgeAdvanceArmed = true;
+    }
+
+    if (notification is OverscrollNotification &&
+        notification.overscroll > 0 &&
+        notification.dragDetails != null) {
+      _scrollEdgeAdvanceArmed = true;
+      _scrollEdgeOverscrollDistance += notification.overscroll;
+      if (_scrollEdgeOverscrollDistance >= _kScrollAdvanceOverscrollTrigger) {
+        _scrollEdgeOverscrollDistance = 0;
+        _scrollEdgeAdvanceArmed = false;
+        unawaited(_advanceChapterFromScrollEdge());
+      }
+      return false;
+    }
+
+    if (notification is ScrollEndNotification ||
+        (notification is UserScrollNotification &&
+            notification.direction == ScrollDirection.idle)) {
+      final shouldAdvance = _scrollEdgeAdvanceArmed;
+      _scrollEdgeOverscrollDistance = 0;
+      _scrollEdgeAdvanceArmed = false;
+      if (shouldAdvance) {
+        unawaited(_advanceChapterFromScrollEdge());
+      }
+    }
+
     return false;
+  }
+
+  Future<void> _advanceChapterFromScrollEdge() async {
+    if (_isScrollEdgeAdvancingChapter || _isAutoReadAdvancingChapter) {
+      return;
+    }
+
+    final index = _currentIndex;
+    if (index == null || index >= _chapters.length - 1) {
+      return;
+    }
+
+    _isScrollEdgeAdvancingChapter = true;
+    try {
+      await _jumpTo(index + 1, initialScrollRatio: 0);
+    } finally {
+      _isScrollEdgeAdvancingChapter = false;
+    }
   }
 
   String _buildMangaImageUrl(String imageUrl, int retryNonce) {
@@ -2843,6 +2948,25 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
       return currentTitle;
     }
 
+    final fallbackTitles = <String>[
+      widget.chapterTitle ?? '',
+      _chapterTitle ?? '',
+    ];
+    for (final candidate in fallbackTitles) {
+      final normalized = candidate.trim();
+      if (!_isSwitchSourceBookTitleUsable(normalized)) {
+        continue;
+      }
+      if (mounted && normalized != _bookTitle) {
+        setState(() {
+          _bookTitle = normalized;
+        });
+      } else {
+        _bookTitle = normalized;
+      }
+      return normalized;
+    }
+
     try {
       final detailResult = await _detailService.load(
         sourceId: currentSourceId,
@@ -3515,6 +3639,12 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
       );
 
       final chapters = detailResult.chapters;
+      if (chapters.isEmpty) {
+        if (showResultMessage) {
+          _showMessage('目标书源暂无可读章节，无法切换。');
+        }
+        return false;
+      }
       final positionDecision = _switchSourcePositionResolver.resolve(
         currentChapters: snapshot.chapters,
         targetChapters: chapters,
@@ -3544,7 +3674,11 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
         }
       }
 
-      final targetChapter = chapters[positionDecision.targetIndex];
+      final targetIndex = positionDecision.targetIndex.clamp(
+        0,
+        chapters.length - 1,
+      );
+      final targetChapter = chapters[targetIndex];
 
       setState(() {
         _sourceId = candidate.book.sourceId;
@@ -3553,7 +3687,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
         _bookAuthor = detailResult.detail.author;
         _bookCoverUrl = detailResult.detail.coverUrl;
         _chapters = chapters;
-        _currentIndex = positionDecision.targetIndex;
+        _currentIndex = targetIndex;
         _chapterId = targetChapter.id;
         _chapterUrl = targetChapter.chapterUrl;
         _chapterTitle = targetChapter.title;
@@ -3569,19 +3703,29 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
 
       final previousSourceId = snapshot.sourceId?.trim() ?? '';
       final previousDetailUrl = snapshot.detailUrl?.trim() ?? '';
-      final shouldMigrateBookshelf =
-          snapshot.isInBookshelf &&
-          previousSourceId.isNotEmpty &&
-          previousDetailUrl.isNotEmpty;
+      var shouldMigrateBookshelf = false;
+      if (previousSourceId.isNotEmpty && previousDetailUrl.isNotEmpty) {
+        if (snapshot.isInBookshelf) {
+          shouldMigrateBookshelf = true;
+        } else {
+          try {
+            shouldMigrateBookshelf = await _bookshelfService.contains(
+              sourceId: previousSourceId,
+              detailUrl: previousDetailUrl,
+            );
+          } catch (_) {
+            shouldMigrateBookshelf = false;
+          }
+        }
+      }
 
       if (shouldMigrateBookshelf) {
         try {
-          await _bookshelfService.remove(
-            sourceId: previousSourceId,
-            detailUrl: previousDetailUrl,
-          );
-          await _bookshelfService.upsert(
-            BookshelfBook(
+          await _bookshelfService.replace(
+            previousSourceId: previousSourceId,
+            previousDetailUrl: previousDetailUrl,
+            preserveTags: true,
+            nextBook: BookshelfBook(
               bookId: widget.bookId,
               sourceId: candidate.book.sourceId,
               title:
@@ -4139,7 +4283,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
           return;
         }
         setState(() {
-          _errorText = '缺少 sourceId/detailUrl/chapterUrl，无法加载正文。';
+          _errorText = '缺少 sourceId/detailUrl，无法加载正文。';
           _isBootstrapping = false;
         });
         return;
@@ -4178,6 +4322,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
       setState(() {
         _errorText = readableError;
       });
+      _maybePromptSwitchSourceForMissingSource(error.code);
     } catch (_) {
       if (!mounted) {
         return;
@@ -4708,6 +4853,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
       _restoreScrollPosition(targetRatio);
 
       await _saveProgress();
+      _hasPromptedMissingSourceSwitch = false;
       final preloadTaskToken = ++_preloadTaskToken;
       unawaited(_preloadNeighbors(taskToken: preloadTaskToken));
       return true;
@@ -4720,6 +4866,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
       setState(() {
         _errorText = readableError;
       });
+      _maybePromptSwitchSourceForMissingSource(error.code);
       final switched = await _tryAutoSwitchSourceOnFailure();
       return switched;
     } catch (_) {
@@ -5800,9 +5947,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
     return _sourceId == null ||
         _sourceId!.isEmpty ||
         _detailUrl == null ||
-        _detailUrl!.isEmpty ||
-        _chapterUrl == null ||
-        _chapterUrl!.isEmpty;
+        _detailUrl!.isEmpty;
   }
 
   void _showMessage(String text) {
@@ -5827,6 +5972,44 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
     );
   }
 
+  void _maybePromptSwitchSourceForMissingSource(ErrorCode? code) {
+    if (code != ErrorCode.unknownSource ||
+        !mounted ||
+        _hasPromptedMissingSourceSwitch ||
+        _isSwitchSourceLoading) {
+      return;
+    }
+    _hasPromptedMissingSourceSwitch = true;
+
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      if (!mounted || _isSwitchSourceLoading) {
+        return;
+      }
+      final confirmed = await showDialog<bool>(
+        context: context,
+        builder: (dialogContext) {
+          return AlertDialog(
+            title: const Text('当前书源不可用'),
+            content: const Text('该书源可能已被删除或停用，是否现在切换到其他书源？'),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.of(dialogContext).pop(false),
+                child: const Text('稍后'),
+              ),
+              FilledButton(
+                onPressed: () => Navigator.of(dialogContext).pop(true),
+                child: const Text('立即换源'),
+              ),
+            ],
+          );
+        },
+      );
+      if (confirmed == true && mounted) {
+        await _showSwitchSourceSheet();
+      }
+    });
+  }
+
   Future<void> _showSettingsSheet({
     _ReaderSettingsTab initialTab = _ReaderSettingsTab.reading,
   }) async {
@@ -5840,6 +6023,42 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
     final isMangaChapter = _chapterImageUrls.isNotEmpty;
     var availableCustomFonts = List<ReaderCustomFontEntry>.from(_customFonts);
     var startAutoReadAfterApply = false;
+    var isPersistingDraft = false;
+    Timer? persistDraftTimer;
+
+    String fingerprint(ReaderSettings settings) {
+      return jsonEncode(settings.copyWith(autoReadEnabled: false).toJson());
+    }
+
+    var persistedFingerprint = fingerprint(_settings);
+
+    Future<void> persistDraftNow(ReaderSettings settings) async {
+      final normalized = settings.copyWith(autoReadEnabled: false);
+      final nextFingerprint = fingerprint(normalized);
+      if (nextFingerprint == persistedFingerprint || isPersistingDraft) {
+        return;
+      }
+
+      isPersistingDraft = true;
+      try {
+        await _preferencesService.saveSettings(normalized);
+        persistedFingerprint = nextFingerprint;
+      } catch (_) {
+        // Keep in-memory preview even when persistence fails.
+      } finally {
+        isPersistingDraft = false;
+      }
+    }
+
+    void schedulePersistDraft() {
+      persistDraftTimer?.cancel();
+      persistDraftTimer = Timer(const Duration(milliseconds: 220), () {
+        if (!mounted) {
+          return;
+        }
+        unawaited(persistDraftNow(draft));
+      });
+    }
 
     await _ensureBackgroundPresetsReady();
     if (!mounted) {
@@ -5873,7 +6092,12 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
                       ? _tryDecodeBase64(activeBackgroundBase64)
                       : null;
               void previewDraftSettings() {
-                if (!mounted || identical(_settings, draft)) {
+                if (!mounted) {
+                  return;
+                }
+
+                schedulePersistDraft();
+                if (identical(_settings, draft)) {
                   return;
                 }
                 WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -6395,6 +6619,83 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
                           );
                         }
 
+                        Future<double?> promptExactMarginValue({
+                          required String label,
+                          required double currentValue,
+                        }) async {
+                          final controller = TextEditingController(
+                            text: currentValue.round().toString(),
+                          );
+                          String? errorText;
+
+                          final result = await showDialog<double>(
+                            context: sheetContext,
+                            builder: (dialogContext) {
+                              return StatefulBuilder(
+                                builder: (dialogContext, setDialogState) {
+                                  void submit() {
+                                    final raw = controller.text.trim();
+                                    final parsed = double.tryParse(raw);
+                                    if (parsed == null) {
+                                      setDialogState(() {
+                                        errorText = '请输入数字';
+                                      });
+                                      return;
+                                    }
+                                    if (parsed <
+                                            ReaderSettings.minLayoutMargin ||
+                                        parsed >
+                                            ReaderSettings.maxLayoutMargin) {
+                                      setDialogState(() {
+                                        errorText =
+                                            '请输入 ${ReaderSettings.minLayoutMargin.toInt()} - ${ReaderSettings.maxLayoutMargin.toInt()}';
+                                      });
+                                      return;
+                                    }
+                                    Navigator.of(dialogContext).pop(parsed);
+                                  }
+
+                                  return AlertDialog(
+                                    title: Text('$label 精确输入'),
+                                    content: TextField(
+                                      controller: controller,
+                                      autofocus: true,
+                                      keyboardType:
+                                          const TextInputType.numberWithOptions(
+                                            decimal: true,
+                                          ),
+                                      decoration: InputDecoration(
+                                        labelText: '边距数值',
+                                        helperText:
+                                            '范围 ${ReaderSettings.minLayoutMargin.toInt()} - ${ReaderSettings.maxLayoutMargin.toInt()}',
+                                        errorText: errorText,
+                                      ),
+                                      onSubmitted: (_) => submit(),
+                                    ),
+                                    actions: [
+                                      TextButton(
+                                        onPressed:
+                                            () =>
+                                                Navigator.of(
+                                                  dialogContext,
+                                                ).pop(),
+                                        child: const Text('取消'),
+                                      ),
+                                      FilledButton(
+                                        onPressed: submit,
+                                        child: const Text('应用'),
+                                      ),
+                                    ],
+                                  );
+                                },
+                              );
+                            },
+                          );
+
+                          controller.dispose();
+                          return result;
+                        }
+
                         Widget buildMarginControlRow({
                           required String label,
                           required double value,
@@ -6453,10 +6754,33 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
                                   icon: const Icon(Icons.add_rounded),
                                 ),
                                 SizedBox(
-                                  width: 28,
-                                  child: Text(
-                                    safeValue.round().toString(),
-                                    textAlign: TextAlign.right,
+                                  width: 52,
+                                  child: InkWell(
+                                    borderRadius: BorderRadius.circular(8),
+                                    onTap: () async {
+                                      final exact =
+                                          await promptExactMarginValue(
+                                            label: label,
+                                            currentValue: safeValue,
+                                          );
+                                      if (exact == null) {
+                                        return;
+                                      }
+                                      onChanged(exact);
+                                    },
+                                    child: Padding(
+                                      padding: const EdgeInsets.symmetric(
+                                        vertical: 6,
+                                      ),
+                                      child: Text(
+                                        safeValue.round().toString(),
+                                        textAlign: TextAlign.right,
+                                        style: textTheme.labelLarge?.copyWith(
+                                          color: colorScheme.primary,
+                                          fontWeight: FontWeight.w700,
+                                        ),
+                                      ),
+                                    ),
                                   ),
                                 ),
                               ],
@@ -6659,15 +6983,6 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
                                       ),
                                     ],
                                   ),
-                                ),
-                                const SizedBox(height: 8),
-                                FilledButton.tonal(
-                                  onPressed: () {
-                                    if (sheetContext.mounted) {
-                                      Navigator.of(sheetContext).pop();
-                                    }
-                                  },
-                                  child: const Text('完成'),
                                 ),
                               ],
                             ),
@@ -6905,15 +7220,6 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
                                         ),
                                     ],
                                   ),
-                                ),
-                                const SizedBox(height: 8),
-                                FilledButton.tonal(
-                                  onPressed: () {
-                                    if (sheetContext.mounted) {
-                                      Navigator.of(sheetContext).pop();
-                                    }
-                                  },
-                                  child: const Text('完成'),
                                 ),
                               ],
                             ),
@@ -7231,7 +7537,8 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
                                               const SizedBox(width: 6),
                                               Flexible(
                                                 child: OutlinedButton(
-                                                  onPressed: openFontPickerSheet,
+                                                  onPressed:
+                                                      openFontPickerSheet,
                                                   style:
                                                       OutlinedButton.styleFrom(
                                                         visualDensity:
@@ -7491,8 +7798,9 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
                                                 divisions: 45,
                                                 value: draft.fontSize,
                                                 step: 1,
-                                                valueLabel:
-                                                    _fontSizeValueLabel(draft),
+                                                valueLabel: _fontSizeValueLabel(
+                                                  draft,
+                                                ),
                                                 onChanged: (value) {
                                                   setModalState(() {
                                                     draft = draft.copyWith(
@@ -7506,9 +7814,10 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
                                                 min: 0,
                                                 max: 100,
                                                 divisions: 100,
-                                                value: _letterSpacingSliderValue(
-                                                  draft,
-                                                ),
+                                                value:
+                                                    _letterSpacingSliderValue(
+                                                      draft,
+                                                    ),
                                                 step: 1,
                                                 valueLabel:
                                                     _letterSpacingValueLabel(
@@ -7535,7 +7844,9 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
                                                 ),
                                                 step: 1,
                                                 valueLabel:
-                                                    _lineHeightValueLabel(draft),
+                                                    _lineHeightValueLabel(
+                                                      draft,
+                                                    ),
                                                 onChanged: (value) {
                                                   setModalState(() {
                                                     draft = draft.copyWith(
@@ -7664,9 +7975,9 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
                                                 ),
                                                 child: Text(
                                                   '滚动触发模式下不使用分页动画',
-                                                  style: Theme.of(
-                                                    context,
-                                                  ).textTheme.labelSmall
+                                                  style: Theme.of(context)
+                                                      .textTheme
+                                                      .labelSmall
                                                       ?.copyWith(
                                                         color:
                                                             Theme.of(context)
@@ -7692,36 +8003,35 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
                                                     Wrap(
                                                       spacing: 8,
                                                       runSpacing: 8,
-                                                      children:
-                                                          ReaderMangaReadMode
-                                                              .values
-                                                              .map(
-                                                                (
+                                                      children: ReaderMangaReadMode
+                                                          .values
+                                                          .map(
+                                                            (
+                                                              mode,
+                                                            ) => ChoiceChip(
+                                                              label: Text(
+                                                                _mangaReadModeLabel(
                                                                   mode,
-                                                                ) => ChoiceChip(
-                                                                  label: Text(
-                                                                    _mangaReadModeLabel(
-                                                                      mode,
-                                                                    ),
-                                                                  ),
-                                                                  selected:
-                                                                      draft.mangaReadMode ==
-                                                                      mode,
-                                                                  onSelected:
-                                                                      (_) {
-                                                                        setModalState(() {
-                                                                          draft =
-                                                                              draft.copyWith(
-                                                                                mangaReadMode:
-                                                                                    mode,
-                                                                              );
-                                                                        });
-                                                                      },
                                                                 ),
-                                                              )
-                                                              .toList(
-                                                                growable: false,
                                                               ),
+                                                              selected:
+                                                                  draft
+                                                                      .mangaReadMode ==
+                                                                  mode,
+                                                              onSelected: (_) {
+                                                                setModalState(() {
+                                                                  draft = draft
+                                                                      .copyWith(
+                                                                        mangaReadMode:
+                                                                            mode,
+                                                                      );
+                                                                });
+                                                              },
+                                                            ),
+                                                          )
+                                                          .toList(
+                                                            growable: false,
+                                                          ),
                                                     ),
                                                     const SizedBox(height: 10),
                                                     Text(
@@ -7750,27 +8060,27 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
                                                             16.0,
                                                           ]
                                                           .map(
-                                                            (value) =>
-                                                                ChoiceChip(
-                                                                  label: Text(
-                                                                    '${value.toInt()}',
-                                                                  ),
-                                                                  selected:
-                                                                      (draft.mangaImagePadding -
-                                                                              value)
-                                                                          .abs() <
-                                                                      0.2,
-                                                                  onSelected:
-                                                                      (_) {
-                                                                        setModalState(() {
-                                                                          draft =
-                                                                              draft.copyWith(
-                                                                                mangaImagePadding:
-                                                                                    value,
-                                                                              );
-                                                                        });
-                                                                      },
-                                                                ),
+                                                            (
+                                                              value,
+                                                            ) => ChoiceChip(
+                                                              label: Text(
+                                                                '${value.toInt()}',
+                                                              ),
+                                                              selected:
+                                                                  (draft.mangaImagePadding -
+                                                                          value)
+                                                                      .abs() <
+                                                                  0.2,
+                                                              onSelected: (_) {
+                                                                setModalState(() {
+                                                                  draft = draft
+                                                                      .copyWith(
+                                                                        mangaImagePadding:
+                                                                            value,
+                                                                      );
+                                                                });
+                                                              },
+                                                            ),
                                                           )
                                                           .toList(
                                                             growable: false,
@@ -7803,27 +8113,27 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
                                                             18.0,
                                                           ]
                                                           .map(
-                                                            (value) =>
-                                                                ChoiceChip(
-                                                                  label: Text(
-                                                                    '${value.toInt()}',
-                                                                  ),
-                                                                  selected:
-                                                                      (draft.mangaImageSpacing -
-                                                                              value)
-                                                                          .abs() <
-                                                                      0.2,
-                                                                  onSelected:
-                                                                      (_) {
-                                                                        setModalState(() {
-                                                                          draft =
-                                                                              draft.copyWith(
-                                                                                mangaImageSpacing:
-                                                                                    value,
-                                                                              );
-                                                                        });
-                                                                      },
-                                                                ),
+                                                            (
+                                                              value,
+                                                            ) => ChoiceChip(
+                                                              label: Text(
+                                                                '${value.toInt()}',
+                                                              ),
+                                                              selected:
+                                                                  (draft.mangaImageSpacing -
+                                                                          value)
+                                                                      .abs() <
+                                                                  0.2,
+                                                              onSelected: (_) {
+                                                                setModalState(() {
+                                                                  draft = draft
+                                                                      .copyWith(
+                                                                        mangaImageSpacing:
+                                                                            value,
+                                                                      );
+                                                                });
+                                                              },
+                                                            ),
                                                           )
                                                           .toList(
                                                             growable: false,
@@ -7862,20 +8172,19 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
                                                                       .plain,
                                                           onSelected: (_) {
                                                             setModalState(() {
-                                                              draft = draft
-                                                                  .copyWith(
-                                                                    themeMode:
-                                                                        ReaderThemeMode
-                                                                            .light,
-                                                                    backgroundStyle:
-                                                                        ReaderBackgroundStyle
-                                                                            .plain,
-                                                                    backgroundTone:
-                                                                        ReaderBackgroundTone
-                                                                            .surface,
-                                                                    clearBackgroundImage:
-                                                                        true,
-                                                                  );
+                                                              draft = draft.copyWith(
+                                                                themeMode:
+                                                                    ReaderThemeMode
+                                                                        .light,
+                                                                backgroundStyle:
+                                                                    ReaderBackgroundStyle
+                                                                        .plain,
+                                                                backgroundTone:
+                                                                    ReaderBackgroundTone
+                                                                        .surface,
+                                                                clearBackgroundImage:
+                                                                    true,
+                                                              );
                                                             });
                                                           },
                                                         ),
@@ -7889,20 +8198,19 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
                                                                   .sepia,
                                                           onSelected: (_) {
                                                             setModalState(() {
-                                                              draft = draft
-                                                                  .copyWith(
-                                                                    themeMode:
-                                                                        ReaderThemeMode
-                                                                            .sepia,
-                                                                    backgroundStyle:
-                                                                        ReaderBackgroundStyle
-                                                                            .warm,
-                                                                    backgroundTone:
-                                                                        ReaderBackgroundTone
-                                                                            .container,
-                                                                    clearBackgroundImage:
-                                                                        true,
-                                                                  );
+                                                              draft = draft.copyWith(
+                                                                themeMode:
+                                                                    ReaderThemeMode
+                                                                        .sepia,
+                                                                backgroundStyle:
+                                                                    ReaderBackgroundStyle
+                                                                        .warm,
+                                                                backgroundTone:
+                                                                    ReaderBackgroundTone
+                                                                        .container,
+                                                                clearBackgroundImage:
+                                                                    true,
+                                                              );
                                                             });
                                                           },
                                                         ),
@@ -7916,20 +8224,19 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
                                                                   .dark,
                                                           onSelected: (_) {
                                                             setModalState(() {
-                                                              draft = draft
-                                                                  .copyWith(
-                                                                    themeMode:
-                                                                        ReaderThemeMode
-                                                                            .dark,
-                                                                    backgroundStyle:
-                                                                        ReaderBackgroundStyle
-                                                                            .plain,
-                                                                    backgroundTone:
-                                                                        ReaderBackgroundTone
-                                                                            .containerHigh,
-                                                                    clearBackgroundImage:
-                                                                        true,
-                                                                  );
+                                                              draft = draft.copyWith(
+                                                                themeMode:
+                                                                    ReaderThemeMode
+                                                                        .dark,
+                                                                backgroundStyle:
+                                                                    ReaderBackgroundStyle
+                                                                        .plain,
+                                                                backgroundTone:
+                                                                    ReaderBackgroundTone
+                                                                        .containerHigh,
+                                                                clearBackgroundImage:
+                                                                    true,
+                                                              );
                                                             });
                                                           },
                                                         ),
@@ -7946,20 +8253,19 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
                                                                       .pureBlack,
                                                           onSelected: (_) {
                                                             setModalState(() {
-                                                              draft = draft
-                                                                  .copyWith(
-                                                                    themeMode:
-                                                                        ReaderThemeMode
-                                                                            .dark,
-                                                                    backgroundStyle:
-                                                                        ReaderBackgroundStyle
-                                                                            .plain,
-                                                                    backgroundTone:
-                                                                        ReaderBackgroundTone
-                                                                            .pureBlack,
-                                                                    clearBackgroundImage:
-                                                                        true,
-                                                                  );
+                                                              draft = draft.copyWith(
+                                                                themeMode:
+                                                                    ReaderThemeMode
+                                                                        .dark,
+                                                                backgroundStyle:
+                                                                    ReaderBackgroundStyle
+                                                                        .plain,
+                                                                backgroundTone:
+                                                                    ReaderBackgroundTone
+                                                                        .pureBlack,
+                                                                clearBackgroundImage:
+                                                                    true,
+                                                              );
                                                             });
                                                           },
                                                         ),
@@ -7984,36 +8290,35 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
                                                     Wrap(
                                                       spacing: 8,
                                                       runSpacing: 8,
-                                                      children:
-                                                          ReaderMangaLoadStrategy
-                                                              .values
-                                                              .map(
-                                                                (
+                                                      children: ReaderMangaLoadStrategy
+                                                          .values
+                                                          .map(
+                                                            (
+                                                              strategy,
+                                                            ) => ChoiceChip(
+                                                              label: Text(
+                                                                _mangaLoadStrategyLabel(
                                                                   strategy,
-                                                                ) => ChoiceChip(
-                                                                  label: Text(
-                                                                    _mangaLoadStrategyLabel(
-                                                                      strategy,
-                                                                    ),
-                                                                  ),
-                                                                  selected:
-                                                                      draft.mangaLoadStrategy ==
-                                                                      strategy,
-                                                                  onSelected:
-                                                                      (_) {
-                                                                        setModalState(() {
-                                                                          draft =
-                                                                              draft.copyWith(
-                                                                                mangaLoadStrategy:
-                                                                                    strategy,
-                                                                              );
-                                                                        });
-                                                                      },
                                                                 ),
-                                                              )
-                                                              .toList(
-                                                                growable: false,
                                                               ),
+                                                              selected:
+                                                                  draft
+                                                                      .mangaLoadStrategy ==
+                                                                  strategy,
+                                                              onSelected: (_) {
+                                                                setModalState(() {
+                                                                  draft = draft
+                                                                      .copyWith(
+                                                                        mangaLoadStrategy:
+                                                                            strategy,
+                                                                      );
+                                                                });
+                                                              },
+                                                            ),
+                                                          )
+                                                          .toList(
+                                                            growable: false,
+                                                          ),
                                                     ),
                                                   ],
                                                 )
@@ -8030,17 +8335,16 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
                                                                 : '本次不启动自动阅读',
                                                             style:
                                                                 Theme.of(
-                                                                  context,
-                                                                ).textTheme
+                                                                      context,
+                                                                    )
+                                                                    .textTheme
                                                                     .bodyMedium,
                                                           ),
                                                         ),
                                                         Switch.adaptive(
                                                           value:
                                                               startAutoReadAfterApply,
-                                                          onChanged: (
-                                                            enabled,
-                                                          ) {
+                                                          onChanged: (enabled) {
                                                             setModalState(() {
                                                               startAutoReadAfterApply =
                                                                   enabled;
@@ -8100,10 +8404,11 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
                                                               .toDouble(),
                                                       onChanged: (value) {
                                                         setModalState(() {
-                                                          draft = draft.copyWith(
-                                                            autoReadSpeed:
-                                                                value,
-                                                          );
+                                                          draft = draft
+                                                              .copyWith(
+                                                                autoReadSpeed:
+                                                                    value,
+                                                              );
                                                         });
                                                       },
                                                     ),
@@ -8149,10 +8454,6 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
                                     },
                                     child: const Text('恢复默认'),
                                   ),
-                                  FilledButton(
-                                    onPressed: () => Navigator.of(context).pop(),
-                                    child: const Text('完成'),
-                                  ),
                                 ],
                               ),
                             ],
@@ -8168,6 +8469,9 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
         );
       },
     );
+
+    persistDraftTimer?.cancel();
+    await persistDraftNow(draft);
 
     if (!mounted) {
       return;
@@ -8592,12 +8896,10 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
   }
 
   double _letterSpacingFromSliderValue(double sliderValue) {
-    return ((((sliderValue.clamp(0, 100).toDouble()) - 50) / 100)
-            .clamp(
-              ReaderSettings.minLetterSpacing,
-              ReaderSettings.maxLetterSpacing,
-            ))
-        .toDouble();
+    return ((((sliderValue.clamp(0, 100).toDouble()) - 50) / 100).clamp(
+      ReaderSettings.minLetterSpacing,
+      ReaderSettings.maxLetterSpacing,
+    )).toDouble();
   }
 
   String _letterSpacingValueLabel(ReaderSettings settings) {
@@ -8610,8 +8912,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
 
   double _lineHeightSliderValue(ReaderSettings settings) {
     final safeFontSize = settings.fontSize <= 0 ? 18.0 : settings.fontSize;
-    return (((settings.lineHeight - 1) * safeFontSize).clamp(0, 20))
-        .toDouble();
+    return (((settings.lineHeight - 1) * safeFontSize).clamp(0, 20)).toDouble();
   }
 
   double _lineHeightFromSliderValue({
@@ -8644,7 +8945,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
       return '无缩进';
     }
     final spaces = '　' * safeCount;
-    return '$spaces(${safeCount}格)';
+    return '$spaces($safeCount格)';
   }
 
   String _paragraphIndentValueLabel(ReaderSettings settings) {

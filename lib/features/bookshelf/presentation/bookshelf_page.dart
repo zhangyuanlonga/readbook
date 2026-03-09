@@ -1,8 +1,11 @@
 import 'dart:async';
+import 'dart:io';
 
 import 'package:file_selector/file_selector.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
+import 'package:path/path.dart' as p;
+import 'package:path_provider/path_provider.dart';
 
 import '../../../app/layout/app_spacing.dart';
 import '../../../app/widgets/disk_cached_cover_image.dart';
@@ -17,7 +20,15 @@ import '../../reader/application/reader_preferences_service.dart';
 import '../../book/application/book_detail_service.dart';
 import 'widgets/bookshelf_grid_sliver.dart';
 
-enum _BookshelfSheetAction { read, detail, select, tag, delete }
+enum _BookshelfSheetAction {
+  read,
+  detail,
+  select,
+  tag,
+  moveGroup,
+  customCover,
+  delete,
+}
 
 enum _BookshelfFilter { all, local, novel, manga, custom }
 
@@ -1557,34 +1568,23 @@ class _BookshelfPageState extends State<BookshelfPage> {
                 children: [
                   Expanded(
                     child: _BookSheetActionButton(
-                      icon: Icons.menu_book_rounded,
-                      label: '继续阅读',
+                      icon: Icons.drive_file_move_rounded,
+                      label: '移动分组',
                       onTap:
                           () => Navigator.of(
                             sheetContext,
-                          ).pop(_BookshelfSheetAction.read),
+                          ).pop(_BookshelfSheetAction.moveGroup),
                     ),
                   ),
                   const SizedBox(width: 8),
                   Expanded(
                     child: _BookSheetActionButton(
-                      icon: Icons.bookmark_add_outlined,
-                      label: '添加标签',
+                      icon: Icons.image_outlined,
+                      label: '自定义封面',
                       onTap:
                           () => Navigator.of(
                             sheetContext,
-                          ).pop(_BookshelfSheetAction.tag),
-                    ),
-                  ),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: _BookSheetActionButton(
-                      icon: Icons.checklist_rounded,
-                      label: '批量管理',
-                      onTap:
-                          () => Navigator.of(
-                            sheetContext,
-                          ).pop(_BookshelfSheetAction.select),
+                          ).pop(_BookshelfSheetAction.customCover),
                     ),
                   ),
                   const SizedBox(width: 8),
@@ -1628,6 +1628,12 @@ class _BookshelfPageState extends State<BookshelfPage> {
         break;
       case _BookshelfSheetAction.tag:
         await _showBookTagSheet(book);
+        break;
+      case _BookshelfSheetAction.moveGroup:
+        await _showMoveGroupSheet(book);
+        break;
+      case _BookshelfSheetAction.customCover:
+        await _pickAndApplyCustomCover(book);
         break;
       case _BookshelfSheetAction.delete:
         await _confirmAndRemoveBook(book);
@@ -1789,6 +1795,261 @@ class _BookshelfPageState extends State<BookshelfPage> {
     } catch (_) {
       _showMessage('标签保存失败，请重试。');
     }
+  }
+
+  Future<void> _showMoveGroupSheet(BookshelfBook book) async {
+    final bookKey = _bookKey(book);
+    final existingTags = List<String>.from(
+      _bookTagsByKey[bookKey] ?? const <String>[],
+    );
+    String? selectedGroup = existingTags.isEmpty ? null : existingTags.first;
+    final groups = List<String>.from(_userTags);
+    if (selectedGroup != null && !groups.contains(selectedGroup)) {
+      groups.insert(0, selectedGroup);
+    }
+
+    var submitted = false;
+    final selected = await showModalBottomSheet<String?>(
+      context: context,
+      useSafeArea: true,
+      showDragHandle: true,
+      isScrollControlled: true,
+      builder: (sheetContext) {
+        final horizontal = AppSpacing.pageHorizontal(sheetContext);
+        final bottomInset = MediaQuery.viewInsetsOf(sheetContext).bottom;
+        return StatefulBuilder(
+          builder: (sheetContext, setSheetState) {
+            return Padding(
+              padding: EdgeInsets.fromLTRB(
+                horizontal,
+                4,
+                horizontal,
+                12 + bottomInset,
+              ),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    '移动分组',
+                    style: Theme.of(sheetContext).textTheme.titleMedium
+                        ?.copyWith(fontWeight: FontWeight.w700),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    _toSingleLineText(book.title),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: Theme.of(sheetContext).textTheme.bodySmall?.copyWith(
+                      color:
+                          Theme.of(sheetContext).colorScheme.onSurfaceVariant,
+                    ),
+                  ),
+                  const SizedBox(height: 10),
+                  RadioListTile<String?>(
+                    value: null,
+                    groupValue: selectedGroup,
+                    contentPadding: EdgeInsets.zero,
+                    title: const Text('未分组'),
+                    onChanged: (value) {
+                      setSheetState(() {
+                        selectedGroup = value;
+                      });
+                    },
+                  ),
+                  ...groups.map(
+                    (group) => RadioListTile<String?>(
+                      value: group,
+                      groupValue: selectedGroup,
+                      contentPadding: EdgeInsets.zero,
+                      title: Text(group),
+                      onChanged: (value) {
+                        setSheetState(() {
+                          selectedGroup = value;
+                        });
+                      },
+                    ),
+                  ),
+                  Align(
+                    alignment: Alignment.centerLeft,
+                    child: TextButton.icon(
+                      onPressed: () async {
+                        final created = await _showCreateTagDialog(
+                          sheetContext,
+                          existingTags: {...groups},
+                        );
+                        if (created == null || !sheetContext.mounted) {
+                          return;
+                        }
+                        setSheetState(() {
+                          if (!groups.contains(created)) {
+                            groups.add(created);
+                          }
+                          selectedGroup = created;
+                        });
+                      },
+                      icon: const Icon(Icons.add_rounded),
+                      label: const Text('新建分组'),
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: OutlinedButton(
+                          onPressed: () => Navigator.of(sheetContext).pop(),
+                          child: const Text('取消'),
+                        ),
+                      ),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: FilledButton(
+                          onPressed: () {
+                            submitted = true;
+                            Navigator.of(sheetContext).pop(selectedGroup);
+                          },
+                          child: const Text('应用'),
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            );
+          },
+        );
+      },
+    );
+
+    if (!mounted || !submitted) {
+      return;
+    }
+
+    final normalizedTags =
+        selected == null ? const <String>[] : _normalizeTags([selected]);
+    final previous = _bookTagsByKey[bookKey] ?? const <String>[];
+    final unchanged =
+        previous.length == normalizedTags.length &&
+        previous.every((tag) => normalizedTags.contains(tag));
+    if (unchanged) {
+      return;
+    }
+
+    try {
+      await _bookshelfService.setBookTags(
+        sourceId: book.sourceId,
+        detailUrl: book.detailUrl,
+        tags: normalizedTags,
+      );
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        final next = Map<String, List<String>>.from(_bookTagsByKey);
+        if (normalizedTags.isEmpty) {
+          next.remove(bookKey);
+        } else {
+          next[bookKey] = normalizedTags;
+        }
+        _bookTagsByKey = next;
+        _ensureFilterStillValid();
+      });
+      _showMessage(
+        normalizedTags.isEmpty ? '已移动到未分组。' : '已移动到分组：${normalizedTags.first}',
+      );
+    } catch (_) {
+      _showMessage('移动分组失败，请重试。');
+    }
+  }
+
+  Future<void> _pickAndApplyCustomCover(BookshelfBook book) async {
+    final picked = await openFile(
+      acceptedTypeGroups: const [
+        XTypeGroup(
+          label: 'images',
+          extensions: ['jpg', 'jpeg', 'png', 'webp', 'gif'],
+        ),
+      ],
+      confirmButtonText: '选择封面',
+    );
+    if (!mounted || picked == null) {
+      return;
+    }
+
+    try {
+      final storedCoverUri = await _persistCustomCover(book, picked);
+      if (storedCoverUri == null) {
+        _showMessage('封面保存失败，请重试。');
+        return;
+      }
+
+      await _bookshelfService.upsert(
+        book.copyWith(coverUrl: storedCoverUri.toString()),
+      );
+      await _loadBookshelf();
+      _showMessage('已更新自定义封面。');
+    } on AppException catch (error) {
+      _showMessage(error.briefMessage);
+    } catch (_) {
+      _showMessage('设置自定义封面失败，请重试。');
+    }
+  }
+
+  Future<Uri?> _persistCustomCover(BookshelfBook book, XFile picked) async {
+    final sourcePath = picked.path.trim();
+    if (sourcePath.isEmpty) {
+      return null;
+    }
+
+    final sourceFile = File(sourcePath);
+    if (!await sourceFile.exists()) {
+      return null;
+    }
+
+    final baseDir = await getApplicationSupportDirectory();
+    final coverDir = Directory(
+      p.join(baseDir.path, 'flutter_appread', 'custom_covers'),
+    );
+    if (!await coverDir.exists()) {
+      await coverDir.create(recursive: true);
+    }
+
+    final key = _bookKey(book).replaceAll(RegExp(r'[^a-zA-Z0-9]+'), '_');
+    final sourceExtension = p.extension(sourcePath).toLowerCase();
+    final extension =
+        const [
+              '.jpg',
+              '.jpeg',
+              '.png',
+              '.webp',
+              '.gif',
+            ].contains(sourceExtension)
+            ? sourceExtension
+            : '.jpg';
+
+    await for (final entity in coverDir.list(followLinks: false)) {
+      if (entity is! File) {
+        continue;
+      }
+      final name = p.basename(entity.path);
+      if (!name.startsWith('${key}_')) {
+        continue;
+      }
+      try {
+        await entity.delete();
+      } catch (_) {
+        // Ignore stale cleanup failure.
+      }
+    }
+
+    final targetFile = File(
+      p.join(
+        coverDir.path,
+        '${key}_${DateTime.now().millisecondsSinceEpoch}$extension',
+      ),
+    );
+    await sourceFile.copy(targetFile.path);
+    return targetFile.uri;
   }
 
   Future<void> _showTagManageSheet(String tag) async {
@@ -2523,11 +2784,18 @@ class _BookshelfPageState extends State<BookshelfPage> {
           ).toString();
 
       context.push(route);
+    } on AppException {
+      if (!mounted) {
+        return;
+      }
+      _openReaderFallbackForSourceSwitch(book);
+      _showMessage('当前书源可能不可用，可在阅读页直接换源。');
     } catch (_) {
       if (!mounted) {
         return;
       }
-      _showMessage('打开阅读失败，请稍后重试。');
+      _openReaderFallbackForSourceSwitch(book);
+      _showMessage('打开详情失败，已进入阅读页，可尝试换源。');
     } finally {
       if (mounted) {
         setState(() {
@@ -2535,6 +2803,19 @@ class _BookshelfPageState extends State<BookshelfPage> {
         });
       }
     }
+  }
+
+  void _openReaderFallbackForSourceSwitch(BookshelfBook book) {
+    final route =
+        Uri(
+          path: '/reader/${book.bookId}/bootstrap',
+          queryParameters: {
+            'sourceId': book.sourceId,
+            'detailUrl': book.detailUrl,
+            'chapterTitle': book.title,
+          },
+        ).toString();
+    context.push(route);
   }
 
   void _continueReading(ReadingProgress progress) {

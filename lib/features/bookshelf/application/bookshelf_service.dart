@@ -61,6 +61,62 @@ class BookshelfService {
     await _save(all);
   }
 
+  Future<void> replace({
+    required String previousSourceId,
+    required String previousDetailUrl,
+    required BookshelfBook nextBook,
+    bool preserveTags = true,
+  }) async {
+    final previousKey = _bookKey(
+      sourceId: previousSourceId,
+      detailUrl: previousDetailUrl,
+    );
+    final nextKey = _bookKey(
+      sourceId: nextBook.sourceId,
+      detailUrl: nextBook.detailUrl,
+    );
+
+    final all = (await getAll()).toList(growable: true);
+    all.removeWhere((entry) {
+      final entryKey = _bookKey(
+        sourceId: entry.sourceId,
+        detailUrl: entry.detailUrl,
+      );
+      if (entryKey.isEmpty) {
+        return false;
+      }
+      return entryKey == previousKey || entryKey == nextKey;
+    });
+    all.insert(0, nextBook.copyWith(addedAt: DateTime.now()));
+    await _save(all);
+
+    final tagMap = Map<String, List<String>>.from(await getTagMap());
+    final previousTags =
+        previousKey.isEmpty
+            ? const <String>[]
+            : List<String>.from(tagMap[previousKey] ?? const <String>[]);
+    if (previousKey.isNotEmpty) {
+      tagMap.remove(previousKey);
+    }
+
+    if (nextKey.isNotEmpty) {
+      final existingTags = List<String>.from(
+        tagMap[nextKey] ?? const <String>[],
+      );
+      final merged =
+          preserveTags
+              ? _normalizeTags(<String>[...existingTags, ...previousTags])
+              : _normalizeTags(existingTags);
+      if (merged.isEmpty) {
+        tagMap.remove(nextKey);
+      } else {
+        tagMap[nextKey] = merged;
+      }
+    }
+
+    await _saveTagMap(tagMap);
+  }
+
   Future<void> remove({
     required String sourceId,
     required String detailUrl,

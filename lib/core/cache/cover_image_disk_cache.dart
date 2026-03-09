@@ -45,7 +45,16 @@ class CoverImageDiskCache {
     }
 
     final uri = Uri.tryParse(normalizedUrl);
-    if (uri == null || !uri.hasScheme) {
+    if (uri == null) {
+      return null;
+    }
+
+    if (uri.scheme == 'file') {
+      final localFile = File.fromUri(uri);
+      return await _hasReadableBytes(localFile) ? localFile : null;
+    }
+
+    if (uri.scheme != 'http' && uri.scheme != 'https') {
       return null;
     }
 

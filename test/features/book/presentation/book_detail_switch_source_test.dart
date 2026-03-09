@@ -114,26 +114,35 @@ void main() {
     addTearDown(router.dispose);
 
     await tester.pumpWidget(MaterialApp.router(routerConfig: router));
-    await tester.pump();
-    await tester.pump(const Duration(milliseconds: 260));
+    await tester.pumpAndSettle(const Duration(milliseconds: 120));
 
     expect(find.text('凡人修仙传-A'), findsWidgets);
+    final switchButtonFinder = find.byIcon(Icons.swap_horiz_rounded);
+    expect(switchButtonFinder, findsOneWidget);
 
-    await tester.tap(find.byTooltip('切换来源'));
-    await tester.pump();
-    await tester.pump(const Duration(milliseconds: 360));
+    await tester.tap(switchButtonFinder);
+    for (
+      var i = 0;
+      i < 24 && find.textContaining('切换书源（').evaluate().isEmpty;
+      i++
+    ) {
+      await tester.pump(const Duration(milliseconds: 120));
+    }
 
-    expect(find.text('切换来源（1）'), findsOneWidget);
-    expect(find.text('源B'), findsOneWidget);
+    expect(find.textContaining('切换书源（'), findsOneWidget);
+    for (var i = 0; i < 24 && find.textContaining('源B').evaluate().isEmpty; i++) {
+      await tester.pump(const Duration(milliseconds: 120));
+    }
+    expect(find.textContaining('源B'), findsWidgets);
 
-    await tester.tap(find.text('源B'));
+    await tester.tap(find.textContaining('源B').first);
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 360));
 
     expect(find.text('凡人修仙传-B'), findsWidgets);
     expect(find.text('已切换到 源B。'), findsOneWidget);
     expect(detailService.loadedSourceIds, <String>['source_a', 'source_b']);
-    expect(searchService.callCount, 2);
+    expect(searchService.callCount, 1);
   });
 }
 

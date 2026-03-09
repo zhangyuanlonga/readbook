@@ -1629,6 +1629,24 @@ class _DiscoverPageState extends State<DiscoverPage> {
       return;
     }
 
+    for (var step = 1; step < sources.length; step++) {
+      final candidateIndex = _wrapIndex(
+        baseIndex + (offset * step),
+        sources.length,
+      );
+      if (candidateIndex == baseIndex ||
+          candidateIndex < 0 ||
+          candidateIndex >= sources.length) {
+        continue;
+      }
+      final candidate = sources[candidateIndex];
+      if (_sourceParseErrorById.containsKey(candidate.id)) {
+        continue;
+      }
+      await _loadCategoriesForSource(candidate, preserveCurrentCategory: false);
+      return;
+    }
+
     await _loadCategoriesForSource(
       sources[nextIndex],
       preserveCurrentCategory: false,
