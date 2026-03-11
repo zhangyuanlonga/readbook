@@ -1000,6 +1000,69 @@ class AppDatabase extends _$AppDatabase {
     return rows.map(_mapRowToLocalChapter).toList(growable: false);
   }
 
+  Future<List<LocalChapter>> getLocalChapterMetas(String bookId) async {
+    final normalizedBookId = bookId.trim();
+    if (normalizedBookId.isEmpty) {
+      return const <LocalChapter>[];
+    }
+
+    final query =
+        selectOnly(storedLocalChapters)
+          ..addColumns([
+            storedLocalChapters.id,
+            storedLocalChapters.bookId,
+            storedLocalChapters.chapterIndex,
+            storedLocalChapters.title,
+            storedLocalChapters.startOffset,
+            storedLocalChapters.endOffset,
+            storedLocalChapters.createdAt,
+            storedLocalChapters.updatedAt,
+          ])
+          ..where(storedLocalChapters.bookId.equals(normalizedBookId))
+          ..orderBy([OrderingTerm.asc(storedLocalChapters.chapterIndex)]);
+
+    final rows = await query.get();
+
+    return rows
+        .map(
+          (row) => LocalChapter(
+            id: row.read(storedLocalChapters.id)!,
+            bookId: row.read(storedLocalChapters.bookId)!,
+            chapterIndex: row.read(storedLocalChapters.chapterIndex)!,
+            title: row.read(storedLocalChapters.title)!,
+            content: '',
+            createdAt: row.read(storedLocalChapters.createdAt)!,
+            updatedAt: row.read(storedLocalChapters.updatedAt)!,
+            startOffset: row.read(storedLocalChapters.startOffset),
+            endOffset: row.read(storedLocalChapters.endOffset),
+          ),
+        )
+        .where((chapter) => chapter.id.isNotEmpty)
+        .toList(growable: false);
+  }
+
+  Future<LocalChapter?> getLocalChapterByIndex({
+    required String bookId,
+    required int chapterIndex,
+  }) async {
+    final normalizedBookId = bookId.trim();
+    if (normalizedBookId.isEmpty) {
+      return null;
+    }
+
+    final row =
+        await (select(storedLocalChapters)
+              ..where((table) => table.bookId.equals(normalizedBookId))
+              ..where((table) => table.chapterIndex.equals(chapterIndex)))
+            .getSingleOrNull();
+
+    if (row == null) {
+      return null;
+    }
+
+    return _mapRowToLocalChapter(row);
+  }
+
   Future<LocalChapter?> getLocalChapterById(String chapterId) async {
     final normalizedId = chapterId.trim();
     if (normalizedId.isEmpty) {

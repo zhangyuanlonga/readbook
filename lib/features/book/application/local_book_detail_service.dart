@@ -35,6 +35,7 @@ class LocalBookDetailService {
   Future<LocalBookDetailResult> load({
     required String bookId,
     bool forceReindex = false,
+    bool withContent = true,
   }) async {
     final normalizedBookId = bookId.trim();
     if (normalizedBookId.isEmpty) {
@@ -72,7 +73,10 @@ class LocalBookDetailService {
       }
     }
 
-    final chapters = await _localBookRepository.getChapters(normalizedBookId);
+    final chapters =
+        withContent
+            ? await _localBookRepository.getChapters(normalizedBookId)
+            : await _localBookRepository.getChapterMetas(normalizedBookId);
 
     return LocalBookDetailResult(book: book, chapters: chapters);
   }

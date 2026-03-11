@@ -18,6 +18,7 @@ import '../../../app/theme/app_theme.dart';
 
 import '../../../core/errors/app_exception.dart';
 import '../../../core/errors/error_codes.dart';
+import '../../../core/errors/error_stage.dart';
 import '../../../data/datasources/local/app_database.dart';
 import '../../../domain/entities/book.dart';
 import '../../../domain/entities/bookshelf_book.dart';
@@ -25,16 +26,18 @@ import '../../../domain/entities/chapter.dart';
 import '../../../domain/entities/reader_settings.dart';
 import '../../../domain/entities/reading_progress.dart';
 import '../../../domain/entities/source_definition.dart';
-import '../../book/application/book_detail_service.dart';
 import '../../bookshelf/application/bookshelf_service.dart';
+import '../../bookshelf/application/local_book_import_service.dart';
 import '../../search/application/search_hit_cache_service.dart';
 import '../../search/application/search_service.dart';
-import '../application/chapter_content_service.dart';
+import '../application/content_provider.dart';
+import '../application/local_content_provider.dart';
 import '../application/reader_font_registry_service.dart';
 import '../application/reader_preferences_service.dart';
 import '../application/reader_error_center_service.dart';
 import '../application/reader_system_settings_service.dart';
 import '../application/reader_typography_resolver.dart';
+import '../application/source_content_provider.dart';
 import '../application/source_switch_score_service.dart';
 import '../application/switch_source_position_resolver.dart';
 import 'chapter_cache_sheets.dart';
@@ -67,8 +70,10 @@ class ReaderPage extends ConsumerStatefulWidget {
 
 class _ReaderPageState extends ConsumerState<ReaderPage>
     with TickerProviderStateMixin {
-  final BookDetailService _detailService = BookDetailService();
-  final ChapterContentService _contentService = ChapterContentService();
+  final ContentProviderRegistry _contentProviderRegistry =
+      ContentProviderRegistry(
+        providers: [LocalContentProvider(), SourceContentProvider()],
+      );
   final ReaderPreferencesService _preferencesService =
       ReaderPreferencesService();
   final ReaderFontRegistryService _fontRegistryService =
@@ -797,6 +802,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
     }
 
     if (_errorText != null) {
+      final canSwitchSource = _canSwitchSource;
       return _buildTapAwareBody(
         child: _buildReaderStateCard(
           colors: colors,
@@ -815,21 +821,22 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
                         : () => _loadCurrentChapter(initialScrollRatio: null),
                 child: const Text('重试'),
               ),
-              OutlinedButton.icon(
-                onPressed:
-                    _isSwitchSourceLoading
-                        ? null
-                        : () => unawaited(_showSwitchSourceSheet()),
-                icon:
-                    _isSwitchSourceLoading
-                        ? const SizedBox(
-                          width: 14,
-                          height: 14,
-                          child: CircularProgressIndicator(strokeWidth: 2),
-                        )
-                        : const Icon(Icons.swap_horiz_rounded),
-                label: Text(_isSwitchSourceLoading ? '换源中...' : '切换书源'),
-              ),
+              if (canSwitchSource)
+                OutlinedButton.icon(
+                  onPressed:
+                      _isSwitchSourceLoading
+                          ? null
+                          : () => unawaited(_showSwitchSourceSheet()),
+                  icon:
+                      _isSwitchSourceLoading
+                          ? const SizedBox(
+                            width: 14,
+                            height: 14,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          )
+                          : const Icon(Icons.swap_horiz_rounded),
+                  label: Text(_isSwitchSourceLoading ? '换源中...' : '切换书源'),
+                ),
             ],
           ),
         ),
@@ -2504,6 +2511,11 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
       return;
     }
 
+    if (!_canCacheChapter) {
+      _showMessage('当前书籍不支持缓存。');
+      return;
+    }
+
     final total = _chapters.length;
     final startIndex = (_currentIndex ?? 0).clamp(0, max(0, total - 1)).toInt();
     final endIndex = min(total - 1, startIndex + 49);
@@ -2522,6 +2534,10 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
 
   Future<void> _showSwitchSourceSheet() async {
     if (_isSwitchSourceLoading) {
+      return;
+    }
+    if (!_canSwitchSource) {
+      _showMessage('当前书籍暂不支持换源。');
       return;
     }
 
@@ -2968,7 +2984,11 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
     }
 
     try {
-      final detailResult = await _detailService.load(
+      final detailProvider = _requireContentProvider(
+        sourceId: currentSourceId,
+        stage: ErrorStage.detail,
+      );
+      final detailResult = await detailProvider.loadDetail(
         sourceId: currentSourceId,
         bookId: widget.bookId,
         detailUrl: currentDetailUrl,
@@ -3451,6 +3471,9 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
   }
 
   bool _canAutoSwitchSourceOnFailure() {
+    if (!_canSwitchSource) {
+      return false;
+    }
     if (!_autoSwitchSourceOnFailureEnabled) {
       return false;
     }
@@ -3630,7 +3653,11 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
     });
 
     try {
-      final detailResult = await _detailService.load(
+      final detailProvider = _requireContentProvider(
+        sourceId: candidate.book.sourceId,
+        stage: ErrorStage.detail,
+      );
+      final detailResult = await detailProvider.loadDetail(
         sourceId: candidate.book.sourceId,
         bookId: candidate.book.id,
         detailUrl: candidate.book.detailUrl,
@@ -3930,27 +3957,32 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
                           ),
                         ),
                         const SizedBox(width: 8),
-                        _buildTopActionButton(
-                          icon:
-                              _isCurrentChapterCached
-                                  ? Icons.cloud_done_rounded
-                                  : Icons.cloud_download_outlined,
-                          tooltip: _isCurrentChapterCached ? '已缓存' : '缓存章节',
-                          onPressed: _openChapterCache,
-                          colors: colors,
-                        ),
-                        const SizedBox(width: 4),
-                        _buildTopActionButton(
-                          icon: Icons.swap_horiz_rounded,
-                          tooltip: '切换书源',
-                          onPressed:
-                              _isSwitchSourceLoading
-                                  ? null
-                                  : () => unawaited(_showSwitchSourceSheet()),
-                          loading: _isSwitchSourceLoading,
-                          colors: colors,
-                        ),
-                        const SizedBox(width: 4),
+                        if (_canCacheChapter) ...[
+                          _buildTopActionButton(
+                            icon:
+                                _isCurrentChapterCached
+                                    ? Icons.cloud_done_rounded
+                                    : Icons.cloud_download_outlined,
+                            tooltip:
+                                _isCurrentChapterCached ? '已缓存' : '缓存章节',
+                            onPressed: _openChapterCache,
+                            colors: colors,
+                          ),
+                          const SizedBox(width: 4),
+                        ],
+                        if (_canSwitchSource) ...[
+                          _buildTopActionButton(
+                            icon: Icons.swap_horiz_rounded,
+                            tooltip: '切换书源',
+                            onPressed:
+                                _isSwitchSourceLoading
+                                    ? null
+                                    : () => unawaited(_showSwitchSourceSheet()),
+                            loading: _isSwitchSourceLoading,
+                            colors: colors,
+                          ),
+                          const SizedBox(width: 4),
+                        ],
                         _buildTopActionButton(
                           icon:
                               _isInBookshelf
@@ -4269,14 +4301,11 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
       final progress = await _preferencesService.loadProgress(widget.bookId);
       _bootstrapProgress = progress;
 
-      if (_isMissingCriticalParams && progress != null) {
-        _sourceId = progress.sourceId;
-        _detailUrl = progress.detailUrl;
-        _chapterId = progress.chapterId;
-        _chapterUrl = progress.chapterUrl;
-        _chapterTitle = progress.chapterTitle;
-        _currentIndex = progress.chapterIndex;
+      if (progress != null) {
+        _applyProgressFallback(progress);
       }
+
+      _applyLocalSchemeFallback();
 
       if (_isMissingCriticalParams) {
         if (!mounted) {
@@ -4289,7 +4318,12 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
         return;
       }
 
-      final detailResult = await _detailService.load(
+      final detailProvider = _requireContentProvider(
+        sourceId: _sourceId,
+        stage: ErrorStage.detail,
+      );
+
+      final detailResult = await detailProvider.loadDetail(
         sourceId: _sourceId!,
         bookId: widget.bookId,
         detailUrl: _detailUrl!,
@@ -4344,6 +4378,23 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
 
   String _toUserReadableError(AppException error) {
     final message = error.briefMessage;
+    if (_isLocalContent) {
+      if (message.contains('未找到本地书籍')) {
+        return '未找到本地书籍，请确认文件是否存在或重新导入。';
+      }
+      if (message.contains('索引失败')) {
+        return '本地书籍索引失败，请在详情页重新索引。';
+      }
+      if (message.contains('没有可用章节') ||
+          message.contains('章节为空') ||
+          message.contains('未找到本地章节内容')) {
+        return '未解析到可读章节，请在详情页重新索引。';
+      }
+      if (message.contains('本地书籍信息缺失') || message.contains('bookId')) {
+        return '本地书籍信息缺失，请重新进入或重新导入。';
+      }
+      return '本地书籍加载失败，请在详情页重新索引或重新导入。';
+    }
 
     return switch (error.code) {
       ErrorCode.network when message.contains('状态码：403') =>
@@ -4817,10 +4868,15 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
           _currentIndex ??
           _chapters.indexWhere((chapter) => chapter.chapterUrl == chapterUrl);
 
-      final contentResult = await _contentService.load(
+      final contentProvider = _requireContentProvider(
+        sourceId: sourceId,
+        stage: ErrorStage.content,
+      );
+      final contentResult = await contentProvider.loadChapterContent(
         sourceId: sourceId,
         chapterUrl: chapterUrl,
         bookId: widget.bookId,
+        chapterId: _chapterId,
         chapterIndex: resolvedIndex >= 0 ? resolvedIndex : null,
         chapterTitle: _chapterTitle,
       );
@@ -5050,10 +5106,15 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
               : '';
 
       try {
-        await _contentService.load(
+        final preloadProvider = _requireContentProvider(
+          sourceId: normalizedSourceId,
+          stage: ErrorStage.content,
+        );
+        await preloadProvider.loadChapterContent(
           sourceId: normalizedSourceId,
           chapterUrl: chapterUrl,
           bookId: widget.bookId,
+          chapterId: chapter.id,
           chapterIndex: index,
           chapterTitle: chapter.title,
           nextChapterUrl: nextChapterUrl.isEmpty ? null : nextChapterUrl,
@@ -5943,6 +6004,110 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
     return 0;
   }
 
+  void _applyProgressFallback(ReadingProgress progress) {
+    if ((_sourceId ?? '').trim().isEmpty) {
+      _sourceId = progress.sourceId;
+    }
+    if ((_detailUrl ?? '').trim().isEmpty) {
+      _detailUrl = progress.detailUrl;
+    }
+    if (_isPlaceholderChapterId(_chapterId)) {
+      _chapterId = progress.chapterId;
+    }
+    if ((_chapterUrl ?? '').trim().isEmpty) {
+      _chapterUrl = progress.chapterUrl;
+    }
+    if ((_chapterTitle ?? '').trim().isEmpty) {
+      _chapterTitle = progress.chapterTitle;
+    }
+    if (_currentIndex == null || _currentIndex! < 0) {
+      _currentIndex = progress.chapterIndex;
+    }
+  }
+
+  void _applyLocalSchemeFallback() {
+    final sourceId = (_sourceId ?? '').trim();
+    final detailUrl = (_detailUrl ?? '').trim();
+    final chapterUrl = (_chapterUrl ?? '').trim();
+
+    if (sourceId.isEmpty &&
+        (_isLocalScheme(detailUrl) || _isLocalScheme(chapterUrl))) {
+      _sourceId = LocalBookImportService.localBookSourceId;
+    }
+
+    if ((_sourceId ?? '').trim() != LocalBookImportService.localBookSourceId) {
+      return;
+    }
+
+    if (detailUrl.isEmpty) {
+      _detailUrl = 'local://book/${widget.bookId}';
+    }
+
+    final normalizedChapterId = _chapterId.trim();
+    if (chapterUrl.isEmpty &&
+        normalizedChapterId.isNotEmpty &&
+        !_isPlaceholderChapterId(normalizedChapterId)) {
+      _chapterUrl = 'local://chapter/$normalizedChapterId';
+    }
+  }
+
+  bool _isLocalScheme(String url) {
+    final normalized = url.trim();
+    if (normalized.isEmpty) {
+      return false;
+    }
+    final uri = Uri.tryParse(normalized);
+    return uri != null && uri.scheme == 'local';
+  }
+
+  bool _isPlaceholderChapterId(String chapterId) {
+    final normalized = chapterId.trim();
+    return normalized.isEmpty ||
+        normalized == 'bootstrap' ||
+        normalized == 'unknown-chapter' ||
+        normalized == 'unknown-local-chapter';
+  }
+
+  ContentCapabilities get _contentCapabilities {
+    final sourceId = _sourceId?.trim();
+    if (sourceId == null || sourceId.isEmpty) {
+      return const ContentCapabilities();
+    }
+    final provider = _contentProviderRegistry.findForSourceId(sourceId);
+    return provider?.capabilities ?? const ContentCapabilities();
+  }
+
+  bool get _canSwitchSource => _contentCapabilities.canSwitchSource;
+  bool get _canCacheChapter => _contentCapabilities.canCacheChapter;
+  bool get _isLocalSource =>
+      _sourceId?.trim() == LocalBookImportService.localBookSourceId;
+  bool get _isLocalContent => _isLocalSource || _contentCapabilities.canReindexLocal;
+
+  ContentProvider _requireContentProvider({
+    required String? sourceId,
+    ErrorStage stage = ErrorStage.unknown,
+  }) {
+    final normalized = (sourceId ?? '').trim();
+    if (normalized.isEmpty) {
+      throw AppException(
+        code: ErrorCode.validation,
+        stage: stage,
+        briefMessage: '缺少 sourceId，无法加载内容。',
+      );
+    }
+
+    final provider = _contentProviderRegistry.findForSourceId(normalized);
+    if (provider == null) {
+      throw AppException(
+        code: ErrorCode.unknownSource,
+        stage: stage,
+        briefMessage: '未找到可用的内容提供者。',
+      );
+    }
+
+    return provider;
+  }
+
   bool get _isMissingCriticalParams {
     return _sourceId == null ||
         _sourceId!.isEmpty ||
@@ -5973,6 +6138,9 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
   }
 
   void _maybePromptSwitchSourceForMissingSource(ErrorCode? code) {
+    if (!_canSwitchSource) {
+      return;
+    }
     if (code != ErrorCode.unknownSource ||
         !mounted ||
         _hasPromptedMissingSourceSwitch ||

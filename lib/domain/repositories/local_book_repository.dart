@@ -23,7 +23,11 @@ abstract class LocalBookRepository {
 
   Future<List<LocalChapter>> getChapters(String bookId);
 
+  Future<List<LocalChapter>> getChapterMetas(String bookId);
+
   Future<LocalChapter?> getChapterById(String chapterId);
+
+  Future<LocalChapter?> getChapterByIndex(String bookId, int chapterIndex);
 
   Future<void> deleteBook(String bookId);
 }

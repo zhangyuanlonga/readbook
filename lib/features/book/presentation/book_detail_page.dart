@@ -11,12 +11,16 @@ import '../../../app/widgets/disk_cached_cover_image.dart';
 
 import '../../../core/errors/app_exception.dart';
 import '../../../core/errors/error_codes.dart';
+import '../../../core/errors/error_stage.dart';
 import '../../../data/datasources/local/app_database.dart';
 import '../../../domain/entities/book.dart';
 import '../../../domain/entities/bookshelf_book.dart';
 import '../../../domain/entities/chapter.dart';
 import '../../../domain/entities/source_definition.dart';
 import '../../bookshelf/application/bookshelf_service.dart';
+import '../../reader/application/content_provider.dart';
+import '../../reader/application/local_content_provider.dart';
+import '../../reader/application/source_content_provider.dart';
 import '../../reader/application/source_switch_score_service.dart';
 import '../../reader/presentation/chapter_cache_sheets.dart';
 import '../../search/application/search_hit_cache_service.dart';
@@ -53,7 +57,8 @@ class BookDetailPage extends StatefulWidget {
 }
 
 class _BookDetailPageState extends State<BookDetailPage> {
-  late final BookDetailService _service;
+  late final SourceContentProvider _sourceContentProvider;
+  late final ContentProviderRegistry _contentProviderRegistry;
   late final BookshelfService _bookshelfService;
   late final SearchService _switchSourceSearchService;
   late final Stream<int> Function(String bookId)
@@ -103,7 +108,11 @@ class _BookDetailPageState extends State<BookDetailPage> {
   @override
   void initState() {
     super.initState();
-    _service = widget.bookDetailService ?? BookDetailService();
+    final detailService = widget.bookDetailService ?? BookDetailService();
+    _sourceContentProvider = SourceContentProvider(detailService: detailService);
+    _contentProviderRegistry = ContentProviderRegistry(
+      providers: [LocalContentProvider(), _sourceContentProvider],
+    );
     _bookshelfService = widget.bookshelfService ?? BookshelfService();
     _switchSourceSearchService =
         widget.switchSourceSearchService ?? SearchService();
@@ -151,7 +160,10 @@ class _BookDetailPageState extends State<BookDetailPage> {
           actions: [
             IconButton(
               onPressed:
-                  (_isLoading || _isSwitchingSource || _isMissingParams)
+                  (!_canSwitchSource ||
+                          _isLoading ||
+                          _isSwitchingSource ||
+                          _isMissingParams)
                       ? null
                       : _handleSwitchSource,
               tooltip: '切换书源',
@@ -165,8 +177,15 @@ class _BookDetailPageState extends State<BookDetailPage> {
                       : const Icon(Icons.swap_horiz_rounded),
             ),
             IconButton(
-              onPressed: _isLoading ? null : () => _load(forceRefresh: true),
-              tooltip: '刷新目录',
+              onPressed:
+                  (_isLoading ||
+                          _isMissingParams ||
+                          (!_canRefreshToc &&
+                              !_contentCapabilities.canReindexLocal))
+                      ? null
+                      : () => _load(forceRefresh: true),
+              tooltip:
+                  _contentCapabilities.canReindexLocal ? '重新索引' : '刷新目录',
               icon: const Icon(Icons.refresh),
             ),
           ],
@@ -277,6 +296,45 @@ class _BookDetailPageState extends State<BookDetailPage> {
         _activeSourceId!.isEmpty ||
         _activeDetailUrl == null ||
         _activeDetailUrl!.isEmpty;
+  }
+
+  ContentCapabilities get _contentCapabilities {
+    final sourceId = _activeSourceId?.trim();
+    if (sourceId == null || sourceId.isEmpty) {
+      return const ContentCapabilities();
+    }
+    final provider = _contentProviderRegistry.findForSourceId(sourceId);
+    return provider?.capabilities ?? const ContentCapabilities();
+  }
+
+  bool get _isLocalContent => _contentCapabilities.canReindexLocal;
+
+  bool get _canSwitchSource => _contentCapabilities.canSwitchSource;
+  bool get _canRefreshToc => _contentCapabilities.canRefreshToc;
+
+  ContentProvider _requireContentProvider({
+    required String? sourceId,
+    ErrorStage stage = ErrorStage.detail,
+  }) {
+    final normalized = (sourceId ?? '').trim();
+    if (normalized.isEmpty) {
+      throw AppException(
+        code: ErrorCode.validation,
+        stage: stage,
+        briefMessage: '缺少 sourceId，无法加载详情。',
+      );
+    }
+
+    final provider = _contentProviderRegistry.findForSourceId(normalized);
+    if (provider == null) {
+      throw AppException(
+        code: ErrorCode.unknownSource,
+        stage: stage,
+        briefMessage: '未找到可用的内容提供者。',
+      );
+    }
+
+    return provider;
   }
 
   Widget _buildDetailCard(BookDetailLoadResult result) {
@@ -764,12 +822,26 @@ class _BookDetailPageState extends State<BookDetailPage> {
                   borderRadius: BorderRadius.circular(12),
                 ),
                 child: Text(
-                  '目录暂时为空，可点击右上角刷新重试。',
+                  _contentCapabilities.canReindexLocal
+                      ? '目录暂时为空，可点击下方重新索引重试。'
+                      : '目录暂时为空，可点击右上角刷新重试。',
                   style: Theme.of(context).textTheme.bodySmall?.copyWith(
                     color: colorScheme.onSurfaceVariant,
                   ),
                 ),
               ),
+              if (_contentCapabilities.canReindexLocal) ...[
+                const SizedBox(height: 8),
+                Align(
+                  alignment: Alignment.centerLeft,
+                  child: OutlinedButton.icon(
+                    onPressed:
+                        _isLoading ? null : () => _load(forceRefresh: true),
+                    icon: const Icon(Icons.refresh, size: 18),
+                    label: const Text('重新索引'),
+                  ),
+                ),
+              ],
             ],
             if (previewChapters.isNotEmpty) ...[
               const SizedBox(height: 10),
@@ -1435,7 +1507,11 @@ class _BookDetailPageState extends State<BookDetailPage> {
     }
 
     try {
-      final detailResult = await _service.load(
+      final detailProvider = _requireContentProvider(
+        sourceId: currentSourceId,
+        stage: ErrorStage.detail,
+      );
+      final detailResult = await detailProvider.loadDetail(
         sourceId: currentSourceId,
         bookId: _activeBookId,
         detailUrl: currentDetailUrl,
@@ -2087,7 +2163,11 @@ class _BookDetailPageState extends State<BookDetailPage> {
     });
 
     try {
-      final result = await _service.load(
+      final detailProvider = _requireContentProvider(
+        sourceId: _activeSourceId,
+        stage: ErrorStage.detail,
+      );
+      final result = await detailProvider.loadDetail(
         sourceId: _activeSourceId!,
         bookId: _activeBookId,
         detailUrl: _activeDetailUrl!,
@@ -2138,6 +2218,23 @@ class _BookDetailPageState extends State<BookDetailPage> {
   }
 
   String _toUserReadableError(AppException error) {
+    if (_isLocalContent) {
+      final message = error.briefMessage;
+      if (message.contains('未找到本地书籍')) {
+        return '未找到本地书籍，请确认文件是否存在或重新导入。';
+      }
+      if (message.contains('索引失败')) {
+        return '本地书籍索引失败，请尝试重新索引。';
+      }
+      if (message.contains('没有可用章节') || message.contains('章节为空')) {
+        return '未解析到可读章节，请重新索引。';
+      }
+      if (message.contains('本地书籍信息缺失') || message.contains('bookId')) {
+        return '本地书籍信息缺失，请重新进入或重新导入。';
+      }
+      return '本地书籍加载失败，请重新索引或重新导入。';
+    }
+
     return switch (error.code) {
       ErrorCode.network => '网络请求失败，请检查网络或更换书源后重试。',
       ErrorCode.validation => '书源规则不完整，暂时无法加载详情。',
@@ -2152,6 +2249,20 @@ class _BookDetailPageState extends State<BookDetailPage> {
   String? _toTocWarningText(AppException? error) {
     if (error == null) {
       return null;
+    }
+
+    if (_isLocalContent) {
+      final message = error.briefMessage;
+      if (message.contains('未找到本地书籍')) {
+        return '本地书籍不存在，目录暂不可用。';
+      }
+      if (message.contains('索引失败')) {
+        return '目录解析失败，请重新索引。';
+      }
+      if (message.contains('没有可用章节') || message.contains('章节为空')) {
+        return '未解析到可读章节，请重新索引。';
+      }
+      return '目录解析失败，请重新索引。';
     }
 
     return switch (error.code) {

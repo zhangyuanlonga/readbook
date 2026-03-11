@@ -8,22 +8,8 @@ import '../../../../domain/entities/local_chapter.dart';
 import '../../../../domain/repositories/local_book_repository.dart';
 import 'local_book_index_service.dart';
 
-class LocalReaderLoadResult {
-  const LocalReaderLoadResult({
-    required this.book,
-    required this.chapters,
-    required this.currentChapter,
-    required this.currentIndex,
-  });
-
-  final LocalBook book;
-  final List<LocalChapter> chapters;
-  final LocalChapter currentChapter;
-  final int currentIndex;
-}
-
-class LocalReaderService {
-  LocalReaderService({
+class LocalChapterContentService {
+  LocalChapterContentService({
     LocalBookRepository? localBookRepository,
     LocalBookIndexService? indexService,
   }) : _localBookRepository =
@@ -39,16 +25,17 @@ class LocalReaderService {
   final LocalBookRepository _localBookRepository;
   final LocalBookIndexService _indexService;
 
-  Future<LocalReaderLoadResult> load({
+  Future<LocalChapter> load({
     required String bookId,
-    required String chapterId,
+    String? chapterId,
+    int? chapterIndex,
   }) async {
     final normalizedBookId = bookId.trim();
     if (normalizedBookId.isEmpty) {
       throw AppException(
         code: ErrorCode.validation,
         stage: ErrorStage.content,
-        briefMessage: 'bookId 不能为空。',
+        briefMessage: '本地书籍信息缺失。',
       );
     }
 
@@ -57,7 +44,7 @@ class LocalReaderService {
       throw AppException(
         code: ErrorCode.validation,
         stage: ErrorStage.content,
-        briefMessage: '未找到本地书籍：$normalizedBookId',
+        briefMessage: '未找到本地书籍，请确认文件是否已移除。',
       );
     }
 
@@ -72,27 +59,50 @@ class LocalReaderService {
       }
     }
 
-    final chapters = await _localBookRepository.getChapters(normalizedBookId);
-    if (chapters.isEmpty) {
+    LocalChapter? chapter;
+    final normalizedChapterId = (chapterId ?? '').trim();
+    if (normalizedChapterId.isNotEmpty) {
+      chapter = await _localBookRepository.getChapterById(normalizedChapterId);
+    }
+
+    if (chapter == null && chapterIndex != null) {
+      final rawIndex = chapterIndex < 0 ? 0 : chapterIndex;
+      var safeIndex = rawIndex;
+      if (book.chapterCount > 0) {
+        safeIndex = rawIndex.clamp(0, book.chapterCount - 1).toInt();
+      }
+
+      chapter = await _localBookRepository.getChapterByIndex(
+        normalizedBookId,
+        safeIndex,
+      );
+
+      if (chapter == null && safeIndex != rawIndex) {
+        chapter = await _localBookRepository.getChapterByIndex(
+          normalizedBookId,
+          rawIndex,
+        );
+      }
+
+      if (chapter == null) {
+        final chapters =
+            await _localBookRepository.getChapters(normalizedBookId);
+        if (chapters.isNotEmpty) {
+          final fallbackIndex =
+              rawIndex.clamp(0, chapters.length - 1).toInt();
+          chapter = chapters[fallbackIndex];
+        }
+      }
+    }
+
+    if (chapter == null) {
       throw AppException(
         code: ErrorCode.ruleMatchEmpty,
         stage: ErrorStage.content,
-        briefMessage: '章节列表为空，无法进入阅读。',
+        briefMessage: '未找到本地章节内容，请重新索引后重试。',
       );
     }
 
-    final normalizedChapterId = chapterId.trim();
-    final currentIndex =
-        normalizedChapterId.isEmpty
-            ? 0
-            : chapters.indexWhere((item) => item.id == normalizedChapterId);
-    final safeIndex = currentIndex < 0 ? 0 : currentIndex;
-
-    return LocalReaderLoadResult(
-      book: book,
-      chapters: chapters,
-      currentChapter: chapters[safeIndex],
-      currentIndex: safeIndex,
-    );
+    return chapter;
   }
 }

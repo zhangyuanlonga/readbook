@@ -2745,12 +2745,23 @@ class _BookshelfPageState extends State<BookshelfPage> {
       return;
     }
 
-    if (book.sourceId == _kLocalBookSourceId) {
-      context.push('/local/book/${book.bookId}');
+    if (_openingBookId != null) {
       return;
     }
 
-    if (_openingBookId != null) {
+    if (book.sourceId == _kLocalBookSourceId) {
+      setState(() {
+        _openingBookId = book.bookId;
+      });
+      try {
+        _openReaderFallbackForSourceSwitch(book);
+      } finally {
+        if (mounted) {
+          setState(() {
+            _openingBookId = null;
+          });
+        }
+      }
       return;
     }
 
@@ -2819,11 +2830,6 @@ class _BookshelfPageState extends State<BookshelfPage> {
   }
 
   void _continueReading(ReadingProgress progress) {
-    if (progress.sourceId == _kLocalBookSourceId) {
-      context.push('/local/reader/${progress.bookId}/${progress.chapterId}');
-      return;
-    }
-
     final route =
         Uri(
           path: '/reader/${progress.bookId}/${progress.chapterId}',
@@ -2841,11 +2847,6 @@ class _BookshelfPageState extends State<BookshelfPage> {
 
   void _openBookDetail(BookshelfBook book) {
     if (_isBatchDeleting) {
-      return;
-    }
-
-    if (book.sourceId == _kLocalBookSourceId) {
-      context.push('/local/book/${book.bookId}');
       return;
     }
 
