@@ -1,13 +1,25 @@
 import 'dart:async';
+import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:shared_preferences/shared_preferences.dart';
-
+import 'package:go_router/go_router.dart';
+import '../core/analytics/analytics_service.dart';
+import '../core/app_update/app_update_dialog.dart';
+import '../core/app_update/app_update_service.dart';
+import '../core/auth/auth_event_bus.dart';
+import '../core/auth/auth_token_refresher_impl.dart';
+import '../core/device/device_identity_service.dart';
+import '../core/device/device_heartbeat_service.dart';
+import '../core/network/api_client.dart';
 import '../data/datasources/local/app_database.dart';
+import '../domain/entities/announcement.dart';
+import '../features/announcement/application/announcement_read_state_service.dart';
+import '../features/announcement/application/announcement_service.dart';
 import '../features/source/application/external_source_import_bridge.dart';
 import 'layout/app_layout.dart';
+import 'layout/app_spacing.dart';
 import 'router.dart';
 import 'theme/app_theme.dart';
 import 'theme/app_theme_provider.dart';
@@ -66,45 +78,65 @@ class _SystemUiOverlayWrapper extends StatefulWidget {
       _SystemUiOverlayWrapperState();
 }
 
-class _SystemUiOverlayWrapperState extends State<_SystemUiOverlayWrapper> {
+class _SystemUiOverlayWrapperState extends State<_SystemUiOverlayWrapper>
+    with WidgetsBindingObserver {
   StreamSubscription<IncomingSourceImportPayload>? _incomingImportSub;
+  StreamSubscription<AuthEvent>? _authEventSub;
   Brightness? _lastBrightness;
   bool _hasShownStartupAnnouncement = false;
   bool _startupAnnouncementScheduled = false;
   int _startupAnnouncementRetryCount = 0;
   bool _isStartupReady = false;
-  bool _skipStartupAnnouncement = false;
   Timer? _startupDelayTimer;
+  final AnnouncementService _announcementService = AnnouncementService();
+  final AnnouncementReadStateService _announcementReadStateService =
+      AnnouncementReadStateService();
+  final AppUpdateService _appUpdateService = AppUpdateService();
+  final DeviceIdentityService _deviceIdentityService = DeviceIdentityService();
+  late final AuthTokenRefresherImpl _authTokenRefresher =
+      AuthTokenRefresherImpl();
+  late final DeviceHeartbeatService _deviceHeartbeatService =
+      DeviceHeartbeatService(identityService: _deviceIdentityService);
+  late final AnalyticsService _analyticsService =
+      AnalyticsService(identityService: _deviceIdentityService);
+  bool _isHeartbeatInFlight = false;
+  bool _isVisitInFlight = false;
+  bool _isStartupUpdateInFlight = false;
+  bool _hasCheckedStartupUpdate = false;
+  DateTime? _lastHeartbeatAt;
+  static const List<String> _dialogFontFallback = [
+    'STKaiti',
+    'Kaiti SC',
+    'KaiTi',
+    'Songti SC',
+    'Noto Serif CJK SC',
+    'serif',
+  ];
 
   static const Duration _kStartupMinDuration = Duration(milliseconds: 500);
-  static const String _kStartupAnnouncementSkipKey =
-      'startup_announcement_skip_v1';
+  static const Duration _kHeartbeatThrottle = Duration(minutes: 2);
 
   @override
   void initState() {
     super.initState();
+    ApiClient.defaultAuthTokenRefresher ??= _authTokenRefresher;
+    WidgetsBinding.instance.addObserver(this);
     _incomingImportSub = ExternalSourceImportBridge.instance.payloadStream
         .listen(_onIncomingSourceImportPayload);
+    _authEventSub = AuthEventBus.instance.stream.listen(_handleAuthEvent);
     unawaited(ExternalSourceImportBridge.instance.initialize());
     unawaited(_prepareStartup());
+    unawaited(_sendHeartbeat());
+    unawaited(_sendVisitEvent());
   }
 
   Future<void> _prepareStartup() async {
     final startedAt = DateTime.now();
-    final preferencesFuture = SharedPreferences.getInstance();
 
     try {
       await AppDatabase.instance.countSourceListItems();
     } catch (_) {
       // Ignore warmup failures and continue startup.
-    }
-
-    try {
-      final prefs = await preferencesFuture;
-      _skipStartupAnnouncement =
-          prefs.getBool(_kStartupAnnouncementSkipKey) ?? false;
-    } catch (_) {
-      _skipStartupAnnouncement = false;
     }
 
     final elapsed = DateTime.now().difference(startedAt);
@@ -120,7 +152,46 @@ class _SystemUiOverlayWrapperState extends State<_SystemUiOverlayWrapper> {
     setState(() {
       _isStartupReady = true;
     });
+    await _checkStartupUpdateIfNeeded();
+    if (!mounted) {
+      return;
+    }
     _showStartupAnnouncementIfNeeded();
+  }
+
+  Future<BuildContext?> _resolveStartupDialogContext() async {
+    for (var attempt = 0; attempt < 12; attempt += 1) {
+      final navigatorContext = appRootNavigatorKey.currentContext;
+      if (navigatorContext != null) {
+        return navigatorContext;
+      }
+      await Future<void>.delayed(const Duration(milliseconds: 60));
+    }
+    return appRootNavigatorKey.currentContext;
+  }
+
+  Future<void> _checkStartupUpdateIfNeeded() async {
+    if (_hasCheckedStartupUpdate || _isStartupUpdateInFlight) {
+      return;
+    }
+    _isStartupUpdateInFlight = true;
+    try {
+      final result = await _appUpdateService.checkUpdate();
+      _hasCheckedStartupUpdate = true;
+      final release = result.release;
+      if (!mounted || !result.hasUpdate || release == null) {
+        return;
+      }
+      final dialogContext = await _resolveStartupDialogContext();
+      if (!mounted || dialogContext == null || !dialogContext.mounted) {
+        return;
+      }
+      await AppUpdateDialog.showUpdateDialog(dialogContext, release);
+    } catch (_) {
+      _hasCheckedStartupUpdate = true;
+    } finally {
+      _isStartupUpdateInFlight = false;
+    }
   }
 
   Future<void> _waitStartupDelay(Duration delay) {
@@ -140,10 +211,84 @@ class _SystemUiOverlayWrapperState extends State<_SystemUiOverlayWrapper> {
   }
 
   @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+      unawaited(_sendHeartbeat());
+      unawaited(_sendVisitEvent());
+    }
+  }
+
+  Future<void> _sendHeartbeat() async {
+    if (_isHeartbeatInFlight) {
+      return;
+    }
+    final now = DateTime.now();
+    final last = _lastHeartbeatAt;
+    if (last != null && now.difference(last) < _kHeartbeatThrottle) {
+      return;
+    }
+    _isHeartbeatInFlight = true;
+    try {
+      await _deviceHeartbeatService.sendHeartbeat();
+      _lastHeartbeatAt = now;
+    } catch (_) {
+      // Ignore heartbeat failures to avoid blocking startup or resume.
+    } finally {
+      _isHeartbeatInFlight = false;
+    }
+  }
+
+  Future<void> _sendVisitEvent() async {
+    if (_isVisitInFlight) {
+      return;
+    }
+    _isVisitInFlight = true;
+    try {
+      await _analyticsService.trackVisit();
+    } catch (_) {
+      // Ignore analytics failures to avoid blocking startup or resume.
+    } finally {
+      _isVisitInFlight = false;
+    }
+  }
+
+  @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     _incomingImportSub?.cancel();
+    _authEventSub?.cancel();
     _startupDelayTimer?.cancel();
     super.dispose();
+  }
+
+  void _handleAuthEvent(AuthEvent event) {
+    if (!mounted) {
+      return;
+    }
+    final messenger = ScaffoldMessenger.of(context);
+    if (!mounted) {
+      return;
+    }
+
+    final action =
+        event.type == AuthEventType.sessionExpired
+            ? SnackBarAction(
+              label: '去登录',
+              onPressed: () {
+                if (!mounted) {
+                  return;
+                }
+                context.push('/auth');
+              },
+            )
+            : null;
+
+    messenger.showSnackBar(
+      SnackBar(
+        content: Text(event.message),
+        action: action,
+      ),
+    );
   }
 
   @override
@@ -172,7 +317,6 @@ class _SystemUiOverlayWrapperState extends State<_SystemUiOverlayWrapper> {
   void _showStartupAnnouncementIfNeeded() {
     if (!_isStartupReady ||
         _hasShownStartupAnnouncement ||
-        _skipStartupAnnouncement ||
         _startupAnnouncementScheduled) {
       return;
     }
@@ -194,41 +338,259 @@ class _SystemUiOverlayWrapperState extends State<_SystemUiOverlayWrapper> {
       }
 
       _startupAnnouncementRetryCount = 0;
-      _hasShownStartupAnnouncement = true;
-      showDialog<void>(
-        context: navigatorContext,
-        builder: (context) {
-          return AlertDialog(
-            title: const Text('公告'),
-            content: const Text('每天高产更新，请在我的页面点击反馈进群及时使用最新版。'),
-            actions: [
-              TextButton(
-                onPressed:
-                    () => _dismissStartupAnnouncementPermanently(context),
-                child: const Text('不再显示'),
-              ),
-              FilledButton(
-                onPressed: () => Navigator.of(context).pop(),
-                child: const Text('我知道了'),
-              ),
-            ],
-          );
-        },
-      );
+      unawaited(_tryShowLatestAnnouncement());
     });
   }
 
-  Future<void> _dismissStartupAnnouncementPermanently(
-    BuildContext dialogContext,
-  ) async {
-    Navigator.of(dialogContext).pop();
-    _skipStartupAnnouncement = true;
+  Future<void> _tryShowLatestAnnouncement() async {
+    Announcement? latest;
     try {
-      final prefs = await SharedPreferences.getInstance();
-      await prefs.setBool(_kStartupAnnouncementSkipKey, true);
+      latest = await _announcementService.fetchLatestAnnouncement();
     } catch (_) {
-      // Ignore preference write failures; skip stays in-memory for this run.
+      return;
     }
+
+    if (!mounted) {
+      return;
+    }
+
+    final announcement = latest;
+
+    final active = announcement.isActiveAt(DateTime.now().toUtc());
+    if (!active) {
+      return;
+    }
+
+    final isRead = await _announcementReadStateService.isRead(announcement.id);
+    if (isRead) {
+      return;
+    }
+
+    final dialogContext = appRootNavigatorKey.currentContext;
+    if (!mounted || dialogContext == null || !dialogContext.mounted) {
+      return;
+    }
+
+    _hasShownStartupAnnouncement = true;
+    showDialog<void>(
+      context: dialogContext,
+      builder: (context) {
+        return _buildAnnouncementDialog(context, announcement);
+      },
+    );
+  }
+
+  Widget _buildAnnouncementDialog(
+    BuildContext context,
+    Announcement announcement,
+  ) {
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
+    final screenHeight = MediaQuery.sizeOf(context).height;
+    final dialogMaxHeight = math.min(420.0, screenHeight * 0.58);
+    final contentMaxHeight = math.min(180.0, screenHeight * 0.26);
+    final accent = switch (announcement.level) {
+      AnnouncementLevel.urgent => colorScheme.error,
+      AnnouncementLevel.important => colorScheme.tertiary,
+      AnnouncementLevel.info => colorScheme.primary,
+    };
+    final surface = colorScheme.surface;
+    final backgroundTop = Color.alphaBlend(
+      accent.withValues(alpha: 0.18),
+      surface,
+    );
+    final backgroundBottom = Color.alphaBlend(
+      colorScheme.secondary.withValues(alpha: 0.12),
+      surface,
+    );
+    final contentText =
+        announcement.content.trim().isEmpty
+            ? '暂无公告正文。'
+            : announcement.content.trim();
+
+    return Dialog(
+      backgroundColor: Colors.transparent,
+      insetPadding: AppSpacing.dialogInsetPadding(context),
+      child: Align(
+        alignment: const Alignment(0, -0.18),
+        child: ConstrainedBox(
+          constraints: BoxConstraints(
+            maxWidth: AppLayout.dialogMaxWidth(context),
+            maxHeight: dialogMaxHeight,
+          ),
+          child: ClipRRect(
+            borderRadius: BorderRadius.circular(24),
+            child: Container(
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                  colors: [backgroundTop, backgroundBottom],
+                ),
+                border: Border.all(
+                  color: colorScheme.outlineVariant.withValues(alpha: 0.35),
+                ),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withValues(alpha: 0.18),
+                    blurRadius: 24,
+                    offset: const Offset(0, 16),
+                  ),
+                ],
+              ),
+              child: Stack(
+                children: [
+                  Positioned(
+                    right: -40,
+                    top: -30,
+                    child: Container(
+                      width: 120,
+                      height: 120,
+                      decoration: BoxDecoration(
+                        color: accent.withValues(alpha: 0.12),
+                        shape: BoxShape.circle,
+                      ),
+                    ),
+                  ),
+                  Positioned(
+                    left: -30,
+                    bottom: -40,
+                    child: Container(
+                      width: 140,
+                      height: 140,
+                      decoration: BoxDecoration(
+                        color: colorScheme.primary.withValues(alpha: 0.08),
+                        shape: BoxShape.circle,
+                      ),
+                    ),
+                  ),
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(18, 16, 18, 12),
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            _buildAnnouncementLevelChip(context, announcement),
+                            const SizedBox(width: 10),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    announcement.title.trim().isEmpty
+                                        ? '公告更新'
+                                        : announcement.title,
+                                    style: theme.textTheme.titleMedium?.copyWith(
+                                      fontWeight: FontWeight.w700,
+                                      height: 1.2,
+                                      fontFamilyFallback: _dialogFontFallback,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 10),
+                        Align(
+                          alignment: Alignment.center,
+                          child: FractionallySizedBox(
+                            widthFactor: 0.92,
+                            child: Container(
+                              padding: const EdgeInsets.all(10),
+                              decoration: BoxDecoration(
+                                color: colorScheme.surface.withValues(
+                                  alpha: 0.86,
+                                ),
+                                borderRadius: BorderRadius.circular(16),
+                                border: Border.all(
+                                  color: colorScheme.outlineVariant.withValues(
+                                    alpha: 0.4,
+                                  ),
+                                ),
+                              ),
+                              child: ConstrainedBox(
+                                constraints: BoxConstraints(
+                                  minHeight: 64,
+                                  maxHeight: contentMaxHeight,
+                                ),
+                                child: SingleChildScrollView(
+                                  child: Text(
+                                    contentText,
+                                    style: theme.textTheme.bodyMedium?.copyWith(
+                                      height: 1.5,
+                                      fontFamilyFallback: _dialogFontFallback,
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ),
+                        ),
+                        const SizedBox(height: 14),
+                        Row(
+                          children: [
+                            TextButton(
+                              onPressed: () => Navigator.of(context).pop(),
+                              child: const Text('稍后'),
+                            ),
+                            const Spacer(),
+                            FilledButton(
+                              onPressed: () {
+                                Navigator.of(context).pop();
+                                unawaited(
+                                  _announcementReadStateService.markRead(
+                                    announcement.id,
+                                  ),
+                                );
+                              },
+                              child: const Text('我已知晓'),
+                            ),
+                          ],
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildAnnouncementLevelChip(
+    BuildContext context,
+    Announcement announcement,
+  ) {
+    final colorScheme = Theme.of(context).colorScheme;
+    final (label, color) = switch (announcement.level) {
+      AnnouncementLevel.urgent => ('紧急', colorScheme.error),
+      AnnouncementLevel.important => ('重要', colorScheme.tertiary),
+      AnnouncementLevel.info => ('通知', colorScheme.primary),
+    };
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.14),
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: color.withValues(alpha: 0.4)),
+      ),
+      child: Text(
+        label,
+        style: Theme.of(context).textTheme.labelSmall?.copyWith(
+          color: color,
+          fontWeight: FontWeight.w600,
+          fontSize: 11,
+          fontFamilyFallback: _dialogFontFallback,
+        ),
+      ),
+    );
   }
 
   void _onIncomingSourceImportPayload(IncomingSourceImportPayload _) {

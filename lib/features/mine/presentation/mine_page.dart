@@ -8,6 +8,9 @@ import '../../../app/layout/app_spacing.dart';
 
 import '../../../app/theme/app_theme_provider.dart';
 import '../../../app/theme/app_theme_seed_provider.dart';
+import '../../../core/app_update/app_update_dialog.dart';
+import '../../../core/app_update/app_update_service.dart';
+import '../../../core/auth/auth_session_store.dart';
 
 class MinePage extends ConsumerStatefulWidget {
   const MinePage({super.key});
@@ -60,6 +63,19 @@ class _MinePageState extends ConsumerState<MinePage> {
     ),
   ];
 
+  final AuthSessionStore _authSessionStore = AuthSessionStore();
+  final AppUpdateService _updateService = AppUpdateService();
+  String? _userId;
+  String? _username;
+  bool _isLoadingSession = true;
+  bool _isCheckingUpdate = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadSession();
+  }
+
   @override
   Widget build(BuildContext context) {
     final horizontal = AppSpacing.pageHorizontal(context);
@@ -91,7 +107,12 @@ class _MinePageState extends ConsumerState<MinePage> {
                     index: 0,
                     child: _buildProfileCard(
                       context,
-                      subtitle: '后续会持续补充系统设置、规则工具与同步能力。',
+                      subtitle:
+                          _isLoadingSession
+                              ? '读取登录状态中...'
+                              : (_userId == null
+                                  ? '未登录，点击登录/注册以同步阅读数据。'
+                                  : '已登录 · ${_username ?? _userId!}'),
                     ),
                   ),
                   const SizedBox(height: 12),
@@ -110,11 +131,6 @@ class _MinePageState extends ConsumerState<MinePage> {
                                 context: context,
                                 ref: ref,
                               ),
-                        ),
-                        _MineActionItem(
-                          icon: Icons.menu_book_outlined,
-                          label: '阅读设置',
-                          onTap: () => context.push('/reader-settings'),
                         ),
                         _MineActionItem(
                           icon: Icons.tune_rounded,
@@ -144,7 +160,7 @@ class _MinePageState extends ConsumerState<MinePage> {
                         _MineActionItem(
                           icon: Icons.bookmarks_outlined,
                           label: '书签',
-                          onTap: () => _showMessage('书签功能开发中。'),
+                          onTap: () => context.push('/bookmarks'),
                         ),
                       ],
                     ),
@@ -163,18 +179,13 @@ class _MinePageState extends ConsumerState<MinePage> {
                         ),
                         _MineActionItem(
                           icon: Icons.feedback_outlined,
-                          label: '加入官方群',
+                          label: '官方群',
                           onTap: _openSourceFeedback,
                         ),
                         _MineActionItem(
-                          icon: Icons.share_outlined,
-                          label: '分享',
-                          onTap: () => _showMessage('分享能力开发中。'),
-                        ),
-                        _MineActionItem(
-                          icon: Icons.volunteer_activism_outlined,
-                          label: '捐赠',
-                          onTap: _showDonateSheet,
+                          icon: Icons.system_update_alt,
+                          label: '检查更新',
+                          onTap: _checkUpdateFromMine,
                         ),
                         _MineActionItem(
                           icon: Icons.info_outline,
@@ -197,47 +208,73 @@ class _MinePageState extends ConsumerState<MinePage> {
     final colorScheme = Theme.of(context).colorScheme;
 
     return Card(
-      child: Padding(
-        padding: _profileCardPadding,
-        child: Row(
-          children: [
-            CircleAvatar(
-              radius: 20,
-              backgroundColor: colorScheme.primaryContainer,
-              child: Icon(
-                Icons.auto_stories_rounded,
-                color: colorScheme.onPrimaryContainer,
-                size: 20,
+      child: InkWell(
+        borderRadius: BorderRadius.circular(20),
+        onTap: () {
+          final target = _userId == null ? '/auth' : '/profile';
+          context.push(target).then((_) => _loadSession());
+        },
+        child: Padding(
+          padding: _profileCardPadding,
+          child: Row(
+            children: [
+              CircleAvatar(
+                radius: 20,
+                backgroundColor: colorScheme.primaryContainer,
+                child: Icon(
+                  Icons.auto_stories_rounded,
+                  color: colorScheme.onPrimaryContainer,
+                  size: 20,
+                ),
               ),
-            ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    'AppRead',
-                    style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                      fontWeight: FontWeight.w700,
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      _userId == null ? '登录 / 注册' : 'AppRead',
+                      style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                        fontWeight: FontWeight.w700,
+                      ),
                     ),
-                  ),
-                  const SizedBox(height: 4),
-                  Text(
-                    subtitle,
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
-                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                      color: colorScheme.onSurfaceVariant,
-                      height: 1.32,
+                    const SizedBox(height: 4),
+                    Text(
+                      subtitle,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                        color: colorScheme.onSurfaceVariant,
+                        height: 1.32,
+                      ),
                     ),
-                  ),
-                ],
+                  ],
+                ),
               ),
-            ),
-          ],
+              Icon(
+                Icons.chevron_right_rounded,
+                color: colorScheme.onSurfaceVariant,
+              ),
+            ],
+          ),
         ),
       ),
     );
+  }
+
+  Future<void> _loadSession() async {
+    setState(() {
+      _isLoadingSession = true;
+    });
+    final session = await _authSessionStore.getSession();
+    if (!mounted) {
+      return;
+    }
+    setState(() {
+      _userId = session?.userId;
+      _username = session?.username;
+      _isLoadingSession = false;
+    });
   }
 
   Widget _buildActionSection(
@@ -882,75 +919,36 @@ class _MinePageState extends ConsumerState<MinePage> {
     _showMessage('跳转失败，请稍后重试。');
   }
 
-  Future<void> _showDonateSheet() async {
-    if (!mounted) {
+  Future<void> _checkUpdateFromMine() async {
+    if (_isCheckingUpdate) {
+      _showMessage('正在检查更新...');
       return;
     }
-    await showModalBottomSheet<void>(
-      context: context,
-      showDragHandle: true,
-      useSafeArea: true,
-      isScrollControlled: true,
-      builder: (sheetContext) {
-        final colorScheme = Theme.of(sheetContext).colorScheme;
-        final maxHeight = MediaQuery.sizeOf(sheetContext).height * 0.75;
-        return ConstrainedBox(
-          constraints: BoxConstraints(maxHeight: maxHeight),
-          child: SingleChildScrollView(
-            padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Text(
-                  '感谢支持',
-                  textAlign: TextAlign.center,
-                  style: Theme.of(sheetContext).textTheme.titleMedium?.copyWith(
-                    fontWeight: FontWeight.w700,
-                  ),
-                ),
-                const SizedBox(height: 6),
-                Text(
-                  '可通过下方二维码进行捐赠',
-                  textAlign: TextAlign.center,
-                  style: Theme.of(sheetContext).textTheme.bodySmall?.copyWith(
-                    color: colorScheme.onSurfaceVariant,
-                  ),
-                ),
-                const SizedBox(height: 12),
-                ClipRRect(
-                  borderRadius: BorderRadius.circular(14),
-                  child: Image.asset(
-                    'assets/mov/vx.png',
-                    fit: BoxFit.contain,
-                    errorBuilder: (context, error, stackTrace) {
-                      return Container(
-                        padding: const EdgeInsets.symmetric(vertical: 24),
-                        alignment: Alignment.center,
-                        decoration: BoxDecoration(
-                          color: colorScheme.surfaceContainerLow,
-                          borderRadius: BorderRadius.circular(14),
-                          border: Border.all(
-                            color: colorScheme.outlineVariant.withValues(
-                              alpha: 0.5,
-                            ),
-                          ),
-                        ),
-                        child: Text(
-                          '图片加载失败：assets/mov/vx.png',
-                          style: Theme.of(sheetContext).textTheme.bodySmall
-                              ?.copyWith(color: colorScheme.onSurfaceVariant),
-                        ),
-                      );
-                    },
-                  ),
-                ),
-              ],
-            ),
-          ),
-        );
-      },
-    );
+    setState(() {
+      _isCheckingUpdate = true;
+    });
+    try {
+      final result = await _updateService.checkUpdate();
+      if (!mounted) {
+        return;
+      }
+      final release = result.release;
+      if (!result.hasUpdate || release == null) {
+        _showMessage('已是最新版本');
+        return;
+      }
+      await AppUpdateDialog.showUpdateDialog(context, release);
+    } catch (_) {
+      if (mounted) {
+        _showMessage('检查更新失败，请稍后再试。');
+      }
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isCheckingUpdate = false;
+        });
+      }
+    }
   }
 
   void _showMessage(String message) {

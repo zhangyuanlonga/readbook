@@ -10,7 +10,6 @@ import 'package:path_provider/path_provider.dart';
 import '../../../app/layout/app_spacing.dart';
 import '../../../app/widgets/disk_cached_cover_image.dart';
 import '../../../core/errors/app_exception.dart';
-
 import '../../../data/datasources/local/app_database.dart';
 import '../../../domain/entities/bookshelf_book.dart';
 import '../../../domain/entities/reading_progress.dart';
@@ -18,6 +17,8 @@ import '../application/bookshelf_service.dart';
 import '../application/local_book_import_service.dart';
 import '../../reader/application/reader_preferences_service.dart';
 import '../../book/application/book_detail_service.dart';
+import '../../announcement/application/announcement_service.dart';
+import '../../announcement/application/announcement_read_state_service.dart';
 import 'widgets/bookshelf_grid_sliver.dart';
 
 enum _BookshelfSheetAction {
@@ -50,6 +51,9 @@ class _BookshelfPageState extends State<BookshelfPage> {
   final BookDetailService _bookDetailService = BookDetailService();
   final LocalBookImportService _localBookImportService =
       LocalBookImportService();
+  final AnnouncementService _announcementService = AnnouncementService();
+  final AnnouncementReadStateService _announcementReadStateService =
+      AnnouncementReadStateService();
 
   bool _isLoading = true;
   List<BookshelfBook> _books = const <BookshelfBook>[];
@@ -67,6 +71,7 @@ class _BookshelfPageState extends State<BookshelfPage> {
   bool _isBatchDeleting = false;
   final Set<String> _selectedBookKeys = <String>{};
   int _loadTicket = 0;
+  bool _hasActiveAnnouncement = false;
 
   static const String _kLocalBookSourceId =
       LocalBookImportService.localBookSourceId;
@@ -90,6 +95,7 @@ class _BookshelfPageState extends State<BookshelfPage> {
       }
       unawaited(_restoreViewModePreference());
       unawaited(_loadBookshelf());
+      unawaited(_prefetchLatestAnnouncement());
     });
   }
 
@@ -135,6 +141,7 @@ class _BookshelfPageState extends State<BookshelfPage> {
             else
               const SizedBox.shrink()
           else ...[
+            _buildAnnouncementAction(),
             IconButton(
               tooltip: '搜索书籍',
               onPressed: () => context.go('/search'),
@@ -146,7 +153,7 @@ class _BookshelfPageState extends State<BookshelfPage> {
               onSelected: (action) {
                 switch (action) {
                   case _BookshelfMoreAction.importGraphicText:
-                    unawaited(_importLocalBook());
+                    context.push('/local-library');
                     break;
                 }
               },
@@ -207,6 +214,61 @@ class _BookshelfPageState extends State<BookshelfPage> {
           ),
         ),
       ),
+    );
+  }
+
+  Future<void> _prefetchLatestAnnouncement() async {
+    try {
+      final latest = await _announcementService.fetchLatestAnnouncement();
+      final isRead = await _announcementReadStateService.isRead(latest.id);
+      if (!mounted) {
+        return;
+      }
+      final active = latest.isActiveAt(DateTime.now().toUtc());
+      final shouldShow = active && !isRead;
+      if (shouldShow != _hasActiveAnnouncement) {
+        setState(() {
+          _hasActiveAnnouncement = shouldShow;
+        });
+      }
+    } catch (_) {
+      // ignore announcement prefetch failures to avoid blocking bookshelf
+    }
+  }
+
+  Widget _buildAnnouncementAction() {
+    final icon = IconButton(
+      tooltip: '公告',
+      onPressed: () {
+        context.push('/announcements').then((_) {
+          if (!mounted) {
+            return;
+          }
+          unawaited(_prefetchLatestAnnouncement());
+        });
+      },
+      icon: const Icon(Icons.notifications_none_outlined),
+    );
+    if (!_hasActiveAnnouncement) {
+      return icon;
+    }
+    return Stack(
+      alignment: Alignment.center,
+      children: [
+        icon,
+        Positioned(
+          right: 10,
+          top: 12,
+          child: Container(
+            width: 8,
+            height: 8,
+            decoration: BoxDecoration(
+              color: Theme.of(context).colorScheme.error,
+              shape: BoxShape.circle,
+            ),
+          ),
+        ),
+      ],
     );
   }
 
@@ -2686,45 +2748,6 @@ class _BookshelfPageState extends State<BookshelfPage> {
       if (end < books.length) {
         await Future<void>.delayed(Duration.zero);
       }
-    }
-  }
-
-  Future<void> _importLocalBook() async {
-    try {
-      final file = await openFile(
-        acceptedTypeGroups: const [
-          XTypeGroup(
-            label: 'Book Files',
-            extensions: ['txt', 'epub'],
-            uniformTypeIdentifiers: [
-              'public.plain-text',
-              'org.idpf.epub-container',
-            ],
-          ),
-        ],
-        confirmButtonText: '导入书架',
-      );
-      if (file == null) {
-        return;
-      }
-
-      final filePath = file.path.trim();
-      if (filePath.isEmpty) {
-        _showMessage('选择的文件无效，请重试。');
-        return;
-      }
-
-      final result = await _localBookImportService.importFromFile(
-        filePath: filePath,
-        displayName: file.name,
-      );
-
-      await _loadBookshelf();
-      _showMessage('已导入《${result.localBook.title}》到书架。');
-    } on AppException catch (error) {
-      _showMessage(error.briefMessage);
-    } catch (_) {
-      _showMessage('导入本地书籍失败，请重试。');
     }
   }
 

@@ -1,6 +1,8 @@
 PODS:
   - battery_plus (1.0.0):
     - Flutter
+  - device_info_plus (0.0.1):
+    - Flutter
   - file_selector_ios (0.0.1):
     - Flutter
   - Flutter (1.0.0)
@@ -16,6 +18,8 @@ PODS:
   - integration_test (0.0.1):
     - Flutter
   - OrderedSet (6.0.3)
+  - package_info_plus (0.4.5):
+    - Flutter
   - path_provider_foundation (0.0.1):
     - Flutter
     - FlutterMacOS
@@ -52,11 +56,13 @@ PODS:
 
 DEPENDENCIES:
   - battery_plus (from `.symlinks/plugins/battery_plus/ios`)
+  - device_info_plus (from `.symlinks/plugins/device_info_plus/ios`)
   - file_selector_ios (from `.symlinks/plugins/file_selector_ios/ios`)
   - Flutter (from `Flutter`)
   - flutter_inappwebview_ios (from `.symlinks/plugins/flutter_inappwebview_ios/ios`)
   - flutter_js (from `.symlinks/plugins/flutter_js/ios`)
   - integration_test (from `.symlinks/plugins/integration_test/ios`)
+  - package_info_plus (from `.symlinks/plugins/package_info_plus/ios`)
   - path_provider_foundation (from `.symlinks/plugins/path_provider_foundation/darwin`)
   - shared_preferences_foundation (from `.symlinks/plugins/shared_preferences_foundation/darwin`)
   - sqlite3_flutter_libs (from `.symlinks/plugins/sqlite3_flutter_libs/darwin`)
@@ -70,6 +76,8 @@ SPEC REPOS:
 EXTERNAL SOURCES:
   battery_plus:
     :path: ".symlinks/plugins/battery_plus/ios"
+  device_info_plus:
+    :path: ".symlinks/plugins/device_info_plus/ios"
   file_selector_ios:
     :path: ".symlinks/plugins/file_selector_ios/ios"
   Flutter:
@@ -80,6 +88,8 @@ EXTERNAL SOURCES:
     :path: ".symlinks/plugins/flutter_js/ios"
   integration_test:
     :path: ".symlinks/plugins/integration_test/ios"
+  package_info_plus:
+    :path: ".symlinks/plugins/package_info_plus/ios"
   path_provider_foundation:
     :path: ".symlinks/plugins/path_provider_foundation/darwin"
   shared_preferences_foundation:
@@ -91,12 +101,14 @@ EXTERNAL SOURCES:
 
 SPEC CHECKSUMS:
   battery_plus: b42253f6d2dde71712f8c36fef456d99121c5977
+  device_info_plus: 71ffc6ab7634ade6267c7a93088ed7e4f74e5896
   file_selector_ios: f92e583d43608aebc2e4a18daac30b8902845502
   Flutter: e0871f40cf51350855a761d2e70bf5af5b9b5de7
   flutter_inappwebview_ios: b89ba3482b96fb25e00c967aae065701b66e9b99
   flutter_js: 867813c1830e1d9b2c5d547cdb6f61801e2f2145
   integration_test: 4a889634ef21a45d28d50d622cf412dc6d9f586e
   OrderedSet: e539b66b644ff081c73a262d24ad552a69be3a94
+  package_info_plus: af8e2ca6888548050f16fa2f1938db7b5a5df499
   path_provider_foundation: 080d55be775b7414fd5a5ef3ac137b97b097e564
   shared_preferences_foundation: 9e1978ff2562383bd5676f64ec4e9aa8fa06a6f7
   sqlite3: 8d708bc63e9f4ce48f0ad9d6269e478c5ced1d9b

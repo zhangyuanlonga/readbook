@@ -3,14 +3,20 @@ import 'package:go_router/go_router.dart';
 
 import '../core/navigation/global_navigator.dart';
 import '../features/book/presentation/book_detail_page.dart';
+import '../features/bookshelf/application/local_book_import_service.dart';
 import '../features/bookshelf/presentation/bookshelf_page.dart';
+import '../features/bookshelf/presentation/local_library_page.dart';
 import '../features/discover/presentation/discover_page.dart';
+import '../features/announcement/presentation/announcement_detail_page.dart';
+import '../features/announcement/presentation/announcement_list_page.dart';
 import '../features/mine/presentation/mine_page.dart';
 import '../features/mine/presentation/cache_management_page.dart';
-import '../features/mine/presentation/reader_settings_page.dart';
 import '../features/mine/presentation/rule_config_page.dart';
 import '../features/mine/presentation/about_page.dart';
+import '../features/mine/presentation/bookmarks_page.dart';
 import '../features/mine/presentation/system_settings_page.dart';
+import '../features/auth/presentation/auth_page.dart';
+import '../features/auth/presentation/user_profile_page.dart';
 import '../features/reader/presentation/reader_page.dart';
 import '../features/search/presentation/search_page.dart';
 import '../features/source/presentation/source_page.dart';
@@ -61,14 +67,22 @@ final GoRouter appRouter = GoRouter(
       builder: (context, state) => const RuleConfigPage(),
     ),
     GoRoute(
-      path: '/reader-settings',
-      name: 'reader-settings',
-      builder: (context, state) => const ReaderSettingsPage(),
-    ),
-    GoRoute(
       path: '/about',
       name: 'about',
       builder: (context, state) => const AboutPage(),
+    ),
+    GoRoute(
+      path: '/announcements',
+      name: 'announcements',
+      builder: (context, state) => const AnnouncementListPage(),
+    ),
+    GoRoute(
+      path: '/announcements/:id',
+      name: 'announcement-detail',
+      builder: (context, state) {
+        final id = state.pathParameters['id'] ?? '';
+        return AnnouncementDetailPage(announcementId: id);
+      },
     ),
     GoRoute(
       path: '/system-settings',
@@ -76,9 +90,29 @@ final GoRouter appRouter = GoRouter(
       builder: (context, state) => const SystemSettingsPage(),
     ),
     GoRoute(
+      path: '/auth',
+      name: 'auth',
+      builder: (context, state) => const AuthPage(),
+    ),
+    GoRoute(
+      path: '/profile',
+      name: 'profile',
+      builder: (context, state) => const UserProfilePage(),
+    ),
+    GoRoute(
+      path: '/bookmarks',
+      name: 'bookmarks',
+      builder: (context, state) => const BookmarksPage(),
+    ),
+    GoRoute(
       path: '/search',
       name: 'search',
       builder: (context, state) => const SearchPage(),
+    ),
+    GoRoute(
+      path: '/local-library',
+      name: 'local-library',
+      builder: (context, state) => const LocalLibraryPage(),
     ),
     GoRoute(
       path: '/source-diagnostics',
@@ -89,11 +123,18 @@ final GoRouter appRouter = GoRouter(
     GoRoute(
       path: '/local/book/:bookId',
       name: 'local-book',
+      redirect: (context, state) {
+        final bookId = state.pathParameters['bookId'] ?? 'unknown-local-book';
+        final query = Map<String, String>.from(state.uri.queryParameters);
+        query['sourceId'] = LocalBookImportService.localBookSourceId;
+        query['detailUrl'] = 'local://book/$bookId';
+        return Uri(path: '/book/$bookId', queryParameters: query).toString();
+      },
       builder: (context, state) {
         final bookId = state.pathParameters['bookId'] ?? 'unknown-local-book';
         return BookDetailPage(
           bookId: bookId,
-          sourceId: '__local_book__',
+          sourceId: LocalBookImportService.localBookSourceId,
           detailUrl: 'local://book/$bookId',
         );
       },
@@ -101,16 +142,31 @@ final GoRouter appRouter = GoRouter(
     GoRoute(
       path: '/local/reader/:bookId/:chapterId',
       name: 'local-reader',
+      redirect: (context, state) {
+        final bookId = state.pathParameters['bookId'] ?? 'unknown-local-book';
+        final chapterId =
+            state.pathParameters['chapterId'] ?? 'unknown-local-chapter';
+        final query = Map<String, String>.from(state.uri.queryParameters);
+        query['sourceId'] = LocalBookImportService.localBookSourceId;
+        query['detailUrl'] = 'local://book/$bookId';
+        query['chapterUrl'] = 'local://chapter/$chapterId';
+        return Uri(
+          path: '/reader/$bookId/$chapterId',
+          queryParameters: query,
+        ).toString();
+      },
       builder: (context, state) {
         final bookId = state.pathParameters['bookId'] ?? 'unknown-local-book';
         final chapterId =
             state.pathParameters['chapterId'] ?? 'unknown-local-chapter';
+        final bookmarkId = state.uri.queryParameters['bookmarkId'];
         return ReaderPage(
           bookId: bookId,
           chapterId: chapterId,
-          sourceId: '__local_book__',
+          sourceId: LocalBookImportService.localBookSourceId,
           detailUrl: 'local://book/$bookId',
           chapterUrl: 'local://chapter/$chapterId',
+          bookmarkId: bookmarkId,
         );
       },
     ),
@@ -144,6 +200,7 @@ final GoRouter appRouter = GoRouter(
         final chapterTitle = state.uri.queryParameters['chapterTitle'];
         final sourceId = state.uri.queryParameters['sourceId'];
         final detailUrl = state.uri.queryParameters['detailUrl'];
+        final bookmarkId = state.uri.queryParameters['bookmarkId'];
         final chapterIndex = int.tryParse(
           state.uri.queryParameters['chapterIndex'] ?? '',
         );
@@ -156,6 +213,7 @@ final GoRouter appRouter = GoRouter(
           sourceId: sourceId,
           detailUrl: detailUrl,
           chapterIndex: chapterIndex,
+          bookmarkId: bookmarkId,
         );
       },
     ),

@@ -6,6 +6,7 @@ import 'package:drift/native.dart';
 import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
 
+import '../../../domain/entities/bookmark.dart';
 import '../../../domain/entities/local_book.dart';
 import '../../../domain/entities/local_chapter.dart';
 import '../../../domain/entities/source_definition.dart';
@@ -93,6 +94,28 @@ class StoredLocalChapters extends Table {
   List<Set<Column<Object>>> get uniqueKeys => [
     {bookId, chapterIndex},
   ];
+}
+
+class StoredBookmarks extends Table {
+  TextColumn get id => text()();
+  TextColumn get bookId => text()();
+  TextColumn get chapterId => text()();
+  IntColumn get chapterIndex => integer()();
+  IntColumn get startOffset => integer()();
+  IntColumn get endOffset => integer()();
+  TextColumn get snippet => text()();
+  BoolColumn get isBold => boolean().withDefault(const Constant(false))();
+  BoolColumn get isUnderline => boolean().withDefault(const Constant(false))();
+  BoolColumn get isWavy => boolean().withDefault(const Constant(false))();
+  TextColumn get color => text().nullable()();
+  DateTimeColumn get createdAt => dateTime().withDefault(currentDateAndTime)();
+  DateTimeColumn get updatedAt => dateTime().withDefault(currentDateAndTime)();
+
+  @override
+  String get tableName => 'bookmarks';
+
+  @override
+  Set<Column<Object>> get primaryKey => {id};
 }
 
 class SearchSourceHits extends Table {
@@ -200,6 +223,7 @@ class SearchSourceHitUpsert {
     ChapterCaches,
     StoredLocalBooks,
     StoredLocalChapters,
+    StoredBookmarks,
     SearchSourceHits,
   ],
 )
@@ -209,7 +233,7 @@ class AppDatabase extends _$AppDatabase {
   static final AppDatabase instance = AppDatabase();
 
   @override
-  int get schemaVersion => 5;
+  int get schemaVersion => 7;
 
   static const String _mangaSourceMatcherSql =
       '(raw_json LIKE \'%"sourceType":2,%\' OR '
@@ -234,6 +258,17 @@ class AppDatabase extends _$AppDatabase {
         }
         if (from < 5) {
           await migrator.createTable(searchSourceHits);
+        }
+        if (from < 6) {
+          await migrator.createTable(storedBookmarks);
+        }
+        if (from == 6) {
+          await migrator.addColumn(storedBookmarks, storedBookmarks.isBold);
+          await migrator.addColumn(
+            storedBookmarks,
+            storedBookmarks.isUnderline,
+          );
+          await migrator.addColumn(storedBookmarks, storedBookmarks.isWavy);
         }
       },
     );
@@ -1094,6 +1129,99 @@ class AppDatabase extends _$AppDatabase {
     });
   }
 
+  Future<void> upsertBookmark(Bookmark bookmark) async {
+    final normalizedId = bookmark.id.trim();
+    final normalizedBookId = bookmark.bookId.trim();
+    final normalizedChapterId = bookmark.chapterId.trim();
+    final normalizedSnippet = bookmark.snippet.trim();
+
+    if (normalizedId.isEmpty ||
+        normalizedBookId.isEmpty ||
+        normalizedChapterId.isEmpty ||
+        normalizedSnippet.isEmpty) {
+      return;
+    }
+
+    final safeChapterIndex = bookmark.chapterIndex < 0
+        ? 0
+        : bookmark.chapterIndex;
+    final safeStartOffset = bookmark.startOffset < 0
+        ? 0
+        : bookmark.startOffset;
+    final safeEndOffset = bookmark.endOffset < safeStartOffset
+        ? safeStartOffset
+        : bookmark.endOffset;
+
+    await into(storedBookmarks).insert(
+      StoredBookmarksCompanion(
+        id: Value(normalizedId),
+        bookId: Value(normalizedBookId),
+        chapterId: Value(normalizedChapterId),
+        chapterIndex: Value(safeChapterIndex),
+        startOffset: Value(safeStartOffset),
+        endOffset: Value(safeEndOffset),
+        snippet: Value(normalizedSnippet),
+        isBold: Value(bookmark.isBold),
+        isUnderline: Value(bookmark.isUnderline),
+        isWavy: Value(bookmark.isWavy),
+        color: Value(_nullableString(bookmark.color)),
+        createdAt: Value(bookmark.createdAt),
+        updatedAt: Value(bookmark.updatedAt),
+      ),
+      mode: InsertMode.insertOrReplace,
+    );
+  }
+
+  Future<List<Bookmark>> getBookmarksByBookId(String bookId) async {
+    final normalizedBookId = bookId.trim();
+    if (normalizedBookId.isEmpty) {
+      return const <Bookmark>[];
+    }
+
+    final rows =
+        await (select(storedBookmarks)
+              ..where((table) => table.bookId.equals(normalizedBookId))
+              ..orderBy([
+                (table) => OrderingTerm.asc(table.chapterIndex),
+                (table) => OrderingTerm.asc(table.startOffset),
+                (table) => OrderingTerm.desc(table.createdAt),
+              ]))
+            .get();
+
+    return rows.map(_mapRowToBookmark).toList(growable: false);
+  }
+
+  Future<List<Bookmark>> getAllBookmarks() async {
+    final rows =
+        await (select(storedBookmarks)
+              ..orderBy([
+                (table) => OrderingTerm.desc(table.updatedAt),
+                (table) => OrderingTerm.desc(table.createdAt),
+              ]))
+            .get();
+    return rows.map(_mapRowToBookmark).toList(growable: false);
+  }
+
+  Future<void> deleteBookmarkById(String bookmarkId) {
+    final normalizedId = bookmarkId.trim();
+    if (normalizedId.isEmpty) {
+      return Future.value();
+    }
+
+    return (delete(storedBookmarks)
+      ..where((table) => table.id.equals(normalizedId))).go();
+  }
+
+  Future<void> deleteBookmarksByBookId(String bookId) {
+    final normalizedBookId = bookId.trim();
+    if (normalizedBookId.isEmpty) {
+      return Future.value();
+    }
+
+    return (delete(storedBookmarks)
+      ..where((table) => table.bookId.equals(normalizedBookId))).go();
+  }
+
   LocalBook _mapRowToLocalBook(StoredLocalBook row) {
     return LocalBook(
       id: row.id,
@@ -1129,6 +1257,24 @@ class AppDatabase extends _$AppDatabase {
       updatedAt: row.updatedAt,
       startOffset: row.startOffset,
       endOffset: row.endOffset,
+    );
+  }
+
+  Bookmark _mapRowToBookmark(StoredBookmark row) {
+    return Bookmark(
+      id: row.id,
+      bookId: row.bookId,
+      chapterId: row.chapterId,
+      chapterIndex: row.chapterIndex,
+      startOffset: row.startOffset,
+      endOffset: row.endOffset,
+      snippet: row.snippet,
+      createdAt: row.createdAt,
+      updatedAt: row.updatedAt,
+      isBold: row.isBold,
+      isUnderline: row.isUnderline,
+      isWavy: row.isWavy,
+      color: row.color,
     );
   }
 

@@ -176,11 +176,13 @@ class LocalContentProvider extends ContentProvider {
   }
 
   String _buildLocalDetailUrl(String bookId) {
-    return '$_kLocalDetailPrefix$bookId';
+    final normalized = bookId.trim();
+    return '$_kLocalDetailPrefix$normalized';
   }
 
   String _buildLocalChapterUrl(String chapterId) {
-    return '$_kLocalChapterPrefix$chapterId';
+    final normalized = chapterId.trim();
+    return '$_kLocalChapterPrefix$normalized';
   }
 
   String? _resolveCoverUrl(String? coverPath) {

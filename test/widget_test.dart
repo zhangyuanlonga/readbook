@@ -17,8 +17,11 @@ void main() {
       await tester.pumpAndSettle();
     }
 
+    await tester.pump(const Duration(seconds: 3));
+    await tester.pumpAndSettle();
+
     expect(find.text('书架'), findsWidgets);
-    expect(find.text('去搜索'), findsOneWidget);
+    expect(find.text('发现'), findsOneWidget);
     expect(find.text('书源'), findsOneWidget);
     expect(find.text('我的'), findsOneWidget);
     expect(find.text('错误'), findsNothing);

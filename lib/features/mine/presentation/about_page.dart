@@ -3,9 +3,17 @@ import 'package:go_router/go_router.dart';
 
 import '../../../app/layout/app_layout.dart';
 import '../../../app/layout/app_spacing.dart';
+import '../../../core/app_update/app_update_check_result.dart';
+import '../../../core/app_update/app_update_dialog.dart';
+import '../../../core/app_update/app_update_release.dart';
+import '../../../core/app_update/app_update_service.dart';
+import '../../../core/device/device_identity_service.dart';
 
-class AboutPage extends StatelessWidget {
+class AboutPage extends StatefulWidget {
   const AboutPage({super.key});
+
+  @override
+  State<AboutPage> createState() => _AboutPageState();
 
   static const String _appVersion = '1.06';
   static const List<String> _projectFocus = [
@@ -34,6 +42,37 @@ class AboutPage extends StatelessWidget {
     'docs/project_conventions.md',
     'docs/implementation_steps.md',
   ];
+}
+
+class _AboutPageState extends State<AboutPage> {
+  final AppUpdateService _updateService = AppUpdateService();
+  final DeviceIdentityService _identityService = DeviceIdentityService();
+
+  String _appVersionName = AboutPage._appVersion;
+  int _appVersionCode = 0;
+  bool _isCheckingUpdate = false;
+  AppUpdateCheckResult? _updateResult;
+  String? _updateMessage;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadVersionInfo();
+  }
+
+  Future<void> _loadVersionInfo() async {
+    final versionName = await _identityService.getAppVersionName();
+    final versionCode = await _identityService.getAppVersionCode();
+    if (!mounted) {
+      return;
+    }
+    setState(() {
+      if (versionName.trim().isNotEmpty) {
+        _appVersionName = versionName.trim();
+      }
+      _appVersionCode = versionCode;
+    });
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -71,7 +110,7 @@ class AboutPage extends StatelessWidget {
                         title: '项目当前重点',
                         subtitle: '来自项目总览与 README 的阶段目标。',
                         icon: Icons.track_changes_outlined,
-                        items: _projectFocus,
+                        items: AboutPage._projectFocus,
                       ),
                       const SizedBox(height: 10),
                       _buildSectionCard(
@@ -79,17 +118,19 @@ class AboutPage extends StatelessWidget {
                         title: 'MVP 范围',
                         subtitle: '当前版本聚焦“导源即读”的可用闭环。',
                         icon: Icons.checklist_rounded,
-                        items: _mvpScope,
+                        items: AboutPage._mvpScope,
                       ),
                     ];
 
                     final rightColumn = <Widget>[
+                      _buildUpdateCard(context),
+                      const SizedBox(height: 10),
                       _buildTagCard(
                         context,
                         title: '技术栈',
                         subtitle: '当前版本采用的核心方案。',
                         icon: Icons.developer_mode_rounded,
-                        tags: _techStack,
+                        tags: AboutPage._techStack,
                       ),
                       const SizedBox(height: 10),
                       _buildDocCard(context),
@@ -184,7 +225,7 @@ class AboutPage extends StatelessWidget {
                         ),
                         const SizedBox(height: 2),
                         Text(
-                          '版本 $_appVersion',
+                          '版本 $_appVersionName${_appVersionCode > 0 ? ' ($_appVersionCode)' : ''}',
                           style: theme.textTheme.bodySmall?.copyWith(
                             color: colorScheme.onSurfaceVariant,
                           ),
@@ -232,6 +273,149 @@ class AboutPage extends StatelessWidget {
         ),
       ),
     );
+  }
+
+  Widget _buildUpdateCard(BuildContext context) {
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
+    final result = _updateResult;
+    final release = result?.release;
+    final hasUpdate = result?.hasUpdate == true;
+
+    String statusText;
+    if (_isCheckingUpdate) {
+      statusText = '检查更新中...';
+    } else if (_updateMessage != null) {
+      statusText = _updateMessage!;
+    } else if (result == null) {
+      statusText = '点击检查更新获取最新版本';
+    } else if (!hasUpdate) {
+      statusText = '已是最新版本';
+    } else {
+      final versionLabel =
+          release?.versionName ??
+          (release?.versionCode != null
+              ? '版本 ${release!.versionCode}'
+              : '新版本');
+      statusText = '发现更新 · $versionLabel';
+      if (release?.forceUpdate == true) {
+        statusText = '$statusText（强制更新）';
+      }
+    }
+
+    final updateUrl = release == null ? null : _resolveUpdateUrl(release);
+
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(12, 12, 12, 12),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Icon(Icons.system_update_alt, size: 19, color: colorScheme.primary),
+                const SizedBox(width: 6),
+                Text(
+                  '检查更新',
+                  style: theme.textTheme.titleSmall?.copyWith(
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 6),
+            Text(
+              statusText,
+              style: theme.textTheme.bodySmall?.copyWith(
+                color: colorScheme.onSurfaceVariant,
+              ),
+            ),
+            if (release?.changelog != null &&
+                release!.changelog!.trim().isNotEmpty) ...[
+              const SizedBox(height: 8),
+              Text(
+                release.changelog!,
+                maxLines: 3,
+                overflow: TextOverflow.ellipsis,
+                style: theme.textTheme.bodySmall?.copyWith(height: 1.4),
+              ),
+            ],
+            const SizedBox(height: 10),
+            Row(
+              children: [
+                OutlinedButton(
+                  onPressed: _isCheckingUpdate ? null : _checkUpdate,
+                  child:
+                      _isCheckingUpdate
+                          ? const SizedBox(
+                            width: 14,
+                            height: 14,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          )
+                          : const Text('检查更新'),
+                ),
+                if (updateUrl != null) ...[
+                  const SizedBox(width: 8),
+                  FilledButton(
+                    onPressed: () => _openUpdateUrl(updateUrl),
+                    child: const Text('前往更新'),
+                  ),
+                ],
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Uri? _resolveUpdateUrl(AppUpdateRelease release) {
+    return AppUpdateDialog.resolveUpdateUrl(release);
+  }
+
+  Future<void> _openUpdateUrl(Uri url) async {
+    await AppUpdateDialog.openUpdateUrl(context, url);
+  }
+
+  Future<void> _checkUpdate() async {
+    if (_isCheckingUpdate) {
+      return;
+    }
+    setState(() {
+      _isCheckingUpdate = true;
+      _updateMessage = null;
+    });
+    try {
+      final result = await _updateService.checkUpdate();
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _updateResult = result;
+        _updateMessage = result.hasUpdate ? '发现新版本' : '已是最新版本';
+      });
+      final release = result.release;
+      if (result.hasUpdate && release != null) {
+        _showUpdateDialog(release);
+      }
+    } catch (_) {
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _updateMessage = '检查更新失败，请稍后再试。';
+      });
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isCheckingUpdate = false;
+        });
+      }
+    }
+  }
+
+  Future<void> _showUpdateDialog(AppUpdateRelease release) async {
+    await AppUpdateDialog.showUpdateDialog(context, release);
   }
 
   Widget _buildMetricPill(BuildContext context, String label, String value) {
@@ -422,7 +606,7 @@ class AboutPage extends StatelessWidget {
               ),
             ),
             const SizedBox(height: 8),
-            for (final path in _docEntries)
+            for (final path in AboutPage._docEntries)
               Container(
                 width: double.infinity,
                 margin: const EdgeInsets.only(bottom: 6),

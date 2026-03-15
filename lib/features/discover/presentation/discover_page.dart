@@ -903,7 +903,12 @@ class _DiscoverPageState extends State<DiscoverPage> {
 
   Widget _buildCoverPreview(String? coverUrl, {required String heroTag}) {
     final trimmed = coverUrl?.trim();
-    if (trimmed == null || trimmed.isEmpty || !_looksLikeImageUrl(trimmed)) {
+    if (trimmed == null || trimmed.isEmpty) {
+      return Hero(tag: heroTag, child: _buildCoverFallback());
+    }
+
+    final uri = Uri.tryParse(trimmed);
+    if (uri == null || !uri.hasScheme) {
       return Hero(tag: heroTag, child: _buildCoverFallback());
     }
 
@@ -920,41 +925,6 @@ class _DiscoverPageState extends State<DiscoverPage> {
         ),
       ),
     );
-  }
-
-  bool _looksLikeImageUrl(String value) {
-    final uri = Uri.tryParse(value);
-    if (uri == null) {
-      return false;
-    }
-    final scheme = uri.scheme.toLowerCase();
-    if (scheme != 'http' && scheme != 'https') {
-      return false;
-    }
-
-    final path = uri.path.toLowerCase();
-    if (path.isEmpty || path.endsWith('/')) {
-      return false;
-    }
-
-    const imageExtensions = <String>[
-      '.jpg',
-      '.jpeg',
-      '.png',
-      '.webp',
-      '.gif',
-      '.bmp',
-      '.avif',
-      '.svg',
-    ];
-    if (imageExtensions.any(path.endsWith)) {
-      return true;
-    }
-
-    return path.contains('/cover') ||
-        path.contains('/covers/') ||
-        path.contains('/img/') ||
-        path.contains('/images/');
   }
 
   Widget _buildCoverFallback() {

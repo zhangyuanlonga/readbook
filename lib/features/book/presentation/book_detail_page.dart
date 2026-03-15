@@ -17,6 +17,7 @@ import '../../../domain/entities/book.dart';
 import '../../../domain/entities/bookshelf_book.dart';
 import '../../../domain/entities/chapter.dart';
 import '../../../domain/entities/source_definition.dart';
+import '../../bookshelf/application/local_book_import_service.dart';
 import '../../bookshelf/application/bookshelf_service.dart';
 import '../../reader/application/content_provider.dart';
 import '../../reader/application/local_content_provider.dart';
@@ -122,6 +123,7 @@ class _BookDetailPageState extends State<BookDetailPage> {
     _activeSourceId = _normalizeRouteParam(widget.sourceId);
     _activeDetailUrl = _normalizeRouteParam(widget.detailUrl);
     _activeBookId = widget.bookId.trim();
+    _applyLocalSchemeFallback();
     _displayTitle = _normalizeRouteParam(widget.title);
     _load();
   }
@@ -589,6 +591,9 @@ class _BookDetailPageState extends State<BookDetailPage> {
     if (sourceId == null || sourceId.isEmpty) {
       return const SizedBox.shrink();
     }
+    if (!_contentCapabilities.canCacheChapter) {
+      return const SizedBox.shrink();
+    }
 
     return StreamBuilder<int>(
       stream: _cachedChapterCountStreamBuilder(_activeBookId),
@@ -1012,6 +1017,41 @@ class _BookDetailPageState extends State<BookDetailPage> {
       return null;
     }
     return trimmed;
+  }
+
+  void _applyLocalSchemeFallback() {
+    final sourceId = (_activeSourceId ?? '').trim();
+    final detailUrl = (_activeDetailUrl ?? '').trim();
+
+    if (sourceId.isEmpty && _isLocalScheme(detailUrl)) {
+      _activeSourceId = LocalBookImportService.localBookSourceId;
+    }
+
+    if ((_activeSourceId ?? '').trim() !=
+        LocalBookImportService.localBookSourceId) {
+      return;
+    }
+
+    if (detailUrl.isEmpty || !_isLocalScheme(detailUrl)) {
+      final normalizedBookId = _activeBookId.trim();
+      if (normalizedBookId.isNotEmpty) {
+        _activeDetailUrl = _buildLocalDetailUrl(normalizedBookId);
+      }
+    }
+  }
+
+  String _buildLocalDetailUrl(String bookId) {
+    final normalized = bookId.trim();
+    return 'local://book/$normalized';
+  }
+
+  bool _isLocalScheme(String url) {
+    final normalized = url.trim();
+    if (normalized.isEmpty) {
+      return false;
+    }
+    final uri = Uri.tryParse(normalized);
+    return uri != null && uri.scheme == 'local';
   }
 
   Future<void> _handleSwitchSource() async {

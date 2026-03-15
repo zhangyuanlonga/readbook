@@ -38,6 +38,10 @@ class ReaderPreferencesService {
       'reader.settings.pageAnimationStyle';
   static const String _backgroundImageBase64Key =
       'reader.settings.backgroundImageBase64';
+  static const String _customBackgroundImagesKey =
+      'reader.settings.customBackgroundImages';
+  static const String _customBackgroundImageBase64Key =
+      'reader.settings.customBackgroundImageBase64';
   static const String _mangaReadModeKey = 'reader.settings.mangaReadMode';
   static const String _mangaImageSpacingKey =
       'reader.settings.mangaImageSpacing';
@@ -412,6 +416,65 @@ class ReaderPreferencesService {
     } else {
       await prefs.setString(_backgroundImageBase64Key, backgroundImageBase64);
     }
+  }
+
+  Future<List<String>> loadCustomBackgroundImages() async {
+    final prefs = await _preferencesFuture;
+    final rawList = prefs.getString(_customBackgroundImagesKey);
+    final results = <String>[];
+
+    if (rawList != null && rawList.trim().isNotEmpty) {
+      try {
+        final decoded = jsonDecode(rawList);
+        if (decoded is List) {
+          for (final entry in decoded) {
+            final value = entry?.toString().trim();
+            if (value == null || value.isEmpty) {
+              continue;
+            }
+            if (!results.contains(value)) {
+              results.add(value);
+            }
+          }
+        }
+      } catch (_) {
+        // Ignore invalid stored list and fall back to legacy key.
+      }
+    }
+
+    final legacy = prefs.getString(_customBackgroundImageBase64Key);
+    final legacyValue = legacy?.trim();
+    if (legacyValue != null &&
+        legacyValue.isNotEmpty &&
+        !results.contains(legacyValue)) {
+      results.add(legacyValue);
+    }
+
+    return results;
+  }
+
+  Future<void> saveCustomBackgroundImages(List<String> images) async {
+    final prefs = await _preferencesFuture;
+    final normalized = <String>[];
+
+    for (final entry in images) {
+      final value = entry.trim();
+      if (value.isEmpty) {
+        continue;
+      }
+      if (!normalized.contains(value)) {
+        normalized.add(value);
+      }
+    }
+
+    if (normalized.isEmpty) {
+      await prefs.remove(_customBackgroundImagesKey);
+      await prefs.remove(_customBackgroundImageBase64Key);
+      return;
+    }
+
+    await prefs.setString(_customBackgroundImagesKey, jsonEncode(normalized));
+    await prefs.setString(_customBackgroundImageBase64Key, normalized.first);
   }
 
   Future<ReadingProgress?> loadProgress(String bookId) async {

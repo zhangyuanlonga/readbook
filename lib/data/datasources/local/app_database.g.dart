@@ -2699,6 +2699,775 @@ class StoredLocalChaptersCompanion extends UpdateCompanion<StoredLocalChapter> {
   }
 }
 
+class $StoredBookmarksTable extends StoredBookmarks
+    with TableInfo<$StoredBookmarksTable, StoredBookmark> {
+  @override
+  final GeneratedDatabase attachedDatabase;
+  final String? _alias;
+  $StoredBookmarksTable(this.attachedDatabase, [this._alias]);
+  static const VerificationMeta _idMeta = const VerificationMeta('id');
+  @override
+  late final GeneratedColumn<String> id = GeneratedColumn<String>(
+    'id',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _bookIdMeta = const VerificationMeta('bookId');
+  @override
+  late final GeneratedColumn<String> bookId = GeneratedColumn<String>(
+    'book_id',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _chapterIdMeta = const VerificationMeta(
+    'chapterId',
+  );
+  @override
+  late final GeneratedColumn<String> chapterId = GeneratedColumn<String>(
+    'chapter_id',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _chapterIndexMeta = const VerificationMeta(
+    'chapterIndex',
+  );
+  @override
+  late final GeneratedColumn<int> chapterIndex = GeneratedColumn<int>(
+    'chapter_index',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _startOffsetMeta = const VerificationMeta(
+    'startOffset',
+  );
+  @override
+  late final GeneratedColumn<int> startOffset = GeneratedColumn<int>(
+    'start_offset',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _endOffsetMeta = const VerificationMeta(
+    'endOffset',
+  );
+  @override
+  late final GeneratedColumn<int> endOffset = GeneratedColumn<int>(
+    'end_offset',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _snippetMeta = const VerificationMeta(
+    'snippet',
+  );
+  @override
+  late final GeneratedColumn<String> snippet = GeneratedColumn<String>(
+    'snippet',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _isBoldMeta = const VerificationMeta('isBold');
+  @override
+  late final GeneratedColumn<bool> isBold = GeneratedColumn<bool>(
+    'is_bold',
+    aliasedName,
+    false,
+    type: DriftSqlType.bool,
+    requiredDuringInsert: false,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'CHECK ("is_bold" IN (0, 1))',
+    ),
+    defaultValue: const Constant(false),
+  );
+  static const VerificationMeta _isUnderlineMeta = const VerificationMeta(
+    'isUnderline',
+  );
+  @override
+  late final GeneratedColumn<bool> isUnderline = GeneratedColumn<bool>(
+    'is_underline',
+    aliasedName,
+    false,
+    type: DriftSqlType.bool,
+    requiredDuringInsert: false,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'CHECK ("is_underline" IN (0, 1))',
+    ),
+    defaultValue: const Constant(false),
+  );
+  static const VerificationMeta _isWavyMeta = const VerificationMeta('isWavy');
+  @override
+  late final GeneratedColumn<bool> isWavy = GeneratedColumn<bool>(
+    'is_wavy',
+    aliasedName,
+    false,
+    type: DriftSqlType.bool,
+    requiredDuringInsert: false,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'CHECK ("is_wavy" IN (0, 1))',
+    ),
+    defaultValue: const Constant(false),
+  );
+  static const VerificationMeta _colorMeta = const VerificationMeta('color');
+  @override
+  late final GeneratedColumn<String> color = GeneratedColumn<String>(
+    'color',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _createdAtMeta = const VerificationMeta(
+    'createdAt',
+  );
+  @override
+  late final GeneratedColumn<DateTime> createdAt = GeneratedColumn<DateTime>(
+    'created_at',
+    aliasedName,
+    false,
+    type: DriftSqlType.dateTime,
+    requiredDuringInsert: false,
+    defaultValue: currentDateAndTime,
+  );
+  static const VerificationMeta _updatedAtMeta = const VerificationMeta(
+    'updatedAt',
+  );
+  @override
+  late final GeneratedColumn<DateTime> updatedAt = GeneratedColumn<DateTime>(
+    'updated_at',
+    aliasedName,
+    false,
+    type: DriftSqlType.dateTime,
+    requiredDuringInsert: false,
+    defaultValue: currentDateAndTime,
+  );
+  @override
+  List<GeneratedColumn> get $columns => [
+    id,
+    bookId,
+    chapterId,
+    chapterIndex,
+    startOffset,
+    endOffset,
+    snippet,
+    isBold,
+    isUnderline,
+    isWavy,
+    color,
+    createdAt,
+    updatedAt,
+  ];
+  @override
+  String get aliasedName => _alias ?? actualTableName;
+  @override
+  String get actualTableName => $name;
+  static const String $name = 'bookmarks';
+  @override
+  VerificationContext validateIntegrity(
+    Insertable<StoredBookmark> instance, {
+    bool isInserting = false,
+  }) {
+    final context = VerificationContext();
+    final data = instance.toColumns(true);
+    if (data.containsKey('id')) {
+      context.handle(_idMeta, id.isAcceptableOrUnknown(data['id']!, _idMeta));
+    } else if (isInserting) {
+      context.missing(_idMeta);
+    }
+    if (data.containsKey('book_id')) {
+      context.handle(
+        _bookIdMeta,
+        bookId.isAcceptableOrUnknown(data['book_id']!, _bookIdMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_bookIdMeta);
+    }
+    if (data.containsKey('chapter_id')) {
+      context.handle(
+        _chapterIdMeta,
+        chapterId.isAcceptableOrUnknown(data['chapter_id']!, _chapterIdMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_chapterIdMeta);
+    }
+    if (data.containsKey('chapter_index')) {
+      context.handle(
+        _chapterIndexMeta,
+        chapterIndex.isAcceptableOrUnknown(
+          data['chapter_index']!,
+          _chapterIndexMeta,
+        ),
+      );
+    } else if (isInserting) {
+      context.missing(_chapterIndexMeta);
+    }
+    if (data.containsKey('start_offset')) {
+      context.handle(
+        _startOffsetMeta,
+        startOffset.isAcceptableOrUnknown(
+          data['start_offset']!,
+          _startOffsetMeta,
+        ),
+      );
+    } else if (isInserting) {
+      context.missing(_startOffsetMeta);
+    }
+    if (data.containsKey('end_offset')) {
+      context.handle(
+        _endOffsetMeta,
+        endOffset.isAcceptableOrUnknown(data['end_offset']!, _endOffsetMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_endOffsetMeta);
+    }
+    if (data.containsKey('snippet')) {
+      context.handle(
+        _snippetMeta,
+        snippet.isAcceptableOrUnknown(data['snippet']!, _snippetMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_snippetMeta);
+    }
+    if (data.containsKey('is_bold')) {
+      context.handle(
+        _isBoldMeta,
+        isBold.isAcceptableOrUnknown(data['is_bold']!, _isBoldMeta),
+      );
+    }
+    if (data.containsKey('is_underline')) {
+      context.handle(
+        _isUnderlineMeta,
+        isUnderline.isAcceptableOrUnknown(
+          data['is_underline']!,
+          _isUnderlineMeta,
+        ),
+      );
+    }
+    if (data.containsKey('is_wavy')) {
+      context.handle(
+        _isWavyMeta,
+        isWavy.isAcceptableOrUnknown(data['is_wavy']!, _isWavyMeta),
+      );
+    }
+    if (data.containsKey('color')) {
+      context.handle(
+        _colorMeta,
+        color.isAcceptableOrUnknown(data['color']!, _colorMeta),
+      );
+    }
+    if (data.containsKey('created_at')) {
+      context.handle(
+        _createdAtMeta,
+        createdAt.isAcceptableOrUnknown(data['created_at']!, _createdAtMeta),
+      );
+    }
+    if (data.containsKey('updated_at')) {
+      context.handle(
+        _updatedAtMeta,
+        updatedAt.isAcceptableOrUnknown(data['updated_at']!, _updatedAtMeta),
+      );
+    }
+    return context;
+  }
+
+  @override
+  Set<GeneratedColumn> get $primaryKey => {id};
+  @override
+  StoredBookmark map(Map<String, dynamic> data, {String? tablePrefix}) {
+    final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
+    return StoredBookmark(
+      id:
+          attachedDatabase.typeMapping.read(
+            DriftSqlType.string,
+            data['${effectivePrefix}id'],
+          )!,
+      bookId:
+          attachedDatabase.typeMapping.read(
+            DriftSqlType.string,
+            data['${effectivePrefix}book_id'],
+          )!,
+      chapterId:
+          attachedDatabase.typeMapping.read(
+            DriftSqlType.string,
+            data['${effectivePrefix}chapter_id'],
+          )!,
+      chapterIndex:
+          attachedDatabase.typeMapping.read(
+            DriftSqlType.int,
+            data['${effectivePrefix}chapter_index'],
+          )!,
+      startOffset:
+          attachedDatabase.typeMapping.read(
+            DriftSqlType.int,
+            data['${effectivePrefix}start_offset'],
+          )!,
+      endOffset:
+          attachedDatabase.typeMapping.read(
+            DriftSqlType.int,
+            data['${effectivePrefix}end_offset'],
+          )!,
+      snippet:
+          attachedDatabase.typeMapping.read(
+            DriftSqlType.string,
+            data['${effectivePrefix}snippet'],
+          )!,
+      isBold:
+          attachedDatabase.typeMapping.read(
+            DriftSqlType.bool,
+            data['${effectivePrefix}is_bold'],
+          )!,
+      isUnderline:
+          attachedDatabase.typeMapping.read(
+            DriftSqlType.bool,
+            data['${effectivePrefix}is_underline'],
+          )!,
+      isWavy:
+          attachedDatabase.typeMapping.read(
+            DriftSqlType.bool,
+            data['${effectivePrefix}is_wavy'],
+          )!,
+      color: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}color'],
+      ),
+      createdAt:
+          attachedDatabase.typeMapping.read(
+            DriftSqlType.dateTime,
+            data['${effectivePrefix}created_at'],
+          )!,
+      updatedAt:
+          attachedDatabase.typeMapping.read(
+            DriftSqlType.dateTime,
+            data['${effectivePrefix}updated_at'],
+          )!,
+    );
+  }
+
+  @override
+  $StoredBookmarksTable createAlias(String alias) {
+    return $StoredBookmarksTable(attachedDatabase, alias);
+  }
+}
+
+class StoredBookmark extends DataClass implements Insertable<StoredBookmark> {
+  final String id;
+  final String bookId;
+  final String chapterId;
+  final int chapterIndex;
+  final int startOffset;
+  final int endOffset;
+  final String snippet;
+  final bool isBold;
+  final bool isUnderline;
+  final bool isWavy;
+  final String? color;
+  final DateTime createdAt;
+  final DateTime updatedAt;
+  const StoredBookmark({
+    required this.id,
+    required this.bookId,
+    required this.chapterId,
+    required this.chapterIndex,
+    required this.startOffset,
+    required this.endOffset,
+    required this.snippet,
+    required this.isBold,
+    required this.isUnderline,
+    required this.isWavy,
+    this.color,
+    required this.createdAt,
+    required this.updatedAt,
+  });
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    map['id'] = Variable<String>(id);
+    map['book_id'] = Variable<String>(bookId);
+    map['chapter_id'] = Variable<String>(chapterId);
+    map['chapter_index'] = Variable<int>(chapterIndex);
+    map['start_offset'] = Variable<int>(startOffset);
+    map['end_offset'] = Variable<int>(endOffset);
+    map['snippet'] = Variable<String>(snippet);
+    map['is_bold'] = Variable<bool>(isBold);
+    map['is_underline'] = Variable<bool>(isUnderline);
+    map['is_wavy'] = Variable<bool>(isWavy);
+    if (!nullToAbsent || color != null) {
+      map['color'] = Variable<String>(color);
+    }
+    map['created_at'] = Variable<DateTime>(createdAt);
+    map['updated_at'] = Variable<DateTime>(updatedAt);
+    return map;
+  }
+
+  StoredBookmarksCompanion toCompanion(bool nullToAbsent) {
+    return StoredBookmarksCompanion(
+      id: Value(id),
+      bookId: Value(bookId),
+      chapterId: Value(chapterId),
+      chapterIndex: Value(chapterIndex),
+      startOffset: Value(startOffset),
+      endOffset: Value(endOffset),
+      snippet: Value(snippet),
+      isBold: Value(isBold),
+      isUnderline: Value(isUnderline),
+      isWavy: Value(isWavy),
+      color:
+          color == null && nullToAbsent ? const Value.absent() : Value(color),
+      createdAt: Value(createdAt),
+      updatedAt: Value(updatedAt),
+    );
+  }
+
+  factory StoredBookmark.fromJson(
+    Map<String, dynamic> json, {
+    ValueSerializer? serializer,
+  }) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return StoredBookmark(
+      id: serializer.fromJson<String>(json['id']),
+      bookId: serializer.fromJson<String>(json['bookId']),
+      chapterId: serializer.fromJson<String>(json['chapterId']),
+      chapterIndex: serializer.fromJson<int>(json['chapterIndex']),
+      startOffset: serializer.fromJson<int>(json['startOffset']),
+      endOffset: serializer.fromJson<int>(json['endOffset']),
+      snippet: serializer.fromJson<String>(json['snippet']),
+      isBold: serializer.fromJson<bool>(json['isBold']),
+      isUnderline: serializer.fromJson<bool>(json['isUnderline']),
+      isWavy: serializer.fromJson<bool>(json['isWavy']),
+      color: serializer.fromJson<String?>(json['color']),
+      createdAt: serializer.fromJson<DateTime>(json['createdAt']),
+      updatedAt: serializer.fromJson<DateTime>(json['updatedAt']),
+    );
+  }
+  @override
+  Map<String, dynamic> toJson({ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return <String, dynamic>{
+      'id': serializer.toJson<String>(id),
+      'bookId': serializer.toJson<String>(bookId),
+      'chapterId': serializer.toJson<String>(chapterId),
+      'chapterIndex': serializer.toJson<int>(chapterIndex),
+      'startOffset': serializer.toJson<int>(startOffset),
+      'endOffset': serializer.toJson<int>(endOffset),
+      'snippet': serializer.toJson<String>(snippet),
+      'isBold': serializer.toJson<bool>(isBold),
+      'isUnderline': serializer.toJson<bool>(isUnderline),
+      'isWavy': serializer.toJson<bool>(isWavy),
+      'color': serializer.toJson<String?>(color),
+      'createdAt': serializer.toJson<DateTime>(createdAt),
+      'updatedAt': serializer.toJson<DateTime>(updatedAt),
+    };
+  }
+
+  StoredBookmark copyWith({
+    String? id,
+    String? bookId,
+    String? chapterId,
+    int? chapterIndex,
+    int? startOffset,
+    int? endOffset,
+    String? snippet,
+    bool? isBold,
+    bool? isUnderline,
+    bool? isWavy,
+    Value<String?> color = const Value.absent(),
+    DateTime? createdAt,
+    DateTime? updatedAt,
+  }) => StoredBookmark(
+    id: id ?? this.id,
+    bookId: bookId ?? this.bookId,
+    chapterId: chapterId ?? this.chapterId,
+    chapterIndex: chapterIndex ?? this.chapterIndex,
+    startOffset: startOffset ?? this.startOffset,
+    endOffset: endOffset ?? this.endOffset,
+    snippet: snippet ?? this.snippet,
+    isBold: isBold ?? this.isBold,
+    isUnderline: isUnderline ?? this.isUnderline,
+    isWavy: isWavy ?? this.isWavy,
+    color: color.present ? color.value : this.color,
+    createdAt: createdAt ?? this.createdAt,
+    updatedAt: updatedAt ?? this.updatedAt,
+  );
+  StoredBookmark copyWithCompanion(StoredBookmarksCompanion data) {
+    return StoredBookmark(
+      id: data.id.present ? data.id.value : this.id,
+      bookId: data.bookId.present ? data.bookId.value : this.bookId,
+      chapterId: data.chapterId.present ? data.chapterId.value : this.chapterId,
+      chapterIndex:
+          data.chapterIndex.present
+              ? data.chapterIndex.value
+              : this.chapterIndex,
+      startOffset:
+          data.startOffset.present ? data.startOffset.value : this.startOffset,
+      endOffset: data.endOffset.present ? data.endOffset.value : this.endOffset,
+      snippet: data.snippet.present ? data.snippet.value : this.snippet,
+      isBold: data.isBold.present ? data.isBold.value : this.isBold,
+      isUnderline:
+          data.isUnderline.present ? data.isUnderline.value : this.isUnderline,
+      isWavy: data.isWavy.present ? data.isWavy.value : this.isWavy,
+      color: data.color.present ? data.color.value : this.color,
+      createdAt: data.createdAt.present ? data.createdAt.value : this.createdAt,
+      updatedAt: data.updatedAt.present ? data.updatedAt.value : this.updatedAt,
+    );
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('StoredBookmark(')
+          ..write('id: $id, ')
+          ..write('bookId: $bookId, ')
+          ..write('chapterId: $chapterId, ')
+          ..write('chapterIndex: $chapterIndex, ')
+          ..write('startOffset: $startOffset, ')
+          ..write('endOffset: $endOffset, ')
+          ..write('snippet: $snippet, ')
+          ..write('isBold: $isBold, ')
+          ..write('isUnderline: $isUnderline, ')
+          ..write('isWavy: $isWavy, ')
+          ..write('color: $color, ')
+          ..write('createdAt: $createdAt, ')
+          ..write('updatedAt: $updatedAt')
+          ..write(')'))
+        .toString();
+  }
+
+  @override
+  int get hashCode => Object.hash(
+    id,
+    bookId,
+    chapterId,
+    chapterIndex,
+    startOffset,
+    endOffset,
+    snippet,
+    isBold,
+    isUnderline,
+    isWavy,
+    color,
+    createdAt,
+    updatedAt,
+  );
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is StoredBookmark &&
+          other.id == this.id &&
+          other.bookId == this.bookId &&
+          other.chapterId == this.chapterId &&
+          other.chapterIndex == this.chapterIndex &&
+          other.startOffset == this.startOffset &&
+          other.endOffset == this.endOffset &&
+          other.snippet == this.snippet &&
+          other.isBold == this.isBold &&
+          other.isUnderline == this.isUnderline &&
+          other.isWavy == this.isWavy &&
+          other.color == this.color &&
+          other.createdAt == this.createdAt &&
+          other.updatedAt == this.updatedAt);
+}
+
+class StoredBookmarksCompanion extends UpdateCompanion<StoredBookmark> {
+  final Value<String> id;
+  final Value<String> bookId;
+  final Value<String> chapterId;
+  final Value<int> chapterIndex;
+  final Value<int> startOffset;
+  final Value<int> endOffset;
+  final Value<String> snippet;
+  final Value<bool> isBold;
+  final Value<bool> isUnderline;
+  final Value<bool> isWavy;
+  final Value<String?> color;
+  final Value<DateTime> createdAt;
+  final Value<DateTime> updatedAt;
+  final Value<int> rowid;
+  const StoredBookmarksCompanion({
+    this.id = const Value.absent(),
+    this.bookId = const Value.absent(),
+    this.chapterId = const Value.absent(),
+    this.chapterIndex = const Value.absent(),
+    this.startOffset = const Value.absent(),
+    this.endOffset = const Value.absent(),
+    this.snippet = const Value.absent(),
+    this.isBold = const Value.absent(),
+    this.isUnderline = const Value.absent(),
+    this.isWavy = const Value.absent(),
+    this.color = const Value.absent(),
+    this.createdAt = const Value.absent(),
+    this.updatedAt = const Value.absent(),
+    this.rowid = const Value.absent(),
+  });
+  StoredBookmarksCompanion.insert({
+    required String id,
+    required String bookId,
+    required String chapterId,
+    required int chapterIndex,
+    required int startOffset,
+    required int endOffset,
+    required String snippet,
+    this.isBold = const Value.absent(),
+    this.isUnderline = const Value.absent(),
+    this.isWavy = const Value.absent(),
+    this.color = const Value.absent(),
+    this.createdAt = const Value.absent(),
+    this.updatedAt = const Value.absent(),
+    this.rowid = const Value.absent(),
+  }) : id = Value(id),
+       bookId = Value(bookId),
+       chapterId = Value(chapterId),
+       chapterIndex = Value(chapterIndex),
+       startOffset = Value(startOffset),
+       endOffset = Value(endOffset),
+       snippet = Value(snippet);
+  static Insertable<StoredBookmark> custom({
+    Expression<String>? id,
+    Expression<String>? bookId,
+    Expression<String>? chapterId,
+    Expression<int>? chapterIndex,
+    Expression<int>? startOffset,
+    Expression<int>? endOffset,
+    Expression<String>? snippet,
+    Expression<bool>? isBold,
+    Expression<bool>? isUnderline,
+    Expression<bool>? isWavy,
+    Expression<String>? color,
+    Expression<DateTime>? createdAt,
+    Expression<DateTime>? updatedAt,
+    Expression<int>? rowid,
+  }) {
+    return RawValuesInsertable({
+      if (id != null) 'id': id,
+      if (bookId != null) 'book_id': bookId,
+      if (chapterId != null) 'chapter_id': chapterId,
+      if (chapterIndex != null) 'chapter_index': chapterIndex,
+      if (startOffset != null) 'start_offset': startOffset,
+      if (endOffset != null) 'end_offset': endOffset,
+      if (snippet != null) 'snippet': snippet,
+      if (isBold != null) 'is_bold': isBold,
+      if (isUnderline != null) 'is_underline': isUnderline,
+      if (isWavy != null) 'is_wavy': isWavy,
+      if (color != null) 'color': color,
+      if (createdAt != null) 'created_at': createdAt,
+      if (updatedAt != null) 'updated_at': updatedAt,
+      if (rowid != null) 'rowid': rowid,
+    });
+  }
+
+  StoredBookmarksCompanion copyWith({
+    Value<String>? id,
+    Value<String>? bookId,
+    Value<String>? chapterId,
+    Value<int>? chapterIndex,
+    Value<int>? startOffset,
+    Value<int>? endOffset,
+    Value<String>? snippet,
+    Value<bool>? isBold,
+    Value<bool>? isUnderline,
+    Value<bool>? isWavy,
+    Value<String?>? color,
+    Value<DateTime>? createdAt,
+    Value<DateTime>? updatedAt,
+    Value<int>? rowid,
+  }) {
+    return StoredBookmarksCompanion(
+      id: id ?? this.id,
+      bookId: bookId ?? this.bookId,
+      chapterId: chapterId ?? this.chapterId,
+      chapterIndex: chapterIndex ?? this.chapterIndex,
+      startOffset: startOffset ?? this.startOffset,
+      endOffset: endOffset ?? this.endOffset,
+      snippet: snippet ?? this.snippet,
+      isBold: isBold ?? this.isBold,
+      isUnderline: isUnderline ?? this.isUnderline,
+      isWavy: isWavy ?? this.isWavy,
+      color: color ?? this.color,
+      createdAt: createdAt ?? this.createdAt,
+      updatedAt: updatedAt ?? this.updatedAt,
+      rowid: rowid ?? this.rowid,
+    );
+  }
+
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    if (id.present) {
+      map['id'] = Variable<String>(id.value);
+    }
+    if (bookId.present) {
+      map['book_id'] = Variable<String>(bookId.value);
+    }
+    if (chapterId.present) {
+      map['chapter_id'] = Variable<String>(chapterId.value);
+    }
+    if (chapterIndex.present) {
+      map['chapter_index'] = Variable<int>(chapterIndex.value);
+    }
+    if (startOffset.present) {
+      map['start_offset'] = Variable<int>(startOffset.value);
+    }
+    if (endOffset.present) {
+      map['end_offset'] = Variable<int>(endOffset.value);
+    }
+    if (snippet.present) {
+      map['snippet'] = Variable<String>(snippet.value);
+    }
+    if (isBold.present) {
+      map['is_bold'] = Variable<bool>(isBold.value);
+    }
+    if (isUnderline.present) {
+      map['is_underline'] = Variable<bool>(isUnderline.value);
+    }
+    if (isWavy.present) {
+      map['is_wavy'] = Variable<bool>(isWavy.value);
+    }
+    if (color.present) {
+      map['color'] = Variable<String>(color.value);
+    }
+    if (createdAt.present) {
+      map['created_at'] = Variable<DateTime>(createdAt.value);
+    }
+    if (updatedAt.present) {
+      map['updated_at'] = Variable<DateTime>(updatedAt.value);
+    }
+    if (rowid.present) {
+      map['rowid'] = Variable<int>(rowid.value);
+    }
+    return map;
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('StoredBookmarksCompanion(')
+          ..write('id: $id, ')
+          ..write('bookId: $bookId, ')
+          ..write('chapterId: $chapterId, ')
+          ..write('chapterIndex: $chapterIndex, ')
+          ..write('startOffset: $startOffset, ')
+          ..write('endOffset: $endOffset, ')
+          ..write('snippet: $snippet, ')
+          ..write('isBold: $isBold, ')
+          ..write('isUnderline: $isUnderline, ')
+          ..write('isWavy: $isWavy, ')
+          ..write('color: $color, ')
+          ..write('createdAt: $createdAt, ')
+          ..write('updatedAt: $updatedAt, ')
+          ..write('rowid: $rowid')
+          ..write(')'))
+        .toString();
+  }
+}
+
 class $SearchSourceHitsTable extends SearchSourceHits
     with TableInfo<$SearchSourceHitsTable, SearchSourceHit> {
   @override
@@ -3431,6 +4200,9 @@ abstract class _$AppDatabase extends GeneratedDatabase {
   );
   late final $StoredLocalChaptersTable storedLocalChapters =
       $StoredLocalChaptersTable(this);
+  late final $StoredBookmarksTable storedBookmarks = $StoredBookmarksTable(
+    this,
+  );
   late final $SearchSourceHitsTable searchSourceHits = $SearchSourceHitsTable(
     this,
   );
@@ -3443,6 +4215,7 @@ abstract class _$AppDatabase extends GeneratedDatabase {
     chapterCaches,
     storedLocalBooks,
     storedLocalChapters,
+    storedBookmarks,
     searchSourceHits,
   ];
 }
@@ -4785,6 +5558,384 @@ typedef $$StoredLocalChaptersTableProcessedTableManager =
       StoredLocalChapter,
       PrefetchHooks Function()
     >;
+typedef $$StoredBookmarksTableCreateCompanionBuilder =
+    StoredBookmarksCompanion Function({
+      required String id,
+      required String bookId,
+      required String chapterId,
+      required int chapterIndex,
+      required int startOffset,
+      required int endOffset,
+      required String snippet,
+      Value<bool> isBold,
+      Value<bool> isUnderline,
+      Value<bool> isWavy,
+      Value<String?> color,
+      Value<DateTime> createdAt,
+      Value<DateTime> updatedAt,
+      Value<int> rowid,
+    });
+typedef $$StoredBookmarksTableUpdateCompanionBuilder =
+    StoredBookmarksCompanion Function({
+      Value<String> id,
+      Value<String> bookId,
+      Value<String> chapterId,
+      Value<int> chapterIndex,
+      Value<int> startOffset,
+      Value<int> endOffset,
+      Value<String> snippet,
+      Value<bool> isBold,
+      Value<bool> isUnderline,
+      Value<bool> isWavy,
+      Value<String?> color,
+      Value<DateTime> createdAt,
+      Value<DateTime> updatedAt,
+      Value<int> rowid,
+    });
+
+class $$StoredBookmarksTableFilterComposer
+    extends Composer<_$AppDatabase, $StoredBookmarksTable> {
+  $$StoredBookmarksTableFilterComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnFilters<String> get id => $composableBuilder(
+    column: $table.id,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get bookId => $composableBuilder(
+    column: $table.bookId,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get chapterId => $composableBuilder(
+    column: $table.chapterId,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get chapterIndex => $composableBuilder(
+    column: $table.chapterIndex,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get startOffset => $composableBuilder(
+    column: $table.startOffset,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get endOffset => $composableBuilder(
+    column: $table.endOffset,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get snippet => $composableBuilder(
+    column: $table.snippet,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<bool> get isBold => $composableBuilder(
+    column: $table.isBold,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<bool> get isUnderline => $composableBuilder(
+    column: $table.isUnderline,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<bool> get isWavy => $composableBuilder(
+    column: $table.isWavy,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get color => $composableBuilder(
+    column: $table.color,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<DateTime> get createdAt => $composableBuilder(
+    column: $table.createdAt,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<DateTime> get updatedAt => $composableBuilder(
+    column: $table.updatedAt,
+    builder: (column) => ColumnFilters(column),
+  );
+}
+
+class $$StoredBookmarksTableOrderingComposer
+    extends Composer<_$AppDatabase, $StoredBookmarksTable> {
+  $$StoredBookmarksTableOrderingComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnOrderings<String> get id => $composableBuilder(
+    column: $table.id,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get bookId => $composableBuilder(
+    column: $table.bookId,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get chapterId => $composableBuilder(
+    column: $table.chapterId,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get chapterIndex => $composableBuilder(
+    column: $table.chapterIndex,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get startOffset => $composableBuilder(
+    column: $table.startOffset,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get endOffset => $composableBuilder(
+    column: $table.endOffset,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get snippet => $composableBuilder(
+    column: $table.snippet,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<bool> get isBold => $composableBuilder(
+    column: $table.isBold,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<bool> get isUnderline => $composableBuilder(
+    column: $table.isUnderline,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<bool> get isWavy => $composableBuilder(
+    column: $table.isWavy,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get color => $composableBuilder(
+    column: $table.color,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<DateTime> get createdAt => $composableBuilder(
+    column: $table.createdAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<DateTime> get updatedAt => $composableBuilder(
+    column: $table.updatedAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+}
+
+class $$StoredBookmarksTableAnnotationComposer
+    extends Composer<_$AppDatabase, $StoredBookmarksTable> {
+  $$StoredBookmarksTableAnnotationComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  GeneratedColumn<String> get id =>
+      $composableBuilder(column: $table.id, builder: (column) => column);
+
+  GeneratedColumn<String> get bookId =>
+      $composableBuilder(column: $table.bookId, builder: (column) => column);
+
+  GeneratedColumn<String> get chapterId =>
+      $composableBuilder(column: $table.chapterId, builder: (column) => column);
+
+  GeneratedColumn<int> get chapterIndex => $composableBuilder(
+    column: $table.chapterIndex,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<int> get startOffset => $composableBuilder(
+    column: $table.startOffset,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<int> get endOffset =>
+      $composableBuilder(column: $table.endOffset, builder: (column) => column);
+
+  GeneratedColumn<String> get snippet =>
+      $composableBuilder(column: $table.snippet, builder: (column) => column);
+
+  GeneratedColumn<bool> get isBold =>
+      $composableBuilder(column: $table.isBold, builder: (column) => column);
+
+  GeneratedColumn<bool> get isUnderline => $composableBuilder(
+    column: $table.isUnderline,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<bool> get isWavy =>
+      $composableBuilder(column: $table.isWavy, builder: (column) => column);
+
+  GeneratedColumn<String> get color =>
+      $composableBuilder(column: $table.color, builder: (column) => column);
+
+  GeneratedColumn<DateTime> get createdAt =>
+      $composableBuilder(column: $table.createdAt, builder: (column) => column);
+
+  GeneratedColumn<DateTime> get updatedAt =>
+      $composableBuilder(column: $table.updatedAt, builder: (column) => column);
+}
+
+class $$StoredBookmarksTableTableManager
+    extends
+        RootTableManager<
+          _$AppDatabase,
+          $StoredBookmarksTable,
+          StoredBookmark,
+          $$StoredBookmarksTableFilterComposer,
+          $$StoredBookmarksTableOrderingComposer,
+          $$StoredBookmarksTableAnnotationComposer,
+          $$StoredBookmarksTableCreateCompanionBuilder,
+          $$StoredBookmarksTableUpdateCompanionBuilder,
+          (
+            StoredBookmark,
+            BaseReferences<
+              _$AppDatabase,
+              $StoredBookmarksTable,
+              StoredBookmark
+            >,
+          ),
+          StoredBookmark,
+          PrefetchHooks Function()
+        > {
+  $$StoredBookmarksTableTableManager(
+    _$AppDatabase db,
+    $StoredBookmarksTable table,
+  ) : super(
+        TableManagerState(
+          db: db,
+          table: table,
+          createFilteringComposer:
+              () =>
+                  $$StoredBookmarksTableFilterComposer($db: db, $table: table),
+          createOrderingComposer:
+              () => $$StoredBookmarksTableOrderingComposer(
+                $db: db,
+                $table: table,
+              ),
+          createComputedFieldComposer:
+              () => $$StoredBookmarksTableAnnotationComposer(
+                $db: db,
+                $table: table,
+              ),
+          updateCompanionCallback:
+              ({
+                Value<String> id = const Value.absent(),
+                Value<String> bookId = const Value.absent(),
+                Value<String> chapterId = const Value.absent(),
+                Value<int> chapterIndex = const Value.absent(),
+                Value<int> startOffset = const Value.absent(),
+                Value<int> endOffset = const Value.absent(),
+                Value<String> snippet = const Value.absent(),
+                Value<bool> isBold = const Value.absent(),
+                Value<bool> isUnderline = const Value.absent(),
+                Value<bool> isWavy = const Value.absent(),
+                Value<String?> color = const Value.absent(),
+                Value<DateTime> createdAt = const Value.absent(),
+                Value<DateTime> updatedAt = const Value.absent(),
+                Value<int> rowid = const Value.absent(),
+              }) => StoredBookmarksCompanion(
+                id: id,
+                bookId: bookId,
+                chapterId: chapterId,
+                chapterIndex: chapterIndex,
+                startOffset: startOffset,
+                endOffset: endOffset,
+                snippet: snippet,
+                isBold: isBold,
+                isUnderline: isUnderline,
+                isWavy: isWavy,
+                color: color,
+                createdAt: createdAt,
+                updatedAt: updatedAt,
+                rowid: rowid,
+              ),
+          createCompanionCallback:
+              ({
+                required String id,
+                required String bookId,
+                required String chapterId,
+                required int chapterIndex,
+                required int startOffset,
+                required int endOffset,
+                required String snippet,
+                Value<bool> isBold = const Value.absent(),
+                Value<bool> isUnderline = const Value.absent(),
+                Value<bool> isWavy = const Value.absent(),
+                Value<String?> color = const Value.absent(),
+                Value<DateTime> createdAt = const Value.absent(),
+                Value<DateTime> updatedAt = const Value.absent(),
+                Value<int> rowid = const Value.absent(),
+              }) => StoredBookmarksCompanion.insert(
+                id: id,
+                bookId: bookId,
+                chapterId: chapterId,
+                chapterIndex: chapterIndex,
+                startOffset: startOffset,
+                endOffset: endOffset,
+                snippet: snippet,
+                isBold: isBold,
+                isUnderline: isUnderline,
+                isWavy: isWavy,
+                color: color,
+                createdAt: createdAt,
+                updatedAt: updatedAt,
+                rowid: rowid,
+              ),
+          withReferenceMapper:
+              (p0) =>
+                  p0
+                      .map(
+                        (e) => (
+                          e.readTable(table),
+                          BaseReferences(db, table, e),
+                        ),
+                      )
+                      .toList(),
+          prefetchHooksCallback: null,
+        ),
+      );
+}
+
+typedef $$StoredBookmarksTableProcessedTableManager =
+    ProcessedTableManager<
+      _$AppDatabase,
+      $StoredBookmarksTable,
+      StoredBookmark,
+      $$StoredBookmarksTableFilterComposer,
+      $$StoredBookmarksTableOrderingComposer,
+      $$StoredBookmarksTableAnnotationComposer,
+      $$StoredBookmarksTableCreateCompanionBuilder,
+      $$StoredBookmarksTableUpdateCompanionBuilder,
+      (
+        StoredBookmark,
+        BaseReferences<_$AppDatabase, $StoredBookmarksTable, StoredBookmark>,
+      ),
+      StoredBookmark,
+      PrefetchHooks Function()
+    >;
 typedef $$SearchSourceHitsTableCreateCompanionBuilder =
     SearchSourceHitsCompanion Function({
       required String titleNorm,
@@ -5158,6 +6309,8 @@ class $AppDatabaseManager {
       $$StoredLocalBooksTableTableManager(_db, _db.storedLocalBooks);
   $$StoredLocalChaptersTableTableManager get storedLocalChapters =>
       $$StoredLocalChaptersTableTableManager(_db, _db.storedLocalChapters);
+  $$StoredBookmarksTableTableManager get storedBookmarks =>
+      $$StoredBookmarksTableTableManager(_db, _db.storedBookmarks);
   $$SearchSourceHitsTableTableManager get searchSourceHits =>
       $$SearchSourceHitsTableTableManager(_db, _db.searchSourceHits);
 }
