@@ -220,6 +220,9 @@ class _BookshelfPageState extends State<BookshelfPage> {
   Future<void> _prefetchLatestAnnouncement() async {
     try {
       final latest = await _announcementService.fetchLatestAnnouncement();
+      if (latest == null) {
+        return;
+      }
       final isRead = await _announcementReadStateService.isRead(latest.id);
       if (!mounted) {
         return;

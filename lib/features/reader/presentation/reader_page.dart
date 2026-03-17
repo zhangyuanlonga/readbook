@@ -102,6 +102,8 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
   final ScrollController _scrollController = ScrollController();
   final PageController _mangaPageController = PageController();
   final GlobalKey _readerBodyKey = GlobalKey();
+  final GlobalKey<SelectionAreaState> _selectionAreaKey =
+      GlobalKey<SelectionAreaState>();
   final SelectionListenerNotifier _selectionNotifier =
       SelectionListenerNotifier();
   final BookmarkRepository _bookmarkRepository =
@@ -177,6 +179,12 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
   bool _scrollEdgeAdvanceArmed = false;
   double? _swipeDragStartDx;
   double? _swipeDragCurrentDx;
+  int? _tapPointerId;
+  Offset? _tapPointerDownPosition;
+  DateTime? _tapPointerDownTime;
+  bool _tapPointerMoved = false;
+  bool _suppressNextReaderTap = false;
+  OverlayEntry? _bookmarkToolbarEntry;
   ReaderPageTurnMode _pageTurnModeBeforeAutoRead = ReaderPageTurnMode.tap;
   List<String> _customBackgroundImages = const [];
   String? _cachedBackgroundImageKey;
@@ -1003,14 +1011,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
     return Stack(
       key: _readerBodyKey,
       children: [
-        SelectionArea(
-          contextMenuBuilder: _buildSelectionContextMenu,
-          onSelectionChanged: _handleSelectionChanged,
-          child: SelectionListener(
-            selectionNotifier: _selectionNotifier,
-            child: listView,
-          ),
-        ),
+        _wrapSelectionArea(child: listView),
         if (_isAutoReadSessionEnabled) _buildAutoReadIndicator(colors),
       ],
     );
@@ -1073,10 +1074,26 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
                     )
                     : null;
 
-            Widget textWidget = SelectableText.rich(
-              textSpan,
-              textAlign: TextAlign.start,
-              textDirection: Directionality.of(context),
+            Widget textWidget = GestureDetector(
+              behavior: HitTestBehavior.translucent,
+              onTapUp: (details) {
+                final handled = _handleBookmarkTap(
+                  paragraphContext: context,
+                  paragraphIndex: paragraphIndex,
+                  paragraphText: paragraph,
+                  localPosition: details.localPosition,
+                  maxWidth: constraints.maxWidth,
+                  textStyle: textStyle,
+                );
+                if (handled) {
+                  _suppressNextReaderTap = true;
+                }
+              },
+              child: Text.rich(
+                textSpan,
+                textAlign: TextAlign.start,
+                textDirection: Directionality.of(context),
+              ),
             );
 
             if (wavyRanges.isNotEmpty && textPainter != null) {
@@ -1191,16 +1208,6 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
   }
 
   int _clampInt(int value, int min, int max) {
-    if (value < min) {
-      return min;
-    }
-    if (value > max) {
-      return max;
-    }
-    return value;
-  }
-
-  double _clampDouble(double value, double min, double max) {
     if (value < min) {
       return min;
     }
@@ -1338,6 +1345,10 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
   }
 
   int _resolveChapterOffsetFromDisplayOffset(int displayOffset) {
+    if (_isPagedTextReaderEnabled() && _pagedPages.isNotEmpty) {
+      return _resolveChapterOffsetFromPagedDisplayOffset(displayOffset);
+    }
+
     final paragraphs =
         _paragraphs.isEmpty
             ? <String>[_content.trim()]
@@ -1372,9 +1383,325 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
     return max(0, chapterOffset - 2 + last.length);
   }
 
+  int _resolveChapterOffsetFromPagedDisplayOffset(int displayOffset) {
+    final paragraphs =
+        _paragraphs.isEmpty
+            ? <String>[_content.trim()]
+            : _paragraphs.toList(growable: false);
+    if (paragraphs.isEmpty || _pagedPages.isEmpty) {
+      return displayOffset;
+    }
+
+    final pageIndex = _currentPageIndex.clamp(0, _pagedPages.length - 1);
+    final page = _pagedPages[pageIndex];
+    if (page.isEmpty) {
+      return displayOffset;
+    }
+
+    final starts = <int>[];
+    var offset = 0;
+    for (final paragraph in paragraphs) {
+      starts.add(offset);
+      offset += paragraph.length + 2;
+    }
+
+    final indentLength = _paragraphIndentLength();
+    var totalDisplayLength = 0;
+    for (final slice in page) {
+      final sliceIndent = slice.start == 0 ? indentLength : 0;
+      totalDisplayLength += (slice.end - slice.start) + sliceIndent;
+    }
+
+    var remaining = _clampInt(displayOffset, 0, totalDisplayLength);
+    for (final slice in page) {
+      final paragraphIndex = slice.paragraphIndex;
+      if (paragraphIndex < 0 || paragraphIndex >= paragraphs.length) {
+        continue;
+      }
+
+      final sliceIndent = slice.start == 0 ? indentLength : 0;
+      final sliceDisplayLength = (slice.end - slice.start) + sliceIndent;
+      if (remaining <= sliceDisplayLength) {
+        final localDisplay = remaining;
+        final localRaw = _clampInt(
+          localDisplay - sliceIndent,
+          0,
+          slice.end - slice.start,
+        );
+        return starts[paragraphIndex] + slice.start + localRaw;
+      }
+      remaining -= sliceDisplayLength;
+    }
+
+    final lastSlice = page.last;
+    final safeParagraphIndex =
+        lastSlice.paragraphIndex.clamp(0, paragraphs.length - 1);
+    return starts[safeParagraphIndex] + lastSlice.end;
+  }
+
+  int _resolveChapterOffsetFromParagraph({
+    required int paragraphIndex,
+    required int paragraphOffset,
+  }) {
+    final paragraphs =
+        _paragraphs.isEmpty
+            ? <String>[_content.trim()]
+            : _paragraphs.toList(growable: false);
+    if (paragraphs.isEmpty) {
+      return paragraphOffset;
+    }
+
+    final safeIndex = _clampInt(
+      paragraphIndex,
+      0,
+      paragraphs.length - 1,
+    );
+    var offset = 0;
+    for (var i = 0; i < safeIndex; i++) {
+      offset += paragraphs[i].length + 2;
+    }
+    offset +=
+        _clampInt(paragraphOffset, 0, paragraphs[safeIndex].length);
+    return offset;
+  }
+
+  Widget _wrapSelectionArea({required Widget child}) {
+    return SelectionArea(
+      key: _selectionAreaKey,
+      contextMenuBuilder: _buildSelectionContextMenu,
+      onSelectionChanged: _handleSelectionChanged,
+      child: SelectionListener(
+        selectionNotifier: _selectionNotifier,
+        child: child,
+      ),
+    );
+  }
+
+  void _clearSystemSelection() {
+    final selectionAreaState = _selectionAreaKey.currentState;
+    if (selectionAreaState == null) {
+      return;
+    }
+    selectionAreaState.selectableRegion.clearSelection();
+  }
+
+  bool _handleBookmarkTap({
+    required BuildContext paragraphContext,
+    required int paragraphIndex,
+    required String paragraphText,
+    required Offset localPosition,
+    required double maxWidth,
+    required TextStyle textStyle,
+  }) {
+    final ranges = _bookmarkRangesByParagraph[paragraphIndex];
+    if (ranges == null || ranges.isEmpty) {
+      return false;
+    }
+
+    final displayText = _applyParagraphIndent(paragraphText);
+    if (displayText.isEmpty) {
+      return false;
+    }
+    final indentLength = displayText.length - paragraphText.length;
+    final painter = _buildParagraphPainter(
+      displayText: displayText,
+      textStyle: textStyle,
+      maxWidth: maxWidth,
+      textDirection: Directionality.of(context),
+    );
+    final position = painter.getPositionForOffset(localPosition);
+    final displayIndex = _clampInt(
+      position.offset,
+      0,
+      displayText.length,
+    );
+    final rawIndex =
+        _clampInt(
+          displayIndex - indentLength,
+          0,
+          paragraphText.length,
+        );
+
+    _BookmarkRange? hitRange;
+    for (final range in ranges) {
+      if (rawIndex >= range.start && rawIndex <= range.end) {
+        if (hitRange == null ||
+            (range.end - range.start) < (hitRange.end - hitRange.start)) {
+          hitRange = range;
+        }
+      }
+    }
+    final resolvedRange = hitRange;
+    if (resolvedRange == null) {
+      return false;
+    }
+
+    final snippet =
+        paragraphText.substring(resolvedRange.start, resolvedRange.end).trim();
+    if (snippet.isEmpty) {
+      return false;
+    }
+
+    final startOffset = _resolveChapterOffsetFromParagraph(
+      paragraphIndex: paragraphIndex,
+      paragraphOffset: resolvedRange.start,
+    );
+    final endOffset = _resolveChapterOffsetFromParagraph(
+      paragraphIndex: paragraphIndex,
+      paragraphOffset: resolvedRange.end,
+    );
+    final renderBox = paragraphContext.findRenderObject() as RenderBox?;
+    final globalPosition =
+        renderBox?.localToGlobal(localPosition) ?? Offset.zero;
+
+    setState(() {
+      _isTextSelectionActive = true;
+      _selectionStartOffset = startOffset;
+      _selectionEndOffset = endOffset;
+      _selectedSnippet = snippet;
+      _selectionBold = resolvedRange.isBold;
+      _selectionUnderline =
+          resolvedRange.isUnderline && !resolvedRange.isWavy;
+      _selectionWavy = resolvedRange.isWavy;
+    });
+    _showBookmarkToolbar(globalPosition);
+    return true;
+  }
+
+  bool _handleBookmarkTapInSlice({
+    required _PagedSlice slice,
+    required String paragraphText,
+    required BuildContext paragraphContext,
+    required Offset localPosition,
+    required double maxWidth,
+    required TextStyle textStyle,
+  }) {
+    final ranges = _bookmarkRangesByParagraph[slice.paragraphIndex];
+    if (ranges == null || ranges.isEmpty) {
+      return false;
+    }
+
+    final rawText = paragraphText.substring(slice.start, slice.end);
+    final displayText = slice.start == 0 ? _applyParagraphIndent(rawText) : rawText;
+    if (displayText.isEmpty) {
+      return false;
+    }
+    final indentLength = displayText.length - rawText.length;
+    final painter = _buildParagraphPainter(
+      displayText: displayText,
+      textStyle: textStyle,
+      maxWidth: maxWidth,
+      textDirection: Directionality.of(context),
+    );
+    final position = painter.getPositionForOffset(localPosition);
+    final displayIndex = _clampInt(
+      position.offset,
+      0,
+      displayText.length,
+    );
+    final localRaw =
+        _clampInt(
+          displayIndex - (slice.start == 0 ? indentLength : 0),
+          0,
+          slice.end - slice.start,
+        );
+    final rawIndex = slice.start + localRaw;
+
+    _BookmarkRange? hitRange;
+    for (final range in ranges) {
+      if (rawIndex >= range.start && rawIndex <= range.end) {
+        if (hitRange == null ||
+            (range.end - range.start) < (hitRange.end - hitRange.start)) {
+          hitRange = range;
+        }
+      }
+    }
+    final resolvedRange = hitRange;
+    if (resolvedRange == null) {
+      return false;
+    }
+
+    final snippet =
+        paragraphText.substring(resolvedRange.start, resolvedRange.end).trim();
+    if (snippet.isEmpty) {
+      return false;
+    }
+
+    final startOffset = _resolveChapterOffsetFromParagraph(
+      paragraphIndex: slice.paragraphIndex,
+      paragraphOffset: resolvedRange.start,
+    );
+    final endOffset = _resolveChapterOffsetFromParagraph(
+      paragraphIndex: slice.paragraphIndex,
+      paragraphOffset: resolvedRange.end,
+    );
+    final renderBox = paragraphContext.findRenderObject() as RenderBox?;
+    final globalPosition =
+        renderBox?.localToGlobal(localPosition) ?? Offset.zero;
+
+    setState(() {
+      _isTextSelectionActive = true;
+      _selectionStartOffset = startOffset;
+      _selectionEndOffset = endOffset;
+      _selectedSnippet = snippet;
+      _selectionBold = resolvedRange.isBold;
+      _selectionUnderline =
+          resolvedRange.isUnderline && !resolvedRange.isWavy;
+      _selectionWavy = resolvedRange.isWavy;
+    });
+    _showBookmarkToolbar(globalPosition);
+    return true;
+  }
+
   void _handleSelectionChanged(SelectedContent? content) {
     _selectedSnippet = content?.plainText.trim() ?? '';
     _syncSelectionState();
+  }
+
+  _SelectionStyle _resolveSelectionStyleByOverlap({
+    required int startOffset,
+    required int endOffset,
+  }) {
+    if (_chapterBookmarks.isEmpty) {
+      return const _SelectionStyle(
+        bold: false,
+        underline: false,
+        wavy: false,
+      );
+    }
+
+    var hasBold = false;
+    var hasUnderline = false;
+    var hasWavy = false;
+    for (final bookmark in _chapterBookmarks) {
+      if (!_isBookmarkInCurrentChapter(bookmark)) {
+        continue;
+      }
+      final overlaps =
+          endOffset > bookmark.startOffset && startOffset < bookmark.endOffset;
+      if (!overlaps) {
+        continue;
+      }
+      if (bookmark.isBold) {
+        hasBold = true;
+      }
+      if (bookmark.isWavy) {
+        hasWavy = true;
+      }
+      if (bookmark.isUnderline) {
+        hasUnderline = true;
+      }
+    }
+
+    if (hasWavy) {
+      hasUnderline = false;
+    }
+
+    return _SelectionStyle(
+      bold: hasBold,
+      underline: hasUnderline,
+      wavy: hasWavy,
+    );
   }
 
   void _handleSelectionNotifierChanged() {
@@ -1383,7 +1710,12 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
     }
     final details = _selectionNotifier.selection;
     _selectionStatus = details.status;
-    _selectionRange = details.range;
+    try {
+      _selectionRange = details.range;
+    } catch (_) {
+      _clearSelectionState();
+      return;
+    }
     _syncSelectionState();
   }
 
@@ -1407,6 +1739,8 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
       return;
     }
 
+    _hideBookmarkToolbar();
+
     final startOffset = _resolveChapterOffsetFromDisplayOffset(
       range.startOffset,
     );
@@ -1424,13 +1758,13 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
       return;
     }
 
-    final matchedBookmark = _findBookmarkByOffsets(safeStart, safeEnd);
-    final nextBold = matchedBookmark?.isBold ?? _selectionBold;
-    final nextWavy = matchedBookmark?.isWavy ?? _selectionWavy;
-    final nextUnderline =
-        nextWavy
-            ? false
-            : (matchedBookmark?.isUnderline ?? _selectionUnderline);
+    final overlapStyle = _resolveSelectionStyleByOverlap(
+      startOffset: safeStart,
+      endOffset: safeEnd,
+    );
+    final nextBold = overlapStyle.bold;
+    final nextWavy = overlapStyle.wavy;
+    final nextUnderline = overlapStyle.underline;
 
     final wasActive = _isTextSelectionActive;
     setState(() {
@@ -1463,17 +1797,107 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
       _selectionEndOffset = 0;
       _selectedSnippet = '';
     });
+    _hideBookmarkToolbar();
     _selectionRange = null;
     _selectionStatus = SelectionStatus.none;
+  }
+
+  void _showBookmarkToolbar(Offset globalPosition) {
+    if (!mounted) {
+      return;
+    }
+    _hideBookmarkToolbar();
+
+    final anchors = TextSelectionToolbarAnchors(
+      primaryAnchor: globalPosition,
+      secondaryAnchor: globalPosition,
+    );
+
+    _bookmarkToolbarEntry = OverlayEntry(
+      builder: (context) {
+        return Stack(
+          children: [
+            Positioned.fill(
+              child: GestureDetector(
+                behavior: HitTestBehavior.translucent,
+                onTap: _clearSelectionState,
+                child: const SizedBox.shrink(),
+              ),
+            ),
+            AdaptiveTextSelectionToolbar.buttonItems(
+              anchors: anchors,
+              buttonItems: [
+                ContextMenuButtonItem(
+                  label: '取消收藏',
+                  onPressed: () {
+                    _hideBookmarkToolbar();
+                    final existing = _currentSelectionBookmark();
+                    if (existing != null) {
+                      unawaited(_onRemoveBookmarkPressed(existing));
+                    } else {
+                      _clearSelectionState();
+                    }
+                  },
+                ),
+                ContextMenuButtonItem(
+                  label: _selectionBold ? '取消加粗' : '加粗',
+                  onPressed: () {
+                    _hideBookmarkToolbar();
+                    unawaited(_toggleSelectionBold());
+                  },
+                ),
+                ContextMenuButtonItem(
+                  label: _selectionUnderline ? '取消下划线' : '下划线',
+                  onPressed: () {
+                    _hideBookmarkToolbar();
+                    unawaited(_toggleSelectionUnderline());
+                  },
+                ),
+                ContextMenuButtonItem(
+                  label: _selectionWavy ? '取消波浪线' : '波浪线',
+                  onPressed: () {
+                    _hideBookmarkToolbar();
+                    unawaited(_toggleSelectionWavy());
+                  },
+                ),
+              ],
+            ),
+          ],
+        );
+      },
+    );
+
+    final overlay = Overlay.of(context, rootOverlay: true);
+    overlay.insert(_bookmarkToolbarEntry!);
+  }
+
+  void _hideBookmarkToolbar() {
+    _bookmarkToolbarEntry?.remove();
+    _bookmarkToolbarEntry = null;
   }
 
   Widget _buildSelectionContextMenu(
     BuildContext context,
     SelectableRegionState selectableRegionState,
   ) {
+    if (!selectableRegionState.mounted) {
+      return const SizedBox.shrink();
+    }
+
     final hasSelection = _isTextSelectionActive && _selectedSnippet.isNotEmpty;
     final existingBookmark = _currentSelectionBookmark();
     final isBookmarked = existingBookmark != null;
+
+    TextSelectionToolbarAnchors anchors;
+    try {
+      anchors = selectableRegionState.contextMenuAnchors;
+    } catch (_) {
+      return const SizedBox.shrink();
+    }
+
+    void hideToolbar() {
+      selectableRegionState.hideToolbar();
+    }
 
     final customItems = <ContextMenuButtonItem>[
       ContextMenuButtonItem(
@@ -1481,6 +1905,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
         onPressed:
             hasSelection
                 ? () {
+                  hideToolbar();
                   if (isBookmarked) {
                     unawaited(
                       _onRemoveBookmarkPressed(
@@ -1500,24 +1925,52 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
       ),
       ContextMenuButtonItem(
         label: _selectionBold ? '取消加粗' : '加粗',
-        onPressed: hasSelection ? () => unawaited(_toggleSelectionBold()) : null,
+        onPressed:
+            hasSelection
+                ? () {
+                  hideToolbar();
+                  unawaited(
+                    _toggleSelectionBold(
+                      clearSelectionState: selectableRegionState,
+                    ),
+                  );
+                }
+                : null,
       ),
       ContextMenuButtonItem(
         label: _selectionUnderline ? '取消下划线' : '下划线',
         onPressed:
             hasSelection
-                ? () => unawaited(_toggleSelectionUnderline())
+                ? () {
+                  hideToolbar();
+                  unawaited(
+                    _toggleSelectionUnderline(
+                      clearSelectionState: selectableRegionState,
+                    ),
+                  );
+                }
                 : null,
       ),
       ContextMenuButtonItem(
         label: _selectionWavy ? '取消波浪线' : '波浪线',
-        onPressed: hasSelection ? () => unawaited(_toggleSelectionWavy()) : null,
+        onPressed:
+            hasSelection
+                ? () {
+                  hideToolbar();
+                  unawaited(
+                    _toggleSelectionWavy(
+                      clearSelectionState: selectableRegionState,
+                    ),
+                  );
+                }
+                : null,
       ),
       ContextMenuButtonItem(
         label: '取消选择',
         onPressed:
             hasSelection
                 ? () {
+                  hideToolbar();
                   selectableRegionState.clearSelection();
                   _clearSelectionState();
                 }
@@ -1526,7 +1979,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
     ];
 
     return AdaptiveTextSelectionToolbar.buttonItems(
-      anchors: selectableRegionState.contextMenuAnchors,
+      anchors: anchors,
       buttonItems: [
         ...customItems,
         ...selectableRegionState.contextMenuButtonItems,
@@ -1534,40 +1987,46 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
     );
   }
 
-  Future<void> _toggleSelectionBold() async {
+  Future<void> _toggleSelectionBold({
+    SelectableRegionState? clearSelectionState,
+  }) async {
     if (!_isTextSelectionActive) {
       return;
     }
-    setState(() {
-      _selectionBold = !_selectionBold;
-    });
+    _selectionBold = !_selectionBold;
     await _ensureSelectionBookmarkSaved();
+    clearSelectionState?.clearSelection();
+    _clearSelectionState();
   }
 
-  Future<void> _toggleSelectionUnderline() async {
+  Future<void> _toggleSelectionUnderline({
+    SelectableRegionState? clearSelectionState,
+  }) async {
     if (!_isTextSelectionActive) {
       return;
     }
-    setState(() {
-      _selectionUnderline = !_selectionUnderline;
-      if (_selectionUnderline) {
-        _selectionWavy = false;
-      }
-    });
+    _selectionUnderline = !_selectionUnderline;
+    if (_selectionUnderline) {
+      _selectionWavy = false;
+    }
     await _ensureSelectionBookmarkSaved();
+    clearSelectionState?.clearSelection();
+    _clearSelectionState();
   }
 
-  Future<void> _toggleSelectionWavy() async {
+  Future<void> _toggleSelectionWavy({
+    SelectableRegionState? clearSelectionState,
+  }) async {
     if (!_isTextSelectionActive) {
       return;
     }
-    setState(() {
-      _selectionWavy = !_selectionWavy;
-      if (_selectionWavy) {
-        _selectionUnderline = false;
-      }
-    });
+    _selectionWavy = !_selectionWavy;
+    if (_selectionWavy) {
+      _selectionUnderline = false;
+    }
     await _ensureSelectionBookmarkSaved();
+    clearSelectionState?.clearSelection();
+    _clearSelectionState();
   }
 
   Future<void> _onSaveBookmarkPressed({
@@ -2109,32 +2568,39 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
             initialIndex: safeIndex,
           );
 
-          return Stack(
+          final pageStack = Stack(
             children: [
               Positioned.fill(
                 child: PageCurlEffect(
                   pageCurlController: controller,
                   pageBuilder: (context, index) {
-                    return _buildCurlPageWidget(
+                    final pageWidget = _buildCurlPageWidget(
                       colors: colors,
                       pageIndex: index,
                       pageSize: pagedSize,
                       padding: contentPadding,
                     );
+                    if (index != safeIndex) {
+                      return SelectionContainer.disabled(child: pageWidget);
+                    }
+                    return pageWidget;
                   },
                   onForwardComplete: () => _onCurlDragComplete(forward: true),
                   onBackwardComplete: () => _onCurlDragComplete(forward: false),
                 ),
               ),
               if (pageCount > 1)
-                _buildPageIndexOverlay(
-                  colors: colors,
-                  index: safeIndex,
-                  total: pageCount,
-                  bottomInset: bottomInset,
+                SelectionContainer.disabled(
+                  child: _buildPageIndexOverlay(
+                    colors: colors,
+                    index: safeIndex,
+                    total: pageCount,
+                    bottomInset: bottomInset,
+                  ),
                 ),
             ],
           );
+          return _wrapSelectionArea(child: pageStack);
         }
 
         final pageChild = KeyedSubtree(
@@ -2148,17 +2614,20 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
         );
 
         if (animationStyle == ReaderPageAnimationStyle.none) {
-          return Stack(
+          final pageStack = Stack(
             children: [
               Positioned.fill(child: pageChild),
-              _buildPageIndexOverlay(
-                colors: colors,
-                index: safeIndex,
-                total: pageCount,
-                bottomInset: bottomInset,
+              SelectionContainer.disabled(
+                child: _buildPageIndexOverlay(
+                  colors: colors,
+                  index: safeIndex,
+                  total: pageCount,
+                  bottomInset: bottomInset,
+                ),
               ),
             ],
           );
+          return _wrapSelectionArea(child: pageStack);
         }
 
         Widget transitionBuilder(Widget child, Animation<double> animation) {
@@ -2211,7 +2680,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
           }
         }
 
-        return Stack(
+        final pageStack = Stack(
           children: [
             Positioned.fill(
               child: ClipRect(
@@ -2223,7 +2692,8 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
                     return Stack(
                       fit: StackFit.expand,
                       children: [
-                        ...previousChildren,
+                        for (final child in previousChildren)
+                          SelectionContainer.disabled(child: child),
                         if (currentChild != null) currentChild,
                       ],
                     );
@@ -2234,14 +2704,17 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
               ),
             ),
             if (pageCount > 1)
-              _buildPageIndexOverlay(
-                colors: colors,
-                index: safeIndex,
-                total: pageCount,
-                bottomInset: bottomInset,
+              SelectionContainer.disabled(
+                child: _buildPageIndexOverlay(
+                  colors: colors,
+                  index: safeIndex,
+                  total: pageCount,
+                  bottomInset: bottomInset,
+                ),
               ),
           ],
         );
+        return _wrapSelectionArea(child: pageStack);
       },
     );
   }
@@ -2318,7 +2791,9 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
         decoration: _buildReaderBackgroundDecoration(colors),
         child: Column(
           children: [
-            _buildPinnedChapterHeader(colors),
+            SelectionContainer.disabled(
+              child: _buildPinnedChapterHeader(colors),
+            ),
             Expanded(
               child: Padding(
                 padding: padding,
@@ -2378,7 +2853,114 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
     final displayText =
         slice.start == 0 ? _applyParagraphIndent(rawText) : rawText;
 
-    return Text(displayText, style: _paragraphTextStyle(colors));
+    final textStyle = _paragraphTextStyle(colors);
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final ranges =
+            _bookmarkRangesByParagraph[slice.paragraphIndex] ??
+            const <_BookmarkRange>[];
+        final localRanges = <_BookmarkRange>[];
+        if (ranges.isNotEmpty) {
+          for (final range in ranges) {
+            final overlapStart = max(range.start, slice.start);
+            final overlapEnd = min(range.end, slice.end);
+            if (overlapEnd <= overlapStart) {
+              continue;
+            }
+            localRanges.add(
+              _BookmarkRange(
+                overlapStart - slice.start,
+                overlapEnd - slice.start,
+                isBold: range.isBold,
+                isUnderline: range.isUnderline,
+                isWavy: range.isWavy,
+              ),
+            );
+          }
+        }
+
+        final indentLength = displayText.length - rawText.length;
+        final mergedRanges =
+            localRanges.isNotEmpty
+                ? _mergeBookmarkRanges(localRanges)
+                : const <_BookmarkRange>[];
+        final textSpan =
+            mergedRanges.isNotEmpty
+                ? _buildBookmarkTextSpan(
+                  displayText: displayText,
+                  ranges: mergedRanges,
+                  indentLength: indentLength,
+                  baseStyle: textStyle,
+                  colors: colors,
+                )
+                : TextSpan(text: displayText, style: textStyle);
+
+        final wavyRanges = <_WavyRange>[];
+        if (mergedRanges.isNotEmpty) {
+          for (final range in mergedRanges) {
+            if (!range.isWavy) {
+              continue;
+            }
+            final startDisplay =
+                _clampInt(range.start + indentLength, 0, displayText.length);
+            final endDisplay =
+                _clampInt(range.end + indentLength, 0, displayText.length);
+            if (endDisplay > startDisplay) {
+              wavyRanges.add(_WavyRange(startDisplay, endDisplay));
+            }
+          }
+        }
+
+        final needsPainter = wavyRanges.isNotEmpty;
+        final textPainter =
+            needsPainter
+                ? _buildParagraphPainter(
+                  displayText: displayText,
+                  textStyle: textStyle,
+                  maxWidth: constraints.maxWidth,
+                  textDirection: Directionality.of(context),
+                )
+                : null;
+
+        Widget textWidget = Text.rich(
+          textSpan,
+          textAlign: TextAlign.start,
+          textDirection: Directionality.of(context),
+        );
+
+        if (wavyRanges.isNotEmpty && textPainter != null) {
+          textWidget = CustomPaint(
+            foregroundPainter: _WavyUnderlinePainter(
+              textPainter: textPainter,
+              ranges: wavyRanges,
+              color: colors.text.withValues(alpha: 0.7),
+              amplitude: (textStyle.fontSize ?? 18) * 0.26,
+              wavelength: (textStyle.fontSize ?? 18) * 1.6,
+              thickness: _decorationThickness(textStyle, wavy: true),
+            ),
+            child: textWidget,
+          );
+        }
+
+        return GestureDetector(
+          behavior: HitTestBehavior.translucent,
+          onTapUp: (details) {
+            final handled = _handleBookmarkTapInSlice(
+              slice: slice,
+              paragraphText: paragraph,
+              paragraphContext: context,
+              localPosition: details.localPosition,
+              maxWidth: constraints.maxWidth,
+              textStyle: textStyle,
+            );
+            if (handled) {
+              _suppressNextReaderTap = true;
+            }
+          },
+          child: textWidget,
+        );
+      },
+    );
   }
 
   Widget _buildPageIndexBadge({
@@ -2541,7 +3123,9 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
         decoration: _buildReaderBackgroundDecoration(colors),
         child: Column(
           children: [
-            _buildPinnedChapterHeader(colors),
+            SelectionContainer.disabled(
+              child: _buildPinnedChapterHeader(colors),
+            ),
             Expanded(
               child: Padding(
                 padding: padding,
@@ -3042,49 +3626,99 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
       builder: (context, constraints) {
         final gestureInsets = MediaQuery.systemGestureInsetsOf(context);
         final enableSwipeTurn = _isSwipePaginationEnabled();
+        return Listener(
+          behavior: HitTestBehavior.translucent,
+          onPointerDown: (event) {
+            if (_tapPointerId != null) {
+              return;
+            }
+            _tapPointerId = event.pointer;
+            _tapPointerDownPosition = event.localPosition;
+            _tapPointerDownTime = DateTime.now();
+            _tapPointerMoved = false;
+            if (enableSwipeTurn) {
+              _swipeDragStartDx = event.localPosition.dx;
+              _swipeDragCurrentDx = event.localPosition.dx;
+            }
+          },
+          onPointerMove: (event) {
+            if (event.pointer != _tapPointerId) {
+              return;
+            }
+            if (enableSwipeTurn) {
+              _swipeDragCurrentDx = event.localPosition.dx;
+            }
+            final down = _tapPointerDownPosition;
+            if (down != null && !_tapPointerMoved) {
+              final moved = (event.localPosition - down).distance;
+              if (moved > kTouchSlop) {
+                _tapPointerMoved = true;
+              }
+            }
+          },
+          onPointerCancel: (event) {
+            if (event.pointer != _tapPointerId) {
+              return;
+            }
+            _resetPointerTracking();
+          },
+          onPointerUp: (event) {
+            if (event.pointer != _tapPointerId) {
+              return;
+            }
+            final size = constraints.biggest;
+            final downTime = _tapPointerDownTime;
+            final elapsedMs =
+                downTime == null
+                    ? 0
+                    : DateTime.now().difference(downTime).inMilliseconds;
+            final dx =
+                (_swipeDragCurrentDx ?? event.localPosition.dx) -
+                (_swipeDragStartDx ?? event.localPosition.dx);
+            final velocity =
+                elapsedMs <= 0 ? 0.0 : dx / (elapsedMs / 1000.0);
 
-        if (_isTextSelectionActive) {
-          return child;
-        }
+            if (enableSwipeTurn &&
+                _swipeDragStartDx != null &&
+                _swipeDragCurrentDx != null) {
+              final isSwipe =
+                  dx.abs() >= _kSwipeTurnDistanceThreshold ||
+                  velocity.abs() >= _kSwipeTurnVelocityThreshold;
+              if (isSwipe) {
+                final dragDetails = DragEndDetails(
+                  velocity: Velocity(pixelsPerSecond: Offset(velocity, 0)),
+                  primaryVelocity: velocity,
+                );
+                _onSwipePaginationDragEnd(
+                  dragDetails,
+                  size,
+                );
+                _resetPointerTracking();
+                return;
+              }
+            }
 
-        return GestureDetector(
-          behavior: HitTestBehavior.opaque,
-          onTapUp:
-              (details) => _onReaderTap(
-                details.localPosition,
-                constraints.biggest,
-                gestureInsets,
-              ),
-          onHorizontalDragStart:
-              enableSwipeTurn
-                  ? (details) {
-                    _swipeDragStartDx = details.localPosition.dx;
-                    _swipeDragCurrentDx = details.localPosition.dx;
-                  }
-                  : null,
-          onHorizontalDragUpdate:
-              enableSwipeTurn
-                  ? (details) {
-                    _swipeDragCurrentDx = details.localPosition.dx;
-                  }
-                  : null,
-          onHorizontalDragCancel:
-              enableSwipeTurn
-                  ? () {
-                    _swipeDragStartDx = null;
-                    _swipeDragCurrentDx = null;
-                  }
-                  : null,
-          onHorizontalDragEnd:
-              enableSwipeTurn
-                  ? (details) =>
-                      _onSwipePaginationDragEnd(details, constraints.biggest)
-                  : null,
-          onLongPress:
-              _isMangaChapter
-                  ? () => unawaited(_openMangaPositionSheet())
-                  : null,
-          child: child,
+            if (_suppressNextReaderTap) {
+              _suppressNextReaderTap = false;
+              _resetPointerTracking();
+              return;
+            }
+
+            if (!_tapPointerMoved &&
+                elapsedMs <= kLongPressTimeout.inMilliseconds &&
+                !_isTextSelectionActive) {
+              _onReaderTap(event.localPosition, size, gestureInsets);
+            }
+            _resetPointerTracking();
+          },
+          child: GestureDetector(
+            behavior: HitTestBehavior.opaque,
+            onLongPress:
+                _isMangaChapter
+                    ? () => unawaited(_openMangaPositionSheet())
+                    : null,
+            child: child,
+          ),
         );
       },
     );
@@ -3126,6 +3760,15 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
     if (isRightTurn && !isLeftTurn) {
       unawaited(_goToPreviousPage(viewportSize.height));
     }
+  }
+
+  void _resetPointerTracking() {
+    _tapPointerId = null;
+    _tapPointerDownPosition = null;
+    _tapPointerDownTime = null;
+    _tapPointerMoved = false;
+    _swipeDragStartDx = null;
+    _swipeDragCurrentDx = null;
   }
 
   TextStyle _paragraphTextStyle(_ReaderThemeColors colors) {
@@ -5124,6 +5767,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
     _selectionStartOffset = 0;
     _selectionEndOffset = 0;
     _selectedSnippet = '';
+    _hideBookmarkToolbar();
     _chapterBookmarks = const [];
     _bookmarkRangesByParagraph = const <int, List<_BookmarkRange>>{};
     if (_mangaPageController.hasClients) {
@@ -6181,6 +6825,8 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
     if (!_isPagedTextReaderEnabled()) {
       return;
     }
+    _clearSelectionState();
+    _clearSystemSelection();
 
     final animationStyle = _effectivePageAnimationStyle();
     if (animationStyle == ReaderPageAnimationStyle.curl) {
@@ -6218,6 +6864,8 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
     if (!_isPagedTextReaderEnabled()) {
       return;
     }
+    _clearSelectionState();
+    _clearSystemSelection();
 
     final animationStyle = _effectivePageAnimationStyle();
     if (animationStyle == ReaderPageAnimationStyle.curl) {
@@ -10106,6 +10754,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
       _settings = appliedResult;
       _customFonts = refreshedCustomFonts;
     });
+    _clearSelectionState();
     await _preferencesService.saveSettings(appliedResult);
 
     if (shouldEnableAutoRead && mounted) {
@@ -10984,6 +11633,18 @@ class _BookmarkGroup {
   final int chapterIndex;
   final String title;
   final List<Bookmark> bookmarks;
+}
+
+class _SelectionStyle {
+  const _SelectionStyle({
+    required this.bold,
+    required this.underline,
+    required this.wavy,
+  });
+
+  final bool bold;
+  final bool underline;
+  final bool wavy;
 }
 
 class _BookmarkGroupSection extends StatelessWidget {

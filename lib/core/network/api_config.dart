@@ -3,7 +3,9 @@ class AppApiConfig {
 
   static const String baseUrl = String.fromEnvironment(
     'APPREAD_API_BASE_URL',
-    defaultValue: 'http://localhost:8080',
+    //  请求正式地址
+    defaultValue: 'https://www.sxyd.lltask.top/api/',
+    // defaultValue: 'http://localhost:8080',
   );
 
   static const String appName = String.fromEnvironment(

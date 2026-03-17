@@ -14,7 +14,7 @@ class AnnouncementService {
   static const Duration _latestCacheTtl = Duration(minutes: 5);
   static Announcement? _latestCache;
   static DateTime? _latestCacheAt;
-  static Future<Announcement>? _latestInFlight;
+  static Future<Announcement?>? _latestInFlight;
 
   final ApiClient _client;
   final String _baseUrl;
@@ -25,19 +25,31 @@ class AnnouncementService {
     bool useCache = true,
   }) async {
     _ensureBaseUrl();
-    final data = await _client.request<Map<String, dynamic>>(
-      method: ApiMethod.get,
-      path: '/v1/announcements',
-      queryParameters: {'page': page, 'page_size': pageSize},
-      enableCache: useCache,
-      cacheTtl: const Duration(minutes: 5),
-      stage: ErrorStage.unknown,
-      decoder: _decodeMap,
-    );
-    return AnnouncementPage.fromJson(data);
+    try {
+      final data = await _client.request<Map<String, dynamic>>(
+        method: ApiMethod.get,
+        path: '/v1/announcements',
+        queryParameters: {'page': page, 'page_size': pageSize},
+        enableCache: useCache,
+        cacheTtl: const Duration(minutes: 5),
+        stage: ErrorStage.unknown,
+        decoder: _decodeMap,
+      );
+      return AnnouncementPage.fromJson(data);
+    } on ApiException catch (error) {
+      if (error.apiCode == 'NOT_FOUND') {
+        return AnnouncementPage(
+          items: const <Announcement>[],
+          page: page,
+          pageSize: pageSize,
+          total: 0,
+        );
+      }
+      rethrow;
+    }
   }
 
-  Future<Announcement> fetchLatestAnnouncement({
+  Future<Announcement?> fetchLatestAnnouncement({
     bool useCache = true,
   }) async {
     _ensureBaseUrl();
@@ -54,24 +66,33 @@ class AnnouncementService {
         return inflight;
       }
     }
-    final future = _client
-        .request<Map<String, dynamic>>(
+    Future<Announcement?> task() async {
+      try {
+        final data = await _client.request<Map<String, dynamic>>(
           method: ApiMethod.get,
           path: '/v1/announcements/latest',
           enableCache: useCache,
           cacheTtl: _latestCacheTtl,
           stage: ErrorStage.unknown,
           decoder: _decodeMap,
-        )
-        .then((data) {
-          final announcement = Announcement.fromJson(data);
-          _latestCache = announcement;
-          _latestCacheAt = DateTime.now();
-          return announcement;
-        })
-        .whenComplete(() {
-          _latestInFlight = null;
-        });
+        );
+        final announcement = Announcement.fromJson(data);
+        _latestCache = announcement;
+        _latestCacheAt = DateTime.now();
+        return announcement;
+      } on ApiException catch (error) {
+        if (error.apiCode == 'NOT_FOUND') {
+          _latestCache = null;
+          _latestCacheAt = null;
+          return null;
+        }
+        rethrow;
+      }
+    }
+
+    final future = task().whenComplete(() {
+      _latestInFlight = null;
+    });
 
     if (useCache) {
       _latestInFlight = future;

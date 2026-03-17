@@ -4,7 +4,6 @@ import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:go_router/go_router.dart';
 import '../core/analytics/analytics_service.dart';
 import '../core/app_update/app_update_dialog.dart';
 import '../core/app_update/app_update_service.dart';
@@ -278,7 +277,7 @@ class _SystemUiOverlayWrapperState extends State<_SystemUiOverlayWrapper>
                 if (!mounted) {
                   return;
                 }
-                context.push('/auth');
+                appRouter.push('/auth');
               },
             )
             : null;
@@ -355,6 +354,9 @@ class _SystemUiOverlayWrapperState extends State<_SystemUiOverlayWrapper>
     }
 
     final announcement = latest;
+    if (announcement == null) {
+      return;
+    }
 
     final active = announcement.isActiveAt(DateTime.now().toUtc());
     if (!active) {

@@ -290,7 +290,18 @@ class ApiClient {
     if (_baseUrl.isEmpty) {
       return normalized;
     }
-    return Uri.parse(_baseUrl).resolve(normalized).toString();
+    final baseUri = Uri.parse(_baseUrl);
+    if (normalized.startsWith('/')) {
+      final basePath = baseUri.path.trim();
+      if (basePath.isNotEmpty && basePath != '/') {
+        final normalizedBasePath =
+            basePath.endsWith('/') ? basePath.substring(0, basePath.length - 1) : basePath;
+        return baseUri
+            .replace(path: '$normalizedBasePath$normalized')
+            .toString();
+      }
+    }
+    return baseUri.resolve(normalized).toString();
   }
 
   String _methodText(ApiMethod method) {

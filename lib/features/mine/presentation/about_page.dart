@@ -1,12 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import '../../../app/layout/app_layout.dart';
 import '../../../app/layout/app_spacing.dart';
-import '../../../core/app_update/app_update_check_result.dart';
-import '../../../core/app_update/app_update_dialog.dart';
-import '../../../core/app_update/app_update_release.dart';
-import '../../../core/app_update/app_update_service.dart';
 import '../../../core/device/device_identity_service.dart';
 
 class AboutPage extends StatefulWidget {
@@ -35,24 +32,14 @@ class AboutPage extends StatefulWidget {
     'Drift + SQLite',
     'html / json_path',
   ];
-  static const List<String> _docEntries = [
-    'docs/project_overview.md',
-    'docs/requirements.md',
-    'docs/architecture.md',
-    'docs/project_conventions.md',
-    'docs/implementation_steps.md',
-  ];
+  static final Uri _officialSiteUri = Uri.parse('https://www.sxyd.lltask.top');
 }
 
 class _AboutPageState extends State<AboutPage> {
-  final AppUpdateService _updateService = AppUpdateService();
   final DeviceIdentityService _identityService = DeviceIdentityService();
 
   String _appVersionName = AboutPage._appVersion;
   int _appVersionCode = 0;
-  bool _isCheckingUpdate = false;
-  AppUpdateCheckResult? _updateResult;
-  String? _updateMessage;
 
   @override
   void initState() {
@@ -123,7 +110,7 @@ class _AboutPageState extends State<AboutPage> {
                     ];
 
                     final rightColumn = <Widget>[
-                      _buildUpdateCard(context),
+                      _buildWebsiteCard(context),
                       const SizedBox(height: 10),
                       _buildTagCard(
                         context,
@@ -132,8 +119,6 @@ class _AboutPageState extends State<AboutPage> {
                         icon: Icons.developer_mode_rounded,
                         tags: AboutPage._techStack,
                       ),
-                      const SizedBox(height: 10),
-                      _buildDocCard(context),
                       const SizedBox(height: 10),
                       _buildComplianceCard(context),
                     ];
@@ -275,35 +260,10 @@ class _AboutPageState extends State<AboutPage> {
     );
   }
 
-  Widget _buildUpdateCard(BuildContext context) {
+  Widget _buildWebsiteCard(BuildContext context) {
     final theme = Theme.of(context);
     final colorScheme = theme.colorScheme;
-    final result = _updateResult;
-    final release = result?.release;
-    final hasUpdate = result?.hasUpdate == true;
-
-    String statusText;
-    if (_isCheckingUpdate) {
-      statusText = '检查更新中...';
-    } else if (_updateMessage != null) {
-      statusText = _updateMessage!;
-    } else if (result == null) {
-      statusText = '点击检查更新获取最新版本';
-    } else if (!hasUpdate) {
-      statusText = '已是最新版本';
-    } else {
-      final versionLabel =
-          release?.versionName ??
-          (release?.versionCode != null
-              ? '版本 ${release!.versionCode}'
-              : '新版本');
-      statusText = '发现更新 · $versionLabel';
-      if (release?.forceUpdate == true) {
-        statusText = '$statusText（强制更新）';
-      }
-    }
-
-    final updateUrl = release == null ? null : _resolveUpdateUrl(release);
+    final urlText = AboutPage._officialSiteUri.toString();
 
     return Card(
       child: Padding(
@@ -313,10 +273,10 @@ class _AboutPageState extends State<AboutPage> {
           children: [
             Row(
               children: [
-                Icon(Icons.system_update_alt, size: 19, color: colorScheme.primary),
+                Icon(Icons.public, size: 19, color: colorScheme.primary),
                 const SizedBox(width: 6),
                 Text(
-                  '检查更新',
+                  '官网地址',
                   style: theme.textTheme.titleSmall?.copyWith(
                     fontWeight: FontWeight.w700,
                   ),
@@ -325,43 +285,33 @@ class _AboutPageState extends State<AboutPage> {
             ),
             const SizedBox(height: 6),
             Text(
-              statusText,
+              '访问官网获取产品介绍与最新动态。',
               style: theme.textTheme.bodySmall?.copyWith(
                 color: colorScheme.onSurfaceVariant,
               ),
             ),
-            if (release?.changelog != null &&
-                release!.changelog!.trim().isNotEmpty) ...[
-              const SizedBox(height: 8),
-              Text(
-                release.changelog!,
-                maxLines: 3,
-                overflow: TextOverflow.ellipsis,
-                style: theme.textTheme.bodySmall?.copyWith(height: 1.4),
-              ),
-            ],
-            const SizedBox(height: 10),
-            Row(
-              children: [
-                OutlinedButton(
-                  onPressed: _isCheckingUpdate ? null : _checkUpdate,
-                  child:
-                      _isCheckingUpdate
-                          ? const SizedBox(
-                            width: 14,
-                            height: 14,
-                            child: CircularProgressIndicator(strokeWidth: 2),
-                          )
-                          : const Text('检查更新'),
+            const SizedBox(height: 8),
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 7),
+              decoration: BoxDecoration(
+                color: colorScheme.surfaceContainerLow,
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(
+                  color: colorScheme.outlineVariant.withValues(alpha: 0.45),
                 ),
-                if (updateUrl != null) ...[
-                  const SizedBox(width: 8),
-                  FilledButton(
-                    onPressed: () => _openUpdateUrl(updateUrl),
-                    child: const Text('前往更新'),
-                  ),
-                ],
-              ],
+              ),
+              child: Text(
+                urlText,
+                style: theme.textTheme.bodySmall?.copyWith(
+                  fontFamily: 'monospace',
+                ),
+              ),
+            ),
+            const SizedBox(height: 10),
+            FilledButton(
+              onPressed: _openOfficialSite,
+              child: const Text('打开官网'),
             ),
           ],
         ),
@@ -369,53 +319,24 @@ class _AboutPageState extends State<AboutPage> {
     );
   }
 
-  Uri? _resolveUpdateUrl(AppUpdateRelease release) {
-    return AppUpdateDialog.resolveUpdateUrl(release);
-  }
-
-  Future<void> _openUpdateUrl(Uri url) async {
-    await AppUpdateDialog.openUpdateUrl(context, url);
-  }
-
-  Future<void> _checkUpdate() async {
-    if (_isCheckingUpdate) {
+  Future<void> _openOfficialSite() async {
+    final launched = await launchUrl(
+      AboutPage._officialSiteUri,
+      mode: LaunchMode.externalApplication,
+    );
+    if (launched || !mounted) {
       return;
     }
-    setState(() {
-      _isCheckingUpdate = true;
-      _updateMessage = null;
-    });
-    try {
-      final result = await _updateService.checkUpdate();
-      if (!mounted) {
-        return;
-      }
-      setState(() {
-        _updateResult = result;
-        _updateMessage = result.hasUpdate ? '发现新版本' : '已是最新版本';
-      });
-      final release = result.release;
-      if (result.hasUpdate && release != null) {
-        _showUpdateDialog(release);
-      }
-    } catch (_) {
-      if (!mounted) {
-        return;
-      }
-      setState(() {
-        _updateMessage = '检查更新失败，请稍后再试。';
-      });
-    } finally {
-      if (mounted) {
-        setState(() {
-          _isCheckingUpdate = false;
-        });
-      }
-    }
+    _showMessage('跳转失败，请稍后重试。');
   }
 
-  Future<void> _showUpdateDialog(AppUpdateRelease release) async {
-    await AppUpdateDialog.showUpdateDialog(context, release);
+  void _showMessage(String message) {
+    if (!mounted) {
+      return;
+    }
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(message)),
+    );
   }
 
   Widget _buildMetricPill(BuildContext context, String label, String value) {
@@ -566,65 +487,6 @@ class _AboutPageState extends State<AboutPage> {
                   .map((tag) => _AboutTag(text: tag))
                   .toList(growable: false),
             ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildDocCard(BuildContext context) {
-    final theme = Theme.of(context);
-    final colorScheme = theme.colorScheme;
-
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.fromLTRB(12, 12, 12, 11),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                Icon(
-                  Icons.library_books_outlined,
-                  size: 19,
-                  color: colorScheme.primary,
-                ),
-                const SizedBox(width: 6),
-                Text(
-                  '文档入口',
-                  style: theme.textTheme.titleSmall?.copyWith(
-                    fontWeight: FontWeight.w700,
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 6),
-            Text(
-              '可在项目目录直接查看以下文档：',
-              style: theme.textTheme.bodySmall?.copyWith(
-                color: colorScheme.onSurfaceVariant,
-              ),
-            ),
-            const SizedBox(height: 8),
-            for (final path in AboutPage._docEntries)
-              Container(
-                width: double.infinity,
-                margin: const EdgeInsets.only(bottom: 6),
-                padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 7),
-                decoration: BoxDecoration(
-                  color: colorScheme.surfaceContainerLow,
-                  borderRadius: BorderRadius.circular(8),
-                  border: Border.all(
-                    color: colorScheme.outlineVariant.withValues(alpha: 0.45),
-                  ),
-                ),
-                child: Text(
-                  path,
-                  style: theme.textTheme.bodySmall?.copyWith(
-                    fontFamily: 'monospace',
-                  ),
-                ),
-              ),
           ],
         ),
       ),
