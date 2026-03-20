@@ -9,6 +9,8 @@ PROJECT_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
 FLUTTER_CMD="${FLUTTER_CMD:-flutter}"
 BUILD_MODE="${1:-${BUILD_MODE:-release}}" # debug | profile | release
 OUTPUT_DIR="${OUTPUT_DIR:-${PROJECT_ROOT}/build/linux/artifacts}"
+BUILD_NAME="${BUILD_NAME:-}"
+BUILD_NUMBER="${BUILD_NUMBER:-}"
 SKIP_CLEAN="${SKIP_CLEAN:-0}"
 SKIP_PUB_GET="${SKIP_PUB_GET:-0}"
 
@@ -23,6 +25,8 @@ Arguments:
 Environment variables:
   FLUTTER_CMD  Flutter command path (default: flutter)
   OUTPUT_DIR   Output artifacts folder (default: build/linux/artifacts)
+  BUILD_NAME   Override Flutter --build-name
+  BUILD_NUMBER Override Flutter --build-number
   SKIP_CLEAN   1 to skip flutter clean
   SKIP_PUB_GET 1 to skip flutter pub get
 
@@ -61,6 +65,8 @@ fi
 echo "==> Project root: ${PROJECT_ROOT}"
 echo "==> Flutter cmd : ${FLUTTER_CMD}"
 echo "==> Build mode  : ${BUILD_MODE}"
+echo "==> Build name  : ${BUILD_NAME:-pubspec default}"
+echo "==> Build number: ${BUILD_NUMBER:-pubspec default}"
 echo "==> Output dir  : ${OUTPUT_DIR}"
 
 cd "${PROJECT_ROOT}"
@@ -76,7 +82,14 @@ if [[ "${SKIP_PUB_GET}" != "1" ]]; then
 fi
 
 echo "==> flutter build linux --${BUILD_MODE}"
-"${FLUTTER_CMD}" build linux --"${BUILD_MODE}"
+CMD=("${FLUTTER_CMD}" build linux --"${BUILD_MODE}")
+if [[ -n "${BUILD_NAME}" ]]; then
+  CMD+=(--build-name="${BUILD_NAME}")
+fi
+if [[ -n "${BUILD_NUMBER}" ]]; then
+  CMD+=(--build-number="${BUILD_NUMBER}")
+fi
+"${CMD[@]}"
 
 BUNDLE_DIR="${PROJECT_ROOT}/build/linux/x64/${BUILD_MODE}/bundle"
 if [[ ! -d "${BUNDLE_DIR}" ]]; then

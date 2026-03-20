@@ -11,6 +11,8 @@ FLUTTER_CMD="${FLUTTER_CMD:-flutter}"
 APP_NAME="${APP_NAME:-Runner}"
 OUTPUT_DIR="${OUTPUT_DIR:-${PROJECT_ROOT}/build/ios/ipa}"
 BUILD_MODE="${BUILD_MODE:-release}"
+BUILD_NAME="${BUILD_NAME:-}"
+BUILD_NUMBER="${BUILD_NUMBER:-}"
 SKIP_CLEAN="${SKIP_CLEAN:-0}"
 SKIP_PUB_GET="${SKIP_PUB_GET:-0}"
 SKIP_POD_INSTALL="${SKIP_POD_INSTALL:-0}"
@@ -33,6 +35,8 @@ fi
 echo "==> Project root: ${PROJECT_ROOT}"
 echo "==> Flutter cmd: ${FLUTTER_CMD}"
 echo "==> Build mode : ${BUILD_MODE}"
+echo "==> Build name : ${BUILD_NAME:-pubspec default}"
+echo "==> Build number: ${BUILD_NUMBER:-pubspec default}"
 echo "==> App name   : ${APP_NAME}"
 echo "==> Output dir : ${OUTPUT_DIR}"
 
@@ -58,7 +62,14 @@ if [[ "${SKIP_POD_INSTALL}" != "1" ]]; then
 fi
 
 echo "==> flutter build ios --${BUILD_MODE} --no-codesign"
-"${FLUTTER_CMD}" build ios --"${BUILD_MODE}" --no-codesign
+CMD=("${FLUTTER_CMD}" build ios --"${BUILD_MODE}" --no-codesign)
+if [[ -n "${BUILD_NAME}" ]]; then
+  CMD+=(--build-name="${BUILD_NAME}")
+fi
+if [[ -n "${BUILD_NUMBER}" ]]; then
+  CMD+=(--build-number="${BUILD_NUMBER}")
+fi
+"${CMD[@]}"
 
 APP_PATH="${PROJECT_ROOT}/build/ios/iphoneos/${APP_NAME}.app"
 if [[ ! -d "${APP_PATH}" ]]; then

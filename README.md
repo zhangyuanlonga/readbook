@@ -27,6 +27,8 @@ flutter run
 
 新增脚本：`scripts/build_unified_artifacts.sh`，会按平台调用现有打包脚本，并把产物汇总到同一个会话目录，避免手动到处找文件。
 
+交互式终端下，脚本会在打包前提示确认本次版本号，并通过 `--build-name / --build-number` 覆盖 Flutter 默认版本，无需每次手改 `pubspec.yaml`。
+
 默认（`auto`）会根据当前主机自动选择可构建平台：
 - macOS: `android ios macos`
 - Linux: `android linux`
@@ -41,6 +43,9 @@ flutter run
 
 # 只打 Android APK（按 ABI 拆分）
 ANDROID_TARGET=apk SPLIT_PER_ABI=1 ./scripts/build_unified_artifacts.sh android release
+
+# 非交互模式手动指定版本
+BUILD_NAME=1.0.7 BUILD_NUMBER=2 ./scripts/build_unified_artifacts.sh android,ios release
 ```
 
 产物默认目录：`build/unified_artifacts/<timestamp>-<mode>/`

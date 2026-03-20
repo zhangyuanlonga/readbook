@@ -14,6 +14,9 @@ ANDROID_TARGET="${ANDROID_TARGET:-both}" # apk | appbundle | both
 SPLIT_PER_ABI="${SPLIT_PER_ABI:-0}"      # Android APK only
 APP_NAME="${APP_NAME:-Runner}"           # iOS APP_NAME
 MACOS_APP_NAME="${MACOS_APP_NAME:-}"     # macOS APP_NAME
+BUILD_NAME="${BUILD_NAME:-}"
+BUILD_NUMBER="${BUILD_NUMBER:-}"
+VERSION_PROMPT="${VERSION_PROMPT:-1}"
 SKIP_CLEAN="${SKIP_CLEAN:-0}"
 SKIP_PUB_GET="${SKIP_PUB_GET:-0}"
 SKIP_POD_INSTALL="${SKIP_POD_INSTALL:-0}"
@@ -41,6 +44,9 @@ Environment variables:
   SPLIT_PER_ABI    1 to pass --split-per-abi for Android APK
   APP_NAME         iOS app bundle name (default: Runner)
   MACOS_APP_NAME   Optional macOS .app name without .app
+  BUILD_NAME       Override Flutter --build-name
+  BUILD_NUMBER     Override Flutter --build-number
+  VERSION_PROMPT   1 to ask interactively before build when TTY is available
   SKIP_CLEAN       1 to skip flutter clean
   SKIP_PUB_GET     1 to skip flutter pub get
   SKIP_POD_INSTALL 1 to skip pod install for iOS
@@ -111,6 +117,51 @@ array_contains() {
   done
 
   return 1
+}
+
+read_pubspec_version() {
+  local version_line
+  version_line="$(grep -E '^version:' "${PROJECT_ROOT}/pubspec.yaml" | head -n 1 | sed 's/^version:[[:space:]]*//')"
+  echo "${version_line}"
+}
+
+resolve_version_overrides() {
+  local pubspec_version current_name current_number input
+
+  pubspec_version="$(read_pubspec_version)"
+  current_name="${pubspec_version%%+*}"
+  current_number=""
+  if [[ "${pubspec_version}" == *"+"* ]]; then
+    current_number="${pubspec_version##*+}"
+  fi
+
+  if [[ -z "${BUILD_NAME}" ]]; then
+    BUILD_NAME="${current_name}"
+  fi
+  if [[ -z "${BUILD_NUMBER}" ]]; then
+    BUILD_NUMBER="${current_number}"
+  fi
+
+  if [[ "${VERSION_PROMPT}" == "1" && -t 0 ]]; then
+    echo "==> Current pubspec version: ${pubspec_version:-unknown}"
+    read -r -p "==> Confirm build name [${BUILD_NAME:-none}]: " input
+    if [[ -n "${input}" ]]; then
+      BUILD_NAME="${input}"
+    fi
+    read -r -p "==> Confirm build number [${BUILD_NUMBER:-none}]: " input
+    if [[ -n "${input}" ]]; then
+      BUILD_NUMBER="${input}"
+    fi
+  fi
+
+  if [[ -n "${BUILD_NAME}" && ! "${BUILD_NAME}" =~ ^[0-9]+(\.[0-9]+){0,2}$ ]]; then
+    echo "Error: BUILD_NAME must look like 1.0.6." >&2
+    exit 1
+  fi
+  if [[ -n "${BUILD_NUMBER}" && ! "${BUILD_NUMBER}" =~ ^[0-9]+$ ]]; then
+    echo "Error: BUILD_NUMBER must be an integer." >&2
+    exit 1
+  fi
 }
 
 normalize_platforms() {
@@ -250,6 +301,8 @@ if ! normalize_platforms "${PLATFORMS_INPUT}"; then
   exit 1
 fi
 
+resolve_version_overrides
+
 BUILDABLE_COUNT=0
 for platform in "${PLATFORMS[@]-}"; do
   if is_platform_supported_on_host "${platform}"; then
@@ -276,6 +329,8 @@ mkdir -p "${SESSION_DIR}" "${STAGING_ROOT}"
   echo "project: ${PROJECT_ROOT}"
   echo "timestamp: ${TIMESTAMP}"
   echo "build_mode: ${BUILD_MODE}"
+  echo "build_name: ${BUILD_NAME:-pubspec default}"
+  echo "build_number: ${BUILD_NUMBER:-pubspec default}"
   echo "platforms: ${PLATFORMS[*]}"
   echo ""
 } > "${MANIFEST_FILE}"
@@ -285,6 +340,8 @@ echo "==> Flutter cmd  : ${FLUTTER_CMD}"
 echo "==> Host OS      : $(host_os)"
 echo "==> Platforms    : ${PLATFORMS[*]}"
 echo "==> Build mode   : ${BUILD_MODE}"
+echo "==> Build name   : ${BUILD_NAME:-pubspec default}"
+echo "==> Build number : ${BUILD_NUMBER:-pubspec default}"
 echo "==> Output folder: ${SESSION_DIR}"
 
 cd "${PROJECT_ROOT}"
@@ -308,6 +365,8 @@ for platform in "${PLATFORMS[@]-}"; do
         SKIP_CLEAN=1 \
         SKIP_PUB_GET=1 \
         SPLIT_PER_ABI="${SPLIT_PER_ABI}" \
+        BUILD_NAME="${BUILD_NAME}" \
+        BUILD_NUMBER="${BUILD_NUMBER}" \
         "${SCRIPT_DIR}/build_android_artifacts.sh" "${ANDROID_TARGET}" "${BUILD_MODE}"
       ;;
     ios)
@@ -328,6 +387,8 @@ for platform in "${PLATFORMS[@]-}"; do
           SKIP_CLEAN=1 \
           SKIP_PUB_GET=1 \
           SKIP_POD_INSTALL="${SKIP_POD_INSTALL}" \
+          BUILD_NAME="${BUILD_NAME}" \
+          BUILD_NUMBER="${BUILD_NUMBER}" \
           "${SCRIPT_DIR}/build_ios_ipa_nocodesign.sh"
       fi
       ;;
@@ -338,6 +399,8 @@ for platform in "${PLATFORMS[@]-}"; do
         APP_NAME="${MACOS_APP_NAME}" \
         SKIP_CLEAN=1 \
         SKIP_PUB_GET=1 \
+        BUILD_NAME="${BUILD_NAME}" \
+        BUILD_NUMBER="${BUILD_NUMBER}" \
         "${SCRIPT_DIR}/build_macos_artifact.sh" "${BUILD_MODE}"
       ;;
     linux)
@@ -346,6 +409,8 @@ for platform in "${PLATFORMS[@]-}"; do
         OUTPUT_DIR="${STAGING_ROOT}/linux" \
         SKIP_CLEAN=1 \
         SKIP_PUB_GET=1 \
+        BUILD_NAME="${BUILD_NAME}" \
+        BUILD_NUMBER="${BUILD_NUMBER}" \
         "${SCRIPT_DIR}/build_linux_artifact.sh" "${BUILD_MODE}"
       ;;
     windows)
@@ -354,6 +419,8 @@ for platform in "${PLATFORMS[@]-}"; do
         OUTPUT_DIR="${STAGING_ROOT}/windows" \
         SKIP_CLEAN=1 \
         SKIP_PUB_GET=1 \
+        BUILD_NAME="${BUILD_NAME}" \
+        BUILD_NUMBER="${BUILD_NUMBER}" \
         "${SCRIPT_DIR}/build_windows_artifact.sh" "${BUILD_MODE}"
       ;;
   esac

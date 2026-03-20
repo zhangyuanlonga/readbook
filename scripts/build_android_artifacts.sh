@@ -12,6 +12,8 @@ TARGET="${1:-${TARGET:-apk}}"            # apk | appbundle | both
 BUILD_MODE="${2:-${BUILD_MODE:-release}}" # debug | profile | release
 SPLIT_PER_ABI="${SPLIT_PER_ABI:-0}"      # 1 to pass --split-per-abi for APK
 OUTPUT_DIR="${OUTPUT_DIR:-${PROJECT_ROOT}/build/android/artifacts}"
+BUILD_NAME="${BUILD_NAME:-}"
+BUILD_NUMBER="${BUILD_NUMBER:-}"
 SKIP_CLEAN="${SKIP_CLEAN:-0}"
 SKIP_PUB_GET="${SKIP_PUB_GET:-0}"
 
@@ -28,6 +30,8 @@ Environment variables:
   FLUTTER_CMD   Flutter command path (default: flutter)
   SPLIT_PER_ABI 1 to add --split-per-abi for APK (default: 0)
   OUTPUT_DIR    Output artifacts folder (default: build/android/artifacts)
+  BUILD_NAME    Override Flutter --build-name
+  BUILD_NUMBER  Override Flutter --build-number
   SKIP_CLEAN    1 to skip flutter clean
   SKIP_PUB_GET  1 to skip flutter pub get
 
@@ -69,6 +73,8 @@ echo "==> Project root: ${PROJECT_ROOT}"
 echo "==> Flutter cmd : ${FLUTTER_CMD}"
 echo "==> Target      : ${TARGET}"
 echo "==> Build mode  : ${BUILD_MODE}"
+echo "==> Build name  : ${BUILD_NAME:-pubspec default}"
+echo "==> Build number: ${BUILD_NUMBER:-pubspec default}"
 echo "==> Output dir  : ${SESSION_DIR}"
 
 cd "${PROJECT_ROOT}"
@@ -88,6 +94,12 @@ build_apk() {
   local cmd=("${FLUTTER_CMD}" build apk "--${BUILD_MODE}")
   if [[ "${SPLIT_PER_ABI}" == "1" ]]; then
     cmd+=(--split-per-abi)
+  fi
+  if [[ -n "${BUILD_NAME}" ]]; then
+    cmd+=(--build-name="${BUILD_NAME}")
+  fi
+  if [[ -n "${BUILD_NUMBER}" ]]; then
+    cmd+=(--build-number="${BUILD_NUMBER}")
   fi
   "${cmd[@]}"
 
@@ -117,7 +129,14 @@ build_apk() {
 
 build_appbundle() {
   echo "==> flutter build appbundle --${BUILD_MODE}"
-  "${FLUTTER_CMD}" build appbundle "--${BUILD_MODE}"
+  local cmd=("${FLUTTER_CMD}" build appbundle "--${BUILD_MODE}")
+  if [[ -n "${BUILD_NAME}" ]]; then
+    cmd+=(--build-name="${BUILD_NAME}")
+  fi
+  if [[ -n "${BUILD_NUMBER}" ]]; then
+    cmd+=(--build-number="${BUILD_NUMBER}")
+  fi
+  "${cmd[@]}"
 
   local aab_file="${PROJECT_ROOT}/build/app/outputs/bundle/${BUILD_MODE}/app-${BUILD_MODE}.aab"
   if [[ ! -f "${aab_file}" ]]; then

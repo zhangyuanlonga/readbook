@@ -10,6 +10,8 @@ FLUTTER_CMD="${FLUTTER_CMD:-flutter}"
 BUILD_MODE="${1:-${BUILD_MODE:-release}}" # debug | profile | release
 APP_NAME="${APP_NAME:-}"                  # optional, e.g. YuanRead
 OUTPUT_DIR="${OUTPUT_DIR:-${PROJECT_ROOT}/build/macos/artifacts}"
+BUILD_NAME="${BUILD_NAME:-}"
+BUILD_NUMBER="${BUILD_NUMBER:-}"
 SKIP_CLEAN="${SKIP_CLEAN:-0}"
 SKIP_PUB_GET="${SKIP_PUB_GET:-0}"
 
@@ -25,6 +27,8 @@ Environment variables:
   FLUTTER_CMD  Flutter command path (default: flutter)
   APP_NAME     Optional .app name (without .app), e.g. YuanRead
   OUTPUT_DIR   Output artifacts folder (default: build/macos/artifacts)
+  BUILD_NAME   Override Flutter --build-name
+  BUILD_NUMBER Override Flutter --build-number
   SKIP_CLEAN   1 to skip flutter clean
   SKIP_PUB_GET 1 to skip flutter pub get
 
@@ -70,6 +74,8 @@ fi
 echo "==> Project root: ${PROJECT_ROOT}"
 echo "==> Flutter cmd : ${FLUTTER_CMD}"
 echo "==> Build mode  : ${BUILD_MODE}"
+echo "==> Build name  : ${BUILD_NAME:-pubspec default}"
+echo "==> Build number: ${BUILD_NUMBER:-pubspec default}"
 echo "==> Output dir  : ${OUTPUT_DIR}"
 
 cd "${PROJECT_ROOT}"
@@ -85,7 +91,14 @@ if [[ "${SKIP_PUB_GET}" != "1" ]]; then
 fi
 
 echo "==> flutter build macos --${BUILD_MODE}"
-"${FLUTTER_CMD}" build macos --"${BUILD_MODE}"
+CMD=("${FLUTTER_CMD}" build macos --"${BUILD_MODE}")
+if [[ -n "${BUILD_NAME}" ]]; then
+  CMD+=(--build-name="${BUILD_NAME}")
+fi
+if [[ -n "${BUILD_NUMBER}" ]]; then
+  CMD+=(--build-number="${BUILD_NUMBER}")
+fi
+"${CMD[@]}"
 
 PRODUCTS_DIR="${PROJECT_ROOT}/build/macos/Build/Products/${MODE_DIR}"
 APP_PATH=""
