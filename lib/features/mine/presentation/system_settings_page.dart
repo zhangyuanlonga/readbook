@@ -6,50 +6,6 @@ import '../../../app/layout/app_spacing.dart';
 import '../../reader/application/reader_system_settings_service.dart';
 import '../../search/application/search_system_settings_service.dart';
 
-const double _kSectionGap = 18;
-const double _kSectionListGap = 6;
-
-TextStyle? _sectionTitleTextStyle(BuildContext context) {
-  return Theme.of(context).textTheme.titleSmall?.copyWith(
-    fontSize: 14.5,
-    height: 1.2,
-    fontWeight: FontWeight.w700,
-  );
-}
-
-TextStyle? _sectionDescriptionTextStyle(BuildContext context) {
-  return Theme.of(context).textTheme.bodySmall?.copyWith(
-    fontSize: 12,
-    height: 1.35,
-    color: Theme.of(context).colorScheme.onSurfaceVariant,
-  );
-}
-
-TextStyle? _settingTitleTextStyle(BuildContext context) {
-  return Theme.of(context).textTheme.bodyLarge?.copyWith(
-    fontSize: 14.5,
-    height: 1.25,
-    fontWeight: FontWeight.w600,
-  );
-}
-
-TextStyle? _settingSubtitleTextStyle(BuildContext context) {
-  return Theme.of(context).textTheme.bodySmall?.copyWith(
-    fontSize: 12,
-    height: 1.3,
-    color: Theme.of(context).colorScheme.onSurfaceVariant,
-  );
-}
-
-TextStyle? _statusTextStyle(BuildContext context) {
-  return Theme.of(context).textTheme.labelMedium?.copyWith(
-    fontSize: 11.5,
-    height: 1.2,
-    fontWeight: FontWeight.w600,
-    color: Theme.of(context).colorScheme.onSurfaceVariant,
-  );
-}
-
 class SystemSettingsPage extends StatelessWidget {
   const SystemSettingsPage({super.key});
 
@@ -87,11 +43,33 @@ class SystemSettingsPage extends StatelessWidget {
                     16 + bottomSafe,
                   ),
                   children: [
-                    _buildPageIntro(context),
-                    const SizedBox(height: _kSectionGap),
-                    _buildReaderFallbackSection(context),
-                    const SizedBox(height: _kSectionGap),
-                    _buildSearchAggregationSection(context),
+                    _buildSystemOverviewCard(context),
+                    const SizedBox(height: 12),
+                    LayoutBuilder(
+                      builder: (context, constraints) {
+                        final wide =
+                            constraints.maxWidth >=
+                            AppLayout.railBreakpointWidth;
+                        if (wide) {
+                          return const Row(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Expanded(child: _ReaderAutoSwitchSettingPanel()),
+                              SizedBox(width: 12),
+                              Expanded(child: _SearchAggregationSettingPanel()),
+                            ],
+                          );
+                        }
+
+                        return const Column(
+                          children: [
+                            _ReaderAutoSwitchSettingPanel(),
+                            SizedBox(height: 12),
+                            _SearchAggregationSettingPanel(),
+                          ],
+                        );
+                      },
+                    ),
                   ],
                 ),
               ),
@@ -102,105 +80,258 @@ class SystemSettingsPage extends StatelessWidget {
     );
   }
 
-  Widget _buildPageIntro(BuildContext context) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [Text('阅读与搜索偏好', style: _sectionTitleTextStyle(context))],
-    );
-  }
-
-  Widget _buildReaderFallbackSection(BuildContext context) {
-    return _buildSettingsSection(
-      context,
-      icon: Icons.auto_fix_high_rounded,
-      title: '阅读容错',
-      description: '正文失败时自动补位。',
-      child: const _ReaderAutoSwitchSettingPanel(),
-    );
-  }
-
-  Widget _buildSearchAggregationSection(BuildContext context) {
-    return _buildSettingsSection(
-      context,
-      icon: Icons.auto_awesome_mosaic_rounded,
-      title: '搜索聚合',
-      description: '控制同书多源合并。',
-      child: const _SearchAggregationSettingPanel(),
-    );
-  }
-
-  Widget _buildSettingsSection(
-    BuildContext context, {
-    required IconData icon,
-    required String title,
-    required String description,
-    required Widget child,
-  }) {
+  Widget _buildSystemOverviewCard(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
+    final textTheme = Theme.of(context).textTheme;
 
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Row(
-          children: [
-            Icon(icon, size: 17, color: colorScheme.primary),
-            const SizedBox(width: 6),
-            Text(title, style: _sectionTitleTextStyle(context)),
+    return Container(
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [
+            colorScheme.primaryContainer.withValues(alpha: 0.42),
+            colorScheme.surfaceContainerLow,
+            colorScheme.surface,
           ],
         ),
-        const SizedBox(height: 4),
-        Text(description, style: _sectionDescriptionTextStyle(context)),
-        const SizedBox(height: _kSectionListGap),
-        child,
-      ],
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(
+          color: colorScheme.outlineVariant.withValues(alpha: 0.44),
+        ),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(16, 16, 16, 16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Container(
+                  width: 42,
+                  height: 42,
+                  decoration: BoxDecoration(
+                    color: colorScheme.primary.withValues(alpha: 0.12),
+                    shape: BoxShape.circle,
+                  ),
+                  child: Icon(
+                    Icons.tune_rounded,
+                    color: colorScheme.primary,
+                    size: 22,
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        '系统偏好',
+                        style: textTheme.titleMedium?.copyWith(
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                      const SizedBox(height: 3),
+                      Text(
+                        '把阅读与搜索相关开关收在一起，减少层级和空白占用。',
+                        style: textTheme.bodySmall?.copyWith(
+                          color: colorScheme.onSurfaceVariant,
+                          height: 1.35,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 14),
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: [
+                _buildMetaChip(
+                  context,
+                  icon: Icons.auto_fix_high_rounded,
+                  label: '阅读容错',
+                ),
+                _buildMetaChip(
+                  context,
+                  icon: Icons.auto_awesome_mosaic_rounded,
+                  label: '搜索聚合',
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
     );
   }
 }
 
-Widget _buildSettingsList(
+Widget _buildMetaChip(
   BuildContext context, {
-  required List<Widget> children,
+  required IconData icon,
+  required String label,
 }) {
   final colorScheme = Theme.of(context).colorScheme;
-  final dividerColor = colorScheme.outlineVariant.withValues(alpha: 0.55);
 
-  return Column(
-    children: [
-      Container(height: 1, color: dividerColor),
-      for (final child in children) ...[
-        child,
-        Container(height: 1, color: dividerColor),
+  return Container(
+    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
+    decoration: BoxDecoration(
+      color: colorScheme.surface.withValues(alpha: 0.78),
+      borderRadius: BorderRadius.circular(999),
+      border: Border.all(
+        color: colorScheme.outlineVariant.withValues(alpha: 0.46),
+      ),
+    ),
+    child: Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Icon(icon, size: 15, color: colorScheme.primary),
+        const SizedBox(width: 6),
+        Text(
+          label,
+          style: Theme.of(
+            context,
+          ).textTheme.labelMedium?.copyWith(fontWeight: FontWeight.w700),
+        ),
       ],
-    ],
+    ),
   );
 }
 
-Widget _buildSavingIndicator(BuildContext context, {required bool visible}) {
+Widget _buildCompactSettingCard(
+  BuildContext context, {
+  required IconData icon,
+  required String title,
+  required String description,
+  required String stateDescription,
+  required String stateLabel,
+  required bool value,
+  required bool isLoading,
+  required bool isSaving,
+  required ValueChanged<bool>? onChanged,
+  String? errorText,
+}) {
   final colorScheme = Theme.of(context).colorScheme;
+  final textTheme = Theme.of(context).textTheme;
 
-  return SizedBox(
-    width: 54,
-    child: AnimatedSwitcher(
-      duration: const Duration(milliseconds: 180),
-      child:
-          visible
-              ? Row(
-                key: const ValueKey('saving'),
-                mainAxisAlignment: MainAxisAlignment.end,
+  return Container(
+    padding: const EdgeInsets.fromLTRB(14, 14, 14, 14),
+    decoration: BoxDecoration(
+      color: colorScheme.surfaceContainerLow,
+      borderRadius: BorderRadius.circular(18),
+      border: Border.all(
+        color: colorScheme.outlineVariant.withValues(alpha: 0.46),
+      ),
+    ),
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Container(
+              width: 38,
+              height: 38,
+              decoration: BoxDecoration(
+                color:
+                    value
+                        ? colorScheme.primaryContainer.withValues(alpha: 0.92)
+                        : colorScheme.surfaceContainerHighest,
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: Icon(
+                icon,
+                size: 20,
+                color:
+                    value
+                        ? colorScheme.onPrimaryContainer
+                        : colorScheme.onSurfaceVariant,
+              ),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  SizedBox(
-                    width: 10,
-                    height: 10,
-                    child: CircularProgressIndicator(
-                      strokeWidth: 1.8,
-                      color: colorScheme.primary,
+                  Text(
+                    title,
+                    style: textTheme.titleSmall?.copyWith(
+                      fontWeight: FontWeight.w700,
                     ),
                   ),
-                  const SizedBox(width: 4),
-                  Text('保存中', style: _statusTextStyle(context)),
+                  const SizedBox(height: 3),
+                  Text(
+                    description,
+                    style: textTheme.bodySmall?.copyWith(
+                      color: colorScheme.onSurfaceVariant,
+                      height: 1.35,
+                    ),
+                  ),
                 ],
+              ),
+            ),
+            const SizedBox(width: 10),
+            if (isLoading || isSaving)
+              SizedBox(
+                width: 22,
+                height: 22,
+                child: CircularProgressIndicator(
+                  strokeWidth: 2,
+                  color: colorScheme.primary,
+                ),
               )
-              : const SizedBox(key: ValueKey('idle')),
+            else
+              Switch.adaptive(value: value, onChanged: onChanged),
+          ],
+        ),
+        const SizedBox(height: 12),
+        Wrap(
+          spacing: 8,
+          runSpacing: 8,
+          children: [
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+              decoration: BoxDecoration(
+                color:
+                    value
+                        ? colorScheme.secondaryContainer.withValues(alpha: 0.78)
+                        : colorScheme.surface,
+                borderRadius: BorderRadius.circular(999),
+                border: Border.all(
+                  color:
+                      value
+                          ? colorScheme.secondary.withValues(alpha: 0.24)
+                          : colorScheme.outlineVariant.withValues(alpha: 0.46),
+                ),
+              ),
+              child: Text(
+                stateLabel,
+                style: textTheme.labelMedium?.copyWith(
+                  color:
+                      value
+                          ? colorScheme.onSecondaryContainer
+                          : colorScheme.onSurfaceVariant,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 10),
+        Text(
+          stateDescription,
+          style: textTheme.bodySmall?.copyWith(
+            color: colorScheme.onSurface,
+            height: 1.35,
+          ),
+        ),
+        if (errorText case final message?) ...[
+          const SizedBox(height: 10),
+          _buildErrorBanner(context, message: message),
+        ],
+      ],
     ),
   );
 }
@@ -231,63 +362,6 @@ Widget _buildErrorBanner(BuildContext context, {required String message}) {
             ),
           ),
         ),
-      ],
-    ),
-  );
-}
-
-Widget _buildStateHint(BuildContext context, {required String message}) {
-  return Padding(
-    padding: const EdgeInsets.symmetric(vertical: 10),
-    child: Text(message, style: _settingSubtitleTextStyle(context)),
-  );
-}
-
-Widget _buildSwitchRow(
-  BuildContext context, {
-  required IconData icon,
-  required String title,
-  required String subtitle,
-  required bool value,
-  required bool isSaving,
-  required ValueChanged<bool>? onChanged,
-}) {
-  final colorScheme = Theme.of(context).colorScheme;
-
-  return Padding(
-    padding: const EdgeInsets.symmetric(vertical: 12),
-    child: Row(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Padding(
-          padding: const EdgeInsets.only(top: 2),
-          child: Icon(
-            icon,
-            size: 18,
-            color: value ? colorScheme.primary : colorScheme.onSurfaceVariant,
-          ),
-        ),
-        const SizedBox(width: 12),
-        Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Expanded(
-                    child: Text(title, style: _settingTitleTextStyle(context)),
-                  ),
-                  _buildSavingIndicator(context, visible: isSaving),
-                ],
-              ),
-              const SizedBox(height: 4),
-              Text(subtitle, style: _settingSubtitleTextStyle(context)),
-            ],
-          ),
-        ),
-        const SizedBox(width: 10),
-        Switch.adaptive(value: value, onChanged: onChanged),
       ],
     ),
   );
@@ -379,32 +453,18 @@ class _ReaderAutoSwitchSettingPanelState
 
   @override
   Widget build(BuildContext context) {
-    if (_isLoading) {
-      return _buildStateHint(context, message: '正在读取自动换源配置...');
-    }
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        _buildSettingsList(
-          context,
-          children: [
-            _buildSwitchRow(
-              context,
-              icon: Icons.swap_horiz_rounded,
-              title: '自动换源（正文加载失败时）',
-              subtitle: _enabled ? '失败时自动尝试候选源。' : '仅支持手动换源。',
-              value: _enabled,
-              isSaving: _isSaving,
-              onChanged: _isSaving ? null : _toggle,
-            ),
-          ],
-        ),
-        if (_errorText case final message?) ...[
-          const SizedBox(height: 8),
-          _buildErrorBanner(context, message: message),
-        ],
-      ],
+    return _buildCompactSettingCard(
+      context,
+      icon: Icons.swap_horiz_rounded,
+      title: '阅读容错',
+      description: '正文加载失败时自动尝试候选来源。',
+      stateDescription: _enabled ? '失败时自动补位。' : '仅支持手动切换来源。',
+      stateLabel: _enabled ? '已开启' : '已关闭',
+      value: _enabled,
+      isLoading: _isLoading,
+      isSaving: _isSaving,
+      onChanged: _isLoading || _isSaving ? null : _toggle,
+      errorText: _errorText,
     );
   }
 }
@@ -493,32 +553,18 @@ class _SearchAggregationSettingPanelState
 
   @override
   Widget build(BuildContext context) {
-    if (_isLoading) {
-      return _buildStateHint(context, message: '正在读取搜索聚合配置...');
-    }
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        _buildSettingsList(
-          context,
-          children: [
-            _buildSwitchRow(
-              context,
-              icon: Icons.merge_type_rounded,
-              title: '同书聚合（书名 + 作者）',
-              subtitle: _enabled ? '多源命中时合并展示。' : '按原始结果逐条展示。',
-              value: _enabled,
-              isSaving: _isSaving,
-              onChanged: _isSaving ? null : _toggle,
-            ),
-          ],
-        ),
-        if (_errorText case final message?) ...[
-          const SizedBox(height: 8),
-          _buildErrorBanner(context, message: message),
-        ],
-      ],
+    return _buildCompactSettingCard(
+      context,
+      icon: Icons.merge_type_rounded,
+      title: '搜索聚合',
+      description: '按书名与作者合并多源命中结果。',
+      stateDescription: _enabled ? '多源命中时自动合并展示。' : '按原始结果逐条展示。',
+      stateLabel: _enabled ? '聚合中' : '原始列表',
+      value: _enabled,
+      isLoading: _isLoading,
+      isSaving: _isSaving,
+      onChanged: _isLoading || _isSaving ? null : _toggle,
+      errorText: _errorText,
     );
   }
 }
