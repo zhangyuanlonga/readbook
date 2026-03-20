@@ -181,6 +181,11 @@ class _MinePageState extends ConsumerState<MinePage> {
                         title: '其他',
                         actions: [
                           _MineActionItem(
+                            icon: Icons.volunteer_activism_outlined,
+                            label: '捐赠支持',
+                            onTap: _showDonationSheet,
+                          ),
+                          _MineActionItem(
                             icon: Icons.rate_review_outlined,
                             label: '问题反馈',
                             onTap: () => context.push('/feedback'),
@@ -854,6 +859,72 @@ class _MinePageState extends ConsumerState<MinePage> {
           .read(appSeedColorProvider.notifier)
           .setSeedColor(selected.seedColor);
     }
+  }
+
+  Future<void> _showDonationSheet() async {
+    if (!mounted) {
+      return;
+    }
+
+    await showModalBottomSheet<void>(
+      context: context,
+      showDragHandle: true,
+      useSafeArea: true,
+      builder: (context) {
+        final colorScheme = Theme.of(context).colorScheme;
+        final textTheme = Theme.of(context).textTheme;
+
+        return SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(20, 8, 20, 24),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  '捐赠支持',
+                  style: textTheme.titleMedium?.copyWith(
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+                const SizedBox(height: 6),
+                Text(
+                  '感谢支持，扫码即可赞赏。',
+                  style: textTheme.bodySmall?.copyWith(
+                    color: colorScheme.onSurfaceVariant,
+                  ),
+                ),
+                const SizedBox(height: 16),
+                Center(
+                  child: ClipRRect(
+                    borderRadius: BorderRadius.circular(20),
+                    child: DecoratedBox(
+                      decoration: BoxDecoration(
+                        color: colorScheme.surfaceContainerLowest,
+                        borderRadius: BorderRadius.circular(20),
+                        border: Border.all(
+                          color: colorScheme.outlineVariant.withValues(
+                            alpha: 0.48,
+                          ),
+                        ),
+                      ),
+                      child: Padding(
+                        padding: const EdgeInsets.all(12),
+                        child: Image.asset(
+                          'assets/mov/vx.png',
+                          width: 260,
+                          fit: BoxFit.contain,
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
   }
 
   Widget _buildThemeModeTile(
