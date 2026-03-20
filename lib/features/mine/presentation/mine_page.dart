@@ -132,6 +132,11 @@ class _MinePageState extends ConsumerState<MinePage> {
                             onTap: () => context.push('/rule-config'),
                           ),
                           _MineActionItem(
+                            icon: Icons.cleaning_services_outlined,
+                            label: '净化',
+                            onTap: () => context.push('/reader-replace-rules'),
+                          ),
+                          _MineActionItem(
                             icon: Icons.cloud_outlined,
                             label: '缓存',
                             onTap: () => context.push('/cache'),

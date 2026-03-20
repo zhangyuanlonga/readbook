@@ -5,6 +5,7 @@ import 'package:flutter_appread/features/bookshelf/application/local_book_import
 import 'package:flutter_appread/features/reader/application/chapter_content_service.dart';
 import 'package:flutter_appread/features/reader/application/source_content_provider.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 class _FakeBookDetailService extends BookDetailService {
   _FakeBookDetailService(this.result);
@@ -72,6 +73,12 @@ class _FakeChapterContentService extends ChapterContentService {
 }
 
 void main() {
+  TestWidgetsFlutterBinding.ensureInitialized();
+
+  setUp(() {
+    SharedPreferences.setMockInitialValues({});
+  });
+
   test('supportsSourceId rejects local source id', () {
     final provider = SourceContentProvider();
 

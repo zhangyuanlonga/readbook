@@ -86,5 +86,23 @@ void main() {
       expect(result.content, '第12节 正文');
       expect(result.effectiveRules, hasLength(1));
     });
+
+    test('reports matches even when replacement keeps original text', () async {
+      final rule = ReaderReplaceRule(
+        name: '保持原样',
+        pattern: '广告',
+        replacement: '广告',
+        isRegex: false,
+        createdAt: DateTime(2026),
+        updatedAt: DateTime(2026),
+      );
+
+      final result = await executor.testDetailed(rule: rule, text: '这里有广告广告');
+
+      expect(result.hasMatch, isTrue);
+      expect(result.hasChange, isFalse);
+      expect(result.matchCount, 2);
+      expect(result.resultText, '这里有广告广告');
+    });
   });
 }

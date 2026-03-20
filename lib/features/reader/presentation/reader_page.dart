@@ -29,6 +29,7 @@ import '../../../domain/entities/bookmark.dart';
 import '../../../domain/entities/book.dart';
 import '../../../domain/entities/bookshelf_book.dart';
 import '../../../domain/entities/chapter.dart';
+import '../../../domain/entities/reader_replace_preference.dart';
 import '../../../domain/entities/reader_replace_rule.dart';
 import '../../../domain/entities/reader_settings.dart';
 import '../../../domain/entities/reading_progress.dart';
@@ -9087,9 +9088,25 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
     var startAutoReadAfterApply = false;
     var draftAutoSwitchSourceOnFailureEnabled =
         _autoSwitchSourceOnFailureEnabled;
+    var draftReaderReplaceRuleMode = ReaderReplaceRuleMode.inherit;
     var isSavingAutoSwitchSourceOnFailure = false;
+    var isSavingReaderReplaceRuleMode = false;
     var isPersistingDraft = false;
     Timer? persistDraftTimer;
+
+    final normalizedSourceId = (_sourceId ?? '').trim();
+    final normalizedDetailUrl = (_detailUrl ?? '').trim();
+    if (_currentBookId.trim().isNotEmpty &&
+        normalizedSourceId.isNotEmpty &&
+        normalizedDetailUrl.isNotEmpty) {
+      final preference = await _readerReplaceRuleService.getBookPreference(
+        bookId: _currentBookId,
+        sourceId: normalizedSourceId,
+        detailUrl: normalizedDetailUrl,
+      );
+      draftReaderReplaceRuleMode =
+          preference?.mode ?? ReaderReplaceRuleMode.inherit;
+    }
 
     String fingerprint(ReaderSettings settings) {
       return jsonEncode(settings.copyWith(autoReadEnabled: false).toJson());
@@ -11340,6 +11357,58 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
                   }
                 }
 
+                String replaceRuleModeLabel(ReaderReplaceRuleMode mode) {
+                  return switch (mode) {
+                    ReaderReplaceRuleMode.inherit => '跟随全局',
+                    ReaderReplaceRuleMode.enabled => '本书开启',
+                    ReaderReplaceRuleMode.disabled => '本书关闭',
+                  };
+                }
+
+                Future<void> updateReaderReplaceRuleMode(
+                  ReaderReplaceRuleMode mode,
+                ) async {
+                  if (isSavingReaderReplaceRuleMode ||
+                      _currentBookId.trim().isEmpty ||
+                      normalizedSourceId.isEmpty ||
+                      normalizedDetailUrl.isEmpty) {
+                    return;
+                  }
+
+                  setModalState(() {
+                    draftReaderReplaceRuleMode = mode;
+                    isSavingReaderReplaceRuleMode = true;
+                  });
+
+                  try {
+                    await _readerReplaceRuleService.saveBookPreference(
+                      ReaderReplacePreference(
+                        bookId: _currentBookId,
+                        sourceId: normalizedSourceId,
+                        detailUrl: normalizedDetailUrl,
+                        mode: mode,
+                        updatedAt: DateTime.now(),
+                      ),
+                    );
+                    await _loadCurrentChapter(
+                      initialScrollRatio: _currentScrollRatio(),
+                    );
+                  } catch (error) {
+                    if (!mounted) {
+                      return;
+                    }
+                    _showMessage('保存净化策略失败：$error');
+                  } finally {
+                    if (mounted) {
+                      setModalState(() {
+                        isSavingReaderReplaceRuleMode = false;
+                      });
+                    } else {
+                      isSavingReaderReplaceRuleMode = false;
+                    }
+                  }
+                }
+
                 final moreSettingsCard = buildSettingsSectionCard(
                   icon: Icons.tune_rounded,
                   title: '更多',
@@ -11455,6 +11524,31 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
                               Wrap(
                                 spacing: 8,
                                 runSpacing: 8,
+                                children: ReaderReplaceRuleMode.values
+                                    .map(
+                                      (mode) => ChoiceChip(
+                                        label: Text(replaceRuleModeLabel(mode)),
+                                        selected:
+                                            draftReaderReplaceRuleMode == mode,
+                                        onSelected:
+                                            isSavingReaderReplaceRuleMode
+                                                ? null
+                                                : (_) => unawaited(
+                                                  updateReaderReplaceRuleMode(
+                                                    mode,
+                                                  ),
+                                                ),
+                                      ),
+                                    )
+                                    .toList(growable: false),
+                              ),
+                              if (isSavingReaderReplaceRuleMode) ...[
+                                const SizedBox(height: 8),
+                                const LinearProgressIndicator(minHeight: 2),
+                              ],
+                              Wrap(
+                                spacing: 8,
+                                runSpacing: 8,
                                 children: [
                                   buildSummaryAction(
                                     icon: Icons.rule_folder_outlined,
@@ -11472,9 +11566,8 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
                               ),
                               const SizedBox(height: 10),
                               Text(
-                                _effectiveReaderReplaceRules.isEmpty
-                                    ? '当前章节没有命中用户净化规则。'
-                                    : '已命中：${_effectiveReaderReplaceRules.map((item) => item.name).join('、')}',
+                                '当前策略：${replaceRuleModeLabel(draftReaderReplaceRuleMode)}。\n'
+                                '${_effectiveReaderReplaceRules.isEmpty ? '当前章节没有命中用户净化规则。' : '已命中：${_effectiveReaderReplaceRules.map((item) => item.name).join('、')}'}',
                                 style: Theme.of(
                                   context,
                                 ).textTheme.bodySmall?.copyWith(
