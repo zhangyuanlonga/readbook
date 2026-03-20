@@ -180,20 +180,20 @@ class _UserProfilePageState extends State<UserProfilePage> {
     final profile = _profile;
     final displayName =
         profile?.username ?? session.username ?? session.userId ?? '用户';
-    final roleText = profile?.role ?? 'user';
+    final roleText = _describeRole(profile?.role);
     final featureList = profile?.features ?? const <String>[];
 
     return [
       _buildAccountHero(context, displayName: displayName, roleText: roleText),
       if (_isLoadingProfile) ...[
         const SizedBox(height: 10),
-        Text('正在同步最新账号资料...', style: _sectionDescriptionTextStyle(context)),
+        Text('正在同步最新账号信息...', style: _sectionDescriptionTextStyle(context)),
       ],
       const SizedBox(height: 22),
-      _buildSection(
+      _buildInfoCardSection(
         context,
-        title: '账号资料',
-        description: '当前登录账号与基础信息。',
+        title: '账号信息',
+        description: '当前登录账号与基础资料。',
         child: _buildListBlock(
           context,
           children: [
@@ -213,27 +213,27 @@ class _UserProfilePageState extends State<UserProfilePage> {
       ),
       if (_hasMembershipInfo(profile)) ...[
         const SizedBox(height: 22),
-        _buildSection(
+        _buildInfoCardSection(
           context,
-          title: '会员状态',
-          description: '当前账号已开通的会员信息。',
+          title: '会员信息',
+          description: '当前账号已开通的会员权益与时效。',
           child: _buildListBlock(
             context,
             children: [
               _buildListRow(
                 context,
                 label: 'VIP 等级',
-                value: profile?.vipLevel ?? '-',
+                value: _describeVipLevel(profile?.vipLevel),
               ),
               _buildListRow(
                 context,
                 label: '会员计划',
-                value: profile?.planType ?? '-',
+                value: _describePlanType(profile?.planType),
               ),
               _buildListRow(
                 context,
                 label: '会员状态',
-                value: profile?.vipStatus ?? '-',
+                value: _describeVipStatus(profile?.vipStatus),
               ),
               _buildListRow(
                 context,
@@ -256,7 +256,7 @@ class _UserProfilePageState extends State<UserProfilePage> {
             children: featureList
                 .map(
                   (feature) => Chip(
-                    label: Text(feature),
+                    label: Text(_describeFeature(feature)),
                     visualDensity: VisualDensity.compact,
                   ),
                 )
@@ -346,6 +346,34 @@ class _UserProfilePageState extends State<UserProfilePage> {
     );
   }
 
+  Widget _buildInfoCardSection(
+    BuildContext context, {
+    required String title,
+    required String description,
+    required Widget child,
+  }) {
+    final colorScheme = Theme.of(context).colorScheme;
+
+    return Card(
+      elevation: 0,
+      color: colorScheme.surface,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(title, style: _sectionTitleTextStyle(context)),
+            const SizedBox(height: 4),
+            Text(description, style: _sectionDescriptionTextStyle(context)),
+            const SizedBox(height: 12),
+            child,
+          ],
+        ),
+      ),
+    );
+  }
+
   Widget _buildListBlock(
     BuildContext context, {
     required List<Widget> children,
@@ -355,13 +383,131 @@ class _UserProfilePageState extends State<UserProfilePage> {
 
     return Column(
       children: [
-        Container(height: 1, color: dividerColor),
-        for (final child in children) ...[
-          child,
-          Container(height: 1, color: dividerColor),
+        for (var index = 0; index < children.length; index++) ...[
+          if (index > 0) Container(height: 1, color: dividerColor),
+          children[index],
         ],
       ],
     );
+  }
+
+  String _describeRole(String? raw) {
+    final normalized = _normalizeEnumValue(raw);
+    switch (normalized) {
+      case '':
+        return '-';
+      case 'user':
+        return '普通用户';
+      case 'admin':
+        return '管理员';
+      case 'super_admin':
+      case 'superadmin':
+        return '超级管理员';
+      case 'vip':
+        return '会员用户';
+      case 'guest':
+        return '游客';
+      default:
+        return raw!.trim();
+    }
+  }
+
+  String _describeVipLevel(String? raw) {
+    final normalized = _normalizeEnumValue(raw);
+    switch (normalized) {
+      case '':
+      case 'none':
+        return '未开通';
+      case 'basic':
+        return '基础会员';
+      case 'pro':
+        return '专业会员';
+      case 'vip':
+        return 'VIP';
+      case 'svip':
+        return 'SVIP';
+      case 'premium':
+        return '高级会员';
+      default:
+        return raw!.trim();
+    }
+  }
+
+  String _describePlanType(String? raw) {
+    final normalized = _normalizeEnumValue(raw);
+    switch (normalized) {
+      case '':
+        return '-';
+      case 'month':
+      case 'monthly':
+        return '包月';
+      case 'quarter':
+      case 'quarterly':
+        return '包季';
+      case 'year':
+      case 'yearly':
+      case 'annual':
+        return '包年';
+      case 'lifetime':
+      case 'permanent':
+        return '永久';
+      case 'trial':
+        return '试用';
+      default:
+        return raw!.trim();
+    }
+  }
+
+  String _describeVipStatus(String? raw) {
+    final normalized = _normalizeEnumValue(raw);
+    switch (normalized) {
+      case '':
+        return '-';
+      case 'active':
+        return '生效中';
+      case 'inactive':
+        return '未开通';
+      case 'expired':
+        return '已过期';
+      case 'pending':
+        return '待生效';
+      case 'cancelled':
+      case 'canceled':
+        return '已取消';
+      case 'suspended':
+        return '已暂停';
+      default:
+        return raw!.trim();
+    }
+  }
+
+  String _describeFeature(String raw) {
+    final normalized = _normalizeEnumValue(raw);
+    switch (normalized) {
+      case 'theme_custom':
+        return '自定义主题';
+      case 'online_service':
+        return '在线服务';
+      case 'cloud_sync':
+      case 'sync':
+        return '云端同步';
+      case 'backup_restore':
+        return '备份恢复';
+      case 'ad_free':
+        return '去广告';
+      case 'priority_support':
+        return '优先支持';
+      case 'advanced_reader':
+        return '高级阅读功能';
+      case 'offline_download':
+        return '离线下载';
+      default:
+        return raw.trim();
+    }
+  }
+
+  String _normalizeEnumValue(String? raw) {
+    return raw?.trim().toLowerCase() ?? '';
   }
 
   Widget _buildListRow(
