@@ -2,6 +2,7 @@ import 'dart:convert';
 
 import 'package:shared_preferences/shared_preferences.dart';
 
+import '../../../domain/entities/reader_toc_snapshot.dart';
 import '../../../domain/entities/reader_settings.dart';
 import '../../../domain/entities/reading_progress.dart';
 
@@ -88,6 +89,7 @@ class ReaderPreferencesService {
   static const String _infoFooterMarginRightKey =
       'reader.settings.infoFooterMarginRight';
   static const String _progressPrefix = 'reader.progress.';
+  static const String _tocSnapshotPrefix = 'reader.tocSnapshot.';
 
   Future<ReaderSettings> loadSettings() async {
     final prefs = await _preferencesFuture;
@@ -508,5 +510,63 @@ class ReaderPreferencesService {
       '$_progressPrefix${progress.bookId}',
       jsonEncode(progress.toJson()),
     );
+  }
+
+  Future<ReaderTocSnapshot?> loadTocSnapshot({
+    required String sourceId,
+    required String detailUrl,
+  }) async {
+    final key = _buildTocSnapshotKey(sourceId: sourceId, detailUrl: detailUrl);
+    if (key == null) {
+      return null;
+    }
+
+    final prefs = await _preferencesFuture;
+    final raw = prefs.getString(key);
+    if (raw == null || raw.trim().isEmpty) {
+      return null;
+    }
+
+    try {
+      final decoded = jsonDecode(raw);
+      if (decoded is! Map) {
+        return null;
+      }
+
+      return ReaderTocSnapshot.fromJson(
+        decoded.map((key, value) => MapEntry(key.toString(), value)),
+      );
+    } on FormatException {
+      return null;
+    }
+  }
+
+  Future<void> saveTocSnapshot(ReaderTocSnapshot snapshot) async {
+    if (snapshot.chapters.isEmpty) {
+      return;
+    }
+
+    final key = _buildTocSnapshotKey(
+      sourceId: snapshot.sourceId,
+      detailUrl: snapshot.detailUrl,
+    );
+    if (key == null) {
+      return;
+    }
+
+    final prefs = await _preferencesFuture;
+    await prefs.setString(key, jsonEncode(snapshot.toJson()));
+  }
+
+  String? _buildTocSnapshotKey({
+    required String sourceId,
+    required String detailUrl,
+  }) {
+    final normalizedSourceId = sourceId.trim();
+    final normalizedDetailUrl = detailUrl.trim();
+    if (normalizedSourceId.isEmpty || normalizedDetailUrl.isEmpty) {
+      return null;
+    }
+    return '$_tocSnapshotPrefix$normalizedSourceId|$normalizedDetailUrl';
   }
 }

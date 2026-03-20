@@ -2783,28 +2783,7 @@ class _BookshelfPageState extends State<BookshelfPage> {
     BookshelfBook book, {
     ReadingProgress? progress,
   }) async {
-    if (progress != null) {
-      _continueReading(progress);
-      return;
-    }
-
     if (_openingBookId != null) {
-      return;
-    }
-
-    if (book.sourceId == _kLocalBookSourceId) {
-      setState(() {
-        _openingBookId = book.bookId;
-      });
-      try {
-        _openReaderFallbackForSourceSwitch(book);
-      } finally {
-        if (mounted) {
-          setState(() {
-            _openingBookId = null;
-          });
-        }
-      }
       return;
     }
 
@@ -2813,6 +2792,35 @@ class _BookshelfPageState extends State<BookshelfPage> {
     });
 
     try {
+      ReadingProgress? latestProgress;
+      try {
+        latestProgress = await _readerPreferencesService
+            .loadProgress(book.bookId)
+            .timeout(_kProgressLoadTimeout);
+      } catch (_) {
+        latestProgress = null;
+      }
+
+      final effectiveProgress = latestProgress ?? progress;
+      if (effectiveProgress != null) {
+        if (mounted &&
+            latestProgress != null &&
+            _progressByBookId[book.bookId] != latestProgress) {
+          setState(() {
+            _progressByBookId = Map<String, ReadingProgress>.from(
+              _progressByBookId,
+            )..[book.bookId] = latestProgress!;
+          });
+        }
+        _continueReading(effectiveProgress);
+        return;
+      }
+
+      if (book.sourceId == _kLocalBookSourceId) {
+        _openReaderFallbackForSourceSwitch(book);
+        return;
+      }
+
       final detailResult = await _bookDetailService.load(
         sourceId: book.sourceId,
         bookId: book.bookId,

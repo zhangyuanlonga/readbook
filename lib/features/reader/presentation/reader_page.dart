@@ -31,13 +31,16 @@ import '../../../domain/entities/bookshelf_book.dart';
 import '../../../domain/entities/chapter.dart';
 import '../../../domain/entities/reader_settings.dart';
 import '../../../domain/entities/reading_progress.dart';
+import '../../../domain/entities/reader_toc_snapshot.dart';
 import '../../../domain/entities/source_definition.dart';
 import '../../../domain/repositories/bookmark_repository.dart';
 import '../../bookshelf/application/bookshelf_service.dart';
 import '../../bookshelf/application/local_book_import_service.dart';
+import '../../book/application/book_detail_service.dart';
 import '../../search/application/search_hit_cache_service.dart';
 import '../../search/application/search_service.dart';
 import '../application/content_provider.dart';
+import '../application/chapter_content_service.dart';
 import '../application/local_content_provider.dart';
 import '../application/reader_font_registry_service.dart';
 import '../application/reader_preferences_service.dart';
@@ -170,6 +173,8 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
   Timer? _progressDebounceTimer;
   Timer? _autoReadResumeTimer;
   Timer? _readerInfoClockTimer;
+  Timer? _chapterLoadingIndicatorTimer;
+  Timer? _blockingLoadingCardTimer;
   final Battery _battery = Battery();
   DateTime _readerInfoNow = DateTime.now();
   int? _readerBatteryLevel;
@@ -200,6 +205,8 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
   String? _paginationSignature;
   int _paginationTaskId = 0;
   double? _pendingPageRestoreRatio;
+  bool _showChapterLoadingIndicator = false;
+  bool _showBlockingLoadingCard = false;
   PageCurlController? _pageCurlController;
   Size? _pageCurlPaperSize;
   bool _isCurlAutoTurning = false;
@@ -235,6 +242,12 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
   static const Duration _kCurlAutoTurnDuration = Duration(milliseconds: 460);
   static const Duration _kAutoReadStepDuration = Duration(milliseconds: 520);
   static const Duration _kAutoReadResumeDelay = Duration(milliseconds: 420);
+  static const Duration _kChapterLoadingIndicatorDelay = Duration(
+    milliseconds: 150,
+  );
+  static const Duration _kBlockingLoadingCardDelay = Duration(
+    milliseconds: 180,
+  );
   static const int _kSwitchSourceCandidateLimit = 24;
   static const int _kSwitchSourceLagTolerance = 20;
   static const int _kSwitchSourceScoreStep = 6;
@@ -245,6 +258,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
   static const int _kBackwardPreloadChapterCount = 1;
   static const double _kScrollAdvanceOverscrollTrigger = 56;
   static const double _kScrollAdvanceEdgeTolerance = 2;
+  static const String _kCachedImagePayloadPrefix = '__appread_image_payload__:';
   static const Set<PointerDeviceKind> _kScrollDragDevices = <PointerDeviceKind>{
     PointerDeviceKind.touch,
     PointerDeviceKind.mouse,
@@ -360,6 +374,26 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
     return _settings.mangaReadMode != ReaderMangaReadMode.continuous;
   }
 
+  bool get _hasVisibleReaderContent =>
+      _content.trim().isNotEmpty || _chapterImageUrls.isNotEmpty;
+
+  bool get _needsBlockingLoadingUi {
+    if (_isBootstrapping && !_hasVisibleReaderContent) {
+      return true;
+    }
+    if (_isSwitchSourceLoading) {
+      return true;
+    }
+    if (_isLoadingContent && !_hasVisibleReaderContent) {
+      return true;
+    }
+    return false;
+  }
+
+  bool get _shouldShowBlockingReaderLoading {
+    return _showBlockingLoadingCard && _needsBlockingLoadingUi;
+  }
+
   double _topSafeInset(BuildContext context) {
     final viewPadding = MediaQuery.viewPaddingOf(context).top;
     final gestureInsets = MediaQuery.systemGestureInsetsOf(context).top;
@@ -377,6 +411,10 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
     final platform = Theme.of(context).platform;
     final minInset = platform == TargetPlatform.iOS ? 14.0 : 0.0;
     return max(rawInset, minInset);
+  }
+
+  int _safePageUpperBound(int pageCount) {
+    return max(0, pageCount - 1);
   }
 
   double _pinnedHeaderTotalHeight(BuildContext context) {
@@ -426,9 +464,13 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
   void dispose() {
     _cancelActiveSwitchSourceSearch();
     _syncSystemUiVisibility(force: true, visible: true);
+    _curlAutoTurnController.stop();
+    _isCurlAutoTurning = false;
     _progressDebounceTimer?.cancel();
     _autoReadResumeTimer?.cancel();
     _readerInfoClockTimer?.cancel();
+    _chapterLoadingIndicatorTimer?.cancel();
+    _blockingLoadingCardTimer?.cancel();
     _scrollController.removeListener(_onScrollChanged);
     _selectionNotifier.removeListener(_handleSelectionNotifierChanged);
     _selectionNotifier.dispose();
@@ -475,6 +517,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
                       ),
                     ),
                   ),
+                _buildChapterLoadingIndicator(colors),
                 if (_showOverlayControls)
                   Positioned.fill(
                     child: GestureDetector(
@@ -522,6 +565,46 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
           ),
         ),
       ],
+    );
+  }
+
+  Widget _buildChapterLoadingIndicator(_ReaderThemeColors colors) {
+    final showIndicator =
+        _showChapterLoadingIndicator && !_shouldShowBlockingReaderLoading;
+    final topInset = _topSafeInset(context);
+    final topOffset = _showOverlayControls ? topInset + 60 : topInset + 8;
+
+    return Positioned(
+      top: topOffset,
+      left: 20,
+      right: 20,
+      child: IgnorePointer(
+        child: AnimatedSlide(
+          duration: const Duration(milliseconds: 150),
+          curve: Curves.easeOutCubic,
+          offset: showIndicator ? Offset.zero : const Offset(0, -0.35),
+          child: AnimatedOpacity(
+            duration: const Duration(milliseconds: 150),
+            opacity: showIndicator ? 1 : 0,
+            child: Align(
+              alignment: Alignment.topCenter,
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 220),
+                child: ClipRRect(
+                  borderRadius: BorderRadius.circular(999),
+                  child: LinearProgressIndicator(
+                    minHeight: 3,
+                    backgroundColor: colors.divider.withValues(alpha: 0.22),
+                    valueColor: AlwaysStoppedAnimation<Color>(
+                      colors.text.withValues(alpha: 0.72),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
     );
   }
 
@@ -860,7 +943,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
   }
 
   Widget _buildBody(_ReaderThemeColors colors) {
-    if (_isBootstrapping || _isLoadingContent) {
+    if (_shouldShowBlockingReaderLoading) {
       return _buildTapAwareBody(
         child: _buildReaderStateCard(
           colors: colors,
@@ -873,6 +956,10 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
           ),
         ),
       );
+    }
+
+    if ((_isBootstrapping || _isLoadingContent) && !_hasVisibleReaderContent) {
+      return const SizedBox.expand();
     }
 
     if (_errorText != null) {
@@ -2250,7 +2337,10 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
       return const SizedBox.shrink();
     }
 
-    final currentIndex = _mangaPageIndex.clamp(0, pageCount - 1);
+    final currentIndex = _mangaPageIndex.clamp(
+      0,
+      _safePageUpperBound(pageCount),
+    );
     final physics =
         _mangaZoomedPageIndexes.contains(currentIndex)
             ? const NeverScrollableScrollPhysics()
@@ -2508,7 +2598,10 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
         }
 
         final pageCount = _pagedPages.length;
-        final safeIndex = _currentPageIndex.clamp(0, pageCount - 1);
+        final safeIndex = _currentPageIndex.clamp(
+          0,
+          _safePageUpperBound(pageCount),
+        );
         final pagedSize = constraints.biggest;
         _pageCurlPaperSize = pagedSize;
 
@@ -3031,7 +3124,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
     required int pageCount,
     required int initialIndex,
   }) {
-    final safeIndex = initialIndex.clamp(0, pageCount - 1);
+    final safeIndex = initialIndex.clamp(0, _safePageUpperBound(pageCount));
     final existing = _pageCurlController;
 
     final needsNewController =
@@ -3101,7 +3194,15 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
       return;
     }
 
-    final nextIndex = controller.pageCurlIndex.clamp(0, _pagedPages.length - 1);
+    final pageCount = _pagedPages.length;
+    if (pageCount <= 0) {
+      return;
+    }
+
+    final nextIndex = controller.pageCurlIndex.clamp(
+      0,
+      _safePageUpperBound(pageCount),
+    );
 
     setState(() {
       _currentPageIndex = nextIndex;
@@ -3152,7 +3253,22 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
     }
 
     final pageCount = _pagedPages.length;
-    final nextIndex = controller.pageCurlIndex.clamp(0, pageCount - 1);
+    if (pageCount <= 0) {
+      if (!mounted) {
+        _isCurlAutoTurning = false;
+        _currentPageIndex = 0;
+        return;
+      }
+      setState(() {
+        _isCurlAutoTurning = false;
+        _currentPageIndex = 0;
+      });
+      return;
+    }
+    final nextIndex = controller.pageCurlIndex.clamp(
+      0,
+      _safePageUpperBound(pageCount),
+    );
 
     setState(() {
       _isCurlAutoTurning = false;
@@ -3304,6 +3420,9 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
 
     _paginationSignature = signature;
     final taskId = ++_paginationTaskId;
+    _curlAutoTurnController.stop();
+    _isCurlAutoTurning = false;
+    _pageCurlController?.reset();
 
     setState(() {
       _isPaginatingPages = true;
@@ -4441,6 +4560,22 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
         fallbackTitle: candidate.book.title,
         forceRefresh: true,
       );
+      try {
+        await _preferencesService.saveTocSnapshot(
+          ReaderTocSnapshot(
+            bookId: candidate.book.id.trim(),
+            sourceId: candidate.book.sourceId,
+            detailUrl: candidate.book.detailUrl,
+            title: detailResult.detail.title,
+            author: detailResult.detail.author,
+            coverUrl: detailResult.detail.coverUrl,
+            chapters: detailResult.chapters,
+            updatedAt: DateTime.now(),
+          ),
+        );
+      } catch (_) {
+        // Ignore snapshot persistence failures during source switching.
+      }
 
       final chapters = detailResult.chapters;
       if (chapters.isEmpty) {
@@ -5036,6 +5171,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
   }
 
   Future<void> _bootstrap() async {
+    _scheduleBlockingLoadingCard();
     try {
       final loadedSettings = await _preferencesService.loadSettings();
       var normalizedSettings = loadedSettings;
@@ -5097,6 +5233,24 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
       }
 
       _applyLocalSchemeFallback();
+      final hydratedTocSnapshot = await _tryHydrateTocSnapshot();
+      await _tryHydrateVisibleContentFromCache();
+
+      if (hydratedTocSnapshot) {
+        await _refreshBookshelfState();
+        if (_hasVisibleReaderContent) {
+          await _consumePendingBookmarkJump();
+          return;
+        }
+
+        final loaded = await _loadCurrentChapter(
+          initialScrollRatio: _consumeBootstrapScrollRatio(),
+        );
+        if (loaded) {
+          await _consumePendingBookmarkJump();
+        }
+        return;
+      }
 
       if (_isMissingCriticalParams) {
         if (!mounted) {
@@ -5120,6 +5274,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
         detailUrl: _detailUrl!,
         fallbackTitle: _chapterTitle,
       );
+      await _persistTocSnapshot(detailResult);
 
       _bookTitle = detailResult.detail.title;
       _bookAuthor = detailResult.detail.author;
@@ -5161,6 +5316,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
         _errorText = fallbackError;
       });
     } finally {
+      _clearDelayedLoadingUi();
       if (mounted) {
         setState(() {
           _isBootstrapping = false;
@@ -5337,6 +5493,24 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
 
     _bootstrapProgress = null;
     return progress.chapterPositionRatio;
+  }
+
+  double _previewBootstrapScrollRatio() {
+    final progress = _bootstrapProgress;
+    if (progress == null) {
+      return 0;
+    }
+
+    final currentChapterId = _chapterId.trim();
+    final currentChapterUrl = (_chapterUrl ?? '').trim();
+    final matchesChapter =
+        progress.chapterId == currentChapterId ||
+        progress.chapterUrl == currentChapterUrl;
+    if (!matchesChapter) {
+      return 0;
+    }
+
+    return progress.chapterPositionRatio.clamp(0.0, 1.0);
   }
 
   void _restoreScrollPosition(double ratio) {
@@ -5969,13 +6143,317 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
     );
   }
 
-  Future<bool> _loadCurrentChapter({double? initialScrollRatio}) async {
+  void _scheduleBlockingLoadingCard() {
+    _blockingLoadingCardTimer?.cancel();
+    _blockingLoadingCardTimer = null;
+    _showBlockingLoadingCard = false;
+
+    if (!_needsBlockingLoadingUi) {
+      return;
+    }
+
+    _blockingLoadingCardTimer = Timer(_kBlockingLoadingCardDelay, () {
+      if (!mounted || !_needsBlockingLoadingUi) {
+        return;
+      }
+      setState(() {
+        _showBlockingLoadingCard = true;
+      });
+    });
+  }
+
+  void _clearDelayedLoadingUi() {
+    _chapterLoadingIndicatorTimer?.cancel();
+    _chapterLoadingIndicatorTimer = null;
+    _blockingLoadingCardTimer?.cancel();
+    _blockingLoadingCardTimer = null;
+    _showChapterLoadingIndicator = false;
+    _showBlockingLoadingCard = false;
+  }
+
+  void _scheduleChapterLoadingIndicator() {
+    _chapterLoadingIndicatorTimer?.cancel();
+    _chapterLoadingIndicatorTimer = null;
+    _showChapterLoadingIndicator = false;
+
+    if (_isBootstrapping ||
+        _isSwitchSourceLoading ||
+        !_hasVisibleReaderContent) {
+      return;
+    }
+
+    _chapterLoadingIndicatorTimer = Timer(_kChapterLoadingIndicatorDelay, () {
+      if (!mounted || !_isLoadingContent || _shouldShowBlockingReaderLoading) {
+        return;
+      }
+      setState(() {
+        _showChapterLoadingIndicator = true;
+      });
+    });
+  }
+
+  Future<_ChapterLoadSnapshot> _fetchChapterContentSnapshot({
+    required String sourceId,
+    required String chapterId,
+    required String chapterUrl,
+    required String? chapterTitle,
+    required int? chapterIndex,
+  }) async {
+    final contentProvider = _requireContentProvider(
+      sourceId: sourceId,
+      stage: ErrorStage.content,
+    );
+    final contentResult = await contentProvider.loadChapterContent(
+      sourceId: sourceId,
+      chapterUrl: chapterUrl,
+      bookId: _currentBookId,
+      chapterId: chapterId,
+      chapterIndex: chapterIndex,
+      chapterTitle: chapterTitle,
+    );
+
+    var isCached = contentResult.fromCache;
+    final cacheKey = '$sourceId|$chapterUrl';
+    try {
+      final persisted = await AppDatabase.instance.getChapterCache(cacheKey);
+      isCached = persisted != null;
+    } catch (_) {
+      // ignore
+    }
+
+    return _ChapterLoadSnapshot(result: contentResult, isCached: isCached);
+  }
+
+  Future<void> _applyLoadedChapterSnapshot({
+    required _ChapterLoadSnapshot snapshot,
+    required String chapterId,
+    required String chapterUrl,
+    required String? chapterTitle,
+    required int? chapterIndex,
+    required double targetRatio,
+    bool commitChapterIdentity = false,
+  }) async {
+    if (!mounted) {
+      return;
+    }
+
+    setState(() {
+      if (commitChapterIdentity) {
+        _currentIndex = chapterIndex;
+        _chapterId = chapterId;
+        _chapterUrl = chapterUrl;
+        _chapterTitle = chapterTitle;
+      }
+      _isCurrentChapterCached = snapshot.isCached;
+      _errorText = null;
+      _setContent(
+        snapshot.result.content,
+        imageUrls: snapshot.result.imageUrls,
+        imageHeaders: snapshot.result.imageHeaders,
+      );
+      _pendingPageRestoreRatio = targetRatio;
+    });
+
+    _restoreScrollPosition(targetRatio);
+
+    await _saveProgress();
+    _hasPromptedMissingSourceSwitch = false;
+    final preloadTaskToken = ++_preloadTaskToken;
+    unawaited(_preloadNeighbors(taskToken: preloadTaskToken));
+  }
+
+  Future<bool> _tryHydrateVisibleContentFromCache() async {
+    final sourceId = (_sourceId ?? '').trim();
+    final chapterUrl = (_chapterUrl ?? '').trim();
+    if (sourceId.isEmpty || chapterUrl.isEmpty) {
+      return false;
+    }
+
+    try {
+      final persisted = await AppDatabase.instance.getChapterCache(
+        '$sourceId|$chapterUrl',
+      );
+      final payload = persisted?.content.trim() ?? '';
+      if (payload.isEmpty) {
+        return false;
+      }
+
+      final decoded = _decodePersistedChapterCache(payload);
+      final previewRatio = _previewBootstrapScrollRatio();
+      if (!mounted) {
+        return false;
+      }
+
+      setState(() {
+        _isCurrentChapterCached = true;
+        _errorText = null;
+        _setContent(
+          decoded.content,
+          imageUrls: decoded.imageUrls,
+          imageHeaders: decoded.imageHeaders,
+        );
+        _pendingPageRestoreRatio = previewRatio;
+      });
+
+      _restoreScrollPosition(previewRatio);
+      return true;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  Future<bool> _tryHydrateTocSnapshot() async {
+    final sourceId = (_sourceId ?? '').trim();
+    final detailUrl = (_detailUrl ?? '').trim();
+    if (sourceId.isEmpty || detailUrl.isEmpty) {
+      return false;
+    }
+
+    try {
+      final snapshot = await _preferencesService.loadTocSnapshot(
+        sourceId: sourceId,
+        detailUrl: detailUrl,
+      );
+      if (snapshot == null || snapshot.chapters.isEmpty) {
+        return false;
+      }
+
+      final chapters = snapshot.chapters;
+      final resolvedIndex = _resolveCurrentIndex(chapters);
+      if (resolvedIndex == null) {
+        return false;
+      }
+      final current = chapters[resolvedIndex];
+
+      if (mounted) {
+        setState(() {
+          _bookTitle = snapshot.title;
+          _bookAuthor = snapshot.author;
+          _bookCoverUrl = snapshot.coverUrl;
+          _chapters = chapters;
+          _currentIndex = resolvedIndex;
+          _chapterId = current.id;
+          _chapterUrl = current.chapterUrl;
+          _chapterTitle = current.title;
+          _errorText = null;
+        });
+      } else {
+        _bookTitle = snapshot.title;
+        _bookAuthor = snapshot.author;
+        _bookCoverUrl = snapshot.coverUrl;
+        _chapters = chapters;
+        _currentIndex = resolvedIndex;
+        _chapterId = current.id;
+        _chapterUrl = current.chapterUrl;
+        _chapterTitle = current.title;
+        _errorText = null;
+      }
+
+      return true;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  Future<void> _persistTocSnapshot(BookDetailLoadResult detailResult) async {
+    final sourceId = (_sourceId ?? '').trim();
+    final detailUrl = (_detailUrl ?? '').trim();
+    if (sourceId.isEmpty ||
+        detailUrl.isEmpty ||
+        detailResult.chapters.isEmpty ||
+        detailResult.detail.title.trim().isEmpty) {
+      return;
+    }
+
+    try {
+      await _preferencesService.saveTocSnapshot(
+        ReaderTocSnapshot(
+          bookId: _currentBookId,
+          sourceId: sourceId,
+          detailUrl: detailUrl,
+          title: detailResult.detail.title,
+          author: detailResult.detail.author,
+          coverUrl: detailResult.detail.coverUrl,
+          chapters: detailResult.chapters,
+          updatedAt: DateTime.now(),
+        ),
+      );
+    } catch (_) {
+      // Ignore snapshot persistence failures.
+    }
+  }
+
+  _DecodedReaderChapterCache _decodePersistedChapterCache(String payload) {
+    final trimmed = payload.trim();
+    if (!trimmed.startsWith(_kCachedImagePayloadPrefix)) {
+      return _DecodedReaderChapterCache(content: trimmed);
+    }
+
+    final raw = trimmed.substring(_kCachedImagePayloadPrefix.length);
+    try {
+      final decoded = jsonDecode(raw);
+      if (decoded is List) {
+        final urls = decoded
+            .map((item) => item?.toString().trim() ?? '')
+            .where((item) => item.isNotEmpty)
+            .toList(growable: false);
+        return _DecodedReaderChapterCache(content: '', imageUrls: urls);
+      }
+
+      if (decoded is Map) {
+        final urls =
+            (decoded['imageUrls'] as List?)
+                ?.map((item) => item?.toString().trim() ?? '')
+                .where((item) => item.isNotEmpty)
+                .toList(growable: false) ??
+            const <String>[];
+        final headers =
+            (decoded['imageHeaders'] as Map?)
+                ?.map(
+                  (key, value) =>
+                      MapEntry(key.toString(), value?.toString().trim() ?? ''),
+                )
+                .map((key, value) => MapEntry(key.trim(), value.trim()))
+                .entries
+                .where(
+                  (entry) => entry.key.isNotEmpty && entry.value.isNotEmpty,
+                )
+                .fold<Map<String, String>>(
+                  <String, String>{},
+                  (result, entry) => result..[entry.key] = entry.value,
+                ) ??
+            const <String, String>{};
+
+        return _DecodedReaderChapterCache(
+          content: '',
+          imageUrls: urls,
+          imageHeaders: headers,
+        );
+      }
+    } on FormatException {
+      return _DecodedReaderChapterCache(content: trimmed);
+    }
+
+    return _DecodedReaderChapterCache(content: trimmed);
+  }
+
+  Future<bool> _loadCurrentChapter({
+    double? initialScrollRatio,
+    String? sourceIdOverride,
+    String? chapterIdOverride,
+    String? chapterUrlOverride,
+    String? chapterTitleOverride,
+    int? chapterIndexOverride,
+    bool commitChapterIdentity = false,
+  }) async {
     if (!mounted) {
       return false;
     }
 
-    final sourceId = _sourceId;
-    final chapterUrl = _chapterUrl;
+    final sourceId = sourceIdOverride ?? _sourceId;
+    final chapterId = chapterIdOverride ?? _chapterId;
+    final chapterUrl = chapterUrlOverride ?? _chapterUrl;
+    final chapterTitle = chapterTitleOverride ?? _chapterTitle;
 
     if (sourceId == null ||
         sourceId.isEmpty ||
@@ -5993,56 +6471,36 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
       _isLoadingContent = true;
       _errorText = null;
     });
+    _scheduleBlockingLoadingCard();
+    _scheduleChapterLoadingIndicator();
 
     try {
       final resolvedIndex =
+          chapterIndexOverride ??
           _currentIndex ??
           _chapters.indexWhere((chapter) => chapter.chapterUrl == chapterUrl);
-
-      final contentProvider = _requireContentProvider(
+      final snapshot = await _fetchChapterContentSnapshot(
         sourceId: sourceId,
-        stage: ErrorStage.content,
-      );
-      final contentResult = await contentProvider.loadChapterContent(
-        sourceId: sourceId,
+        chapterId: chapterId,
         chapterUrl: chapterUrl,
-        bookId: _currentBookId,
-        chapterId: _chapterId,
+        chapterTitle: chapterTitle,
         chapterIndex: resolvedIndex >= 0 ? resolvedIndex : null,
-        chapterTitle: _chapterTitle,
       );
-
-      var isCached = contentResult.fromCache;
-      final cacheKey = '$sourceId|$chapterUrl';
-      try {
-        final persisted = await AppDatabase.instance.getChapterCache(cacheKey);
-        isCached = persisted != null;
-      } catch (_) {
-        // ignore
-      }
 
       if (!mounted) {
         return false;
       }
 
       final targetRatio = initialScrollRatio?.clamp(0.0, 1.0) ?? 0.0;
-
-      setState(() {
-        _isCurrentChapterCached = isCached;
-        _setContent(
-          contentResult.content,
-          imageUrls: contentResult.imageUrls,
-          imageHeaders: contentResult.imageHeaders,
-        );
-        _pendingPageRestoreRatio = targetRatio;
-      });
-
-      _restoreScrollPosition(targetRatio);
-
-      await _saveProgress();
-      _hasPromptedMissingSourceSwitch = false;
-      final preloadTaskToken = ++_preloadTaskToken;
-      unawaited(_preloadNeighbors(taskToken: preloadTaskToken));
+      await _applyLoadedChapterSnapshot(
+        snapshot: snapshot,
+        chapterId: chapterId,
+        chapterUrl: chapterUrl,
+        chapterTitle: chapterTitle,
+        chapterIndex: resolvedIndex >= 0 ? resolvedIndex : null,
+        targetRatio: targetRatio,
+        commitChapterIdentity: commitChapterIdentity,
+      );
       return true;
     } on AppException catch (error) {
       if (!mounted) {
@@ -6068,6 +6526,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
       final switched = await _tryAutoSwitchSourceOnFailure();
       return switched;
     } finally {
+      _clearDelayedLoadingUi();
       if (mounted) {
         setState(() {
           _isLoadingContent = false;
@@ -6370,42 +6829,27 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
   }
 
   Future<void> _jumpTo(int index, {double? initialScrollRatio}) async {
+    if (_isLoadingContent || index < 0 || index >= _chapters.length) {
+      return;
+    }
+
     _stopAutoRead();
     final chapter = _chapters[index];
 
-    final previousChapterId = _chapterId;
-    final previousChapterUrl = _chapterUrl;
-    final previousChapterTitle = _chapterTitle;
-    final previousIndex = _currentIndex;
-    final previousContent = _content;
-    final previousImageUrls = _chapterImageUrls;
-    final previousImageHeaders = _chapterImageHeaders;
-
-    setState(() {
-      _currentIndex = index;
-      _chapterId = chapter.id;
-      _chapterUrl = chapter.chapterUrl;
-      _chapterTitle = chapter.title;
-      _errorText = null;
-    });
-
     final success = await _loadCurrentChapter(
       initialScrollRatio: initialScrollRatio ?? 0,
+      sourceIdOverride: _sourceId,
+      chapterIdOverride: chapter.id,
+      chapterUrlOverride: chapter.chapterUrl,
+      chapterTitleOverride: chapter.title,
+      chapterIndexOverride: index,
+      commitChapterIdentity: true,
     );
     if (success || !mounted) {
       return;
     }
 
     setState(() {
-      _chapterId = previousChapterId;
-      _chapterUrl = previousChapterUrl;
-      _chapterTitle = previousChapterTitle;
-      _currentIndex = previousIndex;
-      _setContent(
-        previousContent,
-        imageUrls: previousImageUrls,
-        imageHeaders: previousImageHeaders,
-      );
       _errorText = null;
     });
 
@@ -11232,6 +11676,25 @@ class _CatalogSearchEntry {
   final int chapterIndex;
   final double? scrollRatio;
   final bool isContent;
+}
+
+class _ChapterLoadSnapshot {
+  const _ChapterLoadSnapshot({required this.result, required this.isCached});
+
+  final ChapterContentResult result;
+  final bool isCached;
+}
+
+class _DecodedReaderChapterCache {
+  const _DecodedReaderChapterCache({
+    required this.content,
+    this.imageUrls = const [],
+    this.imageHeaders = const {},
+  });
+
+  final String content;
+  final List<String> imageUrls;
+  final Map<String, String> imageHeaders;
 }
 
 class _ReaderThemeColors {
