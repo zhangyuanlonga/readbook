@@ -10,6 +10,7 @@ import '../features/discover/presentation/discover_page.dart';
 import '../features/announcement/presentation/announcement_detail_page.dart';
 import '../features/announcement/presentation/announcement_list_page.dart';
 import '../features/mine/presentation/mine_page.dart';
+import '../features/mine/presentation/appearance_page.dart';
 import '../features/mine/presentation/cache_management_page.dart';
 import '../features/mine/presentation/rule_config_page.dart';
 import '../features/mine/presentation/about_page.dart';
@@ -66,6 +67,11 @@ final GoRouter appRouter = GoRouter(
           ],
         ),
       ],
+    ),
+    GoRoute(
+      path: '/appearance',
+      name: 'appearance',
+      builder: (context, state) => const AppearancePage(),
     ),
     GoRoute(
       path: '/cache',

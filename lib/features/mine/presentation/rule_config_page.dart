@@ -22,7 +22,7 @@ class RuleConfigPage extends StatelessWidget {
         context.go('/mine');
       },
       child: Scaffold(
-        appBar: AppBar(title: const Text('规则配置')),
+        appBar: AppBar(title: const Text('规则')),
         body: LayoutBuilder(
           builder: (context, _) {
             final maxWidth = AppLayout.pageContentMaxWidth(

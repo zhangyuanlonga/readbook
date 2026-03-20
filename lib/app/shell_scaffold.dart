@@ -12,11 +12,16 @@ class ShellScaffold extends ConsumerStatefulWidget {
   const ShellScaffold({
     super.key,
     required this.location,
-    required this.navigationShell,
-  });
+    this.navigationShell,
+    this.child,
+  }) : assert(
+         navigationShell != null || child != null,
+         'Either navigationShell or child must be provided.',
+       );
 
   final String location;
-  final StatefulNavigationShell navigationShell;
+  final StatefulNavigationShell? navigationShell;
+  final Widget? child;
 
   @override
   ConsumerState<ShellScaffold> createState() => _ShellScaffoldState();
@@ -92,6 +97,7 @@ class _ShellScaffoldState extends ConsumerState<ShellScaffold>
 
   @override
   Widget build(BuildContext context) {
+    final shellChild = widget.navigationShell ?? widget.child!;
     final useNavigationRail = AppLayout.isMediumUp(context);
     final enableTabSwipe = _enableMobileTabSwipe && !useNavigationRail;
     final navigationState = ref.watch(appShellNavigationProvider);
@@ -119,7 +125,7 @@ class _ShellScaffoldState extends ConsumerState<ShellScaffold>
         shouldAnimateSwitch
             ? AnimatedBuilder(
               animation: _tabSwitchController,
-              child: widget.navigationShell,
+              child: shellChild,
               builder: (context, child) {
                 final slideProgress = _tabSlideCurve.value;
                 final fadeProgress = _tabFadeCurve.value;
@@ -136,7 +142,7 @@ class _ShellScaffoldState extends ConsumerState<ShellScaffold>
                 );
               },
             )
-            : widget.navigationShell;
+            : shellChild;
 
     final body =
         enableTabSwipe
@@ -236,10 +242,15 @@ class _ShellScaffoldState extends ConsumerState<ShellScaffold>
       return;
     }
 
-    widget.navigationShell.goBranch(
-      _tabOrderIndex(destination.tab),
-      initialLocation: false,
-    );
+    final navigationShell = widget.navigationShell;
+    if (navigationShell != null) {
+      navigationShell.goBranch(
+        _tabOrderIndex(destination.tab),
+        initialLocation: false,
+      );
+      return;
+    }
+    context.go(destination.location);
   }
 
   void _scheduleRedirectToVisibleTab(BuildContext context, String location) {

@@ -1,21 +1,13 @@
 import 'package:flutter/material.dart';
-import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../app/layout/app_layout.dart';
 import '../../../app/layout/app_spacing.dart';
-import '../../../app/shell_navigation_provider.dart';
 import '../../reader/application/reader_system_settings_service.dart';
 import '../../search/application/search_system_settings_service.dart';
 
 const double _kSectionGap = 18;
 const double _kSectionListGap = 6;
-
-AppShellDestination _destinationFor(AppShellTab tab) {
-  return appShellDestinations.firstWhere(
-    (destination) => destination.tab == tab,
-  );
-}
 
 TextStyle? _sectionTitleTextStyle(BuildContext context) {
   return Theme.of(context).textTheme.titleSmall?.copyWith(
@@ -75,7 +67,7 @@ class SystemSettingsPage extends StatelessWidget {
         context.go('/mine');
       },
       child: Scaffold(
-        appBar: AppBar(title: const Text('系统设置')),
+        appBar: AppBar(title: const Text('系统')),
         body: LayoutBuilder(
           builder: (context, _) {
             final maxWidth = AppLayout.pageContentMaxWidth(
@@ -97,8 +89,6 @@ class SystemSettingsPage extends StatelessWidget {
                   children: [
                     _buildPageIntro(context),
                     const SizedBox(height: _kSectionGap),
-                    _buildBottomNavigationSection(context),
-                    const SizedBox(height: _kSectionGap),
                     _buildReaderFallbackSection(context),
                     const SizedBox(height: _kSectionGap),
                     _buildSearchAggregationSection(context),
@@ -115,17 +105,7 @@ class SystemSettingsPage extends StatelessWidget {
   Widget _buildPageIntro(BuildContext context) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
-      children: [Text('常用系统开关', style: _sectionTitleTextStyle(context))],
-    );
-  }
-
-  Widget _buildBottomNavigationSection(BuildContext context) {
-    return _buildSettingsSection(
-      context,
-      icon: Icons.space_dashboard_rounded,
-      title: '底部菜单',
-      description: '控制主导航展示项。',
-      child: const _BottomNavigationSettingPanel(),
+      children: [Text('阅读与搜索偏好', style: _sectionTitleTextStyle(context))],
     );
   }
 
@@ -311,145 +291,6 @@ Widget _buildSwitchRow(
       ],
     ),
   );
-}
-
-Widget _buildInfoRow(
-  BuildContext context, {
-  required IconData icon,
-  required String title,
-  required String subtitle,
-  required String trailingLabel,
-}) {
-  final colorScheme = Theme.of(context).colorScheme;
-
-  return Padding(
-    padding: const EdgeInsets.symmetric(vertical: 12),
-    child: Row(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Padding(
-          padding: const EdgeInsets.only(top: 2),
-          child: Icon(icon, size: 18, color: colorScheme.onSurfaceVariant),
-        ),
-        const SizedBox(width: 12),
-        Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(title, style: _settingTitleTextStyle(context)),
-              const SizedBox(height: 4),
-              Text(subtitle, style: _settingSubtitleTextStyle(context)),
-            ],
-          ),
-        ),
-        const SizedBox(width: 10),
-        Text(trailingLabel, style: _statusTextStyle(context)),
-      ],
-    ),
-  );
-}
-
-class _BottomNavigationSettingPanel extends ConsumerStatefulWidget {
-  const _BottomNavigationSettingPanel();
-
-  @override
-  ConsumerState<_BottomNavigationSettingPanel> createState() =>
-      _BottomNavigationSettingPanelState();
-}
-
-class _BottomNavigationSettingPanelState
-    extends ConsumerState<_BottomNavigationSettingPanel> {
-  bool _isSaving = false;
-  AppShellTab? _savingTab;
-  String? _errorText;
-
-  @override
-  Widget build(BuildContext context) {
-    final navigationState = ref.watch(appShellNavigationProvider);
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          '当前展示 ${navigationState.visibleTabCount}/3 项，“我的”固定显示。',
-          style: _settingSubtitleTextStyle(context),
-        ),
-        const SizedBox(height: 8),
-        _buildSettingsList(
-          context,
-          children: [
-            _buildSwitchRow(
-              context,
-              icon: _destinationFor(AppShellTab.bookshelf).icon,
-              title: _destinationFor(AppShellTab.bookshelf).label,
-              subtitle: navigationState.showBookshelf ? '已显示。' : '已隐藏。',
-              value: navigationState.showBookshelf,
-              isSaving: _isSaving && _savingTab == AppShellTab.bookshelf,
-              onChanged:
-                  _isSaving
-                      ? null
-                      : (value) => _toggle(AppShellTab.bookshelf, value),
-            ),
-            _buildSwitchRow(
-              context,
-              icon: _destinationFor(AppShellTab.discover).icon,
-              title: _destinationFor(AppShellTab.discover).label,
-              subtitle: navigationState.showDiscover ? '已显示。' : '已隐藏。',
-              value: navigationState.showDiscover,
-              isSaving: _isSaving && _savingTab == AppShellTab.discover,
-              onChanged:
-                  _isSaving
-                      ? null
-                      : (value) => _toggle(AppShellTab.discover, value),
-            ),
-            _buildInfoRow(
-              context,
-              icon: _destinationFor(AppShellTab.mine).icon,
-              title: _destinationFor(AppShellTab.mine).label,
-              subtitle: '入口固定保留。',
-              trailingLabel: '固定',
-            ),
-          ],
-        ),
-        if (_errorText case final message?) ...[
-          const SizedBox(height: 8),
-          _buildErrorBanner(context, message: message),
-        ],
-      ],
-    );
-  }
-
-  Future<void> _toggle(AppShellTab tab, bool enabled) async {
-    if (_isSaving) {
-      return;
-    }
-
-    setState(() {
-      _isSaving = true;
-      _savingTab = tab;
-      _errorText = null;
-    });
-
-    try {
-      await ref
-          .read(appShellNavigationProvider.notifier)
-          .setTabVisible(tab, enabled);
-    } catch (_) {
-      if (!mounted) {
-        return;
-      }
-      setState(() {
-        _errorText = '保存底部菜单配置失败，请稍后重试。';
-      });
-    } finally {
-      if (mounted) {
-        setState(() {
-          _isSaving = false;
-          _savingTab = null;
-        });
-      }
-    }
-  }
 }
 
 class _ReaderAutoSwitchSettingPanel extends StatefulWidget {

@@ -8,11 +8,11 @@ void main() {
       SharedPreferences.setMockInitialValues({});
     });
 
-    test('loads false by default and persists toggle value', () async {
+    test('loads true by default and persists toggle value', () async {
       final service = ReaderSystemSettingsService();
 
       final defaultValue = await service.loadAutoSwitchSourceOnFailureEnabled();
-      expect(defaultValue, isFalse);
+      expect(defaultValue, isTrue);
 
       await service.saveAutoSwitchSourceOnFailureEnabled(true);
       final enabledValue = await service.loadAutoSwitchSourceOnFailureEnabled();

@@ -8,7 +8,6 @@ import 'package:url_launcher/url_launcher.dart';
 import '../../../app/layout/app_layout.dart';
 import '../../../app/layout/app_spacing.dart';
 
-import '../../../app/theme/app_theme_provider.dart';
 import '../../../app/theme/app_theme_seed_provider.dart';
 import '../../../core/app_update/app_update_dialog.dart';
 import '../../../core/app_update/app_update_service.dart';
@@ -43,30 +42,6 @@ class _MinePageState extends ConsumerState<MinePage> {
   static final Uri _sourceFeedbackUri = Uri.parse(
     'https://qun.qq.com/universal-share/share?ac=1&authKey=Tabvg05EAafVbER7E8%2BzAQ18yErg2a%2B5PoqQH41t6dbPjcZIfDSnNX%2F4KCAXhzVh&busi_data=eyJncm91cENvZGUiOiIxMDgyODI3MjI0IiwidG9rZW4iOiIzam5tVFQ0cUs1T3VlMytzVk9iOXB1Zk40Q1RaUXJiQytzd2JlZUx3NDhXQTJscy9ZZGE5WW1hQXhPdGFwMHU1IiwidWluIjoiNzgyMDQ1MDExIn0%3D&data=PHNA5IOU4A3ujR5i9rmpWqWn4Qc-L9MNr8ByREa7IfvpXTo1utwnHVIfjkB7Rlk4x3yE9dfMR5_ZjOfsQ9wYcA&svctype=4&tempid=h5_group_info',
   );
-  static const List<_SeedColorOption> _seedColorOptions = [
-    _SeedColorOption('番茄橙', Color(0xFFE7573B)),
-    _SeedColorOption('青绿', Color(0xFF2E7D32)),
-    _SeedColorOption('海蓝', Color(0xFF1565C0)),
-    _SeedColorOption('经典紫', Color(0xFF6750A4)),
-    _SeedColorOption('纯白', Color(0xFFFFFFFF)),
-  ];
-  static const List<_ThemeModeOption> _themeModeOptions = [
-    _ThemeModeOption(
-      mode: ThemeMode.light,
-      label: '日间',
-      icon: Icons.light_mode_outlined,
-    ),
-    _ThemeModeOption(
-      mode: ThemeMode.dark,
-      label: '夜间',
-      icon: Icons.dark_mode_outlined,
-    ),
-    _ThemeModeOption(
-      mode: ThemeMode.system,
-      label: '跟随系统',
-      icon: Icons.settings_suggest_outlined,
-    ),
-  ];
 
   final AuthSessionStore _authSessionStore = AuthSessionStore();
   final AppUpdateService _updateService = AppUpdateService();
@@ -136,18 +111,14 @@ class _MinePageState extends ConsumerState<MinePage> {
                         title: '常用',
                         actions: [
                           _MineActionItem(
-                            icon: Icons.settings_outlined,
-                            label: '主题设置',
+                            icon: Icons.palette_outlined,
+                            label: '外观',
                             colorDot: seedColor,
-                            onTap:
-                                () => _showThemeSettingsSheet(
-                                  context: context,
-                                  ref: ref,
-                                ),
+                            onTap: () => context.push('/appearance'),
                           ),
                           _MineActionItem(
                             icon: Icons.tune_rounded,
-                            label: '系统设置',
+                            label: '系统',
                             onTap: () => context.push('/system-settings'),
                           ),
                           _MineActionItem(
@@ -157,12 +128,12 @@ class _MinePageState extends ConsumerState<MinePage> {
                           ),
                           _MineActionItem(
                             icon: Icons.rule_outlined,
-                            label: '规则配置',
+                            label: '规则',
                             onTap: () => context.push('/rule-config'),
                           ),
                           _MineActionItem(
                             icon: Icons.cloud_outlined,
-                            label: '缓存管理',
+                            label: '缓存',
                             onTap: () => context.push('/cache'),
                           ),
                           _MineActionItem(
@@ -615,252 +586,6 @@ class _MinePageState extends ConsumerState<MinePage> {
     );
   }
 
-  Future<void> _showThemeSettingsSheet({
-    required BuildContext context,
-    required WidgetRef ref,
-  }) async {
-    final initialThemeMode = ref.read(appThemeModeProvider);
-    final initialSeedColor = ref.read(appSeedColorProvider);
-
-    final selected = await showModalBottomSheet<_ThemeSettingsResult>(
-      context: context,
-      showDragHandle: true,
-      useSafeArea: true,
-      isScrollControlled: true,
-      builder: (context) {
-        ThemeMode selectedThemeMode = initialThemeMode;
-        Color selectedSeedColor = initialSeedColor;
-
-        return StatefulBuilder(
-          builder: (context, setSheetState) {
-            final colorScheme = Theme.of(context).colorScheme;
-            final textTheme = Theme.of(context).textTheme;
-            final bottomInset = MediaQuery.viewInsetsOf(context).bottom;
-            final maxHeight = MediaQuery.sizeOf(context).height * 0.5;
-
-            return SafeArea(
-              child: AnimatedPadding(
-                duration: const Duration(milliseconds: 180),
-                curve: Curves.easeOutCubic,
-                padding: EdgeInsets.only(bottom: bottomInset),
-                child: ConstrainedBox(
-                  constraints: BoxConstraints(maxHeight: maxHeight),
-                  child: Padding(
-                    padding: const EdgeInsets.fromLTRB(18, 8, 18, 16),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          '主题设置',
-                          style: textTheme.titleMedium?.copyWith(
-                            fontWeight: FontWeight.w700,
-                          ),
-                        ),
-                        const SizedBox(height: 6),
-                        Text(
-                          '统一管理主题模式和主题颜色。',
-                          style: textTheme.bodySmall?.copyWith(
-                            color: colorScheme.onSurfaceVariant,
-                          ),
-                        ),
-                        const SizedBox(height: 10),
-                        Flexible(
-                          child: SingleChildScrollView(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Container(
-                                  width: double.infinity,
-                                  padding: const EdgeInsets.fromLTRB(
-                                    12,
-                                    10,
-                                    12,
-                                    12,
-                                  ),
-                                  decoration: BoxDecoration(
-                                    color: colorScheme.surfaceContainerLow,
-                                    borderRadius: BorderRadius.circular(12),
-                                    border: Border.all(
-                                      color: colorScheme.outlineVariant
-                                          .withValues(alpha: 0.48),
-                                    ),
-                                  ),
-                                  child: Column(
-                                    crossAxisAlignment:
-                                        CrossAxisAlignment.start,
-                                    children: [
-                                      Text(
-                                        '主题模式',
-                                        style: textTheme.labelLarge?.copyWith(
-                                          fontWeight: FontWeight.w700,
-                                        ),
-                                      ),
-                                      const SizedBox(height: 8),
-                                      LayoutBuilder(
-                                        builder: (context, constraints) {
-                                          const spacing = 8.0;
-                                          final columns =
-                                              AppLayout.optionGridColumnsForWidth(
-                                                constraints.maxWidth,
-                                              );
-                                          final itemWidth =
-                                              (constraints.maxWidth -
-                                                  ((columns - 1) * spacing)) /
-                                              columns;
-
-                                          return Wrap(
-                                            spacing: spacing,
-                                            runSpacing: spacing,
-                                            children: _themeModeOptions
-                                                .map(
-                                                  (option) => SizedBox(
-                                                    width: itemWidth,
-                                                    child: _buildThemeModeTile(
-                                                      context,
-                                                      option: option,
-                                                      selectedMode:
-                                                          selectedThemeMode,
-                                                      onTap:
-                                                          () => setSheetState(
-                                                            () {
-                                                              selectedThemeMode =
-                                                                  option.mode;
-                                                            },
-                                                          ),
-                                                    ),
-                                                  ),
-                                                )
-                                                .toList(growable: false),
-                                          );
-                                        },
-                                      ),
-                                    ],
-                                  ),
-                                ),
-                                const SizedBox(height: 10),
-                                Container(
-                                  width: double.infinity,
-                                  padding: const EdgeInsets.fromLTRB(
-                                    12,
-                                    10,
-                                    12,
-                                    12,
-                                  ),
-                                  decoration: BoxDecoration(
-                                    color: colorScheme.surfaceContainerLow,
-                                    borderRadius: BorderRadius.circular(12),
-                                    border: Border.all(
-                                      color: colorScheme.outlineVariant
-                                          .withValues(alpha: 0.48),
-                                    ),
-                                  ),
-                                  child: Column(
-                                    crossAxisAlignment:
-                                        CrossAxisAlignment.start,
-                                    children: [
-                                      Text(
-                                        '主题颜色',
-                                        style: textTheme.labelLarge?.copyWith(
-                                          fontWeight: FontWeight.w700,
-                                        ),
-                                      ),
-                                      const SizedBox(height: 8),
-                                      LayoutBuilder(
-                                        builder: (context, constraints) {
-                                          const spacing = 8.0;
-                                          final columns =
-                                              AppLayout.optionGridColumnsForWidth(
-                                                constraints.maxWidth,
-                                              );
-                                          final itemWidth =
-                                              (constraints.maxWidth -
-                                                  ((columns - 1) * spacing)) /
-                                              columns;
-
-                                          return Wrap(
-                                            spacing: spacing,
-                                            runSpacing: spacing,
-                                            children: _seedColorOptions
-                                                .map(
-                                                  (option) => SizedBox(
-                                                    width: itemWidth,
-                                                    child: _buildThemeColorTile(
-                                                      context,
-                                                      option: option,
-                                                      selectedColor:
-                                                          selectedSeedColor,
-                                                      onTap:
-                                                          () => setSheetState(
-                                                            () {
-                                                              selectedSeedColor =
-                                                                  option.color;
-                                                            },
-                                                          ),
-                                                    ),
-                                                  ),
-                                                )
-                                                .toList(growable: false),
-                                          );
-                                        },
-                                      ),
-                                    ],
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                        ),
-                        const SizedBox(height: 12),
-                        Row(
-                          children: [
-                            Expanded(
-                              child: OutlinedButton(
-                                onPressed: () => Navigator.of(context).pop(),
-                                child: const Text('取消'),
-                              ),
-                            ),
-                            const SizedBox(width: 10),
-                            Expanded(
-                              child: FilledButton(
-                                onPressed:
-                                    () => Navigator.of(context).pop(
-                                      _ThemeSettingsResult(
-                                        themeMode: selectedThemeMode,
-                                        seedColor: selectedSeedColor,
-                                      ),
-                                    ),
-                                child: const Text('保存'),
-                              ),
-                            ),
-                          ],
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-              ),
-            );
-          },
-        );
-      },
-    );
-
-    if (selected == null) {
-      return;
-    }
-
-    if (selected.themeMode != initialThemeMode) {
-      await ref
-          .read(appThemeModeProvider.notifier)
-          .setThemeMode(selected.themeMode);
-    }
-    if (selected.seedColor.toARGB32() != initialSeedColor.toARGB32()) {
-      await ref
-          .read(appSeedColorProvider.notifier)
-          .setSeedColor(selected.seedColor);
-    }
-  }
-
   Future<void> _showDonationSheet() async {
     if (!mounted) {
       return;
@@ -927,125 +652,6 @@ class _MinePageState extends ConsumerState<MinePage> {
     );
   }
 
-  Widget _buildThemeModeTile(
-    BuildContext context, {
-    required _ThemeModeOption option,
-    required ThemeMode selectedMode,
-    required VoidCallback onTap,
-  }) {
-    final colorScheme = Theme.of(context).colorScheme;
-    final selected = option.mode == selectedMode;
-
-    return InkWell(
-      borderRadius: BorderRadius.circular(12),
-      onTap: onTap,
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 160),
-        curve: Curves.easeOutCubic,
-        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
-        decoration: BoxDecoration(
-          color:
-              selected
-                  ? colorScheme.secondaryContainer.withValues(alpha: 0.8)
-                  : colorScheme.surface,
-          borderRadius: BorderRadius.circular(12),
-          border: Border.all(
-            color:
-                selected
-                    ? colorScheme.primary
-                    : colorScheme.outlineVariant.withValues(alpha: 0.58),
-            width: selected ? 1.4 : 1,
-          ),
-        ),
-        child: Row(
-          children: [
-            Icon(
-              option.icon,
-              size: 18,
-              color:
-                  selected ? colorScheme.primary : colorScheme.onSurfaceVariant,
-            ),
-            const SizedBox(width: 8),
-            Expanded(
-              child: Text(
-                option.label,
-                style: Theme.of(
-                  context,
-                ).textTheme.labelLarge?.copyWith(fontWeight: FontWeight.w700),
-              ),
-            ),
-            Icon(
-              selected ? Icons.check_circle_rounded : Icons.circle_outlined,
-              size: 18,
-              color: selected ? colorScheme.primary : colorScheme.outline,
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildThemeColorTile(
-    BuildContext context, {
-    required _SeedColorOption option,
-    required Color selectedColor,
-    required VoidCallback onTap,
-  }) {
-    final colorScheme = Theme.of(context).colorScheme;
-    final selected = option.color.toARGB32() == selectedColor.toARGB32();
-
-    return InkWell(
-      borderRadius: BorderRadius.circular(12),
-      onTap: onTap,
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 160),
-        curve: Curves.easeOutCubic,
-        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
-        decoration: BoxDecoration(
-          color:
-              selected
-                  ? colorScheme.secondaryContainer.withValues(alpha: 0.82)
-                  : colorScheme.surface,
-          borderRadius: BorderRadius.circular(12),
-          border: Border.all(
-            color:
-                selected
-                    ? colorScheme.primary
-                    : colorScheme.outlineVariant.withValues(alpha: 0.58),
-            width: selected ? 1.4 : 1,
-          ),
-        ),
-        child: Row(
-          children: [
-            Container(
-              width: 13,
-              height: 13,
-              decoration: BoxDecoration(
-                color: option.color,
-                shape: BoxShape.circle,
-                border: Border.all(
-                  color: colorScheme.outlineVariant,
-                  width: 0.8,
-                ),
-              ),
-            ),
-            const SizedBox(width: 8),
-            Expanded(
-              child: Text(
-                option.label,
-                style: Theme.of(
-                  context,
-                ).textTheme.labelLarge?.copyWith(fontWeight: FontWeight.w700),
-              ),
-            ),
-            if (selected)
-              Icon(Icons.check_rounded, size: 18, color: colorScheme.primary),
-          ],
-        ),
-      ),
-    );
-  }
-
   Future<void> _openSourceFeedback() async {
     final launched = await launchUrl(
       _sourceFeedbackUri,
@@ -1097,35 +703,6 @@ class _MinePageState extends ConsumerState<MinePage> {
       context,
     ).showSnackBar(SnackBar(content: Text(message)));
   }
-}
-
-class _SeedColorOption {
-  const _SeedColorOption(this.label, this.color);
-
-  final String label;
-  final Color color;
-}
-
-class _ThemeModeOption {
-  const _ThemeModeOption({
-    required this.mode,
-    required this.label,
-    required this.icon,
-  });
-
-  final ThemeMode mode;
-  final String label;
-  final IconData icon;
-}
-
-class _ThemeSettingsResult {
-  const _ThemeSettingsResult({
-    required this.themeMode,
-    required this.seedColor,
-  });
-
-  final ThemeMode themeMode;
-  final Color seedColor;
 }
 
 class _MineActionItem {

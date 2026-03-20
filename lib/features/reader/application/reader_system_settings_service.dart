@@ -14,7 +14,7 @@ class ReaderSystemSettingsService {
 
   Future<bool> loadAutoSwitchSourceOnFailureEnabled() async {
     final prefs = await _preferencesFuture;
-    return prefs.getBool(_autoSwitchSourceOnFailureKey) ?? false;
+    return prefs.getBool(_autoSwitchSourceOnFailureKey) ?? true;
   }
 
   Future<void> saveAutoSwitchSourceOnFailureEnabled(bool enabled) async {

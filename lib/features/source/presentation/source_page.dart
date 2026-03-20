@@ -24,7 +24,7 @@ import '../application/source_capability_analyzer.dart';
 import '../application/external_source_import_bridge.dart';
 import '../application/source_import_service.dart';
 
-enum _SourceSort { nameAsc, nameDesc, enabledFirst }
+enum _SourceSort { smart, nameAsc, enabledFirst }
 
 class SourcePage extends StatefulWidget {
   const SourcePage({super.key});
@@ -56,7 +56,7 @@ class _SourcePageState extends State<SourcePage> {
   Timer? _searchDebounce;
   StreamSubscription<IncomingSourceImportPayload>? _incomingImportSubscription;
   String _searchKeyword = '';
-  _SourceSort _sourceSort = _SourceSort.nameAsc;
+  _SourceSort _sourceSort = _SourceSort.smart;
   bool _isPageLoading = false;
   bool _isInitialLoading = true;
   bool _hasMorePages = true;
@@ -718,37 +718,34 @@ class _SourcePageState extends State<SourcePage> {
         });
       },
       itemBuilder:
-          (context) => const [
-            PopupMenuItem(value: _SourceSort.nameAsc, child: Text('名称 A-Z')),
-            PopupMenuItem(value: _SourceSort.nameDesc, child: Text('名称 Z-A')),
-            PopupMenuItem(value: _SourceSort.enabledFirst, child: Text('启用优先')),
+          (context) => [
+            CheckedPopupMenuItem<_SourceSort>(
+              value: _SourceSort.nameAsc,
+              checked: _sourceSort == _SourceSort.nameAsc,
+              child: const Text('名称排序'),
+            ),
+            CheckedPopupMenuItem<_SourceSort>(
+              value: _SourceSort.smart,
+              checked: _sourceSort == _SourceSort.smart,
+              child: const Text('智能排序'),
+            ),
+            CheckedPopupMenuItem<_SourceSort>(
+              value: _SourceSort.enabledFirst,
+              checked: _sourceSort == _SourceSort.enabledFirst,
+              child: const Text('是否启用'),
+            ),
           ],
       child: Container(
         height: 46,
-        padding: const EdgeInsets.symmetric(horizontal: 12),
+        width: 46,
+        alignment: Alignment.center,
         decoration: BoxDecoration(
           borderRadius: BorderRadius.circular(14),
           border: Border.all(
             color: Theme.of(context).colorScheme.outlineVariant,
           ),
         ),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            const Icon(Icons.swap_vert_rounded, size: 18),
-            const SizedBox(width: 6),
-            Text(
-              switch (_sourceSort) {
-                _SourceSort.nameAsc => 'A-Z',
-                _SourceSort.nameDesc => 'Z-A',
-                _SourceSort.enabledFirst => '启用优先',
-              },
-              style: Theme.of(
-                context,
-              ).textTheme.labelMedium?.copyWith(fontWeight: FontWeight.w600),
-            ),
-          ],
-        ),
+        child: const Icon(Icons.reorder_rounded, size: 20),
       ),
     );
   }
@@ -756,14 +753,36 @@ class _SourcePageState extends State<SourcePage> {
   List<SourceListItem> _applySort(List<SourceListItem> input) {
     final output = [...input];
     switch (_sourceSort) {
+      case _SourceSort.smart:
+        output.sort((a, b) {
+          if (a.enabled != b.enabled) {
+            return a.enabled ? -1 : 1;
+          }
+
+          final healthDiff = _smartHealthPriority(
+            a.lastCheckStatus,
+          ).compareTo(_smartHealthPriority(b.lastCheckStatus));
+          if (healthDiff != 0) {
+            return healthDiff;
+          }
+
+          final aCheckedAt = a.lastCheckedAt;
+          final bCheckedAt = b.lastCheckedAt;
+          if (aCheckedAt != null && bCheckedAt != null) {
+            final checkedDiff = bCheckedAt.compareTo(aCheckedAt);
+            if (checkedDiff != 0) {
+              return checkedDiff;
+            }
+          } else if (aCheckedAt != null || bCheckedAt != null) {
+            return aCheckedAt != null ? -1 : 1;
+          }
+
+          return a.name.toLowerCase().compareTo(b.name.toLowerCase());
+        });
+        break;
       case _SourceSort.nameAsc:
         output.sort(
           (a, b) => a.name.toLowerCase().compareTo(b.name.toLowerCase()),
-        );
-        break;
-      case _SourceSort.nameDesc:
-        output.sort(
-          (a, b) => b.name.toLowerCase().compareTo(a.name.toLowerCase()),
         );
         break;
       case _SourceSort.enabledFirst:
@@ -776,6 +795,15 @@ class _SourcePageState extends State<SourcePage> {
         break;
     }
     return output;
+  }
+
+  int _smartHealthPriority(SourceHealthStatus status) {
+    return switch (status) {
+      SourceHealthStatus.healthy => 0,
+      SourceHealthStatus.degraded => 1,
+      SourceHealthStatus.unknown => 2,
+      SourceHealthStatus.unavailable => 3,
+    };
   }
 
   Widget _buildEmptySourceCard() {

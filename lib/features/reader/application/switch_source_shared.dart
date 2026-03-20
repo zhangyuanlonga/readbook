@@ -140,6 +140,29 @@ int? extractSwitchSourceChapterNumber(String text) {
   return null;
 }
 
+bool isStrictSwitchSourceMatch(
+  Book book, {
+  required String normalizedTargetTitle,
+  required String normalizedTargetAuthor,
+}) {
+  final normalizedTitle = normalizeSwitchSourceText(book.title);
+  if (normalizedTargetTitle.isEmpty ||
+      normalizedTitle != normalizedTargetTitle) {
+    return false;
+  }
+
+  if (normalizedTargetAuthor.isEmpty) {
+    return true;
+  }
+
+  final normalizedAuthor = normalizeSwitchSourceText(book.author ?? '');
+  if (normalizedAuthor.isEmpty) {
+    return false;
+  }
+
+  return normalizedAuthor == normalizedTargetAuthor;
+}
+
 int scoreSwitchSourceCandidate(
   Book book, {
   required String normalizedTargetTitle,
@@ -250,6 +273,13 @@ List<SwitchSourceCandidate> buildSwitchSourceCandidates({
 
   for (final book in books) {
     if (book.sourceId == currentSourceId) {
+      continue;
+    }
+    if (!isStrictSwitchSourceMatch(
+      book,
+      normalizedTargetTitle: normalizedTargetTitle,
+      normalizedTargetAuthor: normalizedTargetAuthor,
+    )) {
       continue;
     }
 
