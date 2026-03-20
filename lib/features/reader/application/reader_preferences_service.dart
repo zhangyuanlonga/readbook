@@ -21,10 +21,14 @@ class ReaderPreferencesService {
       'reader.settings.horizontalPadding';
   static const String _paragraphSpacingKey = 'reader.settings.paragraphSpacing';
   static const String _paragraphIndentKey = 'reader.settings.paragraphIndent';
+  static const String _textFullJustifyEnabledKey =
+      'reader.settings.textFullJustifyEnabled';
   static const String _letterSpacingKey = 'reader.settings.letterSpacing';
   static const String _brightnessKey = 'reader.settings.brightness';
   static const String _themeModeKey = 'reader.settings.themeMode';
   static const String _pageTurnModeKey = 'reader.settings.pageTurnMode';
+  static const String _volumeKeyPageEnabledKey =
+      'reader.settings.volumeKeyPageEnabled';
   static const String _autoReadEnabledKey = 'reader.settings.autoReadEnabled';
   static const String _autoReadSpeedKey = 'reader.settings.autoReadSpeed';
   static const String _backgroundStyleKey = 'reader.settings.backgroundStyle';
@@ -171,6 +175,8 @@ class ReaderPreferencesService {
       horizontalPadding: ((bodyMarginLeft + bodyMarginRight) / 2).toDouble(),
       paragraphSpacing: prefs.getDouble(_paragraphSpacingKey) ?? 14,
       paragraphIndent: prefs.getDouble(_paragraphIndentKey) ?? 0,
+      textFullJustifyEnabled:
+          prefs.getBool(_textFullJustifyEnabledKey) ?? false,
       letterSpacing:
           (prefs.getDouble(_letterSpacingKey) ??
                   ReaderSettings.defaultLetterSpacing)
@@ -182,6 +188,7 @@ class ReaderPreferencesService {
       brightness: (prefs.getDouble(_brightnessKey) ?? 1).clamp(0.2, 1.0),
       themeMode: mode,
       pageTurnMode: pageTurnMode,
+      volumeKeyPageEnabled: prefs.getBool(_volumeKeyPageEnabledKey) ?? false,
       autoReadEnabled: prefs.getBool(_autoReadEnabledKey) ?? false,
       autoReadSpeed:
           (prefs.getDouble(_autoReadSpeedKey) ??
@@ -327,10 +334,18 @@ class ReaderPreferencesService {
     );
     await prefs.setDouble(_paragraphSpacingKey, settings.paragraphSpacing);
     await prefs.setDouble(_paragraphIndentKey, settings.paragraphIndent);
+    await prefs.setBool(
+      _textFullJustifyEnabledKey,
+      settings.textFullJustifyEnabled,
+    );
     await prefs.setDouble(_letterSpacingKey, settings.letterSpacing);
     await prefs.setDouble(_brightnessKey, settings.brightness);
     await prefs.setString(_themeModeKey, settings.themeMode.name);
     await prefs.setString(_pageTurnModeKey, settings.pageTurnMode.name);
+    await prefs.setBool(
+      _volumeKeyPageEnabledKey,
+      settings.volumeKeyPageEnabled,
+    );
     await prefs.setBool(_autoReadEnabledKey, settings.autoReadEnabled);
     await prefs.setDouble(_autoReadSpeedKey, settings.autoReadSpeed);
     await prefs.setString(_backgroundStyleKey, settings.backgroundStyle.name);

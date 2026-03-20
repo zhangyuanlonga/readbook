@@ -29,6 +29,7 @@ import '../../../domain/entities/bookmark.dart';
 import '../../../domain/entities/book.dart';
 import '../../../domain/entities/bookshelf_book.dart';
 import '../../../domain/entities/chapter.dart';
+import '../../../domain/entities/reader_replace_rule.dart';
 import '../../../domain/entities/reader_settings.dart';
 import '../../../domain/entities/reading_progress.dart';
 import '../../../domain/entities/reader_toc_snapshot.dart';
@@ -44,10 +45,12 @@ import '../application/chapter_content_service.dart';
 import '../application/local_content_provider.dart';
 import '../application/reader_font_registry_service.dart';
 import '../application/reader_preferences_service.dart';
+import '../application/reader_replace_rule_service.dart';
 import '../application/reading_record_service.dart';
 import '../application/reader_error_center_service.dart';
 import '../application/reader_system_settings_service.dart';
 import '../application/reader_typography_resolver.dart';
+import '../application/reader_volume_key_page_bridge.dart';
 import '../application/source_content_provider.dart';
 import '../application/source_switch_score_service.dart';
 import '../application/switch_source_shared.dart';
@@ -94,6 +97,8 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
       ReaderFontRegistryService();
   final ReaderTypographyResolver _typographyResolver =
       const ReaderTypographyResolver();
+  final ReaderReplaceRuleService _readerReplaceRuleService =
+      ReaderReplaceRuleService();
   final ReaderSystemSettingsService _systemSettingsService =
       ReaderSystemSettingsService();
   final ReaderErrorCenterService _readerErrorCenterService =
@@ -159,6 +164,8 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
   int _selectionEndOffset = 0;
   String _selectedSnippet = '';
   List<Bookmark> _chapterBookmarks = const [];
+  List<ReaderReplaceRule> _effectiveReaderReplaceRules =
+      const <ReaderReplaceRule>[];
   Map<int, List<_BookmarkRange>> _bookmarkRangesByParagraph =
       const <int, List<_BookmarkRange>>{};
   bool _selectionBold = false;
@@ -179,6 +186,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
   Timer? _chapterLoadingIndicatorTimer;
   Timer? _blockingLoadingCardTimer;
   Timer? _readingRecordAutoCommitTimer;
+  StreamSubscription<ReaderVolumeKeyEvent>? _volumeKeyEventSubscription;
   final Battery _battery = Battery();
   DateTime _readerInfoNow = DateTime.now();
   int? _readerBatteryLevel;
@@ -215,6 +223,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
   Size? _pageCurlPaperSize;
   bool _isCurlAutoTurning = false;
   bool _isSystemUiVisible = true;
+  bool _isVolumeKeyPageInterceptionEnabled = false;
   late final AnimationController _overlayControlsController;
   late final AnimationController _curlAutoTurnController;
   _ActiveReadingRecordSession? _activeReadingRecordSession;
@@ -364,6 +373,203 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
     );
   }
 
+  TextAlign _paragraphTextAlign(ReaderSettings settings) {
+    return settings.textFullJustifyEnabled
+        ? TextAlign.justify
+        : TextAlign.start;
+  }
+
+  bool get _shouldEnableVolumeKeyPageInterception {
+    if (!ReaderVolumeKeyPageBridge.instance.isSupported) {
+      return false;
+    }
+    if (!_settings.volumeKeyPageEnabled) {
+      return false;
+    }
+    if (_showOverlayControls || _isTextSelectionActive) {
+      return false;
+    }
+    if (_isBootstrapping || _isLoadingContent || _errorText != null) {
+      return false;
+    }
+    return true;
+  }
+
+  Future<void> _syncVolumeKeyPageInterception() async {
+    await _setVolumeKeyPageInterceptionEnabled(
+      _shouldEnableVolumeKeyPageInterception,
+    );
+  }
+
+  Future<void> _setVolumeKeyPageInterceptionEnabled(bool enabled) async {
+    if (_isVolumeKeyPageInterceptionEnabled == enabled) {
+      return;
+    }
+    _isVolumeKeyPageInterceptionEnabled = enabled;
+    await ReaderVolumeKeyPageBridge.instance.setEnabled(enabled);
+  }
+
+  Future<void> _handleVolumeKeyEvent(ReaderVolumeKeyEvent event) async {
+    if (!mounted || !_settings.volumeKeyPageEnabled) {
+      return;
+    }
+    if (_showOverlayControls || _isTextSelectionActive) {
+      return;
+    }
+    if (_isBootstrapping || _isLoadingContent || _errorText != null) {
+      return;
+    }
+    if (event.repeatCount > 0) {
+      return;
+    }
+    if (_isAutoReadSessionEnabled) {
+      _stopAutoReadSession(showMessage: true);
+      return;
+    }
+
+    if (event.direction == ReaderVolumeKeyDirection.up) {
+      await _turnReaderBackwardByHardwareKey();
+      return;
+    }
+    await _turnReaderForwardByHardwareKey();
+  }
+
+  Future<void> _turnReaderBackwardByHardwareKey() async {
+    if (_isMangaPagedMode) {
+      await _goToPreviousMangaPage();
+      return;
+    }
+    if (_isPagedTextReaderEnabled()) {
+      await _goToPreviousPage(MediaQuery.sizeOf(context).height);
+      return;
+    }
+    await _advanceScrollReaderByStep(forward: false);
+  }
+
+  Future<void> _turnReaderForwardByHardwareKey() async {
+    if (_isMangaPagedMode) {
+      await _goToNextMangaPage();
+      return;
+    }
+    if (_isPagedTextReaderEnabled()) {
+      await _goToNextPage(MediaQuery.sizeOf(context).height);
+      return;
+    }
+    await _advanceScrollReaderByStep(forward: true);
+  }
+
+  Future<void> _advanceScrollReaderByStep({required bool forward}) async {
+    if (!_scrollController.hasClients) {
+      return;
+    }
+
+    final position = _scrollController.position;
+    final distance =
+        (position.viewportDimension * _settings.pageTurnStepRatio)
+            .clamp(120.0, max(position.viewportDimension, 120.0))
+            .toDouble();
+    final current = position.pixels;
+    final target =
+        forward
+            ? min(current + distance, position.maxScrollExtent)
+            : max(current - distance, 0.0);
+
+    if ((target - current).abs() >= 1.0) {
+      try {
+        await _scrollController.animateTo(
+          target,
+          duration: const Duration(milliseconds: 220),
+          curve: Curves.easeOutCubic,
+        );
+      } catch (_) {
+        // Ignore interrupted animations.
+      }
+      _scheduleProgressSave();
+      return;
+    }
+
+    final index = _currentIndex;
+    if (index == null) {
+      return;
+    }
+
+    if (forward) {
+      if (index >= _chapters.length - 1) {
+        _showMessage('已经是最后一章。');
+        return;
+      }
+      await _jumpTo(index + 1, initialScrollRatio: 0);
+      return;
+    }
+
+    if (index <= 0) {
+      _showMessage('已经是第一章。');
+      return;
+    }
+    await _jumpTo(index - 1, initialScrollRatio: 1);
+  }
+
+  Future<void> _goToPreviousMangaPage() async {
+    if (!_isMangaPagedMode) {
+      return;
+    }
+    if (_mangaPageIndex <= 0) {
+      final index = _currentIndex;
+      if (index == null || index <= 0) {
+        _showMessage('已经是第一章。');
+        return;
+      }
+      await _jumpTo(index - 1, initialScrollRatio: 1);
+      return;
+    }
+    final target = _mangaPageIndex - 1;
+    if (_mangaPageController.hasClients) {
+      await _mangaPageController.animateToPage(
+        target,
+        duration: const Duration(milliseconds: 220),
+        curve: Curves.easeOutCubic,
+      );
+    }
+    if (!mounted) {
+      return;
+    }
+    setState(() {
+      _mangaPageIndex = target;
+    });
+    _scheduleProgressSave();
+  }
+
+  Future<void> _goToNextMangaPage() async {
+    if (!_isMangaPagedMode) {
+      return;
+    }
+    final total = _chapterImageUrls.length;
+    if (_mangaPageIndex >= total - 1) {
+      final index = _currentIndex;
+      if (index == null || index >= _chapters.length - 1) {
+        _showMessage('已经是最后一章。');
+        return;
+      }
+      await _jumpTo(index + 1, initialScrollRatio: 0);
+      return;
+    }
+    final target = _mangaPageIndex + 1;
+    if (_mangaPageController.hasClients) {
+      await _mangaPageController.animateToPage(
+        target,
+        duration: const Duration(milliseconds: 220),
+        curve: Curves.easeOutCubic,
+      );
+    }
+    if (!mounted) {
+      return;
+    }
+    setState(() {
+      _mangaPageIndex = target;
+    });
+    _scheduleProgressSave();
+  }
+
   bool _isPagedTextReaderEnabled() {
     if (_chapterImageUrls.isNotEmpty) {
       return false;
@@ -475,6 +681,14 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
     _curlAutoTurnController.addStatusListener(_onCurlAutoTurnStatus);
     _scrollController.addListener(_onScrollChanged);
     _selectionNotifier.addListener(_handleSelectionNotifierChanged);
+    if (ReaderVolumeKeyPageBridge.instance.isSupported) {
+      _volumeKeyEventSubscription = ReaderVolumeKeyPageBridge.instance.events
+          .listen(
+            (event) => unawaited(_handleVolumeKeyEvent(event)),
+            onError: (_) {},
+          );
+    }
+    unawaited(_syncVolumeKeyPageInterception());
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _syncSystemUiVisibility(force: true);
     });
@@ -504,9 +718,12 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
     _chapterLoadingIndicatorTimer?.cancel();
     _blockingLoadingCardTimer?.cancel();
     _readingRecordAutoCommitTimer?.cancel();
+    _volumeKeyEventSubscription?.cancel();
+    _volumeKeyEventSubscription = null;
     _scrollController.removeListener(_onScrollChanged);
     _selectionNotifier.removeListener(_handleSelectionNotifierChanged);
     _selectionNotifier.dispose();
+    unawaited(_setVolumeKeyPageInterceptionEnabled(false));
     _stopAutoRead();
     _scrollController.dispose();
     _mangaPageController.dispose();
@@ -569,11 +786,13 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
         state == AppLifecycleState.hidden ||
         state == AppLifecycleState.paused ||
         state == AppLifecycleState.detached) {
+      unawaited(_setVolumeKeyPageInterceptionEnabled(false));
       _commitReadingRecordSession();
       return;
     }
 
     if (state == AppLifecycleState.resumed) {
+      unawaited(_syncVolumeKeyPageInterception());
       _maybeStartReadingRecordSession(initialRatio: _currentScrollRatio());
     }
   }
@@ -1251,7 +1470,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
               },
               child: Text.rich(
                 textSpan,
-                textAlign: TextAlign.start,
+                textAlign: _paragraphTextAlign(_settings),
                 textDirection: Directionality.of(context),
               ),
             );
@@ -1358,7 +1577,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
   }) {
     final painter = TextPainter(
       text: TextSpan(text: displayText, style: textStyle),
-      textAlign: TextAlign.start,
+      textAlign: _paragraphTextAlign(_settings),
       textDirection: textDirection,
     );
     painter.layout(maxWidth: maxWidth);
@@ -1715,6 +1934,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
       _selectionUnderline = resolvedRange.isUnderline && !resolvedRange.isWavy;
       _selectionWavy = resolvedRange.isWavy;
     });
+    unawaited(_syncVolumeKeyPageInterception());
     _showBookmarkToolbar(globalPosition);
     return true;
   }
@@ -1795,6 +2015,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
       _selectionUnderline = resolvedRange.isUnderline && !resolvedRange.isWavy;
       _selectionWavy = resolvedRange.isWavy;
     });
+    unawaited(_syncVolumeKeyPageInterception());
     _showBookmarkToolbar(globalPosition);
     return true;
   }
@@ -1915,6 +2136,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
       _selectionUnderline = nextUnderline;
       _selectionWavy = nextWavy;
     });
+    unawaited(_syncVolumeKeyPageInterception());
 
     if (!wasActive) {
       if (_isAutoReadSessionEnabled) {
@@ -1937,6 +2159,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
       _selectionEndOffset = 0;
       _selectedSnippet = '';
     });
+    unawaited(_syncVolumeKeyPageInterception());
     _hideBookmarkToolbar();
     _selectionRange = null;
     _selectionStatus = SelectionStatus.none;
@@ -3047,7 +3270,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
 
         Widget textWidget = Text.rich(
           textSpan,
-          textAlign: TextAlign.start,
+          textAlign: _paragraphTextAlign(_settings),
           textDirection: Directionality.of(context),
         );
 
@@ -5310,6 +5533,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
           _customFonts = availableCustomFonts;
           _customBackgroundImages = storedCustomBackgrounds;
         });
+        unawaited(_syncVolumeKeyPageInterception());
       } else {
         _settings = bootSettings;
         _customFonts = availableCustomFonts;
@@ -6437,10 +6661,20 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
         _currentIndex = chapterIndex;
         _chapterId = chapterId;
         _chapterUrl = chapterUrl;
-        _chapterTitle = chapterTitle;
+        _chapterTitle =
+            snapshot.result.displayChapterTitle?.trim().isNotEmpty == true
+                ? snapshot.result.displayChapterTitle!.trim()
+                : chapterTitle;
+      }
+      if (!commitChapterIdentity &&
+          snapshot.result.displayChapterTitle?.trim().isNotEmpty == true) {
+        _chapterTitle = snapshot.result.displayChapterTitle!.trim();
       }
       _isCurrentChapterCached = snapshot.isCached;
       _errorText = null;
+      _effectiveReaderReplaceRules = List<ReaderReplaceRule>.unmodifiable(
+        snapshot.result.effectiveReaderReplaceRules,
+      );
       _setContent(
         snapshot.result.content,
         imageUrls: snapshot.result.imageUrls,
@@ -6476,6 +6710,25 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
 
       final decoded = _decodePersistedChapterCache(payload);
       final previewRatio = _previewBootstrapScrollRatio();
+      final titleResult = await _readerReplaceRuleService.applyTitleRules(
+        title: (_chapterTitle ?? '').trim(),
+        bookTitle: _bookTitle,
+        sourceId: sourceId,
+      );
+      final contentResult = await _readerReplaceRuleService.applyContentRules(
+        content: decoded.content,
+        bookTitle: _bookTitle,
+        sourceId: sourceId,
+      );
+      final effectiveRules = <ReaderReplaceRule>[
+        ...titleResult.effectiveRules,
+        ...contentResult.effectiveRules.where(
+          (rule) =>
+              !titleResult.effectiveRules.any(
+                (titleRule) => titleRule.id == rule.id,
+              ),
+        ),
+      ];
       if (!mounted) {
         return false;
       }
@@ -6483,8 +6736,14 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
       setState(() {
         _isCurrentChapterCached = true;
         _errorText = null;
+        if (titleResult.content.trim().isNotEmpty) {
+          _chapterTitle = titleResult.content.trim();
+        }
+        _effectiveReaderReplaceRules = List<ReaderReplaceRule>.unmodifiable(
+          effectiveRules,
+        );
         _setContent(
-          decoded.content,
+          contentResult.content,
           imageUrls: decoded.imageUrls,
           imageHeaders: decoded.imageHeaders,
         );
@@ -6843,6 +7102,188 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
     context.push(route);
   }
 
+  Future<void> _showEffectiveReaderReplaceRulesSheet() async {
+    if (!mounted) {
+      return;
+    }
+
+    final rules = _effectiveReaderReplaceRules;
+    await showModalBottomSheet<void>(
+      context: context,
+      showDragHandle: true,
+      useSafeArea: true,
+      backgroundColor: _readerModalTheme().colorScheme.surface,
+      builder: (sheetContext) {
+        final colorScheme = Theme.of(sheetContext).colorScheme;
+        final textTheme = Theme.of(sheetContext).textTheme;
+        return Padding(
+          padding: const EdgeInsets.fromLTRB(16, 6, 16, 16),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                '本章净化',
+                style: textTheme.titleMedium?.copyWith(
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+              const SizedBox(height: 6),
+              Text(
+                rules.isEmpty
+                    ? '本章没有命中用户净化规则。'
+                    : '本章共命中 ${rules.length} 条净化规则。',
+                style: textTheme.bodySmall?.copyWith(
+                  color: colorScheme.onSurfaceVariant,
+                  height: 1.35,
+                ),
+              ),
+              const SizedBox(height: 12),
+              if (rules.isEmpty)
+                Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.all(14),
+                  decoration: BoxDecoration(
+                    color: colorScheme.surfaceContainerLow,
+                    borderRadius: BorderRadius.circular(14),
+                    border: Border.all(
+                      color: colorScheme.outlineVariant.withValues(alpha: 0.42),
+                    ),
+                  ),
+                  child: Text(
+                    '你可以去“净化”里新增去广告、去水印、文本替换等规则。',
+                    style: textTheme.bodySmall?.copyWith(height: 1.35),
+                  ),
+                )
+              else
+                Flexible(
+                  child: ListView.separated(
+                    shrinkWrap: true,
+                    itemCount: rules.length,
+                    separatorBuilder: (_, __) => const SizedBox(height: 8),
+                    itemBuilder: (context, index) {
+                      final rule = rules[index];
+                      return Material(
+                        color: colorScheme.surfaceContainerLow,
+                        borderRadius: BorderRadius.circular(14),
+                        child: InkWell(
+                          borderRadius: BorderRadius.circular(14),
+                          onTap: () async {
+                            Navigator.of(sheetContext).pop();
+                            await context.push(
+                              '/reader-replace-rules/edit?id=${rule.id}',
+                            );
+                          },
+                          child: Padding(
+                            padding: const EdgeInsets.fromLTRB(12, 12, 12, 12),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Row(
+                                  children: [
+                                    Expanded(
+                                      child: Text(
+                                        rule.name,
+                                        style: textTheme.titleSmall?.copyWith(
+                                          fontWeight: FontWeight.w700,
+                                        ),
+                                      ),
+                                    ),
+                                    Container(
+                                      padding: const EdgeInsets.symmetric(
+                                        horizontal: 8,
+                                        vertical: 4,
+                                      ),
+                                      decoration: BoxDecoration(
+                                        color: colorScheme.secondaryContainer
+                                            .withValues(alpha: 0.82),
+                                        borderRadius: BorderRadius.circular(
+                                          999,
+                                        ),
+                                      ),
+                                      child: Text(
+                                        rule.isRegex ? '正则' : '普通',
+                                        style: textTheme.labelSmall?.copyWith(
+                                          color:
+                                              colorScheme.onSecondaryContainer,
+                                          fontWeight: FontWeight.w700,
+                                        ),
+                                      ),
+                                    ),
+                                    const SizedBox(width: 6),
+                                    Container(
+                                      padding: const EdgeInsets.symmetric(
+                                        horizontal: 8,
+                                        vertical: 4,
+                                      ),
+                                      decoration: BoxDecoration(
+                                        color: colorScheme.surface,
+                                        borderRadius: BorderRadius.circular(
+                                          999,
+                                        ),
+                                        border: Border.all(
+                                          color: colorScheme.outlineVariant
+                                              .withValues(alpha: 0.4),
+                                        ),
+                                      ),
+                                      child: Text(
+                                        rule.scopeTitle && rule.scopeContent
+                                            ? '标题+正文'
+                                            : rule.scopeTitle
+                                            ? '标题'
+                                            : '正文',
+                                        style: textTheme.labelSmall?.copyWith(
+                                          color: colorScheme.onSurfaceVariant,
+                                          fontWeight: FontWeight.w700,
+                                        ),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                                const SizedBox(height: 6),
+                                Text(
+                                  '匹配：${rule.pattern}',
+                                  style: textTheme.bodySmall?.copyWith(
+                                    color: colorScheme.onSurfaceVariant,
+                                    height: 1.35,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                      );
+                    },
+                  ),
+                ),
+              const SizedBox(height: 12),
+              Row(
+                children: [
+                  Expanded(
+                    child: OutlinedButton(
+                      onPressed: () => Navigator.of(sheetContext).pop(),
+                      child: const Text('关闭'),
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: FilledButton(
+                      onPressed: () async {
+                        Navigator.of(sheetContext).pop();
+                        await context.push('/reader-replace-rules');
+                      },
+                      child: const Text('管理规则'),
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
   Future<void> _preloadNeighbors({required int taskToken}) async {
     final sourceId = _sourceId;
     final currentIndex = _currentIndex;
@@ -7129,6 +7570,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
       setState(() {
         _showOverlayControls = false;
       });
+      unawaited(_syncVolumeKeyPageInterception());
       _overlayControlsController.reverse();
     }
     if (resumeAutoRead) {
@@ -7144,6 +7586,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
     setState(() {
       _showOverlayControls = visible;
     });
+    unawaited(_syncVolumeKeyPageInterception());
     if (visible) {
       _overlayControlsController.forward();
     } else {
@@ -8745,6 +9188,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
                   setState(() {
                     _settings = draft;
                   });
+                  unawaited(_syncVolumeKeyPageInterception());
                 });
               }
 
@@ -10875,6 +11319,101 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
                   }
                 }
 
+                final moreSettingsCard = buildSettingsSectionCard(
+                  icon: Icons.tune_rounded,
+                  title: '更多',
+                  subtitle: '正文对齐与音量键翻页',
+                  children: [
+                    _buildSettingLine(
+                      context: context,
+                      label: '文字两端对齐',
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            children: [
+                              const Spacer(),
+                              Switch.adaptive(
+                                value: draft.textFullJustifyEnabled,
+                                onChanged: (enabled) {
+                                  setModalState(() {
+                                    draft = draft.copyWith(
+                                      textFullJustifyEnabled: enabled,
+                                    );
+                                  });
+                                },
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 4),
+                          Text(
+                            '开启后正文按两端对齐排版；关闭后恢复自然左对齐。',
+                            style: Theme.of(
+                              context,
+                            ).textTheme.labelSmall?.copyWith(
+                              color:
+                                  Theme.of(
+                                    context,
+                                  ).colorScheme.onSurfaceVariant,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    buildSectionDivider(),
+                    _buildSettingLine(
+                      context: context,
+                      label: '音量键翻页',
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            children: [
+                              Expanded(
+                                child: Text(
+                                  draft.volumeKeyPageEnabled
+                                      ? '音量上键上一页，音量下键下一页'
+                                      : '保留系统音量键行为',
+                                  style: Theme.of(context).textTheme.bodyMedium,
+                                ),
+                              ),
+                              Switch.adaptive(
+                                value: draft.volumeKeyPageEnabled,
+                                onChanged:
+                                    ReaderVolumeKeyPageBridge
+                                            .instance
+                                            .isSupported
+                                        ? (enabled) {
+                                          setModalState(() {
+                                            draft = draft.copyWith(
+                                              volumeKeyPageEnabled: enabled,
+                                            );
+                                          });
+                                        }
+                                        : null,
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 4),
+                          Text(
+                            ReaderVolumeKeyPageBridge.instance.isSupported
+                                ? '仅在阅读态生效，打开菜单或弹层时不会拦截系统音量。'
+                                : '当前平台暂不支持音量键翻页，仅 Android 原生宿主可用。',
+                            style: Theme.of(
+                              context,
+                            ).textTheme.labelSmall?.copyWith(
+                              color:
+                                  Theme.of(
+                                    context,
+                                  ).colorScheme.onSurfaceVariant,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                );
+
                 final showInterfaceSettings =
                     initialTab == _ReaderSettingsTab.interface;
                 final selectedCards =
@@ -10887,6 +11426,46 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
                           readingCards[2],
                         ]
                         : <Widget>[
+                          buildSettingsSectionCard(
+                            icon: Icons.cleaning_services_outlined,
+                            title: '本章净化',
+                            subtitle: '查看当前章节命中的用户净化规则',
+                            children: [
+                              Wrap(
+                                spacing: 8,
+                                runSpacing: 8,
+                                children: [
+                                  buildSummaryAction(
+                                    icon: Icons.rule_folder_outlined,
+                                    label: '命中',
+                                    value:
+                                        _effectiveReaderReplaceRules.isEmpty
+                                            ? '无'
+                                            : '${_effectiveReaderReplaceRules.length} 条',
+                                    onTap:
+                                        () => unawaited(
+                                          _showEffectiveReaderReplaceRulesSheet(),
+                                        ),
+                                  ),
+                                ],
+                              ),
+                              const SizedBox(height: 10),
+                              Text(
+                                _effectiveReaderReplaceRules.isEmpty
+                                    ? '当前章节没有命中用户净化规则。'
+                                    : '已命中：${_effectiveReaderReplaceRules.map((item) => item.name).join('、')}',
+                                style: Theme.of(
+                                  context,
+                                ).textTheme.bodySmall?.copyWith(
+                                  color:
+                                      Theme.of(
+                                        context,
+                                      ).colorScheme.onSurfaceVariant,
+                                  height: 1.35,
+                                ),
+                              ),
+                            ],
+                          ),
                           buildSettingsSectionCard(
                             icon: Icons.auto_fix_high_rounded,
                             title: '阅读容错',
@@ -10945,6 +11524,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
                               ),
                             ],
                           ),
+                          moreSettingsCard,
                           interfaceCards[2],
                           readingCards[3],
                         ];
@@ -11427,6 +12007,25 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
                                           label: '排版',
                                           child: Column(
                                             children: [
+                                              Row(
+                                                children: [
+                                                  const Spacer(),
+                                                  Switch.adaptive(
+                                                    value:
+                                                        draft
+                                                            .textFullJustifyEnabled,
+                                                    onChanged: (enabled) {
+                                                      setModalState(() {
+                                                        draft = draft.copyWith(
+                                                          textFullJustifyEnabled:
+                                                              enabled,
+                                                        );
+                                                      });
+                                                    },
+                                                  ),
+                                                ],
+                                              ),
+                                              const SizedBox(height: 8),
                                               buildTypographySliderRow(
                                                 label: '字号',
                                                 min: 5,
@@ -11623,6 +12222,67 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
                                                 ),
                                               ),
                                             buildPageAnimationSelector(),
+                                          ],
+                                        ),
+                                      ),
+                                      const Divider(height: 1),
+                                      _buildSettingLine(
+                                        context: context,
+                                        label: '音量键翻页',
+                                        child: Column(
+                                          crossAxisAlignment:
+                                              CrossAxisAlignment.start,
+                                          children: [
+                                            Row(
+                                              children: [
+                                                Expanded(
+                                                  child: Text(
+                                                    draft.volumeKeyPageEnabled
+                                                        ? '音量上键上一页，音量下键下一页'
+                                                        : '保留系统音量键行为',
+                                                    style:
+                                                        Theme.of(
+                                                          context,
+                                                        ).textTheme.bodyMedium,
+                                                  ),
+                                                ),
+                                                Switch.adaptive(
+                                                  value:
+                                                      draft
+                                                          .volumeKeyPageEnabled,
+                                                  onChanged:
+                                                      ReaderVolumeKeyPageBridge
+                                                              .instance
+                                                              .isSupported
+                                                          ? (enabled) {
+                                                            setModalState(() {
+                                                              draft = draft
+                                                                  .copyWith(
+                                                                    volumeKeyPageEnabled:
+                                                                        enabled,
+                                                                  );
+                                                            });
+                                                          }
+                                                          : null,
+                                                ),
+                                              ],
+                                            ),
+                                            const SizedBox(height: 4),
+                                            Text(
+                                              ReaderVolumeKeyPageBridge
+                                                      .instance
+                                                      .isSupported
+                                                  ? '仅在阅读态生效，打开菜单或弹层时不会拦截系统音量。'
+                                                  : '当前平台暂不支持音量键翻页，仅 Android 原生宿主可用。',
+                                              style: Theme.of(
+                                                context,
+                                              ).textTheme.labelSmall?.copyWith(
+                                                color:
+                                                    Theme.of(context)
+                                                        .colorScheme
+                                                        .onSurfaceVariant,
+                                              ),
+                                            ),
                                           ],
                                         ),
                                       ),

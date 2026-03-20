@@ -5,7 +5,9 @@ import android.database.Cursor
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
+import android.view.KeyEvent
 import android.provider.OpenableColumns
+import io.flutter.plugin.common.EventChannel
 import io.flutter.embedding.android.FlutterActivity
 import io.flutter.embedding.engine.FlutterEngine
 import io.flutter.plugin.common.MethodChannel
@@ -15,11 +17,18 @@ class MainActivity : FlutterActivity() {
         private const val SOURCE_IMPORT_CHANNEL_NAME = "com.jiangyan.shuxiangread/source_import_intent"
         private const val METHOD_GET_INITIAL_IMPORT_PAYLOAD = "getInitialImportPayload"
         private const val METHOD_ON_IMPORT_PAYLOAD = "onImportPayload"
+        private const val READER_VOLUME_KEY_CHANNEL_NAME = "com.jiangyan.shuxiangread/reader_volume_keys"
+        private const val READER_VOLUME_KEY_EVENT_CHANNEL_NAME = "com.jiangyan.shuxiangread/reader_volume_keys/events"
+        private const val METHOD_SET_INTERCEPT_VOLUME_KEYS = "setInterceptVolumeKeys"
         private const val DEFAULT_PAYLOAD_LABEL = "外部书源"
     }
 
     private var sourceImportMethodChannel: MethodChannel? = null
+    private var readerVolumeKeyMethodChannel: MethodChannel? = null
+    private var readerVolumeKeyEventChannel: EventChannel? = null
+    private var readerVolumeKeyEventSink: EventChannel.EventSink? = null
     private var pendingInitialPayload: Map<String, Any>? = null
+    private var interceptReaderVolumeKeys = false
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -45,6 +54,39 @@ class MainActivity : FlutterActivity() {
             }
         }
 
+        readerVolumeKeyMethodChannel = MethodChannel(
+            flutterEngine.dartExecutor.binaryMessenger,
+            READER_VOLUME_KEY_CHANNEL_NAME
+        ).also { channel ->
+            channel.setMethodCallHandler { call, result ->
+                when (call.method) {
+                    METHOD_SET_INTERCEPT_VOLUME_KEYS -> {
+                        interceptReaderVolumeKeys = (call.arguments as? Boolean) ?: false
+                        result.success(null)
+                    }
+
+                    else -> result.notImplemented()
+                }
+            }
+        }
+
+        readerVolumeKeyEventChannel = EventChannel(
+            flutterEngine.dartExecutor.binaryMessenger,
+            READER_VOLUME_KEY_EVENT_CHANNEL_NAME
+        ).also { channel ->
+            channel.setStreamHandler(
+                object : EventChannel.StreamHandler {
+                    override fun onListen(arguments: Any?, events: EventChannel.EventSink?) {
+                        readerVolumeKeyEventSink = events
+                    }
+
+                    override fun onCancel(arguments: Any?) {
+                        readerVolumeKeyEventSink = null
+                    }
+                }
+            )
+        }
+
         if (pendingInitialPayload == null) {
             pendingInitialPayload = extractPayloadFromIntent(intent)
         }
@@ -62,7 +104,43 @@ class MainActivity : FlutterActivity() {
     override fun onDestroy() {
         sourceImportMethodChannel?.setMethodCallHandler(null)
         sourceImportMethodChannel = null
+        readerVolumeKeyMethodChannel?.setMethodCallHandler(null)
+        readerVolumeKeyMethodChannel = null
+        readerVolumeKeyEventChannel?.setStreamHandler(null)
+        readerVolumeKeyEventChannel = null
+        readerVolumeKeyEventSink = null
+        interceptReaderVolumeKeys = false
         super.onDestroy()
+    }
+
+    override fun dispatchKeyEvent(event: KeyEvent): Boolean {
+        if (
+            interceptReaderVolumeKeys &&
+            (event.keyCode == KeyEvent.KEYCODE_VOLUME_UP ||
+                event.keyCode == KeyEvent.KEYCODE_VOLUME_DOWN)
+        ) {
+            when (event.action) {
+                KeyEvent.ACTION_DOWN -> {
+                    if (event.repeatCount == 0) {
+                        val direction = if (event.keyCode == KeyEvent.KEYCODE_VOLUME_UP) {
+                            "up"
+                        } else {
+                            "down"
+                        }
+                        readerVolumeKeyEventSink?.success(
+                            mapOf(
+                                "direction" to direction,
+                                "repeatCount" to event.repeatCount
+                            )
+                        )
+                    }
+                    return true
+                }
+
+                KeyEvent.ACTION_UP -> return true
+            }
+        }
+        return super.dispatchKeyEvent(event)
     }
 
     private fun extractPayloadFromIntent(intent: Intent?): Map<String, Any>? {

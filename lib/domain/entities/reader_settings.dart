@@ -30,10 +30,12 @@ class ReaderSettings {
     this.horizontalPadding = 18,
     this.paragraphSpacing = 14,
     this.paragraphIndent = 0,
+    this.textFullJustifyEnabled = false,
     this.letterSpacing = defaultLetterSpacing,
     this.brightness = 1,
     this.themeMode = ReaderThemeMode.light,
     this.pageTurnMode = ReaderPageTurnMode.tap,
+    this.volumeKeyPageEnabled = false,
     this.autoReadEnabled = false,
     this.autoReadSpeed = defaultAutoReadSpeed,
     this.backgroundStyle = ReaderBackgroundStyle.plain,
@@ -90,10 +92,12 @@ class ReaderSettings {
   final double horizontalPadding;
   final double paragraphSpacing;
   final double paragraphIndent;
+  final bool textFullJustifyEnabled;
   final double letterSpacing;
   final double brightness;
   final ReaderThemeMode themeMode;
   final ReaderPageTurnMode pageTurnMode;
+  final bool volumeKeyPageEnabled;
   final bool autoReadEnabled;
   final double autoReadSpeed;
   final ReaderBackgroundStyle backgroundStyle;
@@ -139,10 +143,12 @@ class ReaderSettings {
     double? horizontalPadding,
     double? paragraphSpacing,
     double? paragraphIndent,
+    bool? textFullJustifyEnabled,
     double? letterSpacing,
     double? brightness,
     ReaderThemeMode? themeMode,
     ReaderPageTurnMode? pageTurnMode,
+    bool? volumeKeyPageEnabled,
     bool? autoReadEnabled,
     double? autoReadSpeed,
     ReaderBackgroundStyle? backgroundStyle,
@@ -213,6 +219,8 @@ class ReaderSettings {
       horizontalPadding: nextHorizontalPadding,
       paragraphSpacing: paragraphSpacing ?? this.paragraphSpacing,
       paragraphIndent: paragraphIndent ?? this.paragraphIndent,
+      textFullJustifyEnabled:
+          textFullJustifyEnabled ?? this.textFullJustifyEnabled,
       letterSpacing:
           (letterSpacing ?? this.letterSpacing)
               .clamp(minLetterSpacing, maxLetterSpacing)
@@ -220,6 +228,7 @@ class ReaderSettings {
       brightness: brightness ?? this.brightness,
       themeMode: themeMode ?? this.themeMode,
       pageTurnMode: pageTurnMode ?? this.pageTurnMode,
+      volumeKeyPageEnabled: volumeKeyPageEnabled ?? this.volumeKeyPageEnabled,
       autoReadEnabled: autoReadEnabled ?? this.autoReadEnabled,
       autoReadSpeed:
           (autoReadSpeed ?? this.autoReadSpeed)
@@ -310,10 +319,12 @@ class ReaderSettings {
       'horizontalPadding': ((bodyMarginLeft + bodyMarginRight) / 2).toDouble(),
       'paragraphSpacing': paragraphSpacing,
       'paragraphIndent': paragraphIndent,
+      'textFullJustifyEnabled': textFullJustifyEnabled,
       'letterSpacing': letterSpacing,
       'brightness': brightness,
       'themeMode': themeMode.name,
       'pageTurnMode': pageTurnMode.name,
+      'volumeKeyPageEnabled': volumeKeyPageEnabled,
       'autoReadEnabled': autoReadEnabled,
       'autoReadSpeed': autoReadSpeed,
       'backgroundStyle': backgroundStyle.name,
@@ -430,6 +441,7 @@ class ReaderSettings {
       horizontalPadding: ((bodyMarginLeft + bodyMarginRight) / 2).toDouble(),
       paragraphSpacing: _asDouble(json['paragraphSpacing']) ?? 14,
       paragraphIndent: _asDouble(json['paragraphIndent']) ?? 0,
+      textFullJustifyEnabled: _asBool(json['textFullJustifyEnabled']) ?? false,
       letterSpacing:
           (_asDouble(json['letterSpacing']) ?? defaultLetterSpacing)
               .clamp(minLetterSpacing, maxLetterSpacing)
@@ -437,6 +449,7 @@ class ReaderSettings {
       brightness: _asDouble(json['brightness'])?.clamp(0.2, 1.0) ?? 1,
       themeMode: mode,
       pageTurnMode: pageTurnMode,
+      volumeKeyPageEnabled: _asBool(json['volumeKeyPageEnabled']) ?? false,
       autoReadEnabled: _asBool(json['autoReadEnabled']) ?? false,
       autoReadSpeed:
           (_asDouble(json['autoReadSpeed']) ?? defaultAutoReadSpeed)
