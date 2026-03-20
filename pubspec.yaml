@@ -57,6 +57,9 @@ dependencies:
   flutter_js: ^0.8.7
   flutter_inappwebview: ^6.1.5
   battery_plus: ^6.2.1
+  image_picker: ^1.2.1
+  image_picker_android: ^0.8.13+14
+  image_picker_platform_interface: ^2.11.1
 
 dev_dependencies:
   flutter_test:
@@ -126,3 +129,8 @@ flutter_launcher_icons:
   adaptive_icon_background: "#FFFFFF"
   adaptive_icon_foreground: assets/logo/testlogo.png
   remove_alpha_ios: true
+
+hooks:
+  user_defines:
+    sqlite3:
+      source: system

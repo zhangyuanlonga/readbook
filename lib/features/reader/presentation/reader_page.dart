@@ -4,7 +4,6 @@ import 'dart:math';
 import 'dart:ui';
 
 import 'package:battery_plus/battery_plus.dart';
-import 'package:file_selector/file_selector.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
@@ -23,6 +22,7 @@ import '../../../app/widgets/switch_source_candidate_sheet.dart';
 import '../../../core/errors/app_exception.dart';
 import '../../../core/errors/error_codes.dart';
 import '../../../core/errors/error_stage.dart';
+import '../../../core/media/image_selection_service.dart';
 import '../../../data/datasources/local/app_database.dart';
 import '../../../data/repositories/bookmark_repository_impl.dart';
 import '../../../domain/entities/bookmark.dart';
@@ -97,6 +97,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
       ReaderSystemSettingsService();
   final ReaderErrorCenterService _readerErrorCenterService =
       ReaderErrorCenterService.instance;
+  final ImageSelectionService _imageSelectionService = ImageSelectionService();
   final BookshelfService _bookshelfService = BookshelfService();
   final SearchService _switchSourceSearchService = SearchService();
   final SearchHitCacheService _searchHitCacheService = SearchHitCacheService();
@@ -11398,28 +11399,14 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
   Future<String?> _pickBackgroundImageBase64() async {
     try {
       const maxBytes = 900 * 1024;
-      const typeGroup = XTypeGroup(
-        label: 'image',
-        extensions: ['jpg', 'jpeg', 'png', 'webp'],
-        mimeTypes: ['image/jpeg', 'image/png', 'image/webp'],
-        uniformTypeIdentifiers: [
-          'public.image',
-          'public.jpeg',
-          'public.png',
-          'org.webmproject.webp',
-        ],
-      );
-
-      final file = await openFile(
-        acceptedTypeGroups: [typeGroup],
+      final picked = await _imageSelectionService.pickImage(
         confirmButtonText: '选择背景',
       );
-
-      if (file == null) {
+      if (picked == null) {
         return null;
       }
 
-      final bytes = await file.readAsBytes();
+      final Uint8List bytes = picked.bytes;
       if (bytes.isEmpty) {
         _showMessage('背景图片读取失败。');
         return null;
@@ -11431,6 +11418,9 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
       }
 
       return base64Encode(bytes);
+    } on ImageSelectionException catch (error) {
+      _showMessage(error.message);
+      return null;
     } on PlatformException catch (error) {
       _showMessage('选择背景失败：${error.message ?? error.code}');
       return null;

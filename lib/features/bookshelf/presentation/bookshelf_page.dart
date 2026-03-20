@@ -1,7 +1,6 @@
 import 'dart:async';
 import 'dart:io';
 
-import 'package:file_selector/file_selector.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:path/path.dart' as p;
@@ -10,6 +9,7 @@ import 'package:path_provider/path_provider.dart';
 import '../../../app/layout/app_spacing.dart';
 import '../../../app/widgets/disk_cached_cover_image.dart';
 import '../../../core/errors/app_exception.dart';
+import '../../../core/media/image_selection_service.dart';
 import '../../../data/datasources/local/app_database.dart';
 import '../../../domain/entities/bookshelf_book.dart';
 import '../../../domain/entities/reading_progress.dart';
@@ -49,6 +49,7 @@ class _BookshelfPageState extends State<BookshelfPage> {
   final ReaderPreferencesService _readerPreferencesService =
       ReaderPreferencesService();
   final BookDetailService _bookDetailService = BookDetailService();
+  final ImageSelectionService _imageSelectionService = ImageSelectionService();
   final LocalBookImportService _localBookImportService =
       LocalBookImportService();
   final AnnouncementService _announcementService = AnnouncementService();
@@ -69,6 +70,7 @@ class _BookshelfPageState extends State<BookshelfPage> {
   String? _loadErrorText;
   bool _isSelectionMode = false;
   bool _isBatchDeleting = false;
+  bool _isFilterTagSortAscending = true;
   final Set<String> _selectedBookKeys = <String>{};
   int _loadTicket = 0;
   bool _hasActiveAnnouncement = false;
@@ -574,7 +576,7 @@ class _BookshelfPageState extends State<BookshelfPage> {
                   final selected =
                       _activeFilter == _BookshelfFilter.custom &&
                       _activeCustomTag == tag;
-                  final label = '#$tag';
+                  final label = tag;
                   return Padding(
                     padding: const EdgeInsets.only(right: 8),
                     child: GestureDetector(
@@ -667,7 +669,6 @@ class _BookshelfPageState extends State<BookshelfPage> {
       _BookshelfFilter.novel,
       _BookshelfFilter.manga,
     ];
-    final customTags = _userTags;
     final tagBookCount = <String, int>{};
     for (final book in _books) {
       for (final tag in _tagsOfBook(book)) {
@@ -681,65 +682,104 @@ class _BookshelfPageState extends State<BookshelfPage> {
       showDragHandle: true,
       isScrollControlled: true,
       builder: (sheetContext) {
-        final colorScheme = Theme.of(sheetContext).colorScheme;
         final maxHeight = MediaQuery.sizeOf(sheetContext).height * 0.72;
-        return Padding(
-          padding: const EdgeInsets.fromLTRB(8, 0, 8, 10),
-          child: ConstrainedBox(
-            constraints: BoxConstraints(maxHeight: maxHeight),
-            child: ListView(
-              shrinkWrap: true,
-              children: [
-                ...baseFilters.map((filter) {
-                  final value = filter.name;
-                  final isSelected = _activeFilter == filter;
-                  return ListTile(
-                    dense: true,
-                    title: Text(_filterLabel(filter)),
-                    trailing:
-                        isSelected
-                            ? Icon(
-                              Icons.check_rounded,
-                              color: colorScheme.primary,
-                            )
-                            : null,
-                    onTap: () => Navigator.of(sheetContext).pop(value),
-                  );
-                }),
-                if (customTags.isNotEmpty) ...[
-                  const SizedBox(height: 6),
-                  Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 16),
-                    child: Text(
-                      '标签',
-                      style: Theme.of(sheetContext).textTheme.titleSmall
-                          ?.copyWith(fontWeight: FontWeight.w700),
-                    ),
-                  ),
-                  const SizedBox(height: 4),
-                  ...customTags.map((tag) {
-                    final value = 'tag::$tag';
-                    final isSelected =
-                        _activeFilter == _BookshelfFilter.custom &&
-                        _activeCustomTag == tag;
-                    return ListTile(
-                      dense: true,
-                      title: Text('#$tag'),
-                      subtitle: Text('${tagBookCount[tag] ?? 0} 本书'),
-                      trailing:
-                          isSelected
-                              ? Icon(
-                                Icons.check_rounded,
-                                color: colorScheme.primary,
-                              )
-                              : null,
-                      onTap: () => Navigator.of(sheetContext).pop(value),
-                    );
-                  }),
-                ],
-              ],
-            ),
-          ),
+        var isTagSortAscending = _isFilterTagSortAscending;
+        return StatefulBuilder(
+          builder: (sheetContext, setSheetState) {
+            final colorScheme = Theme.of(sheetContext).colorScheme;
+            final customTags = _sortTagsByName(
+              _userTags,
+              ascending: isTagSortAscending,
+            );
+            return Padding(
+              padding: const EdgeInsets.fromLTRB(8, 0, 8, 10),
+              child: ConstrainedBox(
+                constraints: BoxConstraints(maxHeight: maxHeight),
+                child: ListView(
+                  shrinkWrap: true,
+                  children: [
+                    ...baseFilters.map((filter) {
+                      final value = filter.name;
+                      final isSelected = _activeFilter == filter;
+                      return ListTile(
+                        dense: true,
+                        title: Text(_filterLabel(filter)),
+                        trailing:
+                            isSelected
+                                ? Icon(
+                                  Icons.check_rounded,
+                                  color: colorScheme.primary,
+                                )
+                                : null,
+                        onTap: () => Navigator.of(sheetContext).pop(value),
+                      );
+                    }),
+                    if (customTags.isNotEmpty) ...[
+                      const SizedBox(height: 6),
+                      Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 16),
+                        child: Row(
+                          children: [
+                            Expanded(
+                              child: Text(
+                                '标签',
+                                style: Theme.of(sheetContext)
+                                    .textTheme
+                                    .titleSmall
+                                    ?.copyWith(fontWeight: FontWeight.w700),
+                              ),
+                            ),
+                            TextButton.icon(
+                              onPressed: () {
+                                final nextValue = !isTagSortAscending;
+                                setSheetState(() {
+                                  isTagSortAscending = nextValue;
+                                });
+                                setState(() {
+                                  _isFilterTagSortAscending = nextValue;
+                                });
+                              },
+                              style: TextButton.styleFrom(
+                                visualDensity: VisualDensity.compact,
+                                tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                              ),
+                              icon: Icon(
+                                isTagSortAscending
+                                    ? Icons.arrow_upward_rounded
+                                    : Icons.arrow_downward_rounded,
+                                size: 16,
+                              ),
+                              label: Text(isTagSortAscending ? '升序' : '降序'),
+                            ),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+                      ...customTags.map((tag) {
+                        final value = 'tag::$tag';
+                        final isSelected =
+                            _activeFilter == _BookshelfFilter.custom &&
+                            _activeCustomTag == tag;
+                        return ListTile(
+                          dense: true,
+                          title: Text(tag),
+                          subtitle: Text('${tagBookCount[tag] ?? 0} 本书'),
+                          trailing:
+                              isSelected
+                                  ? Icon(
+                                    Icons.check_rounded,
+                                    color: colorScheme.primary,
+                                  )
+                                  : null,
+                          onTap: () => Navigator.of(sheetContext).pop(value),
+                        );
+                      }),
+                    ],
+                  ],
+                ),
+              ),
+            );
+          },
         );
       },
     );
@@ -1398,6 +1438,21 @@ class _BookshelfPageState extends State<BookshelfPage> {
     return tags;
   }
 
+  List<String> _sortTagsByName(
+    Iterable<String> tags, {
+    required bool ascending,
+  }) {
+    final sorted = List<String>.from(tags);
+    sorted.sort((a, b) {
+      final lowerCompare = a.toLowerCase().compareTo(b.toLowerCase());
+      if (lowerCompare != 0) {
+        return ascending ? lowerCompare : -lowerCompare;
+      }
+      return ascending ? a.compareTo(b) : b.compareTo(a);
+    });
+    return List<String>.unmodifiable(sorted);
+  }
+
   List<String> _tagsOfBook(BookshelfBook book) {
     return _bookTagsByKey[_bookKey(book)] ?? const <String>[];
   }
@@ -1423,7 +1478,7 @@ class _BookshelfPageState extends State<BookshelfPage> {
       if (tag == null || tag.isEmpty) {
         return '标签';
       }
-      return '#$tag';
+      return tag;
     }
     return _filterLabel(_activeFilter);
   }
@@ -1889,119 +1944,185 @@ class _BookshelfPageState extends State<BookshelfPage> {
     if (selectedGroup != null && !groups.contains(selectedGroup)) {
       groups.insert(0, selectedGroup);
     }
+    final createGroupController = TextEditingController();
+    String? createGroupErrorText;
+    var showCreateGroupInput = groups.isEmpty;
 
     var submitted = false;
-    final selected = await showModalBottomSheet<String?>(
-      context: context,
-      useSafeArea: true,
-      showDragHandle: true,
-      isScrollControlled: true,
-      builder: (sheetContext) {
-        final horizontal = AppSpacing.pageHorizontal(sheetContext);
-        final bottomInset = MediaQuery.viewInsetsOf(sheetContext).bottom;
-        return StatefulBuilder(
-          builder: (sheetContext, setSheetState) {
-            return Padding(
-              padding: EdgeInsets.fromLTRB(
-                horizontal,
-                4,
-                horizontal,
-                12 + bottomInset,
-              ),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    '移动分组',
-                    style: Theme.of(sheetContext).textTheme.titleMedium
-                        ?.copyWith(fontWeight: FontWeight.w700),
-                  ),
-                  const SizedBox(height: 4),
-                  Text(
-                    _toSingleLineText(book.title),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: Theme.of(sheetContext).textTheme.bodySmall?.copyWith(
-                      color:
-                          Theme.of(sheetContext).colorScheme.onSurfaceVariant,
+    String? selected;
+    try {
+      selected = await showModalBottomSheet<String?>(
+        context: context,
+        useSafeArea: true,
+        showDragHandle: true,
+        isScrollControlled: true,
+        builder: (sheetContext) {
+          final horizontal = AppSpacing.pageHorizontal(sheetContext);
+          final bottomInset = MediaQuery.viewInsetsOf(sheetContext).bottom;
+          return StatefulBuilder(
+            builder: (sheetContext, setSheetState) {
+              void toggleCreateGroupInput() {
+                setSheetState(() {
+                  showCreateGroupInput = !showCreateGroupInput;
+                  createGroupErrorText = null;
+                  if (!showCreateGroupInput) {
+                    createGroupController.clear();
+                  }
+                });
+              }
+
+              void createGroup() {
+                final normalized = _normalizeTags([createGroupController.text]);
+                if (normalized.isEmpty) {
+                  setSheetState(() {
+                    createGroupErrorText = '请输入分组名称';
+                    showCreateGroupInput = true;
+                  });
+                  return;
+                }
+
+                final created = normalized.first;
+                if (groups.contains(created)) {
+                  setSheetState(() {
+                    createGroupErrorText = '该分组已存在';
+                    showCreateGroupInput = true;
+                  });
+                  return;
+                }
+
+                setSheetState(() {
+                  groups.add(created);
+                  selectedGroup = created;
+                  createGroupController.clear();
+                  createGroupErrorText = null;
+                  showCreateGroupInput = false;
+                });
+              }
+
+              return Padding(
+                padding: EdgeInsets.fromLTRB(
+                  horizontal,
+                  4,
+                  horizontal,
+                  12 + bottomInset,
+                ),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      '移动分组',
+                      style: Theme.of(sheetContext).textTheme.titleMedium
+                          ?.copyWith(fontWeight: FontWeight.w700),
                     ),
-                  ),
-                  const SizedBox(height: 10),
-                  RadioListTile<String?>(
-                    value: null,
-                    groupValue: selectedGroup,
-                    contentPadding: EdgeInsets.zero,
-                    title: const Text('未分组'),
-                    onChanged: (value) {
-                      setSheetState(() {
-                        selectedGroup = value;
-                      });
-                    },
-                  ),
-                  ...groups.map(
-                    (group) => RadioListTile<String?>(
-                      value: group,
+                    const SizedBox(height: 4),
+                    Text(
+                      _toSingleLineText(book.title),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: Theme.of(
+                        sheetContext,
+                      ).textTheme.bodySmall?.copyWith(
+                        color:
+                            Theme.of(sheetContext).colorScheme.onSurfaceVariant,
+                      ),
+                    ),
+                    const SizedBox(height: 10),
+                    RadioGroup<String?>(
                       groupValue: selectedGroup,
-                      contentPadding: EdgeInsets.zero,
-                      title: Text(group),
                       onChanged: (value) {
                         setSheetState(() {
                           selectedGroup = value;
                         });
                       },
-                    ),
-                  ),
-                  Align(
-                    alignment: Alignment.centerLeft,
-                    child: TextButton.icon(
-                      onPressed: () async {
-                        final created = await _showCreateTagDialog(
-                          sheetContext,
-                          existingTags: {...groups},
-                        );
-                        if (created == null || !sheetContext.mounted) {
-                          return;
-                        }
-                        setSheetState(() {
-                          if (!groups.contains(created)) {
-                            groups.add(created);
-                          }
-                          selectedGroup = created;
-                        });
-                      },
-                      icon: const Icon(Icons.add_rounded),
-                      label: const Text('新建分组'),
-                    ),
-                  ),
-                  const SizedBox(height: 8),
-                  Row(
-                    children: [
-                      Expanded(
-                        child: OutlinedButton(
-                          onPressed: () => Navigator.of(sheetContext).pop(),
-                          child: const Text('取消'),
-                        ),
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          const RadioListTile<String?>(
+                            value: null,
+                            contentPadding: EdgeInsets.zero,
+                            title: Text('未分组'),
+                          ),
+                          ...groups.map(
+                            (group) => RadioListTile<String?>(
+                              value: group,
+                              contentPadding: EdgeInsets.zero,
+                              title: Text(group),
+                            ),
+                          ),
+                        ],
                       ),
-                      const SizedBox(width: 10),
-                      Expanded(
-                        child: FilledButton(
-                          onPressed: () {
-                            submitted = true;
-                            Navigator.of(sheetContext).pop(selectedGroup);
-                          },
-                          child: const Text('应用'),
+                    ),
+                    Align(
+                      alignment: Alignment.centerLeft,
+                      child: TextButton.icon(
+                        onPressed: toggleCreateGroupInput,
+                        icon: Icon(
+                          showCreateGroupInput
+                              ? Icons.keyboard_arrow_up_rounded
+                              : Icons.add_rounded,
                         ),
+                        label: Text(showCreateGroupInput ? '收起新建分组' : '新建分组'),
+                      ),
+                    ),
+                    if (showCreateGroupInput) ...[
+                      const SizedBox(height: 6),
+                      TextField(
+                        controller: createGroupController,
+                        autofocus: true,
+                        maxLength: 12,
+                        decoration: InputDecoration(
+                          labelText: '分组名称',
+                          hintText: '例如：在读 / 已完结',
+                          errorText: createGroupErrorText,
+                          suffixIcon: IconButton(
+                            tooltip: '添加分组',
+                            onPressed: createGroup,
+                            icon: const Icon(Icons.check_rounded),
+                          ),
+                        ),
+                        onChanged: (_) {
+                          if (createGroupErrorText == null) {
+                            return;
+                          }
+                          setSheetState(() {
+                            createGroupErrorText = null;
+                          });
+                        },
+                        onSubmitted: (_) => createGroup(),
                       ),
                     ],
-                  ),
-                ],
-              ),
-            );
-          },
-        );
-      },
-    );
+                    const SizedBox(height: 8),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: OutlinedButton(
+                            onPressed: () => Navigator.of(sheetContext).pop(),
+                            child: const Text('取消'),
+                          ),
+                        ),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: FilledButton(
+                            onPressed: () {
+                              submitted = true;
+                              Navigator.of(sheetContext).pop(selectedGroup);
+                            },
+                            child: const Text('应用'),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              );
+            },
+          );
+        },
+      );
+    } finally {
+      createGroupController.dispose();
+    }
 
     if (!mounted || !submitted) {
       return;
@@ -2045,20 +2166,15 @@ class _BookshelfPageState extends State<BookshelfPage> {
   }
 
   Future<void> _pickAndApplyCustomCover(BookshelfBook book) async {
-    final picked = await openFile(
-      acceptedTypeGroups: const [
-        XTypeGroup(
-          label: 'images',
-          extensions: ['jpg', 'jpeg', 'png', 'webp', 'gif'],
-        ),
-      ],
-      confirmButtonText: '选择封面',
-    );
-    if (!mounted || picked == null) {
-      return;
-    }
-
     try {
+      final picked = await _imageSelectionService.pickImage(
+        confirmButtonText: '选择封面',
+        allowedExtensions: const {'jpg', 'jpeg', 'png', 'webp', 'gif'},
+      );
+      if (!mounted || picked == null) {
+        return;
+      }
+
       final storedCoverUri = await _persistCustomCover(book, picked);
       if (storedCoverUri == null) {
         _showMessage('封面保存失败，请重试。');
@@ -2070,6 +2186,8 @@ class _BookshelfPageState extends State<BookshelfPage> {
       );
       await _loadBookshelf();
       _showMessage('已更新自定义封面。');
+    } on ImageSelectionException catch (error) {
+      _showMessage(error.message);
     } on AppException catch (error) {
       _showMessage(error.briefMessage);
     } catch (_) {
@@ -2077,14 +2195,12 @@ class _BookshelfPageState extends State<BookshelfPage> {
     }
   }
 
-  Future<Uri?> _persistCustomCover(BookshelfBook book, XFile picked) async {
-    final sourcePath = picked.path.trim();
-    if (sourcePath.isEmpty) {
-      return null;
-    }
-
-    final sourceFile = File(sourcePath);
-    if (!await sourceFile.exists()) {
+  Future<Uri?> _persistCustomCover(
+    BookshelfBook book,
+    PickedImageData picked,
+  ) async {
+    final bytes = picked.bytes;
+    if (bytes.isEmpty) {
       return null;
     }
 
@@ -2097,7 +2213,7 @@ class _BookshelfPageState extends State<BookshelfPage> {
     }
 
     final key = _bookKey(book).replaceAll(RegExp(r'[^a-zA-Z0-9]+'), '_');
-    final sourceExtension = p.extension(sourcePath).toLowerCase();
+    final sourceExtension = p.extension(picked.name).toLowerCase();
     final extension =
         const [
               '.jpg',
@@ -2130,7 +2246,7 @@ class _BookshelfPageState extends State<BookshelfPage> {
         '${key}_${DateTime.now().millisecondsSinceEpoch}$extension',
       ),
     );
-    await sourceFile.copy(targetFile.path);
+    await targetFile.writeAsBytes(bytes, flush: true);
     return targetFile.uri;
   }
 
@@ -2150,7 +2266,7 @@ class _BookshelfPageState extends State<BookshelfPage> {
             ListTile(
               leading: const Icon(Icons.edit_outlined),
               title: const Text('重命名标签'),
-              subtitle: Text('#$tag'),
+              subtitle: Text(tag),
               onTap:
                   () => Navigator.of(
                     sheetContext,
@@ -2167,7 +2283,7 @@ class _BookshelfPageState extends State<BookshelfPage> {
                   color: Theme.of(sheetContext).colorScheme.error,
                 ),
               ),
-              subtitle: Text('#$tag'),
+              subtitle: Text(tag),
               onTap:
                   () => Navigator.of(
                     sheetContext,
@@ -2232,7 +2348,7 @@ class _BookshelfPageState extends State<BookshelfPage> {
         }
         _ensureFilterStillValid();
       });
-      _showMessage('标签已重命名为 #$nextTag。');
+      _showMessage('标签已重命名为 $nextTag。');
     } catch (_) {
       _showMessage('重命名失败，请重试。');
     }
@@ -2245,8 +2361,8 @@ class _BookshelfPageState extends State<BookshelfPage> {
       title: '删除标签',
       content:
           bindCount > 0
-              ? '确定删除标签 #$tag 吗？会从 $bindCount 本书中移除。'
-              : '确定删除标签 #$tag 吗？',
+              ? '确定删除标签 $tag 吗？会从 $bindCount 本书中移除。'
+              : '确定删除标签 $tag 吗？',
       confirmText: '删除',
     );
     if (!mounted || confirmed != true) {
@@ -2276,7 +2392,7 @@ class _BookshelfPageState extends State<BookshelfPage> {
         _bookTagsByKey = nextMap;
         _ensureFilterStillValid();
       });
-      _showMessage('已删除标签 #$tag。');
+      _showMessage('已删除标签 $tag。');
     } catch (_) {
       _showMessage('删除标签失败，请重试。');
     }
