@@ -35,7 +35,7 @@ enum _BookshelfFilter { all, local, novel, manga, custom }
 
 enum _TagManageSheetAction { rename, delete }
 
-enum _BookshelfMoreAction { importGraphicText }
+enum _BookshelfMoreAction { importLocal }
 
 class BookshelfPage extends StatefulWidget {
   const BookshelfPage({super.key});
@@ -148,28 +148,22 @@ class _BookshelfPageState extends State<BookshelfPage> {
               icon: const Icon(Icons.search_rounded),
             ),
             PopupMenuButton<_BookshelfMoreAction>(
-              tooltip: '更多操作',
-              icon: const Icon(Icons.more_vert_rounded),
-              onSelected: (action) {
-                switch (action) {
-                  case _BookshelfMoreAction.importGraphicText:
-                    context.push('/local-library');
-                    break;
-                }
-              },
+              tooltip: '更多功能',
+              onSelected: _handleMoreAction,
               itemBuilder:
                   (context) => const [
                     PopupMenuItem<_BookshelfMoreAction>(
-                      value: _BookshelfMoreAction.importGraphicText,
+                      value: _BookshelfMoreAction.importLocal,
                       child: Row(
                         children: [
-                          Icon(Icons.upload_file_outlined, size: 18),
-                          SizedBox(width: 8),
+                          Icon(Icons.library_add_rounded, size: 18),
+                          SizedBox(width: 10),
                           Text('导入图文'),
                         ],
                       ),
                     ),
                   ],
+              icon: const Icon(Icons.more_vert_rounded),
             ),
           ],
         ],
@@ -354,10 +348,33 @@ class _BookshelfPageState extends State<BookshelfPage> {
                 color: colorScheme.onSurfaceVariant,
               ),
             ),
+            const SizedBox(height: 14),
+            FilledButton.icon(
+              onPressed: _openLocalLibrary,
+              icon: const Icon(Icons.library_add_rounded),
+              label: const Text('导入图文'),
+            ),
           ],
         ),
       ),
     );
+  }
+
+  void _handleMoreAction(_BookshelfMoreAction action) {
+    switch (action) {
+      case _BookshelfMoreAction.importLocal:
+        _openLocalLibrary();
+        break;
+    }
+  }
+
+  void _openLocalLibrary() {
+    context.push('/local-library').then((_) {
+      if (!mounted) {
+        return;
+      }
+      unawaited(_loadBookshelf());
+    });
   }
 
   Widget _buildFilterEmptyCard() {

@@ -166,6 +166,38 @@ class _ChapterCacheRangeSheetState extends State<_ChapterCacheRangeSheet> {
             ),
           ],
           const SizedBox(height: 14),
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+                colors: [
+                  colorScheme.primaryContainer.withValues(alpha: 0.52),
+                  colorScheme.secondaryContainer.withValues(alpha: 0.34),
+                ],
+              ),
+              borderRadius: BorderRadius.circular(18),
+            ),
+            child: Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: [
+                _buildInfoChip(
+                  context,
+                  icon: Icons.library_books_rounded,
+                  label: '共 ${widget.totalChapters} 章',
+                ),
+                _buildInfoChip(
+                  context,
+                  icon: Icons.download_for_offline_rounded,
+                  label: '本次缓存 $selectedCount 章',
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 12),
           DecoratedBox(
             decoration: BoxDecoration(
               color: colorScheme.surfaceContainerLow,
@@ -233,6 +265,13 @@ class _ChapterCacheRangeSheetState extends State<_ChapterCacheRangeSheet> {
                     ],
                   ),
                   const SizedBox(height: 10),
+                  Text(
+                    '拖动滑块快速选择需要离线缓存的章节范围',
+                    style: theme.textTheme.bodySmall?.copyWith(
+                      color: colorScheme.onSurfaceVariant,
+                    ),
+                  ),
+                  const SizedBox(height: 8),
                   RangeSlider(
                     min: 0,
                     max: max(0, widget.totalChapters - 1).toDouble(),
@@ -303,6 +342,13 @@ class _ChapterCacheRangeSheetState extends State<_ChapterCacheRangeSheet> {
                   ),
                 ],
               ),
+            ),
+          ),
+          const SizedBox(height: 10),
+          Text(
+            '建议在 Wi‑Fi 环境下批量缓存，避免长时间占用移动网络。',
+            style: theme.textTheme.bodySmall?.copyWith(
+              color: colorScheme.onSurfaceVariant,
             ),
           ),
           const SizedBox(height: 14),
@@ -417,6 +463,37 @@ class _ChapterCacheRangeSheetState extends State<_ChapterCacheRangeSheet> {
     }
     return '第 $chapterNumber 章 $title';
   }
+
+  Widget _buildInfoChip(
+    BuildContext context, {
+    required IconData icon,
+    required String label,
+  }) {
+    final colorScheme = Theme.of(context).colorScheme;
+    final textTheme = Theme.of(context).textTheme;
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+      decoration: BoxDecoration(
+        color: colorScheme.surface.withValues(alpha: 0.74),
+        borderRadius: BorderRadius.circular(999),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 16, color: colorScheme.primary),
+          const SizedBox(width: 6),
+          Text(
+            label,
+            style: textTheme.labelMedium?.copyWith(
+              color: colorScheme.onSurface,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
 }
 
 class _ChapterCacheProgressSheet extends StatefulWidget {
@@ -526,6 +603,43 @@ class _ChapterCacheProgressSheetState
               ),
             ],
             const SizedBox(height: 16),
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                  colors: [
+                    colorScheme.primaryContainer.withValues(alpha: 0.5),
+                    colorScheme.secondaryContainer.withValues(alpha: 0.34),
+                  ],
+                ),
+                borderRadius: BorderRadius.circular(18),
+              ),
+              child: Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: [
+                  _buildProgressChip(
+                    context,
+                    icon: Icons.task_alt_rounded,
+                    label: '$done / $total',
+                  ),
+                  _buildProgressChip(
+                    context,
+                    icon: Icons.error_outline_rounded,
+                    label: '失败 $failed',
+                  ),
+                  _buildProgressChip(
+                    context,
+                    icon: Icons.percent_rounded,
+                    label: total == 0 ? '0%' : '${(ratio * 100).round()}%',
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 12),
             DecoratedBox(
               decoration: BoxDecoration(
                 color: colorScheme.surfaceContainerLow,
@@ -567,21 +681,55 @@ class _ChapterCacheProgressSheetState
                       borderRadius: BorderRadius.circular(999),
                     ),
                     const SizedBox(height: 12),
-                    Text(
-                      '进度: $done/$total  ·  失败: $failed',
-                      style: theme.textTheme.bodySmall?.copyWith(
-                        color: colorScheme.onSurfaceVariant,
-                      ),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: Text(
+                            '进度: $done/$total',
+                            style: theme.textTheme.bodySmall?.copyWith(
+                              color: colorScheme.onSurfaceVariant,
+                            ),
+                          ),
+                        ),
+                        Text(
+                          canClose ? '可安全关闭' : '可后台继续缓存',
+                          style: theme.textTheme.labelSmall?.copyWith(
+                            color: colorScheme.primary,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                      ],
                     ),
                     if (progress?.currentChapterTitle?.trim().isNotEmpty ==
                         true)
                       Padding(
-                        padding: const EdgeInsets.only(top: 8),
-                        child: Text(
-                          progress!.currentChapterTitle!,
-                          maxLines: 2,
-                          overflow: TextOverflow.ellipsis,
-                          style: theme.textTheme.bodySmall,
+                        padding: const EdgeInsets.only(top: 10),
+                        child: Container(
+                          width: double.infinity,
+                          padding: const EdgeInsets.fromLTRB(12, 10, 12, 10),
+                          decoration: BoxDecoration(
+                            color: colorScheme.surface.withValues(alpha: 0.82),
+                            borderRadius: BorderRadius.circular(14),
+                          ),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                '当前章节',
+                                style: theme.textTheme.labelSmall?.copyWith(
+                                  color: colorScheme.primary,
+                                  fontWeight: FontWeight.w700,
+                                ),
+                              ),
+                              const SizedBox(height: 4),
+                              Text(
+                                progress!.currentChapterTitle!,
+                                maxLines: 2,
+                                overflow: TextOverflow.ellipsis,
+                                style: theme.textTheme.bodySmall,
+                              ),
+                            ],
+                          ),
                         ),
                       ),
                   ],
@@ -667,5 +815,36 @@ class _ChapterCacheProgressSheetState
     }
 
     return '缓存中...';
+  }
+
+  Widget _buildProgressChip(
+    BuildContext context, {
+    required IconData icon,
+    required String label,
+  }) {
+    final colorScheme = Theme.of(context).colorScheme;
+    final textTheme = Theme.of(context).textTheme;
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+      decoration: BoxDecoration(
+        color: colorScheme.surface.withValues(alpha: 0.74),
+        borderRadius: BorderRadius.circular(999),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 16, color: colorScheme.primary),
+          const SizedBox(width: 6),
+          Text(
+            label,
+            style: textTheme.labelMedium?.copyWith(
+              color: colorScheme.onSurface,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+        ],
+      ),
+    );
   }
 }

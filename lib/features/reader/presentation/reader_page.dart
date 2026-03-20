@@ -18,6 +18,7 @@ import 'package:uuid/uuid.dart';
 import '../../../app/layout/app_layout.dart';
 import '../../../app/layout/app_spacing.dart';
 import '../../../app/theme/app_theme.dart';
+import '../../../app/widgets/switch_source_candidate_sheet.dart';
 
 import '../../../core/errors/app_exception.dart';
 import '../../../core/errors/error_codes.dart';
@@ -45,6 +46,7 @@ import '../application/reader_system_settings_service.dart';
 import '../application/reader_typography_resolver.dart';
 import '../application/source_content_provider.dart';
 import '../application/source_switch_score_service.dart';
+import '../application/switch_source_shared.dart';
 import '../application/switch_source_position_resolver.dart';
 import 'chapter_cache_sheets.dart';
 
@@ -106,8 +108,9 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
       GlobalKey<SelectionAreaState>();
   final SelectionListenerNotifier _selectionNotifier =
       SelectionListenerNotifier();
-  final BookmarkRepository _bookmarkRepository =
-      BookmarkRepositoryImpl(AppDatabase.instance);
+  final BookmarkRepository _bookmarkRepository = BookmarkRepositoryImpl(
+    AppDatabase.instance,
+  );
   final Uuid _uuid = const Uuid();
 
   late String _chapterId;
@@ -116,6 +119,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
   String? _sourceId;
   String? _detailUrl;
   String? _pendingBookmarkId;
+  late String _activeBookId;
 
   String _bookTitle = '';
   String? _bookAuthor;
@@ -241,26 +245,20 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
   static const int _kBackwardPreloadChapterCount = 1;
   static const double _kScrollAdvanceOverscrollTrigger = 56;
   static const double _kScrollAdvanceEdgeTolerance = 2;
-  static const Set<PointerDeviceKind> _kScrollDragDevices =
-      <PointerDeviceKind>{
-        PointerDeviceKind.touch,
-        PointerDeviceKind.mouse,
-        PointerDeviceKind.trackpad,
-        PointerDeviceKind.stylus,
-        PointerDeviceKind.invertedStylus,
-        PointerDeviceKind.unknown,
-      };
-  static final RegExp _kSwitchSourceSpacePattern = RegExp(r'[\u3000\s]+');
-  static final RegExp _kSwitchSourceSymbolPattern = RegExp(
-    r'''[·•\-_:：|/\\\(\)\[\]【】<>《》"'‘’,.，。!?！？]''',
-  );
+  static const Set<PointerDeviceKind> _kScrollDragDevices = <PointerDeviceKind>{
+    PointerDeviceKind.touch,
+    PointerDeviceKind.mouse,
+    PointerDeviceKind.trackpad,
+    PointerDeviceKind.stylus,
+    PointerDeviceKind.invertedStylus,
+    PointerDeviceKind.unknown,
+  };
   static final RegExp _kSwitchSourceChapterPattern = RegExp(
     r'第?\s*(\d{1,5})\s*章',
   );
   static final RegExp _kSwitchSourceChapterEnglishPattern = RegExp(
     r'^(chapter|chap)\s*\d{1,5}\b',
   );
-  static final RegExp _kSwitchSourceNumberPattern = RegExp(r'(\d{1,5})');
 
   bool _pageTurnIncludesTap(ReaderPageTurnMode mode) {
     return mode == ReaderPageTurnMode.tap ||
@@ -395,6 +393,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
     _chapterTitle = widget.chapterTitle?.trim();
     _sourceId = widget.sourceId?.trim();
     _detailUrl = widget.detailUrl?.trim();
+    _activeBookId = widget.bookId.trim();
     _bookTitle = widget.chapterTitle?.trim() ?? '';
     _currentIndex = widget.chapterIndex;
     final incomingBookmarkId = widget.bookmarkId?.trim() ?? '';
@@ -1042,10 +1041,16 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
                 if (!range.isWavy) {
                   continue;
                 }
-                final startDisplay =
-                    _clampInt(range.start + indentLength, 0, displayText.length);
-                final endDisplay =
-                    _clampInt(range.end + indentLength, 0, displayText.length);
+                final startDisplay = _clampInt(
+                  range.start + indentLength,
+                  0,
+                  displayText.length,
+                );
+                final endDisplay = _clampInt(
+                  range.end + indentLength,
+                  0,
+                  displayText.length,
+                );
                 if (endDisplay > startDisplay) {
                   wavyRanges.add(_WavyRange(startDisplay, endDisplay));
                 }
@@ -1137,9 +1142,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
 
                 final ratio = _autoReadProgressRatio();
                 final top =
-                    (maxHeight * ratio)
-                        .clamp(2.0, maxHeight - 2.0)
-                        .toDouble();
+                    (maxHeight * ratio).clamp(2.0, maxHeight - 2.0).toDouble();
 
                 return Stack(
                   children: [
@@ -1238,13 +1241,19 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
     final spans = <TextSpan>[];
     var cursor = 0;
     for (final range in merged) {
-      final start = _clampInt(range.start + indentLength, 0, displayText.length);
+      final start = _clampInt(
+        range.start + indentLength,
+        0,
+        displayText.length,
+      );
       final end = _clampInt(range.end + indentLength, 0, displayText.length);
       if (start > cursor) {
-        spans.add(TextSpan(
-          text: displayText.substring(cursor, start),
-          style: baseStyle,
-        ));
+        spans.add(
+          TextSpan(
+            text: displayText.substring(cursor, start),
+            style: baseStyle,
+          ),
+        );
       }
       if (end > start) {
         final highlightStyle = _buildBookmarkHighlightStyle(
@@ -1252,19 +1261,20 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
           colors: colors,
           range: range,
         );
-        spans.add(TextSpan(
-          text: displayText.substring(start, end),
-          style: highlightStyle,
-        ));
+        spans.add(
+          TextSpan(
+            text: displayText.substring(start, end),
+            style: highlightStyle,
+          ),
+        );
         cursor = end;
       }
     }
 
     if (cursor < displayText.length) {
-      spans.add(TextSpan(
-        text: displayText.substring(cursor),
-        style: baseStyle,
-      ));
+      spans.add(
+        TextSpan(text: displayText.substring(cursor), style: baseStyle),
+      );
     }
 
     return TextSpan(children: spans);
@@ -1319,10 +1329,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
           decorationEnabled ? TextDecoration.underline : TextDecoration.none,
       decorationStyle: TextDecorationStyle.solid,
       decorationColor: colors.text.withValues(alpha: 0.55),
-      decorationThickness: _decorationThickness(
-        baseStyle,
-        wavy: false,
-      ),
+      decorationThickness: _decorationThickness(baseStyle, wavy: false),
     );
   }
 
@@ -1339,8 +1346,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
     if (paragraphs.isEmpty) {
       return 0;
     }
-    final rawLength =
-        paragraphs.fold<int>(0, (sum, item) => sum + item.length);
+    final rawLength = paragraphs.fold<int>(0, (sum, item) => sum + item.length);
     return rawLength + max(0, paragraphs.length - 1) * 2;
   }
 
@@ -1360,11 +1366,10 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
     final indentLength = _paragraphIndentLength();
     // Selection offsets are based on concatenated selectable text without
     // paragraph separators, so map back to chapter offsets with +2 gaps.
-    final totalDisplayLength =
-        paragraphs.fold<int>(
-          0,
-          (sum, item) => sum + item.length + indentLength,
-        );
+    final totalDisplayLength = paragraphs.fold<int>(
+      0,
+      (sum, item) => sum + item.length + indentLength,
+    );
     var remaining = _clampInt(displayOffset, 0, totalDisplayLength);
     var chapterOffset = 0;
     for (var i = 0; i < paragraphs.length; i++) {
@@ -1434,8 +1439,10 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
     }
 
     final lastSlice = page.last;
-    final safeParagraphIndex =
-        lastSlice.paragraphIndex.clamp(0, paragraphs.length - 1);
+    final safeParagraphIndex = lastSlice.paragraphIndex.clamp(
+      0,
+      paragraphs.length - 1,
+    );
     return starts[safeParagraphIndex] + lastSlice.end;
   }
 
@@ -1451,17 +1458,12 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
       return paragraphOffset;
     }
 
-    final safeIndex = _clampInt(
-      paragraphIndex,
-      0,
-      paragraphs.length - 1,
-    );
+    final safeIndex = _clampInt(paragraphIndex, 0, paragraphs.length - 1);
     var offset = 0;
     for (var i = 0; i < safeIndex; i++) {
       offset += paragraphs[i].length + 2;
     }
-    offset +=
-        _clampInt(paragraphOffset, 0, paragraphs[safeIndex].length);
+    offset += _clampInt(paragraphOffset, 0, paragraphs[safeIndex].length);
     return offset;
   }
 
@@ -1510,17 +1512,12 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
       textDirection: Directionality.of(context),
     );
     final position = painter.getPositionForOffset(localPosition);
-    final displayIndex = _clampInt(
-      position.offset,
+    final displayIndex = _clampInt(position.offset, 0, displayText.length);
+    final rawIndex = _clampInt(
+      displayIndex - indentLength,
       0,
-      displayText.length,
+      paragraphText.length,
     );
-    final rawIndex =
-        _clampInt(
-          displayIndex - indentLength,
-          0,
-          paragraphText.length,
-        );
 
     _BookmarkRange? hitRange;
     for (final range in ranges) {
@@ -1560,8 +1557,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
       _selectionEndOffset = endOffset;
       _selectedSnippet = snippet;
       _selectionBold = resolvedRange.isBold;
-      _selectionUnderline =
-          resolvedRange.isUnderline && !resolvedRange.isWavy;
+      _selectionUnderline = resolvedRange.isUnderline && !resolvedRange.isWavy;
       _selectionWavy = resolvedRange.isWavy;
     });
     _showBookmarkToolbar(globalPosition);
@@ -1582,7 +1578,8 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
     }
 
     final rawText = paragraphText.substring(slice.start, slice.end);
-    final displayText = slice.start == 0 ? _applyParagraphIndent(rawText) : rawText;
+    final displayText =
+        slice.start == 0 ? _applyParagraphIndent(rawText) : rawText;
     if (displayText.isEmpty) {
       return false;
     }
@@ -1594,17 +1591,12 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
       textDirection: Directionality.of(context),
     );
     final position = painter.getPositionForOffset(localPosition);
-    final displayIndex = _clampInt(
-      position.offset,
+    final displayIndex = _clampInt(position.offset, 0, displayText.length);
+    final localRaw = _clampInt(
+      displayIndex - (slice.start == 0 ? indentLength : 0),
       0,
-      displayText.length,
+      slice.end - slice.start,
     );
-    final localRaw =
-        _clampInt(
-          displayIndex - (slice.start == 0 ? indentLength : 0),
-          0,
-          slice.end - slice.start,
-        );
     final rawIndex = slice.start + localRaw;
 
     _BookmarkRange? hitRange;
@@ -1645,8 +1637,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
       _selectionEndOffset = endOffset;
       _selectedSnippet = snippet;
       _selectionBold = resolvedRange.isBold;
-      _selectionUnderline =
-          resolvedRange.isUnderline && !resolvedRange.isWavy;
+      _selectionUnderline = resolvedRange.isUnderline && !resolvedRange.isWavy;
       _selectionWavy = resolvedRange.isWavy;
     });
     _showBookmarkToolbar(globalPosition);
@@ -1663,11 +1654,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
     required int endOffset,
   }) {
     if (_chapterBookmarks.isEmpty) {
-      return const _SelectionStyle(
-        bold: false,
-        underline: false,
-        wavy: false,
-      );
+      return const _SelectionStyle(bold: false, underline: false, wavy: false);
     }
 
     var hasBold = false;
@@ -1744,9 +1731,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
     final startOffset = _resolveChapterOffsetFromDisplayOffset(
       range.startOffset,
     );
-    final endOffset = _resolveChapterOffsetFromDisplayOffset(
-      range.endOffset,
-    );
+    final endOffset = _resolveChapterOffsetFromDisplayOffset(range.endOffset);
     var safeStart = min(startOffset, endOffset);
     var safeEnd = max(startOffset, endOffset);
     final totalLength = _chapterTextLength();
@@ -1828,7 +1813,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
               anchors: anchors,
               buttonItems: [
                 ContextMenuButtonItem(
-                  label: '取消收藏',
+                  label: '删除收藏',
                   onPressed: () {
                     _hideBookmarkToolbar();
                     final existing = _currentSelectionBookmark();
@@ -1842,21 +1827,18 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
                 ContextMenuButtonItem(
                   label: _selectionBold ? '取消加粗' : '加粗',
                   onPressed: () {
-                    _hideBookmarkToolbar();
                     unawaited(_toggleSelectionBold());
                   },
                 ),
                 ContextMenuButtonItem(
                   label: _selectionUnderline ? '取消下划线' : '下划线',
                   onPressed: () {
-                    _hideBookmarkToolbar();
                     unawaited(_toggleSelectionUnderline());
                   },
                 ),
                 ContextMenuButtonItem(
                   label: _selectionWavy ? '取消波浪线' : '波浪线',
                   onPressed: () {
-                    _hideBookmarkToolbar();
                     unawaited(_toggleSelectionWavy());
                   },
                 ),
@@ -1901,7 +1883,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
 
     final customItems = <ContextMenuButtonItem>[
       ContextMenuButtonItem(
-        label: isBookmarked ? '取消收藏' : '收藏书签',
+        label: isBookmarked ? '删除收藏' : '保存收藏',
         onPressed:
             hasSelection
                 ? () {
@@ -1928,12 +1910,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
         onPressed:
             hasSelection
                 ? () {
-                  hideToolbar();
-                  unawaited(
-                    _toggleSelectionBold(
-                      clearSelectionState: selectableRegionState,
-                    ),
-                  );
+                  unawaited(_toggleSelectionBold());
                 }
                 : null,
       ),
@@ -1942,12 +1919,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
         onPressed:
             hasSelection
                 ? () {
-                  hideToolbar();
-                  unawaited(
-                    _toggleSelectionUnderline(
-                      clearSelectionState: selectableRegionState,
-                    ),
-                  );
+                  unawaited(_toggleSelectionUnderline());
                 }
                 : null,
       ),
@@ -1956,12 +1928,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
         onPressed:
             hasSelection
                 ? () {
-                  hideToolbar();
-                  unawaited(
-                    _toggleSelectionWavy(
-                      clearSelectionState: selectableRegionState,
-                    ),
-                  );
+                  unawaited(_toggleSelectionWavy());
                 }
                 : null,
       ),
@@ -1987,46 +1954,46 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
     );
   }
 
-  Future<void> _toggleSelectionBold({
-    SelectableRegionState? clearSelectionState,
-  }) async {
+  Future<void> _toggleSelectionBold() async {
     if (!_isTextSelectionActive) {
       return;
     }
-    _selectionBold = !_selectionBold;
-    await _ensureSelectionBookmarkSaved();
-    clearSelectionState?.clearSelection();
-    _clearSelectionState();
+    setState(() {
+      _selectionBold = !_selectionBold;
+    });
+    await _persistSelectionStyleForSelection(
+      createdMessage: _selectionBold ? '已保存收藏并加粗' : '已保存收藏',
+    );
   }
 
-  Future<void> _toggleSelectionUnderline({
-    SelectableRegionState? clearSelectionState,
-  }) async {
+  Future<void> _toggleSelectionUnderline() async {
     if (!_isTextSelectionActive) {
       return;
     }
-    _selectionUnderline = !_selectionUnderline;
-    if (_selectionUnderline) {
-      _selectionWavy = false;
-    }
-    await _ensureSelectionBookmarkSaved();
-    clearSelectionState?.clearSelection();
-    _clearSelectionState();
+    setState(() {
+      _selectionUnderline = !_selectionUnderline;
+      if (_selectionUnderline) {
+        _selectionWavy = false;
+      }
+    });
+    await _persistSelectionStyleForSelection(
+      createdMessage: _selectionUnderline ? '已保存收藏并添加下划线' : '已保存收藏',
+    );
   }
 
-  Future<void> _toggleSelectionWavy({
-    SelectableRegionState? clearSelectionState,
-  }) async {
+  Future<void> _toggleSelectionWavy() async {
     if (!_isTextSelectionActive) {
       return;
     }
-    _selectionWavy = !_selectionWavy;
-    if (_selectionWavy) {
-      _selectionUnderline = false;
-    }
-    await _ensureSelectionBookmarkSaved();
-    clearSelectionState?.clearSelection();
-    _clearSelectionState();
+    setState(() {
+      _selectionWavy = !_selectionWavy;
+      if (_selectionWavy) {
+        _selectionUnderline = false;
+      }
+    });
+    await _persistSelectionStyleForSelection(
+      createdMessage: _selectionWavy ? '已保存收藏并添加波浪线' : '已保存收藏',
+    );
   }
 
   Future<void> _onSaveBookmarkPressed({
@@ -2038,42 +2005,15 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
 
     final existing = _currentSelectionBookmark();
     if (existing != null) {
-      _showMessage('已收藏');
+      _showMessage('收藏已存在');
       _clearSelectionState();
       clearSelectionState?.clearSelection();
       return;
     }
 
-    final now = DateTime.now();
-    final startOffset = _selectionStartOffset;
-    final endOffset = _selectionEndOffset;
-    if (startOffset == endOffset) {
-      return;
-    }
-
-    final isWavy = _selectionWavy;
-    final isUnderline = isWavy ? false : _selectionUnderline;
-    final bookmark = Bookmark(
-      id: existing?.id ?? _uuid.v4().replaceAll('-', ''),
-      bookId: widget.bookId,
-      chapterId: _chapterId,
-      chapterIndex: _currentIndex ?? 0,
-      startOffset: startOffset,
-      endOffset: endOffset,
-      snippet: _selectedSnippet,
-      createdAt: existing?.createdAt ?? now,
-      updatedAt: now,
-      isBold: _selectionBold,
-      isUnderline: isUnderline,
-      isWavy: isWavy,
-      color: existing?.color,
-    );
-
-    await _bookmarkRepository.addBookmark(bookmark);
-    _showMessage('已收藏');
-    unawaited(_refreshChapterBookmarks());
+    await _saveSelectionBookmark(clearSelectionState: clearSelectionState);
+    _showMessage('已保存收藏');
     _clearSelectionState();
-    clearSelectionState?.clearSelection();
   }
 
   Future<void> _onRemoveBookmarkPressed(
@@ -2081,17 +2021,33 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
     SelectableRegionState? clearSelectionState,
   }) async {
     await _bookmarkRepository.removeBookmark(bookmark.id);
-    _showMessage('已取消收藏');
+    _showMessage('已删除收藏');
     unawaited(_refreshChapterBookmarks());
     _clearSelectionState();
     clearSelectionState?.clearSelection();
   }
 
-  Future<void> _ensureSelectionBookmarkSaved() async {
+  Future<void> _persistSelectionStyleForSelection({
+    required String createdMessage,
+  }) async {
     if (!_isTextSelectionActive || _selectedSnippet.isEmpty) {
       return;
     }
+    final existing = _currentSelectionBookmark();
+    await _saveSelectionBookmark(existing: existing, clearSelectionState: null);
+    _bookmarkToolbarEntry?.markNeedsBuild();
+    if (existing == null) {
+      _showMessage(createdMessage);
+    }
+  }
 
+  Future<void> _saveSelectionBookmark({
+    Bookmark? existing,
+    SelectableRegionState? clearSelectionState,
+  }) async {
+    if (!_isTextSelectionActive || _selectedSnippet.isEmpty) {
+      return;
+    }
     final now = DateTime.now();
     final startOffset = _selectionStartOffset;
     final endOffset = _selectionEndOffset;
@@ -2099,12 +2055,11 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
       return;
     }
 
-    final existing = _findBookmarkByOffsets(startOffset, endOffset);
     final isWavy = _selectionWavy;
     final isUnderline = isWavy ? false : _selectionUnderline;
     final bookmark = Bookmark(
       id: existing?.id ?? _uuid.v4().replaceAll('-', ''),
-      bookId: widget.bookId,
+      bookId: _currentBookId,
       chapterId: _chapterId,
       chapterIndex: _currentIndex ?? 0,
       startOffset: startOffset,
@@ -2120,6 +2075,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
 
     await _bookmarkRepository.addBookmark(bookmark);
     unawaited(_refreshChapterBookmarks());
+    clearSelectionState?.clearSelection();
   }
 
   bool _onReaderScrollNotification(ScrollNotification notification) {
@@ -2901,10 +2857,16 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
             if (!range.isWavy) {
               continue;
             }
-            final startDisplay =
-                _clampInt(range.start + indentLength, 0, displayText.length);
-            final endDisplay =
-                _clampInt(range.end + indentLength, 0, displayText.length);
+            final startDisplay = _clampInt(
+              range.start + indentLength,
+              0,
+              displayText.length,
+            );
+            final endDisplay = _clampInt(
+              range.end + indentLength,
+              0,
+              displayText.length,
+            );
             if (endDisplay > startDisplay) {
               wavyRanges.add(_WavyRange(startDisplay, endDisplay));
             }
@@ -3028,19 +2990,11 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
           curve: Curves.easeOutCubic,
           opacity: _showOverlayControls ? 0.78 : 1,
           child: Padding(
-            padding: EdgeInsets.fromLTRB(
-              14,
-              0,
-              14,
-              barBottomPadding,
-            ),
+            padding: EdgeInsets.fromLTRB(14, 0, 14, barBottomPadding),
             child: Align(
               alignment: Alignment.bottomCenter,
               child: ConstrainedBox(
-                constraints: const BoxConstraints(
-                  minWidth: 160,
-                  maxWidth: 520,
-                ),
+                constraints: const BoxConstraints(minWidth: 160, maxWidth: 520),
                 child: SizedBox(
                   width: double.infinity,
                   child: Row(
@@ -3051,8 +3005,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
                           index: index,
                           total: total,
                         ),
-                      if (showProgress && rightLabel.isNotEmpty)
-                        const Spacer(),
+                      if (showProgress && rightLabel.isNotEmpty) const Spacer(),
                       if (rightLabel.isNotEmpty)
                         Text(
                           rightLabel,
@@ -3675,8 +3628,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
             final dx =
                 (_swipeDragCurrentDx ?? event.localPosition.dx) -
                 (_swipeDragStartDx ?? event.localPosition.dx);
-            final velocity =
-                elapsedMs <= 0 ? 0.0 : dx / (elapsedMs / 1000.0);
+            final velocity = elapsedMs <= 0 ? 0.0 : dx / (elapsedMs / 1000.0);
 
             if (enableSwipeTurn &&
                 _swipeDragStartDx != null &&
@@ -3689,10 +3641,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
                   velocity: Velocity(pixelsPerSecond: Offset(velocity, 0)),
                   primaryVelocity: velocity,
                 );
-                _onSwipePaginationDragEnd(
-                  dragDetails,
-                  size,
-                );
+                _onSwipePaginationDragEnd(dragDetails, size);
                 _resetPointerTracking();
                 return;
               }
@@ -3824,7 +3773,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
 
     await showChapterCacheFlow(
       context: context,
-      bookId: widget.bookId,
+      bookId: _currentBookId,
       sourceId: sourceId,
       chapters: _chapters,
       initialStartIndex: startIndex,
@@ -3887,8 +3836,8 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
     }
 
     const scoreRankingEnabled = true;
-    final lookupStateNotifier = ValueNotifier<_ReaderSwitchSourceLookupState>(
-      _ReaderSwitchSourceLookupState.loading(
+    final lookupStateNotifier = ValueNotifier<SwitchSourceLookupState>(
+      SwitchSourceLookupState.loading(
         sourceCount: scope.sourceIds.length,
         scoreRankingEnabled: scoreRankingEnabled,
       ),
@@ -3911,7 +3860,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
       scoreRankingEnabled: scoreRankingEnabled,
     );
 
-    _ReaderSourceSwitchCandidate? selected;
+    SwitchSourceCandidate? selected;
     try {
       if (mounted) {
         selected = await _showSwitchSourceCandidateSheet(
@@ -3974,7 +3923,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
     required String keyword,
     required _SwitchSourceScope scope,
     required String currentSourceId,
-    required ValueNotifier<_ReaderSwitchSourceLookupState> lookupStateNotifier,
+    required ValueNotifier<SwitchSourceLookupState> lookupStateNotifier,
     required SearchCancellationToken cancellationToken,
     required SourceSwitchScoreStore scoreStore,
     required bool scoreRankingEnabled,
@@ -4007,7 +3956,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
             scoreRankingEnabled: scoreRankingEnabled,
           );
 
-          lookupStateNotifier.value = _ReaderSwitchSourceLookupState(
+          lookupStateNotifier.value = SwitchSourceLookupState(
             isLoading: true,
             sourceCount: progress.sourceCount,
             processedSourceCount: progress.processedSourceCount,
@@ -4033,7 +3982,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
         scoreStore: scoreStore,
         scoreRankingEnabled: scoreRankingEnabled,
       );
-      lookupStateNotifier.value = _ReaderSwitchSourceLookupState(
+      lookupStateNotifier.value = SwitchSourceLookupState(
         isLoading: false,
         sourceCount: report.sourceCount,
         processedSourceCount: report.processedSourceCount,
@@ -4045,11 +3994,11 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
       if (cancellationToken.isCancelled) {
         return;
       }
-      lookupStateNotifier.value = _ReaderSwitchSourceLookupState(
+      lookupStateNotifier.value = SwitchSourceLookupState(
         isLoading: false,
         sourceCount: scope.sourceIds.length,
         processedSourceCount: 0,
-        candidates: const <_ReaderSourceSwitchCandidate>[],
+        candidates: const <SwitchSourceCandidate>[],
         errorText: '查找可切换书源失败：${error.briefMessage}',
         scoreRankingEnabled: scoreRankingEnabled,
       );
@@ -4057,11 +4006,11 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
       if (cancellationToken.isCancelled) {
         return;
       }
-      lookupStateNotifier.value = _ReaderSwitchSourceLookupState(
+      lookupStateNotifier.value = SwitchSourceLookupState(
         isLoading: false,
         sourceCount: scope.sourceIds.length,
         processedSourceCount: 0,
-        candidates: const <_ReaderSourceSwitchCandidate>[],
+        candidates: const <SwitchSourceCandidate>[],
         errorText: '查找可切换书源失败，请稍后重试。',
         scoreRankingEnabled: scoreRankingEnabled,
       );
@@ -4093,7 +4042,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
     }
   }
 
-  List<_ReaderSourceSwitchCandidate> _buildSwitchSourceCandidates({
+  List<SwitchSourceCandidate> _buildSwitchSourceCandidates({
     required List<Book> books,
     required Map<String, String> sourceNames,
     required String currentSourceId,
@@ -4104,157 +4053,22 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
     required SourceSwitchScoreStore scoreStore,
     required bool scoreRankingEnabled,
   }) {
-    final normalizedTargetTitle = _normalizeSwitchSourceText(targetTitle);
-    final normalizedTargetAuthor = _normalizeSwitchSourceText(
-      targetAuthor ?? '',
+    return buildSwitchSourceCandidates(
+      books: books,
+      sourceNames: sourceNames,
+      currentSourceId: currentSourceId,
+      currentChapterCount: currentChapterCount,
+      targetTitle: targetTitle,
+      targetAuthor: targetAuthor,
+      hitCountBySource: hitCountBySource,
+      scoreStore: scoreStore,
+      scoreRankingEnabled: scoreRankingEnabled,
+      buildBookScoreKey: _switchSourceScoreService.buildBookScoreKey,
+      lagTolerance: _kSwitchSourceLagTolerance,
+      hitCountCap: _kSwitchSourceHitCountCap,
+      hitCountWeight: _kSwitchSourceHitCountWeight,
+      candidateLimit: _kSwitchSourceCandidateLimit,
     );
-
-    final bestBySource = <String, _ReaderSourceSwitchCandidate>{};
-    for (final book in books) {
-      if (book.sourceId == currentSourceId) {
-        continue;
-      }
-
-      final baseScore = _scoreSwitchSourceCandidate(
-        book,
-        normalizedTargetTitle: normalizedTargetTitle,
-        normalizedTargetAuthor: normalizedTargetAuthor,
-      );
-      final hitCount = hitCountBySource[book.sourceId] ?? 0;
-      final sourceScore = scoreStore.sourceScores[book.sourceId] ?? 0;
-      final bookScore =
-          scoreStore.bookScores[_switchSourceScoreService.buildBookScoreKey(
-            sourceId: book.sourceId,
-            title: book.title,
-            author: book.author,
-          )] ??
-          0;
-      final score = _composeSwitchSourceCandidateScore(
-        baseScore: baseScore,
-        hitCount: hitCount,
-        sourceScore: sourceScore,
-        bookScore: bookScore,
-        scoreRankingEnabled: scoreRankingEnabled,
-      );
-      final latestChapterLabel = _formatSwitchSourceLatestChapter(
-        book.latestChapter,
-      );
-      final latestChapterNumber = _extractSwitchSourceChapterNumber(
-        latestChapterLabel,
-      );
-      final isPotentiallyOutdated =
-          currentChapterCount > 0 &&
-          latestChapterNumber != null &&
-          latestChapterNumber + _kSwitchSourceLagTolerance <
-              currentChapterCount;
-
-      final candidate = _ReaderSourceSwitchCandidate(
-        book: book,
-        sourceName: sourceNames[book.sourceId] ?? book.sourceId,
-        baseScore: baseScore,
-        score: score,
-        hitCount: hitCount,
-        sourceScore: sourceScore,
-        bookScore: bookScore,
-        latestChapterLabel: latestChapterLabel,
-        latestChapterNumber: latestChapterNumber,
-        isPotentiallyOutdated: isPotentiallyOutdated,
-      );
-
-      final existing = bestBySource[book.sourceId];
-      if (existing == null || candidate.score > existing.score) {
-        bestBySource[book.sourceId] = candidate;
-      }
-    }
-
-    final candidates = _sortSwitchSourceCandidates(
-      bestBySource.values.toList(growable: false),
-    );
-
-    if (candidates.length <= _kSwitchSourceCandidateLimit) {
-      return candidates;
-    }
-    return candidates
-        .take(_kSwitchSourceCandidateLimit)
-        .toList(growable: false);
-  }
-
-  List<_ReaderSourceSwitchCandidate> _sortSwitchSourceCandidates(
-    List<_ReaderSourceSwitchCandidate> candidates,
-  ) {
-    candidates.sort((a, b) {
-      final scoreDiff = b.score.compareTo(a.score);
-      if (scoreDiff != 0) {
-        return scoreDiff;
-      }
-      final latestDiff = (b.latestChapterNumber ?? -1).compareTo(
-        a.latestChapterNumber ?? -1,
-      );
-      if (latestDiff != 0) {
-        return latestDiff;
-      }
-      return a.sourceName.compareTo(b.sourceName);
-    });
-    return candidates;
-  }
-
-  int _composeSwitchSourceCandidateScore({
-    required int baseScore,
-    required int hitCount,
-    required int sourceScore,
-    required int bookScore,
-    required bool scoreRankingEnabled,
-  }) {
-    final hitBonus = _resolveSwitchSourceHitBonus(hitCount);
-    if (!scoreRankingEnabled) {
-      return baseScore + hitBonus;
-    }
-    return baseScore + hitBonus + sourceScore + bookScore;
-  }
-
-  int _resolveSwitchSourceHitBonus(int hitCount) {
-    final normalizedCount = max(0, hitCount);
-    final capped = min(_kSwitchSourceHitCountCap, normalizedCount);
-    return capped * _kSwitchSourceHitCountWeight;
-  }
-
-  int _scoreSwitchSourceCandidate(
-    Book book, {
-    required String normalizedTargetTitle,
-    required String normalizedTargetAuthor,
-  }) {
-    final normalizedTitle = _normalizeSwitchSourceText(book.title);
-    var score = 0;
-
-    if (normalizedTargetTitle.isEmpty) {
-      score += 40;
-    } else if (normalizedTitle == normalizedTargetTitle) {
-      score += 140;
-    } else if (normalizedTitle.startsWith(normalizedTargetTitle) ||
-        normalizedTargetTitle.startsWith(normalizedTitle)) {
-      score += 110;
-    } else if (normalizedTitle.contains(normalizedTargetTitle) ||
-        normalizedTargetTitle.contains(normalizedTitle)) {
-      score += 85;
-    } else {
-      score += 50;
-    }
-
-    final normalizedAuthor = _normalizeSwitchSourceText(book.author ?? '');
-    if (normalizedTargetAuthor.isNotEmpty && normalizedAuthor.isNotEmpty) {
-      if (normalizedAuthor == normalizedTargetAuthor) {
-        score += 24;
-      } else if (normalizedAuthor.contains(normalizedTargetAuthor) ||
-          normalizedTargetAuthor.contains(normalizedAuthor)) {
-        score += 12;
-      }
-    }
-
-    if (book.latestChapter?.trim().isNotEmpty == true) {
-      score += 2;
-    }
-
-    return score;
   }
 
   Future<String?> _resolveSwitchSourceSearchKeyword({
@@ -4292,7 +4106,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
       );
       final detailResult = await detailProvider.loadDetail(
         sourceId: currentSourceId,
-        bookId: widget.bookId,
+        bookId: _currentBookId,
         detailUrl: currentDetailUrl,
         fallbackTitle: currentTitle.isEmpty ? null : currentTitle,
       );
@@ -4334,40 +4148,8 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
     return _kSwitchSourceChapterEnglishPattern.hasMatch(lower);
   }
 
-  String _normalizeSwitchSourceText(String text) {
-    return text
-        .trim()
-        .toLowerCase()
-        .replaceAll(_kSwitchSourceSpacePattern, '')
-        .replaceAll(_kSwitchSourceSymbolPattern, '');
-  }
-
-  String _formatSwitchSourceLatestChapter(String? latestChapter) {
-    final normalized = latestChapter?.replaceAll(
-      _kSwitchSourceSpacePattern,
-      ' ',
-    );
-    final text = normalized?.trim() ?? '';
-    if (text.isEmpty) {
-      return '未知';
-    }
-    return text;
-  }
-
-  int? _extractSwitchSourceChapterNumber(String text) {
-    final chapterMatch = _kSwitchSourceChapterPattern.firstMatch(text);
-    if (chapterMatch != null) {
-      return int.tryParse(chapterMatch.group(1)!);
-    }
-    final numberMatch = _kSwitchSourceNumberPattern.firstMatch(text);
-    if (numberMatch != null) {
-      return int.tryParse(numberMatch.group(1)!);
-    }
-    return null;
-  }
-
-  Future<_ReaderSourceSwitchCandidate?> _showSwitchSourceCandidateSheet(
-    ValueNotifier<_ReaderSwitchSourceLookupState> lookupStateNotifier, {
+  Future<SwitchSourceCandidate?> _showSwitchSourceCandidateSheet(
+    ValueNotifier<SwitchSourceLookupState> lookupStateNotifier, {
     required SourceSwitchScoreStore scoreStore,
     required bool scoreRankingEnabled,
   }) async {
@@ -4378,277 +4160,26 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
     }
 
     final readerModalTheme = _readerModalTheme();
-    final selected = await showModalBottomSheet<_ReaderSourceSwitchCandidate>(
+    final selected = await showSwitchSourceCandidateSheet(
       context: context,
-      isScrollControlled: true,
-      showDragHandle: true,
-      useSafeArea: true,
-      backgroundColor: readerModalTheme.colorScheme.surface,
-      builder: (context) {
-        final horizontal = AppSpacing.pageHorizontal(context);
-        final bottomInset = _bottomSafeInset(context);
-        final heightFactor = _adaptiveReaderSheetHeightFactor(
-          context,
-          compact: 0.92,
-          regular: 0.88,
-          large: 0.84,
-        );
-
-        return Theme(
-          data: readerModalTheme,
-          child: FractionallySizedBox(
-            heightFactor: heightFactor,
-            child: Padding(
-              padding: EdgeInsets.fromLTRB(horizontal, 4, horizontal, 12),
-              child: ValueListenableBuilder<_ReaderSwitchSourceLookupState>(
-                valueListenable: lookupStateNotifier,
-                builder: (context, lookupState, _) {
-                  final candidates = lookupState.candidates;
-                  final colorScheme = Theme.of(context).colorScheme;
-                  final progressText =
-                      lookupState.sourceCount <= 0
-                          ? '正在准备书源列表...'
-                          : '已扫描 ${lookupState.processedSourceCount}/${lookupState.sourceCount} 个书源';
-                  final emptyMessage =
-                      lookupState.errorText ?? '没有检索到可切换书源，请稍后重试。';
-
-                  return Column(
-                    children: [
-                      Align(
-                        alignment: Alignment.centerLeft,
-                        child: Text(
-                          '切换书源（${candidates.length}）',
-                          style: Theme.of(context).textTheme.titleMedium
-                              ?.copyWith(fontWeight: FontWeight.w700),
-                        ),
-                      ),
-                      const SizedBox(height: 4),
-                      Align(
-                        alignment: Alignment.centerLeft,
-                        child: Text(
-                          '当前书名：${_bookTitle.trim().isEmpty ? '未知' : _bookTitle}',
-                          style: Theme.of(context).textTheme.bodySmall
-                              ?.copyWith(color: colorScheme.onSurfaceVariant),
-                        ),
-                      ),
-                      const SizedBox(height: 2),
-                      Align(
-                        alignment: Alignment.centerLeft,
-                        child: Text(
-                          '当前目录：${_chapters.length} 章',
-                          style: Theme.of(context).textTheme.bodySmall
-                              ?.copyWith(color: colorScheme.onSurfaceVariant),
-                        ),
-                      ),
-                      const SizedBox(height: 2),
-                      Align(
-                        alignment: Alignment.centerLeft,
-                        child: Text(
-                          progressText,
-                          style: Theme.of(context).textTheme.bodySmall
-                              ?.copyWith(color: colorScheme.onSurfaceVariant),
-                        ),
-                      ),
-                      const SizedBox(height: 2),
-                      Align(
-                        alignment: Alignment.centerLeft,
-                        child: Text(
-                          lookupState.scoreRankingEnabled
-                              ? '评分排序：已启用（匹配分 + 源评分 + 本书评分）'
-                              : '评分排序：已关闭（仅按匹配分排序）',
-                          style: Theme.of(context).textTheme.bodySmall
-                              ?.copyWith(color: colorScheme.onSurfaceVariant),
-                        ),
-                      ),
-                      const SizedBox(height: 8),
-                      Expanded(
-                        child:
-                            candidates.isEmpty
-                                ? lookupState.isLoading
-                                    ? _buildSwitchSourceLoadingPlaceholderList(
-                                      colorScheme,
-                                    )
-                                    : Center(
-                                      child: Text(
-                                        emptyMessage,
-                                        textAlign: TextAlign.center,
-                                        style: Theme.of(
-                                          context,
-                                        ).textTheme.bodyMedium?.copyWith(
-                                          color: colorScheme.onSurfaceVariant,
-                                        ),
-                                      ),
-                                    )
-                                : ListView.separated(
-                                  itemCount: candidates.length,
-                                  separatorBuilder:
-                                      (_, __) => const Divider(height: 1),
-                                  itemBuilder: (context, index) {
-                                    final candidate = candidates[index];
-                                    final author =
-                                        candidate.book.author?.trim();
-                                    final subtitle =
-                                        (author == null || author.isEmpty)
-                                            ? candidate.sourceName
-                                            : '${candidate.sourceName} · $author';
-
-                                    return ListTile(
-                                      contentPadding: EdgeInsets.zero,
-                                      title: Text(
-                                        candidate.book.title,
-                                        maxLines: 1,
-                                        overflow: TextOverflow.ellipsis,
-                                        style: Theme.of(
-                                          context,
-                                        ).textTheme.titleSmall?.copyWith(
-                                          fontWeight: FontWeight.w600,
-                                        ),
-                                      ),
-                                      subtitle: Column(
-                                        crossAxisAlignment:
-                                            CrossAxisAlignment.start,
-                                        children: [
-                                          Text(
-                                            subtitle,
-                                            maxLines: 1,
-                                            overflow: TextOverflow.ellipsis,
-                                          ),
-                                          const SizedBox(height: 2),
-                                          Text(
-                                            '最新：${candidate.latestChapterLabel}',
-                                            maxLines: 1,
-                                            overflow: TextOverflow.ellipsis,
-                                            style: Theme.of(
-                                              context,
-                                            ).textTheme.bodySmall?.copyWith(
-                                              color:
-                                                  candidate
-                                                          .isPotentiallyOutdated
-                                                      ? colorScheme.error
-                                                      : colorScheme
-                                                          .onSurfaceVariant,
-                                              fontWeight:
-                                                  candidate
-                                                          .isPotentiallyOutdated
-                                                      ? FontWeight.w700
-                                                      : FontWeight.w500,
-                                            ),
-                                          ),
-                                          const SizedBox(height: 2),
-                                          Text(
-                                            lookupState.scoreRankingEnabled
-                                                ? '匹配:${candidate.baseScore} · 命中:${candidate.hitCount} · 源评:${_formatSignedScore(candidate.sourceScore)} · 书评:${_formatSignedScore(candidate.bookScore)}'
-                                                : '匹配:${candidate.baseScore} · 命中:${candidate.hitCount}（评分排序关闭）',
-                                            maxLines: 1,
-                                            overflow: TextOverflow.ellipsis,
-                                            style: Theme.of(
-                                              context,
-                                            ).textTheme.bodySmall?.copyWith(
-                                              color:
-                                                  colorScheme.onSurfaceVariant,
-                                            ),
-                                          ),
-                                        ],
-                                      ),
-                                      trailing: Row(
-                                        mainAxisSize: MainAxisSize.min,
-                                        children: [
-                                          if (candidate
-                                              .isPotentiallyOutdated) ...[
-                                            Icon(
-                                              Icons.warning_amber_rounded,
-                                              color: colorScheme.error,
-                                              size: 18,
-                                            ),
-                                            const SizedBox(width: 2),
-                                          ],
-                                          PopupMenuButton<
-                                            _ReaderSwitchSourceScoreAction
-                                          >(
-                                            tooltip: '评分',
-                                            icon: const Icon(
-                                              Icons.thumb_up_alt_outlined,
-                                              size: 18,
-                                            ),
-                                            onSelected: (action) {
-                                              unawaited(
-                                                _applySwitchSourceScoreAction(
-                                                  candidate: candidate,
-                                                  action: action,
-                                                  lookupStateNotifier:
-                                                      lookupStateNotifier,
-                                                  scoreStore: scoreStore,
-                                                  scoreRankingEnabled:
-                                                      scoreRankingEnabled,
-                                                ),
-                                              );
-                                            },
-                                            itemBuilder:
-                                                (context) => const [
-                                                  PopupMenuItem(
-                                                    value:
-                                                        _ReaderSwitchSourceScoreAction
-                                                            .upvote,
-                                                    child: Text('推荐 +1'),
-                                                  ),
-                                                  PopupMenuItem(
-                                                    value:
-                                                        _ReaderSwitchSourceScoreAction
-                                                            .downvote,
-                                                    child: Text('降权 -1'),
-                                                  ),
-                                                  PopupMenuItem(
-                                                    value:
-                                                        _ReaderSwitchSourceScoreAction
-                                                            .reset,
-                                                    child: Text('重置本书评分'),
-                                                  ),
-                                                ],
-                                          ),
-                                          const Icon(Icons.chevron_right),
-                                        ],
-                                      ),
-                                      onTap:
-                                          () => Navigator.of(
-                                            context,
-                                          ).pop(candidate),
-                                    );
-                                  },
-                                ),
-                      ),
-                      if (lookupState.isLoading && candidates.isNotEmpty) ...[
-                        const SizedBox(height: 8),
-                        Row(
-                          children: [
-                            SizedBox(
-                              width: 14,
-                              height: 14,
-                              child: CircularProgressIndicator(
-                                strokeWidth: 2,
-                                color: colorScheme.primary,
-                              ),
-                            ),
-                            const SizedBox(width: 8),
-                            Expanded(
-                              child: Text(
-                                '正在继续检索其他书源...',
-                                style: Theme.of(
-                                  context,
-                                ).textTheme.bodySmall?.copyWith(
-                                  color: colorScheme.onSurfaceVariant,
-                                ),
-                              ),
-                            ),
-                          ],
-                        ),
-                      ],
-                      SizedBox(height: bottomInset),
-                    ],
-                  );
-                },
-              ),
-            ),
-          ),
+      lookupStateNotifier: lookupStateNotifier,
+      currentTitle: _bookTitle.trim(),
+      currentChapterCount: _chapters.length,
+      themeData: readerModalTheme,
+      heightFactor: _adaptiveReaderSheetHeightFactor(
+        context,
+        compact: 0.92,
+        regular: 0.88,
+        large: 0.84,
+      ),
+      bottomInset: _bottomSafeInset(context),
+      onScoreAction: (candidate, action) {
+        return _applySwitchSourceScoreAction(
+          candidate: candidate,
+          action: action,
+          lookupStateNotifier: lookupStateNotifier,
+          scoreStore: scoreStore,
+          scoreRankingEnabled: scoreRankingEnabled,
         );
       },
     );
@@ -4661,29 +4192,29 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
   }
 
   Future<void> _applySwitchSourceScoreAction({
-    required _ReaderSourceSwitchCandidate candidate,
-    required _ReaderSwitchSourceScoreAction action,
-    required ValueNotifier<_ReaderSwitchSourceLookupState> lookupStateNotifier,
+    required SwitchSourceCandidate candidate,
+    required SwitchSourceScoreAction action,
+    required ValueNotifier<SwitchSourceLookupState> lookupStateNotifier,
     required SourceSwitchScoreStore scoreStore,
     required bool scoreRankingEnabled,
   }) async {
     try {
       final update = switch (action) {
-        _ReaderSwitchSourceScoreAction.upvote => _switchSourceScoreService
+        SwitchSourceScoreAction.upvote => _switchSourceScoreService
             .adjustBookScore(
               sourceId: candidate.book.sourceId,
               title: candidate.book.title,
               author: candidate.book.author,
               delta: _kSwitchSourceScoreStep,
             ),
-        _ReaderSwitchSourceScoreAction.downvote => _switchSourceScoreService
+        SwitchSourceScoreAction.downvote => _switchSourceScoreService
             .adjustBookScore(
               sourceId: candidate.book.sourceId,
               title: candidate.book.title,
               author: candidate.book.author,
               delta: -_kSwitchSourceScoreStep,
             ),
-        _ReaderSwitchSourceScoreAction.reset => _switchSourceScoreService
+        SwitchSourceScoreAction.reset => _switchSourceScoreService
             .resetBookScore(
               sourceId: candidate.book.sourceId,
               title: candidate.book.title,
@@ -4714,7 +4245,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
           )
           .toList(growable: false);
       lookupStateNotifier.value = current.copyWith(
-        candidates: _sortSwitchSourceCandidates(nextCandidates),
+        candidates: sortSwitchSourceCandidates(nextCandidates),
       );
 
       if (!mounted) {
@@ -4722,9 +4253,9 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
       }
 
       final actionLabel = switch (action) {
-        _ReaderSwitchSourceScoreAction.upvote => '已推荐',
-        _ReaderSwitchSourceScoreAction.downvote => '已降权',
-        _ReaderSwitchSourceScoreAction.reset => '已重置',
+        SwitchSourceScoreAction.upvote => '已推荐',
+        SwitchSourceScoreAction.downvote => '已降权',
+        SwitchSourceScoreAction.reset => '已重置',
       };
       _showMessage(
         '$actionLabel ${candidate.sourceName}（源评 ${_formatSignedScore(resolved.sourceScore)}，书评 ${_formatSignedScore(resolved.bookScore)}）',
@@ -4734,29 +4265,18 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
     }
   }
 
-  _ReaderSourceSwitchCandidate _rebuildSwitchSourceCandidateScore(
-    _ReaderSourceSwitchCandidate candidate, {
+  SwitchSourceCandidate _rebuildSwitchSourceCandidateScore(
+    SwitchSourceCandidate candidate, {
     required SourceSwitchScoreStore scoreStore,
     required bool scoreRankingEnabled,
   }) {
-    final sourceScore = scoreStore.sourceScores[candidate.book.sourceId] ?? 0;
-    final bookScore =
-        scoreStore.bookScores[_switchSourceScoreService.buildBookScoreKey(
-          sourceId: candidate.book.sourceId,
-          title: candidate.book.title,
-          author: candidate.book.author,
-        )] ??
-        0;
-    return candidate.copyWith(
-      sourceScore: sourceScore,
-      bookScore: bookScore,
-      score: _composeSwitchSourceCandidateScore(
-        baseScore: candidate.baseScore,
-        hitCount: candidate.hitCount,
-        sourceScore: sourceScore,
-        bookScore: bookScore,
-        scoreRankingEnabled: scoreRankingEnabled,
-      ),
+    return rebuildSwitchSourceCandidateScore(
+      candidate,
+      scoreStore: scoreStore,
+      scoreRankingEnabled: scoreRankingEnabled,
+      buildBookScoreKey: _switchSourceScoreService.buildBookScoreKey,
+      hitCountCap: _kSwitchSourceHitCountCap,
+      hitCountWeight: _kSwitchSourceHitCountWeight,
     );
   }
 
@@ -4875,54 +4395,8 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
     return false;
   }
 
-  Widget _buildSwitchSourceLoadingPlaceholderList(ColorScheme colorScheme) {
-    final placeholderColor = colorScheme.surfaceContainerHigh;
-    return ListView.separated(
-      itemCount: 6,
-      separatorBuilder: (_, __) => const Divider(height: 1),
-      itemBuilder: (context, index) {
-        final titleWidth = 110.0 + (index % 3) * 42.0;
-        final subtitleWidth = 150.0 + (index % 2) * 56.0;
-
-        return ListTile(
-          contentPadding: EdgeInsets.zero,
-          title: Align(
-            alignment: Alignment.centerLeft,
-            child: Container(
-              width: titleWidth,
-              height: 14,
-              decoration: BoxDecoration(
-                color: placeholderColor,
-                borderRadius: BorderRadius.circular(999),
-              ),
-            ),
-          ),
-          subtitle: Padding(
-            padding: const EdgeInsets.only(top: 6),
-            child: Align(
-              alignment: Alignment.centerLeft,
-              child: Container(
-                width: subtitleWidth,
-                height: 12,
-                decoration: BoxDecoration(
-                  color: placeholderColor.withValues(alpha: 0.85),
-                  borderRadius: BorderRadius.circular(999),
-                ),
-              ),
-            ),
-          ),
-          trailing: Icon(
-            Icons.hourglass_top_rounded,
-            color: colorScheme.onSurfaceVariant,
-            size: 18,
-          ),
-        );
-      },
-    );
-  }
-
   Future<bool> _applySwitchSourceCandidate(
-    _ReaderSourceSwitchCandidate candidate, {
+    SwitchSourceCandidate candidate, {
     bool showResultMessage = true,
     bool promptWhenCoverageGap = true,
   }) async {
@@ -4931,6 +4405,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
     }
 
     final snapshot = _ReaderSourceSnapshot(
+      bookId: _activeBookId,
       sourceId: _sourceId,
       detailUrl: _detailUrl,
       bookTitle: _bookTitle,
@@ -5010,6 +4485,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
       final targetChapter = chapters[targetIndex];
 
       setState(() {
+        _activeBookId = candidate.book.id.trim();
         _sourceId = candidate.book.sourceId;
         _detailUrl = candidate.book.detailUrl;
         _bookTitle = detailResult.detail.title;
@@ -5055,7 +4531,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
             previousDetailUrl: previousDetailUrl,
             preserveTags: true,
             nextBook: BookshelfBook(
-              bookId: widget.bookId,
+              bookId: _currentBookId,
               sourceId: candidate.book.sourceId,
               title:
                   _bookTitle.trim().isEmpty ? candidate.book.title : _bookTitle,
@@ -5156,6 +4632,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
 
   void _restoreSourceSnapshot(_ReaderSourceSnapshot snapshot) {
     setState(() {
+      _activeBookId = snapshot.bookId;
       _sourceId = snapshot.sourceId;
       _detailUrl = snapshot.detailUrl;
       _bookTitle = snapshot.bookTitle;
@@ -5272,9 +4749,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
                                         ? Icons.cloud_done_rounded
                                         : Icons.cloud_download_outlined,
                                 tooltip:
-                                    _isCurrentChapterCached
-                                        ? '已缓存'
-                                        : '缓存章节',
+                                    _isCurrentChapterCached ? '已缓存' : '缓存章节',
                                 onPressed: _openChapterCache,
                                 colors: colors,
                               ),
@@ -5287,9 +4762,8 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
                                 onPressed:
                                     _isSwitchSourceLoading
                                         ? null
-                                        : () => unawaited(
-                                          _showSwitchSourceSheet(),
-                                        ),
+                                        : () =>
+                                            unawaited(_showSwitchSourceSheet()),
                                 loading: _isSwitchSourceLoading,
                                 colors: colors,
                               ),
@@ -5419,8 +4893,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
                                   label: '设置',
                                   onTap:
                                       () => _showSettingsSheet(
-                                        initialTab:
-                                            _ReaderSettingsTab.reading,
+                                        initialTab: _ReaderSettingsTab.reading,
                                       ),
                                   colors: colors,
                                 ),
@@ -5616,7 +5089,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
         _autoSwitchSourceOnFailureEnabled = false;
       }
 
-      final progress = await _preferencesService.loadProgress(widget.bookId);
+      final progress = await _preferencesService.loadProgress(_currentBookId);
       _bootstrapProgress = progress;
 
       if (progress != null) {
@@ -5643,7 +5116,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
 
       final detailResult = await detailProvider.loadDetail(
         sourceId: _sourceId!,
-        bookId: widget.bookId,
+        bookId: _currentBookId,
         detailUrl: _detailUrl!,
         fallbackTitle: _chapterTitle,
       );
@@ -5964,26 +5437,25 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
       return const <_BookmarkGroup>[];
     }
 
-    final sorted = [...bookmarks]
-      ..sort((a, b) {
-        final indexCompare = a.chapterIndex.compareTo(b.chapterIndex);
-        if (indexCompare != 0) {
-          return indexCompare;
-        }
-        final offsetCompare = a.startOffset.compareTo(b.startOffset);
-        if (offsetCompare != 0) {
-          return offsetCompare;
-        }
-        return b.createdAt.compareTo(a.createdAt);
-      });
+    final sorted = [...bookmarks]..sort((a, b) {
+      final indexCompare = a.chapterIndex.compareTo(b.chapterIndex);
+      if (indexCompare != 0) {
+        return indexCompare;
+      }
+      final offsetCompare = a.startOffset.compareTo(b.startOffset);
+      if (offsetCompare != 0) {
+        return offsetCompare;
+      }
+      return b.createdAt.compareTo(a.createdAt);
+    });
 
     final groups = <_BookmarkGroup>[];
     for (final bookmark in sorted) {
       final title = _resolveBookmarkChapterTitle(bookmark);
-      final existing = groups.isNotEmpty &&
-              groups.last.chapterIndex == bookmark.chapterIndex
-          ? groups.last
-          : null;
+      final existing =
+          groups.isNotEmpty && groups.last.chapterIndex == bookmark.chapterIndex
+              ? groups.last
+              : null;
       if (existing != null) {
         existing.bookmarks.add(bookmark);
       } else {
@@ -6034,14 +5506,15 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
   }
 
   Future<void> _refreshChapterBookmarks() async {
-    final bookId = widget.bookId.trim();
+    final bookId = _currentBookId;
     if (bookId.isEmpty) {
       return;
     }
     try {
       final all = await _bookmarkRepository.listBookmarks(bookId);
-      final filtered =
-          all.where(_isBookmarkInCurrentChapter).toList(growable: false);
+      final filtered = all
+          .where(_isBookmarkInCurrentChapter)
+          .toList(growable: false);
       final ranges = _buildBookmarkRangesByParagraph(filtered);
       if (!mounted) {
         return;
@@ -6106,21 +5579,18 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
         continue;
       }
 
-      var startIndex = _findParagraphIndexByOffset(
-        starts,
-        paragraphs,
-        start,
-      );
+      var startIndex = _findParagraphIndexByOffset(starts, paragraphs, start);
       var endIndex = _findParagraphIndexByOffset(starts, paragraphs, end);
 
       for (var index = startIndex; index <= endIndex; index++) {
         final paragraphStart = starts[index];
         final paragraphLength = paragraphs[index].length;
         final paragraphEnd = paragraphStart + paragraphLength;
-        final localStart =
-            index == startIndex ? start - paragraphStart : 0;
+        final localStart = index == startIndex ? start - paragraphStart : 0;
         final localEnd =
-            index == endIndex ? min(end, paragraphEnd) - paragraphStart : paragraphLength;
+            index == endIndex
+                ? min(end, paragraphEnd) - paragraphStart
+                : paragraphLength;
         if (localEnd <= localStart) {
           continue;
         }
@@ -6166,7 +5636,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
     _pendingBookmarkId = null;
 
     try {
-      final items = await _bookmarkRepository.listBookmarks(widget.bookId);
+      final items = await _bookmarkRepository.listBookmarks(_currentBookId);
       Bookmark? target;
       for (final bookmark in items) {
         if (bookmark.id == pendingId) {
@@ -6536,7 +6006,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
       final contentResult = await contentProvider.loadChapterContent(
         sourceId: sourceId,
         chapterUrl: chapterUrl,
-        bookId: widget.bookId,
+        bookId: _currentBookId,
         chapterId: _chapterId,
         chapterIndex: resolvedIndex >= 0 ? resolvedIndex : null,
         chapterTitle: _chapterTitle,
@@ -6656,7 +6126,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
       } else {
         await _bookshelfService.upsert(
           BookshelfBook(
-            bookId: widget.bookId,
+            bookId: _currentBookId,
             sourceId: sourceId,
             title:
                 _bookTitle.isNotEmpty
@@ -6702,7 +6172,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
 
     final route =
         Uri(
-          path: '/book/${widget.bookId}',
+          path: '/book/$_currentBookId',
           queryParameters: {
             'sourceId': sourceId,
             'detailUrl': detailUrl,
@@ -6774,7 +6244,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
         await preloadProvider.loadChapterContent(
           sourceId: normalizedSourceId,
           chapterUrl: chapterUrl,
-          bookId: widget.bookId,
+          bookId: _currentBookId,
           chapterId: chapter.id,
           chapterIndex: index,
           chapterTitle: chapter.title,
@@ -6808,7 +6278,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
 
     await _preferencesService.saveProgress(
       ReadingProgress(
-        bookId: widget.bookId,
+        bookId: _currentBookId,
         sourceId: sourceId,
         detailUrl: normalizedDetailUrl,
         chapterId: _chapterId,
@@ -7187,7 +6657,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
         bookmarkErrorText = '';
       });
       try {
-        final items = await _bookmarkRepository.listBookmarks(widget.bookId);
+        final items = await _bookmarkRepository.listBookmarks(_currentBookId);
         bookmarks = items;
       } catch (error) {
         bookmarkErrorText = '书签加载失败，请稍后重试。';
@@ -7225,6 +6695,18 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
                   isSearching
                       ? _buildFullTextSearchEntries(keyword)
                       : const <_CatalogSearchEntry>[];
+              final tocSearchEntries =
+                  isSearching
+                      ? searchEntries
+                          .where((entry) => !entry.isContent)
+                          .toList(growable: false)
+                      : const <_CatalogSearchEntry>[];
+              final contentSearchEntries =
+                  isSearching
+                      ? searchEntries
+                          .where((entry) => entry.isContent)
+                          .toList(growable: false)
+                      : const <_CatalogSearchEntry>[];
 
               final keyboardInset = MediaQuery.viewInsetsOf(context).bottom;
               final safeBottom = _bottomSafeInset(context);
@@ -7249,12 +6731,6 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
                       ),
                       child: LayoutBuilder(
                         builder: (context, constraints) {
-                          final title = Text(
-                            '目录（${_chapters.length} 章）',
-                            style: textTheme.titleMedium?.copyWith(
-                              fontWeight: FontWeight.w700,
-                            ),
-                          );
                           final locationButton =
                               currentIndex == null
                                   ? null
@@ -7281,31 +6757,11 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
                                     ),
                                     label: Text('定位 ${currentIndex + 1}'),
                                   );
-
-                          if (locationButton == null) {
-                            return Align(
-                              alignment: Alignment.centerLeft,
-                              child: title,
-                            );
-                          }
-
-                          if (constraints.maxWidth <
-                              AppLayout.phoneSmallWidth) {
-                            return Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                title,
-                                const SizedBox(height: 8),
-                                locationButton,
-                              ],
-                            );
-                          }
-
-                          return Row(
-                            children: [
-                              Expanded(child: title),
-                              locationButton,
-                            ],
+                          return _buildReaderCatalogSummaryCard(
+                            context,
+                            chapterCount: _chapters.length,
+                            currentIndex: currentIndex,
+                            locateButton: locationButton,
                           );
                         },
                       ),
@@ -7322,85 +6778,82 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
                         onChanged: (_) => setModalState(() {}),
                         decoration: InputDecoration(
                           isDense: true,
-                          hintText: '搜索全文中的句子、章节、角色名',
-                          prefixIcon: const Icon(Icons.search, size: 20),
+                          filled: true,
+                          fillColor: colorScheme.surface,
+                          hintText: '搜索目录标题或当前章节正文',
+                          prefixIcon: Icon(
+                            Icons.search_rounded,
+                            size: 18,
+                            color: colorScheme.onSurfaceVariant,
+                          ),
+                          contentPadding: const EdgeInsets.symmetric(
+                            horizontal: 14,
+                            vertical: 12,
+                          ),
                           border: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(14),
+                            borderRadius: BorderRadius.circular(16),
+                          ),
+                          enabledBorder: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(16),
+                            borderSide: BorderSide(
+                              color: colorScheme.outlineVariant.withValues(
+                                alpha: 0.6,
+                              ),
+                            ),
+                          ),
+                          focusedBorder: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(16),
+                            borderSide: BorderSide(
+                              color: colorScheme.primary.withValues(alpha: 0.9),
+                              width: 1.2,
+                            ),
                           ),
                         ),
                       ),
                     ),
                     Divider(
                       height: 1,
-                      color: colorScheme.outlineVariant.withValues(
-                        alpha: 0.7,
-                      ),
+                      color: colorScheme.outlineVariant.withValues(alpha: 0.7),
                     ),
                     if (isSearching && searchEntries.isEmpty)
                       Expanded(
                         child: Center(
-                          child: Text(
-                            '未找到匹配内容',
-                            style: textTheme.bodyMedium?.copyWith(
-                              color: colorScheme.onSurfaceVariant,
+                          child: Padding(
+                            padding: const EdgeInsets.symmetric(horizontal: 24),
+                            child: Column(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                Text(
+                                  '未找到匹配内容',
+                                  style: textTheme.bodyMedium?.copyWith(
+                                    color: colorScheme.onSurfaceVariant,
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                ),
+                                const SizedBox(height: 8),
+                                Text(
+                                  '当前仅支持搜索目录标题与本章正文。',
+                                  textAlign: TextAlign.center,
+                                  style: textTheme.bodySmall?.copyWith(
+                                    color: colorScheme.onSurfaceVariant,
+                                  ),
+                                ),
+                              ],
                             ),
                           ),
                         ),
                       )
                     else if (isSearching)
                       Expanded(
-                        child: Scrollbar(
-                          controller: scrollController,
-                          thumbVisibility: true,
-                          child: ListView.separated(
-                            itemCount: searchEntries.length,
-                            separatorBuilder:
-                                (_, __) => Divider(
-                                  height: 1,
-                                  color: colorScheme.outlineVariant.withValues(
-                                    alpha: 0.35,
-                                  ),
-                                ),
-                            itemBuilder: (context, index) {
-                              final entry = searchEntries[index];
-
-                              return ListTile(
-                                leading: Icon(
-                                  entry.isContent
-                                      ? Icons.article_outlined
-                                      : Icons.list_alt_outlined,
-                                  color: colorScheme.primary,
-                                ),
-                                title: Text(
-                                  entry.title,
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
-                                  style: textTheme.bodyLarge?.copyWith(
-                                    fontWeight: FontWeight.w600,
-                                  ),
-                                ),
-                                subtitle: Text(
-                                  entry.subtitle,
-                                  maxLines: 2,
-                                  overflow: TextOverflow.ellipsis,
-                                  style: textTheme.bodySmall?.copyWith(
-                                    color: colorScheme.onSurfaceVariant,
-                                  ),
-                                ),
-                                trailing: Text(
-                                  entry.isContent ? '正文' : '目录',
-                                  style: textTheme.labelMedium?.copyWith(
-                                    color: colorScheme.primary,
-                                    fontWeight: FontWeight.w700,
-                                  ),
-                                ),
-                                onTap: () {
-                                  selectedScrollRatio = entry.scrollRatio;
-                                  Navigator.of(context).pop(entry.chapterIndex);
-                                },
-                              );
-                            },
-                          ),
+                        child: _buildCatalogSearchResultList(
+                          context,
+                          scrollController: scrollController,
+                          tocEntries: tocSearchEntries,
+                          contentEntries: contentSearchEntries,
+                          onEntryTap: (entry) {
+                            selectedScrollRatio = entry.scrollRatio;
+                            Navigator.of(context).pop(entry.chapterIndex);
+                          },
                         ),
                       )
                     else
@@ -7424,85 +6877,26 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
                                 child: child!,
                               );
                             },
-                            child: ListView.builder(
+                            child: ListView.separated(
                               controller: scrollController,
-                              itemExtent: itemExtent,
                               itemCount: _chapters.length,
+                              padding: const EdgeInsets.fromLTRB(
+                                12,
+                                10,
+                                12,
+                                12,
+                              ),
+                              separatorBuilder:
+                                  (_, __) => const SizedBox(height: 8),
                               itemBuilder: (context, index) {
                                 final chapter = _chapters[index];
                                 final selected = index == currentIndex;
-                                final showDivider = index < _chapters.length - 1;
-
-                                return Material(
-                                  color:
-                                      selected
-                                          ? colorScheme.secondaryContainer
-                                              .withValues(alpha: 0.5)
-                                          : Colors.transparent,
-                                  child: InkWell(
-                                    onTap: () =>
-                                        Navigator.of(context).pop(index),
-                                    child: Container(
-                                      padding: const EdgeInsets.symmetric(
-                                        horizontal: 16,
-                                      ),
-                                      decoration: BoxDecoration(
-                                        border:
-                                            showDivider
-                                                ? Border(
-                                                  bottom: BorderSide(
-                                                    color: colorScheme
-                                                        .outlineVariant
-                                                        .withValues(
-                                                          alpha: 0.35,
-                                                        ),
-                                                  ),
-                                                )
-                                                : null,
-                                      ),
-                                      child: Row(
-                                        children: [
-                                          Expanded(
-                                            child: Column(
-                                              mainAxisAlignment:
-                                                  MainAxisAlignment.center,
-                                              crossAxisAlignment:
-                                                  CrossAxisAlignment.start,
-                                              children: [
-                                                Text(
-                                                  chapter.title,
-                                                  maxLines: 1,
-                                                  overflow:
-                                                      TextOverflow.ellipsis,
-                                                  style: textTheme.bodyLarge
-                                                      ?.copyWith(
-                                                        fontWeight:
-                                                            selected
-                                                                ? FontWeight
-                                                                    .w700
-                                                                : FontWeight
-                                                                    .w500,
-                                                        color:
-                                                            selected
-                                                                ? colorScheme
-                                                                    .primary
-                                                                : colorScheme
-                                                                    .onSurface,
-                                                      ),
-                                                ),
-                                              ],
-                                            ),
-                                          ),
-                                          if (selected)
-                                            Icon(
-                                              Icons.play_circle_fill_rounded,
-                                              size: 20,
-                                              color: colorScheme.primary,
-                                            ),
-                                        ],
-                                      ),
-                                    ),
-                                  ),
+                                return _buildReaderCatalogChapterTile(
+                                  context,
+                                  chapter: chapter,
+                                  index: index,
+                                  selected: selected,
+                                  onTap: () => Navigator.of(context).pop(index),
                                 );
                               },
                             ),
@@ -7515,9 +6909,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
 
               Widget buildBookmarkTab() {
                 final title =
-                    isBookmarkLoading
-                        ? '书签'
-                        : '书签（${bookmarks.length}）';
+                    isBookmarkLoading ? '书签' : '书签（${bookmarks.length}）';
 
                 return Padding(
                   padding: EdgeInsets.fromLTRB(
@@ -7565,8 +6957,8 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
                               ),
                             ),
                             TextButton(
-                              onPressed: () =>
-                                  unawaited(loadBookmarks(setModalState)),
+                              onPressed:
+                                  () => unawaited(loadBookmarks(setModalState)),
                               child: const Text('重试'),
                             ),
                           ],
@@ -7585,8 +6977,8 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
                         Expanded(
                           child: ListView.separated(
                             itemCount: bookmarkGroups.length,
-                            separatorBuilder: (_, __) =>
-                                const SizedBox(height: 12),
+                            separatorBuilder:
+                                (_, __) => const SizedBox(height: 12),
                             itemBuilder: (context, index) {
                               final group = bookmarkGroups[index];
                               return _BookmarkGroupSection(
@@ -7666,20 +7058,41 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
                             sheetHorizontal,
                             4,
                           ),
-                          child: TabBar(
-                            labelColor: colorScheme.primary,
-                            unselectedLabelColor: colorScheme.onSurfaceVariant,
-                            indicatorColor: colorScheme.primary,
-                            tabs: [
-                              buildCountTab(
-                                label: '目录',
-                                countText: _chapters.length.toString(),
+                          child: DecoratedBox(
+                            decoration: BoxDecoration(
+                              color: colorScheme.surfaceContainerLow,
+                              borderRadius: BorderRadius.circular(18),
+                              border: Border.all(
+                                color: colorScheme.outlineVariant.withValues(
+                                  alpha: 0.28,
+                                ),
                               ),
-                              buildCountTab(
-                                label: '书签',
-                                countText: bookmarkCountLabel,
+                            ),
+                            child: Padding(
+                              padding: const EdgeInsets.all(4),
+                              child: TabBar(
+                                labelColor: colorScheme.primary,
+                                unselectedLabelColor:
+                                    colorScheme.onSurfaceVariant,
+                                dividerColor: Colors.transparent,
+                                indicatorSize: TabBarIndicatorSize.tab,
+                                indicator: BoxDecoration(
+                                  color: colorScheme.primaryContainer,
+                                  borderRadius: BorderRadius.circular(14),
+                                ),
+                                splashBorderRadius: BorderRadius.circular(14),
+                                tabs: [
+                                  buildCountTab(
+                                    label: '目录',
+                                    countText: _chapters.length.toString(),
+                                  ),
+                                  buildCountTab(
+                                    label: '书签',
+                                    countText: bookmarkCountLabel,
+                                  ),
+                                ],
                               ),
-                            ],
+                            ),
                           ),
                         ),
                         Divider(
@@ -7690,10 +7103,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
                         ),
                         Expanded(
                           child: TabBarView(
-                            children: [
-                              buildCatalogTab(),
-                              buildBookmarkTab(),
-                            ],
+                            children: [buildCatalogTab(), buildBookmarkTab()],
                           ),
                         ),
                       ],
@@ -7800,6 +7210,404 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
     }
 
     return entries;
+  }
+
+  Widget _buildCatalogSearchResultList(
+    BuildContext context, {
+    required ScrollController scrollController,
+    required List<_CatalogSearchEntry> tocEntries,
+    required List<_CatalogSearchEntry> contentEntries,
+    required ValueChanged<_CatalogSearchEntry> onEntryTap,
+  }) {
+    final children = <Widget>[];
+
+    void appendSection(String title, List<_CatalogSearchEntry> entries) {
+      if (entries.isEmpty) {
+        return;
+      }
+      if (children.isNotEmpty) {
+        children.add(const SizedBox(height: 8));
+      }
+      children.add(
+        _buildCatalogSearchSectionHeader(
+          context,
+          title: title,
+          count: entries.length,
+        ),
+      );
+      children.add(const SizedBox(height: 6));
+      for (final entry in entries) {
+        children.add(
+          _buildCatalogSearchEntryTile(
+            context,
+            entry: entry,
+            onTap: () => onEntryTap(entry),
+          ),
+        );
+        children.add(const SizedBox(height: 8));
+      }
+    }
+
+    appendSection('目录匹配', tocEntries);
+    appendSection('当前章节正文', contentEntries);
+
+    return Scrollbar(
+      controller: scrollController,
+      thumbVisibility: true,
+      child: ListView(
+        controller: scrollController,
+        padding: const EdgeInsets.fromLTRB(12, 10, 12, 12),
+        children: children,
+      ),
+    );
+  }
+
+  Widget _buildReaderCatalogSummaryCard(
+    BuildContext context, {
+    required int chapterCount,
+    required int? currentIndex,
+    required Widget? locateButton,
+  }) {
+    final colorScheme = Theme.of(context).colorScheme;
+    final textTheme = Theme.of(context).textTheme;
+    final currentChapterTitle =
+        currentIndex != null &&
+                currentIndex >= 0 &&
+                currentIndex < _chapters.length
+            ? _chapters[currentIndex].title
+            : '尚未定位到章节';
+
+    return Container(
+      padding: const EdgeInsets.fromLTRB(14, 14, 14, 12),
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [
+            colorScheme.surfaceContainerHigh,
+            colorScheme.surfaceContainerLow,
+          ],
+        ),
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(
+          color: colorScheme.outlineVariant.withValues(alpha: 0.25),
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      '阅读导航',
+                      style: textTheme.labelLarge?.copyWith(
+                        color: colorScheme.primary,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      '目录 $chapterCount 章',
+                      style: textTheme.titleMedium?.copyWith(
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      currentIndex == null
+                          ? '可从目录或书签中快速定位'
+                          : '当前阅读 · 第 ${currentIndex + 1} 章',
+                      style: textTheme.bodySmall?.copyWith(
+                        color: colorScheme.onSurfaceVariant,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              if (locateButton != null) locateButton,
+            ],
+          ),
+          const SizedBox(height: 12),
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.fromLTRB(12, 10, 12, 10),
+            decoration: BoxDecoration(
+              color: colorScheme.surface.withValues(alpha: 0.92),
+              borderRadius: BorderRadius.circular(16),
+            ),
+            child: Row(
+              children: [
+                Container(
+                  width: 28,
+                  height: 28,
+                  decoration: BoxDecoration(
+                    color: colorScheme.primaryContainer,
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: Icon(
+                    Icons.menu_book_rounded,
+                    size: 16,
+                    color: colorScheme.onPrimaryContainer,
+                  ),
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Text(
+                    currentChapterTitle,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: textTheme.bodyMedium?.copyWith(
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ),
+                if (currentIndex != null) ...[
+                  const SizedBox(width: 10),
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 8,
+                      vertical: 4,
+                    ),
+                    decoration: BoxDecoration(
+                      color: colorScheme.primaryContainer,
+                      borderRadius: BorderRadius.circular(999),
+                    ),
+                    child: Text(
+                      '当前',
+                      style: textTheme.labelSmall?.copyWith(
+                        color: colorScheme.onPrimaryContainer,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                  ),
+                ],
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildReaderCatalogChapterTile(
+    BuildContext context, {
+    required Chapter chapter,
+    required int index,
+    required bool selected,
+    required VoidCallback onTap,
+  }) {
+    final colorScheme = Theme.of(context).colorScheme;
+    final textTheme = Theme.of(context).textTheme;
+
+    return Material(
+      color:
+          selected
+              ? colorScheme.primaryContainer.withValues(alpha: 0.5)
+              : colorScheme.surface.withValues(alpha: 0.72),
+      borderRadius: BorderRadius.circular(18),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(18),
+        onTap: onTap,
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(12, 11, 12, 11),
+          child: Row(
+            children: [
+              Container(
+                width: 36,
+                height: 36,
+                alignment: Alignment.center,
+                decoration: BoxDecoration(
+                  color:
+                      selected
+                          ? colorScheme.primary
+                          : colorScheme.surfaceContainerHigh,
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Text(
+                  '${index + 1}',
+                  style: textTheme.labelMedium?.copyWith(
+                    fontWeight: FontWeight.w800,
+                    color:
+                        selected
+                            ? colorScheme.onPrimary
+                            : colorScheme.onSurfaceVariant,
+                  ),
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    if (selected)
+                      Padding(
+                        padding: const EdgeInsets.only(bottom: 3),
+                        child: Text(
+                          '当前阅读',
+                          style: textTheme.labelSmall?.copyWith(
+                            color: colorScheme.primary,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                      ),
+                    Text(
+                      chapter.title,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: textTheme.bodyLarge?.copyWith(
+                        fontWeight:
+                            selected ? FontWeight.w700 : FontWeight.w500,
+                        color:
+                            selected
+                                ? colorScheme.primary
+                                : colorScheme.onSurface,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 10),
+              Icon(
+                selected
+                    ? Icons.play_circle_fill_rounded
+                    : Icons.chevron_right_rounded,
+                size: selected ? 20 : 18,
+                color:
+                    selected
+                        ? colorScheme.primary
+                        : colorScheme.onSurfaceVariant,
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildCatalogSearchSectionHeader(
+    BuildContext context, {
+    required String title,
+    required int count,
+  }) {
+    final colorScheme = Theme.of(context).colorScheme;
+    final textTheme = Theme.of(context).textTheme;
+
+    return Row(
+      children: [
+        Text(
+          title,
+          style: textTheme.labelLarge?.copyWith(
+            fontWeight: FontWeight.w700,
+            color: colorScheme.primary,
+          ),
+        ),
+        const SizedBox(width: 8),
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+          decoration: BoxDecoration(
+            color: colorScheme.surfaceContainerHigh,
+            borderRadius: BorderRadius.circular(999),
+          ),
+          child: Text(
+            '$count',
+            style: textTheme.labelSmall?.copyWith(
+              color: colorScheme.onSurfaceVariant,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildCatalogSearchEntryTile(
+    BuildContext context, {
+    required _CatalogSearchEntry entry,
+    required VoidCallback onTap,
+  }) {
+    final colorScheme = Theme.of(context).colorScheme;
+    final textTheme = Theme.of(context).textTheme;
+    final accentColor =
+        entry.isContent ? colorScheme.tertiary : colorScheme.primary;
+
+    return Material(
+      color:
+          entry.isContent
+              ? colorScheme.tertiaryContainer.withValues(alpha: 0.32)
+              : colorScheme.surfaceContainerLow,
+      borderRadius: BorderRadius.circular(16),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(16),
+        onTap: onTap,
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(12, 10, 12, 10),
+          child: Row(
+            children: [
+              Container(
+                width: 34,
+                height: 34,
+                decoration: BoxDecoration(
+                  color: accentColor.withValues(alpha: 0.12),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Icon(
+                  entry.isContent
+                      ? Icons.article_outlined
+                      : Icons.list_alt_outlined,
+                  size: 18,
+                  color: accentColor,
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      entry.title,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: textTheme.bodyLarge?.copyWith(
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                    const SizedBox(height: 3),
+                    Text(
+                      entry.subtitle,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: textTheme.bodySmall?.copyWith(
+                        color: colorScheme.onSurfaceVariant,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 10),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                decoration: BoxDecoration(
+                  color: accentColor.withValues(alpha: 0.1),
+                  borderRadius: BorderRadius.circular(999),
+                ),
+                child: Text(
+                  entry.isContent ? '正文' : '目录',
+                  style: textTheme.labelSmall?.copyWith(
+                    color: accentColor,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
   }
 
   bool _containsKeyword(String text, String keyword, String normalizedKeyword) {
@@ -7962,7 +7770,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
     }
 
     if (detailUrl.isEmpty || !_isLocalScheme(detailUrl)) {
-      _detailUrl = _buildLocalDetailUrl(widget.bookId);
+      _detailUrl = _buildLocalDetailUrl(_currentBookId);
     }
 
     final normalizedChapterId = _chapterId.trim();
@@ -7981,7 +7789,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
     if (_isLocalScheme(normalized)) {
       return normalized;
     }
-    final bookId = widget.bookId.trim();
+    final bookId = _currentBookId;
     if (bookId.isEmpty) {
       return normalized;
     }
@@ -8041,9 +7849,19 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
 
   bool get _canSwitchSource => _contentCapabilities.canSwitchSource;
   bool get _canCacheChapter => _contentCapabilities.canCacheChapter;
+
+  String get _currentBookId {
+    final normalized = _activeBookId.trim();
+    if (normalized.isNotEmpty) {
+      return normalized;
+    }
+    return widget.bookId.trim();
+  }
+
   bool get _isLocalSource =>
       _sourceId?.trim() == LocalBookImportService.localBookSourceId;
-  bool get _isLocalContent => _isLocalSource || _contentCapabilities.canReindexLocal;
+  bool get _isLocalContent =>
+      _isLocalSource || _contentCapabilities.canReindexLocal;
 
   ContentProvider _requireContentProvider({
     required String? sourceId,
@@ -8087,7 +7905,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
 
   void _recordReaderFailure({required String message, ErrorCode? errorCode}) {
     _readerErrorCenterService.addFailure(
-      bookId: widget.bookId,
+      bookId: _currentBookId,
       chapterId: _chapterId,
       chapterTitle: _chapterTitle ?? '',
       message: message,
@@ -8211,9 +8029,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
           );
         }
         _customBackgroundImages = nextCustoms;
-        unawaited(
-          _preferencesService.saveCustomBackgroundImages(nextCustoms),
-        );
+        unawaited(_preferencesService.saveCustomBackgroundImages(nextCustoms));
       }
     }
     final readerModalTheme = _readerModalTheme();
@@ -8259,6 +8075,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
                 });
                 updateCustomBackgrounds(nextCustoms);
               }
+
               void previewDraftSettings() {
                 if (!mounted) {
                   return;
@@ -8284,9 +8101,10 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
                   return;
                 }
 
-                final nextCustoms = List<String>.from(_customBackgroundImages)
-                  ..removeWhere((entry) => entry == encoded)
-                  ..add(encoded);
+                final nextCustoms =
+                    List<String>.from(_customBackgroundImages)
+                      ..removeWhere((entry) => entry == encoded)
+                      ..add(encoded);
                 if (nextCustoms.length > _kMaxCustomBackgrounds) {
                   nextCustoms.removeRange(
                     0,
@@ -8307,9 +8125,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
                   return;
                 }
                 setModalState(() {
-                  draft = draft.copyWith(
-                    backgroundImageBase64: normalized,
-                  );
+                  draft = draft.copyWith(backgroundImageBase64: normalized);
                 });
               }
 
@@ -8328,9 +8144,8 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
                     active.isNotEmpty &&
                     !isActivePreset &&
                     _customBackgroundImages.contains(active)) {
-                  final nextCustoms =
-                      List<String>.from(_customBackgroundImages)
-                        ..removeWhere((entry) => entry == active);
+                  final nextCustoms = List<String>.from(_customBackgroundImages)
+                    ..removeWhere((entry) => entry == active);
                   updateCustomBackgroundsInSheet(nextCustoms);
                 }
               }
@@ -9477,9 +9292,11 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
                 );
               }
               final customBackgroundTiles = <Widget>[];
-              for (var index = 0;
-                  index < customBackgrounds.length;
-                  index += 1) {
+              for (
+                var index = 0;
+                index < customBackgrounds.length;
+                index += 1
+              ) {
                 final base64 = customBackgrounds[index];
                 final previewBytes = _tryDecodeBase64(base64);
                 final isSelected =
@@ -9926,8 +9743,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
                                               children: [
                                                 _buildBackgroundTile(
                                                   label: '无背景',
-                                                  selected:
-                                                      !hasBackgroundImage,
+                                                  selected: !hasBackgroundImage,
                                                   icon:
                                                       Icons.hide_image_outlined,
                                                   onTap: () {
@@ -11348,104 +11164,9 @@ class _SwitchSourceScope {
   final SearchContentMode contentMode;
 }
 
-class _ReaderSourceSwitchCandidate {
-  const _ReaderSourceSwitchCandidate({
-    required this.book,
-    required this.sourceName,
-    required this.baseScore,
-    required this.score,
-    required this.hitCount,
-    required this.sourceScore,
-    required this.bookScore,
-    required this.latestChapterLabel,
-    required this.latestChapterNumber,
-    required this.isPotentiallyOutdated,
-  });
-
-  final Book book;
-  final String sourceName;
-  final int baseScore;
-  final int score;
-  final int hitCount;
-  final int sourceScore;
-  final int bookScore;
-  final String latestChapterLabel;
-  final int? latestChapterNumber;
-  final bool isPotentiallyOutdated;
-
-  _ReaderSourceSwitchCandidate copyWith({
-    int? score,
-    int? sourceScore,
-    int? bookScore,
-  }) {
-    return _ReaderSourceSwitchCandidate(
-      book: book,
-      sourceName: sourceName,
-      baseScore: baseScore,
-      score: score ?? this.score,
-      hitCount: hitCount,
-      sourceScore: sourceScore ?? this.sourceScore,
-      bookScore: bookScore ?? this.bookScore,
-      latestChapterLabel: latestChapterLabel,
-      latestChapterNumber: latestChapterNumber,
-      isPotentiallyOutdated: isPotentiallyOutdated,
-    );
-  }
-}
-
-class _ReaderSwitchSourceLookupState {
-  const _ReaderSwitchSourceLookupState({
-    required this.isLoading,
-    required this.sourceCount,
-    required this.processedSourceCount,
-    required this.candidates,
-    required this.errorText,
-    required this.scoreRankingEnabled,
-  });
-
-  const _ReaderSwitchSourceLookupState.loading({
-    required int sourceCount,
-    required bool scoreRankingEnabled,
-  }) : this(
-         isLoading: true,
-         sourceCount: sourceCount,
-         processedSourceCount: 0,
-         candidates: const <_ReaderSourceSwitchCandidate>[],
-         errorText: null,
-         scoreRankingEnabled: scoreRankingEnabled,
-       );
-
-  final bool isLoading;
-  final int sourceCount;
-  final int processedSourceCount;
-  final List<_ReaderSourceSwitchCandidate> candidates;
-  final String? errorText;
-  final bool scoreRankingEnabled;
-
-  _ReaderSwitchSourceLookupState copyWith({
-    bool? isLoading,
-    int? sourceCount,
-    int? processedSourceCount,
-    List<_ReaderSourceSwitchCandidate>? candidates,
-    String? errorText,
-    bool clearErrorText = false,
-    bool? scoreRankingEnabled,
-  }) {
-    return _ReaderSwitchSourceLookupState(
-      isLoading: isLoading ?? this.isLoading,
-      sourceCount: sourceCount ?? this.sourceCount,
-      processedSourceCount: processedSourceCount ?? this.processedSourceCount,
-      candidates: candidates ?? this.candidates,
-      errorText: clearErrorText ? null : (errorText ?? this.errorText),
-      scoreRankingEnabled: scoreRankingEnabled ?? this.scoreRankingEnabled,
-    );
-  }
-}
-
-enum _ReaderSwitchSourceScoreAction { upvote, downvote, reset }
-
 class _ReaderSourceSnapshot {
   const _ReaderSourceSnapshot({
+    required this.bookId,
     required this.sourceId,
     required this.detailUrl,
     required this.bookTitle,
@@ -11465,6 +11186,7 @@ class _ReaderSourceSnapshot {
     required this.scrollRatio,
   });
 
+  final String bookId;
   final String? sourceId;
   final String? detailUrl;
   final String bookTitle;
@@ -11581,11 +11303,12 @@ class _WavyUnderlinePainter extends CustomPainter {
       return;
     }
 
-    final paint = Paint()
-      ..color = color
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = thickness
-      ..strokeCap = StrokeCap.round;
+    final paint =
+        Paint()
+          ..color = color
+          ..style = PaintingStyle.stroke
+          ..strokeWidth = thickness
+          ..strokeCap = StrokeCap.round;
 
     for (final range in ranges) {
       final boxes = textPainter.getBoxesForSelection(

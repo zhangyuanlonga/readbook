@@ -7,10 +7,7 @@ class AppUpdateDialog {
   const AppUpdateDialog._();
 
   static Uri? resolveUpdateUrl(AppUpdateRelease release) {
-    final candidate =
-        (release.storeUrl ?? '').trim().isNotEmpty
-            ? release.storeUrl!
-            : (release.downloadUrl ?? '').trim();
+    final candidate = (release.downloadUrl ?? '').trim();
     if (candidate.isEmpty) {
       return null;
     }
@@ -22,9 +19,9 @@ class AppUpdateDialog {
     if (launched || !context.mounted) {
       return;
     }
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('打开更新链接失败。')),
-    );
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(const SnackBar(content: Text('打开更新链接失败。')));
   }
 
   static Future<void> showUpdateDialog(
@@ -58,29 +55,32 @@ class AppUpdateDialog {
                   const SizedBox(height: 6),
                   Text(
                     '本次更新为强制更新，请尽快升级。',
-                    style: Theme.of(dialogContext).textTheme.bodySmall?.copyWith(
-                          color: Theme.of(dialogContext).colorScheme.error,
-                        ),
+                    style: Theme.of(
+                      dialogContext,
+                    ).textTheme.bodySmall?.copyWith(
+                      color: Theme.of(dialogContext).colorScheme.error,
+                    ),
                   ),
                 ],
                 if (changelog != null && changelog.isNotEmpty) ...[
                   const SizedBox(height: 10),
                   Text(
                     changelog,
-                    style: Theme.of(dialogContext).textTheme.bodySmall?.copyWith(
-                          height: 1.4,
-                        ),
+                    style: Theme.of(
+                      dialogContext,
+                    ).textTheme.bodySmall?.copyWith(height: 1.4),
                   ),
                 ],
                 if (url == null) ...[
                   const SizedBox(height: 10),
                   Text(
                     '暂无可用更新链接，请稍后再试。',
-                    style: Theme.of(dialogContext).textTheme.bodySmall?.copyWith(
-                          color: Theme.of(dialogContext)
-                              .colorScheme
-                              .onSurfaceVariant,
-                        ),
+                    style: Theme.of(
+                      dialogContext,
+                    ).textTheme.bodySmall?.copyWith(
+                      color:
+                          Theme.of(dialogContext).colorScheme.onSurfaceVariant,
+                    ),
                   ),
                 ],
               ],

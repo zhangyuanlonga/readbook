@@ -1,21 +1,19 @@
 class AppUpdateRelease {
   const AppUpdateRelease({
+    required this.id,
+    required this.appName,
     required this.versionName,
     required this.versionCode,
-    required this.minSupportedCode,
     required this.forceUpdate,
-    required this.rolloutPercent,
-    required this.storeUrl,
     required this.downloadUrl,
     required this.changelog,
   });
 
+  final String? id;
+  final String? appName;
   final String? versionName;
   final int? versionCode;
-  final int? minSupportedCode;
   final bool? forceUpdate;
-  final int? rolloutPercent;
-  final String? storeUrl;
   final String? downloadUrl;
   final String? changelog;
 
@@ -60,12 +58,11 @@ class AppUpdateRelease {
     }
 
     return AppUpdateRelease(
+      id: readString('id'),
+      appName: readString('app_name'),
       versionName: readString('version_name'),
       versionCode: readInt('version_code'),
-      minSupportedCode: readInt('min_supported_code'),
       forceUpdate: readBool('force_update'),
-      rolloutPercent: readInt('rollout_percent'),
-      storeUrl: readString('store_url'),
       downloadUrl: readString('download_url'),
       changelog: readString('changelog'),
     );

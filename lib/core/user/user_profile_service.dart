@@ -1,7 +1,6 @@
 import '../errors/app_exception.dart';
 import '../errors/error_codes.dart';
 import '../errors/error_stage.dart';
-import '../logging/app_logger.dart';
 import '../network/api_client.dart';
 import '../network/api_config.dart';
 import 'user_profile.dart';
@@ -10,11 +9,11 @@ class UserProfileService {
   UserProfileService({ApiClient? client, String? baseUrl})
     : _baseUrl = (baseUrl ?? AppApiConfig.baseUrl).trim(),
       _client =
-          client ?? ApiClient(baseUrl: (baseUrl ?? AppApiConfig.baseUrl).trim());
+          client ??
+          ApiClient(baseUrl: (baseUrl ?? AppApiConfig.baseUrl).trim());
 
   final ApiClient _client;
   final String _baseUrl;
-  final AppLogger _logger = AppLogger.instance;
 
   Future<UserProfile> fetchMe() async {
     _ensureBaseUrl();
@@ -25,7 +24,6 @@ class UserProfileService {
       stage: ErrorStage.unknown,
       decoder: _decodeMap,
     );
-    _logger.info('User profile response', context: data);
     return UserProfile.fromJson(data);
   }
 

@@ -122,16 +122,7 @@ class _DiscoverPageState extends State<DiscoverPage> {
     final horizontal = AppSpacing.pageHorizontal(context);
 
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('发现'),
-        actions: <Widget>[
-          IconButton(
-            onPressed: _refreshCurrentView,
-            tooltip: '刷新',
-            icon: const Icon(Icons.refresh_rounded),
-          ),
-        ],
-      ),
+      appBar: AppBar(title: const Text('发现')),
       body: DecoratedBox(
         decoration: BoxDecoration(
           gradient: LinearGradient(

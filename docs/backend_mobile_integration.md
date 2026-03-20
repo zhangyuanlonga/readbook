@@ -1,58 +1,108 @@
 # Backend Mobile Integration Guide
 
-This document captures the current backend integration conventions in the app, using the Announcement module as the canonical reference, plus the new device/reader/auth/analytics flow.
+This document records the backend contract that the Flutter client currently follows after the March 2026 mobile API migration.
 
-## 0. Shared API Conventions (Reference: Announcement)
+## Development Check
 
-The app uses a shared `ApiClient` wrapper with a standard response envelope and error mapping.
+Run a quick self-check after finishing integration work:
 
-### Response Envelope (Required)
-
-All backend responses are expected to be shaped as:
-
-##  开发检查
- 每次执行完计划或者进度则需要进行自检
- ```bash
+```bash
 flutter analyze
 flutter test
 ```
 
+## 1. Shared Conventions
+
+### Unified Response Envelope
+
+All backend responses use:
 
 ```json
 {
   "code": "OK",
-  "message": "",
-  "data": { }
+  "message": "success",
+  "data": {}
 }
 ```
 
 - `code == "OK"` means success
-- Non-OK codes are mapped into `AppException`
-- `data` is decoded by the caller
+- non-OK responses are converted into `ApiException` / `AppException`
+- callers only decode the unwrapped `data`
 
-### Base URL
-
-- From `APPREAD_API_BASE_URL`
-- Default: `http://localhost:8080`
-
-### Caching
-
-- GET requests can enable cache with TTL (see Announcement service)
-
-### References
+Reference:
 
 - `ApiClient`: `/Users/zhangyuanlong/storage/FlutterProject/flutter_appread/lib/core/network/api_client.dart`
-- `BaseUrl`: `/Users/zhangyuanlong/storage/FlutterProject/flutter_appread/lib/core/network/api_config.dart`
-- `AnnouncementService`: `/Users/zhangyuanlong/storage/FlutterProject/flutter_appread/lib/features/announcement/application/announcement_service.dart`
 
+### Authorization
 
-## 1. Device Heartbeat (Anonymous OK)
+All authenticated APIs use:
 
-Call on cold start and app foreground.
+```http
+Authorization: Bearer <access_token>
+```
 
-### Request
+References:
+
+- `AuthSessionStore`: `/Users/zhangyuanlong/storage/FlutterProject/flutter_appread/lib/core/auth/auth_session_store.dart`
+- `AuthTokenRefresherImpl`: `/Users/zhangyuanlong/storage/FlutterProject/flutter_appread/lib/core/auth/auth_token_refresher_impl.dart`
+
+### Time Format
+
+All API time fields use UTC RFC3339, for example:
+
+```text
+2027-03-15T00:00:00Z
+```
+
+Reference:
+
+- `api_time.dart`: `/Users/zhangyuanlong/storage/FlutterProject/flutter_appread/lib/core/network/api_time.dart`
+
+### Local Persistence
+
+The client persists these values:
+
+- `install_id`
+- `access_token`
+- `refresh_token`
+- `user_id`
+
+References:
+
+- `DeviceIdentityService`: `/Users/zhangyuanlong/storage/FlutterProject/flutter_appread/lib/core/device/device_identity_service.dart`
+- `AuthSessionStore`: `/Users/zhangyuanlong/storage/FlutterProject/flutter_appread/lib/core/auth/auth_session_store.dart`
+
+## 2. Recommended Access Order
+
+Recommended mobile integration order:
+
+1. Cold start: `POST /v1/devices/heartbeat`
+2. Login or register: `POST /v1/auth/login` / `POST /v1/auth/register`
+3. After auth success: persist tokens, then trigger `devices/heartbeat` and `analytics/visit`
+4. Fetch current user when entering the account page: `GET /v1/users/me`
+5. Pull announcements: `GET /v1/announcements` or `GET /v1/announcements/latest`
+6. Check updates: `POST /v1/app-updates/check`
+7. Report analytics on startup and resume: `POST /v1/analytics/visit`
+
+Current app entry points:
+
+- startup lifecycle: `/Users/zhangyuanlong/storage/FlutterProject/flutter_appread/lib/app/app.dart`
+- auth flow: `/Users/zhangyuanlong/storage/FlutterProject/flutter_appread/lib/core/auth/auth_service.dart`
+- auth page: `/Users/zhangyuanlong/storage/FlutterProject/flutter_appread/lib/features/auth/presentation/auth_page.dart`
+- profile page: `/Users/zhangyuanlong/storage/FlutterProject/flutter_appread/lib/features/auth/presentation/user_profile_page.dart`
+
+Note:
+
+- the old device-binding flow is no longer part of the mobile client
+- login and register no longer send `install_id`
+
+## 3. Endpoint Mapping
+
+### Device Heartbeat
 
 `POST /v1/devices/heartbeat`
+
+Request body:
 
 ```json
 {
@@ -66,275 +116,217 @@ Call on cold start and app foreground.
 }
 ```
 
-### Notes
+Client notes:
 
-- Recommended cadence: cold start + app foreground
-- If device info unchanged, backend may only update `last_seen_at`
-- Response includes `device` object (optional cache)
+- call on cold start
+- call again on app foreground
+- the client keeps `install_id` stable per installation
 
-### App Implementation
+References:
 
-- Device identity: `/Users/zhangyuanlong/storage/FlutterProject/flutter_appread/lib/core/device/device_identity_service.dart`
-- Heartbeat service: `/Users/zhangyuanlong/storage/FlutterProject/flutter_appread/lib/core/device/device_heartbeat_service.dart`
-- Lifecycle hook: `/Users/zhangyuanlong/storage/FlutterProject/flutter_appread/lib/app/app.dart`
+- `DeviceIdentityService`: `/Users/zhangyuanlong/storage/FlutterProject/flutter_appread/lib/core/device/device_identity_service.dart`
+- `DeviceHeartbeatService`: `/Users/zhangyuanlong/storage/FlutterProject/flutter_appread/lib/core/device/device_heartbeat_service.dart`
 
-
-## 2. Reader Register (Anonymous OK)
-
-Used when reader_id is needed (uploading sources, reading profile).
-
-### Request
-
-`POST /v1/readers/register`
-
-```json
-{
-  "install_id": "uuid-per-install"
-}
-```
-
-### Response
-
-- Returns `reader` (the `is_vip` field is reader-level and ignored; account VIP should use `GET /v1/users/me`)
-
-### Compatibility
-
-- `readers/register` no longer accepts device fields
-
-### App Implementation
-
-- Reader identity: `/Users/zhangyuanlong/storage/FlutterProject/flutter_appread/lib/core/reader/reader_identity_service.dart`
-- Cached keys: `reader.id` (SharedPreferences)
-
-
-## 3. Login / Register
-
-### Request
+### Login
 
 `POST /v1/auth/login`
 
+Request body:
+
 ```json
 {
   "username": "user001",
-  "password": "passw0rd",
-  "install_id": "uuid-per-install"
+  "password": "passw0rd"
 }
 ```
+
+### Register
 
 `POST /v1/auth/register`
 
+Request body:
+
 ```json
 {
   "username": "user001",
-  "password": "passw0rd",
-  "install_id": "uuid-per-install"
+  "password": "passw0rd"
 }
 ```
 
-### Response
+Shared response fields used by the client:
 
-- Returns `access_token`
+- `user_id`
+- `username`
+- `access_token`
+- `access_expires_at`
+- `refresh_token`
+- `refresh_expires_at`
 
-### App Implementation
+Client notes:
 
-- Auth service: `/Users/zhangyuanlong/storage/FlutterProject/flutter_appread/lib/core/auth/auth_service.dart`
-- Session store: `/Users/zhangyuanlong/storage/FlutterProject/flutter_appread/lib/core/auth/auth_session_store.dart`
+- login/register only issue tokens
+- post-auth heartbeat and analytics are triggered by `AuthService`
 
+References:
 
-## 4. Bind Device After Login
+- `AuthService`: `/Users/zhangyuanlong/storage/FlutterProject/flutter_appread/lib/core/auth/auth_service.dart`
+- `AuthSession`: `/Users/zhangyuanlong/storage/FlutterProject/flutter_appread/lib/core/auth/auth_session.dart`
+- `AuthPage`: `/Users/zhangyuanlong/storage/FlutterProject/flutter_appread/lib/features/auth/presentation/auth_page.dart`
 
-### Request
+### Token Refresh
 
-`POST /v1/auth/bind-device`
+`POST /v1/auth/refresh`
 
-Header:
-
-```
-Authorization: Bearer <access_token>
-```
-
-Body:
+Request body:
 
 ```json
 {
-  "install_id": "uuid-per-install"
+  "refresh_token": "<refresh_token>"
 }
 ```
 
-### Result
+Client notes:
 
-- Success: device bound to account, historical stats merged
-- `409 Conflict`: device already bound to another account, prompt user
+- used automatically after `401` when refresh is enabled
+- on refresh failure, local session is cleared and the user is sent back to login
 
-### App Implementation
+References:
 
-- `AuthService.bindDevice(...)`
+- `AuthService.refresh(...)`: `/Users/zhangyuanlong/storage/FlutterProject/flutter_appread/lib/core/auth/auth_service.dart`
+- `AuthTokenRefresherImpl`: `/Users/zhangyuanlong/storage/FlutterProject/flutter_appread/lib/core/auth/auth_token_refresher_impl.dart`
 
+### Logout
 
-## 5. User Profile (Logged In)
+`POST /v1/auth/logout`
+
+Request body:
+
+```json
+{
+  "refresh_token": "<refresh_token>"
+}
+```
+
+Client notes:
+
+- logout clears local session
+- `install_id` is retained locally
+
+Reference:
+
+- `AuthService.logout(...)`: `/Users/zhangyuanlong/storage/FlutterProject/flutter_appread/lib/core/auth/auth_service.dart`
+
+### Current User
 
 `GET /v1/users/me`
 
-### Response fields
+Response shape used by the client:
 
-- `user_id` `username` `created_at` `vip_level` `plan_type` `vip_status` `vip_expire_at` `features`
+```json
+{
+  "user": {
+    "user_id": "usr_xxx",
+    "username": "user001",
+    "role": "user",
+    "created_at": "2026-03-15T08:00:00Z",
+    "vip_level": "pro",
+    "plan_type": "year",
+    "vip_status": "active",
+    "vip_expire_at": "2027-03-15T00:00:00Z",
+    "features": ["theme_custom", "online_service"]
+  }
+}
+```
 
-### App Implementation
+Client usage:
 
-- User profile service: `/Users/zhangyuanlong/storage/FlutterProject/flutter_appread/lib/core/user/user_profile_service.dart`
-- Profile UI: `/Users/zhangyuanlong/storage/FlutterProject/flutter_appread/lib/features/auth/presentation/user_profile_page.dart`
+- account information page
+- VIP information
+- feature display through `features`
 
+References:
 
-## 6. Analytics Events (Anonymous or Logged In)
+- `UserProfileService`: `/Users/zhangyuanlong/storage/FlutterProject/flutter_appread/lib/core/user/user_profile_service.dart`
+- `UserProfile`: `/Users/zhangyuanlong/storage/FlutterProject/flutter_appread/lib/core/user/user_profile.dart`
+- `UserProfilePage`: `/Users/zhangyuanlong/storage/FlutterProject/flutter_appread/lib/features/auth/presentation/user_profile_page.dart`
 
-Continue existing event reporting logic.
-
-### Request
+### Analytics Visit
 
 `POST /v1/analytics/visit`
+
+Request body:
 
 ```json
 {
   "install_id": "uuid-per-install",
-  "user_id": "usr_xxx",
-  "reader_id": "r_xxx",
   "platform": "android",
   "channel": "stable",
   "app_version": "1.2.3",
-  "occurred_at": "2026-03-15T08:00:00Z"
+  "visit_count": 1,
+  "visit_seconds": 0,
+  "occurred_at": "2026-03-14T12:00:00Z"
 }
 ```
 
-### Notes
+Client notes:
 
-- `install_id` is required
-- When logged in, include `user_id` and `reader_id`
+- anonymous analytics rely on `install_id`
+- authenticated analytics additionally attach `Authorization`
+- current client reports visit on startup, resume, and post-auth bootstrap
 
-### App Implementation
+Reference:
 
-- Analytics service: `/Users/zhangyuanlong/storage/FlutterProject/flutter_appread/lib/core/analytics/analytics_service.dart`
-- Lifecycle hook: `/Users/zhangyuanlong/storage/FlutterProject/flutter_appread/lib/app/app.dart`
+- `AnalyticsService`: `/Users/zhangyuanlong/storage/FlutterProject/flutter_appread/lib/core/analytics/analytics_service.dart`
 
+### Announcements
 
-## 7. App Updates (Anonymous)
+Endpoints:
 
-`POST /v1/app-updates/check`
-
-```json
-{
-  "platform": "all",
-  "channel": "stable",
-  "version_code": 10012,
-  "install_id": "uuid-per-install"
-}
-```
-
-### App Implementation
-
-- Update service: `/Users/zhangyuanlong/storage/FlutterProject/flutter_appread/lib/core/app_update/app_update_service.dart`
-- About page UI: `/Users/zhangyuanlong/storage/FlutterProject/flutter_appread/lib/features/mine/presentation/about_page.dart`
-
-## 8. Token Refresh (401)
-
-`POST /v1/auth/refresh`
-
-```json
-{ "refresh_token": "<refresh_token>" }
-```
-
-### App Implementation
-
-- Refresh API: `AuthService.refresh(...)`
-- Auto refresh on 401: `ApiClient` internal logic (when `enableAuthRefresh` is true)
-- Refresher adapter: `/Users/zhangyuanlong/storage/FlutterProject/flutter_appread/lib/core/auth/auth_token_refresher_impl.dart`
-
-## 9. Logout
-
-`POST /v1/auth/logout`
-
-```json
-{ "refresh_token": "<refresh_token>" }
-```
-
-### App Implementation
-
-- `AuthService.logout(...)`
-
-## 10. Compatibility Reminders (Must Tell Mobile)
-
-- `POST /v1/readers/register` only accepts `install_id`
-- Device info must go to `POST /v1/devices/heartbeat`
-
-
-## 11. Reference: Announcement Integration (Working Example)
-
-Use this as the template for new backend endpoints.
-
-### Endpoints
-
-- `GET /v1/announcements`
+- `GET /v1/announcements?page=1&page_size=20`
 - `GET /v1/announcements/latest`
 - `GET /v1/announcements/:id`
 
-### Features
+Client notes:
 
-- Cache for GET requests
-- Model decode in domain layer
-- Read-state persistence in SharedPreferences
+- `AnnouncementService` is the reference implementation for standard GET APIs
+- latest announcement is prefetched during startup
 
-### References
+References:
 
 - `AnnouncementService`: `/Users/zhangyuanlong/storage/FlutterProject/flutter_appread/lib/features/announcement/application/announcement_service.dart`
 - `Announcement models`: `/Users/zhangyuanlong/storage/FlutterProject/flutter_appread/lib/domain/entities/announcement.dart`
-- `Read state`: `/Users/zhangyuanlong/storage/FlutterProject/flutter_appread/lib/features/announcement/application/announcement_read_state_service.dart`
-- `Startup dialog`: `/Users/zhangyuanlong/storage/FlutterProject/flutter_appread/lib/app/app.dart`
 
+### App Update Check
 
-## 12. Implementation Checklist (Suggested)
+`POST /v1/app-updates/check`
 
-- Create services that mirror `AnnouncementService` structure
-- Use `ApiClient` for all requests
-- Keep response envelope handling consistent
-- Add basic caching only for GETs
-- Store lightweight state via SharedPreferences when needed
+Request body:
 
+```json
+{
+  "app_name": "reader-app",
+  "version_code": 10012
+}
+```
 
-## 后端接入计划
+Response fields used by the client:
 
- 确认 APPREAD_API_BASE_URL 在各环境的配置方式与默认值
- 设备心跳服务封装 POST /v1/devices/heartbeat
- 冷启动与前后台切换时机接入心跳上报
- reader 注册服务封装 POST /v1/readers/register
- 需要 reader_id 的业务点梳理并接入调用
- 登录/注册服务封装 POST /v1/auth/login
- 登录成功后绑定设备 POST /v1/auth/bind-device
- 处理 409 Conflict 绑定冲突提示方案
- 事件上报补齐 install_id + user_id/reader_id
- 响应 envelope 解析与错误映射保持一致
- API 调用埋点/日志（若有统一日志标准）
-登录/注册页面计划
+- `has_update`
+- `force_update`
+- `latest_version.version_code`
+- `latest_version.download_url`
+- `latest_version.changelog`
 
- 确认登录/注册是单页切换还是两个页面
- 确认是否需要验证码登录
- 将现有顶部卡片样式迁移为登录/注册入口
- 表单校验与错误提示样式对齐现有 UI
- 登录成功后的状态刷新与路由跳转
- 绑定设备调用与失败提示接入
- 与 reader 注册流程的衔接策略确认
-## 测试计划
+Client notes:
 
- API 服务单元测试（或最小冒烟测试）
- 登录/绑定设备流程手测
- 事件上报的请求体字段核对
+- `app_version` remains the display version, for example `1.0.6`
+- `version_code` must be an integer compare key
+- do not send `install_id`
+- do not rely on `min_supported_code`
+- current client normalizes `major.minor.patch` into `major * 10000 + minor * 100 + patch`
+- for example `1.0.6 -> 10006`
 
-## 执行状态（当前项目）
+References:
 
-- [x] 设备心跳服务已封装并接入 App 冷启动/前后台切换
-- [x] 设备字段采集（install_id/device_uid/platform/brand/model/os/app_version）
-- [x] Reader 注册服务封装（未强制在启动时调用）
-- [x] 登录/绑定设备服务封装并接入登录页
-- [x] Analytics Visit 事件上报服务封装并接入生命周期（代替 app-open）
-- [x] 登录/注册 UI 页面实现与绑定流程串联
-- [x] Token refresh + logout + analytics/visit 接口封装
-- [x] 用户信息接口封装并展示在账号信息页
-- [x] 检查更新接口封装并在关于页可触发
+- `AppUpdateService`: `/Users/zhangyuanlong/storage/FlutterProject/flutter_appread/lib/core/app_update/app_update_service.dart`
+- `AppUpdateCheckResult`: `/Users/zhangyuanlong/storage/FlutterProject/flutter_appread/lib/core/app_update/app_update_check_result.dart`

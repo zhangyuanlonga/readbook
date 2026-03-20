@@ -26,7 +26,7 @@ class AppLayout {
   static const double expandedBreakpointWidth = 840;
   static const double mineContentMaxWidth = 700;
   static const double settingsContentMaxWidth = 760;
-  static const double systemSettingsContentMaxWidth = 860;
+  static const double systemSettingsContentMaxWidth = 560;
   static const double aboutContentMaxWidth = 920;
   static const double aboutExpandedContentMaxWidth = 1080;
   static const double discoverExpandedSidePanelWidth = 300;

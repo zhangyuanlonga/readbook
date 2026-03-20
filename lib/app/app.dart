@@ -96,8 +96,9 @@ class _SystemUiOverlayWrapperState extends State<_SystemUiOverlayWrapper>
       AuthTokenRefresherImpl();
   late final DeviceHeartbeatService _deviceHeartbeatService =
       DeviceHeartbeatService(identityService: _deviceIdentityService);
-  late final AnalyticsService _analyticsService =
-      AnalyticsService(identityService: _deviceIdentityService);
+  late final AnalyticsService _analyticsService = AnalyticsService(
+    identityService: _deviceIdentityService,
+  );
   bool _isHeartbeatInFlight = false;
   bool _isVisitInFlight = false;
   bool _isStartupUpdateInFlight = false;
@@ -243,7 +244,7 @@ class _SystemUiOverlayWrapperState extends State<_SystemUiOverlayWrapper>
     }
     _isVisitInFlight = true;
     try {
-      await _analyticsService.trackVisit();
+      await _analyticsService.trackVisit(visitCount: 1, visitSeconds: 0);
     } catch (_) {
       // Ignore analytics failures to avoid blocking startup or resume.
     } finally {
@@ -283,10 +284,7 @@ class _SystemUiOverlayWrapperState extends State<_SystemUiOverlayWrapper>
             : null;
 
     messenger.showSnackBar(
-      SnackBar(
-        content: Text(event.message),
-        action: action,
-      ),
+      SnackBar(content: Text(event.message), action: action),
     );
   }
 
@@ -389,8 +387,8 @@ class _SystemUiOverlayWrapperState extends State<_SystemUiOverlayWrapper>
     final theme = Theme.of(context);
     final colorScheme = theme.colorScheme;
     final screenHeight = MediaQuery.sizeOf(context).height;
-    final dialogMaxHeight = math.min(420.0, screenHeight * 0.58);
-    final contentMaxHeight = math.min(180.0, screenHeight * 0.26);
+    final dialogMaxHeight = math.min(356.0, screenHeight * 0.44);
+    final contentMaxHeight = math.min(110.0, screenHeight * 0.135);
     final accent = switch (announcement.level) {
       AnnouncementLevel.urgent => colorScheme.error,
       AnnouncementLevel.important => colorScheme.tertiary,
@@ -409,6 +407,11 @@ class _SystemUiOverlayWrapperState extends State<_SystemUiOverlayWrapper>
         announcement.content.trim().isEmpty
             ? '暂无公告正文。'
             : announcement.content.trim();
+    final publishLabel = _formatAnnouncementDialogTime(
+      announcement.publishFrom,
+    );
+    final titleText =
+        announcement.title.trim().isEmpty ? '公告更新' : announcement.title.trim();
 
     return Dialog(
       backgroundColor: Colors.transparent,
@@ -417,7 +420,7 @@ class _SystemUiOverlayWrapperState extends State<_SystemUiOverlayWrapper>
         alignment: const Alignment(0, -0.18),
         child: ConstrainedBox(
           constraints: BoxConstraints(
-            maxWidth: AppLayout.dialogMaxWidth(context),
+            maxWidth: math.min(AppLayout.dialogMaxWidth(context), 340),
             maxHeight: dialogMaxHeight,
           ),
           child: ClipRRect(
@@ -443,31 +446,31 @@ class _SystemUiOverlayWrapperState extends State<_SystemUiOverlayWrapper>
               child: Stack(
                 children: [
                   Positioned(
-                    right: -40,
-                    top: -30,
+                    right: -46,
+                    top: -42,
                     child: Container(
-                      width: 120,
-                      height: 120,
+                      width: 132,
+                      height: 132,
                       decoration: BoxDecoration(
-                        color: accent.withValues(alpha: 0.12),
+                        color: accent.withValues(alpha: 0.08),
                         shape: BoxShape.circle,
                       ),
                     ),
                   ),
                   Positioned(
-                    left: -30,
-                    bottom: -40,
+                    left: -34,
+                    bottom: -46,
                     child: Container(
-                      width: 140,
-                      height: 140,
+                      width: 124,
+                      height: 124,
                       decoration: BoxDecoration(
-                        color: colorScheme.primary.withValues(alpha: 0.08),
+                        color: colorScheme.primary.withValues(alpha: 0.05),
                         shape: BoxShape.circle,
                       ),
                     ),
                   ),
                   Padding(
-                    padding: const EdgeInsets.fromLTRB(18, 16, 18, 12),
+                    padding: const EdgeInsets.fromLTRB(16, 16, 16, 14),
                     child: Column(
                       mainAxisSize: MainAxisSize.min,
                       crossAxisAlignment: CrossAxisAlignment.start,
@@ -475,64 +478,105 @@ class _SystemUiOverlayWrapperState extends State<_SystemUiOverlayWrapper>
                         Row(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            _buildAnnouncementLevelChip(context, announcement),
-                            const SizedBox(width: 10),
                             Expanded(
                               child: Column(
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
+                                  _buildAnnouncementLevelChip(
+                                    context,
+                                    announcement,
+                                  ),
+                                  const SizedBox(height: 8),
                                   Text(
-                                    announcement.title.trim().isEmpty
-                                        ? '公告更新'
-                                        : announcement.title,
-                                    style: theme.textTheme.titleMedium?.copyWith(
-                                      fontWeight: FontWeight.w700,
-                                      height: 1.2,
-                                      fontFamilyFallback: _dialogFontFallback,
+                                    titleText,
+                                    maxLines: 2,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: theme.textTheme.titleMedium
+                                        ?.copyWith(
+                                          fontWeight: FontWeight.w800,
+                                          height: 1.15,
+                                          fontFamilyFallback:
+                                              _dialogFontFallback,
+                                        ),
+                                  ),
+                                  const SizedBox(height: 4),
+                                  Text(
+                                    publishLabel,
+                                    style: theme.textTheme.bodySmall?.copyWith(
+                                      color: colorScheme.onSurfaceVariant,
                                     ),
                                   ),
                                 ],
                               ),
                             ),
-                          ],
-                        ),
-                        const SizedBox(height: 10),
-                        Align(
-                          alignment: Alignment.center,
-                          child: FractionallySizedBox(
-                            widthFactor: 0.92,
-                            child: Container(
-                              padding: const EdgeInsets.all(10),
-                              decoration: BoxDecoration(
-                                color: colorScheme.surface.withValues(
-                                  alpha: 0.86,
-                                ),
-                                borderRadius: BorderRadius.circular(16),
-                                border: Border.all(
-                                  color: colorScheme.outlineVariant.withValues(
-                                    alpha: 0.4,
-                                  ),
+                            IconButton(
+                              tooltip: '关闭',
+                              onPressed: () => Navigator.of(context).pop(),
+                              style: IconButton.styleFrom(
+                                minimumSize: const Size(34, 34),
+                                padding: EdgeInsets.zero,
+                                backgroundColor: colorScheme.surface.withValues(
+                                  alpha: 0.58,
                                 ),
                               ),
-                              child: ConstrainedBox(
+                              icon: Icon(
+                                Icons.close_rounded,
+                                color: colorScheme.onSurfaceVariant,
+                                size: 18,
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 12),
+                        Container(
+                          width: double.infinity,
+                          padding: const EdgeInsets.fromLTRB(12, 12, 12, 12),
+                          decoration: BoxDecoration(
+                            color: colorScheme.surface.withValues(alpha: 0.88),
+                            borderRadius: BorderRadius.circular(18),
+                            border: Border.all(
+                              color: colorScheme.outlineVariant.withValues(
+                                alpha: 0.22,
+                              ),
+                            ),
+                          ),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Container(
+                                width: 34,
+                                height: 3,
+                                decoration: BoxDecoration(
+                                  color: accent.withValues(alpha: 0.7),
+                                  borderRadius: BorderRadius.circular(999),
+                                ),
+                              ),
+                              const SizedBox(height: 10),
+                              ConstrainedBox(
                                 constraints: BoxConstraints(
-                                  minHeight: 64,
+                                  minHeight: 0,
                                   maxHeight: contentMaxHeight,
                                 ),
-                                child: SingleChildScrollView(
-                                  child: Text(
-                                    contentText,
-                                    style: theme.textTheme.bodyMedium?.copyWith(
-                                      height: 1.5,
-                                      fontFamilyFallback: _dialogFontFallback,
+                                child: ScrollConfiguration(
+                                  behavior: const MaterialScrollBehavior()
+                                      .copyWith(overscroll: false),
+                                  child: SingleChildScrollView(
+                                    child: Text(
+                                      contentText,
+                                      style: theme.textTheme.bodyMedium
+                                          ?.copyWith(
+                                            height: 1.5,
+                                            fontFamilyFallback:
+                                                _dialogFontFallback,
+                                          ),
                                     ),
                                   ),
                                 ),
                               ),
-                            ),
+                            ],
                           ),
                         ),
-                        const SizedBox(height: 14),
+                        const SizedBox(height: 12),
                         Row(
                           children: [
                             TextButton(
@@ -541,6 +585,14 @@ class _SystemUiOverlayWrapperState extends State<_SystemUiOverlayWrapper>
                             ),
                             const Spacer(),
                             FilledButton(
+                              style: FilledButton.styleFrom(
+                                backgroundColor: accent,
+                                foregroundColor: colorScheme.onPrimary,
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 16,
+                                  vertical: 11,
+                                ),
+                              ),
                               onPressed: () {
                                 Navigator.of(context).pop();
                                 unawaited(
@@ -549,7 +601,17 @@ class _SystemUiOverlayWrapperState extends State<_SystemUiOverlayWrapper>
                                   ),
                                 );
                               },
-                              child: const Text('我已知晓'),
+                              child: const Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Icon(
+                                    Icons.check_circle_outline_rounded,
+                                    size: 17,
+                                  ),
+                                  SizedBox(width: 6),
+                                  Text('我已知晓'),
+                                ],
+                              ),
                             ),
                           ],
                         ),
@@ -593,6 +655,15 @@ class _SystemUiOverlayWrapperState extends State<_SystemUiOverlayWrapper>
         ),
       ),
     );
+  }
+
+  String _formatAnnouncementDialogTime(DateTime time) {
+    final local = time.toLocal();
+    final month = local.month.toString().padLeft(2, '0');
+    final day = local.day.toString().padLeft(2, '0');
+    final hour = local.hour.toString().padLeft(2, '0');
+    final minute = local.minute.toString().padLeft(2, '0');
+    return '$month-$day $hour:$minute';
   }
 
   void _onIncomingSourceImportPayload(IncomingSourceImportPayload _) {
@@ -655,14 +726,7 @@ class _StartupGuardPage extends StatelessWidget {
   const _StartupGuardPage();
 
   static const List<String> _brandTextChars = ['书', '享', '阅', '读'];
-  static const List<String> _sloganTextChars = [
-    '享',
-    '受',
-    '阅',
-    '读',
-    '生',
-    '活',
-  ];
+  static const List<String> _sloganTextChars = ['享', '受', '阅', '读', '生', '活'];
 
   @override
   Widget build(BuildContext context) {
@@ -672,10 +736,8 @@ class _StartupGuardPage extends StatelessWidget {
     final shortestSide = MediaQuery.sizeOf(context).shortestSide;
     const brandGap = 2.0;
     const brandLineHeight = 1.02;
-    final brandFontSize =
-        (shortestSide * 0.165).clamp(48.0, 66.0).toDouble();
-    final sloganFontSize =
-        (shortestSide * 0.08).clamp(23.0, 33.0).toDouble();
+    final brandFontSize = (shortestSide * 0.165).clamp(48.0, 66.0).toDouble();
+    final sloganFontSize = (shortestSide * 0.08).clamp(23.0, 33.0).toDouble();
     final sloganTopOffset = (brandFontSize * brandLineHeight + brandGap) * 2;
     final fontFamilyFallback = const [
       'STKaiti',

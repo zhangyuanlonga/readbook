@@ -60,7 +60,7 @@ class _UserProfilePageState extends State<UserProfilePage> {
         _profile = profile;
       });
     } catch (_) {
-      // Keep session-based info when profile fetch fails.
+      // Keep the current page usable with locally cached session data.
     } finally {
       if (mounted) {
         setState(() {
@@ -93,27 +93,47 @@ class _UserProfilePageState extends State<UserProfilePage> {
         builder: (context, _) {
           final maxWidth = AppLayout.pageContentMaxWidth(
             context,
-            maxWidth: AppLayout.mineContentMaxWidth,
+            maxWidth: AppLayout.systemSettingsContentMaxWidth,
           );
 
           return Align(
             alignment: Alignment.topCenter,
             child: ConstrainedBox(
               constraints: BoxConstraints(maxWidth: maxWidth),
-              child: ListView(
-                padding: EdgeInsets.fromLTRB(
-                  horizontal,
-                  12,
-                  horizontal,
-                  12 + bottomSafe,
+              child: RefreshIndicator(
+                onRefresh: _refreshPage,
+                child: ListView(
+                  physics: const AlwaysScrollableScrollPhysics(),
+                  padding: EdgeInsets.fromLTRB(
+                    horizontal,
+                    12,
+                    horizontal,
+                    16 + bottomSafe,
+                  ),
+                  children: _buildContent(context),
                 ),
-                children: _buildContent(context),
               ),
             ),
           );
         },
       ),
     );
+  }
+
+  Future<void> _refreshPage() async {
+    final session = await _sessionStore.getSession();
+    if (!mounted) {
+      return;
+    }
+    setState(() {
+      _session = session;
+      if (session == null) {
+        _profile = null;
+      }
+    });
+    if (session != null) {
+      await _loadProfile();
+    }
   }
 
   List<Widget> _buildContent(BuildContext context) {
@@ -123,174 +143,128 @@ class _UserProfilePageState extends State<UserProfilePage> {
     if (_isLoading) {
       return [
         const SizedBox(height: 40),
-        Center(
-          child: CircularProgressIndicator(
-            color: colorScheme.primary,
-          ),
-        ),
+        Center(child: CircularProgressIndicator(color: colorScheme.primary)),
       ];
     }
 
     if (session == null) {
       return [
-        Card(
-          child: Padding(
-            padding: const EdgeInsets.all(16),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.center,
-              children: [
-                Icon(Icons.person_off_outlined, size: 32, color: colorScheme.onSurfaceVariant),
-                const SizedBox(height: 8),
-                Text(
-                  '当前未登录',
-                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                    fontWeight: FontWeight.w700,
-                  ),
-                ),
-                const SizedBox(height: 6),
-                Text(
-                  '登录后可同步阅读进度与书源。',
-                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                    color: colorScheme.onSurfaceVariant,
-                  ),
-                ),
-                const SizedBox(height: 12),
-                FilledButton(
-                  onPressed: () => context.push('/auth'),
-                  child: const Text('去登录'),
-                ),
-              ],
-            ),
-          ),
+        const SizedBox(height: 12),
+        Icon(
+          Icons.person_off_outlined,
+          size: 34,
+          color: colorScheme.onSurfaceVariant,
+        ),
+        const SizedBox(height: 10),
+        Text(
+          '当前未登录',
+          textAlign: TextAlign.center,
+          style: Theme.of(
+            context,
+          ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700),
+        ),
+        const SizedBox(height: 6),
+        Text(
+          '登录后可同步阅读进度，并查看账号与会员状态。',
+          textAlign: TextAlign.center,
+          style: _sectionDescriptionTextStyle(context),
+        ),
+        const SizedBox(height: 16),
+        FilledButton(
+          onPressed: () => context.push('/auth'),
+          child: const Text('去登录'),
         ),
       ];
     }
 
+    final profile = _profile;
     final displayName =
-        _profile?.username ?? session.username ?? session.userId ?? '用户';
+        profile?.username ?? session.username ?? session.userId ?? '用户';
+    final roleText = profile?.role ?? 'user';
+    final featureList = profile?.features ?? const <String>[];
+
     return [
-      Card(
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
-          child: Row(
-            children: [
-              CircleAvatar(
-                radius: 22,
-                backgroundColor: colorScheme.primaryContainer,
-                child: Icon(
-                  Icons.person_outline,
-                  color: colorScheme.onPrimaryContainer,
-                  size: 22,
-                ),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      displayName,
-                      style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                        fontWeight: FontWeight.w700,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ],
-          ),
+      _buildAccountHero(context, displayName: displayName, roleText: roleText),
+      if (_isLoadingProfile) ...[
+        const SizedBox(height: 10),
+        Text('正在同步最新账号资料...', style: _sectionDescriptionTextStyle(context)),
+      ],
+      const SizedBox(height: 22),
+      _buildSection(
+        context,
+        title: '账号资料',
+        description: '当前登录账号与基础信息。',
+        child: _buildListBlock(
+          context,
+          children: [
+            _buildListRow(
+              context,
+              label: '用户名',
+              value: profile?.username ?? session.username ?? '-',
+            ),
+            _buildListRow(context, label: '角色', value: roleText),
+            _buildListRow(
+              context,
+              label: '注册时间',
+              value: _formatTime(profile?.createdAt),
+            ),
+          ],
         ),
       ),
-      const SizedBox(height: 12),
-      Card(
-        child: Padding(
-          padding: const EdgeInsets.all(14),
-          child: Column(
+      if (_hasMembershipInfo(profile)) ...[
+        const SizedBox(height: 22),
+        _buildSection(
+          context,
+          title: '会员状态',
+          description: '当前账号已开通的会员信息。',
+          child: _buildListBlock(
+            context,
             children: [
-              _buildInfoRow(
-                context,
-                label: '用户名',
-                value: _profile?.username ?? session.username ?? '-',
-              ),
-              const Divider(height: 18),
-              _buildInfoRow(
-                context,
-                label: '注册时间',
-                value: _formatTime(_profile?.createdAt),
-              ),
-              const Divider(height: 18),
-              _buildInfoRow(
+              _buildListRow(
                 context,
                 label: 'VIP 等级',
-                value: _profile?.vipLevel ?? '-',
+                value: profile?.vipLevel ?? '-',
               ),
-              const Divider(height: 18),
-              _buildInfoRow(
+              _buildListRow(
                 context,
                 label: '会员计划',
-                value: _profile?.planType ?? '-',
+                value: profile?.planType ?? '-',
               ),
-              const Divider(height: 18),
-              _buildInfoRow(
+              _buildListRow(
                 context,
                 label: '会员状态',
-                value: _profile?.vipStatus ?? '-',
+                value: profile?.vipStatus ?? '-',
               ),
-              const Divider(height: 18),
-              _buildInfoRow(
+              _buildListRow(
                 context,
                 label: '会员到期',
-                value: _formatTime(_profile?.vipExpireAt),
+                value: _formatTime(profile?.vipExpireAt),
               ),
             ],
-          ),
-        ),
-      ),
-      if (_isLoadingProfile)
-        Padding(
-          padding: const EdgeInsets.only(top: 8),
-          child: Text(
-            '正在获取最新用户信息...',
-            textAlign: TextAlign.center,
-            style: Theme.of(context).textTheme.bodySmall?.copyWith(
-              color: colorScheme.onSurfaceVariant,
-            ),
-          ),
-        ),
-      if ((_profile?.features.isNotEmpty ?? false)) ...[
-        const SizedBox(height: 12),
-        Card(
-          child: Padding(
-            padding: const EdgeInsets.all(14),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  '功能权限',
-                  style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                    fontWeight: FontWeight.w700,
-                  ),
-                ),
-                const SizedBox(height: 8),
-                Wrap(
-                  spacing: 8,
-                  runSpacing: 6,
-                  children:
-                      _profile!.features
-                          .map(
-                            (feature) => Chip(
-                              label: Text(feature),
-                              visualDensity: VisualDensity.compact,
-                            ),
-                          )
-                          .toList(growable: false),
-                ),
-              ],
-            ),
           ),
         ),
       ],
-      const SizedBox(height: 16),
+      if (featureList.isNotEmpty) ...[
+        const SizedBox(height: 22),
+        _buildSection(
+          context,
+          title: '已开通功能',
+          description: '当前账号可用的功能能力。',
+          child: Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: featureList
+                .map(
+                  (feature) => Chip(
+                    label: Text(feature),
+                    visualDensity: VisualDensity.compact,
+                  ),
+                )
+                .toList(growable: false),
+          ),
+        ),
+      ],
+      const SizedBox(height: 24),
       FilledButton.icon(
         onPressed: _isLoggingOut ? null : _handleLogout,
         icon:
@@ -313,33 +287,138 @@ class _UserProfilePageState extends State<UserProfilePage> {
     ];
   }
 
-  Widget _buildInfoRow(
+  Widget _buildAccountHero(
+    BuildContext context, {
+    required String displayName,
+    required String roleText,
+  }) {
+    final colorScheme = Theme.of(context).colorScheme;
+
+    return Row(
+      children: [
+        CircleAvatar(
+          radius: 22,
+          backgroundColor: colorScheme.primaryContainer,
+          child: Icon(
+            Icons.person_outline,
+            color: colorScheme.onPrimaryContainer,
+            size: 22,
+          ),
+        ),
+        const SizedBox(width: 12),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                displayName,
+                style: Theme.of(
+                  context,
+                ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700),
+              ),
+              const SizedBox(height: 4),
+              Text(
+                '当前角色：$roleText',
+                style: _sectionDescriptionTextStyle(context),
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildSection(
+    BuildContext context, {
+    required String title,
+    required String description,
+    required Widget child,
+  }) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(title, style: _sectionTitleTextStyle(context)),
+        const SizedBox(height: 4),
+        Text(description, style: _sectionDescriptionTextStyle(context)),
+        const SizedBox(height: 8),
+        child,
+      ],
+    );
+  }
+
+  Widget _buildListBlock(
+    BuildContext context, {
+    required List<Widget> children,
+  }) {
+    final colorScheme = Theme.of(context).colorScheme;
+    final dividerColor = colorScheme.outlineVariant.withValues(alpha: 0.55);
+
+    return Column(
+      children: [
+        Container(height: 1, color: dividerColor),
+        for (final child in children) ...[
+          child,
+          Container(height: 1, color: dividerColor),
+        ],
+      ],
+    );
+  }
+
+  Widget _buildListRow(
     BuildContext context, {
     required String label,
     required String value,
   }) {
     final colorScheme = Theme.of(context).colorScheme;
-    return Row(
-      children: [
-        SizedBox(
-          width: 90,
-          child: Text(
-            label,
-            style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-              color: colorScheme.onSurfaceVariant,
+
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 12),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          SizedBox(
+            width: 90,
+            child: Text(
+              label,
+              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                color: colorScheme.onSurfaceVariant,
+              ),
             ),
           ),
-        ),
-        Expanded(
-          child: Text(
-            value,
-            textAlign: TextAlign.right,
-            style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-              fontWeight: FontWeight.w600,
+          Expanded(
+            child: Text(
+              value,
+              textAlign: TextAlign.right,
+              style: Theme.of(
+                context,
+              ).textTheme.bodyMedium?.copyWith(fontWeight: FontWeight.w600),
             ),
           ),
-        ),
-      ],
+        ],
+      ),
+    );
+  }
+
+  bool _hasMembershipInfo(UserProfile? profile) {
+    return profile?.vipLevel != null ||
+        profile?.planType != null ||
+        profile?.vipStatus != null ||
+        profile?.vipExpireAt != null;
+  }
+
+  TextStyle? _sectionTitleTextStyle(BuildContext context) {
+    return Theme.of(context).textTheme.titleSmall?.copyWith(
+      fontSize: 14.5,
+      height: 1.2,
+      fontWeight: FontWeight.w700,
+    );
+  }
+
+  TextStyle? _sectionDescriptionTextStyle(BuildContext context) {
+    return Theme.of(context).textTheme.bodySmall?.copyWith(
+      fontSize: 12.5,
+      height: 1.45,
+      color: Theme.of(context).colorScheme.onSurfaceVariant,
     );
   }
 
@@ -393,14 +472,14 @@ class _UserProfilePageState extends State<UserProfilePage> {
       }
       _session = null;
       _profile = null;
-      context.pop();
+      context.go('/mine');
     } catch (_) {
       if (!mounted) {
         return;
       }
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('退出失败，请稍后再试。')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('退出失败，请稍后再试。')));
     } finally {
       if (mounted) {
         setState(() {

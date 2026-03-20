@@ -43,8 +43,10 @@ class DeviceIdentityService {
   Future<int> getAppVersionCode() async {
     try {
       final info = await PackageInfo.fromPlatform();
-      final code = int.tryParse(info.buildNumber.trim());
-      return code ?? 0;
+      return normalizeVersionCode(
+        versionName: info.version,
+        buildNumber: info.buildNumber,
+      );
     } catch (_) {
       return 0;
     }
@@ -212,6 +214,31 @@ class DeviceIdentityService {
       }
     }
     return null;
+  }
+
+  static int normalizeVersionCode({
+    required String versionName,
+    String? buildNumber,
+  }) {
+    final normalizedVersion = versionName.trim();
+    final normalizedBuild = buildNumber?.trim() ?? '';
+    final buildCode = int.tryParse(normalizedBuild) ?? 0;
+
+    final match = RegExp(
+      r'^(\d+)(?:\.(\d+))?(?:\.(\d+))?',
+    ).firstMatch(normalizedVersion);
+    if (match == null) {
+      return buildCode;
+    }
+
+    final major = int.tryParse(match.group(1) ?? '') ?? 0;
+    final minor = int.tryParse(match.group(2) ?? '') ?? 0;
+    final patch = int.tryParse(match.group(3) ?? '') ?? 0;
+    final semanticCode = (major * 10000) + (minor * 100) + patch;
+    if (semanticCode <= 0) {
+      return buildCode;
+    }
+    return semanticCode >= buildCode ? semanticCode : buildCode;
   }
 }
 

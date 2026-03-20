@@ -2,6 +2,7 @@ class UserProfile {
   const UserProfile({
     required this.userId,
     required this.username,
+    required this.role,
     required this.createdAt,
     required this.vipLevel,
     required this.planType,
@@ -12,6 +13,7 @@ class UserProfile {
 
   final String userId;
   final String username;
+  final String? role;
   final DateTime? createdAt;
   final String? vipLevel;
   final String? planType;
@@ -20,21 +22,11 @@ class UserProfile {
   final List<String> features;
 
   factory UserProfile.fromJson(Map<String, dynamic> json) {
-    Map<String, dynamic> normalize(Map<String, dynamic> raw) {
-      final normalized = <String, dynamic>{...raw};
-      final user = raw['user'];
-      if (user is Map) {
-        for (final entry in user.entries) {
-          final key = entry.key.toString();
-          if (!normalized.containsKey(key) || normalized[key] == null) {
-            normalized[key] = entry.value;
-          }
-        }
-      }
-      return normalized;
+    final rawUser = json['user'];
+    if (rawUser is! Map) {
+      throw const FormatException('Missing user object in profile response.');
     }
-
-    final data = normalize(json);
+    final data = rawUser.map((key, value) => MapEntry(key.toString(), value));
 
     String readString(String key) {
       final value = data[key]?.toString().trim() ?? '';
@@ -64,19 +56,13 @@ class UserProfile {
             .where((item) => item.isNotEmpty)
             .toList(growable: false);
       }
-      if (raw is String) {
-        return raw
-            .split(',')
-            .map((item) => item.trim())
-            .where((item) => item.isNotEmpty)
-            .toList(growable: false);
-      }
       return const <String>[];
     }
 
     return UserProfile(
       userId: readString('user_id'),
       username: readString('username'),
+      role: readOptionalString('role'),
       createdAt: readTime('created_at'),
       vipLevel: readOptionalString('vip_level'),
       planType: readOptionalString('plan_type'),

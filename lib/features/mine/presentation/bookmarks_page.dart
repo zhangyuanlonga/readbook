@@ -29,8 +29,7 @@ class _BookmarksPageState extends State<BookmarksPage> {
   bool _isLoading = true;
   String? _errorText;
   List<Bookmark> _bookmarks = const [];
-  Map<String, BookshelfBook> _bookshelfIndex =
-      const <String, BookshelfBook>{};
+  Map<String, BookshelfBook> _bookshelfIndex = const <String, BookshelfBook>{};
 
   @override
   void initState() {
@@ -98,13 +97,6 @@ class _BookmarksPageState extends State<BookmarksPage> {
             icon: const Icon(Icons.arrow_back),
           ),
           title: const Text('书签'),
-          actions: [
-            IconButton(
-              onPressed: _isLoading ? null : () => unawaited(_reload()),
-              tooltip: '刷新',
-              icon: const Icon(Icons.refresh_rounded),
-            ),
-          ],
         ),
         body: LayoutBuilder(
           builder: (context, _) {
@@ -172,7 +164,7 @@ class _BookmarksPageState extends State<BookmarksPage> {
         horizontal: horizontal,
         bottomSafe: bottomSafe,
         title: '还没有书签',
-        message: '在阅读页长按选句即可收藏书签。',
+        message: '在阅读页选中文本后点击“保存书签”即可添加。',
         actionLabel: '刷新',
         onAction: () => unawaited(_reload()),
       );
@@ -182,7 +174,12 @@ class _BookmarksPageState extends State<BookmarksPage> {
       onRefresh: _reload,
       child: ListView.separated(
         physics: const AlwaysScrollableScrollPhysics(),
-        padding: EdgeInsets.fromLTRB(horizontal, 12, horizontal, 12 + bottomSafe),
+        padding: EdgeInsets.fromLTRB(
+          horizontal,
+          12,
+          horizontal,
+          12 + bottomSafe,
+        ),
         itemCount: groups.length,
         separatorBuilder: (_, __) => const SizedBox(height: 12),
         itemBuilder: (context, index) {
@@ -215,11 +212,7 @@ class _BookmarksPageState extends State<BookmarksPage> {
           24 + bottomSafe,
         ),
         children: [
-          Icon(
-            Icons.bookmarks_outlined,
-            size: 48,
-            color: colorScheme.primary,
-          ),
+          Icon(Icons.bookmarks_outlined, size: 48, color: colorScheme.primary),
           const SizedBox(height: 16),
           Text(
             title,
@@ -246,21 +239,18 @@ class _BookmarksPageState extends State<BookmarksPage> {
     );
   }
 
-  Widget _buildBookGroupCard(
-    BuildContext context,
-    _BookmarkBookGroup group,
-  ) {
+  Widget _buildBookGroupCard(BuildContext context, _BookmarkBookGroup group) {
     final textTheme = Theme.of(context).textTheme;
     final colorScheme = Theme.of(context).colorScheme;
     final book = group.book;
     final rawTitle = (book?.title ?? '').trim();
     final title = rawTitle.isNotEmpty ? rawTitle : '未知书籍';
     final rawAuthor = (book?.author ?? '').trim();
-    final author = rawAuthor.isNotEmpty
-        ? rawAuthor
-        : (book == null ? '书籍已从书架移除' : '作者未知');
+    final author =
+        rawAuthor.isNotEmpty ? rawAuthor : (book == null ? '书籍已从书架移除' : '作者未知');
 
-    final subtitle = '共 ${group.bookmarks.length} 条 · 最近 ${_formatTime(group.latestTime)}';
+    final subtitle =
+        '共 ${group.bookmarks.length} 条 · 最近 ${_formatTime(group.latestTime)}';
 
     return Card(
       clipBehavior: Clip.antiAlias,
@@ -333,13 +323,7 @@ class _BookmarksPageState extends State<BookmarksPage> {
       );
       widgets.add(const SizedBox(height: 6));
       for (final bookmark in chapter.bookmarks) {
-        widgets.add(
-          _buildBookmarkItem(
-            context,
-            bookmark,
-            group.book,
-          ),
-        );
+        widgets.add(_buildBookmarkItem(context, bookmark, group.book));
       }
       if (index != chapters.length - 1) {
         widgets.add(const Divider(height: 18));
@@ -358,8 +342,7 @@ class _BookmarksPageState extends State<BookmarksPage> {
     final snippet = _compactSnippet(bookmark.snippet);
     final canOpen = _canOpenBookmark(book);
     final timeLabel = _formatTime(bookmark.updatedAt);
-    final subtitle =
-        canOpen ? timeLabel : '$timeLabel · 书籍已移除，无法定位';
+    final subtitle = canOpen ? timeLabel : '$timeLabel · 书籍已移除，无法定位';
 
     return ListTile(
       dense: true,
@@ -455,35 +438,29 @@ class _BookmarksPageState extends State<BookmarksPage> {
       return const <_BookmarkChapterGroup>[];
     }
 
-    final sorted = [...bookmarks]
-      ..sort((a, b) {
-        final indexCompare = a.chapterIndex.compareTo(b.chapterIndex);
-        if (indexCompare != 0) {
-          return indexCompare;
-        }
-        final offsetCompare = a.startOffset.compareTo(b.startOffset);
-        if (offsetCompare != 0) {
-          return offsetCompare;
-        }
-        return b.updatedAt.compareTo(a.updatedAt);
-      });
+    final sorted = [...bookmarks]..sort((a, b) {
+      final indexCompare = a.chapterIndex.compareTo(b.chapterIndex);
+      if (indexCompare != 0) {
+        return indexCompare;
+      }
+      final offsetCompare = a.startOffset.compareTo(b.startOffset);
+      if (offsetCompare != 0) {
+        return offsetCompare;
+      }
+      return b.updatedAt.compareTo(a.updatedAt);
+    });
 
     final groups = <_BookmarkChapterGroup>[];
     for (final bookmark in sorted) {
       final key = _chapterKey(bookmark);
       final title = _chapterTitle(bookmark);
-      final existing = groups.isNotEmpty && groups.last.key == key
-          ? groups.last
-          : null;
+      final existing =
+          groups.isNotEmpty && groups.last.key == key ? groups.last : null;
       if (existing != null) {
         existing.bookmarks.add(bookmark);
       } else {
         groups.add(
-          _BookmarkChapterGroup(
-            key: key,
-            title: title,
-            bookmarks: [bookmark],
-          ),
+          _BookmarkChapterGroup(key: key, title: title, bookmarks: [bookmark]),
         );
       }
     }
@@ -550,9 +527,10 @@ class _BookmarksPageState extends State<BookmarksPage> {
       return;
     }
 
-    final chapterId = bookmark.chapterId.trim().isEmpty
-        ? 'bootstrap'
-        : bookmark.chapterId.trim();
+    final chapterId =
+        bookmark.chapterId.trim().isEmpty
+            ? 'bootstrap'
+            : bookmark.chapterId.trim();
     final uri = Uri(
       path: '/reader/${bookmark.bookId}/$chapterId',
       queryParameters: {
@@ -572,10 +550,9 @@ class _BookmarksPageState extends State<BookmarksPage> {
         return;
       }
       setState(() {
-        _bookmarks =
-            _bookmarks
-                .where((item) => item.id != bookmark.id)
-                .toList(growable: false);
+        _bookmarks = _bookmarks
+            .where((item) => item.id != bookmark.id)
+            .toList(growable: false);
       });
       _showMessage('已删除书签。');
     } catch (_) {

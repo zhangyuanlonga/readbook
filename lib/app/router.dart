@@ -14,6 +14,7 @@ import '../features/mine/presentation/cache_management_page.dart';
 import '../features/mine/presentation/rule_config_page.dart';
 import '../features/mine/presentation/about_page.dart';
 import '../features/mine/presentation/bookmarks_page.dart';
+import '../features/mine/presentation/feedback_page.dart';
 import '../features/mine/presentation/system_settings_page.dart';
 import '../features/auth/presentation/auth_page.dart';
 import '../features/auth/presentation/user_profile_page.dart';
@@ -103,6 +104,16 @@ final GoRouter appRouter = GoRouter(
       path: '/bookmarks',
       name: 'bookmarks',
       builder: (context, state) => const BookmarksPage(),
+    ),
+    GoRoute(
+      path: '/feedback',
+      name: 'feedback',
+      builder: (context, state) => const FeedbackPage(),
+    ),
+    GoRoute(
+      path: '/feedback/compose',
+      name: 'feedback-compose',
+      builder: (context, state) => const FeedbackComposePage(),
     ),
     GoRoute(
       path: '/search',

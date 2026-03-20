@@ -8,31 +8,34 @@ import '../../../app/shell_navigation_provider.dart';
 import '../../reader/application/reader_system_settings_service.dart';
 import '../../search/application/search_system_settings_service.dart';
 
-const double _kSectionGap = 12;
-const double _kCardPadding = 16;
-const double _kCardIntroGap = 12;
-const double _kCardPanelGap = 16;
+const double _kSectionGap = 18;
+const double _kSectionListGap = 6;
+
+AppShellDestination _destinationFor(AppShellTab tab) {
+  return appShellDestinations.firstWhere(
+    (destination) => destination.tab == tab,
+  );
+}
 
 TextStyle? _sectionTitleTextStyle(BuildContext context) {
   return Theme.of(context).textTheme.titleSmall?.copyWith(
-    fontSize: 15,
+    fontSize: 14.5,
     height: 1.2,
     fontWeight: FontWeight.w700,
-    letterSpacing: 0.1,
   );
 }
 
 TextStyle? _sectionDescriptionTextStyle(BuildContext context) {
   return Theme.of(context).textTheme.bodySmall?.copyWith(
-    fontSize: 13,
-    height: 1.45,
+    fontSize: 12,
+    height: 1.35,
     color: Theme.of(context).colorScheme.onSurfaceVariant,
   );
 }
 
 TextStyle? _settingTitleTextStyle(BuildContext context) {
   return Theme.of(context).textTheme.bodyLarge?.copyWith(
-    fontSize: 15,
+    fontSize: 14.5,
     height: 1.25,
     fontWeight: FontWeight.w600,
   );
@@ -40,15 +43,15 @@ TextStyle? _settingTitleTextStyle(BuildContext context) {
 
 TextStyle? _settingSubtitleTextStyle(BuildContext context) {
   return Theme.of(context).textTheme.bodySmall?.copyWith(
-    fontSize: 13,
-    height: 1.35,
+    fontSize: 12,
+    height: 1.3,
     color: Theme.of(context).colorScheme.onSurfaceVariant,
   );
 }
 
 TextStyle? _statusTextStyle(BuildContext context) {
   return Theme.of(context).textTheme.labelMedium?.copyWith(
-    fontSize: 12,
+    fontSize: 11.5,
     height: 1.2,
     fontWeight: FontWeight.w600,
     color: Theme.of(context).colorScheme.onSurfaceVariant,
@@ -73,197 +76,132 @@ class SystemSettingsPage extends StatelessWidget {
       },
       child: Scaffold(
         appBar: AppBar(title: const Text('系统设置')),
-        body: Align(
-          alignment: Alignment.topCenter,
-          child: ConstrainedBox(
-            constraints: BoxConstraints(
-              maxWidth: AppLayout.pageContentMaxWidth(
-                context,
-                maxWidth: AppLayout.systemSettingsContentMaxWidth,
+        body: LayoutBuilder(
+          builder: (context, _) {
+            final maxWidth = AppLayout.pageContentMaxWidth(
+              context,
+              maxWidth: AppLayout.systemSettingsContentMaxWidth,
+            );
+
+            return Align(
+              alignment: Alignment.topCenter,
+              child: ConstrainedBox(
+                constraints: BoxConstraints(maxWidth: maxWidth),
+                child: ListView(
+                  padding: EdgeInsets.fromLTRB(
+                    horizontal,
+                    12,
+                    horizontal,
+                    16 + bottomSafe,
+                  ),
+                  children: [
+                    _buildPageIntro(context),
+                    const SizedBox(height: _kSectionGap),
+                    _buildBottomNavigationSection(context),
+                    const SizedBox(height: _kSectionGap),
+                    _buildReaderFallbackSection(context),
+                    const SizedBox(height: _kSectionGap),
+                    _buildSearchAggregationSection(context),
+                  ],
+                ),
               ),
-            ),
-            child: ListView(
-              padding: EdgeInsets.fromLTRB(
-                horizontal,
-                16,
-                horizontal,
-                16 + bottomSafe,
-              ),
-              children: [
-                _buildBottomNavigationCard(context),
-                const SizedBox(height: _kSectionGap),
-                _buildReaderFallbackCard(context),
-                const SizedBox(height: _kSectionGap),
-                _buildSearchAggregationCard(context),
-                const SizedBox(height: _kSectionGap),
-                _buildDebugToolsCard(context),
-              ],
-            ),
-          ),
+            );
+          },
         ),
       ),
     );
   }
 
-  Widget _buildBottomNavigationCard(BuildContext context) {
-    return Card(
-      margin: EdgeInsets.zero,
-      child: Padding(
-        padding: const EdgeInsets.all(_kCardPadding),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            _buildSectionTitle(
-              context,
-              icon: Icons.space_dashboard_rounded,
-              title: '底部菜单',
-            ),
-            const SizedBox(height: _kCardIntroGap),
-            Text(
-              '可控制底部导航栏展示项数量；“我的”固定显示，避免找不到系统设置入口。',
-              style: _sectionDescriptionTextStyle(context),
-            ),
-            const SizedBox(height: _kCardPanelGap),
-            const _BottomNavigationSettingPanel(),
-          ],
-        ),
-      ),
+  Widget _buildPageIntro(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [Text('常用系统开关', style: _sectionTitleTextStyle(context))],
     );
   }
 
-  Widget _buildReaderFallbackCard(BuildContext context) {
-    return Card(
-      margin: EdgeInsets.zero,
-      child: Padding(
-        padding: const EdgeInsets.all(_kCardPadding),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            _buildSectionTitle(
-              context,
-              icon: Icons.auto_fix_high_rounded,
-              title: '阅读容错',
-            ),
-            const SizedBox(height: _kCardIntroGap),
-            Text(
-              '当正文加载失败时，可自动尝试切换到候选书源。',
-              style: _sectionDescriptionTextStyle(context),
-            ),
-            const SizedBox(height: _kCardPanelGap),
-            const _ReaderAutoSwitchSettingPanel(),
-          ],
-        ),
-      ),
+  Widget _buildBottomNavigationSection(BuildContext context) {
+    return _buildSettingsSection(
+      context,
+      icon: Icons.space_dashboard_rounded,
+      title: '底部菜单',
+      description: '控制主导航展示项。',
+      child: const _BottomNavigationSettingPanel(),
     );
   }
 
-  Widget _buildSearchAggregationCard(BuildContext context) {
-    return Card(
-      margin: EdgeInsets.zero,
-      child: Padding(
-        padding: const EdgeInsets.all(_kCardPadding),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            _buildSectionTitle(
-              context,
-              icon: Icons.auto_awesome_mosaic_rounded,
-              title: '搜索聚合',
-            ),
-            const SizedBox(height: _kCardIntroGap),
-            Text(
-              '同书多源命中时，是否按书名+作者聚合为单条结果。',
-              style: _sectionDescriptionTextStyle(context),
-            ),
-            const SizedBox(height: _kCardPanelGap),
-            const _SearchAggregationSettingPanel(),
-          ],
-        ),
-      ),
+  Widget _buildReaderFallbackSection(BuildContext context) {
+    return _buildSettingsSection(
+      context,
+      icon: Icons.auto_fix_high_rounded,
+      title: '阅读容错',
+      description: '正文失败时自动补位。',
+      child: const _ReaderAutoSwitchSettingPanel(),
     );
   }
 
-  Widget _buildDebugToolsCard(BuildContext context) {
-    final colorScheme = Theme.of(context).colorScheme;
-
-    return Card(
-      margin: EdgeInsets.zero,
-      color: colorScheme.surfaceContainerLowest,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(12),
-        side: BorderSide(color: colorScheme.outlineVariant.withValues(alpha: 0.3)),
-      ),
-      child: Theme(
-        data: Theme.of(context).copyWith(dividerColor: Colors.transparent),
-        child: ExpansionTile(
-          maintainState: true,
-          tilePadding: const EdgeInsets.fromLTRB(
-            _kCardPadding,
-            _kCardIntroGap,
-            _kCardPadding,
-            _kCardIntroGap,
-          ),
-          childrenPadding: const EdgeInsets.fromLTRB(
-            _kCardPadding,
-            0,
-            _kCardPadding,
-            _kCardPadding,
-          ),
-          leading: Icon(
-            Icons.bug_report_outlined,
-            size: 18,
-            color: colorScheme.onSurfaceVariant,
-          ),
-          iconColor: colorScheme.onSurfaceVariant,
-          collapsedIconColor: colorScheme.onSurfaceVariant,
-          title: Text(
-            '开发与调试',
-            style: _sectionTitleTextStyle(context)?.copyWith(
-              color: colorScheme.onSurfaceVariant,
-              fontWeight: FontWeight.w600,
-            ),
-          ),
-          subtitle: Text(
-            '仅在排查问题时展开并开启，默认收起。',
-            style: _sectionDescriptionTextStyle(context),
-          ),
-          children: const [
-            _SearchDebugLogSettingPanel(),
-          ],
-        ),
-      ),
+  Widget _buildSearchAggregationSection(BuildContext context) {
+    return _buildSettingsSection(
+      context,
+      icon: Icons.auto_awesome_mosaic_rounded,
+      title: '搜索聚合',
+      description: '控制同书多源合并。',
+      child: const _SearchAggregationSettingPanel(),
     );
   }
 
-  Widget _buildSectionTitle(
+  Widget _buildSettingsSection(
     BuildContext context, {
     required IconData icon,
     required String title,
+    required String description,
+    required Widget child,
   }) {
     final colorScheme = Theme.of(context).colorScheme;
-    return Row(
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Icon(icon, size: 18, color: colorScheme.primary),
-        const SizedBox(width: 6),
-        Text(
-          title,
-          style: _sectionTitleTextStyle(context),
+        Row(
+          children: [
+            Icon(icon, size: 17, color: colorScheme.primary),
+            const SizedBox(width: 6),
+            Text(title, style: _sectionTitleTextStyle(context)),
+          ],
         ),
+        const SizedBox(height: 4),
+        Text(description, style: _sectionDescriptionTextStyle(context)),
+        const SizedBox(height: _kSectionListGap),
+        child,
       ],
     );
   }
 }
 
+Widget _buildSettingsList(
+  BuildContext context, {
+  required List<Widget> children,
+}) {
+  final colorScheme = Theme.of(context).colorScheme;
+  final dividerColor = colorScheme.outlineVariant.withValues(alpha: 0.55);
+
+  return Column(
+    children: [
+      Container(height: 1, color: dividerColor),
+      for (final child in children) ...[
+        child,
+        Container(height: 1, color: dividerColor),
+      ],
+    ],
+  );
+}
+
 Widget _buildSavingIndicator(BuildContext context, {required bool visible}) {
   final colorScheme = Theme.of(context).colorScheme;
-  final textStyle = _statusTextStyle(context);
 
   return SizedBox(
-    width: 76,
+    width: 54,
     child: AnimatedSwitcher(
       duration: const Duration(milliseconds: 180),
-      switchInCurve: Curves.easeOut,
-      switchOutCurve: Curves.easeIn,
       child:
           visible
               ? Row(
@@ -271,15 +209,15 @@ Widget _buildSavingIndicator(BuildContext context, {required bool visible}) {
                 mainAxisAlignment: MainAxisAlignment.end,
                 children: [
                   SizedBox(
-                    width: 12,
-                    height: 12,
+                    width: 10,
+                    height: 10,
                     child: CircularProgressIndicator(
-                      strokeWidth: 2,
+                      strokeWidth: 1.8,
                       color: colorScheme.primary,
                     ),
                   ),
-                  const SizedBox(width: 6),
-                  Text('保存中', style: textStyle),
+                  const SizedBox(width: 4),
+                  Text('保存中', style: _statusTextStyle(context)),
                 ],
               )
               : const SizedBox(key: ValueKey('idle')),
@@ -289,6 +227,7 @@ Widget _buildSavingIndicator(BuildContext context, {required bool visible}) {
 
 Widget _buildErrorBanner(BuildContext context, {required String message}) {
   final colorScheme = Theme.of(context).colorScheme;
+
   return Container(
     width: double.infinity,
     padding: const EdgeInsets.fromLTRB(12, 10, 12, 10),
@@ -306,12 +245,105 @@ Widget _buildErrorBanner(BuildContext context, {required String message}) {
           child: Text(
             message,
             style: Theme.of(context).textTheme.bodySmall?.copyWith(
-              fontSize: 13,
+              fontSize: 12.5,
               color: colorScheme.onErrorContainer,
               height: 1.35,
             ),
           ),
         ),
+      ],
+    ),
+  );
+}
+
+Widget _buildStateHint(BuildContext context, {required String message}) {
+  return Padding(
+    padding: const EdgeInsets.symmetric(vertical: 10),
+    child: Text(message, style: _settingSubtitleTextStyle(context)),
+  );
+}
+
+Widget _buildSwitchRow(
+  BuildContext context, {
+  required IconData icon,
+  required String title,
+  required String subtitle,
+  required bool value,
+  required bool isSaving,
+  required ValueChanged<bool>? onChanged,
+}) {
+  final colorScheme = Theme.of(context).colorScheme;
+
+  return Padding(
+    padding: const EdgeInsets.symmetric(vertical: 12),
+    child: Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Padding(
+          padding: const EdgeInsets.only(top: 2),
+          child: Icon(
+            icon,
+            size: 18,
+            color: value ? colorScheme.primary : colorScheme.onSurfaceVariant,
+          ),
+        ),
+        const SizedBox(width: 12),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Expanded(
+                    child: Text(title, style: _settingTitleTextStyle(context)),
+                  ),
+                  _buildSavingIndicator(context, visible: isSaving),
+                ],
+              ),
+              const SizedBox(height: 4),
+              Text(subtitle, style: _settingSubtitleTextStyle(context)),
+            ],
+          ),
+        ),
+        const SizedBox(width: 10),
+        Switch.adaptive(value: value, onChanged: onChanged),
+      ],
+    ),
+  );
+}
+
+Widget _buildInfoRow(
+  BuildContext context, {
+  required IconData icon,
+  required String title,
+  required String subtitle,
+  required String trailingLabel,
+}) {
+  final colorScheme = Theme.of(context).colorScheme;
+
+  return Padding(
+    padding: const EdgeInsets.symmetric(vertical: 12),
+    child: Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Padding(
+          padding: const EdgeInsets.only(top: 2),
+          child: Icon(icon, size: 18, color: colorScheme.onSurfaceVariant),
+        ),
+        const SizedBox(width: 12),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(title, style: _settingTitleTextStyle(context)),
+              const SizedBox(height: 4),
+              Text(subtitle, style: _settingSubtitleTextStyle(context)),
+            ],
+          ),
+        ),
+        const SizedBox(width: 10),
+        Text(trailingLabel, style: _statusTextStyle(context)),
       ],
     ),
   );
@@ -333,95 +365,69 @@ class _BottomNavigationSettingPanelState
 
   @override
   Widget build(BuildContext context) {
-    final colorScheme = Theme.of(context).colorScheme;
     final navigationState = ref.watch(appShellNavigationProvider);
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(
-          '当前展示 ${navigationState.visibleTabCount}/4 项',
-          style: _statusTextStyle(context),
+          '当前展示 ${navigationState.visibleTabCount}/4 项，“我的”固定显示。',
+          style: _settingSubtitleTextStyle(context),
         ),
         const SizedBox(height: 8),
-        _buildTabToggle(
+        _buildSettingsList(
           context,
-          tab: AppShellTab.bookshelf,
-          title: '书架',
-          enabled: navigationState.showBookshelf,
-          enabledSubtitle: '已显示在底部菜单。',
-          disabledSubtitle: '已从底部菜单隐藏。',
-        ),
-        _buildTabToggle(
-          context,
-          tab: AppShellTab.discover,
-          title: '发现',
-          enabled: navigationState.showDiscover,
-          enabledSubtitle: '已显示在底部菜单。',
-          disabledSubtitle: '已从底部菜单隐藏。',
-        ),
-        _buildTabToggle(
-          context,
-          tab: AppShellTab.source,
-          title: '书源',
-          enabled: navigationState.showSource,
-          enabledSubtitle: '已显示在底部菜单。',
-          disabledSubtitle: '已从底部菜单隐藏。',
-        ),
-        ListTile(
-          contentPadding: EdgeInsets.zero,
-          leading: Icon(
-            Icons.lock_outline_rounded,
-            size: 18,
-            color: colorScheme.onSurfaceVariant,
-          ),
-          title: Text('我的（固定显示）', style: _settingTitleTextStyle(context)),
-          subtitle: Text(
-            '保留入口，方便随时返回系统设置调整。',
-            style: _settingSubtitleTextStyle(context),
-          ),
-          trailing: Container(
-            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-            decoration: BoxDecoration(
-              color: colorScheme.surfaceContainerHighest,
-              borderRadius: BorderRadius.circular(8),
+          children: [
+            _buildSwitchRow(
+              context,
+              icon: _destinationFor(AppShellTab.bookshelf).icon,
+              title: _destinationFor(AppShellTab.bookshelf).label,
+              subtitle: navigationState.showBookshelf ? '已显示。' : '已隐藏。',
+              value: navigationState.showBookshelf,
+              isSaving: _isSaving && _savingTab == AppShellTab.bookshelf,
+              onChanged:
+                  _isSaving
+                      ? null
+                      : (value) => _toggle(AppShellTab.bookshelf, value),
             ),
-            child: Text(
-              '固定',
-              style: _statusTextStyle(context),
+            _buildSwitchRow(
+              context,
+              icon: _destinationFor(AppShellTab.discover).icon,
+              title: _destinationFor(AppShellTab.discover).label,
+              subtitle: navigationState.showDiscover ? '已显示。' : '已隐藏。',
+              value: navigationState.showDiscover,
+              isSaving: _isSaving && _savingTab == AppShellTab.discover,
+              onChanged:
+                  _isSaving
+                      ? null
+                      : (value) => _toggle(AppShellTab.discover, value),
             ),
-          ),
+            _buildSwitchRow(
+              context,
+              icon: _destinationFor(AppShellTab.source).icon,
+              title: _destinationFor(AppShellTab.source).label,
+              subtitle: navigationState.showSource ? '已显示。' : '已隐藏。',
+              value: navigationState.showSource,
+              isSaving: _isSaving && _savingTab == AppShellTab.source,
+              onChanged:
+                  _isSaving
+                      ? null
+                      : (value) => _toggle(AppShellTab.source, value),
+            ),
+            _buildInfoRow(
+              context,
+              icon: _destinationFor(AppShellTab.mine).icon,
+              title: _destinationFor(AppShellTab.mine).label,
+              subtitle: '入口固定保留。',
+              trailingLabel: '固定',
+            ),
+          ],
         ),
         if (_errorText case final message?) ...[
           const SizedBox(height: 8),
           _buildErrorBanner(context, message: message),
         ],
       ],
-    );
-  }
-
-  Widget _buildTabToggle(
-    BuildContext context, {
-    required AppShellTab tab,
-    required String title,
-    required bool enabled,
-    required String enabledSubtitle,
-    required String disabledSubtitle,
-  }) {
-    return SwitchListTile.adaptive(
-      contentPadding: EdgeInsets.zero,
-      value: enabled,
-      onChanged: _isSaving ? null : (value) => _toggle(tab, value),
-      title: Row(
-        children: [
-          Expanded(child: Text(title, style: _settingTitleTextStyle(context))),
-          _buildSavingIndicator(context, visible: _isSaving && _savingTab == tab),
-        ],
-      ),
-      subtitle: Text(
-        enabled ? enabledSubtitle : disabledSubtitle,
-        style: _settingSubtitleTextStyle(context),
-      ),
     );
   }
 
@@ -437,10 +443,9 @@ class _BottomNavigationSettingPanelState
     });
 
     try {
-      await ref.read(appShellNavigationProvider.notifier).setTabVisible(
-            tab,
-            enabled,
-          );
+      await ref
+          .read(appShellNavigationProvider.notifier)
+          .setTabVisible(tab, enabled);
     } catch (_) {
       if (!mounted) {
         return;
@@ -552,50 +557,25 @@ class _ReaderAutoSwitchSettingPanelState
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        SwitchListTile.adaptive(
-          contentPadding: EdgeInsets.zero,
-          value: _enabled,
-          onChanged: _isSaving ? null : _toggle,
-          title: Row(
-            children: [
-              Expanded(
-                child: Text(
-                  '自动换源（正文加载失败时）',
-                  style: _settingTitleTextStyle(context),
-                ),
-              ),
-              _buildSavingIndicator(context, visible: _isSaving),
-            ],
-          ),
-          subtitle: Text(
-            _enabled ? '已开启，失败时自动尝试候选源。' : '已关闭，仅支持手动换源。',
-            style: _settingSubtitleTextStyle(context),
-          ),
+        _buildSettingsList(
+          context,
+          children: [
+            _buildSwitchRow(
+              context,
+              icon: Icons.swap_horiz_rounded,
+              title: '自动换源（正文加载失败时）',
+              subtitle: _enabled ? '失败时自动尝试候选源。' : '仅支持手动换源。',
+              value: _enabled,
+              isSaving: _isSaving,
+              onChanged: _isSaving ? null : _toggle,
+            ),
+          ],
         ),
         if (_errorText case final message?) ...[
           const SizedBox(height: 8),
           _buildErrorBanner(context, message: message),
         ],
       ],
-    );
-  }
-
-  Widget _buildStateHint(BuildContext context, {required String message}) {
-    final colorScheme = Theme.of(context).colorScheme;
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.fromLTRB(12, 12, 12, 12),
-      decoration: BoxDecoration(
-        color: colorScheme.surfaceContainerLow,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(
-          color: colorScheme.outlineVariant.withValues(alpha: 0.45),
-        ),
-      ),
-      child: Text(
-        message,
-        style: _settingSubtitleTextStyle(context),
-      ),
     );
   }
 }
@@ -691,188 +671,25 @@ class _SearchAggregationSettingPanelState
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        SwitchListTile.adaptive(
-          contentPadding: EdgeInsets.zero,
-          value: _enabled,
-          onChanged: _isSaving ? null : _toggle,
-          title: Row(
-            children: [
-              Expanded(
-                child: Text(
-                  '同书聚合（书名+作者）',
-                  style: _settingTitleTextStyle(context),
-                ),
-              ),
-              _buildSavingIndicator(context, visible: _isSaving),
-            ],
-          ),
-          subtitle: Text(
-            _enabled ? '已开启，同一本书多源命中时合并展示。' : '已关闭，按各书源原始结果逐条展示。',
-            style: _settingSubtitleTextStyle(context),
-          ),
+        _buildSettingsList(
+          context,
+          children: [
+            _buildSwitchRow(
+              context,
+              icon: Icons.merge_type_rounded,
+              title: '同书聚合（书名 + 作者）',
+              subtitle: _enabled ? '多源命中时合并展示。' : '按原始结果逐条展示。',
+              value: _enabled,
+              isSaving: _isSaving,
+              onChanged: _isSaving ? null : _toggle,
+            ),
+          ],
         ),
         if (_errorText case final message?) ...[
           const SizedBox(height: 8),
           _buildErrorBanner(context, message: message),
         ],
       ],
-    );
-  }
-
-  Widget _buildStateHint(BuildContext context, {required String message}) {
-    final colorScheme = Theme.of(context).colorScheme;
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.fromLTRB(12, 12, 12, 12),
-      decoration: BoxDecoration(
-        color: colorScheme.surfaceContainerLow,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(
-          color: colorScheme.outlineVariant.withValues(alpha: 0.45),
-        ),
-      ),
-      child: Text(
-        message,
-        style: _settingSubtitleTextStyle(context),
-      ),
-    );
-  }
-}
-
-class _SearchDebugLogSettingPanel extends StatefulWidget {
-  const _SearchDebugLogSettingPanel();
-
-  @override
-  State<_SearchDebugLogSettingPanel> createState() =>
-      _SearchDebugLogSettingPanelState();
-}
-
-class _SearchDebugLogSettingPanelState
-    extends State<_SearchDebugLogSettingPanel> {
-  final SearchSystemSettingsService _settingsService =
-      SearchSystemSettingsService();
-
-  bool _isLoading = true;
-  bool _isSaving = false;
-  bool _enabled = false;
-  String? _errorText;
-
-  @override
-  void initState() {
-    super.initState();
-    _loadSetting();
-  }
-
-  Future<void> _loadSetting() async {
-    try {
-      final enabled = await _settingsService.loadSearchDebugLogEnabled();
-      if (!mounted) {
-        return;
-      }
-      setState(() {
-        _enabled = enabled;
-        _errorText = null;
-      });
-    } catch (_) {
-      if (!mounted) {
-        return;
-      }
-      setState(() {
-        _errorText = '读取搜索调试日志开关失败，请稍后重试。';
-      });
-    } finally {
-      if (mounted) {
-        setState(() {
-          _isLoading = false;
-        });
-      }
-    }
-  }
-
-  Future<void> _toggle(bool enabled) async {
-    if (_isSaving) {
-      return;
-    }
-
-    final previous = _enabled;
-    setState(() {
-      _enabled = enabled;
-      _isSaving = true;
-      _errorText = null;
-    });
-
-    try {
-      await _settingsService.saveSearchDebugLogEnabled(enabled);
-    } catch (_) {
-      if (!mounted) {
-        return;
-      }
-      setState(() {
-        _enabled = previous;
-        _errorText = '保存搜索调试日志开关失败，请稍后重试。';
-      });
-    } finally {
-      if (mounted) {
-        setState(() {
-          _isSaving = false;
-        });
-      }
-    }
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    if (_isLoading) {
-      return _buildStateHint(context, message: '正在读取搜索调试日志配置...');
-    }
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        SwitchListTile.adaptive(
-          contentPadding: EdgeInsets.zero,
-          value: _enabled,
-          onChanged: _isSaving ? null : _toggle,
-          title: Row(
-            children: [
-              Expanded(
-                child: Text(
-                  '搜索调试日志（INFO）',
-                  style: _settingTitleTextStyle(context),
-                ),
-              ),
-              _buildSavingIndicator(context, visible: _isSaving),
-            ],
-          ),
-          subtitle: Text(
-            _enabled ? '已开启，记录搜索阶段调试信息。' : '已关闭，仅保留告警和错误日志。',
-            style: _settingSubtitleTextStyle(context),
-          ),
-        ),
-        if (_errorText case final message?) ...[
-          const SizedBox(height: 8),
-          _buildErrorBanner(context, message: message),
-        ],
-      ],
-    );
-  }
-
-  Widget _buildStateHint(BuildContext context, {required String message}) {
-    final colorScheme = Theme.of(context).colorScheme;
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.fromLTRB(12, 12, 12, 12),
-      decoration: BoxDecoration(
-        color: colorScheme.surfaceContainerLow,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(
-          color: colorScheme.outlineVariant.withValues(alpha: 0.45),
-        ),
-      ),
-      child: Text(
-        message,
-        style: _settingSubtitleTextStyle(context),
-      ),
     );
   }
 }

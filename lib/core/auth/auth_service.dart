@@ -1,7 +1,9 @@
-import '../device/device_identity_service.dart';
+import '../analytics/analytics_service.dart';
+import '../device/device_heartbeat_service.dart';
 import '../errors/app_exception.dart';
 import '../errors/error_codes.dart';
 import '../errors/error_stage.dart';
+import '../logging/app_logger.dart';
 import '../network/api_client.dart';
 import '../network/api_config.dart';
 import 'auth_event_bus.dart';
@@ -12,38 +14,39 @@ class AuthService {
   AuthService({
     ApiClient? client,
     String? baseUrl,
-    DeviceIdentityService? identityService,
+    DeviceHeartbeatService? heartbeatService,
+    AnalyticsService? analyticsService,
     AuthSessionStore? sessionStore,
   }) : _baseUrl = (baseUrl ?? AppApiConfig.baseUrl).trim(),
        _client =
-           client ?? ApiClient(baseUrl: (baseUrl ?? AppApiConfig.baseUrl).trim()),
-       _identityService = identityService ?? DeviceIdentityService(),
+           client ??
+           ApiClient(baseUrl: (baseUrl ?? AppApiConfig.baseUrl).trim()),
+       _heartbeatService =
+           heartbeatService ??
+           DeviceHeartbeatService(
+             baseUrl: (baseUrl ?? AppApiConfig.baseUrl).trim(),
+           ),
+       _analyticsService =
+           analyticsService ??
+           AnalyticsService(baseUrl: (baseUrl ?? AppApiConfig.baseUrl).trim()),
        _sessionStore = sessionStore ?? AuthSessionStore();
 
   final ApiClient _client;
   final String _baseUrl;
-  final DeviceIdentityService _identityService;
+  final DeviceHeartbeatService _heartbeatService;
+  final AnalyticsService _analyticsService;
   final AuthSessionStore _sessionStore;
+  final AppLogger _logger = AppLogger.instance;
 
   Future<AuthSession> login({
     required String username,
     required String password,
-    String? installId,
   }) async {
     _ensureBaseUrl();
-    final resolvedInstallId =
-        (installId == null || installId.trim().isEmpty)
-            ? await _identityService.getInstallId()
-            : installId.trim();
-
     final data = await _client.request<Map<String, dynamic>>(
       method: ApiMethod.post,
       path: '/v1/auth/login',
-      body: {
-        'username': username,
-        'password': password,
-        'install_id': resolvedInstallId,
-      },
+      body: {'username': username, 'password': password},
       stage: ErrorStage.unknown,
       decoder: _decodeMap,
     );
@@ -54,36 +57,21 @@ class AuthService {
   Future<AuthSession> loginAndStore({
     required String username,
     required String password,
-    String? installId,
   }) async {
-    final session = await login(
-      username: username,
-      password: password,
-      installId: installId,
-    );
-    await _sessionStore.saveSession(session);
+    final session = await login(username: username, password: password);
+    await _persistAuthenticatedSession(session);
     return session;
   }
 
   Future<AuthSession> register({
     required String username,
     required String password,
-    String? installId,
   }) async {
     _ensureBaseUrl();
-    final resolvedInstallId =
-        (installId == null || installId.trim().isEmpty)
-            ? await _identityService.getInstallId()
-            : installId.trim();
-
     final data = await _client.request<Map<String, dynamic>>(
       method: ApiMethod.post,
       path: '/v1/auth/register',
-      body: {
-        'username': username,
-        'password': password,
-        'install_id': resolvedInstallId,
-      },
+      body: {'username': username, 'password': password},
       stage: ErrorStage.unknown,
       decoder: _decodeMap,
     );
@@ -94,20 +82,13 @@ class AuthService {
   Future<AuthSession> registerAndStore({
     required String username,
     required String password,
-    String? installId,
   }) async {
-    final session = await register(
-      username: username,
-      password: password,
-      installId: installId,
-    );
-    await _sessionStore.saveSession(session);
+    final session = await register(username: username, password: password);
+    await _persistAuthenticatedSession(session);
     return session;
   }
 
-  Future<AuthSession> refresh({
-    String? refreshToken,
-  }) async {
+  Future<AuthSession> refresh({String? refreshToken}) async {
     _ensureBaseUrl();
     final resolvedRefreshToken =
         (refreshToken == null || refreshToken.trim().isEmpty)
@@ -162,35 +143,35 @@ class AuthService {
     AuthEventBus.instance.emitLoggedOut();
   }
 
-  Future<void> bindDevice({
-    String? accessToken,
-    String? installId,
-  }) async {
-    _ensureBaseUrl();
-    final token = (accessToken ?? await _sessionStore.getAccessToken())?.trim();
-    if (token == null || token.isEmpty) {
-      throw const AppException(
-        code: ErrorCode.validation,
-        briefMessage: '缺少登录态，无法绑定设备。',
-        stage: ErrorStage.unknown,
+  Future<void> _persistAuthenticatedSession(AuthSession session) async {
+    await _sessionStore.saveSession(session);
+    await _runPostAuthBootstrap();
+  }
+
+  Future<void> _runPostAuthBootstrap() async {
+    try {
+      await _heartbeatService.sendHeartbeat();
+    } catch (error, stackTrace) {
+      _logger.warn(
+        'Post-auth heartbeat failed',
+        context: {
+          'error': error.toString(),
+          'stackTrace': stackTrace.toString(),
+        },
       );
     }
 
-    final resolvedInstallId =
-        (installId == null || installId.trim().isEmpty)
-            ? await _identityService.getInstallId()
-            : installId.trim();
-
-    await _client.request<Map<String, dynamic>>(
-      method: ApiMethod.post,
-      path: '/v1/auth/bind-device',
-      body: {
-        'install_id': resolvedInstallId,
-      },
-      headers: {'Authorization': 'Bearer $token'},
-      stage: ErrorStage.unknown,
-      decoder: _decodeMap,
-    );
+    try {
+      await _analyticsService.trackVisit(visitCount: 1, visitSeconds: 0);
+    } catch (error, stackTrace) {
+      _logger.warn(
+        'Post-auth visit tracking failed',
+        context: {
+          'error': error.toString(),
+          'stackTrace': stackTrace.toString(),
+        },
+      );
+    }
   }
 
   void _ensureBaseUrl() {
@@ -212,48 +193,26 @@ class AuthService {
   }
 
   AuthSession _parseSession(Map<String, dynamic> data) {
-    if (data['data'] is Map) {
-      data =
-          (data['data'] as Map).map((key, value) => MapEntry(key.toString(), value));
+    String requireString(String key) {
+      final raw = data[key]?.toString().trim() ?? '';
+      if (raw.isEmpty) {
+        throw FormatException('Missing required field: $key');
+      }
+      return raw;
     }
 
-    String? tryString(Object? value) {
-      final raw = value?.toString().trim() ?? '';
+    String? readOptionalString(String key) {
+      final raw = data[key]?.toString().trim() ?? '';
       return raw.isEmpty ? null : raw;
     }
 
-    final accessToken =
-        tryString(data['access_token']) ??
-        tryString(data['accessToken']) ??
-        tryString(data['token']);
-    if (accessToken == null) {
-      throw const FormatException('Missing access_token in response.');
-    }
-
-    String? userId = tryString(data['user_id']) ?? tryString(data['userId']);
-    if (userId == null && data['user'] is Map) {
-      final userMap = data['user'] as Map;
-      userId =
-          tryString(userMap['id']) ??
-          tryString(userMap['user_id']) ??
-          tryString(userMap['uid']);
-    }
-
-    final refreshToken =
-        tryString(data['refresh_token']) ?? tryString(data['refreshToken']);
-    final accessExpiresAt = _parseTime(data['access_expires_at']);
-    final refreshExpiresAt = _parseTime(data['refresh_expires_at']);
-    final username =
-        tryString(data['username']) ??
-        (data['user'] is Map ? tryString((data['user'] as Map)['username']) : null);
-
     return AuthSession(
-      accessToken: accessToken,
-      refreshToken: refreshToken,
-      accessExpiresAt: accessExpiresAt,
-      refreshExpiresAt: refreshExpiresAt,
-      userId: userId,
-      username: username,
+      accessToken: requireString('access_token'),
+      refreshToken: readOptionalString('refresh_token'),
+      accessExpiresAt: _parseTime(data['access_expires_at']),
+      refreshExpiresAt: _parseTime(data['refresh_expires_at']),
+      userId: requireString('user_id'),
+      username: requireString('username'),
     );
   }
 

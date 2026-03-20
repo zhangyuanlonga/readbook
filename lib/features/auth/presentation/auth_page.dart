@@ -6,7 +6,6 @@ import '../../../app/layout/app_spacing.dart';
 import '../../../core/auth/auth_service.dart';
 import '../../../core/errors/app_exception.dart';
 import '../../../core/network/api_client.dart';
-import '../../../core/reader/reader_identity_service.dart';
 
 class AuthPage extends StatefulWidget {
   const AuthPage({super.key});
@@ -22,7 +21,6 @@ class _AuthPageState extends State<AuthPage> {
   final TextEditingController _passwordController = TextEditingController();
   final TextEditingController _confirmController = TextEditingController();
   final AuthService _authService = AuthService();
-  final ReaderIdentityService _readerIdentityService = ReaderIdentityService();
 
   bool _isRegister = false;
   bool _isSubmitting = false;
@@ -86,9 +84,7 @@ class _AuthPageState extends State<AuthPage> {
                   ),
                   const SizedBox(height: 12),
                   Text(
-                    _isRegister
-                        ? '继续即表示你同意相关服务条款与隐私政策。'
-                        : '没有账号？可切换到注册创建新账号。',
+                    _isRegister ? '继续即表示你同意相关服务条款与隐私政策。' : '没有账号？可切换到注册创建新账号。',
                     textAlign: TextAlign.center,
                     style: Theme.of(context).textTheme.bodySmall?.copyWith(
                       color: colorScheme.onSurfaceVariant,
@@ -133,9 +129,7 @@ class _AuthPageState extends State<AuthPage> {
                   ),
                   const SizedBox(height: 4),
                   Text(
-                    _isRegister
-                        ? '注册后可同步阅读进度与个性化设置。'
-                        : '登录后可继续同步书源与阅读记录。',
+                    _isRegister ? '注册后可同步阅读进度与账号权益。' : '登录后可继续同步阅读数据与账号权益。',
                     maxLines: 2,
                     overflow: TextOverflow.ellipsis,
                     style: Theme.of(context).textTheme.bodySmall?.copyWith(
@@ -183,8 +177,8 @@ class _AuthPageState extends State<AuthPage> {
               controller: _usernameController,
               textInputAction: TextInputAction.next,
               decoration: const InputDecoration(
-                labelText: '账号',
-                hintText: '手机号 / 用户名 / 邮箱',
+                labelText: '用户名',
+                hintText: '请输入用户名',
                 prefixIcon: Icon(Icons.person_outline),
               ),
             ),
@@ -262,32 +256,16 @@ class _AuthPageState extends State<AuthPage> {
     });
 
     try {
-      final session =
-          _isRegister
-              ? await _authService.registerAndStore(
-                username: username,
-                password: password,
-              )
-              : await _authService.loginAndStore(
-                username: username,
-                password: password,
-              );
-
-      try {
-        await _authService.bindDevice(accessToken: session.accessToken);
-      } on ApiException catch (error) {
-        if (error.statusCode == 409) {
-          _showMessage('该设备已绑定其他账号，请更换账号或联系支持。');
-          return;
-        }
-      } catch (_) {
-        // Ignore bind failures to avoid blocking login flow.
-      }
-
-      try {
-        await _readerIdentityService.ensureRegistered();
-      } catch (_) {
-        // Ignore reader registration failures to avoid blocking login flow.
+      if (_isRegister) {
+        await _authService.registerAndStore(
+          username: username,
+          password: password,
+        );
+      } else {
+        await _authService.loginAndStore(
+          username: username,
+          password: password,
+        );
       }
 
       if (!mounted) {
@@ -296,9 +274,11 @@ class _AuthPageState extends State<AuthPage> {
       _showMessage(_isRegister ? '注册成功，已登录。' : '登录成功。');
       context.go('/profile');
     } on ApiException catch (error) {
-      _showMessage(error.statusCode == 409
-          ? '该设备已绑定其他账号，请更换账号或联系支持。'
-          : error.briefMessage);
+      _showMessage(
+        _isRegister && error.statusCode == 409
+            ? '该账号已存在，请直接登录或更换账号名。'
+            : error.briefMessage,
+      );
     } on AppException catch (error) {
       _showMessage(error.briefMessage);
     } catch (_) {
@@ -316,8 +296,8 @@ class _AuthPageState extends State<AuthPage> {
     if (!mounted) {
       return;
     }
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(message)),
-    );
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: Text(message)));
   }
 }

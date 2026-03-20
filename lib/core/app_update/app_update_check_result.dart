@@ -4,10 +4,12 @@ class AppUpdateCheckResult {
   const AppUpdateCheckResult({
     required this.release,
     required this.hasUpdate,
+    required this.forceUpdate,
   });
 
   final AppUpdateRelease? release;
   final bool hasUpdate;
+  final bool forceUpdate;
 
   factory AppUpdateCheckResult.fromJson(
     Map<String, dynamic> json, {
@@ -63,14 +65,12 @@ class AppUpdateCheckResult {
       return AppUpdateCheckResult(
         release: null,
         hasUpdate: hasUpdateFlag ?? false,
+        forceUpdate: forceUpdateFlag ?? false,
       );
     }
 
-    if (forceUpdateFlag != null && !releaseMap.containsKey('force_update')) {
-      releaseMap = {
-        ...releaseMap,
-        'force_update': forceUpdateFlag,
-      };
+    if (forceUpdateFlag != null) {
+      releaseMap = {...releaseMap, 'force_update': forceUpdateFlag};
     }
 
     final release = AppUpdateRelease.fromJson(releaseMap);
@@ -78,7 +78,12 @@ class AppUpdateCheckResult {
     final computedHasUpdate =
         releaseCode == null ? true : releaseCode > currentVersionCode;
     final hasUpdate = hasUpdateFlag ?? computedHasUpdate;
+    final forceUpdate = forceUpdateFlag ?? (release.forceUpdate ?? false);
 
-    return AppUpdateCheckResult(release: release, hasUpdate: hasUpdate);
+    return AppUpdateCheckResult(
+      release: release,
+      hasUpdate: hasUpdate,
+      forceUpdate: forceUpdate,
+    );
   }
 }

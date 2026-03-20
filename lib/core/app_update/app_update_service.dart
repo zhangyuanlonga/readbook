@@ -13,7 +13,8 @@ class AppUpdateService {
     DeviceIdentityService? identityService,
   }) : _baseUrl = (baseUrl ?? AppApiConfig.baseUrl).trim(),
        _client =
-           client ?? ApiClient(baseUrl: (baseUrl ?? AppApiConfig.baseUrl).trim()),
+           client ??
+           ApiClient(baseUrl: (baseUrl ?? AppApiConfig.baseUrl).trim()),
        _identityService = identityService ?? DeviceIdentityService();
 
   final ApiClient _client;
@@ -22,7 +23,6 @@ class AppUpdateService {
 
   Future<AppUpdateCheckResult> checkUpdate({String? appName}) async {
     _ensureBaseUrl();
-    final identity = await _identityService.loadIdentity();
     final versionCode = await _identityService.getAppVersionCode();
     final resolvedAppName =
         (appName ?? AppApiConfig.appName).trim().isEmpty
@@ -32,19 +32,12 @@ class AppUpdateService {
     final data = await _client.request<Map<String, dynamic>>(
       method: ApiMethod.post,
       path: '/v1/app-updates/check',
-      body: {
-        'app_name': resolvedAppName,
-        'version_code': versionCode,
-        'install_id': identity.installId,
-      },
+      body: {'app_name': resolvedAppName, 'version_code': versionCode},
       stage: ErrorStage.unknown,
       decoder: _decodeMap,
     );
 
-    return AppUpdateCheckResult.fromJson(
-      data,
-      currentVersionCode: versionCode,
-    );
+    return AppUpdateCheckResult.fromJson(data, currentVersionCode: versionCode);
   }
 
   void _ensureBaseUrl() {

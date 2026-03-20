@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -10,7 +12,10 @@ import '../../../app/theme/app_theme_provider.dart';
 import '../../../app/theme/app_theme_seed_provider.dart';
 import '../../../core/app_update/app_update_dialog.dart';
 import '../../../core/app_update/app_update_service.dart';
+import '../../../core/auth/auth_event_bus.dart';
 import '../../../core/auth/auth_session_store.dart';
+import '../../../core/user/user_profile.dart';
+import '../../../core/user/user_profile_service.dart';
 
 class MinePage extends ConsumerStatefulWidget {
   const MinePage({super.key});
@@ -65,15 +70,25 @@ class _MinePageState extends ConsumerState<MinePage> {
 
   final AuthSessionStore _authSessionStore = AuthSessionStore();
   final AppUpdateService _updateService = AppUpdateService();
+  final UserProfileService _userProfileService = UserProfileService();
+  StreamSubscription<AuthEvent>? _authEventSub;
   String? _userId;
   String? _username;
+  String? _vipStatusText;
   bool _isLoadingSession = true;
   bool _isCheckingUpdate = false;
 
   @override
   void initState() {
     super.initState();
+    _authEventSub = AuthEventBus.instance.stream.listen(_handleAuthEvent);
     _loadSession();
+  }
+
+  @override
+  void dispose() {
+    _authEventSub?.cancel();
+    super.dispose();
   }
 
   @override
@@ -95,107 +110,101 @@ class _MinePageState extends ConsumerState<MinePage> {
             alignment: Alignment.topCenter,
             child: ConstrainedBox(
               constraints: BoxConstraints(maxWidth: maxWidth),
-              child: ListView(
-                padding: EdgeInsets.fromLTRB(
-                  horizontal,
-                  12,
-                  horizontal,
-                  12 + bottomSafe,
+              child: RefreshIndicator(
+                onRefresh: _refreshMine,
+                child: ListView(
+                  physics: const AlwaysScrollableScrollPhysics(),
+                  padding: EdgeInsets.fromLTRB(
+                    horizontal,
+                    12,
+                    horizontal,
+                    12 + bottomSafe,
+                  ),
+                  children: [
+                    _buildPageEntrance(
+                      index: 0,
+                      child: _buildProfileCard(
+                        context,
+                        subtitle: _buildProfileSubtitle(),
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    _buildPageEntrance(
+                      index: 1,
+                      child: _buildActionSection(
+                        context,
+                        title: '常用',
+                        actions: [
+                          _MineActionItem(
+                            icon: Icons.settings_outlined,
+                            label: '主题设置',
+                            colorDot: seedColor,
+                            onTap:
+                                () => _showThemeSettingsSheet(
+                                  context: context,
+                                  ref: ref,
+                                ),
+                          ),
+                          _MineActionItem(
+                            icon: Icons.tune_rounded,
+                            label: '系统设置',
+                            onTap: () => context.push('/system-settings'),
+                          ),
+                          _MineActionItem(
+                            icon: Icons.menu_book_rounded,
+                            label: '书源',
+                            onTap: () => context.go('/source'),
+                          ),
+                          _MineActionItem(
+                            icon: Icons.rule_outlined,
+                            label: '规则配置',
+                            onTap: () => context.push('/rule-config'),
+                          ),
+                          _MineActionItem(
+                            icon: Icons.cloud_outlined,
+                            label: '缓存管理',
+                            onTap: () => context.push('/cache'),
+                          ),
+                          _MineActionItem(
+                            icon: Icons.bookmarks_outlined,
+                            label: '书签',
+                            onTap: () => context.push('/bookmarks'),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    _buildPageEntrance(
+                      index: 2,
+                      child: _buildActionSection(
+                        context,
+                        title: '其他',
+                        actions: [
+                          _MineActionItem(
+                            icon: Icons.rate_review_outlined,
+                            label: '问题反馈',
+                            onTap: () => context.push('/feedback'),
+                          ),
+                          _MineActionItem(
+                            icon: Icons.feedback_outlined,
+                            label: '官方群',
+                            onTap: _openSourceFeedback,
+                          ),
+                          _MineActionItem(
+                            icon: Icons.system_update_alt,
+                            label: '检查更新',
+                            onTap: _checkUpdateFromMine,
+                          ),
+                          _MineActionItem(
+                            icon: Icons.info_outline,
+                            label: '关于',
+                            onTap: () => context.push('/about'),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
                 ),
-                children: [
-                  _buildPageEntrance(
-                    index: 0,
-                    child: _buildProfileCard(
-                      context,
-                      subtitle:
-                          _isLoadingSession
-                              ? '读取登录状态中...'
-                              : (_userId == null
-                                  ? '未登录，点击登录/注册以同步阅读数据。'
-                                  : '已登录 · ${_username ?? _userId!}'),
-                    ),
-                  ),
-                  const SizedBox(height: 12),
-                  _buildPageEntrance(
-                    index: 1,
-                    child: _buildActionSection(
-                      context,
-                      title: '常用',
-                      actions: [
-                        _MineActionItem(
-                          icon: Icons.settings_outlined,
-                          label: '主题设置',
-                          colorDot: seedColor,
-                          onTap:
-                              () => _showThemeSettingsSheet(
-                                context: context,
-                                ref: ref,
-                              ),
-                        ),
-                        _MineActionItem(
-                          icon: Icons.tune_rounded,
-                          label: '系统设置',
-                          onTap: () => context.push('/system-settings'),
-                        ),
-                        _MineActionItem(
-                          icon: Icons.card_membership_outlined,
-                          label: '会员',
-                          onTap: () => _showMessage('会员功能开发中。'),
-                        ),
-                        _MineActionItem(
-                          icon: Icons.menu_book_rounded,
-                          label: '书源',
-                          onTap: () => context.go('/source'),
-                        ),
-                        _MineActionItem(
-                          icon: Icons.rule_outlined,
-                          label: '规则配置',
-                          onTap: () => context.push('/rule-config'),
-                        ),
-                        _MineActionItem(
-                          icon: Icons.cloud_outlined,
-                          label: '缓存管理',
-                          onTap: () => context.push('/cache'),
-                        ),
-                        _MineActionItem(
-                          icon: Icons.bookmarks_outlined,
-                          label: '书签',
-                          onTap: () => context.push('/bookmarks'),
-                        ),
-                      ],
-                    ),
-                  ),
-                  const SizedBox(height: 12),
-                  _buildPageEntrance(
-                    index: 2,
-                    child: _buildActionSection(
-                      context,
-                      title: '其他',
-                      actions: [
-                        _MineActionItem(
-                          icon: Icons.quiz_outlined,
-                          label: '常见问题',
-                          onTap: () => _showMessage('常见问题整理中。'),
-                        ),
-                        _MineActionItem(
-                          icon: Icons.feedback_outlined,
-                          label: '官方群',
-                          onTap: _openSourceFeedback,
-                        ),
-                        _MineActionItem(
-                          icon: Icons.system_update_alt,
-                          label: '检查更新',
-                          onTap: _checkUpdateFromMine,
-                        ),
-                        _MineActionItem(
-                          icon: Icons.info_outline,
-                          label: '关于',
-                          onTap: () => context.push('/about'),
-                        ),
-                      ],
-                    ),
-                  ),
-                ],
               ),
             ),
           );
@@ -206,6 +215,10 @@ class _MinePageState extends ConsumerState<MinePage> {
 
   Widget _buildProfileCard(BuildContext context, {required String subtitle}) {
     final colorScheme = Theme.of(context).colorScheme;
+    final displayName =
+        _userId == null
+            ? '登录 / 注册'
+            : ((_username?.trim().isNotEmpty ?? false) ? _username! : _userId!);
 
     return Card(
       child: InkWell(
@@ -233,7 +246,7 @@ class _MinePageState extends ConsumerState<MinePage> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      _userId == null ? '登录 / 注册' : 'AppRead',
+                      displayName,
                       style: Theme.of(context).textTheme.titleMedium?.copyWith(
                         fontWeight: FontWeight.w700,
                       ),
@@ -262,19 +275,73 @@ class _MinePageState extends ConsumerState<MinePage> {
     );
   }
 
+  String _buildProfileSubtitle() {
+    if (_isLoadingSession) {
+      return '读取登录状态中...';
+    }
+    if (_userId == null) {
+      return '未登录，点击登录/注册以同步阅读数据。';
+    }
+    return '会员状态：${_vipStatusText ?? '未同步'}';
+  }
+
   Future<void> _loadSession() async {
-    setState(() {
-      _isLoadingSession = true;
-    });
+    await _reloadSession(showLoading: true);
+  }
+
+  Future<void> _refreshMine() async {
+    await _reloadSession(showLoading: false);
+  }
+
+  Future<void> _reloadSession({required bool showLoading}) async {
+    if (showLoading && mounted) {
+      setState(() {
+        _isLoadingSession = true;
+      });
+    }
     final session = await _authSessionStore.getSession();
+    UserProfile? profile;
+    if (session != null) {
+      try {
+        profile = await _userProfileService.fetchMe();
+      } catch (_) {
+        profile = null;
+      }
+    }
     if (!mounted) {
       return;
     }
     setState(() {
       _userId = session?.userId;
-      _username = session?.username;
+      _username = profile?.username ?? session?.username;
+      _vipStatusText = _resolveVipStatusText(profile);
       _isLoadingSession = false;
     });
+  }
+
+  String? _resolveVipStatusText(UserProfile? profile) {
+    if (profile == null) {
+      return null;
+    }
+    final level = (profile.vipLevel ?? '').trim().toLowerCase();
+    final status = (profile.vipStatus ?? '').trim().toLowerCase();
+    final isVip = level.isNotEmpty && level != 'none' && status == 'active';
+    if (!isVip) {
+      return '非 VIP';
+    }
+    if (level == 'svip') {
+      return 'SVIP';
+    }
+    return 'VIP';
+  }
+
+  void _handleAuthEvent(AuthEvent event) {
+    switch (event.type) {
+      case AuthEventType.loggedOut:
+      case AuthEventType.sessionExpired:
+        unawaited(_loadSession());
+        break;
+    }
   }
 
   Widget _buildActionSection(
