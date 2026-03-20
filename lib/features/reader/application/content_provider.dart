@@ -42,6 +42,7 @@ abstract class ContentProvider {
     required String sourceId,
     required String bookId,
     required String chapterUrl,
+    String? bookTitle,
     String? chapterId,
     int? chapterIndex,
     String? chapterTitle,

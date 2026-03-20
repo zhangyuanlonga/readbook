@@ -8,14 +8,18 @@ import '../../../../core/errors/error_codes.dart';
 import '../../../../core/errors/error_stage.dart';
 import '../../../../domain/entities/local_book.dart';
 import 'local_book_parser.dart';
+import 'txt_toc_rule_settings_service.dart';
 
 class TxtLocalBookParser implements LocalBookParser {
-  const TxtLocalBookParser();
+  TxtLocalBookParser({TxtTocRuleSettingsService? ruleSettingsService})
+    : _ruleSettingsService = ruleSettingsService ?? TxtTocRuleSettingsService();
 
-  static final RegExp _chapterTitlePattern = RegExp(
-    r'^\s*(第[0-9零一二三四五六七八九十百千万两〇]+[章节卷部篇回](?:\s|[:：\-_.、\)\]）】》>]|$).*)$',
-    caseSensitive: false,
-  );
+  static const int _chunkLengthWithoutToc = 4000;
+  static const int _tocDetectionSampleLength = 200000;
+  static const int _tocDetectionGapThreshold = 1000;
+  static const int _maxLengthWithToc = 102400;
+
+  final TxtTocRuleSettingsService _ruleSettingsService;
 
   @override
   bool supports(LocalBookFormat format) {
@@ -52,7 +56,7 @@ class TxtLocalBookParser implements LocalBookParser {
       );
     }
 
-    final chapters = _splitChapters(normalized);
+    final chapters = await _splitChapters(book, normalized);
     if (chapters.isEmpty) {
       throw AppException(
         code: ErrorCode.ruleMatchEmpty,
@@ -85,55 +89,135 @@ class TxtLocalBookParser implements LocalBookParser {
         .replaceAll('\r\n', '\n')
         .replaceAll('\r', '\n')
         .replaceAll('\u0000', '')
-        .trim();
+        .trimRight();
   }
 
-  List<LocalParsedChapter> _splitChapters(String text) {
-    final lines = text.split('\n');
-    final chapterTitles = <String>[];
-    final chapterBuffers = <StringBuffer>[];
+  Future<List<LocalParsedChapter>> _splitChapters(
+    LocalBook book,
+    String text,
+  ) async {
+    final pattern =
+        _resolveConfiguredPattern(book.txtTocRulePattern) ??
+        await _detectTocPattern(text);
+    if (pattern == null) {
+      return _splitByFixedLength(text);
+    }
+    final chapters = _splitByPattern(text, pattern);
+    if (chapters.isEmpty) {
+      return _splitByFixedLength(text);
+    }
+    if (book.splitLongChapter) {
+      return _splitLongChapters(chapters);
+    }
+    return chapters;
+  }
 
-    String currentTitle = '开始阅读';
-    var currentBuffer = StringBuffer();
+  RegExp? _resolveConfiguredPattern(String? configuredPattern) {
+    final pattern = configuredPattern?.trim() ?? '';
+    if (pattern.isEmpty) {
+      return null;
+    }
+    try {
+      return RegExp(pattern, multiLine: true, caseSensitive: false);
+    } on FormatException {
+      return null;
+    } on ArgumentError {
+      return null;
+    }
+  }
 
-    void flushChapter() {
-      final content = currentBuffer.toString().trim();
-      if (content.isEmpty) {
-        return;
+  Future<RegExp?> _detectTocPattern(String text) async {
+    final sample =
+        text.length > _tocDetectionSampleLength
+            ? text.substring(0, _tocDetectionSampleLength)
+            : text;
+    RegExp? selectedPattern;
+    var maxHits = 0;
+    var maxRawMatches = 0;
+    int? earliestStart;
+
+    final enabledRules = await _ruleSettingsService.loadEnabledRules();
+    for (final rule in enabledRules.reversed) {
+      final pattern = rule.compiled;
+      final matches = pattern.allMatches(sample).toList(growable: false);
+      if (matches.isEmpty) {
+        continue;
       }
-      chapterTitles.add(currentTitle);
-      chapterBuffers.add(StringBuffer(content));
-      currentBuffer = StringBuffer();
+      var hits = 0;
+      int? lastAcceptedEnd;
+      for (final match in matches) {
+        if (lastAcceptedEnd == null ||
+            match.start - lastAcceptedEnd > _tocDetectionGapThreshold) {
+          hits += 1;
+          lastAcceptedEnd = match.end;
+        }
+      }
+      final firstMatchStart = matches.first.start;
+      final shouldSelect =
+          hits > maxHits ||
+          (hits == maxHits && matches.length > maxRawMatches) ||
+          (hits == maxHits &&
+              matches.length == maxRawMatches &&
+              (earliestStart == null || firstMatchStart < earliestStart));
+      if (shouldSelect && hits > 0) {
+        maxHits = hits;
+        maxRawMatches = matches.length;
+        earliestStart = firstMatchStart;
+        selectedPattern = pattern;
+      }
     }
 
-    for (final rawLine in lines) {
-      final line = rawLine.trimRight();
-      final normalizedLine = line.trim();
-      final isTitle = _chapterTitlePattern.hasMatch(normalizedLine);
+    return selectedPattern;
+  }
 
-      if (isTitle) {
-        flushChapter();
-        currentTitle = normalizedLine;
+  List<LocalParsedChapter> _splitByPattern(String text, RegExp pattern) {
+    final matches = pattern.allMatches(text).toList(growable: false);
+    if (matches.isEmpty) {
+      return const <LocalParsedChapter>[];
+    }
+
+    final chapters = <LocalParsedChapter>[];
+    final preface = text.substring(0, matches.first.start).trim();
+    if (preface.isNotEmpty) {
+      chapters.add(
+        LocalParsedChapter(
+          title: '前言',
+          content: preface,
+          startOffset: 0,
+          endOffset: matches.first.start,
+        ),
+      );
+    }
+
+    for (var i = 0; i < matches.length; i += 1) {
+      final match = matches[i];
+      final chapterStart = match.start;
+      final chapterEnd =
+          i + 1 < matches.length ? matches[i + 1].start : text.length;
+      final title = match.group(0)?.trim();
+      if (title == null || title.isEmpty) {
         continue;
       }
 
-      if (currentBuffer.isNotEmpty) {
-        currentBuffer.writeln();
+      final content = text.substring(match.end, chapterEnd).trim();
+      if (content.isEmpty) {
+        continue;
       }
-      currentBuffer.write(line);
+
+      chapters.add(
+        LocalParsedChapter(
+          title: title,
+          content: content,
+          startOffset: chapterStart,
+          endOffset: chapterEnd,
+        ),
+      );
     }
 
-    flushChapter();
-
-    if (chapterTitles.length <= 1) {
-      return _splitByFixedLength(text);
-    }
-
-    return _buildChapters(chapterTitles, chapterBuffers);
+    return chapters;
   }
 
   List<LocalParsedChapter> _splitByFixedLength(String text) {
-    const chunkLength = 4000;
     final normalized = text.trim();
     if (normalized.isEmpty) {
       return const <LocalParsedChapter>[];
@@ -143,7 +227,7 @@ class TxtLocalBookParser implements LocalBookParser {
     var start = 0;
     var index = 0;
     while (start < normalized.length) {
-      var end = start + chunkLength;
+      var end = start + _chunkLengthWithoutToc;
       if (end >= normalized.length) {
         end = normalized.length;
       } else {
@@ -175,30 +259,50 @@ class TxtLocalBookParser implements LocalBookParser {
     return chapters;
   }
 
-  List<LocalParsedChapter> _buildChapters(
-    List<String> titles,
-    List<StringBuffer> buffers,
-  ) {
-    final chapters = <LocalParsedChapter>[];
-    var offset = 0;
-    for (var i = 0; i < titles.length; i += 1) {
-      final content = buffers[i].toString().trim();
-      if (content.isEmpty) {
+  List<LocalParsedChapter> _splitLongChapters(List<LocalParsedChapter> chapters) {
+    final output = <LocalParsedChapter>[];
+
+    for (final chapter in chapters) {
+      final content = chapter.content.trim();
+      if (content.isEmpty || content.length <= _maxLengthWithToc) {
+        output.add(chapter);
         continue;
       }
-      final start = offset;
-      offset += content.length;
-      chapters.add(
-        LocalParsedChapter(
-          title: titles[i],
-          content: content,
-          startOffset: start,
-          endOffset: offset,
-        ),
-      );
-      offset += 1;
+
+      var start = 0;
+      var splitIndex = 0;
+      while (start < content.length) {
+        var end = start + _maxLengthWithToc;
+        if (end >= content.length) {
+          end = content.length;
+        } else {
+          final nextBreak = content.lastIndexOf('\n', end);
+          if (nextBreak > start + 800) {
+            end = nextBreak;
+          }
+        }
+
+        final piece = content.substring(start, end).trim();
+        if (piece.isNotEmpty) {
+          splitIndex += 1;
+          final baseStart = chapter.startOffset ?? 0;
+          output.add(
+            LocalParsedChapter(
+              title: '${chapter.title}($splitIndex)',
+              content: piece,
+              startOffset: baseStart + start,
+              endOffset: baseStart + end,
+            ),
+          );
+        }
+
+        start = end;
+        while (start < content.length && content[start] == '\n') {
+          start += 1;
+        }
+      }
     }
 
-    return chapters;
+    return output;
   }
 }

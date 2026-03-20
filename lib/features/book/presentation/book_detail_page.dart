@@ -12,14 +12,18 @@ import '../../../core/errors/app_exception.dart';
 import '../../../core/errors/error_codes.dart';
 import '../../../core/errors/error_stage.dart';
 import '../../../data/datasources/local/app_database.dart';
+import '../../../data/repositories/local_book_repository_impl.dart';
 import '../../../domain/entities/book.dart';
 import '../../../domain/entities/bookshelf_book.dart';
 import '../../../domain/entities/chapter.dart';
+import '../../../domain/entities/local_book.dart';
 import '../../../domain/entities/source_definition.dart';
+import '../../../domain/repositories/local_book_repository.dart';
 import '../../bookshelf/application/local_book_import_service.dart';
 import '../../bookshelf/application/bookshelf_service.dart';
 import '../../reader/application/content_provider.dart';
 import '../../reader/application/local_content_provider.dart';
+import '../../reader/application/local/txt_toc_rule_settings_service.dart';
 import '../../reader/application/source_content_provider.dart';
 import '../../reader/application/source_switch_score_service.dart';
 import '../../reader/application/switch_source_shared.dart';
@@ -64,6 +68,11 @@ class _BookDetailPageState extends State<BookDetailPage> {
   late final SearchService _switchSourceSearchService;
   late final Stream<int> Function(String bookId)
   _cachedChapterCountStreamBuilder;
+  final TxtTocRuleSettingsService _txtTocRuleSettingsService =
+      TxtTocRuleSettingsService();
+  final LocalBookRepository _localBookRepository = LocalBookRepositoryImpl(
+    AppDatabase.instance,
+  );
 
   static const int _tocPreviewLimit = 80;
   static const int _kSwitchSourceCandidateLimit = 24;
@@ -97,6 +106,8 @@ class _BookDetailPageState extends State<BookDetailPage> {
   String _activeBookId = '';
   String? _displayTitle;
   BookDetailLoadResult? _result;
+  LocalBook? _localBookMeta;
+  TxtBookTocRuleSelection? _selectedTxtTocRule;
   final SearchHitCacheService _searchHitCacheService = SearchHitCacheService();
   final SourceSwitchScoreService _switchSourceScoreService =
       SourceSwitchScoreService();
@@ -285,6 +296,9 @@ class _BookDetailPageState extends State<BookDetailPage> {
   }
 
   bool get _isLocalContent => _contentCapabilities.canReindexLocal;
+
+  bool get _isLocalTxtContent =>
+      _isLocalContent && _localBookMeta?.format == LocalBookFormat.txt;
 
   bool get _canSwitchSource => _contentCapabilities.canSwitchSource;
 
@@ -944,6 +958,34 @@ class _BookDetailPageState extends State<BookDetailPage> {
                 color: colorScheme.onSurfaceVariant,
               ),
             ),
+            if (_isLocalTxtContent) ...[
+              const SizedBox(height: 10),
+              Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: [
+                  OutlinedButton.icon(
+                    onPressed: _isLoading ? null : _showTxtTocRuleSheet,
+                    icon: const Icon(Icons.rule_folder_outlined, size: 18),
+                    label: Text(
+                      '目录规则：${_selectedTxtTocRule?.ruleName ?? '自动探测'}',
+                    ),
+                  ),
+                  FilterChip(
+                    label: const Text('长章节拆分'),
+                    selected: _localBookMeta?.splitLongChapter ?? false,
+                    onSelected:
+                        _isLoading ? null : (_) => _toggleSplitLongChapter(),
+                  ),
+                  OutlinedButton.icon(
+                    onPressed:
+                        _isLoading ? null : () => _load(forceRefresh: true),
+                    icon: const Icon(Icons.refresh, size: 18),
+                    label: const Text('重新索引'),
+                  ),
+                ],
+              ),
+            ],
             if (displayedChapters.isNotEmpty) ...[
               const SizedBox(height: 12),
               Row(
@@ -986,15 +1028,16 @@ class _BookDetailPageState extends State<BookDetailPage> {
               ),
               if (_contentCapabilities.canReindexLocal) ...[
                 const SizedBox(height: 8),
-                Align(
-                  alignment: Alignment.centerLeft,
-                  child: OutlinedButton.icon(
-                    onPressed:
-                        _isLoading ? null : () => _load(forceRefresh: true),
-                    icon: const Icon(Icons.refresh, size: 18),
-                    label: const Text('重新索引'),
+                if (!_isLocalTxtContent)
+                  Align(
+                    alignment: Alignment.centerLeft,
+                    child: OutlinedButton.icon(
+                      onPressed:
+                          _isLoading ? null : () => _load(forceRefresh: true),
+                      icon: const Icon(Icons.refresh, size: 18),
+                      label: const Text('重新索引'),
+                    ),
                   ),
-                ),
               ],
             ],
             if (previewChapters.isNotEmpty) ...[
@@ -1908,6 +1951,7 @@ class _BookDetailPageState extends State<BookDetailPage> {
         _displayTitle = result.detail.title.trim();
       });
 
+      await _syncLocalTxtContext();
       await _refreshBookshelfState(result);
       return true;
     } on AppException catch (error) {
@@ -1917,6 +1961,8 @@ class _BookDetailPageState extends State<BookDetailPage> {
       setState(() {
         _errorText = _toUserReadableError(error);
         _tocWarningText = null;
+        _localBookMeta = null;
+        _selectedTxtTocRule = null;
       });
       return false;
     } catch (_) {
@@ -1926,6 +1972,8 @@ class _BookDetailPageState extends State<BookDetailPage> {
       setState(() {
         _errorText = '加载失败，请稍后重试。';
         _tocWarningText = null;
+        _localBookMeta = null;
+        _selectedTxtTocRule = null;
       });
       return false;
     } finally {
@@ -1935,6 +1983,176 @@ class _BookDetailPageState extends State<BookDetailPage> {
         });
       }
     }
+  }
+
+  Future<void> _syncLocalTxtContext() async {
+    if (!_isLocalContent) {
+      if (!mounted) {
+        _localBookMeta = null;
+        _selectedTxtTocRule = null;
+        return;
+      }
+      setState(() {
+        _localBookMeta = null;
+        _selectedTxtTocRule = null;
+      });
+      return;
+    }
+
+    final localBook = await _localBookRepository.getBookById(_activeBookId);
+    final selection =
+        localBook == null ||
+                (localBook.txtTocRuleName?.trim().isEmpty ?? true) ||
+                (localBook.txtTocRulePattern?.trim().isEmpty ?? true)
+            ? null
+            : TxtBookTocRuleSelection(
+              ruleName: localBook.txtTocRuleName!.trim(),
+              pattern: localBook.txtTocRulePattern!.trim(),
+            );
+    if (!mounted) {
+      _localBookMeta = localBook;
+      _selectedTxtTocRule = selection;
+      return;
+    }
+
+    setState(() {
+      _localBookMeta = localBook;
+      _selectedTxtTocRule = selection;
+    });
+  }
+
+  Future<void> _showTxtTocRuleSheet() async {
+    if (!_isLocalTxtContent || !mounted) {
+      return;
+    }
+
+    final rules = await _txtTocRuleSettingsService.loadRules();
+    final localBook = await _localBookRepository.getBookById(_activeBookId);
+    final currentSelection =
+        localBook == null ||
+                (localBook.txtTocRuleName?.trim().isEmpty ?? true) ||
+                (localBook.txtTocRulePattern?.trim().isEmpty ?? true)
+            ? null
+            : TxtBookTocRuleSelection(
+              ruleName: localBook.txtTocRuleName!.trim(),
+              pattern: localBook.txtTocRulePattern!.trim(),
+            );
+    if (!mounted) {
+      return;
+    }
+
+    final selected = await showModalBottomSheet<_TxtTocRuleSheetResult>(
+      context: context,
+      useSafeArea: true,
+      showDragHandle: true,
+      builder: (context) {
+        final colorScheme = Theme.of(context).colorScheme;
+        final currentPattern = currentSelection?.pattern.trim() ?? '';
+        return ListView(
+          shrinkWrap: true,
+          padding: const EdgeInsets.fromLTRB(12, 0, 12, 16),
+          children: [
+            ListTile(
+              leading: Icon(
+                currentSelection == null
+                    ? Icons.radio_button_checked_rounded
+                    : Icons.radio_button_off_rounded,
+              ),
+              title: const Text('自动探测'),
+              subtitle: const Text('按全局启用规则自动选择最匹配的 TXT 目录规则。'),
+              onTap:
+                  () => Navigator.of(
+                    context,
+                  ).pop(const _TxtTocRuleSheetResult.clear()),
+            ),
+            const Divider(height: 1),
+            for (final rule in rules) ...[
+              ListTile(
+                leading: Icon(
+                  currentPattern == rule.pattern.trim()
+                      ? Icons.radio_button_checked_rounded
+                      : Icons.radio_button_off_rounded,
+                ),
+                title: Text(rule.name),
+                subtitle: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    if ((rule.example ?? '').trim().isNotEmpty)
+                      Text(
+                        '示例：${rule.example!.trim()}',
+                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                          color: colorScheme.onSurfaceVariant,
+                        ),
+                      ),
+                    const SizedBox(height: 4),
+                    Text(
+                      rule.enabled ? '全局自动识别：已启用' : '全局自动识别：未启用',
+                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                        color: colorScheme.onSurfaceVariant,
+                      ),
+                    ),
+                  ],
+                ),
+                isThreeLine: (rule.example ?? '').trim().isNotEmpty,
+                onTap:
+                    () => Navigator.of(
+                      context,
+                    ).pop(_TxtTocRuleSheetResult.select(rule)),
+              ),
+              const Divider(height: 1),
+            ],
+          ],
+        );
+      },
+    );
+
+    if (!mounted || selected == null) {
+      return;
+    }
+
+    final latestBook = await _localBookRepository.getBookById(_activeBookId);
+    if (latestBook == null) {
+      return;
+    }
+
+    if (selected.clearSelection) {
+      await _localBookRepository.upsertBook(
+        latestBook.copyWith(
+          clearTxtTocRuleName: true,
+          clearTxtTocRulePattern: true,
+          updatedAt: DateTime.now(),
+        ),
+      );
+      _showMessage('已切换为自动探测目录规则。');
+    } else if (selected.rule != null) {
+      await _localBookRepository.upsertBook(
+        latestBook.copyWith(
+          txtTocRuleName: selected.rule!.name,
+          txtTocRulePattern: selected.rule!.pattern,
+          updatedAt: DateTime.now(),
+        ),
+      );
+      _showMessage('已切换目录规则：${selected.rule!.name}');
+    }
+
+    await _load(forceRefresh: true);
+  }
+
+  Future<void> _toggleSplitLongChapter() async {
+    final localBook = await _localBookRepository.getBookById(_activeBookId);
+    if (localBook == null) {
+      return;
+    }
+
+    final nextValue = !localBook.splitLongChapter;
+    await _localBookRepository.upsertBook(
+      localBook.copyWith(
+        splitLongChapter: nextValue,
+        updatedAt: DateTime.now(),
+      ),
+    );
+    _showMessage(nextValue ? '已开启长章节拆分。' : '已关闭长章节拆分。');
+    await _load(forceRefresh: true);
   }
 
   String _toUserReadableError(AppException error) {
@@ -2110,6 +2328,14 @@ enum _DetailSwitchSourceApplyResult {
   switched,
   switchedWithBookshelfSyncFailed,
   failed,
+}
+
+class _TxtTocRuleSheetResult {
+  const _TxtTocRuleSheetResult.select(this.rule) : clearSelection = false;
+  const _TxtTocRuleSheetResult.clear() : rule = null, clearSelection = true;
+
+  final TxtTocRuleState? rule;
+  final bool clearSelection;
 }
 
 class _DetailSwitchSourceScope {

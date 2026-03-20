@@ -185,10 +185,32 @@ class ReaderSettings {
     bool clearFontFamilyKey = false,
     bool clearCustomFontPath = false,
   }) {
+    final nextBodyMarginTop =
+        (bodyMarginTop ?? this.bodyMarginTop)
+            .clamp(minLayoutMargin, maxLayoutMargin)
+            .toDouble();
+    final nextBodyMarginBottom =
+        (bodyMarginBottom ?? this.bodyMarginBottom)
+            .clamp(minLayoutMargin, maxLayoutMargin)
+            .toDouble();
+    final nextBodyMarginLeft =
+        (bodyMarginLeft ?? this.bodyMarginLeft)
+            .clamp(minLayoutMargin, maxLayoutMargin)
+            .toDouble();
+    final nextBodyMarginRight =
+        (bodyMarginRight ?? this.bodyMarginRight)
+            .clamp(minLayoutMargin, maxLayoutMargin)
+            .toDouble();
+    final nextHorizontalPadding =
+        horizontalPadding ??
+        (bodyMarginLeft != null || bodyMarginRight != null
+            ? ((nextBodyMarginLeft + nextBodyMarginRight) / 2).toDouble()
+            : this.horizontalPadding);
+
     return ReaderSettings(
       fontSize: fontSize ?? this.fontSize,
       lineHeight: lineHeight ?? this.lineHeight,
-      horizontalPadding: horizontalPadding ?? this.horizontalPadding,
+      horizontalPadding: nextHorizontalPadding,
       paragraphSpacing: paragraphSpacing ?? this.paragraphSpacing,
       paragraphIndent: paragraphIndent ?? this.paragraphIndent,
       letterSpacing:
@@ -258,22 +280,10 @@ class ReaderSettings {
           (infoHeaderMarginRight ?? this.infoHeaderMarginRight)
               .clamp(minLayoutMargin, maxLayoutMargin)
               .toDouble(),
-      bodyMarginTop:
-          (bodyMarginTop ?? this.bodyMarginTop)
-              .clamp(minLayoutMargin, maxLayoutMargin)
-              .toDouble(),
-      bodyMarginBottom:
-          (bodyMarginBottom ?? this.bodyMarginBottom)
-              .clamp(minLayoutMargin, maxLayoutMargin)
-              .toDouble(),
-      bodyMarginLeft:
-          (bodyMarginLeft ?? this.bodyMarginLeft)
-              .clamp(minLayoutMargin, maxLayoutMargin)
-              .toDouble(),
-      bodyMarginRight:
-          (bodyMarginRight ?? this.bodyMarginRight)
-              .clamp(minLayoutMargin, maxLayoutMargin)
-              .toDouble(),
+      bodyMarginTop: nextBodyMarginTop,
+      bodyMarginBottom: nextBodyMarginBottom,
+      bodyMarginLeft: nextBodyMarginLeft,
+      bodyMarginRight: nextBodyMarginRight,
       infoFooterMarginTop:
           (infoFooterMarginTop ?? this.infoFooterMarginTop)
               .clamp(minLayoutMargin, maxLayoutMargin)
@@ -297,7 +307,7 @@ class ReaderSettings {
     return {
       'fontSize': fontSize,
       'lineHeight': lineHeight,
-      'horizontalPadding': horizontalPadding,
+      'horizontalPadding': ((bodyMarginLeft + bodyMarginRight) / 2).toDouble(),
       'paragraphSpacing': paragraphSpacing,
       'paragraphIndent': paragraphIndent,
       'letterSpacing': letterSpacing,
@@ -405,11 +415,19 @@ class ReaderSettings {
     final fontFamilyKey = json['fontFamilyKey']?.toString().trim();
     final customFontPath = json['customFontPath']?.toString().trim();
     final legacyHorizontalPadding = _asDouble(json['horizontalPadding']) ?? 18;
+    final bodyMarginLeft =
+        (_asDouble(json['bodyMarginLeft']) ?? legacyHorizontalPadding)
+            .clamp(minLayoutMargin, maxLayoutMargin)
+            .toDouble();
+    final bodyMarginRight =
+        (_asDouble(json['bodyMarginRight']) ?? legacyHorizontalPadding)
+            .clamp(minLayoutMargin, maxLayoutMargin)
+            .toDouble();
 
     return ReaderSettings(
       fontSize: _asDouble(json['fontSize']) ?? 18,
       lineHeight: _asDouble(json['lineHeight']) ?? 1.7,
-      horizontalPadding: _asDouble(json['horizontalPadding']) ?? 18,
+      horizontalPadding: ((bodyMarginLeft + bodyMarginRight) / 2).toDouble(),
       paragraphSpacing: _asDouble(json['paragraphSpacing']) ?? 14,
       paragraphIndent: _asDouble(json['paragraphIndent']) ?? 0,
       letterSpacing:
@@ -491,14 +509,8 @@ class ReaderSettings {
           (_asDouble(json['bodyMarginBottom']) ?? 18)
               .clamp(minLayoutMargin, maxLayoutMargin)
               .toDouble(),
-      bodyMarginLeft:
-          (_asDouble(json['bodyMarginLeft']) ?? legacyHorizontalPadding)
-              .clamp(minLayoutMargin, maxLayoutMargin)
-              .toDouble(),
-      bodyMarginRight:
-          (_asDouble(json['bodyMarginRight']) ?? legacyHorizontalPadding)
-              .clamp(minLayoutMargin, maxLayoutMargin)
-              .toDouble(),
+      bodyMarginLeft: bodyMarginLeft,
+      bodyMarginRight: bodyMarginRight,
       infoFooterMarginTop:
           (_asDouble(json['infoFooterMarginTop']) ?? 0)
               .clamp(minLayoutMargin, maxLayoutMargin)

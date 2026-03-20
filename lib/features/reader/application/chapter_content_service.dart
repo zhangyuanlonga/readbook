@@ -23,10 +23,13 @@ import '../../../core/webview/interactive_verification_browser_executor.dart';
 import '../../../core/webview/webview_executor.dart';
 import '../../../data/datasources/local/app_database.dart';
 import '../../../data/repositories/source_repository_impl.dart';
+import '../../../domain/entities/reader_replace_rule.dart';
 import '../../../domain/entities/search_request_context.dart';
 import '../../../domain/entities/source_definition.dart';
 import '../../../domain/repositories/source_repository.dart';
 import 'content_text_cleaner.dart';
+import 'reader_replace_rule_executor.dart';
+import 'reader_replace_rule_service.dart';
 
 class ChapterContentResult {
   const ChapterContentResult({
@@ -34,12 +37,14 @@ class ChapterContentResult {
     required this.fromCache,
     this.imageUrls = const [],
     this.imageHeaders = const {},
+    this.effectiveReaderReplaceRules = const <ReaderReplaceRule>[],
   });
 
   final String content;
   final bool fromCache;
   final List<String> imageUrls;
   final Map<String, String> imageHeaders;
+  final List<ReaderReplaceRule> effectiveReaderReplaceRules;
 
   bool get isImageContent => imageUrls.isNotEmpty;
 }
@@ -57,6 +62,7 @@ class ChapterContentService {
     AppLogger? logger,
     UrlTemplateResolver? urlTemplateResolver,
     SourceResponseProcessor? responseProcessor,
+    ReaderReplaceRuleService? readerReplaceRuleService,
   }) : _database = database ?? AppDatabase.instance,
        _sourceRepository =
            sourceRepository ??
@@ -73,7 +79,9 @@ class ChapterContentService {
        _urlTemplateResolver =
            urlTemplateResolver ?? const UrlTemplateResolver(),
        _responseProcessor =
-           responseProcessor ?? const SourceResponseProcessor();
+           responseProcessor ?? const SourceResponseProcessor(),
+       _readerReplaceRuleService =
+           readerReplaceRuleService ?? ReaderReplaceRuleService();
 
   final AppDatabase _database;
   final SourceRepository _sourceRepository;
@@ -86,6 +94,7 @@ class ChapterContentService {
   final AppLogger _logger;
   final UrlTemplateResolver _urlTemplateResolver;
   final SourceResponseProcessor _responseProcessor;
+  final ReaderReplaceRuleService _readerReplaceRuleService;
 
   static final Map<String, String> _chapterCache = <String, String>{};
   static const String _imageCachePrefix = '__appread_image_payload__:';
@@ -94,6 +103,7 @@ class ChapterContentService {
     required String sourceId,
     required String chapterUrl,
     String? bookId,
+    String? bookTitle,
     int? chapterIndex,
     String? chapterTitle,
     String? nextChapterUrl,
@@ -113,11 +123,17 @@ class ChapterContentService {
     final cached = _chapterCache[cacheKey];
     if (cached != null) {
       final decoded = _decodeCachedPayload(cached);
-      return ChapterContentResult(
+      final replaced = await _applyReaderReplaceRules(
         content: decoded.content,
+        bookTitle: bookTitle,
+        sourceId: normalizedSourceId,
+      );
+      return ChapterContentResult(
+        content: replaced.content,
         fromCache: true,
         imageUrls: decoded.imageUrls,
         imageHeaders: decoded.imageHeaders,
+        effectiveReaderReplaceRules: replaced.effectiveRules,
       );
     }
 
@@ -127,11 +143,17 @@ class ChapterContentService {
       if (persistedContent.isNotEmpty) {
         _chapterCache[cacheKey] = persistedContent;
         final decoded = _decodeCachedPayload(persistedContent);
-        return ChapterContentResult(
+        final replaced = await _applyReaderReplaceRules(
           content: decoded.content,
+          bookTitle: bookTitle,
+          sourceId: normalizedSourceId,
+        );
+        return ChapterContentResult(
+          content: replaced.content,
           fromCache: true,
           imageUrls: decoded.imageUrls,
           imageHeaders: decoded.imageHeaders,
+          effectiveReaderReplaceRules: replaced.effectiveRules,
         );
       }
     } catch (error) {
@@ -467,7 +489,17 @@ class ChapterContentService {
       sourceVariables: sourceVariableUpdates,
       bookVariables: bookVariableUpdates,
     );
-    return ChapterContentResult(content: cleaned, fromCache: false);
+    final replaced = await _applyReaderReplaceRules(
+      content: cleaned,
+      bookTitle: bookTitle,
+      sourceId: normalizedSourceId,
+    );
+
+    return ChapterContentResult(
+      content: replaced.content,
+      fromCache: false,
+      effectiveReaderReplaceRules: replaced.effectiveRules,
+    );
   }
 
   Future<void> preload({
@@ -766,6 +798,27 @@ class ChapterContentService {
 
     variableState.addAll(rollingVariables);
     return contentParts.join('\n\n');
+  }
+
+  Future<ReaderReplaceExecutionResult> _applyReaderReplaceRules({
+    required String content,
+    required String sourceId,
+    String? bookTitle,
+  }) {
+    final normalizedBookTitle = (bookTitle ?? '').trim();
+    if (content.isEmpty) {
+      return Future<ReaderReplaceExecutionResult>.value(
+        const ReaderReplaceExecutionResult(
+          content: '',
+          effectiveRules: <ReaderReplaceRule>[],
+        ),
+      );
+    }
+    return _readerReplaceRuleService.applyContentRules(
+      content: content,
+      bookTitle: normalizedBookTitle,
+      sourceId: sourceId,
+    );
   }
 
   Future<String?> _extractNextContentUrl({

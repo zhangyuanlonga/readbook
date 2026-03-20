@@ -9,14 +9,18 @@ import '../../book/application/local_book_detail_service.dart';
 import 'chapter_content_service.dart';
 import 'content_provider.dart';
 import 'local/local_chapter_content_service.dart';
+import 'reader_replace_rule_service.dart';
 
 class LocalContentProvider extends ContentProvider {
   LocalContentProvider({
     LocalBookDetailService? detailService,
     LocalChapterContentService? chapterContentService,
+    ReaderReplaceRuleService? readerReplaceRuleService,
   }) : _detailService = detailService ?? LocalBookDetailService(),
        _chapterContentService =
-           chapterContentService ?? LocalChapterContentService();
+           chapterContentService ?? LocalChapterContentService(),
+       _readerReplaceRuleService =
+           readerReplaceRuleService ?? ReaderReplaceRuleService();
 
   static const String sourceName = '本地导入';
   static const String _kLocalDetailPrefix = 'local://book/';
@@ -24,6 +28,7 @@ class LocalContentProvider extends ContentProvider {
 
   final LocalBookDetailService _detailService;
   final LocalChapterContentService _chapterContentService;
+  final ReaderReplaceRuleService _readerReplaceRuleService;
 
   @override
   ContentCapabilities get capabilities => const ContentCapabilities(
@@ -99,6 +104,7 @@ class LocalContentProvider extends ContentProvider {
     required String sourceId,
     required String bookId,
     required String chapterUrl,
+    String? bookTitle,
     String? chapterId,
     int? chapterIndex,
     String? chapterTitle,
@@ -132,9 +138,16 @@ class LocalContentProvider extends ContentProvider {
       chapterIndex: chapterIndex,
     );
 
-    return ChapterContentResult(
+    final replaced = await _readerReplaceRuleService.applyContentRules(
       content: chapter.content,
+      bookTitle: (bookTitle ?? '').trim(),
+      sourceId: sourceId,
+    );
+
+    return ChapterContentResult(
+      content: replaced.content,
       fromCache: true,
+      effectiveReaderReplaceRules: replaced.effectiveRules,
     );
   }
 

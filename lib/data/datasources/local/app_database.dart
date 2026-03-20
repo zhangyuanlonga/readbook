@@ -9,6 +9,10 @@ import 'package:path_provider/path_provider.dart';
 import '../../../domain/entities/bookmark.dart';
 import '../../../domain/entities/local_book.dart';
 import '../../../domain/entities/local_chapter.dart';
+import '../../../domain/entities/reader_replace_rule.dart';
+import '../../../domain/entities/reading_record.dart';
+import '../../../domain/entities/reading_record_day.dart';
+import '../../../domain/entities/reading_record_session.dart';
 import '../../../domain/entities/source_definition.dart';
 
 part 'app_database.g.dart';
@@ -63,6 +67,10 @@ class StoredLocalBooks extends Table {
   TextColumn get indexStatus => text().withDefault(const Constant('pending'))();
   IntColumn get chapterCount => integer().withDefault(const Constant(0))();
   TextColumn get lastError => text().nullable()();
+  TextColumn get txtTocRuleName => text().nullable()();
+  TextColumn get txtTocRulePattern => text().nullable()();
+  BoolColumn get splitLongChapter =>
+      boolean().withDefault(const Constant(false))();
   DateTimeColumn get createdAt => dateTime().withDefault(currentDateAndTime)();
   DateTimeColumn get updatedAt => dateTime().withDefault(currentDateAndTime)();
 
@@ -118,6 +126,67 @@ class StoredBookmarks extends Table {
   Set<Column<Object>> get primaryKey => {id};
 }
 
+class StoredReadingRecords extends Table {
+  TextColumn get bookId => text()();
+  TextColumn get sourceId => text()();
+  TextColumn get detailUrl => text()();
+  TextColumn get bookTitle => text()();
+  TextColumn get bookAuthor => text().nullable()();
+  TextColumn get coverUrl => text().nullable()();
+  TextColumn get lastChapterId => text().nullable()();
+  TextColumn get lastChapterTitle => text().nullable()();
+  IntColumn get lastChapterIndex => integer().nullable()();
+  TextColumn get lastChapterUrl => text().nullable()();
+  RealColumn get lastPositionRatio => real().withDefault(const Constant(0))();
+  IntColumn get totalReadMillis => integer().withDefault(const Constant(0))();
+  DateTimeColumn get lastReadAt => dateTime()();
+
+  @override
+  String get tableName => 'reading_records';
+
+  @override
+  Set<Column<Object>> get primaryKey => {bookId};
+}
+
+class StoredReadingRecordDays extends Table {
+  TextColumn get bookId => text()();
+  TextColumn get dateKey => text()();
+  TextColumn get bookTitle => text()();
+  TextColumn get bookAuthor => text().nullable()();
+  TextColumn get coverUrl => text().nullable()();
+  IntColumn get readMillis => integer().withDefault(const Constant(0))();
+  DateTimeColumn get firstReadAt => dateTime()();
+  DateTimeColumn get lastReadAt => dateTime()();
+
+  @override
+  String get tableName => 'reading_record_days';
+
+  @override
+  Set<Column<Object>> get primaryKey => {bookId, dateKey};
+}
+
+class StoredReadingRecordSessions extends Table {
+  IntColumn get id => integer().autoIncrement()();
+  TextColumn get bookId => text()();
+  TextColumn get sourceId => text()();
+  TextColumn get detailUrl => text()();
+  TextColumn get bookTitle => text()();
+  TextColumn get bookAuthor => text().nullable()();
+  TextColumn get coverUrl => text().nullable()();
+  TextColumn get chapterId => text().nullable()();
+  TextColumn get chapterTitle => text().nullable()();
+  IntColumn get chapterIndex => integer().nullable()();
+  TextColumn get chapterUrl => text().nullable()();
+  DateTimeColumn get startAt => dateTime()();
+  DateTimeColumn get endAt => dateTime()();
+  IntColumn get durationMillis => integer().withDefault(const Constant(0))();
+  RealColumn get startPositionRatio => real().withDefault(const Constant(0))();
+  RealColumn get endPositionRatio => real().withDefault(const Constant(0))();
+
+  @override
+  String get tableName => 'reading_record_sessions';
+}
+
 class SearchSourceHits extends Table {
   TextColumn get titleNorm => text()();
   TextColumn get authorNorm => text()();
@@ -138,6 +207,50 @@ class SearchSourceHits extends Table {
   @override
   Set<Column<Object>> get primaryKey => {titleNorm, authorNorm, sourceId};
 }
+
+class StoredReaderReplaceRules extends Table {
+  IntColumn get id => integer().autoIncrement()();
+  TextColumn get name => text().withDefault(const Constant(''))();
+  TextColumn get group => text().nullable()();
+  TextColumn get pattern => text().withDefault(const Constant(''))();
+  TextColumn get replacement => text().withDefault(const Constant(''))();
+  TextColumn get scopeMode => text().withDefault(const Constant('all'))();
+  TextColumn get scope => text().nullable()();
+  TextColumn get excludeScope => text().nullable()();
+  BoolColumn get scopeTitle => boolean().withDefault(const Constant(false))();
+  BoolColumn get scopeContent => boolean().withDefault(const Constant(true))();
+  BoolColumn get isEnabled => boolean().withDefault(const Constant(true))();
+  BoolColumn get isRegex => boolean().withDefault(const Constant(true))();
+  IntColumn get timeoutMs => integer().withDefault(const Constant(3000))();
+  IntColumn get sortOrder => integer().withDefault(const Constant(0))();
+  DateTimeColumn get createdAt => dateTime().withDefault(currentDateAndTime)();
+  DateTimeColumn get updatedAt => dateTime().withDefault(currentDateAndTime)();
+
+  @override
+  String get tableName => 'reader_replace_rules';
+}
+
+const String _readerReplaceRulesTableName = 'reader_replace_rules';
+const String _readerReplaceRulesCreateSql = '''
+CREATE TABLE IF NOT EXISTS reader_replace_rules (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  name TEXT NOT NULL DEFAULT '',
+  "group" TEXT,
+  pattern TEXT NOT NULL DEFAULT '',
+  replacement TEXT NOT NULL DEFAULT '',
+  scope_mode TEXT NOT NULL DEFAULT 'all',
+  scope TEXT,
+  exclude_scope TEXT,
+  scope_title INTEGER NOT NULL DEFAULT 0,
+  scope_content INTEGER NOT NULL DEFAULT 1,
+  is_enabled INTEGER NOT NULL DEFAULT 1,
+  is_regex INTEGER NOT NULL DEFAULT 1,
+  timeout_ms INTEGER NOT NULL DEFAULT 3000,
+  sort_order INTEGER NOT NULL DEFAULT 0,
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL
+)
+''';
 
 class SourceListCountSummary {
   const SourceListCountSummary({
@@ -224,6 +337,9 @@ class SearchSourceHitUpsert {
     StoredLocalBooks,
     StoredLocalChapters,
     StoredBookmarks,
+    StoredReadingRecords,
+    StoredReadingRecordDays,
+    StoredReadingRecordSessions,
     SearchSourceHits,
   ],
 )
@@ -233,7 +349,7 @@ class AppDatabase extends _$AppDatabase {
   static final AppDatabase instance = AppDatabase();
 
   @override
-  int get schemaVersion => 7;
+  int get schemaVersion => 10;
 
   static const String _mangaSourceMatcherSql =
       '(raw_json LIKE \'%"sourceType":2,%\' OR '
@@ -244,6 +360,7 @@ class AppDatabase extends _$AppDatabase {
     return MigrationStrategy(
       onCreate: (migrator) async {
         await migrator.createAll();
+        await customStatement(_readerReplaceRulesCreateSql);
       },
       onUpgrade: (migrator, from, to) async {
         if (from < 2) {
@@ -269,6 +386,28 @@ class AppDatabase extends _$AppDatabase {
             storedBookmarks.isUnderline,
           );
           await migrator.addColumn(storedBookmarks, storedBookmarks.isWavy);
+        }
+        if (from < 8) {
+          await migrator.addColumn(
+            storedLocalBooks,
+            storedLocalBooks.txtTocRuleName,
+          );
+          await migrator.addColumn(
+            storedLocalBooks,
+            storedLocalBooks.txtTocRulePattern,
+          );
+          await migrator.addColumn(
+            storedLocalBooks,
+            storedLocalBooks.splitLongChapter,
+          );
+        }
+        if (from < 9) {
+          await migrator.createTable(storedReadingRecords);
+          await migrator.createTable(storedReadingRecordDays);
+          await migrator.createTable(storedReadingRecordSessions);
+        }
+        if (from < 10) {
+          await customStatement(_readerReplaceRulesCreateSql);
         }
       },
     );
@@ -482,10 +621,11 @@ class AppDatabase extends _$AppDatabase {
   }
 
   Future<List<String>> listSourceGroups() async {
-    final query = await customSelect(
-      'SELECT DISTINCT "group" FROM sources',
-      readsFrom: {sources},
-    ).get();
+    final query =
+        await customSelect(
+          'SELECT DISTINCT "group" FROM sources',
+          readsFrom: {sources},
+        ).get();
     final groups = <String>{};
     for (final row in query) {
       final value = row.data['group'] as String?;
@@ -871,6 +1011,112 @@ class AppDatabase extends _$AppDatabase {
 
   Future<void> clearChapterCaches() => delete(chapterCaches).go();
 
+  Future<List<ReaderReplaceRule>> getAllReaderReplaceRules() async {
+    final rows =
+        await customSelect(
+          'SELECT * FROM $_readerReplaceRulesTableName '
+          'ORDER BY sort_order ASC, id ASC',
+        ).get();
+    return rows.map(_mapQueryRowToReaderReplaceRule).toList(growable: false);
+  }
+
+  Stream<List<ReaderReplaceRule>> watchAllReaderReplaceRules() {
+    return Stream.fromFuture(getAllReaderReplaceRules());
+  }
+
+  Future<ReaderReplaceRule?> getReaderReplaceRuleById(int id) async {
+    if (id <= 0) {
+      return null;
+    }
+    final row =
+        await customSelect(
+          'SELECT * FROM $_readerReplaceRulesTableName WHERE id = ? LIMIT 1',
+          variables: [Variable<int>(id)],
+        ).getSingleOrNull();
+    if (row == null) {
+      return null;
+    }
+    return _mapQueryRowToReaderReplaceRule(row);
+  }
+
+  Future<void> upsertReaderReplaceRule(ReaderReplaceRule rule) async {
+    final normalizedName = rule.name.trim();
+    final normalizedPattern = rule.pattern.trim();
+    if (normalizedName.isEmpty || normalizedPattern.isEmpty) {
+      return;
+    }
+
+    final now = DateTime.now();
+    final sortOrder =
+        rule.sortOrder > 0
+            ? rule.sortOrder
+            : await _nextReaderReplaceRuleOrder();
+
+    if (rule.id > 0) {
+      await customStatement(
+        'UPDATE $_readerReplaceRulesTableName '
+        'SET name = ?, "group" = ?, pattern = ?, replacement = ?, '
+        'scope_mode = ?, scope = ?, exclude_scope = ?, scope_title = ?, '
+        'scope_content = ?, is_enabled = ?, is_regex = ?, timeout_ms = ?, '
+        'sort_order = ?, created_at = ?, updated_at = ? '
+        'WHERE id = ?',
+        [
+          normalizedName,
+          _nullableString(rule.group),
+          normalizedPattern,
+          rule.replacement,
+          rule.scopeMode.name,
+          _nullableString(rule.scope),
+          _nullableString(rule.excludeScope),
+          rule.scopeTitle ? 1 : 0,
+          rule.scopeContent ? 1 : 0,
+          rule.isEnabled ? 1 : 0,
+          rule.isRegex ? 1 : 0,
+          rule.safeTimeoutMs,
+          sortOrder,
+          rule.createdAt.toIso8601String(),
+          now.toIso8601String(),
+          rule.id,
+        ],
+      );
+      return;
+    }
+
+    await customStatement(
+      'INSERT INTO $_readerReplaceRulesTableName '
+      '(name, "group", pattern, replacement, scope_mode, scope, exclude_scope, '
+      'scope_title, scope_content, is_enabled, is_regex, timeout_ms, sort_order, created_at, updated_at) '
+      'VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+      [
+        normalizedName,
+        _nullableString(rule.group),
+        normalizedPattern,
+        rule.replacement,
+        rule.scopeMode.name,
+        _nullableString(rule.scope),
+        _nullableString(rule.excludeScope),
+        rule.scopeTitle ? 1 : 0,
+        rule.scopeContent ? 1 : 0,
+        rule.isEnabled ? 1 : 0,
+        rule.isRegex ? 1 : 0,
+        rule.safeTimeoutMs,
+        sortOrder,
+        now.toIso8601String(),
+        now.toIso8601String(),
+      ],
+    );
+  }
+
+  Future<void> deleteReaderReplaceRuleById(int id) async {
+    if (id <= 0) {
+      return;
+    }
+    await customStatement(
+      'DELETE FROM $_readerReplaceRulesTableName WHERE id = ?',
+      [id],
+    );
+  }
+
   Future<int> getTotalCachedChapterCount() async {
     final countExpression = chapterCaches.cacheKey.count();
     final query = selectOnly(chapterCaches)..addColumns([countExpression]);
@@ -903,6 +1149,9 @@ class AppDatabase extends _$AppDatabase {
         indexStatus: Value(book.indexStatus.name),
         chapterCount: Value(book.chapterCount < 0 ? 0 : book.chapterCount),
         lastError: Value(_nullableString(book.lastError)),
+        txtTocRuleName: Value(_nullableString(book.txtTocRuleName)),
+        txtTocRulePattern: Value(_nullableString(book.txtTocRulePattern)),
+        splitLongChapter: Value(book.splitLongChapter),
         createdAt: Value(book.createdAt),
         updatedAt: Value(book.updatedAt),
       ),
@@ -1142,15 +1391,13 @@ class AppDatabase extends _$AppDatabase {
       return;
     }
 
-    final safeChapterIndex = bookmark.chapterIndex < 0
-        ? 0
-        : bookmark.chapterIndex;
-    final safeStartOffset = bookmark.startOffset < 0
-        ? 0
-        : bookmark.startOffset;
-    final safeEndOffset = bookmark.endOffset < safeStartOffset
-        ? safeStartOffset
-        : bookmark.endOffset;
+    final safeChapterIndex =
+        bookmark.chapterIndex < 0 ? 0 : bookmark.chapterIndex;
+    final safeStartOffset = bookmark.startOffset < 0 ? 0 : bookmark.startOffset;
+    final safeEndOffset =
+        bookmark.endOffset < safeStartOffset
+            ? safeStartOffset
+            : bookmark.endOffset;
 
     await into(storedBookmarks).insert(
       StoredBookmarksCompanion(
@@ -1170,6 +1417,21 @@ class AppDatabase extends _$AppDatabase {
       ),
       mode: InsertMode.insertOrReplace,
     );
+  }
+
+  Future<int> _nextReaderReplaceRuleOrder() async {
+    final row =
+        await customSelect(
+          'SELECT MAX(sort_order) AS currentMax FROM $_readerReplaceRulesTableName',
+        ).getSingle();
+    final currentMax = row.data['currentMax'];
+    if (currentMax is int) {
+      return currentMax + 1;
+    }
+    if (currentMax is num) {
+      return currentMax.toInt() + 1;
+    }
+    return 1;
   }
 
   Future<List<Bookmark>> getBookmarksByBookId(String bookId) async {
@@ -1193,12 +1455,10 @@ class AppDatabase extends _$AppDatabase {
 
   Future<List<Bookmark>> getAllBookmarks() async {
     final rows =
-        await (select(storedBookmarks)
-              ..orderBy([
-                (table) => OrderingTerm.desc(table.updatedAt),
-                (table) => OrderingTerm.desc(table.createdAt),
-              ]))
-            .get();
+        await (select(storedBookmarks)..orderBy([
+          (table) => OrderingTerm.desc(table.updatedAt),
+          (table) => OrderingTerm.desc(table.createdAt),
+        ])).get();
     return rows.map(_mapRowToBookmark).toList(growable: false);
   }
 
@@ -1222,6 +1482,200 @@ class AppDatabase extends _$AppDatabase {
       ..where((table) => table.bookId.equals(normalizedBookId))).go();
   }
 
+  Future<void> upsertReadingRecord(ReadingRecord record) async {
+    final normalizedBookId = record.bookId.trim();
+    final normalizedSourceId = record.sourceId.trim();
+    final normalizedDetailUrl = record.detailUrl.trim();
+    final normalizedTitle = record.bookTitle.trim();
+    if (normalizedBookId.isEmpty ||
+        normalizedSourceId.isEmpty ||
+        normalizedDetailUrl.isEmpty ||
+        normalizedTitle.isEmpty) {
+      return;
+    }
+
+    await into(storedReadingRecords).insert(
+      StoredReadingRecordsCompanion(
+        bookId: Value(normalizedBookId),
+        sourceId: Value(normalizedSourceId),
+        detailUrl: Value(normalizedDetailUrl),
+        bookTitle: Value(normalizedTitle),
+        bookAuthor: Value(_nullableString(record.bookAuthor)),
+        coverUrl: Value(_nullableString(record.coverUrl)),
+        lastChapterId: Value(_nullableString(record.lastChapterId)),
+        lastChapterTitle: Value(_nullableString(record.lastChapterTitle)),
+        lastChapterIndex: Value(record.lastChapterIndex),
+        lastChapterUrl: Value(_nullableString(record.lastChapterUrl)),
+        lastPositionRatio: Value(
+          record.lastPositionRatio.clamp(0.0, 1.0).toDouble(),
+        ),
+        totalReadMillis: Value(
+          record.totalReadMillis < 0 ? 0 : record.totalReadMillis,
+        ),
+        lastReadAt: Value(record.lastReadAt),
+      ),
+      mode: InsertMode.insertOrReplace,
+    );
+  }
+
+  Future<ReadingRecord?> getReadingRecordByBookId(String bookId) async {
+    final normalizedBookId = bookId.trim();
+    if (normalizedBookId.isEmpty) {
+      return null;
+    }
+
+    final row =
+        await (select(storedReadingRecords)..where(
+          (table) => table.bookId.equals(normalizedBookId),
+        )).getSingleOrNull();
+    return row == null ? null : _mapRowToReadingRecord(row);
+  }
+
+  Future<void> upsertReadingRecordDay(ReadingRecordDay day) async {
+    final normalizedBookId = day.bookId.trim();
+    final normalizedDateKey = day.dateKey.trim();
+    final normalizedTitle = day.bookTitle.trim();
+    if (normalizedBookId.isEmpty ||
+        normalizedDateKey.isEmpty ||
+        normalizedTitle.isEmpty) {
+      return;
+    }
+
+    await into(storedReadingRecordDays).insert(
+      StoredReadingRecordDaysCompanion(
+        bookId: Value(normalizedBookId),
+        dateKey: Value(normalizedDateKey),
+        bookTitle: Value(normalizedTitle),
+        bookAuthor: Value(_nullableString(day.bookAuthor)),
+        coverUrl: Value(_nullableString(day.coverUrl)),
+        readMillis: Value(day.readMillis < 0 ? 0 : day.readMillis),
+        firstReadAt: Value(day.firstReadAt),
+        lastReadAt: Value(day.lastReadAt),
+      ),
+      mode: InsertMode.insertOrReplace,
+    );
+  }
+
+  Future<ReadingRecordDay?> getReadingRecordDay({
+    required String bookId,
+    required String dateKey,
+  }) async {
+    final normalizedBookId = bookId.trim();
+    final normalizedDateKey = dateKey.trim();
+    if (normalizedBookId.isEmpty || normalizedDateKey.isEmpty) {
+      return null;
+    }
+
+    final row =
+        await (select(storedReadingRecordDays)
+              ..where((table) => table.bookId.equals(normalizedBookId))
+              ..where((table) => table.dateKey.equals(normalizedDateKey)))
+            .getSingleOrNull();
+    return row == null ? null : _mapRowToReadingRecordDay(row);
+  }
+
+  Future<void> insertReadingRecordSession(ReadingRecordSession session) async {
+    await into(storedReadingRecordSessions).insert(
+      StoredReadingRecordSessionsCompanion.insert(
+        bookId: session.bookId.trim(),
+        sourceId: session.sourceId.trim(),
+        detailUrl: session.detailUrl.trim(),
+        bookTitle: session.bookTitle.trim(),
+        bookAuthor: Value(_nullableString(session.bookAuthor)),
+        coverUrl: Value(_nullableString(session.coverUrl)),
+        chapterId: Value(_nullableString(session.chapterId)),
+        chapterTitle: Value(_nullableString(session.chapterTitle)),
+        chapterIndex: Value(session.chapterIndex),
+        chapterUrl: Value(_nullableString(session.chapterUrl)),
+        startAt: session.startAt,
+        endAt: session.endAt,
+        durationMillis: Value(
+          session.durationMillis < 0 ? 0 : session.durationMillis,
+        ),
+        startPositionRatio: Value(
+          session.startPositionRatio.clamp(0.0, 1.0).toDouble(),
+        ),
+        endPositionRatio: Value(
+          session.endPositionRatio.clamp(0.0, 1.0).toDouble(),
+        ),
+      ),
+    );
+  }
+
+  Stream<List<ReadingRecord>> watchLatestReadingRecords({String query = ''}) {
+    final normalizedQuery = query.trim().toLowerCase();
+    final queryBuilder = select(storedReadingRecords)
+      ..orderBy([(table) => OrderingTerm.desc(table.lastReadAt)]);
+    if (normalizedQuery.isNotEmpty) {
+      queryBuilder.where(
+        (table) =>
+            table.bookTitle.lower().like('%$normalizedQuery%') |
+            table.bookAuthor.lower().like('%$normalizedQuery%'),
+      );
+    }
+    return queryBuilder.watch().map(
+      (rows) => rows.map(_mapRowToReadingRecord).toList(growable: false),
+    );
+  }
+
+  Stream<List<ReadingRecordDay>> watchReadingRecordDays({String query = ''}) {
+    final normalizedQuery = query.trim().toLowerCase();
+    final queryBuilder = select(storedReadingRecordDays)..orderBy([
+      (table) => OrderingTerm.desc(table.dateKey),
+      (table) => OrderingTerm.desc(table.lastReadAt),
+    ]);
+    if (normalizedQuery.isNotEmpty) {
+      queryBuilder.where(
+        (table) =>
+            table.bookTitle.lower().like('%$normalizedQuery%') |
+            table.bookAuthor.lower().like('%$normalizedQuery%'),
+      );
+    }
+    return queryBuilder.watch().map(
+      (rows) => rows.map(_mapRowToReadingRecordDay).toList(growable: false),
+    );
+  }
+
+  Stream<List<ReadingRecordSession>> watchReadingRecordSessions({
+    String query = '',
+  }) {
+    final normalizedQuery = query.trim().toLowerCase();
+    final queryBuilder = select(storedReadingRecordSessions)
+      ..orderBy([(table) => OrderingTerm.desc(table.startAt)]);
+    if (normalizedQuery.isNotEmpty) {
+      queryBuilder.where(
+        (table) =>
+            table.bookTitle.lower().like('%$normalizedQuery%') |
+            table.bookAuthor.lower().like('%$normalizedQuery%'),
+      );
+    }
+    return queryBuilder.watch().map(
+      (rows) => rows.map(_mapRowToReadingRecordSession).toList(growable: false),
+    );
+  }
+
+  Stream<int> watchTotalReadingMillis() {
+    final sumExpression = storedReadingRecords.totalReadMillis.sum();
+    final query = selectOnly(storedReadingRecords)..addColumns([sumExpression]);
+    return query.watchSingle().map((row) => row.read(sumExpression) ?? 0);
+  }
+
+  Future<void> deleteReadingRecordsByBookId(String bookId) async {
+    final normalizedBookId = bookId.trim();
+    if (normalizedBookId.isEmpty) {
+      return;
+    }
+
+    await transaction(() async {
+      await (delete(storedReadingRecordSessions)
+        ..where((table) => table.bookId.equals(normalizedBookId))).go();
+      await (delete(storedReadingRecordDays)
+        ..where((table) => table.bookId.equals(normalizedBookId))).go();
+      await (delete(storedReadingRecords)
+        ..where((table) => table.bookId.equals(normalizedBookId))).go();
+    });
+  }
+
   LocalBook _mapRowToLocalBook(StoredLocalBook row) {
     return LocalBook(
       id: row.id,
@@ -1243,6 +1697,9 @@ class AppDatabase extends _$AppDatabase {
       ),
       chapterCount: row.chapterCount,
       lastError: row.lastError,
+      txtTocRuleName: row.txtTocRuleName,
+      txtTocRulePattern: row.txtTocRulePattern,
+      splitLongChapter: row.splitLongChapter,
     );
   }
 
@@ -1275,6 +1732,87 @@ class AppDatabase extends _$AppDatabase {
       isUnderline: row.isUnderline,
       isWavy: row.isWavy,
       color: row.color,
+    );
+  }
+
+  ReadingRecord _mapRowToReadingRecord(StoredReadingRecord row) {
+    return ReadingRecord(
+      bookId: row.bookId,
+      sourceId: row.sourceId,
+      detailUrl: row.detailUrl,
+      bookTitle: row.bookTitle,
+      bookAuthor: row.bookAuthor,
+      coverUrl: row.coverUrl,
+      lastChapterId: row.lastChapterId,
+      lastChapterTitle: row.lastChapterTitle,
+      lastChapterIndex: row.lastChapterIndex,
+      lastChapterUrl: row.lastChapterUrl,
+      lastPositionRatio: row.lastPositionRatio,
+      totalReadMillis: row.totalReadMillis,
+      lastReadAt: row.lastReadAt,
+    );
+  }
+
+  ReadingRecordDay _mapRowToReadingRecordDay(StoredReadingRecordDay row) {
+    return ReadingRecordDay(
+      bookId: row.bookId,
+      dateKey: row.dateKey,
+      bookTitle: row.bookTitle,
+      bookAuthor: row.bookAuthor,
+      coverUrl: row.coverUrl,
+      readMillis: row.readMillis,
+      firstReadAt: row.firstReadAt,
+      lastReadAt: row.lastReadAt,
+    );
+  }
+
+  ReadingRecordSession _mapRowToReadingRecordSession(
+    StoredReadingRecordSession row,
+  ) {
+    return ReadingRecordSession(
+      id: row.id,
+      bookId: row.bookId,
+      sourceId: row.sourceId,
+      detailUrl: row.detailUrl,
+      bookTitle: row.bookTitle,
+      bookAuthor: row.bookAuthor,
+      coverUrl: row.coverUrl,
+      chapterId: row.chapterId,
+      chapterTitle: row.chapterTitle,
+      chapterIndex: row.chapterIndex,
+      chapterUrl: row.chapterUrl,
+      startAt: row.startAt,
+      endAt: row.endAt,
+      durationMillis: row.durationMillis,
+      startPositionRatio: row.startPositionRatio,
+      endPositionRatio: row.endPositionRatio,
+    );
+  }
+
+  ReaderReplaceRule _mapQueryRowToReaderReplaceRule(QueryRow row) {
+    final data = row.data;
+    final scopeMode = ReaderReplaceRuleScopeMode.values.firstWhere(
+      (item) => item.name == (data['scope_mode'] ?? '').toString(),
+      orElse: () => ReaderReplaceRuleScopeMode.all,
+    );
+
+    return ReaderReplaceRule(
+      id: _decodeInt(data['id']) ?? 0,
+      name: (data['name'] ?? '').toString(),
+      group: _nullableString(data['group']),
+      pattern: (data['pattern'] ?? '').toString(),
+      replacement: (data['replacement'] ?? '').toString(),
+      scopeMode: scopeMode,
+      scope: _nullableString(data['scope']),
+      excludeScope: _nullableString(data['exclude_scope']),
+      scopeTitle: _decodeBool(data['scope_title']),
+      scopeContent: _decodeBool(data['scope_content']),
+      isEnabled: _decodeBool(data['is_enabled']),
+      isRegex: _decodeBool(data['is_regex']),
+      timeoutMs: _decodeInt(data['timeout_ms']) ?? 3000,
+      sortOrder: _decodeInt(data['sort_order']) ?? 0,
+      createdAt: _decodeDateTime(data['created_at']),
+      updatedAt: _decodeDateTime(data['updated_at']),
     );
   }
 

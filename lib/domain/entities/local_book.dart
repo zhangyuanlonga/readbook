@@ -17,6 +17,9 @@ class LocalBook {
     this.indexStatus = LocalBookIndexStatus.pending,
     this.chapterCount = 0,
     this.lastError,
+    this.txtTocRuleName,
+    this.txtTocRulePattern,
+    this.splitLongChapter = false,
   });
 
   final String id;
@@ -32,6 +35,9 @@ class LocalBook {
   final LocalBookIndexStatus indexStatus;
   final int chapterCount;
   final String? lastError;
+  final String? txtTocRuleName;
+  final String? txtTocRulePattern;
+  final bool splitLongChapter;
 
   LocalBook copyWith({
     String? id,
@@ -51,6 +57,11 @@ class LocalBook {
     int? chapterCount,
     String? lastError,
     bool clearLastError = false,
+    String? txtTocRuleName,
+    bool clearTxtTocRuleName = false,
+    String? txtTocRulePattern,
+    bool clearTxtTocRulePattern = false,
+    bool? splitLongChapter,
   }) {
     return LocalBook(
       id: id ?? this.id,
@@ -66,6 +77,13 @@ class LocalBook {
       indexStatus: indexStatus ?? this.indexStatus,
       chapterCount: chapterCount ?? this.chapterCount,
       lastError: clearLastError ? null : (lastError ?? this.lastError),
+      txtTocRuleName:
+          clearTxtTocRuleName ? null : (txtTocRuleName ?? this.txtTocRuleName),
+      txtTocRulePattern:
+          clearTxtTocRulePattern
+              ? null
+              : (txtTocRulePattern ?? this.txtTocRulePattern),
+      splitLongChapter: splitLongChapter ?? this.splitLongChapter,
     );
   }
 
@@ -84,6 +102,9 @@ class LocalBook {
       'indexStatus': indexStatus.name,
       'chapterCount': chapterCount,
       'lastError': lastError,
+      'txtTocRuleName': txtTocRuleName,
+      'txtTocRulePattern': txtTocRulePattern,
+      'splitLongChapter': splitLongChapter,
     };
   }
 
@@ -102,6 +123,9 @@ class LocalBook {
       indexStatus: _parseIndexStatus(json['indexStatus']),
       chapterCount: _requiredInt(json, 'chapterCount'),
       lastError: _optionalString(json['lastError']),
+      txtTocRuleName: _optionalString(json['txtTocRuleName']),
+      txtTocRulePattern: _optionalString(json['txtTocRulePattern']),
+      splitLongChapter: _optionalBool(json['splitLongChapter']) ?? false,
     );
   }
 
@@ -170,5 +194,24 @@ class LocalBook {
     }
 
     return text;
+  }
+
+  static bool? _optionalBool(Object? value) {
+    if (value is bool) {
+      return value;
+    }
+    if (value is num) {
+      return value != 0;
+    }
+    if (value is String) {
+      final normalized = value.trim().toLowerCase();
+      if (normalized == 'true' || normalized == '1') {
+        return true;
+      }
+      if (normalized == 'false' || normalized == '0') {
+        return false;
+      }
+    }
+    return null;
   }
 }

@@ -150,11 +150,25 @@ class ReaderPreferencesService {
 
     final legacyHorizontalPadding =
         prefs.getDouble(_horizontalPaddingKey) ?? 18;
+    final bodyMarginLeft =
+        (prefs.getDouble(_bodyMarginLeftKey) ?? legacyHorizontalPadding)
+            .clamp(
+              ReaderSettings.minLayoutMargin,
+              ReaderSettings.maxLayoutMargin,
+            )
+            .toDouble();
+    final bodyMarginRight =
+        (prefs.getDouble(_bodyMarginRightKey) ?? legacyHorizontalPadding)
+            .clamp(
+              ReaderSettings.minLayoutMargin,
+              ReaderSettings.maxLayoutMargin,
+            )
+            .toDouble();
 
     return ReaderSettings(
       fontSize: prefs.getDouble(_fontSizeKey) ?? 18,
       lineHeight: prefs.getDouble(_lineHeightKey) ?? 1.7,
-      horizontalPadding: prefs.getDouble(_horizontalPaddingKey) ?? 18,
+      horizontalPadding: ((bodyMarginLeft + bodyMarginRight) / 2).toDouble(),
       paragraphSpacing: prefs.getDouble(_paragraphSpacingKey) ?? 14,
       paragraphIndent: prefs.getDouble(_paragraphIndentKey) ?? 0,
       letterSpacing:
@@ -268,20 +282,8 @@ class ReaderPreferencesService {
                 ReaderSettings.maxLayoutMargin,
               )
               .toDouble(),
-      bodyMarginLeft:
-          (prefs.getDouble(_bodyMarginLeftKey) ?? legacyHorizontalPadding)
-              .clamp(
-                ReaderSettings.minLayoutMargin,
-                ReaderSettings.maxLayoutMargin,
-              )
-              .toDouble(),
-      bodyMarginRight:
-          (prefs.getDouble(_bodyMarginRightKey) ?? legacyHorizontalPadding)
-              .clamp(
-                ReaderSettings.minLayoutMargin,
-                ReaderSettings.maxLayoutMargin,
-              )
-              .toDouble(),
+      bodyMarginLeft: bodyMarginLeft,
+      bodyMarginRight: bodyMarginRight,
       infoFooterMarginTop:
           (prefs.getDouble(_infoFooterMarginTopKey) ?? 0)
               .clamp(
@@ -319,7 +321,10 @@ class ReaderPreferencesService {
 
     await prefs.setDouble(_fontSizeKey, settings.fontSize);
     await prefs.setDouble(_lineHeightKey, settings.lineHeight);
-    await prefs.setDouble(_horizontalPaddingKey, settings.horizontalPadding);
+    await prefs.setDouble(
+      _horizontalPaddingKey,
+      ((settings.bodyMarginLeft + settings.bodyMarginRight) / 2).toDouble(),
+    );
     await prefs.setDouble(_paragraphSpacingKey, settings.paragraphSpacing);
     await prefs.setDouble(_paragraphIndentKey, settings.paragraphIndent);
     await prefs.setDouble(_letterSpacingKey, settings.letterSpacing);

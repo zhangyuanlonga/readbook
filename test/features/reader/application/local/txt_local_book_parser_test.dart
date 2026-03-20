@@ -1,16 +1,22 @@
 import 'dart:io';
 
 import 'package:flutter_appread/domain/entities/local_book.dart';
+import 'package:flutter_appread/features/reader/application/local/txt_toc_rule_settings_service.dart';
 import 'package:flutter_appread/features/reader/application/local/txt_local_book_parser.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 void main() {
   group('TxtLocalBookParser', () {
     late Directory tempDir;
-    const parser = TxtLocalBookParser();
+    late TxtLocalBookParser parser;
 
     setUp(() async {
+      SharedPreferences.setMockInitialValues({});
       tempDir = await Directory.systemTemp.createTemp('txt_local_parser_test');
+      parser = TxtLocalBookParser(
+        ruleSettingsService: TxtTocRuleSettingsService(),
+      );
     });
 
     tearDown(() async {
@@ -67,6 +73,92 @@ void main() {
 
       expect(result.chapters.length, greaterThanOrEqualTo(2));
       expect(result.chapters.first.title, startsWith('第 '));
+    });
+
+    test('detects english chapter headings from built-in toc rules', () async {
+      final file = File('${tempDir.path}/chapter_en.txt');
+      await file.writeAsString('''
+Chapter 1 Arrival
+First chapter content.
+
+Chapter 2 Return
+Second chapter content.
+''');
+
+      final now = DateTime.parse('2026-02-23T12:00:00.000Z');
+      final result = await parser.parse(
+        LocalBook(
+          id: 'local_txt_3',
+          title: 'English Book',
+          format: LocalBookFormat.txt,
+          storagePath: file.path,
+          fileSize: await file.length(),
+          createdAt: now,
+          updatedAt: now,
+        ),
+      );
+
+      expect(result.chapters, hasLength(2));
+      expect(result.chapters.first.title, 'Chapter 1 Arrival');
+      expect(result.chapters.last.title, 'Chapter 2 Return');
+    });
+
+    test(
+      'creates a preface chapter when content exists before first heading',
+      () async {
+        final file = File('${tempDir.path}/preface.txt');
+        await file.writeAsString('''
+这是一本书的简介。
+这里还有前言内容。
+
+第1章 开始
+第一章内容。
+''');
+
+        final now = DateTime.parse('2026-02-23T12:00:00.000Z');
+        final result = await parser.parse(
+          LocalBook(
+            id: 'local_txt_4',
+            title: '有前言的书',
+            format: LocalBookFormat.txt,
+            storagePath: file.path,
+            fileSize: await file.length(),
+            createdAt: now,
+            updatedAt: now,
+          ),
+        );
+
+        expect(result.chapters, hasLength(2));
+        expect(result.chapters.first.title, '前言');
+        expect(result.chapters.first.content, contains('简介'));
+        expect(result.chapters.last.title, '第1章 开始');
+      },
+    );
+
+    test('splits long chapters when splitLongChapter is enabled', () async {
+      final file = File('${tempDir.path}/long_chapter.txt');
+      final longContent = List.filled(60000, '内容').join('\n');
+      await file.writeAsString('''
+第1章 长章节
+$longContent
+''');
+
+      final now = DateTime.parse('2026-02-23T12:00:00.000Z');
+      final result = await parser.parse(
+        LocalBook(
+          id: 'local_txt_5',
+          title: '长章节书',
+          format: LocalBookFormat.txt,
+          storagePath: file.path,
+          fileSize: await file.length(),
+          createdAt: now,
+          updatedAt: now,
+          splitLongChapter: true,
+        ),
+      );
+
+      expect(result.chapters.length, greaterThan(1));
+      expect(result.chapters.first.title, '第1章 长章节(1)');
     });
   });
 }

@@ -1474,6 +1474,44 @@ class $StoredLocalBooksTable extends StoredLocalBooks
     type: DriftSqlType.string,
     requiredDuringInsert: false,
   );
+  static const VerificationMeta _txtTocRuleNameMeta = const VerificationMeta(
+    'txtTocRuleName',
+  );
+  @override
+  late final GeneratedColumn<String> txtTocRuleName = GeneratedColumn<String>(
+    'txt_toc_rule_name',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _txtTocRulePatternMeta = const VerificationMeta(
+    'txtTocRulePattern',
+  );
+  @override
+  late final GeneratedColumn<String> txtTocRulePattern =
+      GeneratedColumn<String>(
+        'txt_toc_rule_pattern',
+        aliasedName,
+        true,
+        type: DriftSqlType.string,
+        requiredDuringInsert: false,
+      );
+  static const VerificationMeta _splitLongChapterMeta = const VerificationMeta(
+    'splitLongChapter',
+  );
+  @override
+  late final GeneratedColumn<bool> splitLongChapter = GeneratedColumn<bool>(
+    'split_long_chapter',
+    aliasedName,
+    false,
+    type: DriftSqlType.bool,
+    requiredDuringInsert: false,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'CHECK ("split_long_chapter" IN (0, 1))',
+    ),
+    defaultValue: const Constant(false),
+  );
   static const VerificationMeta _createdAtMeta = const VerificationMeta(
     'createdAt',
   );
@@ -1511,6 +1549,9 @@ class $StoredLocalBooksTable extends StoredLocalBooks
     indexStatus,
     chapterCount,
     lastError,
+    txtTocRuleName,
+    txtTocRulePattern,
+    splitLongChapter,
     createdAt,
     updatedAt,
   ];
@@ -1608,6 +1649,33 @@ class $StoredLocalBooksTable extends StoredLocalBooks
         lastError.isAcceptableOrUnknown(data['last_error']!, _lastErrorMeta),
       );
     }
+    if (data.containsKey('txt_toc_rule_name')) {
+      context.handle(
+        _txtTocRuleNameMeta,
+        txtTocRuleName.isAcceptableOrUnknown(
+          data['txt_toc_rule_name']!,
+          _txtTocRuleNameMeta,
+        ),
+      );
+    }
+    if (data.containsKey('txt_toc_rule_pattern')) {
+      context.handle(
+        _txtTocRulePatternMeta,
+        txtTocRulePattern.isAcceptableOrUnknown(
+          data['txt_toc_rule_pattern']!,
+          _txtTocRulePatternMeta,
+        ),
+      );
+    }
+    if (data.containsKey('split_long_chapter')) {
+      context.handle(
+        _splitLongChapterMeta,
+        splitLongChapter.isAcceptableOrUnknown(
+          data['split_long_chapter']!,
+          _splitLongChapterMeta,
+        ),
+      );
+    }
     if (data.containsKey('created_at')) {
       context.handle(
         _createdAtMeta,
@@ -1680,6 +1748,19 @@ class $StoredLocalBooksTable extends StoredLocalBooks
         DriftSqlType.string,
         data['${effectivePrefix}last_error'],
       ),
+      txtTocRuleName: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}txt_toc_rule_name'],
+      ),
+      txtTocRulePattern: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}txt_toc_rule_pattern'],
+      ),
+      splitLongChapter:
+          attachedDatabase.typeMapping.read(
+            DriftSqlType.bool,
+            data['${effectivePrefix}split_long_chapter'],
+          )!,
       createdAt:
           attachedDatabase.typeMapping.read(
             DriftSqlType.dateTime,
@@ -1711,6 +1792,9 @@ class StoredLocalBook extends DataClass implements Insertable<StoredLocalBook> {
   final String indexStatus;
   final int chapterCount;
   final String? lastError;
+  final String? txtTocRuleName;
+  final String? txtTocRulePattern;
+  final bool splitLongChapter;
   final DateTime createdAt;
   final DateTime updatedAt;
   const StoredLocalBook({
@@ -1725,6 +1809,9 @@ class StoredLocalBook extends DataClass implements Insertable<StoredLocalBook> {
     required this.indexStatus,
     required this.chapterCount,
     this.lastError,
+    this.txtTocRuleName,
+    this.txtTocRulePattern,
+    required this.splitLongChapter,
     required this.createdAt,
     required this.updatedAt,
   });
@@ -1750,6 +1837,13 @@ class StoredLocalBook extends DataClass implements Insertable<StoredLocalBook> {
     if (!nullToAbsent || lastError != null) {
       map['last_error'] = Variable<String>(lastError);
     }
+    if (!nullToAbsent || txtTocRuleName != null) {
+      map['txt_toc_rule_name'] = Variable<String>(txtTocRuleName);
+    }
+    if (!nullToAbsent || txtTocRulePattern != null) {
+      map['txt_toc_rule_pattern'] = Variable<String>(txtTocRulePattern);
+    }
+    map['split_long_chapter'] = Variable<bool>(splitLongChapter);
     map['created_at'] = Variable<DateTime>(createdAt);
     map['updated_at'] = Variable<DateTime>(updatedAt);
     return map;
@@ -1778,6 +1872,15 @@ class StoredLocalBook extends DataClass implements Insertable<StoredLocalBook> {
           lastError == null && nullToAbsent
               ? const Value.absent()
               : Value(lastError),
+      txtTocRuleName:
+          txtTocRuleName == null && nullToAbsent
+              ? const Value.absent()
+              : Value(txtTocRuleName),
+      txtTocRulePattern:
+          txtTocRulePattern == null && nullToAbsent
+              ? const Value.absent()
+              : Value(txtTocRulePattern),
+      splitLongChapter: Value(splitLongChapter),
       createdAt: Value(createdAt),
       updatedAt: Value(updatedAt),
     );
@@ -1800,6 +1903,11 @@ class StoredLocalBook extends DataClass implements Insertable<StoredLocalBook> {
       indexStatus: serializer.fromJson<String>(json['indexStatus']),
       chapterCount: serializer.fromJson<int>(json['chapterCount']),
       lastError: serializer.fromJson<String?>(json['lastError']),
+      txtTocRuleName: serializer.fromJson<String?>(json['txtTocRuleName']),
+      txtTocRulePattern: serializer.fromJson<String?>(
+        json['txtTocRulePattern'],
+      ),
+      splitLongChapter: serializer.fromJson<bool>(json['splitLongChapter']),
       createdAt: serializer.fromJson<DateTime>(json['createdAt']),
       updatedAt: serializer.fromJson<DateTime>(json['updatedAt']),
     );
@@ -1819,6 +1927,9 @@ class StoredLocalBook extends DataClass implements Insertable<StoredLocalBook> {
       'indexStatus': serializer.toJson<String>(indexStatus),
       'chapterCount': serializer.toJson<int>(chapterCount),
       'lastError': serializer.toJson<String?>(lastError),
+      'txtTocRuleName': serializer.toJson<String?>(txtTocRuleName),
+      'txtTocRulePattern': serializer.toJson<String?>(txtTocRulePattern),
+      'splitLongChapter': serializer.toJson<bool>(splitLongChapter),
       'createdAt': serializer.toJson<DateTime>(createdAt),
       'updatedAt': serializer.toJson<DateTime>(updatedAt),
     };
@@ -1836,6 +1947,9 @@ class StoredLocalBook extends DataClass implements Insertable<StoredLocalBook> {
     String? indexStatus,
     int? chapterCount,
     Value<String?> lastError = const Value.absent(),
+    Value<String?> txtTocRuleName = const Value.absent(),
+    Value<String?> txtTocRulePattern = const Value.absent(),
+    bool? splitLongChapter,
     DateTime? createdAt,
     DateTime? updatedAt,
   }) => StoredLocalBook(
@@ -1850,6 +1964,13 @@ class StoredLocalBook extends DataClass implements Insertable<StoredLocalBook> {
     indexStatus: indexStatus ?? this.indexStatus,
     chapterCount: chapterCount ?? this.chapterCount,
     lastError: lastError.present ? lastError.value : this.lastError,
+    txtTocRuleName:
+        txtTocRuleName.present ? txtTocRuleName.value : this.txtTocRuleName,
+    txtTocRulePattern:
+        txtTocRulePattern.present
+            ? txtTocRulePattern.value
+            : this.txtTocRulePattern,
+    splitLongChapter: splitLongChapter ?? this.splitLongChapter,
     createdAt: createdAt ?? this.createdAt,
     updatedAt: updatedAt ?? this.updatedAt,
   );
@@ -1872,6 +1993,18 @@ class StoredLocalBook extends DataClass implements Insertable<StoredLocalBook> {
               ? data.chapterCount.value
               : this.chapterCount,
       lastError: data.lastError.present ? data.lastError.value : this.lastError,
+      txtTocRuleName:
+          data.txtTocRuleName.present
+              ? data.txtTocRuleName.value
+              : this.txtTocRuleName,
+      txtTocRulePattern:
+          data.txtTocRulePattern.present
+              ? data.txtTocRulePattern.value
+              : this.txtTocRulePattern,
+      splitLongChapter:
+          data.splitLongChapter.present
+              ? data.splitLongChapter.value
+              : this.splitLongChapter,
       createdAt: data.createdAt.present ? data.createdAt.value : this.createdAt,
       updatedAt: data.updatedAt.present ? data.updatedAt.value : this.updatedAt,
     );
@@ -1891,6 +2024,9 @@ class StoredLocalBook extends DataClass implements Insertable<StoredLocalBook> {
           ..write('indexStatus: $indexStatus, ')
           ..write('chapterCount: $chapterCount, ')
           ..write('lastError: $lastError, ')
+          ..write('txtTocRuleName: $txtTocRuleName, ')
+          ..write('txtTocRulePattern: $txtTocRulePattern, ')
+          ..write('splitLongChapter: $splitLongChapter, ')
           ..write('createdAt: $createdAt, ')
           ..write('updatedAt: $updatedAt')
           ..write(')'))
@@ -1910,6 +2046,9 @@ class StoredLocalBook extends DataClass implements Insertable<StoredLocalBook> {
     indexStatus,
     chapterCount,
     lastError,
+    txtTocRuleName,
+    txtTocRulePattern,
+    splitLongChapter,
     createdAt,
     updatedAt,
   );
@@ -1928,6 +2067,9 @@ class StoredLocalBook extends DataClass implements Insertable<StoredLocalBook> {
           other.indexStatus == this.indexStatus &&
           other.chapterCount == this.chapterCount &&
           other.lastError == this.lastError &&
+          other.txtTocRuleName == this.txtTocRuleName &&
+          other.txtTocRulePattern == this.txtTocRulePattern &&
+          other.splitLongChapter == this.splitLongChapter &&
           other.createdAt == this.createdAt &&
           other.updatedAt == this.updatedAt);
 }
@@ -1944,6 +2086,9 @@ class StoredLocalBooksCompanion extends UpdateCompanion<StoredLocalBook> {
   final Value<String> indexStatus;
   final Value<int> chapterCount;
   final Value<String?> lastError;
+  final Value<String?> txtTocRuleName;
+  final Value<String?> txtTocRulePattern;
+  final Value<bool> splitLongChapter;
   final Value<DateTime> createdAt;
   final Value<DateTime> updatedAt;
   final Value<int> rowid;
@@ -1959,6 +2104,9 @@ class StoredLocalBooksCompanion extends UpdateCompanion<StoredLocalBook> {
     this.indexStatus = const Value.absent(),
     this.chapterCount = const Value.absent(),
     this.lastError = const Value.absent(),
+    this.txtTocRuleName = const Value.absent(),
+    this.txtTocRulePattern = const Value.absent(),
+    this.splitLongChapter = const Value.absent(),
     this.createdAt = const Value.absent(),
     this.updatedAt = const Value.absent(),
     this.rowid = const Value.absent(),
@@ -1975,6 +2123,9 @@ class StoredLocalBooksCompanion extends UpdateCompanion<StoredLocalBook> {
     this.indexStatus = const Value.absent(),
     this.chapterCount = const Value.absent(),
     this.lastError = const Value.absent(),
+    this.txtTocRuleName = const Value.absent(),
+    this.txtTocRulePattern = const Value.absent(),
+    this.splitLongChapter = const Value.absent(),
     this.createdAt = const Value.absent(),
     this.updatedAt = const Value.absent(),
     this.rowid = const Value.absent(),
@@ -1995,6 +2146,9 @@ class StoredLocalBooksCompanion extends UpdateCompanion<StoredLocalBook> {
     Expression<String>? indexStatus,
     Expression<int>? chapterCount,
     Expression<String>? lastError,
+    Expression<String>? txtTocRuleName,
+    Expression<String>? txtTocRulePattern,
+    Expression<bool>? splitLongChapter,
     Expression<DateTime>? createdAt,
     Expression<DateTime>? updatedAt,
     Expression<int>? rowid,
@@ -2011,6 +2165,9 @@ class StoredLocalBooksCompanion extends UpdateCompanion<StoredLocalBook> {
       if (indexStatus != null) 'index_status': indexStatus,
       if (chapterCount != null) 'chapter_count': chapterCount,
       if (lastError != null) 'last_error': lastError,
+      if (txtTocRuleName != null) 'txt_toc_rule_name': txtTocRuleName,
+      if (txtTocRulePattern != null) 'txt_toc_rule_pattern': txtTocRulePattern,
+      if (splitLongChapter != null) 'split_long_chapter': splitLongChapter,
       if (createdAt != null) 'created_at': createdAt,
       if (updatedAt != null) 'updated_at': updatedAt,
       if (rowid != null) 'rowid': rowid,
@@ -2029,6 +2186,9 @@ class StoredLocalBooksCompanion extends UpdateCompanion<StoredLocalBook> {
     Value<String>? indexStatus,
     Value<int>? chapterCount,
     Value<String?>? lastError,
+    Value<String?>? txtTocRuleName,
+    Value<String?>? txtTocRulePattern,
+    Value<bool>? splitLongChapter,
     Value<DateTime>? createdAt,
     Value<DateTime>? updatedAt,
     Value<int>? rowid,
@@ -2045,6 +2205,9 @@ class StoredLocalBooksCompanion extends UpdateCompanion<StoredLocalBook> {
       indexStatus: indexStatus ?? this.indexStatus,
       chapterCount: chapterCount ?? this.chapterCount,
       lastError: lastError ?? this.lastError,
+      txtTocRuleName: txtTocRuleName ?? this.txtTocRuleName,
+      txtTocRulePattern: txtTocRulePattern ?? this.txtTocRulePattern,
+      splitLongChapter: splitLongChapter ?? this.splitLongChapter,
       createdAt: createdAt ?? this.createdAt,
       updatedAt: updatedAt ?? this.updatedAt,
       rowid: rowid ?? this.rowid,
@@ -2087,6 +2250,15 @@ class StoredLocalBooksCompanion extends UpdateCompanion<StoredLocalBook> {
     if (lastError.present) {
       map['last_error'] = Variable<String>(lastError.value);
     }
+    if (txtTocRuleName.present) {
+      map['txt_toc_rule_name'] = Variable<String>(txtTocRuleName.value);
+    }
+    if (txtTocRulePattern.present) {
+      map['txt_toc_rule_pattern'] = Variable<String>(txtTocRulePattern.value);
+    }
+    if (splitLongChapter.present) {
+      map['split_long_chapter'] = Variable<bool>(splitLongChapter.value);
+    }
     if (createdAt.present) {
       map['created_at'] = Variable<DateTime>(createdAt.value);
     }
@@ -2113,6 +2285,9 @@ class StoredLocalBooksCompanion extends UpdateCompanion<StoredLocalBook> {
           ..write('indexStatus: $indexStatus, ')
           ..write('chapterCount: $chapterCount, ')
           ..write('lastError: $lastError, ')
+          ..write('txtTocRuleName: $txtTocRuleName, ')
+          ..write('txtTocRulePattern: $txtTocRulePattern, ')
+          ..write('splitLongChapter: $splitLongChapter, ')
           ..write('createdAt: $createdAt, ')
           ..write('updatedAt: $updatedAt, ')
           ..write('rowid: $rowid')
@@ -3468,6 +3643,2309 @@ class StoredBookmarksCompanion extends UpdateCompanion<StoredBookmark> {
   }
 }
 
+class $StoredReadingRecordsTable extends StoredReadingRecords
+    with TableInfo<$StoredReadingRecordsTable, StoredReadingRecord> {
+  @override
+  final GeneratedDatabase attachedDatabase;
+  final String? _alias;
+  $StoredReadingRecordsTable(this.attachedDatabase, [this._alias]);
+  static const VerificationMeta _bookIdMeta = const VerificationMeta('bookId');
+  @override
+  late final GeneratedColumn<String> bookId = GeneratedColumn<String>(
+    'book_id',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _sourceIdMeta = const VerificationMeta(
+    'sourceId',
+  );
+  @override
+  late final GeneratedColumn<String> sourceId = GeneratedColumn<String>(
+    'source_id',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _detailUrlMeta = const VerificationMeta(
+    'detailUrl',
+  );
+  @override
+  late final GeneratedColumn<String> detailUrl = GeneratedColumn<String>(
+    'detail_url',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _bookTitleMeta = const VerificationMeta(
+    'bookTitle',
+  );
+  @override
+  late final GeneratedColumn<String> bookTitle = GeneratedColumn<String>(
+    'book_title',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _bookAuthorMeta = const VerificationMeta(
+    'bookAuthor',
+  );
+  @override
+  late final GeneratedColumn<String> bookAuthor = GeneratedColumn<String>(
+    'book_author',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _coverUrlMeta = const VerificationMeta(
+    'coverUrl',
+  );
+  @override
+  late final GeneratedColumn<String> coverUrl = GeneratedColumn<String>(
+    'cover_url',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _lastChapterIdMeta = const VerificationMeta(
+    'lastChapterId',
+  );
+  @override
+  late final GeneratedColumn<String> lastChapterId = GeneratedColumn<String>(
+    'last_chapter_id',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _lastChapterTitleMeta = const VerificationMeta(
+    'lastChapterTitle',
+  );
+  @override
+  late final GeneratedColumn<String> lastChapterTitle = GeneratedColumn<String>(
+    'last_chapter_title',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _lastChapterIndexMeta = const VerificationMeta(
+    'lastChapterIndex',
+  );
+  @override
+  late final GeneratedColumn<int> lastChapterIndex = GeneratedColumn<int>(
+    'last_chapter_index',
+    aliasedName,
+    true,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _lastChapterUrlMeta = const VerificationMeta(
+    'lastChapterUrl',
+  );
+  @override
+  late final GeneratedColumn<String> lastChapterUrl = GeneratedColumn<String>(
+    'last_chapter_url',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _lastPositionRatioMeta = const VerificationMeta(
+    'lastPositionRatio',
+  );
+  @override
+  late final GeneratedColumn<double> lastPositionRatio =
+      GeneratedColumn<double>(
+        'last_position_ratio',
+        aliasedName,
+        false,
+        type: DriftSqlType.double,
+        requiredDuringInsert: false,
+        defaultValue: const Constant(0),
+      );
+  static const VerificationMeta _totalReadMillisMeta = const VerificationMeta(
+    'totalReadMillis',
+  );
+  @override
+  late final GeneratedColumn<int> totalReadMillis = GeneratedColumn<int>(
+    'total_read_millis',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+    defaultValue: const Constant(0),
+  );
+  static const VerificationMeta _lastReadAtMeta = const VerificationMeta(
+    'lastReadAt',
+  );
+  @override
+  late final GeneratedColumn<DateTime> lastReadAt = GeneratedColumn<DateTime>(
+    'last_read_at',
+    aliasedName,
+    false,
+    type: DriftSqlType.dateTime,
+    requiredDuringInsert: true,
+  );
+  @override
+  List<GeneratedColumn> get $columns => [
+    bookId,
+    sourceId,
+    detailUrl,
+    bookTitle,
+    bookAuthor,
+    coverUrl,
+    lastChapterId,
+    lastChapterTitle,
+    lastChapterIndex,
+    lastChapterUrl,
+    lastPositionRatio,
+    totalReadMillis,
+    lastReadAt,
+  ];
+  @override
+  String get aliasedName => _alias ?? actualTableName;
+  @override
+  String get actualTableName => $name;
+  static const String $name = 'reading_records';
+  @override
+  VerificationContext validateIntegrity(
+    Insertable<StoredReadingRecord> instance, {
+    bool isInserting = false,
+  }) {
+    final context = VerificationContext();
+    final data = instance.toColumns(true);
+    if (data.containsKey('book_id')) {
+      context.handle(
+        _bookIdMeta,
+        bookId.isAcceptableOrUnknown(data['book_id']!, _bookIdMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_bookIdMeta);
+    }
+    if (data.containsKey('source_id')) {
+      context.handle(
+        _sourceIdMeta,
+        sourceId.isAcceptableOrUnknown(data['source_id']!, _sourceIdMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_sourceIdMeta);
+    }
+    if (data.containsKey('detail_url')) {
+      context.handle(
+        _detailUrlMeta,
+        detailUrl.isAcceptableOrUnknown(data['detail_url']!, _detailUrlMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_detailUrlMeta);
+    }
+    if (data.containsKey('book_title')) {
+      context.handle(
+        _bookTitleMeta,
+        bookTitle.isAcceptableOrUnknown(data['book_title']!, _bookTitleMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_bookTitleMeta);
+    }
+    if (data.containsKey('book_author')) {
+      context.handle(
+        _bookAuthorMeta,
+        bookAuthor.isAcceptableOrUnknown(data['book_author']!, _bookAuthorMeta),
+      );
+    }
+    if (data.containsKey('cover_url')) {
+      context.handle(
+        _coverUrlMeta,
+        coverUrl.isAcceptableOrUnknown(data['cover_url']!, _coverUrlMeta),
+      );
+    }
+    if (data.containsKey('last_chapter_id')) {
+      context.handle(
+        _lastChapterIdMeta,
+        lastChapterId.isAcceptableOrUnknown(
+          data['last_chapter_id']!,
+          _lastChapterIdMeta,
+        ),
+      );
+    }
+    if (data.containsKey('last_chapter_title')) {
+      context.handle(
+        _lastChapterTitleMeta,
+        lastChapterTitle.isAcceptableOrUnknown(
+          data['last_chapter_title']!,
+          _lastChapterTitleMeta,
+        ),
+      );
+    }
+    if (data.containsKey('last_chapter_index')) {
+      context.handle(
+        _lastChapterIndexMeta,
+        lastChapterIndex.isAcceptableOrUnknown(
+          data['last_chapter_index']!,
+          _lastChapterIndexMeta,
+        ),
+      );
+    }
+    if (data.containsKey('last_chapter_url')) {
+      context.handle(
+        _lastChapterUrlMeta,
+        lastChapterUrl.isAcceptableOrUnknown(
+          data['last_chapter_url']!,
+          _lastChapterUrlMeta,
+        ),
+      );
+    }
+    if (data.containsKey('last_position_ratio')) {
+      context.handle(
+        _lastPositionRatioMeta,
+        lastPositionRatio.isAcceptableOrUnknown(
+          data['last_position_ratio']!,
+          _lastPositionRatioMeta,
+        ),
+      );
+    }
+    if (data.containsKey('total_read_millis')) {
+      context.handle(
+        _totalReadMillisMeta,
+        totalReadMillis.isAcceptableOrUnknown(
+          data['total_read_millis']!,
+          _totalReadMillisMeta,
+        ),
+      );
+    }
+    if (data.containsKey('last_read_at')) {
+      context.handle(
+        _lastReadAtMeta,
+        lastReadAt.isAcceptableOrUnknown(
+          data['last_read_at']!,
+          _lastReadAtMeta,
+        ),
+      );
+    } else if (isInserting) {
+      context.missing(_lastReadAtMeta);
+    }
+    return context;
+  }
+
+  @override
+  Set<GeneratedColumn> get $primaryKey => {bookId};
+  @override
+  StoredReadingRecord map(Map<String, dynamic> data, {String? tablePrefix}) {
+    final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
+    return StoredReadingRecord(
+      bookId:
+          attachedDatabase.typeMapping.read(
+            DriftSqlType.string,
+            data['${effectivePrefix}book_id'],
+          )!,
+      sourceId:
+          attachedDatabase.typeMapping.read(
+            DriftSqlType.string,
+            data['${effectivePrefix}source_id'],
+          )!,
+      detailUrl:
+          attachedDatabase.typeMapping.read(
+            DriftSqlType.string,
+            data['${effectivePrefix}detail_url'],
+          )!,
+      bookTitle:
+          attachedDatabase.typeMapping.read(
+            DriftSqlType.string,
+            data['${effectivePrefix}book_title'],
+          )!,
+      bookAuthor: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}book_author'],
+      ),
+      coverUrl: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}cover_url'],
+      ),
+      lastChapterId: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}last_chapter_id'],
+      ),
+      lastChapterTitle: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}last_chapter_title'],
+      ),
+      lastChapterIndex: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}last_chapter_index'],
+      ),
+      lastChapterUrl: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}last_chapter_url'],
+      ),
+      lastPositionRatio:
+          attachedDatabase.typeMapping.read(
+            DriftSqlType.double,
+            data['${effectivePrefix}last_position_ratio'],
+          )!,
+      totalReadMillis:
+          attachedDatabase.typeMapping.read(
+            DriftSqlType.int,
+            data['${effectivePrefix}total_read_millis'],
+          )!,
+      lastReadAt:
+          attachedDatabase.typeMapping.read(
+            DriftSqlType.dateTime,
+            data['${effectivePrefix}last_read_at'],
+          )!,
+    );
+  }
+
+  @override
+  $StoredReadingRecordsTable createAlias(String alias) {
+    return $StoredReadingRecordsTable(attachedDatabase, alias);
+  }
+}
+
+class StoredReadingRecord extends DataClass
+    implements Insertable<StoredReadingRecord> {
+  final String bookId;
+  final String sourceId;
+  final String detailUrl;
+  final String bookTitle;
+  final String? bookAuthor;
+  final String? coverUrl;
+  final String? lastChapterId;
+  final String? lastChapterTitle;
+  final int? lastChapterIndex;
+  final String? lastChapterUrl;
+  final double lastPositionRatio;
+  final int totalReadMillis;
+  final DateTime lastReadAt;
+  const StoredReadingRecord({
+    required this.bookId,
+    required this.sourceId,
+    required this.detailUrl,
+    required this.bookTitle,
+    this.bookAuthor,
+    this.coverUrl,
+    this.lastChapterId,
+    this.lastChapterTitle,
+    this.lastChapterIndex,
+    this.lastChapterUrl,
+    required this.lastPositionRatio,
+    required this.totalReadMillis,
+    required this.lastReadAt,
+  });
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    map['book_id'] = Variable<String>(bookId);
+    map['source_id'] = Variable<String>(sourceId);
+    map['detail_url'] = Variable<String>(detailUrl);
+    map['book_title'] = Variable<String>(bookTitle);
+    if (!nullToAbsent || bookAuthor != null) {
+      map['book_author'] = Variable<String>(bookAuthor);
+    }
+    if (!nullToAbsent || coverUrl != null) {
+      map['cover_url'] = Variable<String>(coverUrl);
+    }
+    if (!nullToAbsent || lastChapterId != null) {
+      map['last_chapter_id'] = Variable<String>(lastChapterId);
+    }
+    if (!nullToAbsent || lastChapterTitle != null) {
+      map['last_chapter_title'] = Variable<String>(lastChapterTitle);
+    }
+    if (!nullToAbsent || lastChapterIndex != null) {
+      map['last_chapter_index'] = Variable<int>(lastChapterIndex);
+    }
+    if (!nullToAbsent || lastChapterUrl != null) {
+      map['last_chapter_url'] = Variable<String>(lastChapterUrl);
+    }
+    map['last_position_ratio'] = Variable<double>(lastPositionRatio);
+    map['total_read_millis'] = Variable<int>(totalReadMillis);
+    map['last_read_at'] = Variable<DateTime>(lastReadAt);
+    return map;
+  }
+
+  StoredReadingRecordsCompanion toCompanion(bool nullToAbsent) {
+    return StoredReadingRecordsCompanion(
+      bookId: Value(bookId),
+      sourceId: Value(sourceId),
+      detailUrl: Value(detailUrl),
+      bookTitle: Value(bookTitle),
+      bookAuthor:
+          bookAuthor == null && nullToAbsent
+              ? const Value.absent()
+              : Value(bookAuthor),
+      coverUrl:
+          coverUrl == null && nullToAbsent
+              ? const Value.absent()
+              : Value(coverUrl),
+      lastChapterId:
+          lastChapterId == null && nullToAbsent
+              ? const Value.absent()
+              : Value(lastChapterId),
+      lastChapterTitle:
+          lastChapterTitle == null && nullToAbsent
+              ? const Value.absent()
+              : Value(lastChapterTitle),
+      lastChapterIndex:
+          lastChapterIndex == null && nullToAbsent
+              ? const Value.absent()
+              : Value(lastChapterIndex),
+      lastChapterUrl:
+          lastChapterUrl == null && nullToAbsent
+              ? const Value.absent()
+              : Value(lastChapterUrl),
+      lastPositionRatio: Value(lastPositionRatio),
+      totalReadMillis: Value(totalReadMillis),
+      lastReadAt: Value(lastReadAt),
+    );
+  }
+
+  factory StoredReadingRecord.fromJson(
+    Map<String, dynamic> json, {
+    ValueSerializer? serializer,
+  }) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return StoredReadingRecord(
+      bookId: serializer.fromJson<String>(json['bookId']),
+      sourceId: serializer.fromJson<String>(json['sourceId']),
+      detailUrl: serializer.fromJson<String>(json['detailUrl']),
+      bookTitle: serializer.fromJson<String>(json['bookTitle']),
+      bookAuthor: serializer.fromJson<String?>(json['bookAuthor']),
+      coverUrl: serializer.fromJson<String?>(json['coverUrl']),
+      lastChapterId: serializer.fromJson<String?>(json['lastChapterId']),
+      lastChapterTitle: serializer.fromJson<String?>(json['lastChapterTitle']),
+      lastChapterIndex: serializer.fromJson<int?>(json['lastChapterIndex']),
+      lastChapterUrl: serializer.fromJson<String?>(json['lastChapterUrl']),
+      lastPositionRatio: serializer.fromJson<double>(json['lastPositionRatio']),
+      totalReadMillis: serializer.fromJson<int>(json['totalReadMillis']),
+      lastReadAt: serializer.fromJson<DateTime>(json['lastReadAt']),
+    );
+  }
+  @override
+  Map<String, dynamic> toJson({ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return <String, dynamic>{
+      'bookId': serializer.toJson<String>(bookId),
+      'sourceId': serializer.toJson<String>(sourceId),
+      'detailUrl': serializer.toJson<String>(detailUrl),
+      'bookTitle': serializer.toJson<String>(bookTitle),
+      'bookAuthor': serializer.toJson<String?>(bookAuthor),
+      'coverUrl': serializer.toJson<String?>(coverUrl),
+      'lastChapterId': serializer.toJson<String?>(lastChapterId),
+      'lastChapterTitle': serializer.toJson<String?>(lastChapterTitle),
+      'lastChapterIndex': serializer.toJson<int?>(lastChapterIndex),
+      'lastChapterUrl': serializer.toJson<String?>(lastChapterUrl),
+      'lastPositionRatio': serializer.toJson<double>(lastPositionRatio),
+      'totalReadMillis': serializer.toJson<int>(totalReadMillis),
+      'lastReadAt': serializer.toJson<DateTime>(lastReadAt),
+    };
+  }
+
+  StoredReadingRecord copyWith({
+    String? bookId,
+    String? sourceId,
+    String? detailUrl,
+    String? bookTitle,
+    Value<String?> bookAuthor = const Value.absent(),
+    Value<String?> coverUrl = const Value.absent(),
+    Value<String?> lastChapterId = const Value.absent(),
+    Value<String?> lastChapterTitle = const Value.absent(),
+    Value<int?> lastChapterIndex = const Value.absent(),
+    Value<String?> lastChapterUrl = const Value.absent(),
+    double? lastPositionRatio,
+    int? totalReadMillis,
+    DateTime? lastReadAt,
+  }) => StoredReadingRecord(
+    bookId: bookId ?? this.bookId,
+    sourceId: sourceId ?? this.sourceId,
+    detailUrl: detailUrl ?? this.detailUrl,
+    bookTitle: bookTitle ?? this.bookTitle,
+    bookAuthor: bookAuthor.present ? bookAuthor.value : this.bookAuthor,
+    coverUrl: coverUrl.present ? coverUrl.value : this.coverUrl,
+    lastChapterId:
+        lastChapterId.present ? lastChapterId.value : this.lastChapterId,
+    lastChapterTitle:
+        lastChapterTitle.present
+            ? lastChapterTitle.value
+            : this.lastChapterTitle,
+    lastChapterIndex:
+        lastChapterIndex.present
+            ? lastChapterIndex.value
+            : this.lastChapterIndex,
+    lastChapterUrl:
+        lastChapterUrl.present ? lastChapterUrl.value : this.lastChapterUrl,
+    lastPositionRatio: lastPositionRatio ?? this.lastPositionRatio,
+    totalReadMillis: totalReadMillis ?? this.totalReadMillis,
+    lastReadAt: lastReadAt ?? this.lastReadAt,
+  );
+  StoredReadingRecord copyWithCompanion(StoredReadingRecordsCompanion data) {
+    return StoredReadingRecord(
+      bookId: data.bookId.present ? data.bookId.value : this.bookId,
+      sourceId: data.sourceId.present ? data.sourceId.value : this.sourceId,
+      detailUrl: data.detailUrl.present ? data.detailUrl.value : this.detailUrl,
+      bookTitle: data.bookTitle.present ? data.bookTitle.value : this.bookTitle,
+      bookAuthor:
+          data.bookAuthor.present ? data.bookAuthor.value : this.bookAuthor,
+      coverUrl: data.coverUrl.present ? data.coverUrl.value : this.coverUrl,
+      lastChapterId:
+          data.lastChapterId.present
+              ? data.lastChapterId.value
+              : this.lastChapterId,
+      lastChapterTitle:
+          data.lastChapterTitle.present
+              ? data.lastChapterTitle.value
+              : this.lastChapterTitle,
+      lastChapterIndex:
+          data.lastChapterIndex.present
+              ? data.lastChapterIndex.value
+              : this.lastChapterIndex,
+      lastChapterUrl:
+          data.lastChapterUrl.present
+              ? data.lastChapterUrl.value
+              : this.lastChapterUrl,
+      lastPositionRatio:
+          data.lastPositionRatio.present
+              ? data.lastPositionRatio.value
+              : this.lastPositionRatio,
+      totalReadMillis:
+          data.totalReadMillis.present
+              ? data.totalReadMillis.value
+              : this.totalReadMillis,
+      lastReadAt:
+          data.lastReadAt.present ? data.lastReadAt.value : this.lastReadAt,
+    );
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('StoredReadingRecord(')
+          ..write('bookId: $bookId, ')
+          ..write('sourceId: $sourceId, ')
+          ..write('detailUrl: $detailUrl, ')
+          ..write('bookTitle: $bookTitle, ')
+          ..write('bookAuthor: $bookAuthor, ')
+          ..write('coverUrl: $coverUrl, ')
+          ..write('lastChapterId: $lastChapterId, ')
+          ..write('lastChapterTitle: $lastChapterTitle, ')
+          ..write('lastChapterIndex: $lastChapterIndex, ')
+          ..write('lastChapterUrl: $lastChapterUrl, ')
+          ..write('lastPositionRatio: $lastPositionRatio, ')
+          ..write('totalReadMillis: $totalReadMillis, ')
+          ..write('lastReadAt: $lastReadAt')
+          ..write(')'))
+        .toString();
+  }
+
+  @override
+  int get hashCode => Object.hash(
+    bookId,
+    sourceId,
+    detailUrl,
+    bookTitle,
+    bookAuthor,
+    coverUrl,
+    lastChapterId,
+    lastChapterTitle,
+    lastChapterIndex,
+    lastChapterUrl,
+    lastPositionRatio,
+    totalReadMillis,
+    lastReadAt,
+  );
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is StoredReadingRecord &&
+          other.bookId == this.bookId &&
+          other.sourceId == this.sourceId &&
+          other.detailUrl == this.detailUrl &&
+          other.bookTitle == this.bookTitle &&
+          other.bookAuthor == this.bookAuthor &&
+          other.coverUrl == this.coverUrl &&
+          other.lastChapterId == this.lastChapterId &&
+          other.lastChapterTitle == this.lastChapterTitle &&
+          other.lastChapterIndex == this.lastChapterIndex &&
+          other.lastChapterUrl == this.lastChapterUrl &&
+          other.lastPositionRatio == this.lastPositionRatio &&
+          other.totalReadMillis == this.totalReadMillis &&
+          other.lastReadAt == this.lastReadAt);
+}
+
+class StoredReadingRecordsCompanion
+    extends UpdateCompanion<StoredReadingRecord> {
+  final Value<String> bookId;
+  final Value<String> sourceId;
+  final Value<String> detailUrl;
+  final Value<String> bookTitle;
+  final Value<String?> bookAuthor;
+  final Value<String?> coverUrl;
+  final Value<String?> lastChapterId;
+  final Value<String?> lastChapterTitle;
+  final Value<int?> lastChapterIndex;
+  final Value<String?> lastChapterUrl;
+  final Value<double> lastPositionRatio;
+  final Value<int> totalReadMillis;
+  final Value<DateTime> lastReadAt;
+  final Value<int> rowid;
+  const StoredReadingRecordsCompanion({
+    this.bookId = const Value.absent(),
+    this.sourceId = const Value.absent(),
+    this.detailUrl = const Value.absent(),
+    this.bookTitle = const Value.absent(),
+    this.bookAuthor = const Value.absent(),
+    this.coverUrl = const Value.absent(),
+    this.lastChapterId = const Value.absent(),
+    this.lastChapterTitle = const Value.absent(),
+    this.lastChapterIndex = const Value.absent(),
+    this.lastChapterUrl = const Value.absent(),
+    this.lastPositionRatio = const Value.absent(),
+    this.totalReadMillis = const Value.absent(),
+    this.lastReadAt = const Value.absent(),
+    this.rowid = const Value.absent(),
+  });
+  StoredReadingRecordsCompanion.insert({
+    required String bookId,
+    required String sourceId,
+    required String detailUrl,
+    required String bookTitle,
+    this.bookAuthor = const Value.absent(),
+    this.coverUrl = const Value.absent(),
+    this.lastChapterId = const Value.absent(),
+    this.lastChapterTitle = const Value.absent(),
+    this.lastChapterIndex = const Value.absent(),
+    this.lastChapterUrl = const Value.absent(),
+    this.lastPositionRatio = const Value.absent(),
+    this.totalReadMillis = const Value.absent(),
+    required DateTime lastReadAt,
+    this.rowid = const Value.absent(),
+  }) : bookId = Value(bookId),
+       sourceId = Value(sourceId),
+       detailUrl = Value(detailUrl),
+       bookTitle = Value(bookTitle),
+       lastReadAt = Value(lastReadAt);
+  static Insertable<StoredReadingRecord> custom({
+    Expression<String>? bookId,
+    Expression<String>? sourceId,
+    Expression<String>? detailUrl,
+    Expression<String>? bookTitle,
+    Expression<String>? bookAuthor,
+    Expression<String>? coverUrl,
+    Expression<String>? lastChapterId,
+    Expression<String>? lastChapterTitle,
+    Expression<int>? lastChapterIndex,
+    Expression<String>? lastChapterUrl,
+    Expression<double>? lastPositionRatio,
+    Expression<int>? totalReadMillis,
+    Expression<DateTime>? lastReadAt,
+    Expression<int>? rowid,
+  }) {
+    return RawValuesInsertable({
+      if (bookId != null) 'book_id': bookId,
+      if (sourceId != null) 'source_id': sourceId,
+      if (detailUrl != null) 'detail_url': detailUrl,
+      if (bookTitle != null) 'book_title': bookTitle,
+      if (bookAuthor != null) 'book_author': bookAuthor,
+      if (coverUrl != null) 'cover_url': coverUrl,
+      if (lastChapterId != null) 'last_chapter_id': lastChapterId,
+      if (lastChapterTitle != null) 'last_chapter_title': lastChapterTitle,
+      if (lastChapterIndex != null) 'last_chapter_index': lastChapterIndex,
+      if (lastChapterUrl != null) 'last_chapter_url': lastChapterUrl,
+      if (lastPositionRatio != null) 'last_position_ratio': lastPositionRatio,
+      if (totalReadMillis != null) 'total_read_millis': totalReadMillis,
+      if (lastReadAt != null) 'last_read_at': lastReadAt,
+      if (rowid != null) 'rowid': rowid,
+    });
+  }
+
+  StoredReadingRecordsCompanion copyWith({
+    Value<String>? bookId,
+    Value<String>? sourceId,
+    Value<String>? detailUrl,
+    Value<String>? bookTitle,
+    Value<String?>? bookAuthor,
+    Value<String?>? coverUrl,
+    Value<String?>? lastChapterId,
+    Value<String?>? lastChapterTitle,
+    Value<int?>? lastChapterIndex,
+    Value<String?>? lastChapterUrl,
+    Value<double>? lastPositionRatio,
+    Value<int>? totalReadMillis,
+    Value<DateTime>? lastReadAt,
+    Value<int>? rowid,
+  }) {
+    return StoredReadingRecordsCompanion(
+      bookId: bookId ?? this.bookId,
+      sourceId: sourceId ?? this.sourceId,
+      detailUrl: detailUrl ?? this.detailUrl,
+      bookTitle: bookTitle ?? this.bookTitle,
+      bookAuthor: bookAuthor ?? this.bookAuthor,
+      coverUrl: coverUrl ?? this.coverUrl,
+      lastChapterId: lastChapterId ?? this.lastChapterId,
+      lastChapterTitle: lastChapterTitle ?? this.lastChapterTitle,
+      lastChapterIndex: lastChapterIndex ?? this.lastChapterIndex,
+      lastChapterUrl: lastChapterUrl ?? this.lastChapterUrl,
+      lastPositionRatio: lastPositionRatio ?? this.lastPositionRatio,
+      totalReadMillis: totalReadMillis ?? this.totalReadMillis,
+      lastReadAt: lastReadAt ?? this.lastReadAt,
+      rowid: rowid ?? this.rowid,
+    );
+  }
+
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    if (bookId.present) {
+      map['book_id'] = Variable<String>(bookId.value);
+    }
+    if (sourceId.present) {
+      map['source_id'] = Variable<String>(sourceId.value);
+    }
+    if (detailUrl.present) {
+      map['detail_url'] = Variable<String>(detailUrl.value);
+    }
+    if (bookTitle.present) {
+      map['book_title'] = Variable<String>(bookTitle.value);
+    }
+    if (bookAuthor.present) {
+      map['book_author'] = Variable<String>(bookAuthor.value);
+    }
+    if (coverUrl.present) {
+      map['cover_url'] = Variable<String>(coverUrl.value);
+    }
+    if (lastChapterId.present) {
+      map['last_chapter_id'] = Variable<String>(lastChapterId.value);
+    }
+    if (lastChapterTitle.present) {
+      map['last_chapter_title'] = Variable<String>(lastChapterTitle.value);
+    }
+    if (lastChapterIndex.present) {
+      map['last_chapter_index'] = Variable<int>(lastChapterIndex.value);
+    }
+    if (lastChapterUrl.present) {
+      map['last_chapter_url'] = Variable<String>(lastChapterUrl.value);
+    }
+    if (lastPositionRatio.present) {
+      map['last_position_ratio'] = Variable<double>(lastPositionRatio.value);
+    }
+    if (totalReadMillis.present) {
+      map['total_read_millis'] = Variable<int>(totalReadMillis.value);
+    }
+    if (lastReadAt.present) {
+      map['last_read_at'] = Variable<DateTime>(lastReadAt.value);
+    }
+    if (rowid.present) {
+      map['rowid'] = Variable<int>(rowid.value);
+    }
+    return map;
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('StoredReadingRecordsCompanion(')
+          ..write('bookId: $bookId, ')
+          ..write('sourceId: $sourceId, ')
+          ..write('detailUrl: $detailUrl, ')
+          ..write('bookTitle: $bookTitle, ')
+          ..write('bookAuthor: $bookAuthor, ')
+          ..write('coverUrl: $coverUrl, ')
+          ..write('lastChapterId: $lastChapterId, ')
+          ..write('lastChapterTitle: $lastChapterTitle, ')
+          ..write('lastChapterIndex: $lastChapterIndex, ')
+          ..write('lastChapterUrl: $lastChapterUrl, ')
+          ..write('lastPositionRatio: $lastPositionRatio, ')
+          ..write('totalReadMillis: $totalReadMillis, ')
+          ..write('lastReadAt: $lastReadAt, ')
+          ..write('rowid: $rowid')
+          ..write(')'))
+        .toString();
+  }
+}
+
+class $StoredReadingRecordDaysTable extends StoredReadingRecordDays
+    with TableInfo<$StoredReadingRecordDaysTable, StoredReadingRecordDay> {
+  @override
+  final GeneratedDatabase attachedDatabase;
+  final String? _alias;
+  $StoredReadingRecordDaysTable(this.attachedDatabase, [this._alias]);
+  static const VerificationMeta _bookIdMeta = const VerificationMeta('bookId');
+  @override
+  late final GeneratedColumn<String> bookId = GeneratedColumn<String>(
+    'book_id',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _dateKeyMeta = const VerificationMeta(
+    'dateKey',
+  );
+  @override
+  late final GeneratedColumn<String> dateKey = GeneratedColumn<String>(
+    'date_key',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _bookTitleMeta = const VerificationMeta(
+    'bookTitle',
+  );
+  @override
+  late final GeneratedColumn<String> bookTitle = GeneratedColumn<String>(
+    'book_title',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _bookAuthorMeta = const VerificationMeta(
+    'bookAuthor',
+  );
+  @override
+  late final GeneratedColumn<String> bookAuthor = GeneratedColumn<String>(
+    'book_author',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _coverUrlMeta = const VerificationMeta(
+    'coverUrl',
+  );
+  @override
+  late final GeneratedColumn<String> coverUrl = GeneratedColumn<String>(
+    'cover_url',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _readMillisMeta = const VerificationMeta(
+    'readMillis',
+  );
+  @override
+  late final GeneratedColumn<int> readMillis = GeneratedColumn<int>(
+    'read_millis',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+    defaultValue: const Constant(0),
+  );
+  static const VerificationMeta _firstReadAtMeta = const VerificationMeta(
+    'firstReadAt',
+  );
+  @override
+  late final GeneratedColumn<DateTime> firstReadAt = GeneratedColumn<DateTime>(
+    'first_read_at',
+    aliasedName,
+    false,
+    type: DriftSqlType.dateTime,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _lastReadAtMeta = const VerificationMeta(
+    'lastReadAt',
+  );
+  @override
+  late final GeneratedColumn<DateTime> lastReadAt = GeneratedColumn<DateTime>(
+    'last_read_at',
+    aliasedName,
+    false,
+    type: DriftSqlType.dateTime,
+    requiredDuringInsert: true,
+  );
+  @override
+  List<GeneratedColumn> get $columns => [
+    bookId,
+    dateKey,
+    bookTitle,
+    bookAuthor,
+    coverUrl,
+    readMillis,
+    firstReadAt,
+    lastReadAt,
+  ];
+  @override
+  String get aliasedName => _alias ?? actualTableName;
+  @override
+  String get actualTableName => $name;
+  static const String $name = 'reading_record_days';
+  @override
+  VerificationContext validateIntegrity(
+    Insertable<StoredReadingRecordDay> instance, {
+    bool isInserting = false,
+  }) {
+    final context = VerificationContext();
+    final data = instance.toColumns(true);
+    if (data.containsKey('book_id')) {
+      context.handle(
+        _bookIdMeta,
+        bookId.isAcceptableOrUnknown(data['book_id']!, _bookIdMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_bookIdMeta);
+    }
+    if (data.containsKey('date_key')) {
+      context.handle(
+        _dateKeyMeta,
+        dateKey.isAcceptableOrUnknown(data['date_key']!, _dateKeyMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_dateKeyMeta);
+    }
+    if (data.containsKey('book_title')) {
+      context.handle(
+        _bookTitleMeta,
+        bookTitle.isAcceptableOrUnknown(data['book_title']!, _bookTitleMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_bookTitleMeta);
+    }
+    if (data.containsKey('book_author')) {
+      context.handle(
+        _bookAuthorMeta,
+        bookAuthor.isAcceptableOrUnknown(data['book_author']!, _bookAuthorMeta),
+      );
+    }
+    if (data.containsKey('cover_url')) {
+      context.handle(
+        _coverUrlMeta,
+        coverUrl.isAcceptableOrUnknown(data['cover_url']!, _coverUrlMeta),
+      );
+    }
+    if (data.containsKey('read_millis')) {
+      context.handle(
+        _readMillisMeta,
+        readMillis.isAcceptableOrUnknown(data['read_millis']!, _readMillisMeta),
+      );
+    }
+    if (data.containsKey('first_read_at')) {
+      context.handle(
+        _firstReadAtMeta,
+        firstReadAt.isAcceptableOrUnknown(
+          data['first_read_at']!,
+          _firstReadAtMeta,
+        ),
+      );
+    } else if (isInserting) {
+      context.missing(_firstReadAtMeta);
+    }
+    if (data.containsKey('last_read_at')) {
+      context.handle(
+        _lastReadAtMeta,
+        lastReadAt.isAcceptableOrUnknown(
+          data['last_read_at']!,
+          _lastReadAtMeta,
+        ),
+      );
+    } else if (isInserting) {
+      context.missing(_lastReadAtMeta);
+    }
+    return context;
+  }
+
+  @override
+  Set<GeneratedColumn> get $primaryKey => {bookId, dateKey};
+  @override
+  StoredReadingRecordDay map(Map<String, dynamic> data, {String? tablePrefix}) {
+    final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
+    return StoredReadingRecordDay(
+      bookId:
+          attachedDatabase.typeMapping.read(
+            DriftSqlType.string,
+            data['${effectivePrefix}book_id'],
+          )!,
+      dateKey:
+          attachedDatabase.typeMapping.read(
+            DriftSqlType.string,
+            data['${effectivePrefix}date_key'],
+          )!,
+      bookTitle:
+          attachedDatabase.typeMapping.read(
+            DriftSqlType.string,
+            data['${effectivePrefix}book_title'],
+          )!,
+      bookAuthor: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}book_author'],
+      ),
+      coverUrl: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}cover_url'],
+      ),
+      readMillis:
+          attachedDatabase.typeMapping.read(
+            DriftSqlType.int,
+            data['${effectivePrefix}read_millis'],
+          )!,
+      firstReadAt:
+          attachedDatabase.typeMapping.read(
+            DriftSqlType.dateTime,
+            data['${effectivePrefix}first_read_at'],
+          )!,
+      lastReadAt:
+          attachedDatabase.typeMapping.read(
+            DriftSqlType.dateTime,
+            data['${effectivePrefix}last_read_at'],
+          )!,
+    );
+  }
+
+  @override
+  $StoredReadingRecordDaysTable createAlias(String alias) {
+    return $StoredReadingRecordDaysTable(attachedDatabase, alias);
+  }
+}
+
+class StoredReadingRecordDay extends DataClass
+    implements Insertable<StoredReadingRecordDay> {
+  final String bookId;
+  final String dateKey;
+  final String bookTitle;
+  final String? bookAuthor;
+  final String? coverUrl;
+  final int readMillis;
+  final DateTime firstReadAt;
+  final DateTime lastReadAt;
+  const StoredReadingRecordDay({
+    required this.bookId,
+    required this.dateKey,
+    required this.bookTitle,
+    this.bookAuthor,
+    this.coverUrl,
+    required this.readMillis,
+    required this.firstReadAt,
+    required this.lastReadAt,
+  });
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    map['book_id'] = Variable<String>(bookId);
+    map['date_key'] = Variable<String>(dateKey);
+    map['book_title'] = Variable<String>(bookTitle);
+    if (!nullToAbsent || bookAuthor != null) {
+      map['book_author'] = Variable<String>(bookAuthor);
+    }
+    if (!nullToAbsent || coverUrl != null) {
+      map['cover_url'] = Variable<String>(coverUrl);
+    }
+    map['read_millis'] = Variable<int>(readMillis);
+    map['first_read_at'] = Variable<DateTime>(firstReadAt);
+    map['last_read_at'] = Variable<DateTime>(lastReadAt);
+    return map;
+  }
+
+  StoredReadingRecordDaysCompanion toCompanion(bool nullToAbsent) {
+    return StoredReadingRecordDaysCompanion(
+      bookId: Value(bookId),
+      dateKey: Value(dateKey),
+      bookTitle: Value(bookTitle),
+      bookAuthor:
+          bookAuthor == null && nullToAbsent
+              ? const Value.absent()
+              : Value(bookAuthor),
+      coverUrl:
+          coverUrl == null && nullToAbsent
+              ? const Value.absent()
+              : Value(coverUrl),
+      readMillis: Value(readMillis),
+      firstReadAt: Value(firstReadAt),
+      lastReadAt: Value(lastReadAt),
+    );
+  }
+
+  factory StoredReadingRecordDay.fromJson(
+    Map<String, dynamic> json, {
+    ValueSerializer? serializer,
+  }) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return StoredReadingRecordDay(
+      bookId: serializer.fromJson<String>(json['bookId']),
+      dateKey: serializer.fromJson<String>(json['dateKey']),
+      bookTitle: serializer.fromJson<String>(json['bookTitle']),
+      bookAuthor: serializer.fromJson<String?>(json['bookAuthor']),
+      coverUrl: serializer.fromJson<String?>(json['coverUrl']),
+      readMillis: serializer.fromJson<int>(json['readMillis']),
+      firstReadAt: serializer.fromJson<DateTime>(json['firstReadAt']),
+      lastReadAt: serializer.fromJson<DateTime>(json['lastReadAt']),
+    );
+  }
+  @override
+  Map<String, dynamic> toJson({ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return <String, dynamic>{
+      'bookId': serializer.toJson<String>(bookId),
+      'dateKey': serializer.toJson<String>(dateKey),
+      'bookTitle': serializer.toJson<String>(bookTitle),
+      'bookAuthor': serializer.toJson<String?>(bookAuthor),
+      'coverUrl': serializer.toJson<String?>(coverUrl),
+      'readMillis': serializer.toJson<int>(readMillis),
+      'firstReadAt': serializer.toJson<DateTime>(firstReadAt),
+      'lastReadAt': serializer.toJson<DateTime>(lastReadAt),
+    };
+  }
+
+  StoredReadingRecordDay copyWith({
+    String? bookId,
+    String? dateKey,
+    String? bookTitle,
+    Value<String?> bookAuthor = const Value.absent(),
+    Value<String?> coverUrl = const Value.absent(),
+    int? readMillis,
+    DateTime? firstReadAt,
+    DateTime? lastReadAt,
+  }) => StoredReadingRecordDay(
+    bookId: bookId ?? this.bookId,
+    dateKey: dateKey ?? this.dateKey,
+    bookTitle: bookTitle ?? this.bookTitle,
+    bookAuthor: bookAuthor.present ? bookAuthor.value : this.bookAuthor,
+    coverUrl: coverUrl.present ? coverUrl.value : this.coverUrl,
+    readMillis: readMillis ?? this.readMillis,
+    firstReadAt: firstReadAt ?? this.firstReadAt,
+    lastReadAt: lastReadAt ?? this.lastReadAt,
+  );
+  StoredReadingRecordDay copyWithCompanion(
+    StoredReadingRecordDaysCompanion data,
+  ) {
+    return StoredReadingRecordDay(
+      bookId: data.bookId.present ? data.bookId.value : this.bookId,
+      dateKey: data.dateKey.present ? data.dateKey.value : this.dateKey,
+      bookTitle: data.bookTitle.present ? data.bookTitle.value : this.bookTitle,
+      bookAuthor:
+          data.bookAuthor.present ? data.bookAuthor.value : this.bookAuthor,
+      coverUrl: data.coverUrl.present ? data.coverUrl.value : this.coverUrl,
+      readMillis:
+          data.readMillis.present ? data.readMillis.value : this.readMillis,
+      firstReadAt:
+          data.firstReadAt.present ? data.firstReadAt.value : this.firstReadAt,
+      lastReadAt:
+          data.lastReadAt.present ? data.lastReadAt.value : this.lastReadAt,
+    );
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('StoredReadingRecordDay(')
+          ..write('bookId: $bookId, ')
+          ..write('dateKey: $dateKey, ')
+          ..write('bookTitle: $bookTitle, ')
+          ..write('bookAuthor: $bookAuthor, ')
+          ..write('coverUrl: $coverUrl, ')
+          ..write('readMillis: $readMillis, ')
+          ..write('firstReadAt: $firstReadAt, ')
+          ..write('lastReadAt: $lastReadAt')
+          ..write(')'))
+        .toString();
+  }
+
+  @override
+  int get hashCode => Object.hash(
+    bookId,
+    dateKey,
+    bookTitle,
+    bookAuthor,
+    coverUrl,
+    readMillis,
+    firstReadAt,
+    lastReadAt,
+  );
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is StoredReadingRecordDay &&
+          other.bookId == this.bookId &&
+          other.dateKey == this.dateKey &&
+          other.bookTitle == this.bookTitle &&
+          other.bookAuthor == this.bookAuthor &&
+          other.coverUrl == this.coverUrl &&
+          other.readMillis == this.readMillis &&
+          other.firstReadAt == this.firstReadAt &&
+          other.lastReadAt == this.lastReadAt);
+}
+
+class StoredReadingRecordDaysCompanion
+    extends UpdateCompanion<StoredReadingRecordDay> {
+  final Value<String> bookId;
+  final Value<String> dateKey;
+  final Value<String> bookTitle;
+  final Value<String?> bookAuthor;
+  final Value<String?> coverUrl;
+  final Value<int> readMillis;
+  final Value<DateTime> firstReadAt;
+  final Value<DateTime> lastReadAt;
+  final Value<int> rowid;
+  const StoredReadingRecordDaysCompanion({
+    this.bookId = const Value.absent(),
+    this.dateKey = const Value.absent(),
+    this.bookTitle = const Value.absent(),
+    this.bookAuthor = const Value.absent(),
+    this.coverUrl = const Value.absent(),
+    this.readMillis = const Value.absent(),
+    this.firstReadAt = const Value.absent(),
+    this.lastReadAt = const Value.absent(),
+    this.rowid = const Value.absent(),
+  });
+  StoredReadingRecordDaysCompanion.insert({
+    required String bookId,
+    required String dateKey,
+    required String bookTitle,
+    this.bookAuthor = const Value.absent(),
+    this.coverUrl = const Value.absent(),
+    this.readMillis = const Value.absent(),
+    required DateTime firstReadAt,
+    required DateTime lastReadAt,
+    this.rowid = const Value.absent(),
+  }) : bookId = Value(bookId),
+       dateKey = Value(dateKey),
+       bookTitle = Value(bookTitle),
+       firstReadAt = Value(firstReadAt),
+       lastReadAt = Value(lastReadAt);
+  static Insertable<StoredReadingRecordDay> custom({
+    Expression<String>? bookId,
+    Expression<String>? dateKey,
+    Expression<String>? bookTitle,
+    Expression<String>? bookAuthor,
+    Expression<String>? coverUrl,
+    Expression<int>? readMillis,
+    Expression<DateTime>? firstReadAt,
+    Expression<DateTime>? lastReadAt,
+    Expression<int>? rowid,
+  }) {
+    return RawValuesInsertable({
+      if (bookId != null) 'book_id': bookId,
+      if (dateKey != null) 'date_key': dateKey,
+      if (bookTitle != null) 'book_title': bookTitle,
+      if (bookAuthor != null) 'book_author': bookAuthor,
+      if (coverUrl != null) 'cover_url': coverUrl,
+      if (readMillis != null) 'read_millis': readMillis,
+      if (firstReadAt != null) 'first_read_at': firstReadAt,
+      if (lastReadAt != null) 'last_read_at': lastReadAt,
+      if (rowid != null) 'rowid': rowid,
+    });
+  }
+
+  StoredReadingRecordDaysCompanion copyWith({
+    Value<String>? bookId,
+    Value<String>? dateKey,
+    Value<String>? bookTitle,
+    Value<String?>? bookAuthor,
+    Value<String?>? coverUrl,
+    Value<int>? readMillis,
+    Value<DateTime>? firstReadAt,
+    Value<DateTime>? lastReadAt,
+    Value<int>? rowid,
+  }) {
+    return StoredReadingRecordDaysCompanion(
+      bookId: bookId ?? this.bookId,
+      dateKey: dateKey ?? this.dateKey,
+      bookTitle: bookTitle ?? this.bookTitle,
+      bookAuthor: bookAuthor ?? this.bookAuthor,
+      coverUrl: coverUrl ?? this.coverUrl,
+      readMillis: readMillis ?? this.readMillis,
+      firstReadAt: firstReadAt ?? this.firstReadAt,
+      lastReadAt: lastReadAt ?? this.lastReadAt,
+      rowid: rowid ?? this.rowid,
+    );
+  }
+
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    if (bookId.present) {
+      map['book_id'] = Variable<String>(bookId.value);
+    }
+    if (dateKey.present) {
+      map['date_key'] = Variable<String>(dateKey.value);
+    }
+    if (bookTitle.present) {
+      map['book_title'] = Variable<String>(bookTitle.value);
+    }
+    if (bookAuthor.present) {
+      map['book_author'] = Variable<String>(bookAuthor.value);
+    }
+    if (coverUrl.present) {
+      map['cover_url'] = Variable<String>(coverUrl.value);
+    }
+    if (readMillis.present) {
+      map['read_millis'] = Variable<int>(readMillis.value);
+    }
+    if (firstReadAt.present) {
+      map['first_read_at'] = Variable<DateTime>(firstReadAt.value);
+    }
+    if (lastReadAt.present) {
+      map['last_read_at'] = Variable<DateTime>(lastReadAt.value);
+    }
+    if (rowid.present) {
+      map['rowid'] = Variable<int>(rowid.value);
+    }
+    return map;
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('StoredReadingRecordDaysCompanion(')
+          ..write('bookId: $bookId, ')
+          ..write('dateKey: $dateKey, ')
+          ..write('bookTitle: $bookTitle, ')
+          ..write('bookAuthor: $bookAuthor, ')
+          ..write('coverUrl: $coverUrl, ')
+          ..write('readMillis: $readMillis, ')
+          ..write('firstReadAt: $firstReadAt, ')
+          ..write('lastReadAt: $lastReadAt, ')
+          ..write('rowid: $rowid')
+          ..write(')'))
+        .toString();
+  }
+}
+
+class $StoredReadingRecordSessionsTable extends StoredReadingRecordSessions
+    with
+        TableInfo<
+          $StoredReadingRecordSessionsTable,
+          StoredReadingRecordSession
+        > {
+  @override
+  final GeneratedDatabase attachedDatabase;
+  final String? _alias;
+  $StoredReadingRecordSessionsTable(this.attachedDatabase, [this._alias]);
+  static const VerificationMeta _idMeta = const VerificationMeta('id');
+  @override
+  late final GeneratedColumn<int> id = GeneratedColumn<int>(
+    'id',
+    aliasedName,
+    false,
+    hasAutoIncrement: true,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'PRIMARY KEY AUTOINCREMENT',
+    ),
+  );
+  static const VerificationMeta _bookIdMeta = const VerificationMeta('bookId');
+  @override
+  late final GeneratedColumn<String> bookId = GeneratedColumn<String>(
+    'book_id',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _sourceIdMeta = const VerificationMeta(
+    'sourceId',
+  );
+  @override
+  late final GeneratedColumn<String> sourceId = GeneratedColumn<String>(
+    'source_id',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _detailUrlMeta = const VerificationMeta(
+    'detailUrl',
+  );
+  @override
+  late final GeneratedColumn<String> detailUrl = GeneratedColumn<String>(
+    'detail_url',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _bookTitleMeta = const VerificationMeta(
+    'bookTitle',
+  );
+  @override
+  late final GeneratedColumn<String> bookTitle = GeneratedColumn<String>(
+    'book_title',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _bookAuthorMeta = const VerificationMeta(
+    'bookAuthor',
+  );
+  @override
+  late final GeneratedColumn<String> bookAuthor = GeneratedColumn<String>(
+    'book_author',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _coverUrlMeta = const VerificationMeta(
+    'coverUrl',
+  );
+  @override
+  late final GeneratedColumn<String> coverUrl = GeneratedColumn<String>(
+    'cover_url',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _chapterIdMeta = const VerificationMeta(
+    'chapterId',
+  );
+  @override
+  late final GeneratedColumn<String> chapterId = GeneratedColumn<String>(
+    'chapter_id',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _chapterTitleMeta = const VerificationMeta(
+    'chapterTitle',
+  );
+  @override
+  late final GeneratedColumn<String> chapterTitle = GeneratedColumn<String>(
+    'chapter_title',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _chapterIndexMeta = const VerificationMeta(
+    'chapterIndex',
+  );
+  @override
+  late final GeneratedColumn<int> chapterIndex = GeneratedColumn<int>(
+    'chapter_index',
+    aliasedName,
+    true,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _chapterUrlMeta = const VerificationMeta(
+    'chapterUrl',
+  );
+  @override
+  late final GeneratedColumn<String> chapterUrl = GeneratedColumn<String>(
+    'chapter_url',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _startAtMeta = const VerificationMeta(
+    'startAt',
+  );
+  @override
+  late final GeneratedColumn<DateTime> startAt = GeneratedColumn<DateTime>(
+    'start_at',
+    aliasedName,
+    false,
+    type: DriftSqlType.dateTime,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _endAtMeta = const VerificationMeta('endAt');
+  @override
+  late final GeneratedColumn<DateTime> endAt = GeneratedColumn<DateTime>(
+    'end_at',
+    aliasedName,
+    false,
+    type: DriftSqlType.dateTime,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _durationMillisMeta = const VerificationMeta(
+    'durationMillis',
+  );
+  @override
+  late final GeneratedColumn<int> durationMillis = GeneratedColumn<int>(
+    'duration_millis',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+    defaultValue: const Constant(0),
+  );
+  static const VerificationMeta _startPositionRatioMeta =
+      const VerificationMeta('startPositionRatio');
+  @override
+  late final GeneratedColumn<double> startPositionRatio =
+      GeneratedColumn<double>(
+        'start_position_ratio',
+        aliasedName,
+        false,
+        type: DriftSqlType.double,
+        requiredDuringInsert: false,
+        defaultValue: const Constant(0),
+      );
+  static const VerificationMeta _endPositionRatioMeta = const VerificationMeta(
+    'endPositionRatio',
+  );
+  @override
+  late final GeneratedColumn<double> endPositionRatio = GeneratedColumn<double>(
+    'end_position_ratio',
+    aliasedName,
+    false,
+    type: DriftSqlType.double,
+    requiredDuringInsert: false,
+    defaultValue: const Constant(0),
+  );
+  @override
+  List<GeneratedColumn> get $columns => [
+    id,
+    bookId,
+    sourceId,
+    detailUrl,
+    bookTitle,
+    bookAuthor,
+    coverUrl,
+    chapterId,
+    chapterTitle,
+    chapterIndex,
+    chapterUrl,
+    startAt,
+    endAt,
+    durationMillis,
+    startPositionRatio,
+    endPositionRatio,
+  ];
+  @override
+  String get aliasedName => _alias ?? actualTableName;
+  @override
+  String get actualTableName => $name;
+  static const String $name = 'reading_record_sessions';
+  @override
+  VerificationContext validateIntegrity(
+    Insertable<StoredReadingRecordSession> instance, {
+    bool isInserting = false,
+  }) {
+    final context = VerificationContext();
+    final data = instance.toColumns(true);
+    if (data.containsKey('id')) {
+      context.handle(_idMeta, id.isAcceptableOrUnknown(data['id']!, _idMeta));
+    }
+    if (data.containsKey('book_id')) {
+      context.handle(
+        _bookIdMeta,
+        bookId.isAcceptableOrUnknown(data['book_id']!, _bookIdMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_bookIdMeta);
+    }
+    if (data.containsKey('source_id')) {
+      context.handle(
+        _sourceIdMeta,
+        sourceId.isAcceptableOrUnknown(data['source_id']!, _sourceIdMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_sourceIdMeta);
+    }
+    if (data.containsKey('detail_url')) {
+      context.handle(
+        _detailUrlMeta,
+        detailUrl.isAcceptableOrUnknown(data['detail_url']!, _detailUrlMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_detailUrlMeta);
+    }
+    if (data.containsKey('book_title')) {
+      context.handle(
+        _bookTitleMeta,
+        bookTitle.isAcceptableOrUnknown(data['book_title']!, _bookTitleMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_bookTitleMeta);
+    }
+    if (data.containsKey('book_author')) {
+      context.handle(
+        _bookAuthorMeta,
+        bookAuthor.isAcceptableOrUnknown(data['book_author']!, _bookAuthorMeta),
+      );
+    }
+    if (data.containsKey('cover_url')) {
+      context.handle(
+        _coverUrlMeta,
+        coverUrl.isAcceptableOrUnknown(data['cover_url']!, _coverUrlMeta),
+      );
+    }
+    if (data.containsKey('chapter_id')) {
+      context.handle(
+        _chapterIdMeta,
+        chapterId.isAcceptableOrUnknown(data['chapter_id']!, _chapterIdMeta),
+      );
+    }
+    if (data.containsKey('chapter_title')) {
+      context.handle(
+        _chapterTitleMeta,
+        chapterTitle.isAcceptableOrUnknown(
+          data['chapter_title']!,
+          _chapterTitleMeta,
+        ),
+      );
+    }
+    if (data.containsKey('chapter_index')) {
+      context.handle(
+        _chapterIndexMeta,
+        chapterIndex.isAcceptableOrUnknown(
+          data['chapter_index']!,
+          _chapterIndexMeta,
+        ),
+      );
+    }
+    if (data.containsKey('chapter_url')) {
+      context.handle(
+        _chapterUrlMeta,
+        chapterUrl.isAcceptableOrUnknown(data['chapter_url']!, _chapterUrlMeta),
+      );
+    }
+    if (data.containsKey('start_at')) {
+      context.handle(
+        _startAtMeta,
+        startAt.isAcceptableOrUnknown(data['start_at']!, _startAtMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_startAtMeta);
+    }
+    if (data.containsKey('end_at')) {
+      context.handle(
+        _endAtMeta,
+        endAt.isAcceptableOrUnknown(data['end_at']!, _endAtMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_endAtMeta);
+    }
+    if (data.containsKey('duration_millis')) {
+      context.handle(
+        _durationMillisMeta,
+        durationMillis.isAcceptableOrUnknown(
+          data['duration_millis']!,
+          _durationMillisMeta,
+        ),
+      );
+    }
+    if (data.containsKey('start_position_ratio')) {
+      context.handle(
+        _startPositionRatioMeta,
+        startPositionRatio.isAcceptableOrUnknown(
+          data['start_position_ratio']!,
+          _startPositionRatioMeta,
+        ),
+      );
+    }
+    if (data.containsKey('end_position_ratio')) {
+      context.handle(
+        _endPositionRatioMeta,
+        endPositionRatio.isAcceptableOrUnknown(
+          data['end_position_ratio']!,
+          _endPositionRatioMeta,
+        ),
+      );
+    }
+    return context;
+  }
+
+  @override
+  Set<GeneratedColumn> get $primaryKey => {id};
+  @override
+  StoredReadingRecordSession map(
+    Map<String, dynamic> data, {
+    String? tablePrefix,
+  }) {
+    final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
+    return StoredReadingRecordSession(
+      id:
+          attachedDatabase.typeMapping.read(
+            DriftSqlType.int,
+            data['${effectivePrefix}id'],
+          )!,
+      bookId:
+          attachedDatabase.typeMapping.read(
+            DriftSqlType.string,
+            data['${effectivePrefix}book_id'],
+          )!,
+      sourceId:
+          attachedDatabase.typeMapping.read(
+            DriftSqlType.string,
+            data['${effectivePrefix}source_id'],
+          )!,
+      detailUrl:
+          attachedDatabase.typeMapping.read(
+            DriftSqlType.string,
+            data['${effectivePrefix}detail_url'],
+          )!,
+      bookTitle:
+          attachedDatabase.typeMapping.read(
+            DriftSqlType.string,
+            data['${effectivePrefix}book_title'],
+          )!,
+      bookAuthor: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}book_author'],
+      ),
+      coverUrl: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}cover_url'],
+      ),
+      chapterId: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}chapter_id'],
+      ),
+      chapterTitle: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}chapter_title'],
+      ),
+      chapterIndex: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}chapter_index'],
+      ),
+      chapterUrl: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}chapter_url'],
+      ),
+      startAt:
+          attachedDatabase.typeMapping.read(
+            DriftSqlType.dateTime,
+            data['${effectivePrefix}start_at'],
+          )!,
+      endAt:
+          attachedDatabase.typeMapping.read(
+            DriftSqlType.dateTime,
+            data['${effectivePrefix}end_at'],
+          )!,
+      durationMillis:
+          attachedDatabase.typeMapping.read(
+            DriftSqlType.int,
+            data['${effectivePrefix}duration_millis'],
+          )!,
+      startPositionRatio:
+          attachedDatabase.typeMapping.read(
+            DriftSqlType.double,
+            data['${effectivePrefix}start_position_ratio'],
+          )!,
+      endPositionRatio:
+          attachedDatabase.typeMapping.read(
+            DriftSqlType.double,
+            data['${effectivePrefix}end_position_ratio'],
+          )!,
+    );
+  }
+
+  @override
+  $StoredReadingRecordSessionsTable createAlias(String alias) {
+    return $StoredReadingRecordSessionsTable(attachedDatabase, alias);
+  }
+}
+
+class StoredReadingRecordSession extends DataClass
+    implements Insertable<StoredReadingRecordSession> {
+  final int id;
+  final String bookId;
+  final String sourceId;
+  final String detailUrl;
+  final String bookTitle;
+  final String? bookAuthor;
+  final String? coverUrl;
+  final String? chapterId;
+  final String? chapterTitle;
+  final int? chapterIndex;
+  final String? chapterUrl;
+  final DateTime startAt;
+  final DateTime endAt;
+  final int durationMillis;
+  final double startPositionRatio;
+  final double endPositionRatio;
+  const StoredReadingRecordSession({
+    required this.id,
+    required this.bookId,
+    required this.sourceId,
+    required this.detailUrl,
+    required this.bookTitle,
+    this.bookAuthor,
+    this.coverUrl,
+    this.chapterId,
+    this.chapterTitle,
+    this.chapterIndex,
+    this.chapterUrl,
+    required this.startAt,
+    required this.endAt,
+    required this.durationMillis,
+    required this.startPositionRatio,
+    required this.endPositionRatio,
+  });
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    map['id'] = Variable<int>(id);
+    map['book_id'] = Variable<String>(bookId);
+    map['source_id'] = Variable<String>(sourceId);
+    map['detail_url'] = Variable<String>(detailUrl);
+    map['book_title'] = Variable<String>(bookTitle);
+    if (!nullToAbsent || bookAuthor != null) {
+      map['book_author'] = Variable<String>(bookAuthor);
+    }
+    if (!nullToAbsent || coverUrl != null) {
+      map['cover_url'] = Variable<String>(coverUrl);
+    }
+    if (!nullToAbsent || chapterId != null) {
+      map['chapter_id'] = Variable<String>(chapterId);
+    }
+    if (!nullToAbsent || chapterTitle != null) {
+      map['chapter_title'] = Variable<String>(chapterTitle);
+    }
+    if (!nullToAbsent || chapterIndex != null) {
+      map['chapter_index'] = Variable<int>(chapterIndex);
+    }
+    if (!nullToAbsent || chapterUrl != null) {
+      map['chapter_url'] = Variable<String>(chapterUrl);
+    }
+    map['start_at'] = Variable<DateTime>(startAt);
+    map['end_at'] = Variable<DateTime>(endAt);
+    map['duration_millis'] = Variable<int>(durationMillis);
+    map['start_position_ratio'] = Variable<double>(startPositionRatio);
+    map['end_position_ratio'] = Variable<double>(endPositionRatio);
+    return map;
+  }
+
+  StoredReadingRecordSessionsCompanion toCompanion(bool nullToAbsent) {
+    return StoredReadingRecordSessionsCompanion(
+      id: Value(id),
+      bookId: Value(bookId),
+      sourceId: Value(sourceId),
+      detailUrl: Value(detailUrl),
+      bookTitle: Value(bookTitle),
+      bookAuthor:
+          bookAuthor == null && nullToAbsent
+              ? const Value.absent()
+              : Value(bookAuthor),
+      coverUrl:
+          coverUrl == null && nullToAbsent
+              ? const Value.absent()
+              : Value(coverUrl),
+      chapterId:
+          chapterId == null && nullToAbsent
+              ? const Value.absent()
+              : Value(chapterId),
+      chapterTitle:
+          chapterTitle == null && nullToAbsent
+              ? const Value.absent()
+              : Value(chapterTitle),
+      chapterIndex:
+          chapterIndex == null && nullToAbsent
+              ? const Value.absent()
+              : Value(chapterIndex),
+      chapterUrl:
+          chapterUrl == null && nullToAbsent
+              ? const Value.absent()
+              : Value(chapterUrl),
+      startAt: Value(startAt),
+      endAt: Value(endAt),
+      durationMillis: Value(durationMillis),
+      startPositionRatio: Value(startPositionRatio),
+      endPositionRatio: Value(endPositionRatio),
+    );
+  }
+
+  factory StoredReadingRecordSession.fromJson(
+    Map<String, dynamic> json, {
+    ValueSerializer? serializer,
+  }) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return StoredReadingRecordSession(
+      id: serializer.fromJson<int>(json['id']),
+      bookId: serializer.fromJson<String>(json['bookId']),
+      sourceId: serializer.fromJson<String>(json['sourceId']),
+      detailUrl: serializer.fromJson<String>(json['detailUrl']),
+      bookTitle: serializer.fromJson<String>(json['bookTitle']),
+      bookAuthor: serializer.fromJson<String?>(json['bookAuthor']),
+      coverUrl: serializer.fromJson<String?>(json['coverUrl']),
+      chapterId: serializer.fromJson<String?>(json['chapterId']),
+      chapterTitle: serializer.fromJson<String?>(json['chapterTitle']),
+      chapterIndex: serializer.fromJson<int?>(json['chapterIndex']),
+      chapterUrl: serializer.fromJson<String?>(json['chapterUrl']),
+      startAt: serializer.fromJson<DateTime>(json['startAt']),
+      endAt: serializer.fromJson<DateTime>(json['endAt']),
+      durationMillis: serializer.fromJson<int>(json['durationMillis']),
+      startPositionRatio: serializer.fromJson<double>(
+        json['startPositionRatio'],
+      ),
+      endPositionRatio: serializer.fromJson<double>(json['endPositionRatio']),
+    );
+  }
+  @override
+  Map<String, dynamic> toJson({ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return <String, dynamic>{
+      'id': serializer.toJson<int>(id),
+      'bookId': serializer.toJson<String>(bookId),
+      'sourceId': serializer.toJson<String>(sourceId),
+      'detailUrl': serializer.toJson<String>(detailUrl),
+      'bookTitle': serializer.toJson<String>(bookTitle),
+      'bookAuthor': serializer.toJson<String?>(bookAuthor),
+      'coverUrl': serializer.toJson<String?>(coverUrl),
+      'chapterId': serializer.toJson<String?>(chapterId),
+      'chapterTitle': serializer.toJson<String?>(chapterTitle),
+      'chapterIndex': serializer.toJson<int?>(chapterIndex),
+      'chapterUrl': serializer.toJson<String?>(chapterUrl),
+      'startAt': serializer.toJson<DateTime>(startAt),
+      'endAt': serializer.toJson<DateTime>(endAt),
+      'durationMillis': serializer.toJson<int>(durationMillis),
+      'startPositionRatio': serializer.toJson<double>(startPositionRatio),
+      'endPositionRatio': serializer.toJson<double>(endPositionRatio),
+    };
+  }
+
+  StoredReadingRecordSession copyWith({
+    int? id,
+    String? bookId,
+    String? sourceId,
+    String? detailUrl,
+    String? bookTitle,
+    Value<String?> bookAuthor = const Value.absent(),
+    Value<String?> coverUrl = const Value.absent(),
+    Value<String?> chapterId = const Value.absent(),
+    Value<String?> chapterTitle = const Value.absent(),
+    Value<int?> chapterIndex = const Value.absent(),
+    Value<String?> chapterUrl = const Value.absent(),
+    DateTime? startAt,
+    DateTime? endAt,
+    int? durationMillis,
+    double? startPositionRatio,
+    double? endPositionRatio,
+  }) => StoredReadingRecordSession(
+    id: id ?? this.id,
+    bookId: bookId ?? this.bookId,
+    sourceId: sourceId ?? this.sourceId,
+    detailUrl: detailUrl ?? this.detailUrl,
+    bookTitle: bookTitle ?? this.bookTitle,
+    bookAuthor: bookAuthor.present ? bookAuthor.value : this.bookAuthor,
+    coverUrl: coverUrl.present ? coverUrl.value : this.coverUrl,
+    chapterId: chapterId.present ? chapterId.value : this.chapterId,
+    chapterTitle: chapterTitle.present ? chapterTitle.value : this.chapterTitle,
+    chapterIndex: chapterIndex.present ? chapterIndex.value : this.chapterIndex,
+    chapterUrl: chapterUrl.present ? chapterUrl.value : this.chapterUrl,
+    startAt: startAt ?? this.startAt,
+    endAt: endAt ?? this.endAt,
+    durationMillis: durationMillis ?? this.durationMillis,
+    startPositionRatio: startPositionRatio ?? this.startPositionRatio,
+    endPositionRatio: endPositionRatio ?? this.endPositionRatio,
+  );
+  StoredReadingRecordSession copyWithCompanion(
+    StoredReadingRecordSessionsCompanion data,
+  ) {
+    return StoredReadingRecordSession(
+      id: data.id.present ? data.id.value : this.id,
+      bookId: data.bookId.present ? data.bookId.value : this.bookId,
+      sourceId: data.sourceId.present ? data.sourceId.value : this.sourceId,
+      detailUrl: data.detailUrl.present ? data.detailUrl.value : this.detailUrl,
+      bookTitle: data.bookTitle.present ? data.bookTitle.value : this.bookTitle,
+      bookAuthor:
+          data.bookAuthor.present ? data.bookAuthor.value : this.bookAuthor,
+      coverUrl: data.coverUrl.present ? data.coverUrl.value : this.coverUrl,
+      chapterId: data.chapterId.present ? data.chapterId.value : this.chapterId,
+      chapterTitle:
+          data.chapterTitle.present
+              ? data.chapterTitle.value
+              : this.chapterTitle,
+      chapterIndex:
+          data.chapterIndex.present
+              ? data.chapterIndex.value
+              : this.chapterIndex,
+      chapterUrl:
+          data.chapterUrl.present ? data.chapterUrl.value : this.chapterUrl,
+      startAt: data.startAt.present ? data.startAt.value : this.startAt,
+      endAt: data.endAt.present ? data.endAt.value : this.endAt,
+      durationMillis:
+          data.durationMillis.present
+              ? data.durationMillis.value
+              : this.durationMillis,
+      startPositionRatio:
+          data.startPositionRatio.present
+              ? data.startPositionRatio.value
+              : this.startPositionRatio,
+      endPositionRatio:
+          data.endPositionRatio.present
+              ? data.endPositionRatio.value
+              : this.endPositionRatio,
+    );
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('StoredReadingRecordSession(')
+          ..write('id: $id, ')
+          ..write('bookId: $bookId, ')
+          ..write('sourceId: $sourceId, ')
+          ..write('detailUrl: $detailUrl, ')
+          ..write('bookTitle: $bookTitle, ')
+          ..write('bookAuthor: $bookAuthor, ')
+          ..write('coverUrl: $coverUrl, ')
+          ..write('chapterId: $chapterId, ')
+          ..write('chapterTitle: $chapterTitle, ')
+          ..write('chapterIndex: $chapterIndex, ')
+          ..write('chapterUrl: $chapterUrl, ')
+          ..write('startAt: $startAt, ')
+          ..write('endAt: $endAt, ')
+          ..write('durationMillis: $durationMillis, ')
+          ..write('startPositionRatio: $startPositionRatio, ')
+          ..write('endPositionRatio: $endPositionRatio')
+          ..write(')'))
+        .toString();
+  }
+
+  @override
+  int get hashCode => Object.hash(
+    id,
+    bookId,
+    sourceId,
+    detailUrl,
+    bookTitle,
+    bookAuthor,
+    coverUrl,
+    chapterId,
+    chapterTitle,
+    chapterIndex,
+    chapterUrl,
+    startAt,
+    endAt,
+    durationMillis,
+    startPositionRatio,
+    endPositionRatio,
+  );
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is StoredReadingRecordSession &&
+          other.id == this.id &&
+          other.bookId == this.bookId &&
+          other.sourceId == this.sourceId &&
+          other.detailUrl == this.detailUrl &&
+          other.bookTitle == this.bookTitle &&
+          other.bookAuthor == this.bookAuthor &&
+          other.coverUrl == this.coverUrl &&
+          other.chapterId == this.chapterId &&
+          other.chapterTitle == this.chapterTitle &&
+          other.chapterIndex == this.chapterIndex &&
+          other.chapterUrl == this.chapterUrl &&
+          other.startAt == this.startAt &&
+          other.endAt == this.endAt &&
+          other.durationMillis == this.durationMillis &&
+          other.startPositionRatio == this.startPositionRatio &&
+          other.endPositionRatio == this.endPositionRatio);
+}
+
+class StoredReadingRecordSessionsCompanion
+    extends UpdateCompanion<StoredReadingRecordSession> {
+  final Value<int> id;
+  final Value<String> bookId;
+  final Value<String> sourceId;
+  final Value<String> detailUrl;
+  final Value<String> bookTitle;
+  final Value<String?> bookAuthor;
+  final Value<String?> coverUrl;
+  final Value<String?> chapterId;
+  final Value<String?> chapterTitle;
+  final Value<int?> chapterIndex;
+  final Value<String?> chapterUrl;
+  final Value<DateTime> startAt;
+  final Value<DateTime> endAt;
+  final Value<int> durationMillis;
+  final Value<double> startPositionRatio;
+  final Value<double> endPositionRatio;
+  const StoredReadingRecordSessionsCompanion({
+    this.id = const Value.absent(),
+    this.bookId = const Value.absent(),
+    this.sourceId = const Value.absent(),
+    this.detailUrl = const Value.absent(),
+    this.bookTitle = const Value.absent(),
+    this.bookAuthor = const Value.absent(),
+    this.coverUrl = const Value.absent(),
+    this.chapterId = const Value.absent(),
+    this.chapterTitle = const Value.absent(),
+    this.chapterIndex = const Value.absent(),
+    this.chapterUrl = const Value.absent(),
+    this.startAt = const Value.absent(),
+    this.endAt = const Value.absent(),
+    this.durationMillis = const Value.absent(),
+    this.startPositionRatio = const Value.absent(),
+    this.endPositionRatio = const Value.absent(),
+  });
+  StoredReadingRecordSessionsCompanion.insert({
+    this.id = const Value.absent(),
+    required String bookId,
+    required String sourceId,
+    required String detailUrl,
+    required String bookTitle,
+    this.bookAuthor = const Value.absent(),
+    this.coverUrl = const Value.absent(),
+    this.chapterId = const Value.absent(),
+    this.chapterTitle = const Value.absent(),
+    this.chapterIndex = const Value.absent(),
+    this.chapterUrl = const Value.absent(),
+    required DateTime startAt,
+    required DateTime endAt,
+    this.durationMillis = const Value.absent(),
+    this.startPositionRatio = const Value.absent(),
+    this.endPositionRatio = const Value.absent(),
+  }) : bookId = Value(bookId),
+       sourceId = Value(sourceId),
+       detailUrl = Value(detailUrl),
+       bookTitle = Value(bookTitle),
+       startAt = Value(startAt),
+       endAt = Value(endAt);
+  static Insertable<StoredReadingRecordSession> custom({
+    Expression<int>? id,
+    Expression<String>? bookId,
+    Expression<String>? sourceId,
+    Expression<String>? detailUrl,
+    Expression<String>? bookTitle,
+    Expression<String>? bookAuthor,
+    Expression<String>? coverUrl,
+    Expression<String>? chapterId,
+    Expression<String>? chapterTitle,
+    Expression<int>? chapterIndex,
+    Expression<String>? chapterUrl,
+    Expression<DateTime>? startAt,
+    Expression<DateTime>? endAt,
+    Expression<int>? durationMillis,
+    Expression<double>? startPositionRatio,
+    Expression<double>? endPositionRatio,
+  }) {
+    return RawValuesInsertable({
+      if (id != null) 'id': id,
+      if (bookId != null) 'book_id': bookId,
+      if (sourceId != null) 'source_id': sourceId,
+      if (detailUrl != null) 'detail_url': detailUrl,
+      if (bookTitle != null) 'book_title': bookTitle,
+      if (bookAuthor != null) 'book_author': bookAuthor,
+      if (coverUrl != null) 'cover_url': coverUrl,
+      if (chapterId != null) 'chapter_id': chapterId,
+      if (chapterTitle != null) 'chapter_title': chapterTitle,
+      if (chapterIndex != null) 'chapter_index': chapterIndex,
+      if (chapterUrl != null) 'chapter_url': chapterUrl,
+      if (startAt != null) 'start_at': startAt,
+      if (endAt != null) 'end_at': endAt,
+      if (durationMillis != null) 'duration_millis': durationMillis,
+      if (startPositionRatio != null)
+        'start_position_ratio': startPositionRatio,
+      if (endPositionRatio != null) 'end_position_ratio': endPositionRatio,
+    });
+  }
+
+  StoredReadingRecordSessionsCompanion copyWith({
+    Value<int>? id,
+    Value<String>? bookId,
+    Value<String>? sourceId,
+    Value<String>? detailUrl,
+    Value<String>? bookTitle,
+    Value<String?>? bookAuthor,
+    Value<String?>? coverUrl,
+    Value<String?>? chapterId,
+    Value<String?>? chapterTitle,
+    Value<int?>? chapterIndex,
+    Value<String?>? chapterUrl,
+    Value<DateTime>? startAt,
+    Value<DateTime>? endAt,
+    Value<int>? durationMillis,
+    Value<double>? startPositionRatio,
+    Value<double>? endPositionRatio,
+  }) {
+    return StoredReadingRecordSessionsCompanion(
+      id: id ?? this.id,
+      bookId: bookId ?? this.bookId,
+      sourceId: sourceId ?? this.sourceId,
+      detailUrl: detailUrl ?? this.detailUrl,
+      bookTitle: bookTitle ?? this.bookTitle,
+      bookAuthor: bookAuthor ?? this.bookAuthor,
+      coverUrl: coverUrl ?? this.coverUrl,
+      chapterId: chapterId ?? this.chapterId,
+      chapterTitle: chapterTitle ?? this.chapterTitle,
+      chapterIndex: chapterIndex ?? this.chapterIndex,
+      chapterUrl: chapterUrl ?? this.chapterUrl,
+      startAt: startAt ?? this.startAt,
+      endAt: endAt ?? this.endAt,
+      durationMillis: durationMillis ?? this.durationMillis,
+      startPositionRatio: startPositionRatio ?? this.startPositionRatio,
+      endPositionRatio: endPositionRatio ?? this.endPositionRatio,
+    );
+  }
+
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    if (id.present) {
+      map['id'] = Variable<int>(id.value);
+    }
+    if (bookId.present) {
+      map['book_id'] = Variable<String>(bookId.value);
+    }
+    if (sourceId.present) {
+      map['source_id'] = Variable<String>(sourceId.value);
+    }
+    if (detailUrl.present) {
+      map['detail_url'] = Variable<String>(detailUrl.value);
+    }
+    if (bookTitle.present) {
+      map['book_title'] = Variable<String>(bookTitle.value);
+    }
+    if (bookAuthor.present) {
+      map['book_author'] = Variable<String>(bookAuthor.value);
+    }
+    if (coverUrl.present) {
+      map['cover_url'] = Variable<String>(coverUrl.value);
+    }
+    if (chapterId.present) {
+      map['chapter_id'] = Variable<String>(chapterId.value);
+    }
+    if (chapterTitle.present) {
+      map['chapter_title'] = Variable<String>(chapterTitle.value);
+    }
+    if (chapterIndex.present) {
+      map['chapter_index'] = Variable<int>(chapterIndex.value);
+    }
+    if (chapterUrl.present) {
+      map['chapter_url'] = Variable<String>(chapterUrl.value);
+    }
+    if (startAt.present) {
+      map['start_at'] = Variable<DateTime>(startAt.value);
+    }
+    if (endAt.present) {
+      map['end_at'] = Variable<DateTime>(endAt.value);
+    }
+    if (durationMillis.present) {
+      map['duration_millis'] = Variable<int>(durationMillis.value);
+    }
+    if (startPositionRatio.present) {
+      map['start_position_ratio'] = Variable<double>(startPositionRatio.value);
+    }
+    if (endPositionRatio.present) {
+      map['end_position_ratio'] = Variable<double>(endPositionRatio.value);
+    }
+    return map;
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('StoredReadingRecordSessionsCompanion(')
+          ..write('id: $id, ')
+          ..write('bookId: $bookId, ')
+          ..write('sourceId: $sourceId, ')
+          ..write('detailUrl: $detailUrl, ')
+          ..write('bookTitle: $bookTitle, ')
+          ..write('bookAuthor: $bookAuthor, ')
+          ..write('coverUrl: $coverUrl, ')
+          ..write('chapterId: $chapterId, ')
+          ..write('chapterTitle: $chapterTitle, ')
+          ..write('chapterIndex: $chapterIndex, ')
+          ..write('chapterUrl: $chapterUrl, ')
+          ..write('startAt: $startAt, ')
+          ..write('endAt: $endAt, ')
+          ..write('durationMillis: $durationMillis, ')
+          ..write('startPositionRatio: $startPositionRatio, ')
+          ..write('endPositionRatio: $endPositionRatio')
+          ..write(')'))
+        .toString();
+  }
+}
+
 class $SearchSourceHitsTable extends SearchSourceHits
     with TableInfo<$SearchSourceHitsTable, SearchSourceHit> {
   @override
@@ -4203,6 +6681,12 @@ abstract class _$AppDatabase extends GeneratedDatabase {
   late final $StoredBookmarksTable storedBookmarks = $StoredBookmarksTable(
     this,
   );
+  late final $StoredReadingRecordsTable storedReadingRecords =
+      $StoredReadingRecordsTable(this);
+  late final $StoredReadingRecordDaysTable storedReadingRecordDays =
+      $StoredReadingRecordDaysTable(this);
+  late final $StoredReadingRecordSessionsTable storedReadingRecordSessions =
+      $StoredReadingRecordSessionsTable(this);
   late final $SearchSourceHitsTable searchSourceHits = $SearchSourceHitsTable(
     this,
   );
@@ -4216,6 +6700,9 @@ abstract class _$AppDatabase extends GeneratedDatabase {
     storedLocalBooks,
     storedLocalChapters,
     storedBookmarks,
+    storedReadingRecords,
+    storedReadingRecordDays,
+    storedReadingRecordSessions,
     searchSourceHits,
   ];
 }
@@ -4885,6 +7372,9 @@ typedef $$StoredLocalBooksTableCreateCompanionBuilder =
       Value<String> indexStatus,
       Value<int> chapterCount,
       Value<String?> lastError,
+      Value<String?> txtTocRuleName,
+      Value<String?> txtTocRulePattern,
+      Value<bool> splitLongChapter,
       Value<DateTime> createdAt,
       Value<DateTime> updatedAt,
       Value<int> rowid,
@@ -4902,6 +7392,9 @@ typedef $$StoredLocalBooksTableUpdateCompanionBuilder =
       Value<String> indexStatus,
       Value<int> chapterCount,
       Value<String?> lastError,
+      Value<String?> txtTocRuleName,
+      Value<String?> txtTocRulePattern,
+      Value<bool> splitLongChapter,
       Value<DateTime> createdAt,
       Value<DateTime> updatedAt,
       Value<int> rowid,
@@ -4968,6 +7461,21 @@ class $$StoredLocalBooksTableFilterComposer
 
   ColumnFilters<String> get lastError => $composableBuilder(
     column: $table.lastError,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get txtTocRuleName => $composableBuilder(
+    column: $table.txtTocRuleName,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get txtTocRulePattern => $composableBuilder(
+    column: $table.txtTocRulePattern,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<bool> get splitLongChapter => $composableBuilder(
+    column: $table.splitLongChapter,
     builder: (column) => ColumnFilters(column),
   );
 
@@ -5046,6 +7554,21 @@ class $$StoredLocalBooksTableOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
+  ColumnOrderings<String> get txtTocRuleName => $composableBuilder(
+    column: $table.txtTocRuleName,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get txtTocRulePattern => $composableBuilder(
+    column: $table.txtTocRulePattern,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<bool> get splitLongChapter => $composableBuilder(
+    column: $table.splitLongChapter,
+    builder: (column) => ColumnOrderings(column),
+  );
+
   ColumnOrderings<DateTime> get createdAt => $composableBuilder(
     column: $table.createdAt,
     builder: (column) => ColumnOrderings(column),
@@ -5106,6 +7629,21 @@ class $$StoredLocalBooksTableAnnotationComposer
 
   GeneratedColumn<String> get lastError =>
       $composableBuilder(column: $table.lastError, builder: (column) => column);
+
+  GeneratedColumn<String> get txtTocRuleName => $composableBuilder(
+    column: $table.txtTocRuleName,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get txtTocRulePattern => $composableBuilder(
+    column: $table.txtTocRulePattern,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<bool> get splitLongChapter => $composableBuilder(
+    column: $table.splitLongChapter,
+    builder: (column) => column,
+  );
 
   GeneratedColumn<DateTime> get createdAt =>
       $composableBuilder(column: $table.createdAt, builder: (column) => column);
@@ -5169,6 +7707,9 @@ class $$StoredLocalBooksTableTableManager
                 Value<String> indexStatus = const Value.absent(),
                 Value<int> chapterCount = const Value.absent(),
                 Value<String?> lastError = const Value.absent(),
+                Value<String?> txtTocRuleName = const Value.absent(),
+                Value<String?> txtTocRulePattern = const Value.absent(),
+                Value<bool> splitLongChapter = const Value.absent(),
                 Value<DateTime> createdAt = const Value.absent(),
                 Value<DateTime> updatedAt = const Value.absent(),
                 Value<int> rowid = const Value.absent(),
@@ -5184,6 +7725,9 @@ class $$StoredLocalBooksTableTableManager
                 indexStatus: indexStatus,
                 chapterCount: chapterCount,
                 lastError: lastError,
+                txtTocRuleName: txtTocRuleName,
+                txtTocRulePattern: txtTocRulePattern,
+                splitLongChapter: splitLongChapter,
                 createdAt: createdAt,
                 updatedAt: updatedAt,
                 rowid: rowid,
@@ -5201,6 +7745,9 @@ class $$StoredLocalBooksTableTableManager
                 Value<String> indexStatus = const Value.absent(),
                 Value<int> chapterCount = const Value.absent(),
                 Value<String?> lastError = const Value.absent(),
+                Value<String?> txtTocRuleName = const Value.absent(),
+                Value<String?> txtTocRulePattern = const Value.absent(),
+                Value<bool> splitLongChapter = const Value.absent(),
                 Value<DateTime> createdAt = const Value.absent(),
                 Value<DateTime> updatedAt = const Value.absent(),
                 Value<int> rowid = const Value.absent(),
@@ -5216,6 +7763,9 @@ class $$StoredLocalBooksTableTableManager
                 indexStatus: indexStatus,
                 chapterCount: chapterCount,
                 lastError: lastError,
+                txtTocRuleName: txtTocRuleName,
+                txtTocRulePattern: txtTocRulePattern,
+                splitLongChapter: splitLongChapter,
                 createdAt: createdAt,
                 updatedAt: updatedAt,
                 rowid: rowid,
@@ -5936,6 +8486,1134 @@ typedef $$StoredBookmarksTableProcessedTableManager =
       StoredBookmark,
       PrefetchHooks Function()
     >;
+typedef $$StoredReadingRecordsTableCreateCompanionBuilder =
+    StoredReadingRecordsCompanion Function({
+      required String bookId,
+      required String sourceId,
+      required String detailUrl,
+      required String bookTitle,
+      Value<String?> bookAuthor,
+      Value<String?> coverUrl,
+      Value<String?> lastChapterId,
+      Value<String?> lastChapterTitle,
+      Value<int?> lastChapterIndex,
+      Value<String?> lastChapterUrl,
+      Value<double> lastPositionRatio,
+      Value<int> totalReadMillis,
+      required DateTime lastReadAt,
+      Value<int> rowid,
+    });
+typedef $$StoredReadingRecordsTableUpdateCompanionBuilder =
+    StoredReadingRecordsCompanion Function({
+      Value<String> bookId,
+      Value<String> sourceId,
+      Value<String> detailUrl,
+      Value<String> bookTitle,
+      Value<String?> bookAuthor,
+      Value<String?> coverUrl,
+      Value<String?> lastChapterId,
+      Value<String?> lastChapterTitle,
+      Value<int?> lastChapterIndex,
+      Value<String?> lastChapterUrl,
+      Value<double> lastPositionRatio,
+      Value<int> totalReadMillis,
+      Value<DateTime> lastReadAt,
+      Value<int> rowid,
+    });
+
+class $$StoredReadingRecordsTableFilterComposer
+    extends Composer<_$AppDatabase, $StoredReadingRecordsTable> {
+  $$StoredReadingRecordsTableFilterComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnFilters<String> get bookId => $composableBuilder(
+    column: $table.bookId,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get sourceId => $composableBuilder(
+    column: $table.sourceId,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get detailUrl => $composableBuilder(
+    column: $table.detailUrl,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get bookTitle => $composableBuilder(
+    column: $table.bookTitle,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get bookAuthor => $composableBuilder(
+    column: $table.bookAuthor,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get coverUrl => $composableBuilder(
+    column: $table.coverUrl,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get lastChapterId => $composableBuilder(
+    column: $table.lastChapterId,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get lastChapterTitle => $composableBuilder(
+    column: $table.lastChapterTitle,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get lastChapterIndex => $composableBuilder(
+    column: $table.lastChapterIndex,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get lastChapterUrl => $composableBuilder(
+    column: $table.lastChapterUrl,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<double> get lastPositionRatio => $composableBuilder(
+    column: $table.lastPositionRatio,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get totalReadMillis => $composableBuilder(
+    column: $table.totalReadMillis,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<DateTime> get lastReadAt => $composableBuilder(
+    column: $table.lastReadAt,
+    builder: (column) => ColumnFilters(column),
+  );
+}
+
+class $$StoredReadingRecordsTableOrderingComposer
+    extends Composer<_$AppDatabase, $StoredReadingRecordsTable> {
+  $$StoredReadingRecordsTableOrderingComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnOrderings<String> get bookId => $composableBuilder(
+    column: $table.bookId,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get sourceId => $composableBuilder(
+    column: $table.sourceId,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get detailUrl => $composableBuilder(
+    column: $table.detailUrl,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get bookTitle => $composableBuilder(
+    column: $table.bookTitle,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get bookAuthor => $composableBuilder(
+    column: $table.bookAuthor,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get coverUrl => $composableBuilder(
+    column: $table.coverUrl,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get lastChapterId => $composableBuilder(
+    column: $table.lastChapterId,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get lastChapterTitle => $composableBuilder(
+    column: $table.lastChapterTitle,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get lastChapterIndex => $composableBuilder(
+    column: $table.lastChapterIndex,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get lastChapterUrl => $composableBuilder(
+    column: $table.lastChapterUrl,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<double> get lastPositionRatio => $composableBuilder(
+    column: $table.lastPositionRatio,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get totalReadMillis => $composableBuilder(
+    column: $table.totalReadMillis,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<DateTime> get lastReadAt => $composableBuilder(
+    column: $table.lastReadAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+}
+
+class $$StoredReadingRecordsTableAnnotationComposer
+    extends Composer<_$AppDatabase, $StoredReadingRecordsTable> {
+  $$StoredReadingRecordsTableAnnotationComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  GeneratedColumn<String> get bookId =>
+      $composableBuilder(column: $table.bookId, builder: (column) => column);
+
+  GeneratedColumn<String> get sourceId =>
+      $composableBuilder(column: $table.sourceId, builder: (column) => column);
+
+  GeneratedColumn<String> get detailUrl =>
+      $composableBuilder(column: $table.detailUrl, builder: (column) => column);
+
+  GeneratedColumn<String> get bookTitle =>
+      $composableBuilder(column: $table.bookTitle, builder: (column) => column);
+
+  GeneratedColumn<String> get bookAuthor => $composableBuilder(
+    column: $table.bookAuthor,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get coverUrl =>
+      $composableBuilder(column: $table.coverUrl, builder: (column) => column);
+
+  GeneratedColumn<String> get lastChapterId => $composableBuilder(
+    column: $table.lastChapterId,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get lastChapterTitle => $composableBuilder(
+    column: $table.lastChapterTitle,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<int> get lastChapterIndex => $composableBuilder(
+    column: $table.lastChapterIndex,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get lastChapterUrl => $composableBuilder(
+    column: $table.lastChapterUrl,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<double> get lastPositionRatio => $composableBuilder(
+    column: $table.lastPositionRatio,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<int> get totalReadMillis => $composableBuilder(
+    column: $table.totalReadMillis,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<DateTime> get lastReadAt => $composableBuilder(
+    column: $table.lastReadAt,
+    builder: (column) => column,
+  );
+}
+
+class $$StoredReadingRecordsTableTableManager
+    extends
+        RootTableManager<
+          _$AppDatabase,
+          $StoredReadingRecordsTable,
+          StoredReadingRecord,
+          $$StoredReadingRecordsTableFilterComposer,
+          $$StoredReadingRecordsTableOrderingComposer,
+          $$StoredReadingRecordsTableAnnotationComposer,
+          $$StoredReadingRecordsTableCreateCompanionBuilder,
+          $$StoredReadingRecordsTableUpdateCompanionBuilder,
+          (
+            StoredReadingRecord,
+            BaseReferences<
+              _$AppDatabase,
+              $StoredReadingRecordsTable,
+              StoredReadingRecord
+            >,
+          ),
+          StoredReadingRecord,
+          PrefetchHooks Function()
+        > {
+  $$StoredReadingRecordsTableTableManager(
+    _$AppDatabase db,
+    $StoredReadingRecordsTable table,
+  ) : super(
+        TableManagerState(
+          db: db,
+          table: table,
+          createFilteringComposer:
+              () => $$StoredReadingRecordsTableFilterComposer(
+                $db: db,
+                $table: table,
+              ),
+          createOrderingComposer:
+              () => $$StoredReadingRecordsTableOrderingComposer(
+                $db: db,
+                $table: table,
+              ),
+          createComputedFieldComposer:
+              () => $$StoredReadingRecordsTableAnnotationComposer(
+                $db: db,
+                $table: table,
+              ),
+          updateCompanionCallback:
+              ({
+                Value<String> bookId = const Value.absent(),
+                Value<String> sourceId = const Value.absent(),
+                Value<String> detailUrl = const Value.absent(),
+                Value<String> bookTitle = const Value.absent(),
+                Value<String?> bookAuthor = const Value.absent(),
+                Value<String?> coverUrl = const Value.absent(),
+                Value<String?> lastChapterId = const Value.absent(),
+                Value<String?> lastChapterTitle = const Value.absent(),
+                Value<int?> lastChapterIndex = const Value.absent(),
+                Value<String?> lastChapterUrl = const Value.absent(),
+                Value<double> lastPositionRatio = const Value.absent(),
+                Value<int> totalReadMillis = const Value.absent(),
+                Value<DateTime> lastReadAt = const Value.absent(),
+                Value<int> rowid = const Value.absent(),
+              }) => StoredReadingRecordsCompanion(
+                bookId: bookId,
+                sourceId: sourceId,
+                detailUrl: detailUrl,
+                bookTitle: bookTitle,
+                bookAuthor: bookAuthor,
+                coverUrl: coverUrl,
+                lastChapterId: lastChapterId,
+                lastChapterTitle: lastChapterTitle,
+                lastChapterIndex: lastChapterIndex,
+                lastChapterUrl: lastChapterUrl,
+                lastPositionRatio: lastPositionRatio,
+                totalReadMillis: totalReadMillis,
+                lastReadAt: lastReadAt,
+                rowid: rowid,
+              ),
+          createCompanionCallback:
+              ({
+                required String bookId,
+                required String sourceId,
+                required String detailUrl,
+                required String bookTitle,
+                Value<String?> bookAuthor = const Value.absent(),
+                Value<String?> coverUrl = const Value.absent(),
+                Value<String?> lastChapterId = const Value.absent(),
+                Value<String?> lastChapterTitle = const Value.absent(),
+                Value<int?> lastChapterIndex = const Value.absent(),
+                Value<String?> lastChapterUrl = const Value.absent(),
+                Value<double> lastPositionRatio = const Value.absent(),
+                Value<int> totalReadMillis = const Value.absent(),
+                required DateTime lastReadAt,
+                Value<int> rowid = const Value.absent(),
+              }) => StoredReadingRecordsCompanion.insert(
+                bookId: bookId,
+                sourceId: sourceId,
+                detailUrl: detailUrl,
+                bookTitle: bookTitle,
+                bookAuthor: bookAuthor,
+                coverUrl: coverUrl,
+                lastChapterId: lastChapterId,
+                lastChapterTitle: lastChapterTitle,
+                lastChapterIndex: lastChapterIndex,
+                lastChapterUrl: lastChapterUrl,
+                lastPositionRatio: lastPositionRatio,
+                totalReadMillis: totalReadMillis,
+                lastReadAt: lastReadAt,
+                rowid: rowid,
+              ),
+          withReferenceMapper:
+              (p0) =>
+                  p0
+                      .map(
+                        (e) => (
+                          e.readTable(table),
+                          BaseReferences(db, table, e),
+                        ),
+                      )
+                      .toList(),
+          prefetchHooksCallback: null,
+        ),
+      );
+}
+
+typedef $$StoredReadingRecordsTableProcessedTableManager =
+    ProcessedTableManager<
+      _$AppDatabase,
+      $StoredReadingRecordsTable,
+      StoredReadingRecord,
+      $$StoredReadingRecordsTableFilterComposer,
+      $$StoredReadingRecordsTableOrderingComposer,
+      $$StoredReadingRecordsTableAnnotationComposer,
+      $$StoredReadingRecordsTableCreateCompanionBuilder,
+      $$StoredReadingRecordsTableUpdateCompanionBuilder,
+      (
+        StoredReadingRecord,
+        BaseReferences<
+          _$AppDatabase,
+          $StoredReadingRecordsTable,
+          StoredReadingRecord
+        >,
+      ),
+      StoredReadingRecord,
+      PrefetchHooks Function()
+    >;
+typedef $$StoredReadingRecordDaysTableCreateCompanionBuilder =
+    StoredReadingRecordDaysCompanion Function({
+      required String bookId,
+      required String dateKey,
+      required String bookTitle,
+      Value<String?> bookAuthor,
+      Value<String?> coverUrl,
+      Value<int> readMillis,
+      required DateTime firstReadAt,
+      required DateTime lastReadAt,
+      Value<int> rowid,
+    });
+typedef $$StoredReadingRecordDaysTableUpdateCompanionBuilder =
+    StoredReadingRecordDaysCompanion Function({
+      Value<String> bookId,
+      Value<String> dateKey,
+      Value<String> bookTitle,
+      Value<String?> bookAuthor,
+      Value<String?> coverUrl,
+      Value<int> readMillis,
+      Value<DateTime> firstReadAt,
+      Value<DateTime> lastReadAt,
+      Value<int> rowid,
+    });
+
+class $$StoredReadingRecordDaysTableFilterComposer
+    extends Composer<_$AppDatabase, $StoredReadingRecordDaysTable> {
+  $$StoredReadingRecordDaysTableFilterComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnFilters<String> get bookId => $composableBuilder(
+    column: $table.bookId,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get dateKey => $composableBuilder(
+    column: $table.dateKey,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get bookTitle => $composableBuilder(
+    column: $table.bookTitle,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get bookAuthor => $composableBuilder(
+    column: $table.bookAuthor,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get coverUrl => $composableBuilder(
+    column: $table.coverUrl,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get readMillis => $composableBuilder(
+    column: $table.readMillis,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<DateTime> get firstReadAt => $composableBuilder(
+    column: $table.firstReadAt,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<DateTime> get lastReadAt => $composableBuilder(
+    column: $table.lastReadAt,
+    builder: (column) => ColumnFilters(column),
+  );
+}
+
+class $$StoredReadingRecordDaysTableOrderingComposer
+    extends Composer<_$AppDatabase, $StoredReadingRecordDaysTable> {
+  $$StoredReadingRecordDaysTableOrderingComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnOrderings<String> get bookId => $composableBuilder(
+    column: $table.bookId,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get dateKey => $composableBuilder(
+    column: $table.dateKey,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get bookTitle => $composableBuilder(
+    column: $table.bookTitle,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get bookAuthor => $composableBuilder(
+    column: $table.bookAuthor,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get coverUrl => $composableBuilder(
+    column: $table.coverUrl,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get readMillis => $composableBuilder(
+    column: $table.readMillis,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<DateTime> get firstReadAt => $composableBuilder(
+    column: $table.firstReadAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<DateTime> get lastReadAt => $composableBuilder(
+    column: $table.lastReadAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+}
+
+class $$StoredReadingRecordDaysTableAnnotationComposer
+    extends Composer<_$AppDatabase, $StoredReadingRecordDaysTable> {
+  $$StoredReadingRecordDaysTableAnnotationComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  GeneratedColumn<String> get bookId =>
+      $composableBuilder(column: $table.bookId, builder: (column) => column);
+
+  GeneratedColumn<String> get dateKey =>
+      $composableBuilder(column: $table.dateKey, builder: (column) => column);
+
+  GeneratedColumn<String> get bookTitle =>
+      $composableBuilder(column: $table.bookTitle, builder: (column) => column);
+
+  GeneratedColumn<String> get bookAuthor => $composableBuilder(
+    column: $table.bookAuthor,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get coverUrl =>
+      $composableBuilder(column: $table.coverUrl, builder: (column) => column);
+
+  GeneratedColumn<int> get readMillis => $composableBuilder(
+    column: $table.readMillis,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<DateTime> get firstReadAt => $composableBuilder(
+    column: $table.firstReadAt,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<DateTime> get lastReadAt => $composableBuilder(
+    column: $table.lastReadAt,
+    builder: (column) => column,
+  );
+}
+
+class $$StoredReadingRecordDaysTableTableManager
+    extends
+        RootTableManager<
+          _$AppDatabase,
+          $StoredReadingRecordDaysTable,
+          StoredReadingRecordDay,
+          $$StoredReadingRecordDaysTableFilterComposer,
+          $$StoredReadingRecordDaysTableOrderingComposer,
+          $$StoredReadingRecordDaysTableAnnotationComposer,
+          $$StoredReadingRecordDaysTableCreateCompanionBuilder,
+          $$StoredReadingRecordDaysTableUpdateCompanionBuilder,
+          (
+            StoredReadingRecordDay,
+            BaseReferences<
+              _$AppDatabase,
+              $StoredReadingRecordDaysTable,
+              StoredReadingRecordDay
+            >,
+          ),
+          StoredReadingRecordDay,
+          PrefetchHooks Function()
+        > {
+  $$StoredReadingRecordDaysTableTableManager(
+    _$AppDatabase db,
+    $StoredReadingRecordDaysTable table,
+  ) : super(
+        TableManagerState(
+          db: db,
+          table: table,
+          createFilteringComposer:
+              () => $$StoredReadingRecordDaysTableFilterComposer(
+                $db: db,
+                $table: table,
+              ),
+          createOrderingComposer:
+              () => $$StoredReadingRecordDaysTableOrderingComposer(
+                $db: db,
+                $table: table,
+              ),
+          createComputedFieldComposer:
+              () => $$StoredReadingRecordDaysTableAnnotationComposer(
+                $db: db,
+                $table: table,
+              ),
+          updateCompanionCallback:
+              ({
+                Value<String> bookId = const Value.absent(),
+                Value<String> dateKey = const Value.absent(),
+                Value<String> bookTitle = const Value.absent(),
+                Value<String?> bookAuthor = const Value.absent(),
+                Value<String?> coverUrl = const Value.absent(),
+                Value<int> readMillis = const Value.absent(),
+                Value<DateTime> firstReadAt = const Value.absent(),
+                Value<DateTime> lastReadAt = const Value.absent(),
+                Value<int> rowid = const Value.absent(),
+              }) => StoredReadingRecordDaysCompanion(
+                bookId: bookId,
+                dateKey: dateKey,
+                bookTitle: bookTitle,
+                bookAuthor: bookAuthor,
+                coverUrl: coverUrl,
+                readMillis: readMillis,
+                firstReadAt: firstReadAt,
+                lastReadAt: lastReadAt,
+                rowid: rowid,
+              ),
+          createCompanionCallback:
+              ({
+                required String bookId,
+                required String dateKey,
+                required String bookTitle,
+                Value<String?> bookAuthor = const Value.absent(),
+                Value<String?> coverUrl = const Value.absent(),
+                Value<int> readMillis = const Value.absent(),
+                required DateTime firstReadAt,
+                required DateTime lastReadAt,
+                Value<int> rowid = const Value.absent(),
+              }) => StoredReadingRecordDaysCompanion.insert(
+                bookId: bookId,
+                dateKey: dateKey,
+                bookTitle: bookTitle,
+                bookAuthor: bookAuthor,
+                coverUrl: coverUrl,
+                readMillis: readMillis,
+                firstReadAt: firstReadAt,
+                lastReadAt: lastReadAt,
+                rowid: rowid,
+              ),
+          withReferenceMapper:
+              (p0) =>
+                  p0
+                      .map(
+                        (e) => (
+                          e.readTable(table),
+                          BaseReferences(db, table, e),
+                        ),
+                      )
+                      .toList(),
+          prefetchHooksCallback: null,
+        ),
+      );
+}
+
+typedef $$StoredReadingRecordDaysTableProcessedTableManager =
+    ProcessedTableManager<
+      _$AppDatabase,
+      $StoredReadingRecordDaysTable,
+      StoredReadingRecordDay,
+      $$StoredReadingRecordDaysTableFilterComposer,
+      $$StoredReadingRecordDaysTableOrderingComposer,
+      $$StoredReadingRecordDaysTableAnnotationComposer,
+      $$StoredReadingRecordDaysTableCreateCompanionBuilder,
+      $$StoredReadingRecordDaysTableUpdateCompanionBuilder,
+      (
+        StoredReadingRecordDay,
+        BaseReferences<
+          _$AppDatabase,
+          $StoredReadingRecordDaysTable,
+          StoredReadingRecordDay
+        >,
+      ),
+      StoredReadingRecordDay,
+      PrefetchHooks Function()
+    >;
+typedef $$StoredReadingRecordSessionsTableCreateCompanionBuilder =
+    StoredReadingRecordSessionsCompanion Function({
+      Value<int> id,
+      required String bookId,
+      required String sourceId,
+      required String detailUrl,
+      required String bookTitle,
+      Value<String?> bookAuthor,
+      Value<String?> coverUrl,
+      Value<String?> chapterId,
+      Value<String?> chapterTitle,
+      Value<int?> chapterIndex,
+      Value<String?> chapterUrl,
+      required DateTime startAt,
+      required DateTime endAt,
+      Value<int> durationMillis,
+      Value<double> startPositionRatio,
+      Value<double> endPositionRatio,
+    });
+typedef $$StoredReadingRecordSessionsTableUpdateCompanionBuilder =
+    StoredReadingRecordSessionsCompanion Function({
+      Value<int> id,
+      Value<String> bookId,
+      Value<String> sourceId,
+      Value<String> detailUrl,
+      Value<String> bookTitle,
+      Value<String?> bookAuthor,
+      Value<String?> coverUrl,
+      Value<String?> chapterId,
+      Value<String?> chapterTitle,
+      Value<int?> chapterIndex,
+      Value<String?> chapterUrl,
+      Value<DateTime> startAt,
+      Value<DateTime> endAt,
+      Value<int> durationMillis,
+      Value<double> startPositionRatio,
+      Value<double> endPositionRatio,
+    });
+
+class $$StoredReadingRecordSessionsTableFilterComposer
+    extends Composer<_$AppDatabase, $StoredReadingRecordSessionsTable> {
+  $$StoredReadingRecordSessionsTableFilterComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnFilters<int> get id => $composableBuilder(
+    column: $table.id,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get bookId => $composableBuilder(
+    column: $table.bookId,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get sourceId => $composableBuilder(
+    column: $table.sourceId,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get detailUrl => $composableBuilder(
+    column: $table.detailUrl,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get bookTitle => $composableBuilder(
+    column: $table.bookTitle,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get bookAuthor => $composableBuilder(
+    column: $table.bookAuthor,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get coverUrl => $composableBuilder(
+    column: $table.coverUrl,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get chapterId => $composableBuilder(
+    column: $table.chapterId,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get chapterTitle => $composableBuilder(
+    column: $table.chapterTitle,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get chapterIndex => $composableBuilder(
+    column: $table.chapterIndex,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get chapterUrl => $composableBuilder(
+    column: $table.chapterUrl,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<DateTime> get startAt => $composableBuilder(
+    column: $table.startAt,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<DateTime> get endAt => $composableBuilder(
+    column: $table.endAt,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get durationMillis => $composableBuilder(
+    column: $table.durationMillis,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<double> get startPositionRatio => $composableBuilder(
+    column: $table.startPositionRatio,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<double> get endPositionRatio => $composableBuilder(
+    column: $table.endPositionRatio,
+    builder: (column) => ColumnFilters(column),
+  );
+}
+
+class $$StoredReadingRecordSessionsTableOrderingComposer
+    extends Composer<_$AppDatabase, $StoredReadingRecordSessionsTable> {
+  $$StoredReadingRecordSessionsTableOrderingComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnOrderings<int> get id => $composableBuilder(
+    column: $table.id,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get bookId => $composableBuilder(
+    column: $table.bookId,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get sourceId => $composableBuilder(
+    column: $table.sourceId,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get detailUrl => $composableBuilder(
+    column: $table.detailUrl,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get bookTitle => $composableBuilder(
+    column: $table.bookTitle,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get bookAuthor => $composableBuilder(
+    column: $table.bookAuthor,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get coverUrl => $composableBuilder(
+    column: $table.coverUrl,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get chapterId => $composableBuilder(
+    column: $table.chapterId,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get chapterTitle => $composableBuilder(
+    column: $table.chapterTitle,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get chapterIndex => $composableBuilder(
+    column: $table.chapterIndex,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get chapterUrl => $composableBuilder(
+    column: $table.chapterUrl,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<DateTime> get startAt => $composableBuilder(
+    column: $table.startAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<DateTime> get endAt => $composableBuilder(
+    column: $table.endAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get durationMillis => $composableBuilder(
+    column: $table.durationMillis,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<double> get startPositionRatio => $composableBuilder(
+    column: $table.startPositionRatio,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<double> get endPositionRatio => $composableBuilder(
+    column: $table.endPositionRatio,
+    builder: (column) => ColumnOrderings(column),
+  );
+}
+
+class $$StoredReadingRecordSessionsTableAnnotationComposer
+    extends Composer<_$AppDatabase, $StoredReadingRecordSessionsTable> {
+  $$StoredReadingRecordSessionsTableAnnotationComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  GeneratedColumn<int> get id =>
+      $composableBuilder(column: $table.id, builder: (column) => column);
+
+  GeneratedColumn<String> get bookId =>
+      $composableBuilder(column: $table.bookId, builder: (column) => column);
+
+  GeneratedColumn<String> get sourceId =>
+      $composableBuilder(column: $table.sourceId, builder: (column) => column);
+
+  GeneratedColumn<String> get detailUrl =>
+      $composableBuilder(column: $table.detailUrl, builder: (column) => column);
+
+  GeneratedColumn<String> get bookTitle =>
+      $composableBuilder(column: $table.bookTitle, builder: (column) => column);
+
+  GeneratedColumn<String> get bookAuthor => $composableBuilder(
+    column: $table.bookAuthor,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get coverUrl =>
+      $composableBuilder(column: $table.coverUrl, builder: (column) => column);
+
+  GeneratedColumn<String> get chapterId =>
+      $composableBuilder(column: $table.chapterId, builder: (column) => column);
+
+  GeneratedColumn<String> get chapterTitle => $composableBuilder(
+    column: $table.chapterTitle,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<int> get chapterIndex => $composableBuilder(
+    column: $table.chapterIndex,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get chapterUrl => $composableBuilder(
+    column: $table.chapterUrl,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<DateTime> get startAt =>
+      $composableBuilder(column: $table.startAt, builder: (column) => column);
+
+  GeneratedColumn<DateTime> get endAt =>
+      $composableBuilder(column: $table.endAt, builder: (column) => column);
+
+  GeneratedColumn<int> get durationMillis => $composableBuilder(
+    column: $table.durationMillis,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<double> get startPositionRatio => $composableBuilder(
+    column: $table.startPositionRatio,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<double> get endPositionRatio => $composableBuilder(
+    column: $table.endPositionRatio,
+    builder: (column) => column,
+  );
+}
+
+class $$StoredReadingRecordSessionsTableTableManager
+    extends
+        RootTableManager<
+          _$AppDatabase,
+          $StoredReadingRecordSessionsTable,
+          StoredReadingRecordSession,
+          $$StoredReadingRecordSessionsTableFilterComposer,
+          $$StoredReadingRecordSessionsTableOrderingComposer,
+          $$StoredReadingRecordSessionsTableAnnotationComposer,
+          $$StoredReadingRecordSessionsTableCreateCompanionBuilder,
+          $$StoredReadingRecordSessionsTableUpdateCompanionBuilder,
+          (
+            StoredReadingRecordSession,
+            BaseReferences<
+              _$AppDatabase,
+              $StoredReadingRecordSessionsTable,
+              StoredReadingRecordSession
+            >,
+          ),
+          StoredReadingRecordSession,
+          PrefetchHooks Function()
+        > {
+  $$StoredReadingRecordSessionsTableTableManager(
+    _$AppDatabase db,
+    $StoredReadingRecordSessionsTable table,
+  ) : super(
+        TableManagerState(
+          db: db,
+          table: table,
+          createFilteringComposer:
+              () => $$StoredReadingRecordSessionsTableFilterComposer(
+                $db: db,
+                $table: table,
+              ),
+          createOrderingComposer:
+              () => $$StoredReadingRecordSessionsTableOrderingComposer(
+                $db: db,
+                $table: table,
+              ),
+          createComputedFieldComposer:
+              () => $$StoredReadingRecordSessionsTableAnnotationComposer(
+                $db: db,
+                $table: table,
+              ),
+          updateCompanionCallback:
+              ({
+                Value<int> id = const Value.absent(),
+                Value<String> bookId = const Value.absent(),
+                Value<String> sourceId = const Value.absent(),
+                Value<String> detailUrl = const Value.absent(),
+                Value<String> bookTitle = const Value.absent(),
+                Value<String?> bookAuthor = const Value.absent(),
+                Value<String?> coverUrl = const Value.absent(),
+                Value<String?> chapterId = const Value.absent(),
+                Value<String?> chapterTitle = const Value.absent(),
+                Value<int?> chapterIndex = const Value.absent(),
+                Value<String?> chapterUrl = const Value.absent(),
+                Value<DateTime> startAt = const Value.absent(),
+                Value<DateTime> endAt = const Value.absent(),
+                Value<int> durationMillis = const Value.absent(),
+                Value<double> startPositionRatio = const Value.absent(),
+                Value<double> endPositionRatio = const Value.absent(),
+              }) => StoredReadingRecordSessionsCompanion(
+                id: id,
+                bookId: bookId,
+                sourceId: sourceId,
+                detailUrl: detailUrl,
+                bookTitle: bookTitle,
+                bookAuthor: bookAuthor,
+                coverUrl: coverUrl,
+                chapterId: chapterId,
+                chapterTitle: chapterTitle,
+                chapterIndex: chapterIndex,
+                chapterUrl: chapterUrl,
+                startAt: startAt,
+                endAt: endAt,
+                durationMillis: durationMillis,
+                startPositionRatio: startPositionRatio,
+                endPositionRatio: endPositionRatio,
+              ),
+          createCompanionCallback:
+              ({
+                Value<int> id = const Value.absent(),
+                required String bookId,
+                required String sourceId,
+                required String detailUrl,
+                required String bookTitle,
+                Value<String?> bookAuthor = const Value.absent(),
+                Value<String?> coverUrl = const Value.absent(),
+                Value<String?> chapterId = const Value.absent(),
+                Value<String?> chapterTitle = const Value.absent(),
+                Value<int?> chapterIndex = const Value.absent(),
+                Value<String?> chapterUrl = const Value.absent(),
+                required DateTime startAt,
+                required DateTime endAt,
+                Value<int> durationMillis = const Value.absent(),
+                Value<double> startPositionRatio = const Value.absent(),
+                Value<double> endPositionRatio = const Value.absent(),
+              }) => StoredReadingRecordSessionsCompanion.insert(
+                id: id,
+                bookId: bookId,
+                sourceId: sourceId,
+                detailUrl: detailUrl,
+                bookTitle: bookTitle,
+                bookAuthor: bookAuthor,
+                coverUrl: coverUrl,
+                chapterId: chapterId,
+                chapterTitle: chapterTitle,
+                chapterIndex: chapterIndex,
+                chapterUrl: chapterUrl,
+                startAt: startAt,
+                endAt: endAt,
+                durationMillis: durationMillis,
+                startPositionRatio: startPositionRatio,
+                endPositionRatio: endPositionRatio,
+              ),
+          withReferenceMapper:
+              (p0) =>
+                  p0
+                      .map(
+                        (e) => (
+                          e.readTable(table),
+                          BaseReferences(db, table, e),
+                        ),
+                      )
+                      .toList(),
+          prefetchHooksCallback: null,
+        ),
+      );
+}
+
+typedef $$StoredReadingRecordSessionsTableProcessedTableManager =
+    ProcessedTableManager<
+      _$AppDatabase,
+      $StoredReadingRecordSessionsTable,
+      StoredReadingRecordSession,
+      $$StoredReadingRecordSessionsTableFilterComposer,
+      $$StoredReadingRecordSessionsTableOrderingComposer,
+      $$StoredReadingRecordSessionsTableAnnotationComposer,
+      $$StoredReadingRecordSessionsTableCreateCompanionBuilder,
+      $$StoredReadingRecordSessionsTableUpdateCompanionBuilder,
+      (
+        StoredReadingRecordSession,
+        BaseReferences<
+          _$AppDatabase,
+          $StoredReadingRecordSessionsTable,
+          StoredReadingRecordSession
+        >,
+      ),
+      StoredReadingRecordSession,
+      PrefetchHooks Function()
+    >;
 typedef $$SearchSourceHitsTableCreateCompanionBuilder =
     SearchSourceHitsCompanion Function({
       required String titleNorm,
@@ -6311,6 +9989,19 @@ class $AppDatabaseManager {
       $$StoredLocalChaptersTableTableManager(_db, _db.storedLocalChapters);
   $$StoredBookmarksTableTableManager get storedBookmarks =>
       $$StoredBookmarksTableTableManager(_db, _db.storedBookmarks);
+  $$StoredReadingRecordsTableTableManager get storedReadingRecords =>
+      $$StoredReadingRecordsTableTableManager(_db, _db.storedReadingRecords);
+  $$StoredReadingRecordDaysTableTableManager get storedReadingRecordDays =>
+      $$StoredReadingRecordDaysTableTableManager(
+        _db,
+        _db.storedReadingRecordDays,
+      );
+  $$StoredReadingRecordSessionsTableTableManager
+  get storedReadingRecordSessions =>
+      $$StoredReadingRecordSessionsTableTableManager(
+        _db,
+        _db.storedReadingRecordSessions,
+      );
   $$SearchSourceHitsTableTableManager get searchSourceHits =>
       $$SearchSourceHitsTableTableManager(_db, _db.searchSourceHits);
 }

@@ -141,6 +141,11 @@ class _MinePageState extends ConsumerState<MinePage> {
                             label: '书签',
                             onTap: () => context.push('/bookmarks'),
                           ),
+                          _MineActionItem(
+                            icon: Icons.history_rounded,
+                            label: '阅读记录',
+                            onTap: () => context.push('/read-records'),
+                          ),
                         ],
                       ),
                     ),

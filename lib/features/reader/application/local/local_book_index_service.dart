@@ -10,17 +10,25 @@ import '../../../../domain/repositories/local_book_repository.dart';
 import 'epub_local_book_parser.dart';
 import 'local_book_parser.dart';
 import 'txt_local_book_parser.dart';
+import 'txt_toc_rule_settings_service.dart';
 
 class LocalBookIndexService {
   LocalBookIndexService({
     LocalBookRepository? localBookRepository,
     List<LocalBookParser>? parsers,
     AppLogger? logger,
+    TxtTocRuleSettingsService? txtTocRuleSettingsService,
   }) : _localBookRepository =
            localBookRepository ?? LocalBookRepositoryImpl(AppDatabase.instance),
        _parsers =
            parsers ??
-           const <LocalBookParser>[TxtLocalBookParser(), EpubLocalBookParser()],
+           <LocalBookParser>[
+             TxtLocalBookParser(
+               ruleSettingsService:
+                   txtTocRuleSettingsService ?? TxtTocRuleSettingsService(),
+             ),
+             const EpubLocalBookParser(),
+           ],
        _logger = logger ?? AppLogger.instance;
 
   final LocalBookRepository _localBookRepository;

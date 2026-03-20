@@ -23,6 +23,7 @@ import '../features/reader/presentation/reader_page.dart';
 import '../features/search/presentation/search_page.dart';
 import '../features/source/presentation/source_page.dart';
 import '../features/source/presentation/source_diagnostics_page.dart';
+import '../features/reader/presentation/reading_records_page.dart';
 import 'shell_scaffold.dart';
 
 GlobalKey<NavigatorState> get appRootNavigatorKey => globalRootNavigatorKey;
@@ -120,6 +121,11 @@ final GoRouter appRouter = GoRouter(
       path: '/bookmarks',
       name: 'bookmarks',
       builder: (context, state) => const BookmarksPage(),
+    ),
+    GoRoute(
+      path: '/read-records',
+      name: 'read-records',
+      builder: (context, state) => const ReadingRecordsPage(),
     ),
     GoRoute(
       path: '/source',
