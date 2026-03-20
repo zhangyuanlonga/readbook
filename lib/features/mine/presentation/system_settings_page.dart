@@ -371,7 +371,7 @@ class _BottomNavigationSettingPanelState
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(
-          '当前展示 ${navigationState.visibleTabCount}/4 项，“我的”固定显示。',
+          '当前展示 ${navigationState.visibleTabCount}/3 项，“我的”固定显示。',
           style: _settingSubtitleTextStyle(context),
         ),
         const SizedBox(height: 8),
@@ -401,18 +401,6 @@ class _BottomNavigationSettingPanelState
                   _isSaving
                       ? null
                       : (value) => _toggle(AppShellTab.discover, value),
-            ),
-            _buildSwitchRow(
-              context,
-              icon: _destinationFor(AppShellTab.source).icon,
-              title: _destinationFor(AppShellTab.source).label,
-              subtitle: navigationState.showSource ? '已显示。' : '已隐藏。',
-              value: navigationState.showSource,
-              isSaving: _isSaving && _savingTab == AppShellTab.source,
-              onChanged:
-                  _isSaving
-                      ? null
-                      : (value) => _toggle(AppShellTab.source, value),
             ),
             _buildInfoRow(
               context,

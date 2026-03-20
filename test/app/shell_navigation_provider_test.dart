@@ -16,8 +16,7 @@ void main() {
       final state = container.read(appShellNavigationProvider);
       expect(state.showBookshelf, isTrue);
       expect(state.showDiscover, isTrue);
-      expect(state.showSource, isTrue);
-      expect(state.visibleTabCount, 4);
+      expect(state.visibleTabCount, 3);
     });
 
     test('persists configurable tab visibility', () async {
@@ -30,7 +29,7 @@ void main() {
 
       final updated = container.read(appShellNavigationProvider);
       expect(updated.showDiscover, isFalse);
-      expect(updated.visibleTabCount, 3);
+      expect(updated.visibleTabCount, 2);
 
       final prefs = await SharedPreferences.getInstance();
       expect(prefs.getBool('app.shell.navigation.discover'), isFalse);
@@ -45,7 +44,7 @@ void main() {
           .setTabVisible(AppShellTab.mine, false);
 
       final state = container.read(appShellNavigationProvider);
-      expect(state.visibleTabCount, 4);
+      expect(state.visibleTabCount, 3);
     });
   });
 }

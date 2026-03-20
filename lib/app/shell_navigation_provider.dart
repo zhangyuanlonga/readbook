@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
-enum AppShellTab { bookshelf, discover, source, mine }
+enum AppShellTab { bookshelf, discover, mine }
 
 class AppShellDestination {
   const AppShellDestination({
@@ -32,12 +32,6 @@ const List<AppShellDestination> appShellDestinations = [
     icon: Icons.travel_explore_outlined,
   ),
   AppShellDestination(
-    tab: AppShellTab.source,
-    location: '/source',
-    label: '书源',
-    icon: Icons.storage_outlined,
-  ),
-  AppShellDestination(
     tab: AppShellTab.mine,
     location: '/mine',
     label: '我的',
@@ -49,12 +43,10 @@ class AppShellNavigationState {
   const AppShellNavigationState({
     this.showBookshelf = true,
     this.showDiscover = true,
-    this.showSource = true,
   });
 
   final bool showBookshelf;
   final bool showDiscover;
-  final bool showSource;
 
   int get configurableVisibleCount {
     var count = 0;
@@ -64,9 +56,6 @@ class AppShellNavigationState {
     if (showDiscover) {
       count += 1;
     }
-    if (showSource) {
-      count += 1;
-    }
     return count;
   }
 
@@ -74,7 +63,6 @@ class AppShellNavigationState {
     return switch (tab) {
       AppShellTab.bookshelf => showBookshelf,
       AppShellTab.discover => showDiscover,
-      AppShellTab.source => showSource,
       AppShellTab.mine => true,
     };
   }
@@ -83,15 +71,10 @@ class AppShellNavigationState {
     return configurableVisibleCount + 1;
   }
 
-  AppShellNavigationState copyWith({
-    bool? showBookshelf,
-    bool? showDiscover,
-    bool? showSource,
-  }) {
+  AppShellNavigationState copyWith({bool? showBookshelf, bool? showDiscover}) {
     return AppShellNavigationState(
       showBookshelf: showBookshelf ?? this.showBookshelf,
       showDiscover: showDiscover ?? this.showDiscover,
-      showSource: showSource ?? this.showSource,
     );
   }
 
@@ -99,12 +82,11 @@ class AppShellNavigationState {
   bool operator ==(Object other) {
     return other is AppShellNavigationState &&
         other.showBookshelf == showBookshelf &&
-        other.showDiscover == showDiscover &&
-        other.showSource == showSource;
+        other.showDiscover == showDiscover;
   }
 
   @override
-  int get hashCode => Object.hash(showBookshelf, showDiscover, showSource);
+  int get hashCode => Object.hash(showBookshelf, showDiscover);
 }
 
 List<AppShellDestination> visibleAppShellDestinations(
@@ -143,9 +125,9 @@ class AppShellNavigationNotifier extends Notifier<AppShellNavigationState> {
     final loaded = AppShellNavigationState(
       showBookshelf: prefs.getBool(_bookshelfVisibleKey) ?? true,
       showDiscover: prefs.getBool(_discoverVisibleKey) ?? true,
-      showSource: prefs.getBool(_sourceVisibleKey) ?? true,
     );
     final normalized = _normalizeState(loaded);
+    await prefs.remove(_sourceVisibleKey);
 
     if (_hasExplicitSet) {
       return;
@@ -169,7 +151,6 @@ class AppShellNavigationNotifier extends Notifier<AppShellNavigationState> {
     final changed = switch (tab) {
       AppShellTab.bookshelf => state.copyWith(showBookshelf: visible),
       AppShellTab.discover => state.copyWith(showDiscover: visible),
-      AppShellTab.source => state.copyWith(showSource: visible),
       AppShellTab.mine => state,
     };
     final next = _normalizeState(changed);
@@ -205,6 +186,6 @@ class AppShellNavigationNotifier extends Notifier<AppShellNavigationState> {
   ) async {
     await prefs.setBool(_bookshelfVisibleKey, state.showBookshelf);
     await prefs.setBool(_discoverVisibleKey, state.showDiscover);
-    await prefs.setBool(_sourceVisibleKey, state.showSource);
+    await prefs.remove(_sourceVisibleKey);
   }
 }

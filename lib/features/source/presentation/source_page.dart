@@ -24,6 +24,8 @@ import '../application/source_capability_analyzer.dart';
 import '../application/external_source_import_bridge.dart';
 import '../application/source_import_service.dart';
 
+enum _SourceSort { nameAsc, nameDesc, enabledFirst }
+
 class SourcePage extends StatefulWidget {
   const SourcePage({super.key});
 
@@ -48,26 +50,19 @@ class _SourcePageState extends State<SourcePage> {
   final Set<String> _deletingSourceIds = <String>{};
   final Set<String> _exportingSourceIds = <String>{};
   final Set<String> _selectedSourceIds = <String>{};
-  final Set<String> _expandedCommentSourceIds = <String>{};
   List<SourceListItem> _visibleSources = const <SourceListItem>[];
   final TextEditingController _searchController = TextEditingController();
-  final FocusNode _searchFocusNode = FocusNode();
   final ScrollController _scrollController = ScrollController();
   Timer? _searchDebounce;
   StreamSubscription<IncomingSourceImportPayload>? _incomingImportSubscription;
   String _searchKeyword = '';
-  bool _showSearchBar = false;
+  _SourceSort _sourceSort = _SourceSort.nameAsc;
   bool _isPageLoading = false;
   bool _isInitialLoading = true;
   bool _hasMorePages = true;
   String? _listErrorText;
   int _nextOffset = 0;
   int _totalCount = 0;
-  int _filteredNovelCount = 0;
-  int _filteredMangaCount = 0;
-  int _totalImportedCount = 0;
-  int _novelCount = 0;
-  int _mangaCount = 0;
   int _queryTicket = 0;
   bool _loadMoreScheduledFromBuild = false;
   bool _isConsumingExternalImportPayloads = false;
@@ -84,7 +79,6 @@ class _SourcePageState extends State<SourcePage> {
   static const String _defaultConnectivityKeyword = '凡人修仙传';
   static const Duration _kSourceListLoadTimeout = Duration(seconds: 8);
   static const Duration _kSourceCardEntryDuration = Duration(milliseconds: 420);
-  static const Duration _kCommentExpandDuration = Duration(milliseconds: 220);
   static const int _kSourceCardEntryStaggerGroup = 8;
   static const double _kSourceCardEntryStaggerStep = 0.08;
   static const double _kSourceCardEntryCurveSpan = 0.4;
@@ -121,7 +115,6 @@ class _SourcePageState extends State<SourcePage> {
     _scrollController.dispose();
     _searchController.removeListener(_onSearchInputChanged);
     _searchController.dispose();
-    _searchFocusNode.dispose();
     super.dispose();
   }
 
@@ -174,35 +167,22 @@ class _SourcePageState extends State<SourcePage> {
         groupEquals: groupEquals,
         includeUngroupedOnly: includeUngroupedOnly,
       );
-      final needsOverviewSummary = keyword.isNotEmpty || _isGroupFilterActive;
-      final overviewSummaryFuture =
-          needsOverviewSummary
-              ? AppDatabase.instance.summarizeSourceListItems()
-              : Future<SourceListCountSummary?>.value(null);
 
       final results = await Future.wait<Object?>([
         pageFuture,
         summaryFuture,
-        overviewSummaryFuture,
       ]).timeout(_kSourceListLoadTimeout);
 
       final page = results[0] as List<SourceListItem>;
       final summary = results[1] as SourceListCountSummary;
-      final overviewSummary = results[2] as SourceListCountSummary?;
-      final overview = overviewSummary ?? summary;
 
       if (!mounted || ticket != _queryTicket) {
         return;
       }
 
       setState(() {
-        _visibleSources = page;
+        _visibleSources = _applySort(page);
         _totalCount = summary.totalCount;
-        _filteredNovelCount = summary.novelCount;
-        _filteredMangaCount = summary.mangaCount;
-        _totalImportedCount = overview.totalCount;
-        _novelCount = overview.novelCount;
-        _mangaCount = overview.mangaCount;
         _nextOffset = page.length;
         _hasMorePages = page.length < summary.totalCount;
         _isInitialLoading = false;
@@ -211,7 +191,6 @@ class _SourcePageState extends State<SourcePage> {
       });
 
       _syncSelectionWithVisibleSources();
-      _syncExpandedCommentsWithVisibleSources();
     } on TimeoutException {
       if (!mounted || ticket != _queryTicket) {
         return;
@@ -263,7 +242,7 @@ class _SourcePageState extends State<SourcePage> {
       }
 
       setState(() {
-        _visibleSources = [..._visibleSources, ...page];
+        _visibleSources = _applySort([..._visibleSources, ...page]);
         _nextOffset += page.length;
         _hasMorePages = _nextOffset < _totalCount;
         _isPageLoading = false;
@@ -320,34 +299,10 @@ class _SourcePageState extends State<SourcePage> {
     });
   }
 
-  void _syncExpandedCommentsWithVisibleSources() {
-    if (_expandedCommentSourceIds.isEmpty) {
-      return;
-    }
-
-    final visibleIds = _visibleSources.map((item) => item.id).toSet();
-    final nextExpanded =
-        _expandedCommentSourceIds
-            .where((id) => visibleIds.contains(id))
-            .toSet();
-
-    if (nextExpanded.length == _expandedCommentSourceIds.length || !mounted) {
-      return;
-    }
-
-    setState(() {
-      _expandedCommentSourceIds
-        ..clear()
-        ..addAll(nextExpanded);
-    });
-  }
-
   @override
   Widget build(BuildContext context) {
-    final colorScheme = Theme.of(context).colorScheme;
     final horizontal = AppSpacing.pageHorizontal(context);
     final bottomSafe = MediaQuery.viewPaddingOf(context).bottom;
-    final isSearchActive = _showSearchBar || _hasActiveFilters;
 
     return Scaffold(
       appBar: AppBar(
@@ -358,24 +313,22 @@ class _SourcePageState extends State<SourcePage> {
                   tooltip: '取消选择',
                   icon: const Icon(Icons.close),
                 )
-                : null,
+                : IconButton(
+                  onPressed: () {
+                    if (context.canPop()) {
+                      context.pop();
+                      return;
+                    }
+                    context.go('/mine');
+                  },
+                  tooltip: '返回',
+                  icon: const Icon(Icons.arrow_back),
+                ),
         title: Text(
           _isSelectionMode ? '已选择 ${_selectedSourceIds.length} 项' : '书源',
         ),
         actions: [
           if (!_isSelectionMode) ...[
-            if (isSearchActive)
-              IconButton.filledTonal(
-                onPressed: _toggleSearchBar,
-                tooltip: '收起搜索',
-                icon: const Icon(Icons.search_off_rounded),
-              )
-            else
-              IconButton(
-                onPressed: _toggleSearchBar,
-                tooltip: '搜索书源',
-                icon: const Icon(Icons.search_rounded),
-              ),
             IconButton(
               onPressed: _openBatchDiagnostics,
               tooltip: '批量诊断',
@@ -437,7 +390,10 @@ class _SourcePageState extends State<SourcePage> {
           gradient: LinearGradient(
             begin: Alignment.topCenter,
             end: Alignment.bottomCenter,
-            colors: [colorScheme.surface, colorScheme.surfaceContainerLow],
+            colors: [
+              Theme.of(context).colorScheme.surface,
+              Theme.of(context).colorScheme.surfaceContainerLow,
+            ],
           ),
         ),
         child: _buildSourceListContent(
@@ -452,13 +408,11 @@ class _SourcePageState extends State<SourcePage> {
     required double horizontal,
     required double bottomSafe,
   }) {
-    final hasFilters = _hasActiveFilters;
-    final showSearchPanel = _showSearchBar || hasFilters;
     final showEmpty = !_isInitialLoading && _visibleSources.isEmpty;
     final showErrorCard = _listErrorText != null && _visibleSources.isEmpty;
     final showLoadingCard = _isInitialLoading;
 
-    const headerCount = 2;
+    const headerCount = 1;
     final listCount =
         showLoadingCard || showErrorCard || showEmpty
             ? 1
@@ -470,28 +424,19 @@ class _SourcePageState extends State<SourcePage> {
         _visibleSources.isNotEmpty;
     final itemCount = headerCount + listCount + (showFooter ? 1 : 0);
 
-    const searchPanelIndex = 1;
-    const listStartIndex = 2;
+    const headerIndex = 0;
+    const listStartIndex = 1;
 
     return ListView.builder(
       controller: _scrollController,
       padding: EdgeInsets.fromLTRB(horizontal, 16, horizontal, 16 + bottomSafe),
       itemCount: itemCount,
       itemBuilder: (context, index) {
-        if (index == 0) {
-          return _buildOverviewCard(
-            totalSourceCount: _totalCount,
-            novelCount: _filteredNovelCount,
-            mangaCount: _filteredMangaCount,
-            overallSourceCount: _totalImportedCount,
-            overallNovelCount: _novelCount,
-            overallMangaCount: _mangaCount,
-            hasActiveFilters: hasFilters,
+        if (index == headerIndex) {
+          return Padding(
+            padding: const EdgeInsets.only(bottom: 12),
+            child: _buildTopFilterBar(),
           );
-        }
-
-        if (index == searchPanelIndex) {
-          return _buildSearchPanelSlot(showSearchPanel: showSearchPanel);
         }
 
         final itemListIndex = index - listStartIndex;
@@ -546,32 +491,6 @@ class _SourcePageState extends State<SourcePage> {
     );
   }
 
-  Widget _buildSearchPanelSlot({required bool showSearchPanel}) {
-    return AnimatedSwitcher(
-      duration: const Duration(milliseconds: 220),
-      switchInCurve: Curves.easeOutCubic,
-      switchOutCurve: Curves.easeInCubic,
-      transitionBuilder: (child, animation) {
-        return FadeTransition(
-          opacity: animation,
-          child: SizeTransition(
-            sizeFactor: animation,
-            axisAlignment: -1,
-            child: child,
-          ),
-        );
-      },
-      child:
-          showSearchPanel
-              ? Padding(
-                key: const ValueKey('search_panel_visible'),
-                padding: const EdgeInsets.only(top: 10, bottom: 10),
-                child: _buildSearchPanel(),
-              )
-              : const SizedBox.shrink(key: ValueKey('search_panel_hidden')),
-    );
-  }
-
   Widget _buildSelectionActionBar() {
     final colorScheme = Theme.of(context).colorScheme;
 
@@ -603,7 +522,7 @@ class _SourcePageState extends State<SourcePage> {
               Expanded(
                 child: OutlinedButton(
                   onPressed:
-                      _isBatchDeleting || _totalImportedCount == 0
+                      _isBatchDeleting || _totalCount == 0
                           ? null
                           : _clearAllSources,
                   child: const Text('清空全部'),
@@ -691,7 +610,9 @@ class _SourcePageState extends State<SourcePage> {
                 ),
                 OutlinedButton(
                   onPressed:
-                      hasFilters ? _clearSourceSearchFilter : _showImportActionSheet,
+                      hasFilters
+                          ? _clearSourceSearchFilter
+                          : _showImportActionSheet,
                   child: Text(hasFilters ? '清空筛选' : '导入书源'),
                 ),
               ],
@@ -702,83 +623,24 @@ class _SourcePageState extends State<SourcePage> {
     );
   }
 
-  Widget _buildOverviewCard({
-    required int totalSourceCount,
-    required int novelCount,
-    required int mangaCount,
-    required int overallSourceCount,
-    required int overallNovelCount,
-    required int overallMangaCount,
-    required bool hasActiveFilters,
-  }) {
-    final colorScheme = Theme.of(context).colorScheme;
-    return Card(
-      margin: const EdgeInsets.only(bottom: 8),
-      shape: _buildOutlinedCardShape(context),
-      child: Padding(
-        padding: const EdgeInsets.all(14),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                Icon(
-                  Icons.storage_rounded,
-                  color: Theme.of(context).colorScheme.primary,
-                ),
-                const SizedBox(width: 8),
-                Text(
-                  '书源概览',
-                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                    fontWeight: FontWeight.w700,
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 10),
-            Wrap(
-              spacing: 8,
-              runSpacing: 8,
-              children: [
-                _buildOverviewChip('书源总数', '$totalSourceCount'),
-                _buildOverviewChip('小说源', '$novelCount'),
-                _buildOverviewChip('漫画源', '$mangaCount'),
-              ],
-            ),
-            if (hasActiveFilters) ...[
-              const SizedBox(height: 10),
-              Text(
-                '全部书源：$overallSourceCount（小说源 $overallNovelCount，漫画源 $overallMangaCount）',
-                style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                  color: colorScheme.onSurfaceVariant,
-                ),
-              ),
-            ],
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildSearchPanel() {
+  Widget _buildTopFilterBar() {
     final colorScheme = Theme.of(context).colorScheme;
 
     return Card(
       shape: _buildOutlinedCardShape(context),
       margin: EdgeInsets.zero,
       child: Padding(
-        padding: const EdgeInsets.fromLTRB(4, 4, 4, 4),
+        padding: const EdgeInsets.fromLTRB(8, 8, 8, 8),
         child: Row(
           children: [
             Expanded(
               child: Container(
                 decoration: BoxDecoration(
                   borderRadius: BorderRadius.circular(14),
-                  border: Border.all(color: colorScheme.outline),
+                  border: Border.all(color: colorScheme.outlineVariant),
                 ),
                 child: TextField(
                   controller: _searchController,
-                  focusNode: _searchFocusNode,
                   textInputAction: TextInputAction.search,
                   textAlignVertical: TextAlignVertical.center,
                   style: Theme.of(context).textTheme.bodyMedium?.copyWith(
@@ -816,7 +678,7 @@ class _SourcePageState extends State<SourcePage> {
                             ? null
                             : IconButton(
                               tooltip: '清空关键词',
-                              onPressed: () => _searchController.clear(),
+                              onPressed: _clearSourceSearchFilter,
                               icon: const Icon(Icons.close_rounded, size: 18),
                             ),
                   ),
@@ -824,11 +686,18 @@ class _SourcePageState extends State<SourcePage> {
               ),
             ),
             const SizedBox(width: 8),
-            _buildGroupFilterButton(),
+            _buildSortButton(),
             IconButton(
-              tooltip: '收起搜索',
-              onPressed: _toggleSearchBar,
-              icon: const Icon(Icons.expand_less_rounded),
+              tooltip: '分组筛选',
+              onPressed: _isGroupFilterLoading ? null : _showGroupFilterSheet,
+              icon:
+                  _isGroupFilterLoading
+                      ? const SizedBox(
+                        width: 18,
+                        height: 18,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
+                      : const Icon(Icons.filter_alt_rounded),
             ),
           ],
         ),
@@ -836,68 +705,77 @@ class _SourcePageState extends State<SourcePage> {
     );
   }
 
-  Widget _buildGroupFilterButton() {
-    final colorScheme = Theme.of(context).colorScheme;
-    final isActive = _isGroupFilterActive;
-    final label =
-        _filterUngroupedOnly
-            ? '未分组'
-            : (_selectedGroupFilter ?? '全部分组');
-    final textColor =
-        isActive ? colorScheme.primary : colorScheme.onSurfaceVariant;
-
-    return OutlinedButton.icon(
-      onPressed: _isGroupFilterLoading ? null : _showGroupFilterSheet,
-      style: OutlinedButton.styleFrom(
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
-        minimumSize: const Size(0, 40),
-        side: BorderSide(
-          color: isActive ? colorScheme.primary : colorScheme.outlineVariant,
+  Widget _buildSortButton() {
+    return PopupMenuButton<_SourceSort>(
+      tooltip: '排序',
+      onSelected: (value) {
+        if (value == _sourceSort) {
+          return;
+        }
+        setState(() {
+          _sourceSort = value;
+          _visibleSources = _applySort(_visibleSources);
+        });
+      },
+      itemBuilder:
+          (context) => const [
+            PopupMenuItem(value: _SourceSort.nameAsc, child: Text('名称 A-Z')),
+            PopupMenuItem(value: _SourceSort.nameDesc, child: Text('名称 Z-A')),
+            PopupMenuItem(value: _SourceSort.enabledFirst, child: Text('启用优先')),
+          ],
+      child: Container(
+        height: 46,
+        padding: const EdgeInsets.symmetric(horizontal: 12),
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(
+            color: Theme.of(context).colorScheme.outlineVariant,
+          ),
         ),
-        foregroundColor: textColor,
-      ),
-      icon:
-          _isGroupFilterLoading
-              ? SizedBox(
-                  width: 14,
-                  height: 14,
-                  child: CircularProgressIndicator(
-                    strokeWidth: 2,
-                    color: colorScheme.primary,
-                  ),
-                )
-              : Icon(
-                  Icons.filter_alt_rounded,
-                  size: 16,
-                  color: textColor,
-                ),
-      label: Text(
-        label,
-        style: Theme.of(context).textTheme.labelMedium?.copyWith(
-          color: textColor,
-          fontWeight: FontWeight.w600,
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Icon(Icons.swap_vert_rounded, size: 18),
+            const SizedBox(width: 6),
+            Text(
+              switch (_sourceSort) {
+                _SourceSort.nameAsc => 'A-Z',
+                _SourceSort.nameDesc => 'Z-A',
+                _SourceSort.enabledFirst => '启用优先',
+              },
+              style: Theme.of(
+                context,
+              ).textTheme.labelMedium?.copyWith(fontWeight: FontWeight.w600),
+            ),
+          ],
         ),
       ),
     );
   }
 
-  Widget _buildOverviewChip(String label, String value) {
-    final colorScheme = Theme.of(context).colorScheme;
-
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-      decoration: BoxDecoration(
-        color: colorScheme.secondaryContainer,
-        borderRadius: BorderRadius.circular(999),
-      ),
-      child: Text(
-        '$label: $value',
-        style: Theme.of(context).textTheme.labelMedium?.copyWith(
-          color: colorScheme.onSecondaryContainer,
-          fontWeight: FontWeight.w600,
-        ),
-      ),
-    );
+  List<SourceListItem> _applySort(List<SourceListItem> input) {
+    final output = [...input];
+    switch (_sourceSort) {
+      case _SourceSort.nameAsc:
+        output.sort(
+          (a, b) => a.name.toLowerCase().compareTo(b.name.toLowerCase()),
+        );
+        break;
+      case _SourceSort.nameDesc:
+        output.sort(
+          (a, b) => b.name.toLowerCase().compareTo(a.name.toLowerCase()),
+        );
+        break;
+      case _SourceSort.enabledFirst:
+        output.sort((a, b) {
+          if (a.enabled != b.enabled) {
+            return a.enabled ? -1 : 1;
+          }
+          return a.name.toLowerCase().compareTo(b.name.toLowerCase());
+        });
+        break;
+    }
+    return output;
   }
 
   Widget _buildEmptySourceCard() {
@@ -995,19 +873,12 @@ class _SourcePageState extends State<SourcePage> {
   }
 
   Widget _buildSourceCard(SourceListItem source) {
-    final hasTestedTime =
-        source.lastCheckStatus != SourceHealthStatus.unknown &&
-        source.lastCheckedAt != null;
     final isTesting = _testingSourceIds.contains(source.id);
     final isChangingEnabled = _changingEnabledSourceIds.contains(source.id);
     final isDeleting = _deletingSourceIds.contains(source.id);
     final isExporting = _exportingSourceIds.contains(source.id);
     final selected = _selectedSourceIds.contains(source.id);
     final isActionLocked = _isBatchDeleting || isDeleting || isExporting;
-    final colorScheme = Theme.of(context).colorScheme;
-    final hasComment = _hasSourceComment(source.comment);
-    final isCommentExpanded = _expandedCommentSourceIds.contains(source.id);
-    final commentText = _trimSourceComment(source.comment);
 
     return Card(
       margin: const EdgeInsets.only(bottom: 8),
@@ -1030,169 +901,27 @@ class _SourcePageState extends State<SourcePage> {
                   ),
                 ),
               Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
+                child: Row(
                   children: [
-                    Row(
-                      crossAxisAlignment: CrossAxisAlignment.center,
-                      children: [
-                        Expanded(
-                          child: Text(
-                            source.name,
-                            style: Theme.of(context).textTheme.titleSmall
-                                ?.copyWith(fontWeight: FontWeight.w700),
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                          ),
+                    Expanded(
+                      child: Text(
+                        source.name,
+                        style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                          fontWeight: FontWeight.w700,
                         ),
-                        if (!_isSelectionMode)
-                          _buildSourceTrailingActions(
-                            source: source,
-                            isTesting: isTesting,
-                            isChangingEnabled: isChangingEnabled,
-                            isDeleting: isDeleting,
-                            isExporting: isExporting,
-                            isActionLocked: isActionLocked,
-                          ),
-                      ],
-                    ),
-                    const SizedBox(height: 3),
-                    Row(
-                      children: [
-                        Expanded(
-                          child: Text(
-                            _buildSourceSecondaryLine(source),
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                              color: colorScheme.onSurfaceVariant,
-                            ),
-                          ),
-                        ),
-                        if (hasTestedTime) ...[
-                          const SizedBox(width: 8),
-                          ConstrainedBox(
-                            constraints: const BoxConstraints(maxWidth: 150),
-                            child: Text(
-                              '测试: ${_buildConnectivityTestTimeText(source)}',
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              textAlign: TextAlign.right,
-                              style: Theme.of(
-                                context,
-                              ).textTheme.labelSmall?.copyWith(
-                                color: colorScheme.onSurfaceVariant,
-                                fontWeight: FontWeight.w600,
-                              ),
-                            ),
-                          ),
-                        ],
-                      ],
-                    ),
-                    const SizedBox(height: 5),
-                    Wrap(
-                      spacing: 6,
-                      runSpacing: 4,
-                      crossAxisAlignment: WrapCrossAlignment.center,
-                      children: [
-                        _buildHealthStatusPill(source.lastCheckStatus),
-                        _buildGroupChip(source),
-                      ],
-                    ),
-                    if (hasComment) ...[
-                      const SizedBox(height: 5),
-                      InkWell(
-                        borderRadius: BorderRadius.circular(8),
-                        onTap: () => _toggleCommentExpanded(source.id),
-                        child: Padding(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 4,
-                            vertical: 2,
-                          ),
-                          child: Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              Icon(
-                                Icons.sticky_note_2_outlined,
-                                size: 15,
-                                color: colorScheme.onSurfaceVariant,
-                              ),
-                              const SizedBox(width: 4),
-                              Text(
-                                isCommentExpanded ? '收起备注' : '展开备注',
-                                style: Theme.of(
-                                  context,
-                                ).textTheme.labelSmall?.copyWith(
-                                  color: colorScheme.onSurfaceVariant,
-                                  fontWeight: FontWeight.w600,
-                                ),
-                              ),
-                              const SizedBox(width: 2),
-                              AnimatedRotation(
-                                turns: isCommentExpanded ? 0.5 : 0,
-                                duration: _kCommentExpandDuration,
-                                curve: Curves.easeOutCubic,
-                                child: Icon(
-                                  Icons.expand_more_rounded,
-                                  size: 15,
-                                  color: colorScheme.onSurfaceVariant,
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
                       ),
-                      AnimatedSwitcher(
-                        duration: _kCommentExpandDuration,
-                        switchInCurve: Curves.easeOutCubic,
-                        switchOutCurve: Curves.easeInCubic,
-                        transitionBuilder: (child, animation) {
-                          final slideAnimation = Tween<Offset>(
-                            begin: const Offset(0, -0.08),
-                            end: Offset.zero,
-                          ).animate(animation);
-                          return FadeTransition(
-                            opacity: animation,
-                            child: SizeTransition(
-                              sizeFactor: animation,
-                              axisAlignment: -1,
-                              child: SlideTransition(
-                                position: slideAnimation,
-                                child: child,
-                              ),
-                            ),
-                          );
-                        },
-                        child:
-                            isCommentExpanded
-                                ? Padding(
-                                key: ValueKey<String>(
-                                  'source_comment_open_${source.id}',
-                                ),
-                                padding: const EdgeInsets.only(top: 4),
-                                child: Container(
-                                  width: double.infinity,
-                                  padding: const EdgeInsets.symmetric(
-                                      horizontal: 10,
-                                      vertical: 8,
-                                    ),
-                                    decoration: BoxDecoration(
-                                      color: colorScheme.surfaceContainerHighest,
-                                      borderRadius: BorderRadius.circular(8),
-                                    ),
-                                    child: Text(
-                                      commentText,
-                                      maxLines: 3,
-                                      overflow: TextOverflow.ellipsis,
-                                      style: Theme.of(context).textTheme.bodySmall,
-                                    ),
-                                  ),
-                                )
-                                : const SizedBox.shrink(
-                                  key: ValueKey<String>('source_comment_closed'),
-                                ),
+                    ),
+                    if (!_isSelectionMode)
+                      _buildSourceTrailingActions(
+                        source: source,
+                        isTesting: isTesting,
+                        isChangingEnabled: isChangingEnabled,
+                        isDeleting: isDeleting,
+                        isExporting: isExporting,
+                        isActionLocked: isActionLocked,
                       ),
-                    ],
                   ],
                 ),
               ),
@@ -1211,21 +940,9 @@ class _SourcePageState extends State<SourcePage> {
     required bool isExporting,
     required bool isActionLocked,
   }) {
-    final showProgress =
-        isTesting || isChangingEnabled || isDeleting || isExporting;
-
     return Row(
       mainAxisSize: MainAxisSize.min,
       children: [
-        if (showProgress)
-          const Padding(
-            padding: EdgeInsets.only(right: 4),
-            child: SizedBox(
-              width: 14,
-              height: 14,
-              child: CircularProgressIndicator(strokeWidth: 2),
-            ),
-          ),
         Transform.scale(
           scale: 0.82,
           child: Switch(
@@ -1236,6 +953,8 @@ class _SourcePageState extends State<SourcePage> {
                     : (value) => _setEnabled(source.id, value),
           ),
         ),
+        const SizedBox(width: 4),
+        _buildGroupChip(source),
         PopupMenuButton<_SourceAction>(
           tooltip: '更多操作',
           icon: const Icon(Icons.more_vert, size: 20),
@@ -1272,55 +991,6 @@ class _SourcePageState extends State<SourcePage> {
     );
   }
 
-  Widget _buildHealthStatusPill(SourceHealthStatus status) {
-    final colorScheme = Theme.of(context).colorScheme;
-
-    final color = switch (status) {
-      SourceHealthStatus.healthy => const Color(0xFF2E7D32),
-      SourceHealthStatus.degraded ||
-      SourceHealthStatus.unavailable => colorScheme.error,
-      SourceHealthStatus.unknown => colorScheme.onSurfaceVariant.withValues(
-        alpha: 0.55,
-      ),
-    };
-
-    final label = switch (status) {
-      SourceHealthStatus.healthy => '可用',
-      SourceHealthStatus.degraded || SourceHealthStatus.unavailable => '异常',
-      SourceHealthStatus.unknown => '未测',
-    };
-
-    final icon = switch (status) {
-      SourceHealthStatus.healthy => Icons.check_circle_rounded,
-      SourceHealthStatus.degraded ||
-      SourceHealthStatus.unavailable => Icons.error_outline_rounded,
-      SourceHealthStatus.unknown => Icons.help_outline_rounded,
-    };
-
-    return DecoratedBox(
-      decoration: BoxDecoration(
-        color: color.withValues(alpha: 0.14),
-        borderRadius: BorderRadius.circular(999),
-      ),
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(icon, size: 12, color: color),
-            const SizedBox(width: 3),
-            Text(
-              label,
-              style: Theme.of(
-                context,
-              ).textTheme.labelSmall?.copyWith(color: color),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
   RoundedRectangleBorder _buildOutlinedCardShape(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
     return RoundedRectangleBorder(
@@ -1329,12 +999,6 @@ class _SourcePageState extends State<SourcePage> {
         color: colorScheme.outlineVariant.withValues(alpha: 0.72),
       ),
     );
-  }
-
-  String _buildSourceSecondaryLine(SourceListItem source) {
-    final host = _resolveSourceHost(source.baseUrl);
-    final typeText = source.isMangaSource ? '漫画' : '小说';
-    return '$host · $typeText';
   }
 
   Widget _buildGroupChip(SourceListItem source) {
@@ -1350,17 +1014,11 @@ class _SourcePageState extends State<SourcePage> {
       onTap: isLocked ? null : () => _onGroupChipTapped(source),
       child: DecoratedBox(
         decoration: BoxDecoration(
-          color: colorScheme.surfaceContainerHighest,
+          color: colorScheme.surfaceContainerHigh,
           borderRadius: BorderRadius.circular(999),
-          border: Border.all(
-            color:
-                isLocked
-                    ? colorScheme.outlineVariant
-                    : colorScheme.primary.withValues(alpha: 0.6),
-          ),
         ),
         child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+          padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 5),
           child: Row(
             mainAxisSize: MainAxisSize.min,
             children: [
@@ -1374,7 +1032,7 @@ class _SourcePageState extends State<SourcePage> {
               ),
               const SizedBox(width: 4),
               ConstrainedBox(
-                constraints: const BoxConstraints(maxWidth: 160),
+                constraints: const BoxConstraints(maxWidth: 90),
                 child: Text(
                   label,
                   maxLines: 1,
@@ -1409,27 +1067,6 @@ class _SourcePageState extends State<SourcePage> {
         ),
       ),
     );
-  }
-
-  String _resolveSourceHost(String baseUrl) {
-    final raw = baseUrl.trim();
-    final uri = Uri.tryParse(raw);
-    if (uri == null || uri.host.isEmpty) {
-      return raw.replaceFirst(RegExp(r'^https?://'), '');
-    }
-
-    if (uri.port > 0) {
-      return '${uri.host}:${uri.port}';
-    }
-    return uri.host;
-  }
-
-  bool _hasSourceComment(String? comment) {
-    return comment != null && comment.trim().isNotEmpty;
-  }
-
-  String _trimSourceComment(String? comment) {
-    return (comment ?? '').trim().replaceAll(RegExp(r'\s+'), ' ');
   }
 
   String? _normalizeGroupLabel(String? group) {
@@ -2020,7 +1657,7 @@ class _SourcePageState extends State<SourcePage> {
   }
 
   Future<void> _clearAllSources() async {
-    if (_isBatchDeleting || _totalImportedCount == 0) {
+    if (_isBatchDeleting || _totalCount == 0) {
       return;
     }
 
@@ -2046,7 +1683,6 @@ class _SourcePageState extends State<SourcePage> {
 
       setState(() {
         _selectedSourceIds.clear();
-        _expandedCommentSourceIds.clear();
         _isSelectionMode = false;
       });
 
@@ -2063,16 +1699,6 @@ class _SourcePageState extends State<SourcePage> {
     }
   }
 
-  void _toggleCommentExpanded(String sourceId) {
-    setState(() {
-      if (_expandedCommentSourceIds.contains(sourceId)) {
-        _expandedCommentSourceIds.remove(sourceId);
-      } else {
-        _expandedCommentSourceIds.add(sourceId);
-      }
-    });
-  }
-
   void _exitSelectionMode() {
     setState(() {
       _isSelectionMode = false;
@@ -2082,40 +1708,19 @@ class _SourcePageState extends State<SourcePage> {
 
   void _clearSourceSearchFilter() {
     final hasPendingInput = _searchController.text.isNotEmpty;
-    final hasVisibleSearch = _showSearchBar;
     final hasFilters = _hasActiveFilters;
-    if (!hasPendingInput && !hasVisibleSearch && !hasFilters) {
+    if (!hasPendingInput && !hasFilters) {
       return;
     }
 
     _searchDebounce?.cancel();
-    _searchFocusNode.unfocus();
     _searchController.clear();
     setState(() {
-      _showSearchBar = false;
       _searchKeyword = '';
       _selectedGroupFilter = null;
       _filterUngroupedOnly = false;
     });
     unawaited(_reloadSourceList(reset: true));
-  }
-
-  void _toggleSearchBar() {
-    if (_showSearchBar || _hasActiveFilters) {
-      _clearSourceSearchFilter();
-      return;
-    }
-
-    setState(() {
-      _showSearchBar = true;
-    });
-
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!mounted) {
-        return;
-      }
-      _searchFocusNode.requestFocus();
-    });
   }
 
   void _onSearchInputChanged() {
@@ -2646,27 +2251,6 @@ class _SourcePageState extends State<SourcePage> {
     };
   }
 
-  String _buildConnectivityTestTimeText(SourceListItem source) {
-    if (source.lastCheckStatus == SourceHealthStatus.unknown ||
-        source.lastCheckedAt == null) {
-      return '未测试';
-    }
-
-    return _formatDateTime(source.lastCheckedAt);
-  }
-
-  String _formatDateTime(DateTime? time) {
-    if (time == null) {
-      return '未测试';
-    }
-
-    final local = time.toLocal();
-    final year = local.year.toString().padLeft(4, '0');
-    final month = local.month.toString().padLeft(2, '0');
-    final day = local.day.toString().padLeft(2, '0');
-    return '$year-$month-$day';
-  }
-
   String _timestampToken() {
     final now = DateTime.now();
     final year = now.year.toString().padLeft(4, '0');
@@ -3158,12 +2742,13 @@ class _SourceGroupPickerSheetState extends State<_SourceGroupPickerSheet> {
                                   Expanded(
                                     child: Text(
                                       '暂无历史分组，可在上方创建。',
-                                      style: theme.textTheme.bodySmall?.copyWith(
-                                        color:
-                                            theme
-                                                .colorScheme
-                                                .onSurfaceVariant,
-                                      ),
+                                      style: theme.textTheme.bodySmall
+                                          ?.copyWith(
+                                            color:
+                                                theme
+                                                    .colorScheme
+                                                    .onSurfaceVariant,
+                                          ),
                                     ),
                                   ),
                                 ],
@@ -3357,18 +2942,16 @@ class _SourceGroupFilterSheet extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final selectedValue =
-        initialUngrouped
-            ? _kUngroupedValue
-            : (initialGroup ?? _kAllValue);
+        initialUngrouped ? _kUngroupedValue : (initialGroup ?? _kAllValue);
     final tiles = <Widget>[
       RadioListTile<String>(
         value: _kAllValue,
         groupValue: selectedValue,
         title: const Text('全部分组'),
         onChanged: (_) {
-          Navigator.of(context).pop(
-            const _GroupFilterResult(group: null, ungrouped: false),
-          );
+          Navigator.of(
+            context,
+          ).pop(const _GroupFilterResult(group: null, ungrouped: false));
         },
       ),
       RadioListTile<String>(
@@ -3376,9 +2959,9 @@ class _SourceGroupFilterSheet extends StatelessWidget {
         groupValue: selectedValue,
         title: const Text('仅未分组'),
         onChanged: (_) {
-          Navigator.of(context).pop(
-            const _GroupFilterResult(group: null, ungrouped: true),
-          );
+          Navigator.of(
+            context,
+          ).pop(const _GroupFilterResult(group: null, ungrouped: true));
         },
       ),
     ];
@@ -3388,10 +2971,7 @@ class _SourceGroupFilterSheet extends StatelessWidget {
         ListTile(
           enabled: false,
           leading: const Icon(Icons.info_outline_rounded),
-          title: Text(
-            '暂无已命名分组',
-            style: theme.textTheme.bodyMedium,
-          ),
+          title: Text('暂无已命名分组', style: theme.textTheme.bodyMedium),
           subtitle: Text(
             '可以先在书源卡片上设置分组。',
             style: theme.textTheme.bodySmall?.copyWith(
@@ -3408,9 +2988,9 @@ class _SourceGroupFilterSheet extends StatelessWidget {
             groupValue: selectedValue,
             title: Text(group),
             onChanged: (_) {
-              Navigator.of(context).pop(
-                _GroupFilterResult(group: group, ungrouped: false),
-              );
+              Navigator.of(
+                context,
+              ).pop(_GroupFilterResult(group: group, ungrouped: false));
             },
           ),
         );
@@ -3442,10 +3022,7 @@ class _SourceGroupFilterSheet extends StatelessWidget {
               constraints: BoxConstraints(
                 maxHeight: MediaQuery.sizeOf(context).height * 0.6,
               ),
-              child: ListView(
-                shrinkWrap: true,
-                children: tiles,
-              ),
+              child: ListView(shrinkWrap: true, children: tiles),
             ),
           ],
         ),

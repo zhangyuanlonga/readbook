@@ -46,11 +46,6 @@ final GoRouter appRouter = GoRouter(
           builder: (context, state) => const DiscoverPage(),
         ),
         GoRoute(
-          path: '/source',
-          name: 'source',
-          builder: (context, state) => const SourcePage(),
-        ),
-        GoRoute(
           path: '/mine',
           name: 'mine',
           builder: (context, state) => const MinePage(),
@@ -104,6 +99,11 @@ final GoRouter appRouter = GoRouter(
       path: '/bookmarks',
       name: 'bookmarks',
       builder: (context, state) => const BookmarksPage(),
+    ),
+    GoRoute(
+      path: '/source',
+      name: 'source',
+      builder: (context, state) => const SourcePage(),
     ),
     GoRoute(
       path: '/feedback',

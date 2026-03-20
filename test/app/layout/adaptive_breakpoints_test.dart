@@ -328,7 +328,7 @@ void main() {
         .map((item) => (item as NavigationDestination).label)
         .toList(growable: false);
 
-    expect(labels, <String>['书架', '发现', '书源', '我的']);
+    expect(labels, <String>['书架', '发现', '我的']);
     expect(bar.selectedIndex, 1);
   });
 
@@ -421,7 +421,6 @@ class _BookshelfMineNavigationNotifier extends AppShellNavigationNotifier {
     return const AppShellNavigationState(
       showBookshelf: true,
       showDiscover: false,
-      showSource: false,
     );
   }
 }

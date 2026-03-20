@@ -68,7 +68,10 @@ class _ShellScaffoldState extends ConsumerState<ShellScaffold> {
     final canShowNavigation = visibleDestinations.length >= 2;
 
     if (selectedIndex < 0 && visibleDestinations.isNotEmpty) {
-      _scheduleRedirectToVisibleTab(context, visibleDestinations.first.location);
+      _scheduleRedirectToVisibleTab(
+        context,
+        visibleDestinations.first.location,
+      );
     } else {
       _pendingRedirectLocation = null;
     }
@@ -83,7 +86,8 @@ class _ShellScaffoldState extends ConsumerState<ShellScaffold> {
               switchInCurve: Curves.easeOutCubic,
               switchOutCurve: Curves.easeInCubic,
               transitionBuilder: (child, animation) {
-                final isIncoming = child.key == ValueKey<int>(_currentOrderIndex);
+                final isIncoming =
+                    child.key == ValueKey<int>(_currentOrderIndex);
                 final beginX =
                     isIncoming
                         ? (_isForward ? 0.16 : -0.16)
@@ -137,10 +141,8 @@ class _ShellScaffoldState extends ConsumerState<ShellScaffold> {
               child: NavigationRail(
                 selectedIndex: effectiveSelectedIndex,
                 onDestinationSelected:
-                    (index) => _goToDestination(
-                      context,
-                      visibleDestinations[index],
-                    ),
+                    (index) =>
+                        _goToDestination(context, visibleDestinations[index]),
                 labelType: NavigationRailLabelType.all,
                 destinations: [
                   for (final destination in visibleDestinations)
@@ -235,17 +237,13 @@ class _ShellScaffoldState extends ConsumerState<ShellScaffold> {
     return switch (tab) {
       AppShellTab.bookshelf => 0,
       AppShellTab.discover => 1,
-      AppShellTab.source => 2,
-      AppShellTab.mine => 3,
+      AppShellTab.mine => 2,
     };
   }
 
   AppShellTab _locationTab(String currentLocation) {
     if (currentLocation.startsWith('/discover')) {
       return AppShellTab.discover;
-    }
-    if (currentLocation.startsWith('/source')) {
-      return AppShellTab.source;
     }
     if (currentLocation.startsWith('/mine')) {
       return AppShellTab.mine;
