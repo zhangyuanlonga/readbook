@@ -1,5 +1,7 @@
 import 'package:flutter_appread/domain/entities/reader_settings.dart';
 import 'package:flutter_appread/domain/entities/reading_progress.dart';
+import 'package:flutter_appread/domain/entities/reader_toc_snapshot.dart';
+import 'package:flutter_appread/domain/entities/chapter.dart';
 import 'package:flutter_appread/features/reader/application/reader_preferences_service.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -147,6 +149,49 @@ void main() {
 
       expect(restored, isNotNull);
       expect(restored!.chapterPositionRatio, 0);
+    });
+
+    test('saves and loads toc snapshot', () async {
+      final service = ReaderPreferencesService();
+      final snapshot = ReaderTocSnapshot(
+        bookId: 'book_1',
+        sourceId: 'src_1',
+        detailUrl: 'https://example.com/book/1',
+        title: '测试书籍',
+        author: '作者甲',
+        coverUrl: 'https://example.com/cover.jpg',
+        chapters: const [
+          Chapter(
+            id: 'chapter_1',
+            bookId: 'book_1',
+            title: '第一章',
+            chapterUrl: 'https://example.com/book/1/chapter/1',
+            index: 0,
+          ),
+          Chapter(
+            id: 'chapter_2',
+            bookId: 'book_1',
+            title: '第二章',
+            chapterUrl: 'https://example.com/book/1/chapter/2',
+            index: 1,
+          ),
+        ],
+        updatedAt: DateTime.parse('2026-03-20T12:00:00.000Z'),
+      );
+
+      await service.saveTocSnapshot(snapshot);
+      final restored = await service.loadTocSnapshot(
+        sourceId: 'src_1',
+        detailUrl: 'https://example.com/book/1',
+      );
+
+      expect(restored, isNotNull);
+      expect(restored!.title, '测试书籍');
+      expect(restored.author, '作者甲');
+      expect(restored.coverUrl, 'https://example.com/cover.jpg');
+      expect(restored.chapters, hasLength(2));
+      expect(restored.chapters.first.title, '第一章');
+      expect(restored.chapters.last.index, 1);
     });
   });
 }

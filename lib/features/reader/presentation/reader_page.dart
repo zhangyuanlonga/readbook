@@ -211,6 +211,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
   Size? _pageCurlPaperSize;
   bool _isCurlAutoTurning = false;
   bool _isSystemUiVisible = true;
+  late final AnimationController _overlayControlsController;
   late final AnimationController _curlAutoTurnController;
   double _curlAutoStartX = 0;
   double _curlAutoEndX = 0;
@@ -239,6 +240,13 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
   static const double _kCoverEdgeShadowWidth = 20;
   static const double _kCoverEdgeShadowMaxAlpha = 0.22;
   static const double _kDarkBackgroundOverlayAlpha = 0.45;
+  static const double _kOverlayScrimMaxAlpha = 0.14;
+  static const Duration _kOverlayControlsShowDuration = Duration(
+    milliseconds: 280,
+  );
+  static const Duration _kOverlayControlsHideDuration = Duration(
+    milliseconds: 220,
+  );
   static const Duration _kCurlAutoTurnDuration = Duration(milliseconds: 460);
   static const Duration _kAutoReadStepDuration = Duration(milliseconds: 520);
   static const Duration _kAutoReadResumeDelay = Duration(milliseconds: 420);
@@ -394,6 +402,12 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
     return _showBlockingLoadingCard && _needsBlockingLoadingUi;
   }
 
+  double get _overlayControlsShiftProgress =>
+      Curves.easeOutCubic.transform(_overlayControlsController.value);
+
+  double get _overlayControlsFadeProgress =>
+      Curves.easeOut.transform(_overlayControlsController.value);
+
   double _topSafeInset(BuildContext context) {
     final viewPadding = MediaQuery.viewPaddingOf(context).top;
     final gestureInsets = MediaQuery.systemGestureInsetsOf(context).top;
@@ -438,6 +452,12 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
     if (incomingBookmarkId.isNotEmpty) {
       _pendingBookmarkId = incomingBookmarkId;
     }
+    _overlayControlsController = AnimationController(
+      vsync: this,
+      duration: _kOverlayControlsShowDuration,
+      reverseDuration: _kOverlayControlsHideDuration,
+      value: _showOverlayControls ? 1 : 0,
+    );
     _curlAutoTurnController = AnimationController(
       vsync: this,
       duration: _kCurlAutoTurnDuration,
@@ -464,6 +484,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
   void dispose() {
     _cancelActiveSwitchSourceSearch();
     _syncSystemUiVisibility(force: true, visible: true);
+    _overlayControlsController.stop();
     _curlAutoTurnController.stop();
     _isCurlAutoTurning = false;
     _progressDebounceTimer?.cancel();
@@ -479,6 +500,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
     _mangaPageController.dispose();
     _disposeMangaTransformControllers();
     _pageCurlController?.dispose();
+    _overlayControlsController.dispose();
     _curlAutoTurnController.dispose();
     super.dispose();
   }
@@ -518,14 +540,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
                     ),
                   ),
                 _buildChapterLoadingIndicator(colors),
-                if (_showOverlayControls)
-                  Positioned.fill(
-                    child: GestureDetector(
-                      behavior: HitTestBehavior.opaque,
-                      onTap: _hideOverlayControls,
-                      child: const ColoredBox(color: Color(0x28000000)),
-                    ),
-                  ),
+                _buildOverlayScrim(),
                 _buildTopOverlay(colors),
                 _buildBottomOverlay(colors),
               ],
@@ -542,6 +557,25 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
       return;
     }
     context.go('/bookshelf');
+  }
+
+  Widget _buildOverlayScrim() {
+    return Positioned.fill(
+      child: AnimatedBuilder(
+        animation: _overlayControlsController,
+        builder: (context, _) {
+          final opacity = _overlayControlsFadeProgress * _kOverlayScrimMaxAlpha;
+          return IgnorePointer(
+            ignoring: opacity <= 0.001,
+            child: GestureDetector(
+              behavior: HitTestBehavior.opaque,
+              onTap: _hideOverlayControls,
+              child: ColoredBox(color: Colors.black.withValues(alpha: opacity)),
+            ),
+          );
+        },
+      ),
+    );
   }
 
   Widget _buildBackgroundLayer(_ReaderThemeColors colors) {
@@ -572,39 +606,46 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
     final showIndicator =
         _showChapterLoadingIndicator && !_shouldShowBlockingReaderLoading;
     final topInset = _topSafeInset(context);
-    final topOffset = _showOverlayControls ? topInset + 60 : topInset + 8;
 
-    return Positioned(
-      top: topOffset,
-      left: 20,
-      right: 20,
-      child: IgnorePointer(
-        child: AnimatedSlide(
-          duration: const Duration(milliseconds: 150),
-          curve: Curves.easeOutCubic,
-          offset: showIndicator ? Offset.zero : const Offset(0, -0.35),
-          child: AnimatedOpacity(
-            duration: const Duration(milliseconds: 150),
-            opacity: showIndicator ? 1 : 0,
-            child: Align(
-              alignment: Alignment.topCenter,
-              child: ConstrainedBox(
-                constraints: const BoxConstraints(maxWidth: 220),
-                child: ClipRRect(
-                  borderRadius: BorderRadius.circular(999),
-                  child: LinearProgressIndicator(
-                    minHeight: 3,
-                    backgroundColor: colors.divider.withValues(alpha: 0.22),
-                    valueColor: AlwaysStoppedAnimation<Color>(
-                      colors.text.withValues(alpha: 0.72),
+    return AnimatedBuilder(
+      animation: _overlayControlsController,
+      builder: (context, _) {
+        final overlayProgress = _overlayControlsShiftProgress;
+        final topOffset =
+            lerpDouble(topInset + 8, topInset + 60, overlayProgress)!;
+        return Positioned(
+          top: topOffset,
+          left: 20,
+          right: 20,
+          child: IgnorePointer(
+            child: AnimatedSlide(
+              duration: const Duration(milliseconds: 150),
+              curve: Curves.easeOutCubic,
+              offset: showIndicator ? Offset.zero : const Offset(0, -0.35),
+              child: AnimatedOpacity(
+                duration: const Duration(milliseconds: 150),
+                opacity: showIndicator ? 1 : 0,
+                child: Align(
+                  alignment: Alignment.topCenter,
+                  child: ConstrainedBox(
+                    constraints: const BoxConstraints(maxWidth: 220),
+                    child: ClipRRect(
+                      borderRadius: BorderRadius.circular(999),
+                      child: LinearProgressIndicator(
+                        minHeight: 3,
+                        backgroundColor: colors.divider.withValues(alpha: 0.22),
+                        valueColor: AlwaysStoppedAnimation<Color>(
+                          colors.text.withValues(alpha: 0.72),
+                        ),
+                      ),
                     ),
                   ),
                 ),
               ),
             ),
           ),
-        ),
-      ),
+        );
+      },
     );
   }
 
@@ -3056,9 +3097,6 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
         platform == TargetPlatform.iOS
             ? (safeBottomInset - 8).clamp(0.0, 64.0)
             : 4.0 + safeBottomInset;
-    final bottomOffset = _showOverlayControls ? 78.0 + safeBottomInset : 0.0;
-    final barBottomPadding =
-        _showOverlayControls ? 6.0 : collapsedTextBottomPadding;
 
     final rightItems = <String>[];
     if (showTime) {
@@ -3073,49 +3111,63 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
       return const SizedBox.shrink();
     }
 
-    return Positioned(
-      left: 0,
-      right: 0,
-      bottom: bottomOffset,
-      child: IgnorePointer(
-        child: AnimatedOpacity(
-          duration: const Duration(milliseconds: 140),
-          curve: Curves.easeOutCubic,
-          opacity: _showOverlayControls ? 0.78 : 1,
-          child: Padding(
-            padding: EdgeInsets.fromLTRB(14, 0, 14, barBottomPadding),
-            child: Align(
-              alignment: Alignment.bottomCenter,
-              child: ConstrainedBox(
-                constraints: const BoxConstraints(minWidth: 160, maxWidth: 520),
-                child: SizedBox(
-                  width: double.infinity,
-                  child: Row(
-                    children: [
-                      if (showProgress)
-                        _buildPageIndexBadge(
-                          colors: colors,
-                          index: index,
-                          total: total,
-                        ),
-                      if (showProgress && rightLabel.isNotEmpty) const Spacer(),
-                      if (rightLabel.isNotEmpty)
-                        Text(
-                          rightLabel,
-                          style: TextStyle(
-                            color: colors.meta.withValues(alpha: 0.9),
-                            fontSize: 11.5,
-                            fontWeight: FontWeight.w500,
-                          ),
-                        ),
-                    ],
+    return AnimatedBuilder(
+      animation: _overlayControlsController,
+      builder: (context, _) {
+        final overlayProgress = _overlayControlsShiftProgress;
+        final overlayFade = _overlayControlsFadeProgress;
+        final bottomOffset =
+            lerpDouble(0.0, 78.0 + safeBottomInset, overlayProgress)!;
+        final barBottomPadding =
+            lerpDouble(collapsedTextBottomPadding, 6.0, overlayProgress)!;
+
+        return Positioned(
+          left: 0,
+          right: 0,
+          bottom: bottomOffset,
+          child: IgnorePointer(
+            child: Opacity(
+              opacity: lerpDouble(1.0, 0.84, overlayFade)!,
+              child: Padding(
+                padding: EdgeInsets.fromLTRB(14, 0, 14, barBottomPadding),
+                child: Align(
+                  alignment: Alignment.bottomCenter,
+                  child: ConstrainedBox(
+                    constraints: const BoxConstraints(
+                      minWidth: 160,
+                      maxWidth: 520,
+                    ),
+                    child: SizedBox(
+                      width: double.infinity,
+                      child: Row(
+                        children: [
+                          if (showProgress)
+                            _buildPageIndexBadge(
+                              colors: colors,
+                              index: index,
+                              total: total,
+                            ),
+                          if (showProgress && rightLabel.isNotEmpty)
+                            const Spacer(),
+                          if (rightLabel.isNotEmpty)
+                            Text(
+                              rightLabel,
+                              style: TextStyle(
+                                color: colors.meta.withValues(alpha: 0.9),
+                                fontSize: 11.5,
+                                fontWeight: FontWeight.w500,
+                              ),
+                            ),
+                        ],
+                      ),
+                    ),
                   ),
                 ),
               ),
             ),
           ),
-        ),
-      ),
+        );
+      },
     );
   }
 
@@ -4797,142 +4849,152 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
     final chapterTitle =
         _chapterTitle?.isNotEmpty == true ? _chapterTitle! : '阅读';
 
-    final topInset = _topSafeInset(context);
-
     return Positioned(
       top: 0,
       left: 0,
       right: 0,
       child: IgnorePointer(
         ignoring: !_showOverlayControls,
-        child: AnimatedSlide(
-          duration: const Duration(milliseconds: 160),
-          curve: Curves.easeOutCubic,
-          offset: _showOverlayControls ? Offset.zero : const Offset(0, -1),
-          child: AnimatedOpacity(
-            duration: const Duration(milliseconds: 160),
-            opacity: _showOverlayControls ? 1 : 0,
-            child: Padding(
-              padding: EdgeInsets.only(top: topInset),
-              child: ClipRRect(
-                borderRadius: const BorderRadius.vertical(
-                  bottom: Radius.circular(18),
-                ),
-                child: BackdropFilter(
-                  filter: ImageFilter.blur(sigmaX: 18, sigmaY: 18),
-                  child: DecoratedBox(
-                    decoration: BoxDecoration(
-                      color: colors.overlay.withValues(alpha: 0.78),
-                      border: Border(
-                        bottom: BorderSide(
-                          color: colors.divider.withValues(alpha: 0.28),
-                        ),
-                      ),
-                      boxShadow: [
-                        BoxShadow(
-                          color: Colors.black.withValues(alpha: 0.06),
-                          blurRadius: 10,
-                          offset: const Offset(0, 4),
-                        ),
-                      ],
-                    ),
-                    child: SizedBox(
-                      height: 56,
-                      child: Padding(
-                        padding: const EdgeInsets.fromLTRB(8, 6, 8, 6),
-                        child: Row(
-                          children: [
-                            _buildTopActionButton(
-                              icon: Icons.arrow_back_ios_new,
-                              tooltip: '返回',
-                              onPressed: _handleBackNavigation,
-                              colors: colors,
-                            ),
-                            const SizedBox(width: 8),
-                            Expanded(
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                mainAxisAlignment: MainAxisAlignment.center,
-                                children: [
-                                  Text(
-                                    chapterTitle,
-                                    maxLines: 1,
-                                    overflow: TextOverflow.ellipsis,
-                                    style: TextStyle(
-                                      color: colors.text,
-                                      fontWeight: FontWeight.w600,
-                                    ),
-                                  ),
-                                  const SizedBox(height: 1),
-                                  Text(
-                                    _chapterProgressLabel(),
-                                    maxLines: 1,
-                                    overflow: TextOverflow.ellipsis,
-                                    style: TextStyle(
-                                      color: colors.meta,
-                                      fontSize: 11,
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ),
-                            const SizedBox(width: 8),
-                            if (_canCacheChapter) ...[
-                              _buildTopActionButton(
-                                icon:
-                                    _isCurrentChapterCached
-                                        ? Icons.cloud_done_rounded
-                                        : Icons.cloud_download_outlined,
-                                tooltip:
-                                    _isCurrentChapterCached ? '已缓存' : '缓存章节',
-                                onPressed: _openChapterCache,
-                                colors: colors,
-                              ),
-                              const SizedBox(width: 4),
-                            ],
-                            if (_canSwitchSource) ...[
-                              _buildTopActionButton(
-                                icon: Icons.swap_horiz_rounded,
-                                tooltip: '切换书源',
-                                onPressed:
-                                    _isSwitchSourceLoading
-                                        ? null
-                                        : () =>
-                                            unawaited(_showSwitchSourceSheet()),
-                                loading: _isSwitchSourceLoading,
-                                colors: colors,
-                              ),
-                              const SizedBox(width: 4),
-                            ],
-                            _buildTopActionButton(
-                              icon:
-                                  _isInBookshelf
-                                      ? Icons.bookmark_added
-                                      : Icons.bookmark_add_outlined,
-                              tooltip: _isInBookshelf ? '移出书架' : '加���������书架',
-                              onPressed:
-                                  _isShelfActionLoading
-                                      ? null
-                                      : _toggleBookshelf,
-                              loading: _isShelfActionLoading,
-                              colors: colors,
-                            ),
-                            const SizedBox(width: 4),
-                            _buildTopActionButton(
-                              icon: Icons.info_outline,
-                              tooltip: '查看详情',
-                              onPressed: _openDetailPage,
-                              colors: colors,
-                            ),
+        child: AnimatedBuilder(
+          animation: _overlayControlsController,
+          builder: (context, _) {
+            final shift = _overlayControlsShiftProgress;
+            final fade = _overlayControlsFadeProgress;
+            return SlideTransition(
+              position: AlwaysStoppedAnimation<Offset>(Offset(0, shift - 1)),
+              child: Opacity(
+                opacity: fade,
+                child: ClipRect(
+                  child: BackdropFilter(
+                    filter: ImageFilter.blur(sigmaX: 12, sigmaY: 12),
+                    child: DecoratedBox(
+                      decoration: BoxDecoration(
+                        gradient: LinearGradient(
+                          begin: Alignment.topCenter,
+                          end: Alignment.bottomCenter,
+                          colors: [
+                            colors.overlay.withValues(alpha: 0.94),
+                            colors.overlay.withValues(alpha: 0.84),
                           ],
+                        ),
+                        border: Border(
+                          bottom: BorderSide(
+                            color: colors.divider.withValues(alpha: 0.22),
+                          ),
+                        ),
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.black.withValues(alpha: 0.05 * fade),
+                            blurRadius: 12,
+                            offset: const Offset(0, 5),
+                          ),
+                        ],
+                      ),
+                      child: SafeArea(
+                        bottom: false,
+                        child: SizedBox(
+                          height: 68,
+                          child: Padding(
+                            padding: const EdgeInsets.fromLTRB(12, 8, 12, 8),
+                            child: Row(
+                              children: [
+                                _buildTopActionButton(
+                                  icon: Icons.arrow_back_ios_new,
+                                  tooltip: '返回',
+                                  onPressed: _handleBackNavigation,
+                                  colors: colors,
+                                ),
+                                const SizedBox(width: 10),
+                                Expanded(
+                                  child: Column(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
+                                    mainAxisAlignment: MainAxisAlignment.center,
+                                    children: [
+                                      Text(
+                                        chapterTitle,
+                                        maxLines: 1,
+                                        overflow: TextOverflow.ellipsis,
+                                        style: TextStyle(
+                                          color: colors.text,
+                                          fontWeight: FontWeight.w700,
+                                        ),
+                                      ),
+                                      const SizedBox(height: 2),
+                                      Text(
+                                        _chapterProgressLabel(),
+                                        maxLines: 1,
+                                        overflow: TextOverflow.ellipsis,
+                                        style: TextStyle(
+                                          color: colors.meta,
+                                          fontSize: 11,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                                const SizedBox(width: 10),
+                                if (_canCacheChapter) ...[
+                                  _buildTopActionButton(
+                                    icon:
+                                        _isCurrentChapterCached
+                                            ? Icons.cloud_done_rounded
+                                            : Icons.cloud_download_outlined,
+                                    tooltip:
+                                        _isCurrentChapterCached
+                                            ? '已缓存'
+                                            : '缓存章节',
+                                    onPressed: _openChapterCache,
+                                    colors: colors,
+                                  ),
+                                  const SizedBox(width: 6),
+                                ],
+                                if (_canSwitchSource) ...[
+                                  _buildTopActionButton(
+                                    icon: Icons.swap_horiz_rounded,
+                                    tooltip: '切换书源',
+                                    onPressed:
+                                        _isSwitchSourceLoading
+                                            ? null
+                                            : () => unawaited(
+                                              _showSwitchSourceSheet(),
+                                            ),
+                                    loading: _isSwitchSourceLoading,
+                                    colors: colors,
+                                  ),
+                                  const SizedBox(width: 6),
+                                ],
+                                _buildTopActionButton(
+                                  icon:
+                                      _isInBookshelf
+                                          ? Icons.bookmark_added
+                                          : Icons.bookmark_add_outlined,
+                                  tooltip: _isInBookshelf ? '移出书架' : '加入书架',
+                                  onPressed:
+                                      _isShelfActionLoading
+                                          ? null
+                                          : _toggleBookshelf,
+                                  loading: _isShelfActionLoading,
+                                  colors: colors,
+                                ),
+                                const SizedBox(width: 6),
+                                _buildTopActionButton(
+                                  icon: Icons.info_outline,
+                                  tooltip: '查看详情',
+                                  onPressed: _openDetailPage,
+                                  colors: colors,
+                                ),
+                              ],
+                            ),
+                          ),
                         ),
                       ),
                     ),
                   ),
                 ),
               ),
-            ),
-          ),
+            );
+          },
         ),
       ),
     );
@@ -4947,48 +5009,54 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
     final dayNightIcon =
         isDarkMode ? Icons.light_mode_rounded : Icons.dark_mode_rounded;
 
-    final bottomInset = _effectiveBottomSafeInset(context);
-
     return Positioned(
       left: 0,
       right: 0,
       bottom: 0,
       child: IgnorePointer(
         ignoring: !_showOverlayControls,
-        child: AnimatedSlide(
-          duration: const Duration(milliseconds: 160),
-          curve: Curves.easeOutCubic,
-          offset: _showOverlayControls ? Offset.zero : const Offset(0, 1),
-          child: AnimatedOpacity(
-            duration: const Duration(milliseconds: 160),
-            opacity: _showOverlayControls ? 1 : 0,
-            child: Padding(
-              padding: EdgeInsets.fromLTRB(22, 6, 22, 12 + bottomInset),
-              child: Align(
-                alignment: Alignment.bottomCenter,
-                child: ConstrainedBox(
-                  constraints: const BoxConstraints(maxWidth: 460),
-                  child: ClipRRect(
-                    borderRadius: BorderRadius.circular(28),
-                    child: BackdropFilter(
-                      filter: ImageFilter.blur(sigmaX: 18, sigmaY: 18),
-                      child: DecoratedBox(
-                        decoration: BoxDecoration(
-                          color: colors.overlay.withValues(alpha: 0.78),
-                          borderRadius: BorderRadius.circular(28),
-                          border: Border.all(
-                            color: colors.divider.withValues(alpha: 0.28),
-                          ),
-                          boxShadow: [
-                            BoxShadow(
-                              color: Colors.black.withValues(alpha: 0.08),
-                              blurRadius: 12,
-                              offset: const Offset(0, 6),
-                            ),
+        child: AnimatedBuilder(
+          animation: _overlayControlsController,
+          builder: (context, _) {
+            final shift = _overlayControlsShiftProgress;
+            final fade = _overlayControlsFadeProgress;
+            return SlideTransition(
+              position: AlwaysStoppedAnimation<Offset>(Offset(0, 1 - shift)),
+              child: Opacity(
+                opacity: fade,
+                child: ClipRRect(
+                  borderRadius: const BorderRadius.vertical(
+                    top: Radius.circular(24),
+                  ),
+                  child: BackdropFilter(
+                    filter: ImageFilter.blur(sigmaX: 12, sigmaY: 12),
+                    child: DecoratedBox(
+                      decoration: BoxDecoration(
+                        gradient: LinearGradient(
+                          begin: Alignment.topCenter,
+                          end: Alignment.bottomCenter,
+                          colors: [
+                            colors.overlay.withValues(alpha: 0.84),
+                            colors.overlay.withValues(alpha: 0.94),
                           ],
                         ),
+                        border: Border(
+                          top: BorderSide(
+                            color: colors.divider.withValues(alpha: 0.22),
+                          ),
+                        ),
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.black.withValues(alpha: 0.06 * fade),
+                            blurRadius: 14,
+                            offset: const Offset(0, -5),
+                          ),
+                        ],
+                      ),
+                      child: SafeArea(
+                        top: false,
                         child: Padding(
-                          padding: const EdgeInsets.fromLTRB(6, 6, 6, 6),
+                          padding: const EdgeInsets.fromLTRB(14, 10, 14, 10),
                           child: Row(
                             children: [
                               Expanded(
@@ -5041,8 +5109,8 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
                   ),
                 ),
               ),
-            ),
-          ),
+            );
+          },
         ),
       ),
     );
@@ -5086,7 +5154,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
       onPressed: onPressed,
       style: IconButton.styleFrom(
         foregroundColor: colors.text,
-        backgroundColor: colors.background.withValues(alpha: 0.42),
+        backgroundColor: Colors.transparent,
         minimumSize: const Size(34, 34),
         visualDensity: VisualDensity.compact,
         padding: EdgeInsets.zero,
@@ -6929,6 +6997,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
       setState(() {
         _showOverlayControls = false;
       });
+      _overlayControlsController.reverse();
     }
     if (resumeAutoRead) {
       _scheduleAutoReadResume();
@@ -6943,6 +7012,11 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
     setState(() {
       _showOverlayControls = visible;
     });
+    if (visible) {
+      _overlayControlsController.forward();
+    } else {
+      _overlayControlsController.reverse();
+    }
     _syncSystemUiVisibility(visible: visible);
   }
 
