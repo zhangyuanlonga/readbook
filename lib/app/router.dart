@@ -30,25 +30,40 @@ final GoRouter appRouter = GoRouter(
   navigatorKey: globalRootNavigatorKey,
   initialLocation: '/bookshelf',
   routes: [
-    ShellRoute(
-      builder: (context, state, child) {
-        return ShellScaffold(location: state.matchedLocation, child: child);
+    StatefulShellRoute.indexedStack(
+      builder: (context, state, navigationShell) {
+        return ShellScaffold(
+          location: state.matchedLocation,
+          navigationShell: navigationShell,
+        );
       },
-      routes: [
-        GoRoute(
-          path: '/bookshelf',
-          name: 'bookshelf',
-          builder: (context, state) => const BookshelfPage(),
+      branches: [
+        StatefulShellBranch(
+          routes: [
+            GoRoute(
+              path: '/bookshelf',
+              name: 'bookshelf',
+              builder: (context, state) => const BookshelfPage(),
+            ),
+          ],
         ),
-        GoRoute(
-          path: '/discover',
-          name: 'discover',
-          builder: (context, state) => const DiscoverPage(),
+        StatefulShellBranch(
+          routes: [
+            GoRoute(
+              path: '/discover',
+              name: 'discover',
+              builder: (context, state) => const DiscoverPage(),
+            ),
+          ],
         ),
-        GoRoute(
-          path: '/mine',
-          name: 'mine',
-          builder: (context, state) => const MinePage(),
+        StatefulShellBranch(
+          routes: [
+            GoRoute(
+              path: '/mine',
+              name: 'mine',
+              builder: (context, state) => const MinePage(),
+            ),
+          ],
         ),
       ],
     ),

@@ -1,3 +1,5 @@
+import 'dart:ui' show lerpDouble;
+
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -7,23 +9,32 @@ import 'layout/app_layout.dart';
 import 'shell_navigation_provider.dart';
 
 class ShellScaffold extends ConsumerStatefulWidget {
-  const ShellScaffold({super.key, required this.location, required this.child});
+  const ShellScaffold({
+    super.key,
+    required this.location,
+    required this.navigationShell,
+  });
 
   final String location;
-  final Widget child;
+  final StatefulNavigationShell navigationShell;
 
   @override
   ConsumerState<ShellScaffold> createState() => _ShellScaffoldState();
 }
 
-class _ShellScaffoldState extends ConsumerState<ShellScaffold> {
+class _ShellScaffoldState extends ConsumerState<ShellScaffold>
+    with SingleTickerProviderStateMixin {
   static const double _kSwipeVelocityThreshold = 420;
-  static const bool _kEnableMobileTabSwitchAnimation = false;
+  static const bool _kEnableMobileTabSwitchAnimation = true;
+  static const Duration _kTabSwitchDuration = Duration(milliseconds: 320);
 
   late int _currentOrderIndex;
   bool _isForward = true;
-  bool _hasTabSwitched = false;
   String? _pendingRedirectLocation;
+  late final AnimationController _tabSwitchController;
+  late final Animation<double> _tabSlideCurve;
+  late final Animation<double> _tabFadeCurve;
+  late final Animation<double> _tabScaleCurve;
 
   bool get _enableMobileTabSwipe {
     if (kIsWeb) {
@@ -38,6 +49,23 @@ class _ShellScaffoldState extends ConsumerState<ShellScaffold> {
   void initState() {
     super.initState();
     _currentOrderIndex = _locationOrderIndex(widget.location);
+    _tabSwitchController = AnimationController(
+      vsync: this,
+      duration: _kTabSwitchDuration,
+      value: 1,
+    );
+    _tabSlideCurve = CurvedAnimation(
+      parent: _tabSwitchController,
+      curve: Curves.easeOutCubic,
+    );
+    _tabFadeCurve = CurvedAnimation(
+      parent: _tabSwitchController,
+      curve: const Interval(0.08, 1, curve: Curves.easeOutCubic),
+    );
+    _tabScaleCurve = CurvedAnimation(
+      parent: _tabSwitchController,
+      curve: const Interval(0.0, 1, curve: Curves.easeOutQuart),
+    );
   }
 
   @override
@@ -51,7 +79,15 @@ class _ShellScaffoldState extends ConsumerState<ShellScaffold> {
 
     _isForward = nextIndex > _currentOrderIndex;
     _currentOrderIndex = nextIndex;
-    _hasTabSwitched = true;
+    if (_kEnableMobileTabSwitchAnimation) {
+      _tabSwitchController.forward(from: 0);
+    }
+  }
+
+  @override
+  void dispose() {
+    _tabSwitchController.dispose();
+    super.dispose();
   }
 
   @override
@@ -77,42 +113,30 @@ class _ShellScaffoldState extends ConsumerState<ShellScaffold> {
     }
 
     final shouldAnimateSwitch =
-        enableTabSwipe && _hasTabSwitched && _kEnableMobileTabSwitchAnimation;
+        enableTabSwipe && _kEnableMobileTabSwitchAnimation;
 
     final switchedChild =
         shouldAnimateSwitch
-            ? AnimatedSwitcher(
-              duration: const Duration(milliseconds: 220),
-              switchInCurve: Curves.easeOutCubic,
-              switchOutCurve: Curves.easeInCubic,
-              transitionBuilder: (child, animation) {
-                final isIncoming =
-                    child.key == ValueKey<int>(_currentOrderIndex);
-                final beginX =
-                    isIncoming
-                        ? (_isForward ? 0.16 : -0.16)
-                        : (_isForward ? -0.1 : 0.1);
-                final position = Tween<Offset>(
-                  begin: Offset(beginX, 0),
-                  end: Offset.zero,
-                ).animate(animation);
-
-                return ClipRect(
-                  child: SlideTransition(
-                    position: position,
-                    child: FadeTransition(opacity: animation, child: child),
+            ? AnimatedBuilder(
+              animation: _tabSwitchController,
+              child: widget.navigationShell,
+              builder: (context, child) {
+                final slideProgress = _tabSlideCurve.value;
+                final fadeProgress = _tabFadeCurve.value;
+                final scaleProgress = _tabScaleCurve.value;
+                final dx = (_isForward ? 28.0 : -28.0) * (1 - slideProgress);
+                final opacity = lerpDouble(0.78, 1.0, fadeProgress)!;
+                final scale = lerpDouble(0.985, 1.0, scaleProgress)!;
+                return Transform.translate(
+                  offset: Offset(dx, 0),
+                  child: Opacity(
+                    opacity: opacity,
+                    child: Transform.scale(scale: scale, child: child),
                   ),
                 );
               },
-              child: KeyedSubtree(
-                key: ValueKey<int>(_currentOrderIndex),
-                child: widget.child,
-              ),
             )
-            : KeyedSubtree(
-              key: ValueKey<int>(_currentOrderIndex),
-              child: widget.child,
-            );
+            : widget.navigationShell;
 
     final body =
         enableTabSwipe
@@ -212,7 +236,10 @@ class _ShellScaffoldState extends ConsumerState<ShellScaffold> {
       return;
     }
 
-    context.go(destination.location);
+    widget.navigationShell.goBranch(
+      _tabOrderIndex(destination.tab),
+      initialLocation: false,
+    );
   }
 
   void _scheduleRedirectToVisibleTab(BuildContext context, String location) {

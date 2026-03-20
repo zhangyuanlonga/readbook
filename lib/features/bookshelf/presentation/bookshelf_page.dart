@@ -44,7 +44,15 @@ class BookshelfPage extends StatefulWidget {
   State<BookshelfPage> createState() => _BookshelfPageState();
 }
 
-class _BookshelfPageState extends State<BookshelfPage> {
+class _BookshelfPageState extends State<BookshelfPage>
+    with AutomaticKeepAliveClientMixin<BookshelfPage> {
+  static const List<_BookshelfFilter> _kDefaultBaseFilters = <_BookshelfFilter>[
+    _BookshelfFilter.all,
+    _BookshelfFilter.local,
+    _BookshelfFilter.novel,
+    _BookshelfFilter.manga,
+  ];
+
   final BookshelfService _bookshelfService = BookshelfService();
   final ReaderPreferencesService _readerPreferencesService =
       ReaderPreferencesService();
@@ -63,6 +71,8 @@ class _BookshelfPageState extends State<BookshelfPage> {
   Map<String, String> _latestCachedChapterByBookId = const <String, String>{};
   Map<String, int> _sourceTypeBySourceId = const <String, int>{};
   Map<String, List<String>> _bookTagsByKey = const <String, List<String>>{};
+  List<String> _tagOrder = const <String>[];
+  List<_BookshelfFilter> _baseFilterOrder = _kDefaultBaseFilters;
   bool _useGridView = false;
   _BookshelfFilter _activeFilter = _BookshelfFilter.all;
   String? _activeCustomTag;
@@ -70,7 +80,6 @@ class _BookshelfPageState extends State<BookshelfPage> {
   String? _loadErrorText;
   bool _isSelectionMode = false;
   bool _isBatchDeleting = false;
-  bool _isFilterTagSortAscending = true;
   final Set<String> _selectedBookKeys = <String>{};
   int _loadTicket = 0;
   bool _hasActiveAnnouncement = false;
@@ -109,6 +118,7 @@ class _BookshelfPageState extends State<BookshelfPage> {
 
   @override
   Widget build(BuildContext context) {
+    super.build(context);
     final colorScheme = Theme.of(context).colorScheme;
     final horizontal = AppSpacing.pageHorizontal(context);
     final bottomSafe = MediaQuery.viewPaddingOf(context).bottom;
@@ -212,6 +222,9 @@ class _BookshelfPageState extends State<BookshelfPage> {
       ),
     );
   }
+
+  @override
+  bool get wantKeepAlive => true;
 
   Future<void> _prefetchLatestAnnouncement() async {
     try {
@@ -498,12 +511,7 @@ class _BookshelfPageState extends State<BookshelfPage> {
 
   Widget _buildFilterBar() {
     final colorScheme = Theme.of(context).colorScheme;
-    final baseFilters = const <_BookshelfFilter>[
-      _BookshelfFilter.all,
-      _BookshelfFilter.local,
-      _BookshelfFilter.novel,
-      _BookshelfFilter.manga,
-    ];
+    final baseFilters = _orderedBaseFilters;
     final customTags = _userTags;
     final visibleBaseFilters = baseFilters.take(3).toList(growable: false);
     final visibleCustomTags = customTags.take(3).toList(growable: false);
@@ -663,18 +671,33 @@ class _BookshelfPageState extends State<BookshelfPage> {
     if (_isBatchDeleting || !mounted) {
       return;
     }
-    final baseFilters = const <_BookshelfFilter>[
-      _BookshelfFilter.all,
-      _BookshelfFilter.local,
-      _BookshelfFilter.novel,
-      _BookshelfFilter.manga,
-    ];
-    final tagBookCount = <String, int>{};
-    for (final book in _books) {
-      for (final tag in _tagsOfBook(book)) {
-        tagBookCount[tag] = (tagBookCount[tag] ?? 0) + 1;
-      }
-    }
+    var baseFilters = List<_BookshelfFilter>.from(_orderedBaseFilters);
+    final baseFilterBookCount = <_BookshelfFilter, int>{
+      _BookshelfFilter.all: _books.length,
+      _BookshelfFilter.local:
+          _books
+              .where(
+                (book) =>
+                    _bookMatchesStaticFilter(book, _BookshelfFilter.local),
+              )
+              .length,
+      _BookshelfFilter.novel:
+          _books
+              .where(
+                (book) =>
+                    _bookMatchesStaticFilter(book, _BookshelfFilter.novel),
+              )
+              .length,
+      _BookshelfFilter.manga:
+          _books
+              .where(
+                (book) =>
+                    _bookMatchesStaticFilter(book, _BookshelfFilter.manga),
+              )
+              .length,
+    };
+    final tagBookCount = _buildTagBookCount();
+    var customTags = List<String>.from(_userTags);
 
     final selected = await showModalBottomSheet<String>(
       context: context,
@@ -683,14 +706,39 @@ class _BookshelfPageState extends State<BookshelfPage> {
       isScrollControlled: true,
       builder: (sheetContext) {
         final maxHeight = MediaQuery.sizeOf(sheetContext).height * 0.72;
-        var isTagSortAscending = _isFilterTagSortAscending;
         return StatefulBuilder(
           builder: (sheetContext, setSheetState) {
             final colorScheme = Theme.of(sheetContext).colorScheme;
-            final customTags = _sortTagsByName(
-              _userTags,
-              ascending: isTagSortAscending,
-            );
+            final textTheme = Theme.of(sheetContext).textTheme;
+
+            Future<void> moveTag(int index, int offset) async {
+              final nextIndex = index + offset;
+              if (nextIndex < 0 || nextIndex >= customTags.length) {
+                return;
+              }
+              final nextTags = List<String>.from(customTags);
+              final movedTag = nextTags.removeAt(index);
+              nextTags.insert(nextIndex, movedTag);
+              setSheetState(() {
+                customTags = nextTags;
+              });
+              await _persistTagOrder(nextTags);
+            }
+
+            Future<void> moveBaseFilter(int index, int offset) async {
+              final nextIndex = index + offset;
+              if (nextIndex < 0 || nextIndex >= baseFilters.length) {
+                return;
+              }
+              final nextFilters = List<_BookshelfFilter>.from(baseFilters);
+              final movedFilter = nextFilters.removeAt(index);
+              nextFilters.insert(nextIndex, movedFilter);
+              setSheetState(() {
+                baseFilters = nextFilters;
+              });
+              await _persistBaseFilterOrder(nextFilters);
+            }
+
             return Padding(
               padding: const EdgeInsets.fromLTRB(8, 0, 8, 10),
               child: ConstrainedBox(
@@ -698,80 +746,202 @@ class _BookshelfPageState extends State<BookshelfPage> {
                 child: ListView(
                   shrinkWrap: true,
                   children: [
-                    ...baseFilters.map((filter) {
+                    ...baseFilters.asMap().entries.map((entry) {
+                      final index = entry.key;
+                      final filter = entry.value;
                       final value = filter.name;
                       final isSelected = _activeFilter == filter;
-                      return ListTile(
-                        dense: true,
-                        title: Text(_filterLabel(filter)),
-                        trailing:
+                      return Material(
+                        color:
                             isSelected
-                                ? Icon(
-                                  Icons.check_rounded,
-                                  color: colorScheme.primary,
+                                ? colorScheme.primaryContainer.withValues(
+                                  alpha: 0.38,
                                 )
-                                : null,
-                        onTap: () => Navigator.of(sheetContext).pop(value),
+                                : Colors.transparent,
+                        borderRadius: BorderRadius.circular(12),
+                        child: InkWell(
+                          borderRadius: BorderRadius.circular(12),
+                          onTap: () => Navigator.of(sheetContext).pop(value),
+                          child: Padding(
+                            padding: const EdgeInsets.fromLTRB(16, 6, 12, 6),
+                            child: Row(
+                              children: [
+                                Expanded(
+                                  child: Text(
+                                    _filterLabel(filter),
+                                    style: textTheme.bodyMedium?.copyWith(
+                                      color:
+                                          isSelected
+                                              ? colorScheme.onPrimaryContainer
+                                              : colorScheme.onSurface,
+                                      fontWeight:
+                                          isSelected
+                                              ? FontWeight.w700
+                                              : FontWeight.w500,
+                                    ),
+                                  ),
+                                ),
+                                Text(
+                                  '${baseFilterBookCount[filter] ?? 0} 本书',
+                                  style: textTheme.bodySmall?.copyWith(
+                                    color: colorScheme.onSurfaceVariant,
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                ),
+                                const SizedBox(width: 6),
+                                if (isSelected)
+                                  Padding(
+                                    padding: const EdgeInsets.only(right: 4),
+                                    child: Icon(
+                                      Icons.check_rounded,
+                                      size: 18,
+                                      color: colorScheme.primary,
+                                    ),
+                                  ),
+                                IconButton(
+                                  tooltip: '上移',
+                                  onPressed:
+                                      index > 0
+                                          ? () => unawaited(
+                                            moveBaseFilter(index, -1),
+                                          )
+                                          : null,
+                                  visualDensity: VisualDensity.compact,
+                                  padding: EdgeInsets.zero,
+                                  constraints: const BoxConstraints.tightFor(
+                                    width: 30,
+                                    height: 30,
+                                  ),
+                                  icon: const Icon(
+                                    Icons.arrow_upward_rounded,
+                                    size: 18,
+                                  ),
+                                ),
+                                IconButton(
+                                  tooltip: '下移',
+                                  onPressed:
+                                      index < baseFilters.length - 1
+                                          ? () => unawaited(
+                                            moveBaseFilter(index, 1),
+                                          )
+                                          : null,
+                                  visualDensity: VisualDensity.compact,
+                                  padding: EdgeInsets.zero,
+                                  constraints: const BoxConstraints.tightFor(
+                                    width: 30,
+                                    height: 30,
+                                  ),
+                                  icon: const Icon(
+                                    Icons.arrow_downward_rounded,
+                                    size: 18,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
                       );
                     }),
                     if (customTags.isNotEmpty) ...[
                       const SizedBox(height: 6),
                       Padding(
                         padding: const EdgeInsets.symmetric(horizontal: 16),
-                        child: Row(
-                          children: [
-                            Expanded(
-                              child: Text(
-                                '标签',
-                                style: Theme.of(sheetContext)
-                                    .textTheme
-                                    .titleSmall
-                                    ?.copyWith(fontWeight: FontWeight.w700),
-                              ),
-                            ),
-                            TextButton.icon(
-                              onPressed: () {
-                                final nextValue = !isTagSortAscending;
-                                setSheetState(() {
-                                  isTagSortAscending = nextValue;
-                                });
-                                setState(() {
-                                  _isFilterTagSortAscending = nextValue;
-                                });
-                              },
-                              style: TextButton.styleFrom(
-                                visualDensity: VisualDensity.compact,
-                                tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                              ),
-                              icon: Icon(
-                                isTagSortAscending
-                                    ? Icons.arrow_upward_rounded
-                                    : Icons.arrow_downward_rounded,
-                                size: 16,
-                              ),
-                              label: Text(isTagSortAscending ? '升序' : '降序'),
-                            ),
-                          ],
+                        child: Text(
+                          '标签',
+                          style: textTheme.titleSmall?.copyWith(
+                            fontWeight: FontWeight.w700,
+                          ),
                         ),
                       ),
                       const SizedBox(height: 4),
-                      ...customTags.map((tag) {
+                      ...customTags.asMap().entries.map((entry) {
+                        final index = entry.key;
+                        final tag = entry.value;
                         final value = 'tag::$tag';
                         final isSelected =
                             _activeFilter == _BookshelfFilter.custom &&
                             _activeCustomTag == tag;
-                        return ListTile(
-                          dense: true,
-                          title: Text(tag),
-                          subtitle: Text('${tagBookCount[tag] ?? 0} 本书'),
-                          trailing:
+                        return Material(
+                          color:
                               isSelected
-                                  ? Icon(
-                                    Icons.check_rounded,
-                                    color: colorScheme.primary,
+                                  ? colorScheme.secondaryContainer.withValues(
+                                    alpha: 0.42,
                                   )
-                                  : null,
-                          onTap: () => Navigator.of(sheetContext).pop(value),
+                                  : Colors.transparent,
+                          borderRadius: BorderRadius.circular(12),
+                          child: InkWell(
+                            borderRadius: BorderRadius.circular(12),
+                            onTap: () => Navigator.of(sheetContext).pop(value),
+                            child: Padding(
+                              padding: const EdgeInsets.fromLTRB(16, 6, 12, 6),
+                              child: Row(
+                                children: [
+                                  Expanded(
+                                    child: Text(
+                                      tag,
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                      style: textTheme.bodyMedium?.copyWith(
+                                        color:
+                                            isSelected
+                                                ? colorScheme
+                                                    .onSecondaryContainer
+                                                : colorScheme.onSurface,
+                                        fontWeight:
+                                            isSelected
+                                                ? FontWeight.w700
+                                                : FontWeight.w500,
+                                      ),
+                                    ),
+                                  ),
+                                  const SizedBox(width: 10),
+                                  Text(
+                                    '${tagBookCount[tag] ?? 0} 本书',
+                                    style: textTheme.bodySmall?.copyWith(
+                                      color: colorScheme.onSurfaceVariant,
+                                      fontWeight: FontWeight.w600,
+                                    ),
+                                  ),
+                                  const SizedBox(width: 4),
+                                  IconButton(
+                                    tooltip: '上移',
+                                    onPressed:
+                                        index > 0
+                                            ? () =>
+                                                unawaited(moveTag(index, -1))
+                                            : null,
+                                    visualDensity: VisualDensity.compact,
+                                    padding: EdgeInsets.zero,
+                                    constraints: const BoxConstraints.tightFor(
+                                      width: 30,
+                                      height: 30,
+                                    ),
+                                    icon: const Icon(
+                                      Icons.arrow_upward_rounded,
+                                      size: 18,
+                                    ),
+                                  ),
+                                  IconButton(
+                                    tooltip: '下移',
+                                    onPressed:
+                                        index < customTags.length - 1
+                                            ? () => unawaited(moveTag(index, 1))
+                                            : null,
+                                    visualDensity: VisualDensity.compact,
+                                    padding: EdgeInsets.zero,
+                                    constraints: const BoxConstraints.tightFor(
+                                      width: 30,
+                                      height: 30,
+                                    ),
+                                    icon: const Icon(
+                                      Icons.arrow_downward_rounded,
+                                      size: 18,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ),
                         );
                       }),
                     ],
@@ -1420,37 +1590,119 @@ class _BookshelfPageState extends State<BookshelfPage> {
     }
   }
 
-  List<String> get _userTags {
-    final counts = <String, int>{};
-    for (final book in _books) {
-      for (final tag in _tagsOfBook(book)) {
-        counts[tag] = (counts[tag] ?? 0) + 1;
-      }
+  bool _bookMatchesStaticFilter(BookshelfBook book, _BookshelfFilter filter) {
+    switch (filter) {
+      case _BookshelfFilter.all:
+        return true;
+      case _BookshelfFilter.local:
+        return book.sourceId == _kLocalBookSourceId;
+      case _BookshelfFilter.manga:
+        return book.sourceId != _kLocalBookSourceId &&
+            (_sourceTypeBySourceId[book.sourceId] ?? 0) == 2;
+      case _BookshelfFilter.novel:
+        return book.sourceId != _kLocalBookSourceId &&
+            (_sourceTypeBySourceId[book.sourceId] ?? 0) != 2;
+      case _BookshelfFilter.custom:
+        return false;
     }
-    final tags = counts.keys.toList(growable: false);
-    tags.sort((a, b) {
+  }
+
+  List<String> get _userTags {
+    final counts = _buildTagBookCount();
+    final tags = <String>[];
+    for (final tag in _tagOrder) {
+      if ((counts[tag] ?? 0) <= 0 || tags.contains(tag)) {
+        continue;
+      }
+      tags.add(tag);
+    }
+    final remaining = counts.keys
+        .where((tag) => !tags.contains(tag))
+        .toList(growable: false);
+    remaining.sort((a, b) {
       final countCompare = (counts[b] ?? 0).compareTo(counts[a] ?? 0);
       if (countCompare != 0) {
         return countCompare;
       }
       return a.compareTo(b);
     });
-    return tags;
+    return <String>[...tags, ...remaining];
   }
 
-  List<String> _sortTagsByName(
-    Iterable<String> tags, {
-    required bool ascending,
-  }) {
-    final sorted = List<String>.from(tags);
-    sorted.sort((a, b) {
-      final lowerCompare = a.toLowerCase().compareTo(b.toLowerCase());
-      if (lowerCompare != 0) {
-        return ascending ? lowerCompare : -lowerCompare;
+  List<_BookshelfFilter> get _orderedBaseFilters {
+    final ordered = <_BookshelfFilter>[];
+    for (final filter in _baseFilterOrder) {
+      if (!_kDefaultBaseFilters.contains(filter) || ordered.contains(filter)) {
+        continue;
       }
-      return ascending ? a.compareTo(b) : b.compareTo(a);
+      ordered.add(filter);
+    }
+    for (final filter in _kDefaultBaseFilters) {
+      if (!ordered.contains(filter)) {
+        ordered.add(filter);
+      }
+    }
+    return List<_BookshelfFilter>.unmodifiable(ordered);
+  }
+
+  Map<String, int> _buildTagBookCount() {
+    final counts = <String, int>{};
+    for (final book in _books) {
+      for (final tag in _tagsOfBook(book)) {
+        counts[tag] = (counts[tag] ?? 0) + 1;
+      }
+    }
+    return counts;
+  }
+
+  Future<void> _persistTagOrder(List<String> tags) async {
+    final normalized = _normalizeTags(tags);
+    if (!mounted) {
+      return;
+    }
+    setState(() {
+      _tagOrder = normalized;
     });
-    return List<String>.unmodifiable(sorted);
+    try {
+      await _bookshelfService.saveTagOrder(normalized);
+    } catch (_) {
+      if (!mounted) {
+        return;
+      }
+      _showMessage('分组排序保存失败，请重试。');
+    }
+  }
+
+  Future<void> _persistBaseFilterOrder(List<_BookshelfFilter> filters) async {
+    final normalized = <_BookshelfFilter>[];
+    for (final filter in filters) {
+      if (!_kDefaultBaseFilters.contains(filter) ||
+          normalized.contains(filter)) {
+        continue;
+      }
+      normalized.add(filter);
+    }
+    for (final filter in _kDefaultBaseFilters) {
+      if (!normalized.contains(filter)) {
+        normalized.add(filter);
+      }
+    }
+    if (!mounted) {
+      return;
+    }
+    setState(() {
+      _baseFilterOrder = normalized;
+    });
+    try {
+      await _bookshelfService.saveBaseFilterOrder(
+        normalized.map((filter) => filter.name).toList(growable: false),
+      );
+    } catch (_) {
+      if (!mounted) {
+        return;
+      }
+      _showMessage('筛选排序保存失败，请重试。');
+    }
   }
 
   List<String> _tagsOfBook(BookshelfBook book) {
@@ -2342,6 +2594,9 @@ class _BookshelfPageState extends State<BookshelfPage> {
           }
         }
         _bookTagsByKey = nextMap;
+        _tagOrder = _normalizeTags(
+          _tagOrder.map((value) => value == tag ? nextTag : value),
+        );
         if (_activeFilter == _BookshelfFilter.custom &&
             _activeCustomTag == tag) {
           _activeCustomTag = nextTag;
@@ -2390,6 +2645,7 @@ class _BookshelfPageState extends State<BookshelfPage> {
           }
         }
         _bookTagsByKey = nextMap;
+        _tagOrder = _tagOrder.where((value) => value != tag).toList();
         _ensureFilterStillValid();
       });
       _showMessage('已删除标签 $tag。');
@@ -2720,6 +2976,8 @@ class _BookshelfPageState extends State<BookshelfPage> {
       );
       final sourceTypeMap = await _loadSourceTypeMap();
       final rawTagMap = await _bookshelfService.getTagMap();
+      final tagOrder = await _bookshelfService.getTagOrder();
+      final baseFilterOrderNames = await _bookshelfService.getBaseFilterOrder();
       final validBookKeys = books.map(_bookKey).toSet();
       final tagMap = <String, List<String>>{};
       for (final entry in rawTagMap.entries) {
@@ -2741,6 +2999,18 @@ class _BookshelfPageState extends State<BookshelfPage> {
         _books = books;
         _sourceTypeBySourceId = sourceTypeMap;
         _bookTagsByKey = tagMap;
+        _tagOrder = _normalizeTags(tagOrder);
+        _baseFilterOrder = baseFilterOrderNames
+            .map((name) {
+              for (final filter in _kDefaultBaseFilters) {
+                if (filter.name == name) {
+                  return filter;
+                }
+              }
+              return null;
+            })
+            .whereType<_BookshelfFilter>()
+            .toList(growable: false);
         _progressByBookId = const <String, ReadingProgress>{};
         _latestCachedChapterByBookId = const <String, String>{};
         _isLoading = false;

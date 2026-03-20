@@ -39,7 +39,8 @@ class DiscoverPage extends StatefulWidget {
   State<DiscoverPage> createState() => _DiscoverPageState();
 }
 
-class _DiscoverPageState extends State<DiscoverPage> {
+class _DiscoverPageState extends State<DiscoverPage>
+    with AutomaticKeepAliveClientMixin<DiscoverPage> {
   static const int _bookPageSize = 24;
   static const int _compactCategoryPreviewCount = 8;
   static const int _backgroundProbeBatchLimit = 60;
@@ -118,6 +119,7 @@ class _DiscoverPageState extends State<DiscoverPage> {
 
   @override
   Widget build(BuildContext context) {
+    super.build(context);
     final colorScheme = Theme.of(context).colorScheme;
     final horizontal = AppSpacing.pageHorizontal(context);
 
@@ -162,6 +164,9 @@ class _DiscoverPageState extends State<DiscoverPage> {
       ),
     );
   }
+
+  @override
+  bool get wantKeepAlive => true;
 
   void _onBookListScroll() {
     if (!_booksScrollController.hasClients ||

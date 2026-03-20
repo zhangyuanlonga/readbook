@@ -15,6 +15,9 @@ class BookshelfService {
 
   static const String _storageKey = 'bookshelf.books';
   static const String _tagStorageKey = 'bookshelf.book_tags';
+  static const String _tagOrderStorageKey = 'bookshelf.tag_order';
+  static const String _baseFilterOrderStorageKey =
+      'bookshelf.base_filter_order';
   static const String _viewModeGridKey = 'bookshelf.view.useGrid';
 
   Future<List<BookshelfBook>> getAll() async {
@@ -184,6 +187,62 @@ class BookshelfService {
     }
   }
 
+  Future<List<String>> getTagOrder() async {
+    final prefs = await _preferencesFuture;
+    final raw = prefs.getString(_tagOrderStorageKey);
+    if (raw == null || raw.trim().isEmpty) {
+      return const <String>[];
+    }
+
+    try {
+      final decoded = jsonDecode(raw);
+      if (decoded is! List) {
+        return const <String>[];
+      }
+      return _normalizeTags(decoded.map((value) => '$value'));
+    } catch (_) {
+      return const <String>[];
+    }
+  }
+
+  Future<void> saveTagOrder(List<String> orderedTags) async {
+    final prefs = await _preferencesFuture;
+    final normalized = _normalizeTags(orderedTags);
+    if (normalized.isEmpty) {
+      await prefs.remove(_tagOrderStorageKey);
+      return;
+    }
+    await prefs.setString(_tagOrderStorageKey, jsonEncode(normalized));
+  }
+
+  Future<List<String>> getBaseFilterOrder() async {
+    final prefs = await _preferencesFuture;
+    final raw = prefs.getString(_baseFilterOrderStorageKey);
+    if (raw == null || raw.trim().isEmpty) {
+      return const <String>[];
+    }
+
+    try {
+      final decoded = jsonDecode(raw);
+      if (decoded is! List) {
+        return const <String>[];
+      }
+      return _normalizeTags(decoded.map((value) => '$value'));
+    } catch (_) {
+      return const <String>[];
+    }
+  }
+
+  Future<void> saveBaseFilterOrder(List<String> orderedFilters) async {
+    final prefs = await _preferencesFuture;
+    final normalized = _normalizeTags(orderedFilters);
+    if (normalized.isEmpty) {
+      await prefs.remove(_baseFilterOrderStorageKey);
+      return;
+    }
+    await prefs.setString(_baseFilterOrderStorageKey, jsonEncode(normalized));
+  }
+
   Future<void> setBookTags({
     required String sourceId,
     required String detailUrl,
@@ -229,6 +288,7 @@ class BookshelfService {
     }
 
     final map = Map<String, List<String>>.from(await getTagMap());
+    final tagOrder = List<String>.from(await getTagOrder());
     var affectedCount = 0;
     for (final entry in map.entries.toList(growable: false)) {
       final tags = _normalizeTags(entry.value);
@@ -249,6 +309,7 @@ class BookshelfService {
     }
 
     await _saveTagMap(map);
+    await saveTagOrder(tagOrder.map((tag) => tag == from ? to : tag).toList());
     return affectedCount;
   }
 
@@ -260,6 +321,7 @@ class BookshelfService {
     final target = values.first;
 
     final map = Map<String, List<String>>.from(await getTagMap());
+    final tagOrder = List<String>.from(await getTagOrder());
     var affectedCount = 0;
     for (final entry in map.entries.toList(growable: false)) {
       final tags = _normalizeTags(entry.value);
@@ -282,6 +344,9 @@ class BookshelfService {
     }
 
     await _saveTagMap(map);
+    await saveTagOrder(
+      tagOrder.where((tag) => tag != target).toList(growable: false),
+    );
     return affectedCount;
   }
 
