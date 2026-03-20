@@ -11,6 +11,7 @@ class ReaderSystemSettingsService {
 
   static const String _autoSwitchSourceOnFailureKey =
       'reader.system.autoSwitchSourceOnFailure';
+  static const String _readRecordEnabledKey = 'reader.system.readRecordEnabled';
 
   Future<bool> loadAutoSwitchSourceOnFailureEnabled() async {
     final prefs = await _preferencesFuture;
@@ -20,5 +21,15 @@ class ReaderSystemSettingsService {
   Future<void> saveAutoSwitchSourceOnFailureEnabled(bool enabled) async {
     final prefs = await _preferencesFuture;
     await prefs.setBool(_autoSwitchSourceOnFailureKey, enabled);
+  }
+
+  Future<bool> loadReadRecordEnabled() async {
+    final prefs = await _preferencesFuture;
+    return prefs.getBool(_readRecordEnabledKey) ?? true;
+  }
+
+  Future<void> saveReadRecordEnabled(bool enabled) async {
+    final prefs = await _preferencesFuture;
+    await prefs.setBool(_readRecordEnabledKey, enabled);
   }
 }

@@ -37,6 +37,7 @@ class ChapterContentResult {
     required this.fromCache,
     this.imageUrls = const [],
     this.imageHeaders = const {},
+    this.displayChapterTitle,
     this.effectiveReaderReplaceRules = const <ReaderReplaceRule>[],
   });
 
@@ -44,6 +45,7 @@ class ChapterContentResult {
   final bool fromCache;
   final List<String> imageUrls;
   final Map<String, String> imageHeaders;
+  final String? displayChapterTitle;
   final List<ReaderReplaceRule> effectiveReaderReplaceRules;
 
   bool get isImageContent => imageUrls.isNotEmpty;
@@ -120,6 +122,7 @@ class ChapterContentService {
     }
 
     final cacheKey = '$normalizedSourceId|$normalizedChapterUrl';
+    final normalizedBookId = bookId?.trim() ?? '';
     final cached = _chapterCache[cacheKey];
     if (cached != null) {
       final decoded = _decodeCachedPayload(cached);
@@ -127,13 +130,26 @@ class ChapterContentService {
         content: decoded.content,
         bookTitle: bookTitle,
         sourceId: normalizedSourceId,
+        bookId: normalizedBookId,
+        detailUrl: normalizedChapterUrl,
+      );
+      final titleResult = await _applyReaderTitleRules(
+        title: chapterTitle,
+        bookTitle: bookTitle,
+        sourceId: normalizedSourceId,
+        bookId: normalizedBookId,
+        detailUrl: normalizedChapterUrl,
       );
       return ChapterContentResult(
         content: replaced.content,
         fromCache: true,
         imageUrls: decoded.imageUrls,
         imageHeaders: decoded.imageHeaders,
-        effectiveReaderReplaceRules: replaced.effectiveRules,
+        displayChapterTitle: titleResult.content,
+        effectiveReaderReplaceRules: _mergeEffectiveReaderReplaceRules(
+          titleResult.effectiveRules,
+          replaced.effectiveRules,
+        ),
       );
     }
 
@@ -147,13 +163,26 @@ class ChapterContentService {
           content: decoded.content,
           bookTitle: bookTitle,
           sourceId: normalizedSourceId,
+          bookId: normalizedBookId,
+          detailUrl: normalizedChapterUrl,
+        );
+        final titleResult = await _applyReaderTitleRules(
+          title: chapterTitle,
+          bookTitle: bookTitle,
+          sourceId: normalizedSourceId,
+          bookId: normalizedBookId,
+          detailUrl: normalizedChapterUrl,
         );
         return ChapterContentResult(
           content: replaced.content,
           fromCache: true,
           imageUrls: decoded.imageUrls,
           imageHeaders: decoded.imageHeaders,
-          effectiveReaderReplaceRules: replaced.effectiveRules,
+          displayChapterTitle: titleResult.content,
+          effectiveReaderReplaceRules: _mergeEffectiveReaderReplaceRules(
+            titleResult.effectiveRules,
+            replaced.effectiveRules,
+          ),
         );
       }
     } catch (error) {
@@ -168,7 +197,6 @@ class ChapterContentService {
     }
 
     final source = await _findSource(normalizedSourceId);
-    final normalizedBookId = bookId?.trim() ?? '';
     final sourceVariableUpdates = <String, String>{};
     final bookVariableUpdates = <String, String>{};
     final runtimeJsVariables = <String, String>{
@@ -409,11 +437,20 @@ class ChapterContentService {
         sourceVariables: sourceVariableUpdates,
         bookVariables: bookVariableUpdates,
       );
+      final titleResult = await _applyReaderTitleRules(
+        title: chapterTitle,
+        bookTitle: bookTitle,
+        sourceId: normalizedSourceId,
+        bookId: normalizedBookId,
+        detailUrl: normalizedChapterUrl,
+      );
       return ChapterContentResult(
         content: '',
         fromCache: false,
         imageUrls: imageUrls,
         imageHeaders: imageHeaders,
+        displayChapterTitle: titleResult.content,
+        effectiveReaderReplaceRules: titleResult.effectiveRules,
       );
     }
 
@@ -493,12 +530,25 @@ class ChapterContentService {
       content: cleaned,
       bookTitle: bookTitle,
       sourceId: normalizedSourceId,
+      bookId: normalizedBookId,
+      detailUrl: normalizedChapterUrl,
+    );
+    final titleResult = await _applyReaderTitleRules(
+      title: chapterTitle,
+      bookTitle: bookTitle,
+      sourceId: normalizedSourceId,
+      bookId: normalizedBookId,
+      detailUrl: normalizedChapterUrl,
     );
 
     return ChapterContentResult(
       content: replaced.content,
       fromCache: false,
-      effectiveReaderReplaceRules: replaced.effectiveRules,
+      displayChapterTitle: titleResult.content,
+      effectiveReaderReplaceRules: _mergeEffectiveReaderReplaceRules(
+        titleResult.effectiveRules,
+        replaced.effectiveRules,
+      ),
     );
   }
 
@@ -804,6 +854,8 @@ class ChapterContentService {
     required String content,
     required String sourceId,
     String? bookTitle,
+    String? bookId,
+    String? detailUrl,
   }) {
     final normalizedBookTitle = (bookTitle ?? '').trim();
     if (content.isEmpty) {
@@ -818,7 +870,51 @@ class ChapterContentService {
       content: content,
       bookTitle: normalizedBookTitle,
       sourceId: sourceId,
+      bookId: bookId,
+      detailUrl: detailUrl,
     );
+  }
+
+  Future<ReaderReplaceExecutionResult> _applyReaderTitleRules({
+    required String? title,
+    required String sourceId,
+    String? bookTitle,
+    String? bookId,
+    String? detailUrl,
+  }) {
+    final normalizedTitle = (title ?? '').trim();
+    final normalizedBookTitle = (bookTitle ?? '').trim();
+    if (normalizedTitle.isEmpty) {
+      return Future<ReaderReplaceExecutionResult>.value(
+        const ReaderReplaceExecutionResult(
+          content: '',
+          effectiveRules: <ReaderReplaceRule>[],
+        ),
+      );
+    }
+    return _readerReplaceRuleService.applyTitleRules(
+      title: normalizedTitle,
+      bookTitle:
+          normalizedBookTitle.isEmpty ? normalizedTitle : normalizedBookTitle,
+      sourceId: sourceId,
+      bookId: bookId,
+      detailUrl: detailUrl,
+    );
+  }
+
+  List<ReaderReplaceRule> _mergeEffectiveReaderReplaceRules(
+    List<ReaderReplaceRule> titleRules,
+    List<ReaderReplaceRule> contentRules,
+  ) {
+    final merged = <ReaderReplaceRule>[];
+    final seenIds = <int>{};
+    for (final rule in <ReaderReplaceRule>[...titleRules, ...contentRules]) {
+      if (!seenIds.add(rule.id)) {
+        continue;
+      }
+      merged.add(rule);
+    }
+    return List<ReaderReplaceRule>.unmodifiable(merged);
   }
 
   Future<String?> _extractNextContentUrl({

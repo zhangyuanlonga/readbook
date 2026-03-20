@@ -3782,6 +3782,18 @@ class $StoredReadingRecordsTable extends StoredReadingRecords
     requiredDuringInsert: false,
     defaultValue: const Constant(0),
   );
+  static const VerificationMeta _totalReadCharsMeta = const VerificationMeta(
+    'totalReadChars',
+  );
+  @override
+  late final GeneratedColumn<int> totalReadChars = GeneratedColumn<int>(
+    'total_read_chars',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+    defaultValue: const Constant(0),
+  );
   static const VerificationMeta _lastReadAtMeta = const VerificationMeta(
     'lastReadAt',
   );
@@ -3807,6 +3819,7 @@ class $StoredReadingRecordsTable extends StoredReadingRecords
     lastChapterUrl,
     lastPositionRatio,
     totalReadMillis,
+    totalReadChars,
     lastReadAt,
   ];
   @override
@@ -3919,6 +3932,15 @@ class $StoredReadingRecordsTable extends StoredReadingRecords
         ),
       );
     }
+    if (data.containsKey('total_read_chars')) {
+      context.handle(
+        _totalReadCharsMeta,
+        totalReadChars.isAcceptableOrUnknown(
+          data['total_read_chars']!,
+          _totalReadCharsMeta,
+        ),
+      );
+    }
     if (data.containsKey('last_read_at')) {
       context.handle(
         _lastReadAtMeta,
@@ -3993,6 +4015,11 @@ class $StoredReadingRecordsTable extends StoredReadingRecords
             DriftSqlType.int,
             data['${effectivePrefix}total_read_millis'],
           )!,
+      totalReadChars:
+          attachedDatabase.typeMapping.read(
+            DriftSqlType.int,
+            data['${effectivePrefix}total_read_chars'],
+          )!,
       lastReadAt:
           attachedDatabase.typeMapping.read(
             DriftSqlType.dateTime,
@@ -4021,6 +4048,7 @@ class StoredReadingRecord extends DataClass
   final String? lastChapterUrl;
   final double lastPositionRatio;
   final int totalReadMillis;
+  final int totalReadChars;
   final DateTime lastReadAt;
   const StoredReadingRecord({
     required this.bookId,
@@ -4035,6 +4063,7 @@ class StoredReadingRecord extends DataClass
     this.lastChapterUrl,
     required this.lastPositionRatio,
     required this.totalReadMillis,
+    required this.totalReadChars,
     required this.lastReadAt,
   });
   @override
@@ -4064,6 +4093,7 @@ class StoredReadingRecord extends DataClass
     }
     map['last_position_ratio'] = Variable<double>(lastPositionRatio);
     map['total_read_millis'] = Variable<int>(totalReadMillis);
+    map['total_read_chars'] = Variable<int>(totalReadChars);
     map['last_read_at'] = Variable<DateTime>(lastReadAt);
     return map;
   }
@@ -4100,6 +4130,7 @@ class StoredReadingRecord extends DataClass
               : Value(lastChapterUrl),
       lastPositionRatio: Value(lastPositionRatio),
       totalReadMillis: Value(totalReadMillis),
+      totalReadChars: Value(totalReadChars),
       lastReadAt: Value(lastReadAt),
     );
   }
@@ -4122,6 +4153,7 @@ class StoredReadingRecord extends DataClass
       lastChapterUrl: serializer.fromJson<String?>(json['lastChapterUrl']),
       lastPositionRatio: serializer.fromJson<double>(json['lastPositionRatio']),
       totalReadMillis: serializer.fromJson<int>(json['totalReadMillis']),
+      totalReadChars: serializer.fromJson<int>(json['totalReadChars']),
       lastReadAt: serializer.fromJson<DateTime>(json['lastReadAt']),
     );
   }
@@ -4141,6 +4173,7 @@ class StoredReadingRecord extends DataClass
       'lastChapterUrl': serializer.toJson<String?>(lastChapterUrl),
       'lastPositionRatio': serializer.toJson<double>(lastPositionRatio),
       'totalReadMillis': serializer.toJson<int>(totalReadMillis),
+      'totalReadChars': serializer.toJson<int>(totalReadChars),
       'lastReadAt': serializer.toJson<DateTime>(lastReadAt),
     };
   }
@@ -4158,6 +4191,7 @@ class StoredReadingRecord extends DataClass
     Value<String?> lastChapterUrl = const Value.absent(),
     double? lastPositionRatio,
     int? totalReadMillis,
+    int? totalReadChars,
     DateTime? lastReadAt,
   }) => StoredReadingRecord(
     bookId: bookId ?? this.bookId,
@@ -4180,6 +4214,7 @@ class StoredReadingRecord extends DataClass
         lastChapterUrl.present ? lastChapterUrl.value : this.lastChapterUrl,
     lastPositionRatio: lastPositionRatio ?? this.lastPositionRatio,
     totalReadMillis: totalReadMillis ?? this.totalReadMillis,
+    totalReadChars: totalReadChars ?? this.totalReadChars,
     lastReadAt: lastReadAt ?? this.lastReadAt,
   );
   StoredReadingRecord copyWithCompanion(StoredReadingRecordsCompanion data) {
@@ -4215,6 +4250,10 @@ class StoredReadingRecord extends DataClass
           data.totalReadMillis.present
               ? data.totalReadMillis.value
               : this.totalReadMillis,
+      totalReadChars:
+          data.totalReadChars.present
+              ? data.totalReadChars.value
+              : this.totalReadChars,
       lastReadAt:
           data.lastReadAt.present ? data.lastReadAt.value : this.lastReadAt,
     );
@@ -4235,6 +4274,7 @@ class StoredReadingRecord extends DataClass
           ..write('lastChapterUrl: $lastChapterUrl, ')
           ..write('lastPositionRatio: $lastPositionRatio, ')
           ..write('totalReadMillis: $totalReadMillis, ')
+          ..write('totalReadChars: $totalReadChars, ')
           ..write('lastReadAt: $lastReadAt')
           ..write(')'))
         .toString();
@@ -4254,6 +4294,7 @@ class StoredReadingRecord extends DataClass
     lastChapterUrl,
     lastPositionRatio,
     totalReadMillis,
+    totalReadChars,
     lastReadAt,
   );
   @override
@@ -4272,6 +4313,7 @@ class StoredReadingRecord extends DataClass
           other.lastChapterUrl == this.lastChapterUrl &&
           other.lastPositionRatio == this.lastPositionRatio &&
           other.totalReadMillis == this.totalReadMillis &&
+          other.totalReadChars == this.totalReadChars &&
           other.lastReadAt == this.lastReadAt);
 }
 
@@ -4289,6 +4331,7 @@ class StoredReadingRecordsCompanion
   final Value<String?> lastChapterUrl;
   final Value<double> lastPositionRatio;
   final Value<int> totalReadMillis;
+  final Value<int> totalReadChars;
   final Value<DateTime> lastReadAt;
   final Value<int> rowid;
   const StoredReadingRecordsCompanion({
@@ -4304,6 +4347,7 @@ class StoredReadingRecordsCompanion
     this.lastChapterUrl = const Value.absent(),
     this.lastPositionRatio = const Value.absent(),
     this.totalReadMillis = const Value.absent(),
+    this.totalReadChars = const Value.absent(),
     this.lastReadAt = const Value.absent(),
     this.rowid = const Value.absent(),
   });
@@ -4320,6 +4364,7 @@ class StoredReadingRecordsCompanion
     this.lastChapterUrl = const Value.absent(),
     this.lastPositionRatio = const Value.absent(),
     this.totalReadMillis = const Value.absent(),
+    this.totalReadChars = const Value.absent(),
     required DateTime lastReadAt,
     this.rowid = const Value.absent(),
   }) : bookId = Value(bookId),
@@ -4340,6 +4385,7 @@ class StoredReadingRecordsCompanion
     Expression<String>? lastChapterUrl,
     Expression<double>? lastPositionRatio,
     Expression<int>? totalReadMillis,
+    Expression<int>? totalReadChars,
     Expression<DateTime>? lastReadAt,
     Expression<int>? rowid,
   }) {
@@ -4356,6 +4402,7 @@ class StoredReadingRecordsCompanion
       if (lastChapterUrl != null) 'last_chapter_url': lastChapterUrl,
       if (lastPositionRatio != null) 'last_position_ratio': lastPositionRatio,
       if (totalReadMillis != null) 'total_read_millis': totalReadMillis,
+      if (totalReadChars != null) 'total_read_chars': totalReadChars,
       if (lastReadAt != null) 'last_read_at': lastReadAt,
       if (rowid != null) 'rowid': rowid,
     });
@@ -4374,6 +4421,7 @@ class StoredReadingRecordsCompanion
     Value<String?>? lastChapterUrl,
     Value<double>? lastPositionRatio,
     Value<int>? totalReadMillis,
+    Value<int>? totalReadChars,
     Value<DateTime>? lastReadAt,
     Value<int>? rowid,
   }) {
@@ -4390,6 +4438,7 @@ class StoredReadingRecordsCompanion
       lastChapterUrl: lastChapterUrl ?? this.lastChapterUrl,
       lastPositionRatio: lastPositionRatio ?? this.lastPositionRatio,
       totalReadMillis: totalReadMillis ?? this.totalReadMillis,
+      totalReadChars: totalReadChars ?? this.totalReadChars,
       lastReadAt: lastReadAt ?? this.lastReadAt,
       rowid: rowid ?? this.rowid,
     );
@@ -4434,6 +4483,9 @@ class StoredReadingRecordsCompanion
     if (totalReadMillis.present) {
       map['total_read_millis'] = Variable<int>(totalReadMillis.value);
     }
+    if (totalReadChars.present) {
+      map['total_read_chars'] = Variable<int>(totalReadChars.value);
+    }
     if (lastReadAt.present) {
       map['last_read_at'] = Variable<DateTime>(lastReadAt.value);
     }
@@ -4458,6 +4510,7 @@ class StoredReadingRecordsCompanion
           ..write('lastChapterUrl: $lastChapterUrl, ')
           ..write('lastPositionRatio: $lastPositionRatio, ')
           ..write('totalReadMillis: $totalReadMillis, ')
+          ..write('totalReadChars: $totalReadChars, ')
           ..write('lastReadAt: $lastReadAt, ')
           ..write('rowid: $rowid')
           ..write(')'))
@@ -4536,6 +4589,18 @@ class $StoredReadingRecordDaysTable extends StoredReadingRecordDays
     requiredDuringInsert: false,
     defaultValue: const Constant(0),
   );
+  static const VerificationMeta _readCharsMeta = const VerificationMeta(
+    'readChars',
+  );
+  @override
+  late final GeneratedColumn<int> readChars = GeneratedColumn<int>(
+    'read_chars',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+    defaultValue: const Constant(0),
+  );
   static const VerificationMeta _firstReadAtMeta = const VerificationMeta(
     'firstReadAt',
   );
@@ -4566,6 +4631,7 @@ class $StoredReadingRecordDaysTable extends StoredReadingRecordDays
     bookAuthor,
     coverUrl,
     readMillis,
+    readChars,
     firstReadAt,
     lastReadAt,
   ];
@@ -4621,6 +4687,12 @@ class $StoredReadingRecordDaysTable extends StoredReadingRecordDays
       context.handle(
         _readMillisMeta,
         readMillis.isAcceptableOrUnknown(data['read_millis']!, _readMillisMeta),
+      );
+    }
+    if (data.containsKey('read_chars')) {
+      context.handle(
+        _readCharsMeta,
+        readChars.isAcceptableOrUnknown(data['read_chars']!, _readCharsMeta),
       );
     }
     if (data.containsKey('first_read_at')) {
@@ -4682,6 +4754,11 @@ class $StoredReadingRecordDaysTable extends StoredReadingRecordDays
             DriftSqlType.int,
             data['${effectivePrefix}read_millis'],
           )!,
+      readChars:
+          attachedDatabase.typeMapping.read(
+            DriftSqlType.int,
+            data['${effectivePrefix}read_chars'],
+          )!,
       firstReadAt:
           attachedDatabase.typeMapping.read(
             DriftSqlType.dateTime,
@@ -4709,6 +4786,7 @@ class StoredReadingRecordDay extends DataClass
   final String? bookAuthor;
   final String? coverUrl;
   final int readMillis;
+  final int readChars;
   final DateTime firstReadAt;
   final DateTime lastReadAt;
   const StoredReadingRecordDay({
@@ -4718,6 +4796,7 @@ class StoredReadingRecordDay extends DataClass
     this.bookAuthor,
     this.coverUrl,
     required this.readMillis,
+    required this.readChars,
     required this.firstReadAt,
     required this.lastReadAt,
   });
@@ -4734,6 +4813,7 @@ class StoredReadingRecordDay extends DataClass
       map['cover_url'] = Variable<String>(coverUrl);
     }
     map['read_millis'] = Variable<int>(readMillis);
+    map['read_chars'] = Variable<int>(readChars);
     map['first_read_at'] = Variable<DateTime>(firstReadAt);
     map['last_read_at'] = Variable<DateTime>(lastReadAt);
     return map;
@@ -4753,6 +4833,7 @@ class StoredReadingRecordDay extends DataClass
               ? const Value.absent()
               : Value(coverUrl),
       readMillis: Value(readMillis),
+      readChars: Value(readChars),
       firstReadAt: Value(firstReadAt),
       lastReadAt: Value(lastReadAt),
     );
@@ -4770,6 +4851,7 @@ class StoredReadingRecordDay extends DataClass
       bookAuthor: serializer.fromJson<String?>(json['bookAuthor']),
       coverUrl: serializer.fromJson<String?>(json['coverUrl']),
       readMillis: serializer.fromJson<int>(json['readMillis']),
+      readChars: serializer.fromJson<int>(json['readChars']),
       firstReadAt: serializer.fromJson<DateTime>(json['firstReadAt']),
       lastReadAt: serializer.fromJson<DateTime>(json['lastReadAt']),
     );
@@ -4784,6 +4866,7 @@ class StoredReadingRecordDay extends DataClass
       'bookAuthor': serializer.toJson<String?>(bookAuthor),
       'coverUrl': serializer.toJson<String?>(coverUrl),
       'readMillis': serializer.toJson<int>(readMillis),
+      'readChars': serializer.toJson<int>(readChars),
       'firstReadAt': serializer.toJson<DateTime>(firstReadAt),
       'lastReadAt': serializer.toJson<DateTime>(lastReadAt),
     };
@@ -4796,6 +4879,7 @@ class StoredReadingRecordDay extends DataClass
     Value<String?> bookAuthor = const Value.absent(),
     Value<String?> coverUrl = const Value.absent(),
     int? readMillis,
+    int? readChars,
     DateTime? firstReadAt,
     DateTime? lastReadAt,
   }) => StoredReadingRecordDay(
@@ -4805,6 +4889,7 @@ class StoredReadingRecordDay extends DataClass
     bookAuthor: bookAuthor.present ? bookAuthor.value : this.bookAuthor,
     coverUrl: coverUrl.present ? coverUrl.value : this.coverUrl,
     readMillis: readMillis ?? this.readMillis,
+    readChars: readChars ?? this.readChars,
     firstReadAt: firstReadAt ?? this.firstReadAt,
     lastReadAt: lastReadAt ?? this.lastReadAt,
   );
@@ -4820,6 +4905,7 @@ class StoredReadingRecordDay extends DataClass
       coverUrl: data.coverUrl.present ? data.coverUrl.value : this.coverUrl,
       readMillis:
           data.readMillis.present ? data.readMillis.value : this.readMillis,
+      readChars: data.readChars.present ? data.readChars.value : this.readChars,
       firstReadAt:
           data.firstReadAt.present ? data.firstReadAt.value : this.firstReadAt,
       lastReadAt:
@@ -4836,6 +4922,7 @@ class StoredReadingRecordDay extends DataClass
           ..write('bookAuthor: $bookAuthor, ')
           ..write('coverUrl: $coverUrl, ')
           ..write('readMillis: $readMillis, ')
+          ..write('readChars: $readChars, ')
           ..write('firstReadAt: $firstReadAt, ')
           ..write('lastReadAt: $lastReadAt')
           ..write(')'))
@@ -4850,6 +4937,7 @@ class StoredReadingRecordDay extends DataClass
     bookAuthor,
     coverUrl,
     readMillis,
+    readChars,
     firstReadAt,
     lastReadAt,
   );
@@ -4863,6 +4951,7 @@ class StoredReadingRecordDay extends DataClass
           other.bookAuthor == this.bookAuthor &&
           other.coverUrl == this.coverUrl &&
           other.readMillis == this.readMillis &&
+          other.readChars == this.readChars &&
           other.firstReadAt == this.firstReadAt &&
           other.lastReadAt == this.lastReadAt);
 }
@@ -4875,6 +4964,7 @@ class StoredReadingRecordDaysCompanion
   final Value<String?> bookAuthor;
   final Value<String?> coverUrl;
   final Value<int> readMillis;
+  final Value<int> readChars;
   final Value<DateTime> firstReadAt;
   final Value<DateTime> lastReadAt;
   final Value<int> rowid;
@@ -4885,6 +4975,7 @@ class StoredReadingRecordDaysCompanion
     this.bookAuthor = const Value.absent(),
     this.coverUrl = const Value.absent(),
     this.readMillis = const Value.absent(),
+    this.readChars = const Value.absent(),
     this.firstReadAt = const Value.absent(),
     this.lastReadAt = const Value.absent(),
     this.rowid = const Value.absent(),
@@ -4896,6 +4987,7 @@ class StoredReadingRecordDaysCompanion
     this.bookAuthor = const Value.absent(),
     this.coverUrl = const Value.absent(),
     this.readMillis = const Value.absent(),
+    this.readChars = const Value.absent(),
     required DateTime firstReadAt,
     required DateTime lastReadAt,
     this.rowid = const Value.absent(),
@@ -4911,6 +5003,7 @@ class StoredReadingRecordDaysCompanion
     Expression<String>? bookAuthor,
     Expression<String>? coverUrl,
     Expression<int>? readMillis,
+    Expression<int>? readChars,
     Expression<DateTime>? firstReadAt,
     Expression<DateTime>? lastReadAt,
     Expression<int>? rowid,
@@ -4922,6 +5015,7 @@ class StoredReadingRecordDaysCompanion
       if (bookAuthor != null) 'book_author': bookAuthor,
       if (coverUrl != null) 'cover_url': coverUrl,
       if (readMillis != null) 'read_millis': readMillis,
+      if (readChars != null) 'read_chars': readChars,
       if (firstReadAt != null) 'first_read_at': firstReadAt,
       if (lastReadAt != null) 'last_read_at': lastReadAt,
       if (rowid != null) 'rowid': rowid,
@@ -4935,6 +5029,7 @@ class StoredReadingRecordDaysCompanion
     Value<String?>? bookAuthor,
     Value<String?>? coverUrl,
     Value<int>? readMillis,
+    Value<int>? readChars,
     Value<DateTime>? firstReadAt,
     Value<DateTime>? lastReadAt,
     Value<int>? rowid,
@@ -4946,6 +5041,7 @@ class StoredReadingRecordDaysCompanion
       bookAuthor: bookAuthor ?? this.bookAuthor,
       coverUrl: coverUrl ?? this.coverUrl,
       readMillis: readMillis ?? this.readMillis,
+      readChars: readChars ?? this.readChars,
       firstReadAt: firstReadAt ?? this.firstReadAt,
       lastReadAt: lastReadAt ?? this.lastReadAt,
       rowid: rowid ?? this.rowid,
@@ -4973,6 +5069,9 @@ class StoredReadingRecordDaysCompanion
     if (readMillis.present) {
       map['read_millis'] = Variable<int>(readMillis.value);
     }
+    if (readChars.present) {
+      map['read_chars'] = Variable<int>(readChars.value);
+    }
     if (firstReadAt.present) {
       map['first_read_at'] = Variable<DateTime>(firstReadAt.value);
     }
@@ -4994,6 +5093,7 @@ class StoredReadingRecordDaysCompanion
           ..write('bookAuthor: $bookAuthor, ')
           ..write('coverUrl: $coverUrl, ')
           ..write('readMillis: $readMillis, ')
+          ..write('readChars: $readChars, ')
           ..write('firstReadAt: $firstReadAt, ')
           ..write('lastReadAt: $lastReadAt, ')
           ..write('rowid: $rowid')
@@ -5165,6 +5265,18 @@ class $StoredReadingRecordSessionsTable extends StoredReadingRecordSessions
     requiredDuringInsert: false,
     defaultValue: const Constant(0),
   );
+  static const VerificationMeta _readCharsMeta = const VerificationMeta(
+    'readChars',
+  );
+  @override
+  late final GeneratedColumn<int> readChars = GeneratedColumn<int>(
+    'read_chars',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+    defaultValue: const Constant(0),
+  );
   static const VerificationMeta _startPositionRatioMeta =
       const VerificationMeta('startPositionRatio');
   @override
@@ -5205,6 +5317,7 @@ class $StoredReadingRecordSessionsTable extends StoredReadingRecordSessions
     startAt,
     endAt,
     durationMillis,
+    readChars,
     startPositionRatio,
     endPositionRatio,
   ];
@@ -5322,6 +5435,12 @@ class $StoredReadingRecordSessionsTable extends StoredReadingRecordSessions
         ),
       );
     }
+    if (data.containsKey('read_chars')) {
+      context.handle(
+        _readCharsMeta,
+        readChars.isAcceptableOrUnknown(data['read_chars']!, _readCharsMeta),
+      );
+    }
     if (data.containsKey('start_position_ratio')) {
       context.handle(
         _startPositionRatioMeta,
@@ -5416,6 +5535,11 @@ class $StoredReadingRecordSessionsTable extends StoredReadingRecordSessions
             DriftSqlType.int,
             data['${effectivePrefix}duration_millis'],
           )!,
+      readChars:
+          attachedDatabase.typeMapping.read(
+            DriftSqlType.int,
+            data['${effectivePrefix}read_chars'],
+          )!,
       startPositionRatio:
           attachedDatabase.typeMapping.read(
             DriftSqlType.double,
@@ -5451,6 +5575,7 @@ class StoredReadingRecordSession extends DataClass
   final DateTime startAt;
   final DateTime endAt;
   final int durationMillis;
+  final int readChars;
   final double startPositionRatio;
   final double endPositionRatio;
   const StoredReadingRecordSession({
@@ -5468,6 +5593,7 @@ class StoredReadingRecordSession extends DataClass
     required this.startAt,
     required this.endAt,
     required this.durationMillis,
+    required this.readChars,
     required this.startPositionRatio,
     required this.endPositionRatio,
   });
@@ -5500,6 +5626,7 @@ class StoredReadingRecordSession extends DataClass
     map['start_at'] = Variable<DateTime>(startAt);
     map['end_at'] = Variable<DateTime>(endAt);
     map['duration_millis'] = Variable<int>(durationMillis);
+    map['read_chars'] = Variable<int>(readChars);
     map['start_position_ratio'] = Variable<double>(startPositionRatio);
     map['end_position_ratio'] = Variable<double>(endPositionRatio);
     return map;
@@ -5539,6 +5666,7 @@ class StoredReadingRecordSession extends DataClass
       startAt: Value(startAt),
       endAt: Value(endAt),
       durationMillis: Value(durationMillis),
+      readChars: Value(readChars),
       startPositionRatio: Value(startPositionRatio),
       endPositionRatio: Value(endPositionRatio),
     );
@@ -5564,6 +5692,7 @@ class StoredReadingRecordSession extends DataClass
       startAt: serializer.fromJson<DateTime>(json['startAt']),
       endAt: serializer.fromJson<DateTime>(json['endAt']),
       durationMillis: serializer.fromJson<int>(json['durationMillis']),
+      readChars: serializer.fromJson<int>(json['readChars']),
       startPositionRatio: serializer.fromJson<double>(
         json['startPositionRatio'],
       ),
@@ -5588,6 +5717,7 @@ class StoredReadingRecordSession extends DataClass
       'startAt': serializer.toJson<DateTime>(startAt),
       'endAt': serializer.toJson<DateTime>(endAt),
       'durationMillis': serializer.toJson<int>(durationMillis),
+      'readChars': serializer.toJson<int>(readChars),
       'startPositionRatio': serializer.toJson<double>(startPositionRatio),
       'endPositionRatio': serializer.toJson<double>(endPositionRatio),
     };
@@ -5608,6 +5738,7 @@ class StoredReadingRecordSession extends DataClass
     DateTime? startAt,
     DateTime? endAt,
     int? durationMillis,
+    int? readChars,
     double? startPositionRatio,
     double? endPositionRatio,
   }) => StoredReadingRecordSession(
@@ -5625,6 +5756,7 @@ class StoredReadingRecordSession extends DataClass
     startAt: startAt ?? this.startAt,
     endAt: endAt ?? this.endAt,
     durationMillis: durationMillis ?? this.durationMillis,
+    readChars: readChars ?? this.readChars,
     startPositionRatio: startPositionRatio ?? this.startPositionRatio,
     endPositionRatio: endPositionRatio ?? this.endPositionRatio,
   );
@@ -5657,6 +5789,7 @@ class StoredReadingRecordSession extends DataClass
           data.durationMillis.present
               ? data.durationMillis.value
               : this.durationMillis,
+      readChars: data.readChars.present ? data.readChars.value : this.readChars,
       startPositionRatio:
           data.startPositionRatio.present
               ? data.startPositionRatio.value
@@ -5685,6 +5818,7 @@ class StoredReadingRecordSession extends DataClass
           ..write('startAt: $startAt, ')
           ..write('endAt: $endAt, ')
           ..write('durationMillis: $durationMillis, ')
+          ..write('readChars: $readChars, ')
           ..write('startPositionRatio: $startPositionRatio, ')
           ..write('endPositionRatio: $endPositionRatio')
           ..write(')'))
@@ -5707,6 +5841,7 @@ class StoredReadingRecordSession extends DataClass
     startAt,
     endAt,
     durationMillis,
+    readChars,
     startPositionRatio,
     endPositionRatio,
   );
@@ -5728,6 +5863,7 @@ class StoredReadingRecordSession extends DataClass
           other.startAt == this.startAt &&
           other.endAt == this.endAt &&
           other.durationMillis == this.durationMillis &&
+          other.readChars == this.readChars &&
           other.startPositionRatio == this.startPositionRatio &&
           other.endPositionRatio == this.endPositionRatio);
 }
@@ -5748,6 +5884,7 @@ class StoredReadingRecordSessionsCompanion
   final Value<DateTime> startAt;
   final Value<DateTime> endAt;
   final Value<int> durationMillis;
+  final Value<int> readChars;
   final Value<double> startPositionRatio;
   final Value<double> endPositionRatio;
   const StoredReadingRecordSessionsCompanion({
@@ -5765,6 +5902,7 @@ class StoredReadingRecordSessionsCompanion
     this.startAt = const Value.absent(),
     this.endAt = const Value.absent(),
     this.durationMillis = const Value.absent(),
+    this.readChars = const Value.absent(),
     this.startPositionRatio = const Value.absent(),
     this.endPositionRatio = const Value.absent(),
   });
@@ -5783,6 +5921,7 @@ class StoredReadingRecordSessionsCompanion
     required DateTime startAt,
     required DateTime endAt,
     this.durationMillis = const Value.absent(),
+    this.readChars = const Value.absent(),
     this.startPositionRatio = const Value.absent(),
     this.endPositionRatio = const Value.absent(),
   }) : bookId = Value(bookId),
@@ -5806,6 +5945,7 @@ class StoredReadingRecordSessionsCompanion
     Expression<DateTime>? startAt,
     Expression<DateTime>? endAt,
     Expression<int>? durationMillis,
+    Expression<int>? readChars,
     Expression<double>? startPositionRatio,
     Expression<double>? endPositionRatio,
   }) {
@@ -5824,6 +5964,7 @@ class StoredReadingRecordSessionsCompanion
       if (startAt != null) 'start_at': startAt,
       if (endAt != null) 'end_at': endAt,
       if (durationMillis != null) 'duration_millis': durationMillis,
+      if (readChars != null) 'read_chars': readChars,
       if (startPositionRatio != null)
         'start_position_ratio': startPositionRatio,
       if (endPositionRatio != null) 'end_position_ratio': endPositionRatio,
@@ -5845,6 +5986,7 @@ class StoredReadingRecordSessionsCompanion
     Value<DateTime>? startAt,
     Value<DateTime>? endAt,
     Value<int>? durationMillis,
+    Value<int>? readChars,
     Value<double>? startPositionRatio,
     Value<double>? endPositionRatio,
   }) {
@@ -5863,6 +6005,7 @@ class StoredReadingRecordSessionsCompanion
       startAt: startAt ?? this.startAt,
       endAt: endAt ?? this.endAt,
       durationMillis: durationMillis ?? this.durationMillis,
+      readChars: readChars ?? this.readChars,
       startPositionRatio: startPositionRatio ?? this.startPositionRatio,
       endPositionRatio: endPositionRatio ?? this.endPositionRatio,
     );
@@ -5913,6 +6056,9 @@ class StoredReadingRecordSessionsCompanion
     if (durationMillis.present) {
       map['duration_millis'] = Variable<int>(durationMillis.value);
     }
+    if (readChars.present) {
+      map['read_chars'] = Variable<int>(readChars.value);
+    }
     if (startPositionRatio.present) {
       map['start_position_ratio'] = Variable<double>(startPositionRatio.value);
     }
@@ -5939,6 +6085,7 @@ class StoredReadingRecordSessionsCompanion
           ..write('startAt: $startAt, ')
           ..write('endAt: $endAt, ')
           ..write('durationMillis: $durationMillis, ')
+          ..write('readChars: $readChars, ')
           ..write('startPositionRatio: $startPositionRatio, ')
           ..write('endPositionRatio: $endPositionRatio')
           ..write(')'))
@@ -6668,6 +6815,382 @@ class SearchSourceHitsCompanion extends UpdateCompanion<SearchSourceHit> {
   }
 }
 
+class $StoredReaderReplacePreferencesTable
+    extends StoredReaderReplacePreferences
+    with
+        TableInfo<
+          $StoredReaderReplacePreferencesTable,
+          StoredReaderReplacePreference
+        > {
+  @override
+  final GeneratedDatabase attachedDatabase;
+  final String? _alias;
+  $StoredReaderReplacePreferencesTable(this.attachedDatabase, [this._alias]);
+  static const VerificationMeta _bookIdMeta = const VerificationMeta('bookId');
+  @override
+  late final GeneratedColumn<String> bookId = GeneratedColumn<String>(
+    'book_id',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _sourceIdMeta = const VerificationMeta(
+    'sourceId',
+  );
+  @override
+  late final GeneratedColumn<String> sourceId = GeneratedColumn<String>(
+    'source_id',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _detailUrlMeta = const VerificationMeta(
+    'detailUrl',
+  );
+  @override
+  late final GeneratedColumn<String> detailUrl = GeneratedColumn<String>(
+    'detail_url',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _modeMeta = const VerificationMeta('mode');
+  @override
+  late final GeneratedColumn<String> mode = GeneratedColumn<String>(
+    'mode',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+    defaultValue: const Constant('inherit'),
+  );
+  static const VerificationMeta _updatedAtMeta = const VerificationMeta(
+    'updatedAt',
+  );
+  @override
+  late final GeneratedColumn<DateTime> updatedAt = GeneratedColumn<DateTime>(
+    'updated_at',
+    aliasedName,
+    false,
+    type: DriftSqlType.dateTime,
+    requiredDuringInsert: false,
+    defaultValue: currentDateAndTime,
+  );
+  @override
+  List<GeneratedColumn> get $columns => [
+    bookId,
+    sourceId,
+    detailUrl,
+    mode,
+    updatedAt,
+  ];
+  @override
+  String get aliasedName => _alias ?? actualTableName;
+  @override
+  String get actualTableName => $name;
+  static const String $name = 'reader_replace_preferences';
+  @override
+  VerificationContext validateIntegrity(
+    Insertable<StoredReaderReplacePreference> instance, {
+    bool isInserting = false,
+  }) {
+    final context = VerificationContext();
+    final data = instance.toColumns(true);
+    if (data.containsKey('book_id')) {
+      context.handle(
+        _bookIdMeta,
+        bookId.isAcceptableOrUnknown(data['book_id']!, _bookIdMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_bookIdMeta);
+    }
+    if (data.containsKey('source_id')) {
+      context.handle(
+        _sourceIdMeta,
+        sourceId.isAcceptableOrUnknown(data['source_id']!, _sourceIdMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_sourceIdMeta);
+    }
+    if (data.containsKey('detail_url')) {
+      context.handle(
+        _detailUrlMeta,
+        detailUrl.isAcceptableOrUnknown(data['detail_url']!, _detailUrlMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_detailUrlMeta);
+    }
+    if (data.containsKey('mode')) {
+      context.handle(
+        _modeMeta,
+        mode.isAcceptableOrUnknown(data['mode']!, _modeMeta),
+      );
+    }
+    if (data.containsKey('updated_at')) {
+      context.handle(
+        _updatedAtMeta,
+        updatedAt.isAcceptableOrUnknown(data['updated_at']!, _updatedAtMeta),
+      );
+    }
+    return context;
+  }
+
+  @override
+  Set<GeneratedColumn> get $primaryKey => {bookId, sourceId, detailUrl};
+  @override
+  StoredReaderReplacePreference map(
+    Map<String, dynamic> data, {
+    String? tablePrefix,
+  }) {
+    final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
+    return StoredReaderReplacePreference(
+      bookId:
+          attachedDatabase.typeMapping.read(
+            DriftSqlType.string,
+            data['${effectivePrefix}book_id'],
+          )!,
+      sourceId:
+          attachedDatabase.typeMapping.read(
+            DriftSqlType.string,
+            data['${effectivePrefix}source_id'],
+          )!,
+      detailUrl:
+          attachedDatabase.typeMapping.read(
+            DriftSqlType.string,
+            data['${effectivePrefix}detail_url'],
+          )!,
+      mode:
+          attachedDatabase.typeMapping.read(
+            DriftSqlType.string,
+            data['${effectivePrefix}mode'],
+          )!,
+      updatedAt:
+          attachedDatabase.typeMapping.read(
+            DriftSqlType.dateTime,
+            data['${effectivePrefix}updated_at'],
+          )!,
+    );
+  }
+
+  @override
+  $StoredReaderReplacePreferencesTable createAlias(String alias) {
+    return $StoredReaderReplacePreferencesTable(attachedDatabase, alias);
+  }
+}
+
+class StoredReaderReplacePreference extends DataClass
+    implements Insertable<StoredReaderReplacePreference> {
+  final String bookId;
+  final String sourceId;
+  final String detailUrl;
+  final String mode;
+  final DateTime updatedAt;
+  const StoredReaderReplacePreference({
+    required this.bookId,
+    required this.sourceId,
+    required this.detailUrl,
+    required this.mode,
+    required this.updatedAt,
+  });
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    map['book_id'] = Variable<String>(bookId);
+    map['source_id'] = Variable<String>(sourceId);
+    map['detail_url'] = Variable<String>(detailUrl);
+    map['mode'] = Variable<String>(mode);
+    map['updated_at'] = Variable<DateTime>(updatedAt);
+    return map;
+  }
+
+  StoredReaderReplacePreferencesCompanion toCompanion(bool nullToAbsent) {
+    return StoredReaderReplacePreferencesCompanion(
+      bookId: Value(bookId),
+      sourceId: Value(sourceId),
+      detailUrl: Value(detailUrl),
+      mode: Value(mode),
+      updatedAt: Value(updatedAt),
+    );
+  }
+
+  factory StoredReaderReplacePreference.fromJson(
+    Map<String, dynamic> json, {
+    ValueSerializer? serializer,
+  }) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return StoredReaderReplacePreference(
+      bookId: serializer.fromJson<String>(json['bookId']),
+      sourceId: serializer.fromJson<String>(json['sourceId']),
+      detailUrl: serializer.fromJson<String>(json['detailUrl']),
+      mode: serializer.fromJson<String>(json['mode']),
+      updatedAt: serializer.fromJson<DateTime>(json['updatedAt']),
+    );
+  }
+  @override
+  Map<String, dynamic> toJson({ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return <String, dynamic>{
+      'bookId': serializer.toJson<String>(bookId),
+      'sourceId': serializer.toJson<String>(sourceId),
+      'detailUrl': serializer.toJson<String>(detailUrl),
+      'mode': serializer.toJson<String>(mode),
+      'updatedAt': serializer.toJson<DateTime>(updatedAt),
+    };
+  }
+
+  StoredReaderReplacePreference copyWith({
+    String? bookId,
+    String? sourceId,
+    String? detailUrl,
+    String? mode,
+    DateTime? updatedAt,
+  }) => StoredReaderReplacePreference(
+    bookId: bookId ?? this.bookId,
+    sourceId: sourceId ?? this.sourceId,
+    detailUrl: detailUrl ?? this.detailUrl,
+    mode: mode ?? this.mode,
+    updatedAt: updatedAt ?? this.updatedAt,
+  );
+  StoredReaderReplacePreference copyWithCompanion(
+    StoredReaderReplacePreferencesCompanion data,
+  ) {
+    return StoredReaderReplacePreference(
+      bookId: data.bookId.present ? data.bookId.value : this.bookId,
+      sourceId: data.sourceId.present ? data.sourceId.value : this.sourceId,
+      detailUrl: data.detailUrl.present ? data.detailUrl.value : this.detailUrl,
+      mode: data.mode.present ? data.mode.value : this.mode,
+      updatedAt: data.updatedAt.present ? data.updatedAt.value : this.updatedAt,
+    );
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('StoredReaderReplacePreference(')
+          ..write('bookId: $bookId, ')
+          ..write('sourceId: $sourceId, ')
+          ..write('detailUrl: $detailUrl, ')
+          ..write('mode: $mode, ')
+          ..write('updatedAt: $updatedAt')
+          ..write(')'))
+        .toString();
+  }
+
+  @override
+  int get hashCode => Object.hash(bookId, sourceId, detailUrl, mode, updatedAt);
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is StoredReaderReplacePreference &&
+          other.bookId == this.bookId &&
+          other.sourceId == this.sourceId &&
+          other.detailUrl == this.detailUrl &&
+          other.mode == this.mode &&
+          other.updatedAt == this.updatedAt);
+}
+
+class StoredReaderReplacePreferencesCompanion
+    extends UpdateCompanion<StoredReaderReplacePreference> {
+  final Value<String> bookId;
+  final Value<String> sourceId;
+  final Value<String> detailUrl;
+  final Value<String> mode;
+  final Value<DateTime> updatedAt;
+  final Value<int> rowid;
+  const StoredReaderReplacePreferencesCompanion({
+    this.bookId = const Value.absent(),
+    this.sourceId = const Value.absent(),
+    this.detailUrl = const Value.absent(),
+    this.mode = const Value.absent(),
+    this.updatedAt = const Value.absent(),
+    this.rowid = const Value.absent(),
+  });
+  StoredReaderReplacePreferencesCompanion.insert({
+    required String bookId,
+    required String sourceId,
+    required String detailUrl,
+    this.mode = const Value.absent(),
+    this.updatedAt = const Value.absent(),
+    this.rowid = const Value.absent(),
+  }) : bookId = Value(bookId),
+       sourceId = Value(sourceId),
+       detailUrl = Value(detailUrl);
+  static Insertable<StoredReaderReplacePreference> custom({
+    Expression<String>? bookId,
+    Expression<String>? sourceId,
+    Expression<String>? detailUrl,
+    Expression<String>? mode,
+    Expression<DateTime>? updatedAt,
+    Expression<int>? rowid,
+  }) {
+    return RawValuesInsertable({
+      if (bookId != null) 'book_id': bookId,
+      if (sourceId != null) 'source_id': sourceId,
+      if (detailUrl != null) 'detail_url': detailUrl,
+      if (mode != null) 'mode': mode,
+      if (updatedAt != null) 'updated_at': updatedAt,
+      if (rowid != null) 'rowid': rowid,
+    });
+  }
+
+  StoredReaderReplacePreferencesCompanion copyWith({
+    Value<String>? bookId,
+    Value<String>? sourceId,
+    Value<String>? detailUrl,
+    Value<String>? mode,
+    Value<DateTime>? updatedAt,
+    Value<int>? rowid,
+  }) {
+    return StoredReaderReplacePreferencesCompanion(
+      bookId: bookId ?? this.bookId,
+      sourceId: sourceId ?? this.sourceId,
+      detailUrl: detailUrl ?? this.detailUrl,
+      mode: mode ?? this.mode,
+      updatedAt: updatedAt ?? this.updatedAt,
+      rowid: rowid ?? this.rowid,
+    );
+  }
+
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    if (bookId.present) {
+      map['book_id'] = Variable<String>(bookId.value);
+    }
+    if (sourceId.present) {
+      map['source_id'] = Variable<String>(sourceId.value);
+    }
+    if (detailUrl.present) {
+      map['detail_url'] = Variable<String>(detailUrl.value);
+    }
+    if (mode.present) {
+      map['mode'] = Variable<String>(mode.value);
+    }
+    if (updatedAt.present) {
+      map['updated_at'] = Variable<DateTime>(updatedAt.value);
+    }
+    if (rowid.present) {
+      map['rowid'] = Variable<int>(rowid.value);
+    }
+    return map;
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('StoredReaderReplacePreferencesCompanion(')
+          ..write('bookId: $bookId, ')
+          ..write('sourceId: $sourceId, ')
+          ..write('detailUrl: $detailUrl, ')
+          ..write('mode: $mode, ')
+          ..write('updatedAt: $updatedAt, ')
+          ..write('rowid: $rowid')
+          ..write(')'))
+        .toString();
+  }
+}
+
 abstract class _$AppDatabase extends GeneratedDatabase {
   _$AppDatabase(QueryExecutor e) : super(e);
   $AppDatabaseManager get managers => $AppDatabaseManager(this);
@@ -6690,6 +7213,8 @@ abstract class _$AppDatabase extends GeneratedDatabase {
   late final $SearchSourceHitsTable searchSourceHits = $SearchSourceHitsTable(
     this,
   );
+  late final $StoredReaderReplacePreferencesTable
+  storedReaderReplacePreferences = $StoredReaderReplacePreferencesTable(this);
   @override
   Iterable<TableInfo<Table, Object?>> get allTables =>
       allSchemaEntities.whereType<TableInfo<Table, Object?>>();
@@ -6704,6 +7229,7 @@ abstract class _$AppDatabase extends GeneratedDatabase {
     storedReadingRecordDays,
     storedReadingRecordSessions,
     searchSourceHits,
+    storedReaderReplacePreferences,
   ];
 }
 
@@ -8500,6 +9026,7 @@ typedef $$StoredReadingRecordsTableCreateCompanionBuilder =
       Value<String?> lastChapterUrl,
       Value<double> lastPositionRatio,
       Value<int> totalReadMillis,
+      Value<int> totalReadChars,
       required DateTime lastReadAt,
       Value<int> rowid,
     });
@@ -8517,6 +9044,7 @@ typedef $$StoredReadingRecordsTableUpdateCompanionBuilder =
       Value<String?> lastChapterUrl,
       Value<double> lastPositionRatio,
       Value<int> totalReadMillis,
+      Value<int> totalReadChars,
       Value<DateTime> lastReadAt,
       Value<int> rowid,
     });
@@ -8587,6 +9115,11 @@ class $$StoredReadingRecordsTableFilterComposer
 
   ColumnFilters<int> get totalReadMillis => $composableBuilder(
     column: $table.totalReadMillis,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get totalReadChars => $composableBuilder(
+    column: $table.totalReadChars,
     builder: (column) => ColumnFilters(column),
   );
 
@@ -8665,6 +9198,11 @@ class $$StoredReadingRecordsTableOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
+  ColumnOrderings<int> get totalReadChars => $composableBuilder(
+    column: $table.totalReadChars,
+    builder: (column) => ColumnOrderings(column),
+  );
+
   ColumnOrderings<DateTime> get lastReadAt => $composableBuilder(
     column: $table.lastReadAt,
     builder: (column) => ColumnOrderings(column),
@@ -8727,6 +9265,11 @@ class $$StoredReadingRecordsTableAnnotationComposer
 
   GeneratedColumn<int> get totalReadMillis => $composableBuilder(
     column: $table.totalReadMillis,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<int> get totalReadChars => $composableBuilder(
+    column: $table.totalReadChars,
     builder: (column) => column,
   );
 
@@ -8794,6 +9337,7 @@ class $$StoredReadingRecordsTableTableManager
                 Value<String?> lastChapterUrl = const Value.absent(),
                 Value<double> lastPositionRatio = const Value.absent(),
                 Value<int> totalReadMillis = const Value.absent(),
+                Value<int> totalReadChars = const Value.absent(),
                 Value<DateTime> lastReadAt = const Value.absent(),
                 Value<int> rowid = const Value.absent(),
               }) => StoredReadingRecordsCompanion(
@@ -8809,6 +9353,7 @@ class $$StoredReadingRecordsTableTableManager
                 lastChapterUrl: lastChapterUrl,
                 lastPositionRatio: lastPositionRatio,
                 totalReadMillis: totalReadMillis,
+                totalReadChars: totalReadChars,
                 lastReadAt: lastReadAt,
                 rowid: rowid,
               ),
@@ -8826,6 +9371,7 @@ class $$StoredReadingRecordsTableTableManager
                 Value<String?> lastChapterUrl = const Value.absent(),
                 Value<double> lastPositionRatio = const Value.absent(),
                 Value<int> totalReadMillis = const Value.absent(),
+                Value<int> totalReadChars = const Value.absent(),
                 required DateTime lastReadAt,
                 Value<int> rowid = const Value.absent(),
               }) => StoredReadingRecordsCompanion.insert(
@@ -8841,6 +9387,7 @@ class $$StoredReadingRecordsTableTableManager
                 lastChapterUrl: lastChapterUrl,
                 lastPositionRatio: lastPositionRatio,
                 totalReadMillis: totalReadMillis,
+                totalReadChars: totalReadChars,
                 lastReadAt: lastReadAt,
                 rowid: rowid,
               ),
@@ -8888,6 +9435,7 @@ typedef $$StoredReadingRecordDaysTableCreateCompanionBuilder =
       Value<String?> bookAuthor,
       Value<String?> coverUrl,
       Value<int> readMillis,
+      Value<int> readChars,
       required DateTime firstReadAt,
       required DateTime lastReadAt,
       Value<int> rowid,
@@ -8900,6 +9448,7 @@ typedef $$StoredReadingRecordDaysTableUpdateCompanionBuilder =
       Value<String?> bookAuthor,
       Value<String?> coverUrl,
       Value<int> readMillis,
+      Value<int> readChars,
       Value<DateTime> firstReadAt,
       Value<DateTime> lastReadAt,
       Value<int> rowid,
@@ -8941,6 +9490,11 @@ class $$StoredReadingRecordDaysTableFilterComposer
 
   ColumnFilters<int> get readMillis => $composableBuilder(
     column: $table.readMillis,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get readChars => $composableBuilder(
+    column: $table.readChars,
     builder: (column) => ColumnFilters(column),
   );
 
@@ -8994,6 +9548,11 @@ class $$StoredReadingRecordDaysTableOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
+  ColumnOrderings<int> get readChars => $composableBuilder(
+    column: $table.readChars,
+    builder: (column) => ColumnOrderings(column),
+  );
+
   ColumnOrderings<DateTime> get firstReadAt => $composableBuilder(
     column: $table.firstReadAt,
     builder: (column) => ColumnOrderings(column),
@@ -9035,6 +9594,9 @@ class $$StoredReadingRecordDaysTableAnnotationComposer
     column: $table.readMillis,
     builder: (column) => column,
   );
+
+  GeneratedColumn<int> get readChars =>
+      $composableBuilder(column: $table.readChars, builder: (column) => column);
 
   GeneratedColumn<DateTime> get firstReadAt => $composableBuilder(
     column: $table.firstReadAt,
@@ -9099,6 +9661,7 @@ class $$StoredReadingRecordDaysTableTableManager
                 Value<String?> bookAuthor = const Value.absent(),
                 Value<String?> coverUrl = const Value.absent(),
                 Value<int> readMillis = const Value.absent(),
+                Value<int> readChars = const Value.absent(),
                 Value<DateTime> firstReadAt = const Value.absent(),
                 Value<DateTime> lastReadAt = const Value.absent(),
                 Value<int> rowid = const Value.absent(),
@@ -9109,6 +9672,7 @@ class $$StoredReadingRecordDaysTableTableManager
                 bookAuthor: bookAuthor,
                 coverUrl: coverUrl,
                 readMillis: readMillis,
+                readChars: readChars,
                 firstReadAt: firstReadAt,
                 lastReadAt: lastReadAt,
                 rowid: rowid,
@@ -9121,6 +9685,7 @@ class $$StoredReadingRecordDaysTableTableManager
                 Value<String?> bookAuthor = const Value.absent(),
                 Value<String?> coverUrl = const Value.absent(),
                 Value<int> readMillis = const Value.absent(),
+                Value<int> readChars = const Value.absent(),
                 required DateTime firstReadAt,
                 required DateTime lastReadAt,
                 Value<int> rowid = const Value.absent(),
@@ -9131,6 +9696,7 @@ class $$StoredReadingRecordDaysTableTableManager
                 bookAuthor: bookAuthor,
                 coverUrl: coverUrl,
                 readMillis: readMillis,
+                readChars: readChars,
                 firstReadAt: firstReadAt,
                 lastReadAt: lastReadAt,
                 rowid: rowid,
@@ -9187,6 +9753,7 @@ typedef $$StoredReadingRecordSessionsTableCreateCompanionBuilder =
       required DateTime startAt,
       required DateTime endAt,
       Value<int> durationMillis,
+      Value<int> readChars,
       Value<double> startPositionRatio,
       Value<double> endPositionRatio,
     });
@@ -9206,6 +9773,7 @@ typedef $$StoredReadingRecordSessionsTableUpdateCompanionBuilder =
       Value<DateTime> startAt,
       Value<DateTime> endAt,
       Value<int> durationMillis,
+      Value<int> readChars,
       Value<double> startPositionRatio,
       Value<double> endPositionRatio,
     });
@@ -9286,6 +9854,11 @@ class $$StoredReadingRecordSessionsTableFilterComposer
 
   ColumnFilters<int> get durationMillis => $composableBuilder(
     column: $table.durationMillis,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get readChars => $composableBuilder(
+    column: $table.readChars,
     builder: (column) => ColumnFilters(column),
   );
 
@@ -9379,6 +9952,11 @@ class $$StoredReadingRecordSessionsTableOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
+  ColumnOrderings<int> get readChars => $composableBuilder(
+    column: $table.readChars,
+    builder: (column) => ColumnOrderings(column),
+  );
+
   ColumnOrderings<double> get startPositionRatio => $composableBuilder(
     column: $table.startPositionRatio,
     builder: (column) => ColumnOrderings(column),
@@ -9451,6 +10029,9 @@ class $$StoredReadingRecordSessionsTableAnnotationComposer
     builder: (column) => column,
   );
 
+  GeneratedColumn<int> get readChars =>
+      $composableBuilder(column: $table.readChars, builder: (column) => column);
+
   GeneratedColumn<double> get startPositionRatio => $composableBuilder(
     column: $table.startPositionRatio,
     builder: (column) => column,
@@ -9522,6 +10103,7 @@ class $$StoredReadingRecordSessionsTableTableManager
                 Value<DateTime> startAt = const Value.absent(),
                 Value<DateTime> endAt = const Value.absent(),
                 Value<int> durationMillis = const Value.absent(),
+                Value<int> readChars = const Value.absent(),
                 Value<double> startPositionRatio = const Value.absent(),
                 Value<double> endPositionRatio = const Value.absent(),
               }) => StoredReadingRecordSessionsCompanion(
@@ -9539,6 +10121,7 @@ class $$StoredReadingRecordSessionsTableTableManager
                 startAt: startAt,
                 endAt: endAt,
                 durationMillis: durationMillis,
+                readChars: readChars,
                 startPositionRatio: startPositionRatio,
                 endPositionRatio: endPositionRatio,
               ),
@@ -9558,6 +10141,7 @@ class $$StoredReadingRecordSessionsTableTableManager
                 required DateTime startAt,
                 required DateTime endAt,
                 Value<int> durationMillis = const Value.absent(),
+                Value<int> readChars = const Value.absent(),
                 Value<double> startPositionRatio = const Value.absent(),
                 Value<double> endPositionRatio = const Value.absent(),
               }) => StoredReadingRecordSessionsCompanion.insert(
@@ -9575,6 +10159,7 @@ class $$StoredReadingRecordSessionsTableTableManager
                 startAt: startAt,
                 endAt: endAt,
                 durationMillis: durationMillis,
+                readChars: readChars,
                 startPositionRatio: startPositionRatio,
                 endPositionRatio: endPositionRatio,
               ),
@@ -9975,6 +10560,232 @@ typedef $$SearchSourceHitsTableProcessedTableManager =
       SearchSourceHit,
       PrefetchHooks Function()
     >;
+typedef $$StoredReaderReplacePreferencesTableCreateCompanionBuilder =
+    StoredReaderReplacePreferencesCompanion Function({
+      required String bookId,
+      required String sourceId,
+      required String detailUrl,
+      Value<String> mode,
+      Value<DateTime> updatedAt,
+      Value<int> rowid,
+    });
+typedef $$StoredReaderReplacePreferencesTableUpdateCompanionBuilder =
+    StoredReaderReplacePreferencesCompanion Function({
+      Value<String> bookId,
+      Value<String> sourceId,
+      Value<String> detailUrl,
+      Value<String> mode,
+      Value<DateTime> updatedAt,
+      Value<int> rowid,
+    });
+
+class $$StoredReaderReplacePreferencesTableFilterComposer
+    extends Composer<_$AppDatabase, $StoredReaderReplacePreferencesTable> {
+  $$StoredReaderReplacePreferencesTableFilterComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnFilters<String> get bookId => $composableBuilder(
+    column: $table.bookId,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get sourceId => $composableBuilder(
+    column: $table.sourceId,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get detailUrl => $composableBuilder(
+    column: $table.detailUrl,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get mode => $composableBuilder(
+    column: $table.mode,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<DateTime> get updatedAt => $composableBuilder(
+    column: $table.updatedAt,
+    builder: (column) => ColumnFilters(column),
+  );
+}
+
+class $$StoredReaderReplacePreferencesTableOrderingComposer
+    extends Composer<_$AppDatabase, $StoredReaderReplacePreferencesTable> {
+  $$StoredReaderReplacePreferencesTableOrderingComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnOrderings<String> get bookId => $composableBuilder(
+    column: $table.bookId,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get sourceId => $composableBuilder(
+    column: $table.sourceId,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get detailUrl => $composableBuilder(
+    column: $table.detailUrl,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get mode => $composableBuilder(
+    column: $table.mode,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<DateTime> get updatedAt => $composableBuilder(
+    column: $table.updatedAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+}
+
+class $$StoredReaderReplacePreferencesTableAnnotationComposer
+    extends Composer<_$AppDatabase, $StoredReaderReplacePreferencesTable> {
+  $$StoredReaderReplacePreferencesTableAnnotationComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  GeneratedColumn<String> get bookId =>
+      $composableBuilder(column: $table.bookId, builder: (column) => column);
+
+  GeneratedColumn<String> get sourceId =>
+      $composableBuilder(column: $table.sourceId, builder: (column) => column);
+
+  GeneratedColumn<String> get detailUrl =>
+      $composableBuilder(column: $table.detailUrl, builder: (column) => column);
+
+  GeneratedColumn<String> get mode =>
+      $composableBuilder(column: $table.mode, builder: (column) => column);
+
+  GeneratedColumn<DateTime> get updatedAt =>
+      $composableBuilder(column: $table.updatedAt, builder: (column) => column);
+}
+
+class $$StoredReaderReplacePreferencesTableTableManager
+    extends
+        RootTableManager<
+          _$AppDatabase,
+          $StoredReaderReplacePreferencesTable,
+          StoredReaderReplacePreference,
+          $$StoredReaderReplacePreferencesTableFilterComposer,
+          $$StoredReaderReplacePreferencesTableOrderingComposer,
+          $$StoredReaderReplacePreferencesTableAnnotationComposer,
+          $$StoredReaderReplacePreferencesTableCreateCompanionBuilder,
+          $$StoredReaderReplacePreferencesTableUpdateCompanionBuilder,
+          (
+            StoredReaderReplacePreference,
+            BaseReferences<
+              _$AppDatabase,
+              $StoredReaderReplacePreferencesTable,
+              StoredReaderReplacePreference
+            >,
+          ),
+          StoredReaderReplacePreference,
+          PrefetchHooks Function()
+        > {
+  $$StoredReaderReplacePreferencesTableTableManager(
+    _$AppDatabase db,
+    $StoredReaderReplacePreferencesTable table,
+  ) : super(
+        TableManagerState(
+          db: db,
+          table: table,
+          createFilteringComposer:
+              () => $$StoredReaderReplacePreferencesTableFilterComposer(
+                $db: db,
+                $table: table,
+              ),
+          createOrderingComposer:
+              () => $$StoredReaderReplacePreferencesTableOrderingComposer(
+                $db: db,
+                $table: table,
+              ),
+          createComputedFieldComposer:
+              () => $$StoredReaderReplacePreferencesTableAnnotationComposer(
+                $db: db,
+                $table: table,
+              ),
+          updateCompanionCallback:
+              ({
+                Value<String> bookId = const Value.absent(),
+                Value<String> sourceId = const Value.absent(),
+                Value<String> detailUrl = const Value.absent(),
+                Value<String> mode = const Value.absent(),
+                Value<DateTime> updatedAt = const Value.absent(),
+                Value<int> rowid = const Value.absent(),
+              }) => StoredReaderReplacePreferencesCompanion(
+                bookId: bookId,
+                sourceId: sourceId,
+                detailUrl: detailUrl,
+                mode: mode,
+                updatedAt: updatedAt,
+                rowid: rowid,
+              ),
+          createCompanionCallback:
+              ({
+                required String bookId,
+                required String sourceId,
+                required String detailUrl,
+                Value<String> mode = const Value.absent(),
+                Value<DateTime> updatedAt = const Value.absent(),
+                Value<int> rowid = const Value.absent(),
+              }) => StoredReaderReplacePreferencesCompanion.insert(
+                bookId: bookId,
+                sourceId: sourceId,
+                detailUrl: detailUrl,
+                mode: mode,
+                updatedAt: updatedAt,
+                rowid: rowid,
+              ),
+          withReferenceMapper:
+              (p0) =>
+                  p0
+                      .map(
+                        (e) => (
+                          e.readTable(table),
+                          BaseReferences(db, table, e),
+                        ),
+                      )
+                      .toList(),
+          prefetchHooksCallback: null,
+        ),
+      );
+}
+
+typedef $$StoredReaderReplacePreferencesTableProcessedTableManager =
+    ProcessedTableManager<
+      _$AppDatabase,
+      $StoredReaderReplacePreferencesTable,
+      StoredReaderReplacePreference,
+      $$StoredReaderReplacePreferencesTableFilterComposer,
+      $$StoredReaderReplacePreferencesTableOrderingComposer,
+      $$StoredReaderReplacePreferencesTableAnnotationComposer,
+      $$StoredReaderReplacePreferencesTableCreateCompanionBuilder,
+      $$StoredReaderReplacePreferencesTableUpdateCompanionBuilder,
+      (
+        StoredReaderReplacePreference,
+        BaseReferences<
+          _$AppDatabase,
+          $StoredReaderReplacePreferencesTable,
+          StoredReaderReplacePreference
+        >,
+      ),
+      StoredReaderReplacePreference,
+      PrefetchHooks Function()
+    >;
 
 class $AppDatabaseManager {
   final _$AppDatabase _db;
@@ -10004,4 +10815,10 @@ class $AppDatabaseManager {
       );
   $$SearchSourceHitsTableTableManager get searchSourceHits =>
       $$SearchSourceHitsTableTableManager(_db, _db.searchSourceHits);
+  $$StoredReaderReplacePreferencesTableTableManager
+  get storedReaderReplacePreferences =>
+      $$StoredReaderReplacePreferencesTableTableManager(
+        _db,
+        _db.storedReaderReplacePreferences,
+      );
 }

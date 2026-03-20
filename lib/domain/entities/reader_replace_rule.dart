@@ -98,20 +98,14 @@ class ReaderReplaceRule {
     return _matchesScope(bookTitle: bookTitle, sourceId: sourceId);
   }
 
-  bool matchesForTitle({
-    required String bookTitle,
-    required String sourceId,
-  }) {
+  bool matchesForTitle({required String bookTitle, required String sourceId}) {
     if (!isEnabled || !scopeTitle) {
       return false;
     }
     return _matchesScope(bookTitle: bookTitle, sourceId: sourceId);
   }
 
-  bool _matchesScope({
-    required String bookTitle,
-    required String sourceId,
-  }) {
+  bool _matchesScope({required String bookTitle, required String sourceId}) {
     final normalizedBookTitle = _normalize(bookTitle);
     final normalizedSourceId = _normalize(sourceId);
     if (_matchesAnyToken(
@@ -212,6 +206,11 @@ class ReaderReplaceRule {
   }
 
   factory ReaderReplaceRule.fromJson(Map<String, dynamic> json) {
+    final fallbackName =
+        (json['name'] ?? json['replaceSummary'] ?? json['summary'] ?? '')
+            .toString();
+    final fallbackPattern = (json['pattern'] ?? json['regex'] ?? '').toString();
+    final fallbackScope = (json['scope'] ?? json['useTo'])?.toString();
     final scopeModeName = json['scopeMode']?.toString();
     final scopeMode = ReaderReplaceRuleScopeMode.values.firstWhere(
       (item) => item.name == scopeModeName,
@@ -223,7 +222,8 @@ class ReaderReplaceRule {
         return value;
       }
       if (value is String) {
-        return DateTime.tryParse(value) ?? DateTime.fromMillisecondsSinceEpoch(0);
+        return DateTime.tryParse(value) ??
+            DateTime.fromMillisecondsSinceEpoch(0);
       }
       return DateTime.fromMillisecondsSinceEpoch(0);
     }
@@ -262,19 +262,25 @@ class ReaderReplaceRule {
 
     return ReaderReplaceRule(
       id: parseInt(json['id'], 0),
-      name: (json['name'] ?? '').toString(),
-      pattern: (json['pattern'] ?? '').toString(),
+      name: fallbackName,
+      pattern: fallbackPattern,
       replacement: (json['replacement'] ?? '').toString(),
       group: json['group']?.toString(),
       scopeMode: scopeMode,
-      scope: json['scope']?.toString(),
+      scope: fallbackScope,
       excludeScope: json['excludeScope']?.toString(),
       scopeTitle: parseBool(json['scopeTitle'], false),
       scopeContent: parseBool(json['scopeContent'], true),
-      isEnabled: parseBool(json['isEnabled'], true),
+      isEnabled: parseBool(json['isEnabled'] ?? json['enable'], true),
       isRegex: parseBool(json['isRegex'], true),
-      timeoutMs: parseInt(json['timeoutMs'], 3000),
-      sortOrder: parseInt(json['sortOrder'], 0),
+      timeoutMs: parseInt(
+        json['timeoutMs'] ?? json['timeoutMillisecond'],
+        3000,
+      ),
+      sortOrder: parseInt(
+        json['sortOrder'] ?? json['serialNumber'] ?? json['order'],
+        0,
+      ),
       createdAt: parseDate(json['createdAt']),
       updatedAt: parseDate(json['updatedAt']),
     );

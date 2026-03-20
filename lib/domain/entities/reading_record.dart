@@ -12,6 +12,7 @@ class ReadingRecord {
     this.lastChapterUrl,
     this.lastPositionRatio = 0,
     this.totalReadMillis = 0,
+    this.totalReadChars = 0,
     required this.lastReadAt,
   });
 
@@ -27,5 +28,6 @@ class ReadingRecord {
   final String? lastChapterUrl;
   final double lastPositionRatio;
   final int totalReadMillis;
+  final int totalReadChars;
   final DateTime lastReadAt;
 }

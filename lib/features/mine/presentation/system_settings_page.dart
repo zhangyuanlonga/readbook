@@ -51,12 +51,22 @@ class SystemSettingsPage extends StatelessWidget {
                             constraints.maxWidth >=
                             AppLayout.railBreakpointWidth;
                         if (wide) {
-                          return const Row(
-                            crossAxisAlignment: CrossAxisAlignment.start,
+                          return const Column(
                             children: [
-                              Expanded(child: _ReaderAutoSwitchSettingPanel()),
-                              SizedBox(width: 12),
-                              Expanded(child: _SearchAggregationSettingPanel()),
+                              Row(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Expanded(
+                                    child: _ReaderAutoSwitchSettingPanel(),
+                                  ),
+                                  SizedBox(width: 12),
+                                  Expanded(
+                                    child: _SearchAggregationSettingPanel(),
+                                  ),
+                                ],
+                              ),
+                              SizedBox(height: 12),
+                              _ReadingRecordSettingPanel(),
                             ],
                           );
                         }
@@ -66,6 +76,8 @@ class SystemSettingsPage extends StatelessWidget {
                             _ReaderAutoSwitchSettingPanel(),
                             SizedBox(height: 12),
                             _SearchAggregationSettingPanel(),
+                            SizedBox(height: 12),
+                            _ReadingRecordSettingPanel(),
                           ],
                         );
                       },
@@ -158,6 +170,11 @@ class SystemSettingsPage extends StatelessWidget {
                   context,
                   icon: Icons.auto_awesome_mosaic_rounded,
                   label: '搜索聚合',
+                ),
+                _buildMetaChip(
+                  context,
+                  icon: Icons.history_rounded,
+                  label: '阅读记录',
                 ),
               ],
             ),
@@ -560,6 +577,105 @@ class _SearchAggregationSettingPanelState
       description: '按书名与作者合并多源命中结果。',
       stateDescription: _enabled ? '多源命中时自动合并展示。' : '按原始结果逐条展示。',
       stateLabel: _enabled ? '聚合中' : '原始列表',
+      value: _enabled,
+      isLoading: _isLoading,
+      isSaving: _isSaving,
+      onChanged: _isLoading || _isSaving ? null : _toggle,
+      errorText: _errorText,
+    );
+  }
+}
+
+class _ReadingRecordSettingPanel extends StatefulWidget {
+  const _ReadingRecordSettingPanel();
+
+  @override
+  State<_ReadingRecordSettingPanel> createState() =>
+      _ReadingRecordSettingPanelState();
+}
+
+class _ReadingRecordSettingPanelState
+    extends State<_ReadingRecordSettingPanel> {
+  final ReaderSystemSettingsService _systemSettingsService =
+      ReaderSystemSettingsService();
+
+  bool _isLoading = true;
+  bool _isSaving = false;
+  bool _enabled = true;
+  String? _errorText;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadSetting();
+  }
+
+  Future<void> _loadSetting() async {
+    try {
+      final enabled = await _systemSettingsService.loadReadRecordEnabled();
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _enabled = enabled;
+        _errorText = null;
+      });
+    } catch (_) {
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _errorText = '读取阅读记录开关失败，请稍后重试。';
+      });
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+        });
+      }
+    }
+  }
+
+  Future<void> _toggle(bool enabled) async {
+    if (_isSaving) {
+      return;
+    }
+
+    final previous = _enabled;
+    setState(() {
+      _enabled = enabled;
+      _isSaving = true;
+      _errorText = null;
+    });
+
+    try {
+      await _systemSettingsService.saveReadRecordEnabled(enabled);
+    } catch (_) {
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _enabled = previous;
+        _errorText = '保存阅读记录开关失败，请稍后重试。';
+      });
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isSaving = false;
+        });
+      }
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return _buildCompactSettingCard(
+      context,
+      icon: Icons.history_rounded,
+      title: '阅读记录',
+      description: '记录阅读时长、按天汇总和时间线会话。',
+      stateDescription: _enabled ? '阅读时自动累计记录。' : '不再新增阅读记录，已有记录仍保留。',
+      stateLabel: _enabled ? '记录中' : '已关闭',
       value: _enabled,
       isLoading: _isLoading,
       isSaving: _isSaving,

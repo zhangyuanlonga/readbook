@@ -149,6 +149,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
   bool _isSwitchSourceLoading = false;
   bool _isAutoSwitchingSource = false;
   bool _autoSwitchSourceOnFailureEnabled = false;
+  bool _readingRecordEnabled = true;
   bool _isScrollEdgeAdvancingChapter = false;
   bool _hasPromptedMissingSourceSwitch = false;
   SearchCancellationToken? _activeSwitchSourceCancellationToken;
@@ -5545,6 +5546,12 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
       } catch (_) {
         _autoSwitchSourceOnFailureEnabled = false;
       }
+      try {
+        _readingRecordEnabled =
+            await _systemSettingsService.loadReadRecordEnabled();
+      } catch (_) {
+        _readingRecordEnabled = true;
+      }
 
       final progress = await _preferencesService.loadProgress(_currentBookId);
       _bootstrapProgress = progress;
@@ -6409,6 +6416,9 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
     final sourceId = (_sourceId ?? '').trim();
     final detailUrl = (_detailUrl ?? '').trim();
     final title = _bookTitle.trim();
+    if (!_readingRecordEnabled) {
+      return false;
+    }
     if (_isBootstrapping || _isLoadingContent || _errorText != null) {
       return false;
     }
@@ -6477,9 +6487,19 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
     if (session == null) {
       return;
     }
+    if (!_readingRecordEnabled) {
+      return;
+    }
 
     final endAt = DateTime.now();
     final endRatio = _currentScrollRatio();
+    final chapterLength = _chapterTextLength();
+    final readChars =
+        chapterLength <= 0
+            ? 0
+            : ((endRatio - session.startPositionRatio).abs() * chapterLength)
+                .round()
+                .clamp(0, chapterLength);
     unawaited(
       _readingRecordService.commitSession(
         ReadingRecordCommitInput(
@@ -6495,6 +6515,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
           chapterUrl: session.chapterUrl,
           startAt: session.startAt,
           endAt: endAt,
+          readChars: readChars,
           startPositionRatio: session.startPositionRatio,
           endPositionRatio: endRatio.clamp(0.0, 1.0).toDouble(),
         ),

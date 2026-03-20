@@ -3,6 +3,7 @@ import '../../../core/errors/error_codes.dart';
 import '../../../core/errors/error_stage.dart';
 import '../../../domain/entities/book_detail.dart';
 import '../../../domain/entities/chapter.dart';
+import '../../../domain/entities/reader_replace_rule.dart';
 import '../../bookshelf/application/local_book_import_service.dart';
 import '../../book/application/book_detail_service.dart';
 import '../../book/application/local_book_detail_service.dart';
@@ -142,12 +143,30 @@ class LocalContentProvider extends ContentProvider {
       content: chapter.content,
       bookTitle: (bookTitle ?? '').trim(),
       sourceId: sourceId,
+      bookId: bookId,
+      detailUrl: _buildLocalDetailUrl(bookId),
+    );
+    final titleResult = await _readerReplaceRuleService.applyTitleRules(
+      title: chapterTitle ?? chapter.title,
+      bookTitle: (bookTitle ?? '').trim(),
+      sourceId: sourceId,
+      bookId: bookId,
+      detailUrl: _buildLocalDetailUrl(bookId),
     );
 
     return ChapterContentResult(
       content: replaced.content,
       fromCache: true,
-      effectiveReaderReplaceRules: replaced.effectiveRules,
+      displayChapterTitle: titleResult.content,
+      effectiveReaderReplaceRules: <ReaderReplaceRule>[
+        ...titleResult.effectiveRules,
+        ...replaced.effectiveRules.where(
+          (rule) =>
+              !titleResult.effectiveRules.any(
+                (titleRule) => titleRule.id == rule.id,
+              ),
+        ),
+      ],
     );
   }
 

@@ -14,6 +14,22 @@ class ReaderReplaceExecutionResult {
   final List<ReaderReplaceRule> effectiveRules;
 }
 
+class ReaderReplaceRuleTestResult {
+  const ReaderReplaceRuleTestResult({
+    required this.originalText,
+    required this.resultText,
+    required this.hasMatch,
+    required this.hasChange,
+    required this.matchCount,
+  });
+
+  final String originalText;
+  final String resultText;
+  final bool hasMatch;
+  final bool hasChange;
+  final int matchCount;
+}
+
 class ReaderReplaceRuleExecutor {
   ReaderReplaceRuleExecutor({AppLogger? logger})
     : _logger = logger ?? AppLogger.instance;
@@ -98,12 +114,37 @@ class ReaderReplaceRuleExecutor {
   Future<String> test({
     required ReaderReplaceRule rule,
     required String text,
-  }) {
+  }) async {
+    final result = await testDetailed(rule: rule, text: text);
+    return result.resultText;
+  }
+
+  Future<ReaderReplaceRuleTestResult> testDetailed({
+    required ReaderReplaceRule rule,
+    required String text,
+  }) async {
     if (!rule.isValid || text.isEmpty) {
-      return Future<String>.value(text);
+      return ReaderReplaceRuleTestResult(
+        originalText: text,
+        resultText: text,
+        hasMatch: false,
+        hasChange: false,
+        matchCount: 0,
+      );
     }
-    return _applyRule(text, rule: rule).timeout(
-      Duration(milliseconds: rule.safeTimeoutMs),
+
+    final result = await _probeRule(
+      text,
+      rule: rule,
+    ).timeout(Duration(milliseconds: rule.safeTimeoutMs));
+    final resultText = result['output'] as String? ?? text;
+    final matchCount = result['matchCount'] as int? ?? 0;
+    return ReaderReplaceRuleTestResult(
+      originalText: text,
+      resultText: resultText,
+      hasMatch: matchCount > 0,
+      hasChange: resultText != text,
+      matchCount: matchCount,
     );
   }
 
@@ -138,5 +179,45 @@ class ReaderReplaceRuleExecutor {
       }
       return match.group(groupIndex) ?? '';
     });
+  }
+
+  Future<Map<String, Object>> _probeRule(
+    String input, {
+    required ReaderReplaceRule rule,
+  }) async {
+    if (!rule.isRegex) {
+      return <String, Object>{
+        'output': input.replaceAll(rule.pattern, rule.replacement),
+        'matchCount': _countPlainMatches(input, rule.pattern),
+      };
+    }
+
+    return Isolate.run<Map<String, Object>>(() {
+      final regex = RegExp(rule.pattern, dotAll: true);
+      final matches = regex.allMatches(input).toList(growable: false);
+      final output = input.replaceAllMapped(
+        regex,
+        (match) => _resolveReplacement(rule.replacement, match),
+      );
+      return <String, Object>{'output': output, 'matchCount': matches.length};
+    });
+  }
+
+  int _countPlainMatches(String input, String pattern) {
+    if (pattern.isEmpty) {
+      return 0;
+    }
+
+    var count = 0;
+    var start = 0;
+    while (start < input.length) {
+      final index = input.indexOf(pattern, start);
+      if (index < 0) {
+        break;
+      }
+      count += 1;
+      start = index + pattern.length;
+    }
+    return count;
   }
 }

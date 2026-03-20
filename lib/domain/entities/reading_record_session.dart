@@ -14,6 +14,7 @@ class ReadingRecordSession {
     required this.startAt,
     required this.endAt,
     required this.durationMillis,
+    this.readChars = 0,
     this.startPositionRatio = 0,
     this.endPositionRatio = 0,
   });
@@ -32,6 +33,7 @@ class ReadingRecordSession {
   final DateTime startAt;
   final DateTime endAt;
   final int durationMillis;
+  final int readChars;
   final double startPositionRatio;
   final double endPositionRatio;
 }

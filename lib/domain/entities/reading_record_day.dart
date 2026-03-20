@@ -6,6 +6,7 @@ class ReadingRecordDay {
     this.bookAuthor,
     this.coverUrl,
     required this.readMillis,
+    this.readChars = 0,
     required this.firstReadAt,
     required this.lastReadAt,
   });
@@ -16,6 +17,7 @@ class ReadingRecordDay {
   final String? bookAuthor;
   final String? coverUrl;
   final int readMillis;
+  final int readChars;
   final DateTime firstReadAt;
   final DateTime lastReadAt;
 }
