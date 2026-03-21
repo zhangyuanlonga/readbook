@@ -10,7 +10,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:page_curl_effect/page_curl_effect.dart';
 import 'package:go_router/go_router.dart';
 import 'package:uuid/uuid.dart';
 
@@ -214,25 +213,21 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
   MemoryImage? _cachedBackgroundImage;
   List<List<_PagedSlice>> _pagedPages = const [];
   int _currentPageIndex = 0;
-  int _pageSwitchDirection = 1;
   bool _isPaginatingPages = false;
   String? _paginationSignature;
   int _paginationTaskId = 0;
   double? _pendingPageRestoreRatio;
   bool _showChapterLoadingIndicator = false;
   bool _showBlockingLoadingCard = false;
-  PageCurlController? _pageCurlController;
-  Size? _pageCurlPaperSize;
-  bool _isCurlAutoTurning = false;
+  _PagedPageTransitionState _pagedTransition =
+      const _PagedPageTransitionState();
+  _CurlTransitionState _curlTransition = const _CurlTransitionState();
   bool _isSystemUiVisible = true;
   bool _isVolumeKeyPageInterceptionEnabled = false;
   late final AnimationController _overlayControlsController;
+  late final AnimationController _pagedTransitionController;
   late final AnimationController _curlAutoTurnController;
   _ActiveReadingRecordSession? _activeReadingRecordSession;
-  double _curlAutoStartX = 0;
-  double _curlAutoEndX = 0;
-  double _curlAutoY = 0;
-  int _curlAutoDirection = 1;
   final Map<String, Uint8List> _backgroundPresetBytes = <String, Uint8List>{};
   final Map<String, String> _backgroundPresetBase64 = <String, String>{};
   final List<_ReaderBackgroundPreset> _backgroundPresets =
@@ -253,6 +248,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
   static const int _kMaxCustomBackgrounds = 5;
   static const double _kSwipeTurnDistanceThreshold = 42;
   static const double _kSwipeTurnVelocityThreshold = 120;
+  static const double _kCurlPreviewStartThreshold = 8;
   static const double _kCoverEdgeShadowWidth = 20;
   static const double _kCoverEdgeShadowMaxAlpha = 0.22;
   static const double _kDarkBackgroundOverlayAlpha = 0.45;
@@ -263,7 +259,9 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
   static const Duration _kOverlayControlsHideDuration = Duration(
     milliseconds: 220,
   );
-  static const Duration _kCurlAutoTurnDuration = Duration(milliseconds: 460);
+  static const Duration _kCurlAutoTurnDuration = Duration(milliseconds: 560);
+  static const Duration _kPagedScrollTurnDuration = Duration(milliseconds: 300);
+  static const Duration _kMangaPagedTurnDuration = Duration(milliseconds: 320);
   static const Duration _kAutoReadStepDuration = Duration(milliseconds: 520);
   static const Duration _kAutoReadResumeDelay = Duration(milliseconds: 420);
   static const Duration _kChapterLoadingIndicatorDelay = Duration(
@@ -294,6 +292,15 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
     PointerDeviceKind.invertedStylus,
     PointerDeviceKind.unknown,
   };
+
+  bool get _isCurlAutoTurning => _curlTransition.isAnimating;
+  bool get _isCurlPreviewActive => _curlTransition.isPreview;
+  int get _curlAutoDirection => _curlTransition.direction;
+  int get _curlAnimationFromIndex => _curlTransition.fromIndex;
+  int get _curlAnimationToIndex => _curlTransition.toIndex;
+  double get _curlPreviewProgress => _curlTransition.previewProgress;
+  bool get _curlCommitOnAnimationEnd => _curlTransition.commitOnAnimationEnd;
+  bool get _isPagedTransitionAnimating => _pagedTransition.isAnimating;
   static final RegExp _kSwitchSourceChapterPattern = RegExp(
     r'第?\s*(\d{1,5})\s*章',
   );
@@ -480,8 +487,8 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
       try {
         await _scrollController.animateTo(
           target,
-          duration: const Duration(milliseconds: 220),
-          curve: Curves.easeOutCubic,
+          duration: _kPagedScrollTurnDuration,
+          curve: Curves.easeInOutCubic,
         );
       } catch (_) {
         // Ignore interrupted animations.
@@ -528,8 +535,8 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
     if (_mangaPageController.hasClients) {
       await _mangaPageController.animateToPage(
         target,
-        duration: const Duration(milliseconds: 220),
-        curve: Curves.easeOutCubic,
+        duration: _kMangaPagedTurnDuration,
+        curve: Curves.easeInOutCubic,
       );
     }
     if (!mounted) {
@@ -559,8 +566,8 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
     if (_mangaPageController.hasClients) {
       await _mangaPageController.animateToPage(
         target,
-        duration: const Duration(milliseconds: 220),
-        curve: Curves.easeOutCubic,
+        duration: _kMangaPagedTurnDuration,
+        curve: Curves.easeInOutCubic,
       );
     }
     if (!mounted) {
@@ -675,11 +682,15 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
       reverseDuration: _kOverlayControlsHideDuration,
       value: _showOverlayControls ? 1 : 0,
     );
+    _pagedTransitionController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 400),
+    );
+    _pagedTransitionController.addStatusListener(_onPagedTransitionStatus);
     _curlAutoTurnController = AnimationController(
       vsync: this,
       duration: _kCurlAutoTurnDuration,
     );
-    _curlAutoTurnController.addListener(_onCurlAutoTurnTick);
     _curlAutoTurnController.addStatusListener(_onCurlAutoTurnStatus);
     _scrollController.addListener(_onScrollChanged);
     _selectionNotifier.addListener(_handleSelectionNotifierChanged);
@@ -712,8 +723,10 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
     _commitReadingRecordSession();
     _syncSystemUiVisibility(force: true, visible: true);
     _overlayControlsController.stop();
+    _pagedTransitionController.stop();
     _curlAutoTurnController.stop();
-    _isCurlAutoTurning = false;
+    _pagedTransition = const _PagedPageTransitionState();
+    _curlTransition = const _CurlTransitionState();
     _progressDebounceTimer?.cancel();
     _autoReadResumeTimer?.cancel();
     _readerInfoClockTimer?.cancel();
@@ -730,8 +743,8 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
     _scrollController.dispose();
     _mangaPageController.dispose();
     _disposeMangaTransformControllers();
-    _pageCurlController?.dispose();
     _overlayControlsController.dispose();
+    _pagedTransitionController.dispose();
     _curlAutoTurnController.dispose();
     super.dispose();
   }
@@ -2783,32 +2796,53 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
     return _settings.pageAnimationStyle;
   }
 
-  Duration _pageSwitchDurationForStyle(ReaderPageAnimationStyle style) {
+  _PagedAnimationMotionSpec _pageSwitchMotionSpecForStyle(
+    ReaderPageAnimationStyle style,
+  ) {
     return switch (style) {
-      ReaderPageAnimationStyle.curl => _kCurlAutoTurnDuration,
-      ReaderPageAnimationStyle.cover => const Duration(milliseconds: 420),
-      ReaderPageAnimationStyle.translate => const Duration(milliseconds: 330),
-      ReaderPageAnimationStyle.vertical => const Duration(milliseconds: 360),
-      ReaderPageAnimationStyle.fade => const Duration(milliseconds: 300),
-      ReaderPageAnimationStyle.none => Duration.zero,
+      ReaderPageAnimationStyle.curl => const _PagedAnimationMotionSpec(
+        duration: _kCurlAutoTurnDuration,
+        switchInCurve: Curves.easeOutCubic,
+        switchOutCurve: Curves.easeInOutCubic,
+      ),
+      ReaderPageAnimationStyle.cover => const _PagedAnimationMotionSpec(
+        duration: Duration(milliseconds: 520),
+        switchInCurve: Curves.easeOutCubic,
+        switchOutCurve: Curves.easeInCubic,
+      ),
+      ReaderPageAnimationStyle.translate => const _PagedAnimationMotionSpec(
+        duration: Duration(milliseconds: 430),
+        switchInCurve: Curves.easeOutCubic,
+        switchOutCurve: Curves.easeInCubic,
+      ),
+      ReaderPageAnimationStyle.vertical => const _PagedAnimationMotionSpec(
+        duration: Duration(milliseconds: 460),
+        switchInCurve: Curves.easeOutCubic,
+        switchOutCurve: Curves.easeInCubic,
+      ),
+      ReaderPageAnimationStyle.fade => const _PagedAnimationMotionSpec(
+        duration: Duration(milliseconds: 380),
+        switchInCurve: Curves.easeInOutCubic,
+        switchOutCurve: Curves.easeInOutCubic,
+      ),
+      ReaderPageAnimationStyle.none => const _PagedAnimationMotionSpec(
+        duration: Duration.zero,
+        switchInCurve: Curves.linear,
+        switchOutCurve: Curves.linear,
+      ),
     };
+  }
+
+  Duration _pageSwitchDurationForStyle(ReaderPageAnimationStyle style) {
+    return _pageSwitchMotionSpecForStyle(style).duration;
   }
 
   Curve _pageSwitchInCurveForStyle(ReaderPageAnimationStyle style) {
-    return switch (style) {
-      ReaderPageAnimationStyle.cover => Curves.linearToEaseOut,
-      ReaderPageAnimationStyle.fade => Curves.easeInOut,
-      ReaderPageAnimationStyle.none => Curves.linear,
-      _ => Curves.easeInOutCubic,
-    };
+    return _pageSwitchMotionSpecForStyle(style).switchInCurve;
   }
 
   Curve _pageSwitchOutCurveForStyle(ReaderPageAnimationStyle style) {
-    return switch (style) {
-      ReaderPageAnimationStyle.fade => Curves.easeInOut,
-      ReaderPageAnimationStyle.none => Curves.linear,
-      _ => Curves.easeInOutCubic,
-    };
+    return _pageSwitchMotionSpecForStyle(style).switchOutCurve;
   }
 
   Widget _buildPagedReader(_ReaderThemeColors colors) {
@@ -2896,193 +2930,222 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
           _safePageUpperBound(pageCount),
         );
         final pagedSize = constraints.biggest;
-        _pageCurlPaperSize = pagedSize;
 
         final animationStyle = _effectivePageAnimationStyle();
         final switchDuration = _pageSwitchDurationForStyle(animationStyle);
         final switchInCurve = _pageSwitchInCurveForStyle(animationStyle);
         final switchOutCurve = _pageSwitchOutCurveForStyle(animationStyle);
 
-        if (animationStyle == ReaderPageAnimationStyle.curl) {
-          final controller = _ensurePageCurlController(
-            paperSize: pagedSize,
-            pageCount: pageCount,
-            initialIndex: safeIndex,
-          );
-
-          final pageStack = Stack(
-            children: [
-              Positioned.fill(
-                child: PageCurlEffect(
-                  pageCurlController: controller,
-                  pageBuilder: (context, index) {
-                    final pageWidget = _buildCurlPageWidget(
-                      colors: colors,
-                      pageIndex: index,
-                      pageSize: pagedSize,
-                      padding: contentPadding,
-                    );
-                    if (index != safeIndex) {
-                      return SelectionContainer.disabled(child: pageWidget);
-                    }
-                    return pageWidget;
-                  },
-                  onForwardComplete: () => _onCurlDragComplete(forward: true),
-                  onBackwardComplete: () => _onCurlDragComplete(forward: false),
-                ),
-              ),
-              if (pageCount > 1)
-                SelectionContainer.disabled(
-                  child: _buildPageIndexOverlay(
-                    colors: colors,
-                    index: safeIndex,
-                    total: pageCount,
-                    bottomInset: bottomInset,
-                  ),
-                ),
-            ],
-          );
-          return _wrapSelectionArea(child: pageStack);
-        }
-
-        final pageChild = KeyedSubtree(
-          key: ValueKey<int>(safeIndex),
-          child: _buildPagedPageContainer(
-            colors: colors,
-            pageIndex: safeIndex,
-            pageSize: pagedSize,
-            padding: contentPadding,
-          ),
+        return _buildPagedTransitionStack(
+          colors: colors,
+          animationStyle: animationStyle,
+          pageCount: pageCount,
+          safeIndex: safeIndex,
+          pagedSize: pagedSize,
+          contentPadding: contentPadding,
+          bottomInset: bottomInset,
+          switchDuration: switchDuration,
+          switchInCurve: switchInCurve,
+          switchOutCurve: switchOutCurve,
         );
-
-        if (animationStyle == ReaderPageAnimationStyle.none) {
-          final pageStack = Stack(
-            children: [
-              Positioned.fill(child: pageChild),
-              SelectionContainer.disabled(
-                child: _buildPageIndexOverlay(
-                  colors: colors,
-                  index: safeIndex,
-                  total: pageCount,
-                  bottomInset: bottomInset,
-                ),
-              ),
-            ],
-          );
-          return _wrapSelectionArea(child: pageStack);
-        }
-
-        Widget transitionBuilder(Widget child, Animation<double> animation) {
-          final curved = CurvedAnimation(
-            parent: animation,
-            curve: switchInCurve,
-            reverseCurve: switchOutCurve,
-          );
-          final direction = _pageSwitchDirection.toDouble().clamp(-1.0, 1.0);
-
-          switch (animationStyle) {
-            case ReaderPageAnimationStyle.cover:
-              if (animation.status == AnimationStatus.reverse) {
-                return child;
-              }
-              return _buildCoverInTransition(
-                child: child,
-                animation: curved,
-                direction: direction,
-              );
-            case ReaderPageAnimationStyle.translate:
-              final begin =
-                  animation.status == AnimationStatus.reverse
-                      ? Offset(-direction, 0)
-                      : Offset(direction, 0);
-              return SlideTransition(
-                position: Tween<Offset>(
-                  begin: begin,
-                  end: Offset.zero,
-                ).animate(curved),
-                child: child,
-              );
-            case ReaderPageAnimationStyle.vertical:
-              final begin =
-                  animation.status == AnimationStatus.reverse
-                      ? Offset(0, -direction)
-                      : Offset(0, direction);
-              return SlideTransition(
-                position: Tween<Offset>(
-                  begin: begin,
-                  end: Offset.zero,
-                ).animate(curved),
-                child: child,
-              );
-            case ReaderPageAnimationStyle.fade:
-              return FadeTransition(opacity: curved, child: child);
-            case ReaderPageAnimationStyle.curl:
-            case ReaderPageAnimationStyle.none:
-              return FadeTransition(opacity: curved, child: child);
-          }
-        }
-
-        final pageStack = Stack(
-          children: [
-            Positioned.fill(
-              child: ClipRect(
-                child: AnimatedSwitcher(
-                  duration: switchDuration,
-                  switchInCurve: switchInCurve,
-                  switchOutCurve: switchOutCurve,
-                  layoutBuilder: (currentChild, previousChildren) {
-                    return Stack(
-                      fit: StackFit.expand,
-                      children: [
-                        for (final child in previousChildren)
-                          SelectionContainer.disabled(child: child),
-                        if (currentChild != null) currentChild,
-                      ],
-                    );
-                  },
-                  transitionBuilder: transitionBuilder,
-                  child: pageChild,
-                ),
-              ),
-            ),
-            if (pageCount > 1)
-              SelectionContainer.disabled(
-                child: _buildPageIndexOverlay(
-                  colors: colors,
-                  index: safeIndex,
-                  total: pageCount,
-                  bottomInset: bottomInset,
-                ),
-              ),
-          ],
-        );
-        return _wrapSelectionArea(child: pageStack);
       },
     );
   }
 
-  Widget _buildCoverInTransition({
-    required Widget child,
-    required Animation<double> animation,
+  Widget _buildPagedTransitionStack({
+    required _ReaderThemeColors colors,
+    required ReaderPageAnimationStyle animationStyle,
+    required int pageCount,
+    required int safeIndex,
+    required Size pagedSize,
+    required EdgeInsets contentPadding,
+    required double bottomInset,
+    required Duration switchDuration,
+    required Curve switchInCurve,
+    required Curve switchOutCurve,
+  }) {
+    final renderedAnimationStyle =
+        _isPagedTransitionAnimating ? _pagedTransition.style : animationStyle;
+    final pageStack = Stack(
+      children: [
+        Positioned.fill(
+          child: switch (renderedAnimationStyle) {
+            ReaderPageAnimationStyle.curl => _buildCustomCurlPageStack(
+              colors: colors,
+              pageCount: pageCount,
+              safeIndex: safeIndex,
+              pagedSize: pagedSize,
+              contentPadding: contentPadding,
+            ),
+            ReaderPageAnimationStyle.none => _buildStaticPagedPage(
+              colors: colors,
+              pageIndex: safeIndex,
+              pageSize: pagedSize,
+              padding: contentPadding,
+            ),
+            _ => _buildAnimatedPagedPageTransition(
+              colors: colors,
+              animationStyle: renderedAnimationStyle,
+              safeIndex: safeIndex,
+              pagedSize: pagedSize,
+              contentPadding: contentPadding,
+              switchDuration: switchDuration,
+              switchInCurve: switchInCurve,
+              switchOutCurve: switchOutCurve,
+            ),
+          },
+        ),
+        if (pageCount > 1)
+          SelectionContainer.disabled(
+            child: _buildPageIndexOverlay(
+              colors: colors,
+              index: safeIndex,
+              total: pageCount,
+              bottomInset: bottomInset,
+            ),
+          ),
+      ],
+    );
+
+    if (renderedAnimationStyle == ReaderPageAnimationStyle.curl &&
+        (_isCurlAutoTurning || _isCurlPreviewActive)) {
+      return SelectionContainer.disabled(child: pageStack);
+    }
+    return _wrapSelectionArea(child: pageStack);
+  }
+
+  Widget _buildStaticPagedPage({
+    required _ReaderThemeColors colors,
+    required int pageIndex,
+    required Size pageSize,
+    required EdgeInsets padding,
+  }) {
+    return KeyedSubtree(
+      key: ValueKey<int>(pageIndex),
+      child: _buildPagedPageContainer(
+        colors: colors,
+        pageIndex: pageIndex,
+        pageSize: pageSize,
+        padding: padding,
+      ),
+    );
+  }
+
+  Widget _buildAnimatedPagedPageTransition({
+    required _ReaderThemeColors colors,
+    required ReaderPageAnimationStyle animationStyle,
+    required int safeIndex,
+    required Size pagedSize,
+    required EdgeInsets contentPadding,
+    required Duration switchDuration,
+    required Curve switchInCurve,
+    required Curve switchOutCurve,
+  }) {
+    if (!_isPagedTransitionAnimating ||
+        _pagedTransition.style != animationStyle ||
+        _pagedTransition.fromIndex == _pagedTransition.toIndex) {
+      return _buildStaticPagedPage(
+        colors: colors,
+        pageIndex: safeIndex,
+        pageSize: pagedSize,
+        padding: contentPadding,
+      );
+    }
+
+    if (_pagedTransition.fromIndex < 0 ||
+        _pagedTransition.fromIndex >= _pagedPages.length ||
+        _pagedTransition.toIndex < 0 ||
+        _pagedTransition.toIndex >= _pagedPages.length) {
+      return _buildStaticPagedPage(
+        colors: colors,
+        pageIndex: safeIndex,
+        pageSize: pagedSize,
+        padding: contentPadding,
+      );
+    }
+
+    final fromPage = SelectionContainer.disabled(
+      child: _buildStaticPagedPage(
+        colors: colors,
+        pageIndex: _pagedTransition.fromIndex,
+        pageSize: pagedSize,
+        padding: contentPadding,
+      ),
+    );
+    final toPage = SelectionContainer.disabled(
+      child: _buildStaticPagedPage(
+        colors: colors,
+        pageIndex: _pagedTransition.toIndex,
+        pageSize: pagedSize,
+        padding: contentPadding,
+      ),
+    );
+    final effectRenderer = _resolvePagedAnimationEffectRenderer(animationStyle);
+
+    return AnimatedBuilder(
+      animation: _pagedTransitionController,
+      builder: (context, _) {
+        final progress = switchInCurve.transform(
+          _pagedTransitionController.value.clamp(0.0, 1.0),
+        );
+        return effectRenderer.build(
+          fromPage: fromPage,
+          toPage: toPage,
+          progress: progress,
+          direction: _pagedTransition.direction.toDouble(),
+          coverBuilder:
+              ({
+                required Widget fromPage,
+                required Widget toPage,
+                required double progress,
+                required double direction,
+              }) => _buildCoverTransitionStack(
+                fromPage: fromPage,
+                toPage: toPage,
+                progress: progress,
+                direction: direction,
+              ),
+        );
+      },
+    );
+  }
+
+  _PagedAnimationEffectRenderer _resolvePagedAnimationEffectRenderer(
+    ReaderPageAnimationStyle style,
+  ) {
+    return switch (style) {
+      ReaderPageAnimationStyle.cover => const _CoverPagedAnimationEffect(),
+      ReaderPageAnimationStyle.translate =>
+        const _HorizontalSlidePagedAnimationEffect(),
+      ReaderPageAnimationStyle.vertical =>
+        const _VerticalSlidePagedAnimationEffect(),
+      ReaderPageAnimationStyle.fade => const _FadePagedAnimationEffect(),
+      ReaderPageAnimationStyle.curl ||
+      ReaderPageAnimationStyle.none => const _FadePagedAnimationEffect(),
+    };
+  }
+
+  Widget _buildCoverTransitionStack({
+    required Widget fromPage,
+    required Widget toPage,
+    required double progress,
     required double direction,
   }) {
     final normalizedDirection = direction >= 0 ? 1.0 : -1.0;
     final fromRight = normalizedDirection > 0;
+    final translateX = normalizedDirection * (1 - progress);
+    final shadowAlpha = (1 - progress) * _kCoverEdgeShadowMaxAlpha;
 
-    return AnimatedBuilder(
-      animation: animation,
-      child: child,
-      builder: (context, animatedChild) {
-        final progress = animation.value.clamp(0.0, 1.0);
-        final translateX = normalizedDirection * (1 - progress);
-        final shadowAlpha = (1 - progress) * _kCoverEdgeShadowMaxAlpha;
-
-        return FractionalTranslation(
+    return Stack(
+      fit: StackFit.expand,
+      children: [
+        fromPage,
+        FractionalTranslation(
           translation: Offset(translateX, 0),
           child: Stack(
             fit: StackFit.expand,
             children: [
-              if (animatedChild != null) animatedChild,
+              toPage,
               IgnorePointer(
                 child: Align(
                   alignment:
@@ -3110,8 +3173,8 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
               ),
             ],
           ),
-        );
-      },
+        ),
+      ],
     );
   }
 
@@ -3423,38 +3486,6 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
     );
   }
 
-  PageCurlController _ensurePageCurlController({
-    required Size paperSize,
-    required int pageCount,
-    required int initialIndex,
-  }) {
-    final safeIndex = initialIndex.clamp(0, _safePageUpperBound(pageCount));
-    final existing = _pageCurlController;
-
-    final needsNewController =
-        existing == null ||
-        existing.paperSize != paperSize ||
-        existing.numberOfPage != pageCount;
-
-    if (needsNewController) {
-      existing?.dispose();
-      final controller = PageCurlController(
-        paperSize,
-        pageCurlIndex: safeIndex,
-        numberOfPage: pageCount,
-      );
-      _pageCurlController = controller;
-      _pageCurlPaperSize = paperSize;
-      return controller;
-    }
-
-    if (existing.pageCurlIndex != safeIndex) {
-      existing.pageCurlIndex = safeIndex;
-    }
-    _pageCurlPaperSize = paperSize;
-    return existing;
-  }
-
   Widget _buildCurlPageWidget({
     required _ReaderThemeColors colors,
     required int pageIndex,
@@ -3488,134 +3519,240 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
     );
   }
 
-  void _onCurlDragComplete({required bool forward}) {
-    if (!mounted) {
-      return;
+  Widget _buildCustomCurlPageStack({
+    required _ReaderThemeColors colors,
+    required int pageCount,
+    required int safeIndex,
+    required Size pagedSize,
+    required EdgeInsets contentPadding,
+  }) {
+    final hasActiveCurlTarget =
+        (_isCurlPreviewActive || _isCurlAutoTurning) &&
+        pageCount > 0 &&
+        _curlAnimationFromIndex >= 0 &&
+        _curlAnimationFromIndex < pageCount &&
+        _curlAnimationToIndex >= 0 &&
+        _curlAnimationToIndex < pageCount &&
+        _curlAnimationFromIndex != _curlAnimationToIndex;
+
+    if (!hasActiveCurlTarget) {
+      return _buildCurlPageWidget(
+        colors: colors,
+        pageIndex: safeIndex,
+        pageSize: pagedSize,
+        padding: contentPadding,
+      );
     }
 
-    final controller = _pageCurlController;
-    if (controller == null) {
-      return;
-    }
-
-    final pageCount = _pagedPages.length;
-    if (pageCount <= 0) {
-      return;
-    }
-
-    final nextIndex = controller.pageCurlIndex.clamp(
-      0,
-      _safePageUpperBound(pageCount),
+    final targetPage = SelectionContainer.disabled(
+      child: _buildCurlPageWidget(
+        colors: colors,
+        pageIndex: _curlAnimationToIndex,
+        pageSize: pagedSize,
+        padding: contentPadding,
+      ),
+    );
+    final currentPage = SelectionContainer.disabled(
+      child: _buildCurlPageWidget(
+        colors: colors,
+        pageIndex: _curlAnimationFromIndex,
+        pageSize: pagedSize,
+        padding: contentPadding,
+      ),
     );
 
-    setState(() {
-      _currentPageIndex = nextIndex;
-    });
-    _scheduleProgressSave();
+    return AnimatedBuilder(
+      animation: _curlAutoTurnController,
+      child: targetPage,
+      builder: (context, child) {
+        final activeProgress =
+            _isCurlPreviewActive
+                ? _curlPreviewProgress
+                : _curlAutoTurnController.value;
+        if (activeProgress <= 0) {
+          return currentPage;
+        }
+        final progress = activeProgress.clamp(0.0, 1.0);
+        return Stack(
+          fit: StackFit.expand,
+          children: [
+            if (child != null) child,
+            ClipPath(
+              clipper: _CurlPageClipper(
+                progress: progress,
+                direction: _curlAutoDirection,
+              ),
+              child: currentPage,
+            ),
+            IgnorePointer(
+              child: CustomPaint(
+                painter: _CurlOverlayPainter(
+                  progress: progress,
+                  direction: _curlAutoDirection,
+                  backgroundColor: colors.background,
+                  dividerColor: colors.divider,
+                  overlayColor: colors.overlay,
+                ),
+              ),
+            ),
+          ],
+        );
+      },
+    );
   }
 
-  void _onCurlAutoTurnTick() {
-    if (!_isCurlAutoTurning) {
+  void _updateCurlPreviewProgress(Size viewportSize) {
+    if (_isCurlAutoTurning) {
       return;
     }
 
-    final controller = _pageCurlController;
-    final size = _pageCurlPaperSize;
-    if (controller == null || size == null) {
+    final startDx = _swipeDragStartDx;
+    final currentDx = _swipeDragCurrentDx;
+    if (startDx == null || currentDx == null) {
       return;
     }
-    final t = Curves.easeInOutCubic.transform(_curlAutoTurnController.value);
-    final x = _curlAutoStartX + (_curlAutoEndX - _curlAutoStartX) * t;
 
-    try {
-      controller.onAutoPanUpdate(Offset(x, _curlAutoY));
-    } catch (error, stackTrace) {
-      _abortCurlAutoTurn(
-        controller: controller,
-        error: error,
-        stackTrace: stackTrace,
+    final delta = currentDx - startDx;
+    if (delta.abs() < _kCurlPreviewStartThreshold) {
+      if (_isCurlPreviewActive) {
+        setState(() {
+          _curlTransition = _curlTransition.copyWith(
+            isPreview: false,
+            previewProgress: 0,
+          );
+        });
+      }
+      return;
+    }
+
+    final pages = _pagedPages;
+    if (pages.isEmpty) {
+      return;
+    }
+
+    final direction = delta < 0 ? 1 : -1;
+    final currentIndex = _currentPageIndex.clamp(0, pages.length - 1);
+    final targetIndex = currentIndex + direction;
+    if (targetIndex < 0 || targetIndex >= pages.length) {
+      if (_isCurlPreviewActive) {
+        setState(() {
+          _curlTransition = _curlTransition.copyWith(
+            isPreview: false,
+            previewProgress: 0,
+          );
+        });
+      }
+      return;
+    }
+
+    final progress = (delta.abs() / max(viewportSize.width * 0.9, 1.0)).clamp(
+      0.0,
+      0.98,
+    );
+    if (_isCurlPreviewActive &&
+        _curlAutoDirection == direction &&
+        _curlAnimationFromIndex == currentIndex &&
+        _curlAnimationToIndex == targetIndex &&
+        (progress - _curlPreviewProgress).abs() < 0.01) {
+      return;
+    }
+
+    setState(() {
+      _curlTransition = _curlTransition.copyWith(
+        direction: direction,
+        fromIndex: currentIndex,
+        toIndex: targetIndex,
+        previewProgress: progress,
+        isPreview: true,
       );
+    });
+  }
+
+  void _finishCurlPreview({required bool commit}) {
+    if (!_isCurlPreviewActive) {
+      return;
+    }
+
+    final progress = _curlPreviewProgress.clamp(0.0, 1.0);
+    if (progress <= 0) {
+      setState(() {
+        _curlTransition = _curlTransition.copyWith(
+          isPreview: false,
+          previewProgress: 0,
+        );
+      });
+      return;
+    }
+
+    setState(() {
+      _curlTransition = _curlTransition.copyWith(
+        commitOnAnimationEnd: commit,
+        isPreview: false,
+        isAnimating: true,
+      );
+    });
+
+    _curlAutoTurnController.value = progress;
+    if (commit) {
+      _curlAutoTurnController.forward();
+    } else {
+      _curlAutoTurnController.reverse();
     }
   }
 
   void _onCurlAutoTurnStatus(AnimationStatus status) {
-    if (status != AnimationStatus.completed || !_isCurlAutoTurning) {
+    if (!_isCurlAutoTurning) {
       return;
     }
 
-    final controller = _pageCurlController;
-    if (controller == null || !mounted) {
-      _isCurlAutoTurning = false;
+    if (status == AnimationStatus.dismissed && !_curlCommitOnAnimationEnd) {
+      final pageCount = _pagedPages.length;
+      final currentIndex =
+          pageCount <= 0
+              ? 0
+              : _currentPageIndex.clamp(0, _safePageUpperBound(pageCount));
+      setState(() {
+        _curlTransition = _curlTransition.copyWith(
+          isAnimating: false,
+          isPreview: false,
+          previewProgress: 0,
+          fromIndex: currentIndex,
+          toIndex: currentIndex,
+        );
+      });
       return;
     }
 
-    controller.reset();
-    if (_curlAutoDirection > 0) {
-      controller.onForwardComplete();
-    } else {
-      controller.onBackwardComplete();
+    if (status != AnimationStatus.completed || !_curlCommitOnAnimationEnd) {
+      return;
     }
 
     final pageCount = _pagedPages.length;
     if (pageCount <= 0) {
       if (!mounted) {
-        _isCurlAutoTurning = false;
+        _curlTransition = const _CurlTransitionState();
         _currentPageIndex = 0;
         return;
       }
       setState(() {
-        _isCurlAutoTurning = false;
+        _curlTransition = const _CurlTransitionState();
         _currentPageIndex = 0;
       });
       return;
     }
-    final nextIndex = controller.pageCurlIndex.clamp(
+    final nextIndex = _curlAnimationToIndex.clamp(
       0,
       _safePageUpperBound(pageCount),
     );
 
     setState(() {
-      _isCurlAutoTurning = false;
-      _currentPageIndex = nextIndex;
-    });
-    _scheduleProgressSave();
-  }
-
-  void _abortCurlAutoTurn({
-    required PageCurlController controller,
-    required Object error,
-    StackTrace? stackTrace,
-  }) {
-    if (!_isCurlAutoTurning) {
-      return;
-    }
-
-    debugPrint("Page curl auto turn failed: ");
-    if (stackTrace != null) {
-      debugPrint("");
-    }
-
-    _curlAutoTurnController.stop();
-    controller.reset();
-
-    final pages = _pagedPages;
-    final nextIndex = (_currentPageIndex + _curlAutoDirection).clamp(
-      0,
-      pages.isEmpty ? 0 : pages.length - 1,
-    );
-
-    if (pages.isNotEmpty) {
-      controller.pageCurlIndex = nextIndex;
-    }
-
-    if (!mounted) {
-      _isCurlAutoTurning = false;
-      _currentPageIndex = nextIndex;
-      return;
-    }
-
-    setState(() {
-      _isCurlAutoTurning = false;
+      _curlTransition = _curlTransition.copyWith(
+        isAnimating: false,
+        isPreview: false,
+        previewProgress: 0,
+        fromIndex: nextIndex,
+        toIndex: nextIndex,
+      );
       _currentPageIndex = nextIndex;
     });
     _scheduleProgressSave();
@@ -3628,18 +3765,6 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
 
     final pages = _pagedPages;
     if (pages.isEmpty) {
-      return;
-    }
-
-    final size = _pageCurlPaperSize;
-    if (size == null) {
-      setState(() {
-        _currentPageIndex = (_currentPageIndex + direction).clamp(
-          0,
-          pages.length - 1,
-        );
-      });
-      _scheduleProgressSave();
       return;
     }
 
@@ -3664,28 +3789,20 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
       return;
     }
 
-    final controller = _ensurePageCurlController(
-      paperSize: size,
-      pageCount: pages.length,
-      initialIndex: currentIndex,
-    );
-
-    controller.reset();
-    controller.pageCurlIndex = currentIndex;
-
-    _curlAutoDirection = direction;
-
-    final safeEdgePadding = (size.width * 0.05).clamp(28.0, 60.0).toDouble();
-    _curlAutoY = (size.height * 0.5).clamp(24.0, size.height - 24.0).toDouble();
-    _curlAutoStartX =
-        direction > 0 ? size.width - safeEdgePadding : safeEdgePadding;
-    _curlAutoEndX = direction > 0 ? -size.width : size.width;
-
     setState(() {
-      _isCurlAutoTurning = true;
+      _curlTransition = _curlTransition.copyWith(
+        direction: direction,
+        fromIndex: currentIndex,
+        toIndex: currentIndex + direction,
+        commitOnAnimationEnd: true,
+        isPreview: false,
+        previewProgress: 0,
+        isAnimating: true,
+      );
     });
 
-    _curlAutoTurnController.forward(from: 0);
+    _curlAutoTurnController.value = 0;
+    _curlAutoTurnController.forward();
   }
 
   void _ensurePagination({
@@ -3724,9 +3841,8 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
 
     _paginationSignature = signature;
     final taskId = ++_paginationTaskId;
-    _curlAutoTurnController.stop();
-    _isCurlAutoTurning = false;
-    _pageCurlController?.reset();
+    _resetPagedTransitionState();
+    _resetCurlAnimationState();
 
     setState(() {
       _isPaginatingPages = true;
@@ -3741,6 +3857,16 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
         maxHeight: normalizedHeight,
       ),
     );
+  }
+
+  void _resetCurlAnimationState() {
+    _curlAutoTurnController.stop();
+    _curlTransition = const _CurlTransitionState();
+  }
+
+  void _resetPagedTransitionState() {
+    _pagedTransitionController.stop();
+    _pagedTransition = const _PagedPageTransitionState();
   }
 
   String _buildPaginationSignature({
@@ -3781,6 +3907,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
       setState(() {
         _isPaginatingPages = false;
         _pagedPages = const [];
+        _resetCurlAnimationState();
       });
       return;
     }
@@ -4002,6 +4129,9 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
       builder: (context, constraints) {
         final gestureInsets = MediaQuery.systemGestureInsetsOf(context);
         final enableSwipeTurn = _isSwipePaginationEnabled();
+        final enableCurlPreview =
+            enableSwipeTurn &&
+            _effectivePageAnimationStyle() == ReaderPageAnimationStyle.curl;
         return Listener(
           behavior: HitTestBehavior.translucent,
           onPointerDown: (event) {
@@ -4023,6 +4153,9 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
             }
             if (enableSwipeTurn) {
               _swipeDragCurrentDx = event.localPosition.dx;
+              if (enableCurlPreview) {
+                _updateCurlPreviewProgress(constraints.biggest);
+              }
             }
             final down = _tapPointerDownPosition;
             if (down != null && !_tapPointerMoved) {
@@ -4035,6 +4168,9 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
           onPointerCancel: (event) {
             if (event.pointer != _tapPointerId) {
               return;
+            }
+            if (enableCurlPreview && _isCurlPreviewActive) {
+              _finishCurlPreview(commit: false);
             }
             _resetPointerTracking();
           },
@@ -4059,6 +4195,11 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
               final isSwipe =
                   dx.abs() >= _kSwipeTurnDistanceThreshold ||
                   velocity.abs() >= _kSwipeTurnVelocityThreshold;
+              if (enableCurlPreview && _isCurlPreviewActive) {
+                _finishCurlPreview(commit: isSwipe);
+                _resetPointerTracking();
+                return;
+              }
               if (isSwipe) {
                 final dragDetails = DragEndDetails(
                   velocity: Velocity(pixelsPerSecond: Offset(velocity, 0)),
@@ -5736,6 +5877,8 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
     _currentPageIndex = 0;
     _paginationSignature = null;
     _isPaginatingPages = false;
+    _resetPagedTransitionState();
+    _resetCurlAnimationState();
     unawaited(_refreshChapterBookmarks());
   }
 
@@ -7412,18 +7555,21 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
     );
   }
 
-  Future<void> _goToPreviousPage(double viewportHeight) async {
+  Future<void> _goToPreviousPage(double viewportHeight) {
+    return _turnPagedTextPage(direction: -1);
+  }
+
+  Future<void> _goToNextPage(double viewportHeight) {
+    return _turnPagedTextPage(direction: 1);
+  }
+
+  Future<void> _turnPagedTextPage({required int direction}) async {
     if (!_isPagedTextReaderEnabled()) {
       return;
     }
+
     _clearSelectionState();
     _clearSystemSelection();
-
-    final animationStyle = _effectivePageAnimationStyle();
-    if (animationStyle == ReaderPageAnimationStyle.curl) {
-      await _autoTurnCurlPage(-1);
-      return;
-    }
 
     if (_isPaginatingPages) {
       return;
@@ -7434,58 +7580,96 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
       return;
     }
 
-    if (_currentPageIndex <= 0) {
-      final index = _currentIndex;
-      if (index == null || index <= 0) {
+    final safeDirection = direction >= 0 ? 1 : -1;
+    final targetIndex = _currentPageIndex + safeDirection;
+    if (targetIndex < 0 || targetIndex >= pages.length) {
+      await _jumpPagedTextAcrossChapter(direction: safeDirection);
+      return;
+    }
+
+    final animationStyle = _effectivePageAnimationStyle();
+    if (animationStyle == ReaderPageAnimationStyle.curl) {
+      await _autoTurnCurlPage(safeDirection);
+      return;
+    }
+
+    if (animationStyle == ReaderPageAnimationStyle.none) {
+      setState(() {
+        _currentPageIndex = targetIndex;
+      });
+      _scheduleProgressSave();
+      return;
+    }
+
+    _startPagedPageTransition(
+      style: animationStyle,
+      direction: safeDirection,
+      fromIndex: _currentPageIndex,
+      toIndex: targetIndex,
+    );
+  }
+
+  Future<void> _jumpPagedTextAcrossChapter({required int direction}) async {
+    final currentChapterIndex = _currentIndex;
+    if (currentChapterIndex == null) {
+      return;
+    }
+
+    if (direction < 0) {
+      if (currentChapterIndex <= 0) {
         _showMessage('已经是第一章。');
         return;
       }
-      await _jumpTo(index - 1, initialScrollRatio: 1);
+      await _jumpTo(currentChapterIndex - 1, initialScrollRatio: 1);
       return;
     }
 
-    setState(() {
-      _pageSwitchDirection = -1;
-      _currentPageIndex -= 1;
-    });
-    _scheduleProgressSave();
+    if (currentChapterIndex >= _chapters.length - 1) {
+      _showMessage('已经是最后一章。');
+      return;
+    }
+    await _jumpTo(currentChapterIndex + 1, initialScrollRatio: 0);
   }
 
-  Future<void> _goToNextPage(double viewportHeight) async {
-    if (!_isPagedTextReaderEnabled()) {
-      return;
-    }
-    _clearSelectionState();
-    _clearSystemSelection();
-
-    final animationStyle = _effectivePageAnimationStyle();
-    if (animationStyle == ReaderPageAnimationStyle.curl) {
-      await _autoTurnCurlPage(1);
+  void _startPagedPageTransition({
+    required ReaderPageAnimationStyle style,
+    required int direction,
+    required int fromIndex,
+    required int toIndex,
+  }) {
+    if (_isPagedTransitionAnimating) {
       return;
     }
 
-    if (_isPaginatingPages) {
-      return;
-    }
-
-    final pages = _pagedPages;
-    if (pages.isEmpty) {
-      return;
-    }
-
-    if (_currentPageIndex >= pages.length - 1) {
-      final index = _currentIndex;
-      if (index == null || index >= _chapters.length - 1) {
-        _showMessage('已经是最后一章。');
-        return;
-      }
-      await _jumpTo(index + 1, initialScrollRatio: 0);
-      return;
-    }
-
+    final motion = _pageSwitchMotionSpecForStyle(style);
+    _pagedTransitionController.duration = motion.duration;
     setState(() {
-      _pageSwitchDirection = 1;
-      _currentPageIndex += 1;
+      _pagedTransition = _PagedPageTransitionState(
+        isAnimating: true,
+        style: style,
+        direction: direction,
+        fromIndex: fromIndex,
+        toIndex: toIndex,
+      );
+    });
+    _pagedTransitionController.value = 0;
+    _pagedTransitionController.forward();
+  }
+
+  void _onPagedTransitionStatus(AnimationStatus status) {
+    if (!_isPagedTransitionAnimating || status != AnimationStatus.completed) {
+      return;
+    }
+
+    final nextIndex = _pagedTransition.toIndex;
+    setState(() {
+      _currentPageIndex = nextIndex;
+      _pagedTransition = _PagedPageTransitionState(
+        fromIndex: nextIndex,
+        toIndex: nextIndex,
+        style: _pagedTransition.style,
+        direction: _pagedTransition.direction,
+      );
     });
     _scheduleProgressSave();
   }
@@ -13616,6 +13800,449 @@ class _ReaderBackgroundPreset {
 
   final String label;
   final String assetPath;
+}
+
+class _PagedPageTransitionState {
+  const _PagedPageTransitionState({
+    this.isAnimating = false,
+    this.style = ReaderPageAnimationStyle.none,
+    this.direction = 1,
+    this.fromIndex = 0,
+    this.toIndex = 0,
+  });
+
+  final bool isAnimating;
+  final ReaderPageAnimationStyle style;
+  final int direction;
+  final int fromIndex;
+  final int toIndex;
+
+  _PagedPageTransitionState copyWith({
+    bool? isAnimating,
+    ReaderPageAnimationStyle? style,
+    int? direction,
+    int? fromIndex,
+    int? toIndex,
+  }) {
+    return _PagedPageTransitionState(
+      isAnimating: isAnimating ?? this.isAnimating,
+      style: style ?? this.style,
+      direction: direction ?? this.direction,
+      fromIndex: fromIndex ?? this.fromIndex,
+      toIndex: toIndex ?? this.toIndex,
+    );
+  }
+}
+
+class _CurlTransitionState {
+  const _CurlTransitionState({
+    this.isAnimating = false,
+    this.isPreview = false,
+    this.direction = 1,
+    this.fromIndex = 0,
+    this.toIndex = 0,
+    this.previewProgress = 0,
+    this.commitOnAnimationEnd = true,
+  });
+
+  final bool isAnimating;
+  final bool isPreview;
+  final int direction;
+  final int fromIndex;
+  final int toIndex;
+  final double previewProgress;
+  final bool commitOnAnimationEnd;
+
+  _CurlTransitionState copyWith({
+    bool? isAnimating,
+    bool? isPreview,
+    int? direction,
+    int? fromIndex,
+    int? toIndex,
+    double? previewProgress,
+    bool? commitOnAnimationEnd,
+  }) {
+    return _CurlTransitionState(
+      isAnimating: isAnimating ?? this.isAnimating,
+      isPreview: isPreview ?? this.isPreview,
+      direction: direction ?? this.direction,
+      fromIndex: fromIndex ?? this.fromIndex,
+      toIndex: toIndex ?? this.toIndex,
+      previewProgress: previewProgress ?? this.previewProgress,
+      commitOnAnimationEnd: commitOnAnimationEnd ?? this.commitOnAnimationEnd,
+    );
+  }
+}
+
+class _PagedAnimationMotionSpec {
+  const _PagedAnimationMotionSpec({
+    required this.duration,
+    required this.switchInCurve,
+    required this.switchOutCurve,
+  });
+
+  final Duration duration;
+  final Curve switchInCurve;
+  final Curve switchOutCurve;
+}
+
+typedef _CoverTransitionBuilder =
+    Widget Function({
+      required Widget fromPage,
+      required Widget toPage,
+      required double progress,
+      required double direction,
+    });
+
+abstract class _PagedAnimationEffectRenderer {
+  const _PagedAnimationEffectRenderer();
+
+  Widget build({
+    required Widget fromPage,
+    required Widget toPage,
+    required double progress,
+    required double direction,
+    required _CoverTransitionBuilder coverBuilder,
+  });
+}
+
+class _CoverPagedAnimationEffect extends _PagedAnimationEffectRenderer {
+  const _CoverPagedAnimationEffect();
+
+  @override
+  Widget build({
+    required Widget fromPage,
+    required Widget toPage,
+    required double progress,
+    required double direction,
+    required _CoverTransitionBuilder coverBuilder,
+  }) {
+    return coverBuilder(
+      fromPage: fromPage,
+      toPage: toPage,
+      progress: progress,
+      direction: direction,
+    );
+  }
+}
+
+class _HorizontalSlidePagedAnimationEffect
+    extends _PagedAnimationEffectRenderer {
+  const _HorizontalSlidePagedAnimationEffect();
+
+  @override
+  Widget build({
+    required Widget fromPage,
+    required Widget toPage,
+    required double progress,
+    required double direction,
+    required _CoverTransitionBuilder coverBuilder,
+  }) {
+    final outgoingTranslation = Offset(-direction * progress, 0);
+    final incomingTranslation = Offset(direction * (1 - progress), 0);
+    return Stack(
+      fit: StackFit.expand,
+      children: [
+        FractionalTranslation(
+          translation: outgoingTranslation,
+          child: fromPage,
+        ),
+        FractionalTranslation(translation: incomingTranslation, child: toPage),
+      ],
+    );
+  }
+}
+
+class _VerticalSlidePagedAnimationEffect extends _PagedAnimationEffectRenderer {
+  const _VerticalSlidePagedAnimationEffect();
+
+  @override
+  Widget build({
+    required Widget fromPage,
+    required Widget toPage,
+    required double progress,
+    required double direction,
+    required _CoverTransitionBuilder coverBuilder,
+  }) {
+    final outgoingTranslation = Offset(0, -direction * progress);
+    final incomingTranslation = Offset(0, direction * (1 - progress));
+    return Stack(
+      fit: StackFit.expand,
+      children: [
+        FractionalTranslation(
+          translation: outgoingTranslation,
+          child: fromPage,
+        ),
+        FractionalTranslation(translation: incomingTranslation, child: toPage),
+      ],
+    );
+  }
+}
+
+class _FadePagedAnimationEffect extends _PagedAnimationEffectRenderer {
+  const _FadePagedAnimationEffect();
+
+  @override
+  Widget build({
+    required Widget fromPage,
+    required Widget toPage,
+    required double progress,
+    required double direction,
+    required _CoverTransitionBuilder coverBuilder,
+  }) {
+    return Stack(
+      fit: StackFit.expand,
+      children: [
+        Opacity(opacity: (1 - progress).clamp(0.0, 1.0), child: fromPage),
+        Opacity(opacity: progress.clamp(0.0, 1.0), child: toPage),
+      ],
+    );
+  }
+}
+
+class _CurlVisualMetrics {
+  const _CurlVisualMetrics({
+    required this.boundaryX,
+    required this.curveDepth,
+    required this.shadowWidth,
+    required this.highlightWidth,
+  });
+
+  final double boundaryX;
+  final double curveDepth;
+  final double shadowWidth;
+  final double highlightWidth;
+
+  factory _CurlVisualMetrics.resolve(
+    Size size, {
+    required double progress,
+    required int direction,
+  }) {
+    final clamped = progress.clamp(0.0, 1.0);
+    final eased = Curves.easeInOutCubic.transform(clamped);
+    final curveDepth =
+        lerpDouble(
+          10,
+          min(size.width * 0.16, 88.0),
+          Curves.easeOutCubic.transform(clamped),
+        )!;
+    final shadowWidth = lerpDouble(18, min(size.width * 0.2, 110.0), clamped)!;
+    final highlightWidth =
+        lerpDouble(8, min(size.width * 0.07, 32.0), clamped)!;
+
+    if (direction >= 0) {
+      return _CurlVisualMetrics(
+        boundaryX: lerpDouble(size.width, size.width * 0.08, eased)!,
+        curveDepth: curveDepth,
+        shadowWidth: shadowWidth,
+        highlightWidth: highlightWidth,
+      );
+    }
+
+    return _CurlVisualMetrics(
+      boundaryX: lerpDouble(0, size.width * 0.92, eased)!,
+      curveDepth: curveDepth,
+      shadowWidth: shadowWidth,
+      highlightWidth: highlightWidth,
+    );
+  }
+}
+
+class _CurlPageClipper extends CustomClipper<Path> {
+  const _CurlPageClipper({required this.progress, required this.direction});
+
+  final double progress;
+  final int direction;
+
+  @override
+  Path getClip(Size size) {
+    final metrics = _CurlVisualMetrics.resolve(
+      size,
+      progress: progress,
+      direction: direction,
+    );
+    final path = Path();
+
+    if (direction >= 0) {
+      path
+        ..moveTo(0, 0)
+        ..lineTo(metrics.boundaryX, 0)
+        ..quadraticBezierTo(
+          metrics.boundaryX - metrics.curveDepth * 0.18,
+          size.height * 0.22,
+          metrics.boundaryX - metrics.curveDepth,
+          size.height * 0.5,
+        )
+        ..quadraticBezierTo(
+          metrics.boundaryX - metrics.curveDepth * 0.18,
+          size.height * 0.78,
+          metrics.boundaryX,
+          size.height,
+        )
+        ..lineTo(0, size.height)
+        ..close();
+      return path;
+    }
+
+    path
+      ..moveTo(metrics.boundaryX, 0)
+      ..lineTo(size.width, 0)
+      ..lineTo(size.width, size.height)
+      ..lineTo(metrics.boundaryX, size.height)
+      ..quadraticBezierTo(
+        metrics.boundaryX + metrics.curveDepth * 0.18,
+        size.height * 0.78,
+        metrics.boundaryX + metrics.curveDepth,
+        size.height * 0.5,
+      )
+      ..quadraticBezierTo(
+        metrics.boundaryX + metrics.curveDepth * 0.18,
+        size.height * 0.22,
+        metrics.boundaryX,
+        0,
+      )
+      ..close();
+    return path;
+  }
+
+  @override
+  bool shouldReclip(covariant _CurlPageClipper oldClipper) {
+    return oldClipper.progress != progress || oldClipper.direction != direction;
+  }
+}
+
+class _CurlOverlayPainter extends CustomPainter {
+  const _CurlOverlayPainter({
+    required this.progress,
+    required this.direction,
+    required this.backgroundColor,
+    required this.dividerColor,
+    required this.overlayColor,
+  });
+
+  final double progress;
+  final int direction;
+  final Color backgroundColor;
+  final Color dividerColor;
+  final Color overlayColor;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    if (progress <= 0) {
+      return;
+    }
+
+    final metrics = _CurlVisualMetrics.resolve(
+      size,
+      progress: progress,
+      direction: direction,
+    );
+    final shadowAlpha = lerpDouble(0.0, 0.22, progress)!;
+    final overlayAlpha = lerpDouble(0.0, 0.16, progress)!;
+    final highlightAlpha = lerpDouble(0.0, 0.18, progress)!;
+
+    if (direction >= 0) {
+      final shadowRect = Rect.fromLTRB(
+        max(0, metrics.boundaryX - metrics.shadowWidth),
+        0,
+        min(size.width, metrics.boundaryX + metrics.highlightWidth * 0.6),
+        size.height,
+      );
+      canvas.drawRect(
+        shadowRect,
+        Paint()
+          ..shader = LinearGradient(
+            begin: Alignment.centerLeft,
+            end: Alignment.centerRight,
+            colors: [
+              Colors.transparent,
+              overlayColor.withValues(alpha: shadowAlpha * 0.55),
+              backgroundColor.withValues(alpha: overlayAlpha),
+              dividerColor.withValues(alpha: highlightAlpha),
+            ],
+            stops: const [0, 0.45, 0.78, 1],
+          ).createShader(shadowRect),
+      );
+
+      final edgePath =
+          Path()
+            ..moveTo(metrics.boundaryX, 0)
+            ..quadraticBezierTo(
+              metrics.boundaryX - metrics.curveDepth * 0.18,
+              size.height * 0.22,
+              metrics.boundaryX - metrics.curveDepth,
+              size.height * 0.5,
+            )
+            ..quadraticBezierTo(
+              metrics.boundaryX - metrics.curveDepth * 0.18,
+              size.height * 0.78,
+              metrics.boundaryX,
+              size.height,
+            );
+      canvas.drawPath(
+        edgePath,
+        Paint()
+          ..color = dividerColor.withValues(alpha: highlightAlpha * 0.9)
+          ..style = PaintingStyle.stroke
+          ..strokeWidth = lerpDouble(0.8, 1.6, progress)!,
+      );
+      return;
+    }
+
+    final shadowRect = Rect.fromLTRB(
+      max(0, metrics.boundaryX - metrics.highlightWidth * 0.6),
+      0,
+      min(size.width, metrics.boundaryX + metrics.shadowWidth),
+      size.height,
+    );
+    canvas.drawRect(
+      shadowRect,
+      Paint()
+        ..shader = LinearGradient(
+          begin: Alignment.centerLeft,
+          end: Alignment.centerRight,
+          colors: [
+            dividerColor.withValues(alpha: highlightAlpha),
+            backgroundColor.withValues(alpha: overlayAlpha),
+            overlayColor.withValues(alpha: shadowAlpha * 0.55),
+            Colors.transparent,
+          ],
+          stops: const [0, 0.22, 0.55, 1],
+        ).createShader(shadowRect),
+    );
+
+    final edgePath =
+        Path()
+          ..moveTo(metrics.boundaryX, 0)
+          ..quadraticBezierTo(
+            metrics.boundaryX + metrics.curveDepth * 0.18,
+            size.height * 0.22,
+            metrics.boundaryX + metrics.curveDepth,
+            size.height * 0.5,
+          )
+          ..quadraticBezierTo(
+            metrics.boundaryX + metrics.curveDepth * 0.18,
+            size.height * 0.78,
+            metrics.boundaryX,
+            size.height,
+          );
+    canvas.drawPath(
+      edgePath,
+      Paint()
+        ..color = dividerColor.withValues(alpha: highlightAlpha * 0.9)
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = lerpDouble(0.8, 1.6, progress)!,
+    );
+  }
+
+  @override
+  bool shouldRepaint(covariant _CurlOverlayPainter oldDelegate) {
+    return oldDelegate.progress != progress ||
+        oldDelegate.direction != direction ||
+        oldDelegate.backgroundColor != backgroundColor ||
+        oldDelegate.dividerColor != dividerColor ||
+        oldDelegate.overlayColor != overlayColor;
+  }
 }
 
 class _BookmarkRange {
