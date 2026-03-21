@@ -32,6 +32,7 @@ import '../../search/application/search_hit_cache_service.dart';
 import '../../search/application/search_service.dart';
 import '../application/book_detail_service.dart';
 import 'widgets/book_detail_primary_actions.dart';
+import 'widgets/book_detail_sections.dart';
 
 class BookDetailPage extends StatefulWidget {
   const BookDetailPage({
@@ -188,60 +189,49 @@ class _BookDetailPageState extends State<BookDetailPage> {
               ),
               children: [
                 if (_isMissingParams)
-                  Card(
-                    child: Padding(
-                      padding: const EdgeInsets.all(16),
-                      child: Text(
-                        '缺少 sourceId/detailUrl，无法加载详情。请从搜索结果进入。bookId=${widget.bookId}',
-                      ),
+                  BookDetailStateCard(
+                    child: Text(
+                      '缺少 sourceId/detailUrl，无法加载详情。请从搜索结果进入。bookId=${widget.bookId}',
                     ),
                   )
                 else if (_isLoading)
-                  const Card(
-                    child: Padding(
-                      padding: EdgeInsets.all(16),
-                      child: Row(
-                        children: [
-                          SizedBox(
-                            width: 18,
-                            height: 18,
-                            child: CircularProgressIndicator(strokeWidth: 2),
-                          ),
-                          SizedBox(width: 12),
-                          Expanded(child: Text('正在加载详情和目录...')),
-                        ],
-                      ),
+                  const BookDetailStateCard(
+                    child: Row(
+                      children: [
+                        SizedBox(
+                          width: 18,
+                          height: 18,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        ),
+                        SizedBox(width: 12),
+                        Expanded(child: Text('正在加载详情和目录...')),
+                      ],
                     ),
                   )
                 else if (_errorText != null)
-                  Card(
+                  BookDetailStateCard(
                     color: colorScheme.errorContainer,
-                    child: Padding(
-                      padding: const EdgeInsets.all(16),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            '加载失败',
-                            style: TextStyle(
-                              color: colorScheme.onErrorContainer,
-                              fontWeight: FontWeight.w600,
-                            ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          '加载失败',
+                          style: TextStyle(
+                            color: colorScheme.onErrorContainer,
+                            fontWeight: FontWeight.w600,
                           ),
-                          const SizedBox(height: 8),
-                          Text(
-                            _errorText!,
-                            style: TextStyle(
-                              color: colorScheme.onErrorContainer,
-                            ),
-                          ),
-                          const SizedBox(height: 10),
-                          FilledButton.tonal(
-                            onPressed: _load,
-                            child: const Text('重试'),
-                          ),
-                        ],
-                      ),
+                        ),
+                        const SizedBox(height: 8),
+                        Text(
+                          _errorText!,
+                          style: TextStyle(color: colorScheme.onErrorContainer),
+                        ),
+                        const SizedBox(height: 10),
+                        FilledButton.tonal(
+                          onPressed: _load,
+                          child: const Text('重试'),
+                        ),
+                      ],
                     ),
                   )
                 else if (_result != null) ...[
@@ -330,7 +320,6 @@ class _BookDetailPageState extends State<BookDetailPage> {
   Widget _buildDetailCard(BookDetailLoadResult result) {
     final detail = result.detail;
     final intro = _resolveIntro(detail.intro);
-    final colorScheme = Theme.of(context).colorScheme;
     final heroTag =
         widget.heroTag?.trim().isNotEmpty == true
             ? widget.heroTag!.trim()
@@ -340,84 +329,25 @@ class _BookDetailPageState extends State<BookDetailPage> {
               detailUrl: detail.detailUrl,
             );
 
-    return Card(
-      clipBehavior: Clip.antiAlias,
-      child: Container(
-        decoration: BoxDecoration(
-          gradient: LinearGradient(
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-            colors: [colorScheme.surface, colorScheme.surfaceContainerLowest],
-          ),
-        ),
-        child: Padding(
-          padding: const EdgeInsets.all(16),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  _buildCoverPreview(detail.coverUrl, heroTag: heroTag),
-                  const SizedBox(width: 10),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          detail.title,
-                          style: Theme.of(context).textTheme.titleMedium
-                              ?.copyWith(fontWeight: FontWeight.w700),
-                        ),
-                        const SizedBox(height: 6),
-                        Text(
-                          '点击目录章节即可开始阅读',
-                          style: Theme.of(context).textTheme.bodySmall
-                              ?.copyWith(color: colorScheme.onSurfaceVariant),
-                        ),
-                        const SizedBox(height: 10),
-                        if (detail.author != null && detail.author!.isNotEmpty)
-                          Row(
-                            children: [
-                              Expanded(
-                                child: _buildMetaChip('来源', result.sourceName),
-                              ),
-                              const SizedBox(width: 8),
-                              Expanded(
-                                child: _buildMetaChip('作者', detail.author!),
-                              ),
-                            ],
-                          )
-                        else
-                          _buildMetaChip('来源', result.sourceName),
-                        const SizedBox(height: 10),
-                        LayoutBuilder(
-                          builder: (context, constraints) {
-                            return BookDetailPrimaryActions(
-                              availableWidth: constraints.maxWidth,
-                              isInBookshelf: _isInBookshelf,
-                              isShelfActionLoading: _isShelfActionLoading,
-                              onRead:
-                                  result.chapters.isEmpty
-                                      ? null
-                                      : () =>
-                                          _openChapter(result.chapters.first),
-                              onToggleBookshelf: _toggleBookshelf,
-                            );
-                          },
-                        ),
-                      ],
-                    ),
-                  ),
-                ],
-              ),
-              if (intro != null) ...[
-                const SizedBox(height: 14),
-                _buildIntroCard(intro),
-              ],
-            ],
-          ),
-        ),
+    return BookDetailSummaryCard(
+      title: detail.title,
+      sourceName: result.sourceName,
+      author: detail.author,
+      cover: _buildCoverPreview(detail.coverUrl, heroTag: heroTag),
+      intro: intro,
+      primaryActions: LayoutBuilder(
+        builder: (context, constraints) {
+          return BookDetailPrimaryActions(
+            availableWidth: constraints.maxWidth,
+            isInBookshelf: _isInBookshelf,
+            isShelfActionLoading: _isShelfActionLoading,
+            onRead:
+                result.chapters.isEmpty
+                    ? null
+                    : () => _openChapter(result.chapters.first),
+            onToggleBookshelf: _toggleBookshelf,
+          );
+        },
       ),
     );
   }
@@ -470,28 +400,6 @@ class _BookDetailPageState extends State<BookDetailPage> {
     );
   }
 
-  Widget _buildMetaChip(String label, String value) {
-    final colorScheme = Theme.of(context).colorScheme;
-
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 5),
-      decoration: BoxDecoration(
-        color: colorScheme.secondaryContainer,
-        borderRadius: BorderRadius.circular(999),
-      ),
-      child: Text(
-        '$label: $value',
-        maxLines: 1,
-        softWrap: false,
-        overflow: TextOverflow.ellipsis,
-        style: Theme.of(context).textTheme.labelSmall?.copyWith(
-          color: colorScheme.onSecondaryContainer,
-          fontWeight: FontWeight.w600,
-        ),
-      ),
-    );
-  }
-
   Chapter? _resolveLatestChapter(BookDetailLoadResult result) {
     if (result.chapters.isEmpty) {
       return null;
@@ -518,124 +426,28 @@ class _BookDetailPageState extends State<BookDetailPage> {
 
   Widget _buildLatestChapterCard(Chapter latestChapter) {
     final latestTitle = _normalizeSingleLineText(latestChapter.title);
-    final colorScheme = Theme.of(context).colorScheme;
-
-    return Card(
-      color: colorScheme.surfaceContainerHigh,
-      child: InkWell(
-        borderRadius: BorderRadius.circular(20),
-        onTap: () => _openChapter(latestChapter),
-        child: Padding(
-          padding: const EdgeInsets.all(14),
-          child: Row(
-            children: [
-              Container(
-                width: 4,
-                height: 50,
-                decoration: BoxDecoration(
-                  color: colorScheme.primary,
-                  borderRadius: BorderRadius.circular(999),
-                ),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      '最新章节',
-                      style: Theme.of(context).textTheme.labelMedium?.copyWith(
-                        color: colorScheme.primary,
-                        fontWeight: FontWeight.w700,
-                      ),
-                    ),
-                    const SizedBox(height: 4),
-                    Text(
-                      latestTitle,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: Theme.of(context).textTheme.bodyMedium,
-                    ),
-                  ],
-                ),
-              ),
-              const SizedBox(width: 10),
-              FilledButton.tonal(
-                onPressed: () => _openChapter(latestChapter),
-                child: const Text('去阅读'),
-              ),
-            ],
-          ),
-        ),
-      ),
+    return BookDetailActionEntryCard(
+      title: '最新章节',
+      subtitle: latestTitle,
+      buttonLabel: '去阅读',
+      onPressed: () => _openChapter(latestChapter),
     );
   }
 
   Widget _buildSwitchSourceEntryCard() {
-    final colorScheme = Theme.of(context).colorScheme;
     final sourceLabel = _resolveCurrentSourceDisplayName();
-
-    return Card(
-      color: colorScheme.surfaceContainerHigh,
-      child: InkWell(
-        borderRadius: BorderRadius.circular(20),
-        onTap:
-            (_isLoading || _isSwitchingSource || _isMissingParams)
-                ? null
-                : _handleSwitchSource,
-        child: Padding(
-          padding: const EdgeInsets.all(14),
-          child: Row(
-            children: [
-              Container(
-                width: 4,
-                height: 50,
-                decoration: BoxDecoration(
-                  color: colorScheme.primary,
-                  borderRadius: BorderRadius.circular(999),
-                ),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      '切换书源',
-                      style: Theme.of(context).textTheme.labelMedium?.copyWith(
-                        color: colorScheme.primary,
-                        fontWeight: FontWeight.w700,
-                      ),
-                    ),
-                    const SizedBox(height: 4),
-                    Text(
-                      sourceLabel,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: Theme.of(context).textTheme.bodyMedium,
-                    ),
-                  ],
-                ),
-              ),
-              const SizedBox(width: 10),
-              FilledButton.tonal(
-                onPressed:
-                    (_isLoading || _isSwitchingSource || _isMissingParams)
-                        ? null
-                        : _handleSwitchSource,
-                child: Text(_isSwitchingSource ? '切换中' : '去换源'),
-              ),
-            ],
-          ),
-        ),
-      ),
+    final enabled = !(_isLoading || _isSwitchingSource || _isMissingParams);
+    return BookDetailActionEntryCard(
+      title: '切换书源',
+      subtitle: sourceLabel,
+      buttonLabel: _isSwitchingSource ? '切换中' : '去换源',
+      onPressed: enabled ? _handleSwitchSource : null,
+      enabled: enabled,
     );
   }
 
   Widget _buildCacheCard(BookDetailLoadResult result) {
     final totalChapters = result.chapters.length;
-    final colorScheme = Theme.of(context).colorScheme;
-    final textTheme = Theme.of(context).textTheme;
 
     final sourceId = _activeSourceId;
     if (sourceId == null || sourceId.isEmpty) {
@@ -666,159 +478,36 @@ class _BookDetailPageState extends State<BookDetailPage> {
           _ => '缓存中',
         };
 
-        final icon =
-            isAllCached
-                ? Icons.cloud_done_rounded
-                : Icons.cloud_download_outlined;
+        void openCache() {
+          if (totalChapters == 0) {
+            return;
+          }
+          final startIndex = 0;
+          final endIndex =
+              totalChapters > 0
+                  ? (startIndex + 49).clamp(0, totalChapters - 1)
+                  : 0;
 
-        return Card(
-          color: colorScheme.surfaceContainerHigh,
-          child: InkWell(
-            borderRadius: BorderRadius.circular(20),
-            onTap:
-                totalChapters == 0
-                    ? null
-                    : () {
-                      final startIndex = 0;
-                      final endIndex =
-                          totalChapters > 0
-                              ? (startIndex + 49).clamp(0, totalChapters - 1)
-                              : 0;
+          showChapterCacheFlow(
+            context: context,
+            bookId: _activeBookId,
+            sourceId: sourceId,
+            chapters: result.chapters,
+            initialStartIndex: startIndex,
+            initialEndIndex: endIndex,
+            entryPoint: ChapterCacheEntryPoint.detail,
+            bookTitle: result.detail.title,
+          );
+        }
 
-                      showChapterCacheFlow(
-                        context: context,
-                        bookId: _activeBookId,
-                        sourceId: sourceId,
-                        chapters: result.chapters,
-                        initialStartIndex: startIndex,
-                        initialEndIndex: endIndex,
-                        entryPoint: ChapterCacheEntryPoint.detail,
-                        bookTitle: result.detail.title,
-                      );
-                    },
-            child: Padding(
-              padding: const EdgeInsets.all(14),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    children: [
-                      Container(
-                        width: 42,
-                        height: 42,
-                        decoration: BoxDecoration(
-                          color: colorScheme.primaryContainer,
-                          borderRadius: BorderRadius.circular(14),
-                        ),
-                        child: Icon(
-                          icon,
-                          color: colorScheme.onPrimaryContainer,
-                        ),
-                      ),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              '缓存章节',
-                              style: textTheme.titleSmall?.copyWith(
-                                fontWeight: FontWeight.w700,
-                              ),
-                            ),
-                            const SizedBox(height: 4),
-                            Text(
-                              '已缓存 $cappedCached / $totalChapters 章',
-                              style: textTheme.bodySmall?.copyWith(
-                                color: colorScheme.onSurfaceVariant,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                      const SizedBox(width: 10),
-                      FilledButton.tonal(
-                        onPressed:
-                            totalChapters == 0
-                                ? null
-                                : () {
-                                  final startIndex = 0;
-                                  final endIndex =
-                                      totalChapters > 0
-                                          ? (startIndex + 49).clamp(
-                                            0,
-                                            totalChapters - 1,
-                                          )
-                                          : 0;
-
-                                  showChapterCacheFlow(
-                                    context: context,
-                                    bookId: _activeBookId,
-                                    sourceId: sourceId,
-                                    chapters: result.chapters,
-                                    initialStartIndex: startIndex,
-                                    initialEndIndex: endIndex,
-                                    entryPoint: ChapterCacheEntryPoint.detail,
-                                    bookTitle: result.detail.title,
-                                  );
-                                },
-                        child: const Text('去缓存'),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 12),
-                  Row(
-                    children: [
-                      Container(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 8,
-                          vertical: 4,
-                        ),
-                        decoration: BoxDecoration(
-                          color: colorScheme.primaryContainer,
-                          borderRadius: BorderRadius.circular(999),
-                        ),
-                        child: Text(
-                          statusLabel,
-                          style: textTheme.labelSmall?.copyWith(
-                            color: colorScheme.onPrimaryContainer,
-                            fontWeight: FontWeight.w700,
-                          ),
-                        ),
-                      ),
-                      const SizedBox(width: 8),
-                      Text(
-                        percentLabel,
-                        style: textTheme.labelMedium?.copyWith(
-                          color: colorScheme.primary,
-                          fontWeight: FontWeight.w700,
-                        ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 10),
-                  ClipRRect(
-                    borderRadius: BorderRadius.circular(999),
-                    child: LinearProgressIndicator(
-                      value: totalChapters <= 0 ? 0 : progress.clamp(0.0, 1.0),
-                      minHeight: 8,
-                      backgroundColor: colorScheme.surfaceContainerHighest,
-                      valueColor: AlwaysStoppedAnimation<Color>(
-                        colorScheme.primary,
-                      ),
-                    ),
-                  ),
-                  const SizedBox(height: 8),
-                  Text(
-                    isAllCached ? '当前目录已全部缓存，离线阅读会更稳定。' : '可按章节范围批量缓存，减少翻页等待。',
-                    style: textTheme.bodySmall?.copyWith(
-                      color: colorScheme.onSurfaceVariant,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ),
+        return BookDetailCacheSummaryCard(
+          totalChapters: totalChapters,
+          cachedChapters: cappedCached,
+          statusLabel: statusLabel,
+          percentLabel: percentLabel,
+          progress: progress,
+          isAllCached: isAllCached,
+          onOpenCache: totalChapters == 0 ? null : openCache,
         );
       },
     );
@@ -834,40 +523,6 @@ class _BookDetailPageState extends State<BookDetailPage> {
       return sourceId;
     }
     return '当前书源未知';
-  }
-
-  Widget _buildIntroCard(String intro) {
-    final colorScheme = Theme.of(context).colorScheme;
-
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        color: colorScheme.surfaceContainerHigh,
-        borderRadius: BorderRadius.circular(14),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            '简介',
-            style: Theme.of(
-              context,
-            ).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w700),
-          ),
-          const SizedBox(height: 8),
-          Text(
-            intro,
-            maxLines: 5,
-            overflow: TextOverflow.ellipsis,
-            style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-              color: colorScheme.onSurfaceVariant,
-              height: 1.45,
-            ),
-          ),
-        ],
-      ),
-    );
   }
 
   String _normalizeText(String text) {
@@ -895,7 +550,6 @@ class _BookDetailPageState extends State<BookDetailPage> {
 
   Widget _buildChapterSection(BookDetailLoadResult result) {
     final displayedChapters = _buildDisplayedChapters(result.chapters);
-    final colorScheme = Theme.of(context).colorScheme;
     final previewCount =
         displayedChapters.length > _tocPreviewLimit
             ? _tocPreviewLimit
@@ -905,163 +559,134 @@ class _BookDetailPageState extends State<BookDetailPage> {
         .toList(growable: false);
     final hasMoreChapters = displayedChapters.length > previewCount;
 
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
+    final localTxtControls =
+        _isLocalTxtContent
+            ? Wrap(
+              spacing: 8,
+              runSpacing: 8,
               children: [
-                Icon(Icons.menu_book_rounded, color: colorScheme.primary),
+                OutlinedButton.icon(
+                  onPressed: _isLoading ? null : _showTxtTocRuleSheet,
+                  icon: const Icon(Icons.rule_folder_outlined, size: 18),
+                  label: Text(
+                    '目录规则：${_selectedTxtTocRule?.ruleName ?? '自动探测'}',
+                  ),
+                ),
+                FilterChip(
+                  label: const Text('长章节拆分'),
+                  selected: _localBookMeta?.splitLongChapter ?? false,
+                  onSelected:
+                      _isLoading ? null : (_) => _toggleSplitLongChapter(),
+                ),
+                OutlinedButton.icon(
+                  onPressed:
+                      _isLoading ? null : () => _load(forceRefresh: true),
+                  icon: const Icon(Icons.refresh, size: 18),
+                  label: const Text('重新索引'),
+                ),
+              ],
+            )
+            : null;
+
+    final primaryActions =
+        displayedChapters.isNotEmpty
+            ? Row(
+              children: [
+                Expanded(
+                  child: FilledButton.tonal(
+                    onPressed: () => _openChapter(displayedChapters.first),
+                    child: const Text('阅读当前首章'),
+                  ),
+                ),
                 const SizedBox(width: 8),
                 Expanded(
+                  child: OutlinedButton(
+                    onPressed: () => _openChapter(displayedChapters.last),
+                    child: const Text('阅读当前末章'),
+                  ),
+                ),
+              ],
+            )
+            : null;
+
+    final emptyState =
+        displayedChapters.isEmpty
+            ? Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 12,
+                    vertical: 14,
+                  ),
+                  decoration: BoxDecoration(
+                    color: Theme.of(context).colorScheme.surfaceContainerLow,
+                    borderRadius: BorderRadius.circular(12),
+                  ),
                   child: Text(
-                    '目录（${displayedChapters.length} 章）',
-                    style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                      fontWeight: FontWeight.w700,
+                    _contentCapabilities.canReindexLocal
+                        ? '目录暂时为空，可点击下方重新索引重试。'
+                        : '目录暂时为空，可下拉页面刷新重试。',
+                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                      color: Theme.of(context).colorScheme.onSurfaceVariant,
                     ),
                   ),
                 ),
-                if (result.tocFromCache)
+                if (_contentCapabilities.canReindexLocal && !_isLocalTxtContent)
                   Padding(
-                    padding: const EdgeInsets.only(right: 8),
-                    child: Text(
-                      '缓存',
-                      style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                        color: colorScheme.onSurfaceVariant,
+                    padding: const EdgeInsets.only(top: 8),
+                    child: Align(
+                      alignment: Alignment.centerLeft,
+                      child: OutlinedButton.icon(
+                        onPressed:
+                            _isLoading ? null : () => _load(forceRefresh: true),
+                        icon: const Icon(Icons.refresh, size: 18),
+                        label: const Text('重新索引'),
                       ),
                     ),
                   ),
-                IconButton(
-                  onPressed:
-                      displayedChapters.length <= 1
-                          ? null
-                          : () {
-                            setState(() {
-                              _manualTocReversed = !_manualTocReversed;
-                            });
-                          },
-                  tooltip: _manualTocReversed ? '切换为正序' : '切换为倒序',
-                  icon: Icon(
-                    _manualTocReversed
-                        ? Icons.arrow_downward_rounded
-                        : Icons.arrow_upward_rounded,
-                  ),
-                ),
               ],
-            ),
-            const SizedBox(height: 4),
-            Text(
-              _manualTocReversed ? '当前展示：倒序' : '当前展示：正序',
-              style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                color: colorScheme.onSurfaceVariant,
-              ),
-            ),
-            if (_isLocalTxtContent) ...[
-              const SizedBox(height: 10),
-              Wrap(
-                spacing: 8,
-                runSpacing: 8,
-                children: [
-                  OutlinedButton.icon(
-                    onPressed: _isLoading ? null : _showTxtTocRuleSheet,
-                    icon: const Icon(Icons.rule_folder_outlined, size: 18),
-                    label: Text(
-                      '目录规则：${_selectedTxtTocRule?.ruleName ?? '自动探测'}',
-                    ),
-                  ),
-                  FilterChip(
-                    label: const Text('长章节拆分'),
-                    selected: _localBookMeta?.splitLongChapter ?? false,
-                    onSelected:
-                        _isLoading ? null : (_) => _toggleSplitLongChapter(),
-                  ),
-                  OutlinedButton.icon(
-                    onPressed:
-                        _isLoading ? null : () => _load(forceRefresh: true),
-                    icon: const Icon(Icons.refresh, size: 18),
-                    label: const Text('重新索引'),
-                  ),
-                ],
-              ),
-            ],
-            if (displayedChapters.isNotEmpty) ...[
-              const SizedBox(height: 12),
-              Row(
-                children: [
-                  Expanded(
-                    child: FilledButton.tonal(
-                      onPressed: () => _openChapter(displayedChapters.first),
-                      child: const Text('阅读当前首章'),
-                    ),
-                  ),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: OutlinedButton(
-                      onPressed: () => _openChapter(displayedChapters.last),
-                      child: const Text('阅读当前末章'),
-                    ),
-                  ),
-                ],
-              ),
-            ] else ...[
-              const SizedBox(height: 12),
-              Container(
-                width: double.infinity,
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 12,
-                  vertical: 14,
-                ),
-                decoration: BoxDecoration(
-                  color: colorScheme.surfaceContainerLow,
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: Text(
-                  _contentCapabilities.canReindexLocal
-                      ? '目录暂时为空，可点击下方重新索引重试。'
-                      : '目录暂时为空，可下拉页面刷新重试。',
-                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                    color: colorScheme.onSurfaceVariant,
-                  ),
-                ),
-              ),
-              if (_contentCapabilities.canReindexLocal) ...[
-                const SizedBox(height: 8),
-                if (!_isLocalTxtContent)
-                  Align(
-                    alignment: Alignment.centerLeft,
-                    child: OutlinedButton.icon(
-                      onPressed:
-                          _isLoading ? null : () => _load(forceRefresh: true),
-                      icon: const Icon(Icons.refresh, size: 18),
-                      label: const Text('重新索引'),
-                    ),
-                  ),
-              ],
-            ],
-            if (previewChapters.isNotEmpty) ...[
-              const SizedBox(height: 10),
-              ...previewChapters.asMap().entries.map(
-                (entry) => _buildChapterTile(
-                  displayIndex: entry.key,
-                  chapter: entry.value,
-                  showDivider:
-                      hasMoreChapters || entry.key < previewChapters.length - 1,
-                ),
-              ),
-              if (hasMoreChapters) ...[
-                const SizedBox(height: 8),
-                OutlinedButton.icon(
-                  onPressed: () => _showAllChaptersSheet(displayedChapters),
-                  icon: const Icon(Icons.unfold_more_rounded),
-                  label: Text('查看全部目录（${displayedChapters.length} 章）'),
-                ),
-              ],
-            ],
-          ],
-        ),
-      ),
+            )
+            : null;
+
+    final previewChildren = previewChapters
+        .asMap()
+        .entries
+        .map(
+          (entry) => BookDetailChapterTile(
+            displayIndex: entry.key,
+            title: _normalizeSingleLineText(entry.value.title),
+            onTap: () => _openChapter(entry.value),
+            showDivider:
+                hasMoreChapters || entry.key < previewChapters.length - 1,
+          ),
+        )
+        .toList(growable: false);
+
+    return BookDetailChapterSectionCard(
+      totalChapters: displayedChapters.length,
+      tocFromCache: result.tocFromCache,
+      reversed: _manualTocReversed,
+      canToggleReverse: displayedChapters.length > 1,
+      onToggleReverse:
+          displayedChapters.length <= 1
+              ? null
+              : () {
+                setState(() {
+                  _manualTocReversed = !_manualTocReversed;
+                });
+              },
+      localTxtControls: localTxtControls,
+      primaryActions: primaryActions,
+      emptyState: emptyState,
+      previewChildren: previewChildren,
+      showAllChaptersLabel:
+          hasMoreChapters ? '查看全部目录（${displayedChapters.length} 章）' : null,
+      onShowAllChapters:
+          hasMoreChapters
+              ? () => _showAllChaptersSheet(displayedChapters)
+              : null,
     );
   }
 
@@ -1154,53 +779,6 @@ class _BookDetailPageState extends State<BookDetailPage> {
     }
 
     return chapters.reversed.toList(growable: false);
-  }
-
-  Widget _buildChapterTile({
-    required int displayIndex,
-    required Chapter chapter,
-    bool showDivider = true,
-  }) {
-    final colorScheme = Theme.of(context).colorScheme;
-
-    return InkWell(
-      borderRadius: BorderRadius.circular(10),
-      onTap: () => _openChapter(chapter),
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 10),
-        decoration: BoxDecoration(
-          border:
-              showDivider
-                  ? Border(
-                    bottom: BorderSide(
-                      color: colorScheme.outlineVariant.withValues(alpha: 0.55),
-                    ),
-                  )
-                  : null,
-        ),
-        child: Row(
-          children: [
-            SizedBox(
-              width: 28,
-              child: Text(
-                '${displayIndex + 1}',
-                textAlign: TextAlign.center,
-                style: Theme.of(context).textTheme.bodySmall,
-              ),
-            ),
-            const SizedBox(width: 6),
-            Expanded(
-              child: Text(
-                _normalizeSingleLineText(chapter.title),
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-              ),
-            ),
-            Icon(Icons.chevron_right, color: colorScheme.onSurfaceVariant),
-          ],
-        ),
-      ),
-    );
   }
 
   String? _normalizeRouteParam(String? value) {
