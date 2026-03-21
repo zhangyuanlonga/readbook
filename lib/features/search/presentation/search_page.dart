@@ -1,11 +1,9 @@
 import 'dart:async';
-import 'dart:isolate';
 
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 import 'package:go_router/go_router.dart';
-import 'package:html/parser.dart' as html_parser;
 
 import '../../../app/layout/app_spacing.dart';
 
@@ -18,6 +16,7 @@ import '../../source/presentation/source_filter_sheet.dart';
 import '../application/search_history_service.dart';
 import '../application/search_service.dart';
 import '../application/search_system_settings_service.dart';
+import 'search_render_state_controller.dart';
 import 'widgets/search_book_card.dart';
 import 'widgets/search_empty_state.dart';
 import 'widgets/search_failure_banner.dart';
@@ -65,11 +64,10 @@ class _SearchPageState extends State<SearchPage> {
   bool _isLoadingSourceCount = false;
   final ValueNotifier<SearchExecutionReport?> _progressReportNotifier =
       ValueNotifier<SearchExecutionReport?>(null);
-  final ValueNotifier<_SearchRenderState?> _renderStateNotifier =
-      ValueNotifier<_SearchRenderState?>(null);
+  final SearchRenderStateController _renderStateController =
+      SearchRenderStateController(pageSize: _searchResultPageSize);
   SearchCancellationToken? _activeSearchToken;
   int _searchSessionId = 0;
-  int _renderPrepareTicket = 0;
   SearchContentMode _searchContentMode = SearchContentMode.novel;
   bool _isPreciseBookMatch = false;
   bool _aggregateByTitleAuthorEnabled = true;
@@ -112,7 +110,7 @@ class _SearchPageState extends State<SearchPage> {
     _pageScrollController.removeListener(_onPageScroll);
     _pageScrollController.dispose();
     _progressReportNotifier.dispose();
-    _renderStateNotifier.dispose();
+    _renderStateController.dispose();
     _searchFocusNode.dispose();
     _keywordController.dispose();
     super.dispose();
@@ -199,8 +197,8 @@ class _SearchPageState extends State<SearchPage> {
                       ),
                     ),
                   ),
-                  ValueListenableBuilder<_SearchRenderState?>(
-                    valueListenable: _renderStateNotifier,
+                  ValueListenableBuilder<SearchRenderState?>(
+                    valueListenable: _renderStateController.renderStateNotifier,
                     builder: (context, renderState, _) {
                       if (renderState == null) {
                         if (_isSearching) {
@@ -531,19 +529,14 @@ class _SearchPageState extends State<SearchPage> {
   void _appendMoreRenderedResults() {
     if (_isAppendingResults) return;
 
-    final renderState = _renderStateNotifier.value;
+    final renderState = _renderStateController.renderStateNotifier.value;
     if (renderState == null) return;
 
     final total = renderState.visibleBooks.length;
     if (total == 0 || renderState.renderedResultCount >= total) return;
 
     _isAppendingResults = true;
-    final nextRenderedCount = (renderState.renderedResultCount +
-            _searchResultPageSize)
-        .clamp(0, total);
-    _renderStateNotifier.value = renderState.copyWith(
-      renderedResultCount: nextRenderedCount,
-    );
+    _renderStateController.appendMoreResults();
     _isAppendingResults = false;
     _scheduleAutoAppendIfNeeded();
   }
@@ -552,7 +545,7 @@ class _SearchPageState extends State<SearchPage> {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted || _isSearching || _isAppendingResults) return;
       if (!_pageScrollController.hasClients) return;
-      final renderState = _renderStateNotifier.value;
+      final renderState = _renderStateController.renderStateNotifier.value;
       if (renderState == null) return;
       if (renderState.renderedResultCount >= renderState.visibleBooks.length) {
         return;
@@ -573,12 +566,11 @@ class _SearchPageState extends State<SearchPage> {
   // ── Report preparation ──
 
   void _clearSearchOutput() {
-    _renderPrepareTicket += 1;
     _clearProgressUiThrottle();
     _clearDeferredProgressUiUpdate();
     _clearPendingSearchCompletion();
     _progressReportNotifier.value = null;
-    _renderStateNotifier.value = null;
+    _renderStateController.clear();
   }
 
   Future<void> _prepareRenderState({
@@ -587,86 +579,14 @@ class _SearchPageState extends State<SearchPage> {
     SearchCancellationToken? token,
     bool force = false,
   }) async {
-    final preciseMatch = _isPreciseBookMatch;
-    final currentState = _renderStateNotifier.value;
-    if (!force &&
-        currentState != null &&
-        identical(currentState.booksIdentity, report.books) &&
-        currentState.preciseMatch == preciseMatch &&
-        currentState.keyword == report.keyword) {
-      if (!identical(currentState.report, report)) {
-        _renderStateNotifier.value = currentState.copyWith(report: report);
-      }
-      return;
-    }
-
-    final ticket = ++_renderPrepareTicket;
-    final request = _SearchRenderPrepareRequest(
-      keyword: report.keyword,
-      preciseMatch: preciseMatch,
-      books: report.books
-          .map(
-            (book) => _SearchRenderBookPayload(
-              id: book.id,
-              title: book.title,
-              intro: book.intro,
-              latestChapter: book.latestChapter,
-            ),
-          )
-          .toList(growable: false),
-    );
-    late final _SearchRenderPrepareResult prepared;
-    try {
-      prepared = await _prepareSearchRenderDataInIsolate(request);
-    } catch (error) {
-      // Fallback to main isolate to avoid crashing when isolate payload checks fail.
-      debugPrint(
-        'Search render isolate failed, fallback to UI isolate: $error',
-      );
-      prepared = _prepareSearchRenderData(request);
-    }
-
-    if (!mounted || ticket != _renderPrepareTicket) {
-      return;
-    }
-    if (sessionId != _searchSessionId) {
-      return;
-    }
-    if (token?.isCancelled ?? false) {
-      return;
-    }
-
-    final booksById = <String, Book>{
-      for (final book in report.books) book.id: book,
-    };
-    final visibleBooks = <Book>[];
-    for (final id in prepared.visibleBookIds) {
-      final book = booksById[id];
-      if (book != null) {
-        visibleBooks.add(book);
-      }
-    }
-
-    final renderedResultCount =
-        visibleBooks.length > _searchResultPageSize
-            ? _searchResultPageSize
-            : visibleBooks.length;
-
-    _renderStateNotifier.value = _SearchRenderState(
+    await _renderStateController.prepareRenderState(
       report: report,
-      booksIdentity: report.books,
-      keyword: report.keyword,
-      preciseMatch: preciseMatch,
-      visibleBooks: List<Book>.unmodifiable(visibleBooks),
-      normalizedIntros: Map<String, String?>.unmodifiable(
-        prepared.normalizedIntros,
-      ),
-      normalizedLatestChapters: Map<String, String?>.unmodifiable(
-        prepared.normalizedLatestChapters,
-      ),
-      renderedResultCount: renderedResultCount,
+      sessionId: sessionId,
+      activeSessionId: _searchSessionId,
+      preciseMatch: _isPreciseBookMatch,
+      token: token,
+      force: force,
     );
-
     _scheduleAutoAppendIfNeeded();
   }
 
@@ -1197,340 +1117,4 @@ class _DeferredProgressUiUpdate {
   final int sessionId;
   final bool forceRenderState;
   final bool isFinalReport;
-}
-
-class _SearchRenderState {
-  const _SearchRenderState({
-    required this.report,
-    required this.booksIdentity,
-    required this.keyword,
-    required this.preciseMatch,
-    required this.visibleBooks,
-    required this.normalizedIntros,
-    required this.normalizedLatestChapters,
-    required this.renderedResultCount,
-  });
-
-  final SearchExecutionReport report;
-  final Object booksIdentity;
-  final String keyword;
-  final bool preciseMatch;
-  final List<Book> visibleBooks;
-  final Map<String, String?> normalizedIntros;
-  final Map<String, String?> normalizedLatestChapters;
-  final int renderedResultCount;
-
-  _SearchRenderState copyWith({
-    SearchExecutionReport? report,
-    int? renderedResultCount,
-  }) {
-    return _SearchRenderState(
-      report: report ?? this.report,
-      booksIdentity: booksIdentity,
-      keyword: keyword,
-      preciseMatch: preciseMatch,
-      visibleBooks: visibleBooks,
-      normalizedIntros: normalizedIntros,
-      normalizedLatestChapters: normalizedLatestChapters,
-      renderedResultCount: renderedResultCount ?? this.renderedResultCount,
-    );
-  }
-}
-
-class _SearchRenderPrepareRequest {
-  const _SearchRenderPrepareRequest({
-    required this.keyword,
-    required this.preciseMatch,
-    required this.books,
-  });
-
-  final String keyword;
-  final bool preciseMatch;
-  final List<_SearchRenderBookPayload> books;
-}
-
-class _SearchRenderBookPayload {
-  const _SearchRenderBookPayload({
-    required this.id,
-    required this.title,
-    this.intro,
-    this.latestChapter,
-  });
-
-  final String id;
-  final String title;
-  final String? intro;
-  final String? latestChapter;
-}
-
-class _SearchRenderPrepareResult {
-  const _SearchRenderPrepareResult({
-    required this.visibleBookIds,
-    required this.normalizedIntros,
-    required this.normalizedLatestChapters,
-  });
-
-  final List<String> visibleBookIds;
-  final Map<String, String?> normalizedIntros;
-  final Map<String, String?> normalizedLatestChapters;
-}
-
-final RegExp _renderPreciseSpaceRegex = RegExp(r'[\u3000\s]+');
-final RegExp _renderHtmlTagRegex = RegExp(r'<[^>]+>');
-const Set<String> _renderPreciseTitleSeparators = <String>{
-  ' ',
-  '-',
-  '_',
-  '.',
-  '·',
-  ':',
-  '：',
-  '/',
-  '|',
-  '(',
-  '（',
-  '[',
-  '【',
-  '<',
-  '《',
-};
-const Set<String> _renderPreciseLeadingWrappers = <String>{
-  '《',
-  '〈',
-  '<',
-  '「',
-  '『',
-  '【',
-  '[',
-  '(',
-  '（',
-};
-const Set<String> _renderPreciseTrailingWrappers = <String>{
-  '》',
-  '〉',
-  '>',
-  '」',
-  '』',
-  '】',
-  ']',
-  ')',
-  '）',
-};
-
-_SearchRenderPrepareResult _prepareSearchRenderData(
-  _SearchRenderPrepareRequest request,
-) {
-  final normalizedKeyword = _normalizeRenderPreciseText(request.keyword);
-  final hasPreciseKeyword =
-      request.preciseMatch && normalizedKeyword.isNotEmpty;
-
-  final visibleBookIds = <String>[];
-  final normalizedIntros = <String, String?>{};
-  final normalizedLatestChapters = <String, String?>{};
-
-  for (final book in request.books) {
-    if (hasPreciseKeyword &&
-        !_isRenderPreciseTitleMatch(book.title, normalizedKeyword)) {
-      continue;
-    }
-    visibleBookIds.add(book.id);
-    normalizedIntros[book.id] = _normalizeRenderSnippet(book.intro);
-    normalizedLatestChapters[book.id] = _normalizeRenderSnippet(
-      book.latestChapter,
-    );
-  }
-
-  return _SearchRenderPrepareResult(
-    visibleBookIds: visibleBookIds,
-    normalizedIntros: normalizedIntros,
-    normalizedLatestChapters: normalizedLatestChapters,
-  );
-}
-
-String? _normalizeRenderSnippet(String? raw) {
-  final text = raw?.trim();
-  if (text == null || text.isEmpty) return null;
-
-  var normalized = text
-      .replaceAll(r'\r\n', '\n')
-      .replaceAll(r'\n', '\n')
-      .replaceAll('\r\n', '\n')
-      .replaceAll('\r', '\n');
-
-  normalized = normalized
-      .replaceAll(RegExp(r'<\s*br\s*/?>', caseSensitive: false), '\n')
-      .replaceAll(RegExp(r'\{\{[^{}]*\}\}'), '')
-      .replaceAll(RegExp(r'\{\{[^\n\r]*'), '');
-
-  if (_renderHtmlTagRegex.hasMatch(normalized)) {
-    normalized = html_parser.parseFragment(normalized).text ?? '';
-  }
-
-  normalized =
-      normalized
-          .replaceAll(RegExp(r'[ \t\u00A0]+'), ' ')
-          .replaceAll(RegExp(r'\n{3,}'), '\n\n')
-          .trim();
-
-  return normalized.isEmpty ? null : normalized;
-}
-
-bool _isRenderPreciseTitleMatch(String title, String normalizedKeyword) {
-  final normalizedTitle = _normalizeRenderPreciseText(title);
-  if (normalizedTitle.isEmpty) return false;
-
-  if (normalizedTitle == normalizedKeyword) return true;
-
-  if (!normalizedTitle.startsWith(normalizedKeyword) ||
-      normalizedTitle.length <= normalizedKeyword.length) {
-    return false;
-  }
-
-  final nextChar = normalizedTitle[normalizedKeyword.length];
-  return _renderPreciseTitleSeparators.contains(nextChar);
-}
-
-String _normalizeRenderPreciseText(String raw) {
-  var normalized = raw.trim().toLowerCase();
-  if (normalized.isEmpty) return '';
-
-  if (normalized.contains('<') && normalized.contains('>')) {
-    normalized = normalized.replaceAll(_renderHtmlTagRegex, ' ');
-  }
-
-  normalized = normalized.replaceAll(_renderPreciseSpaceRegex, ' ').trim();
-  return _trimRenderPreciseWrappers(normalized);
-}
-
-String _trimRenderPreciseWrappers(String value) {
-  var normalized = value;
-  while (normalized.isNotEmpty &&
-      _renderPreciseLeadingWrappers.contains(normalized[0])) {
-    normalized = normalized.substring(1).trimLeft();
-  }
-
-  while (normalized.isNotEmpty &&
-      _renderPreciseTrailingWrappers.contains(
-        normalized[normalized.length - 1],
-      )) {
-    normalized = normalized.substring(0, normalized.length - 1).trimRight();
-  }
-
-  return normalized;
-}
-
-Future<_SearchRenderPrepareResult> _prepareSearchRenderDataInIsolate(
-  _SearchRenderPrepareRequest request,
-) async {
-  final message = _searchRenderPrepareRequestToMessage(request);
-  final resultMessage = await Isolate.run(
-    () => _prepareSearchRenderDataInIsolateEntry(message),
-  );
-  return _searchRenderPrepareResultFromMessage(resultMessage);
-}
-
-Map<String, Object?> _prepareSearchRenderDataInIsolateEntry(
-  Map<String, Object?> message,
-) {
-  final request = _searchRenderPrepareRequestFromMessage(message);
-  final result = _prepareSearchRenderData(request);
-  return _searchRenderPrepareResultToMessage(result);
-}
-
-Map<String, Object?> _searchRenderPrepareRequestToMessage(
-  _SearchRenderPrepareRequest request,
-) {
-  return <String, Object?>{
-    'keyword': request.keyword,
-    'preciseMatch': request.preciseMatch,
-    'books': request.books
-        .map(
-          (book) => <String, Object?>{
-            'id': book.id,
-            'title': book.title,
-            'intro': book.intro,
-            'latestChapter': book.latestChapter,
-          },
-        )
-        .toList(growable: false),
-  };
-}
-
-_SearchRenderPrepareRequest _searchRenderPrepareRequestFromMessage(
-  Map<String, Object?> message,
-) {
-  final rawBooks = message['books'];
-  final books = <_SearchRenderBookPayload>[];
-  if (rawBooks is List) {
-    for (final entry in rawBooks) {
-      if (entry is! Map) {
-        continue;
-      }
-      final id = entry['id'];
-      final title = entry['title'];
-      books.add(
-        _SearchRenderBookPayload(
-          id: id is String ? id : '',
-          title: title is String ? title : '',
-          intro: entry['intro'] as String?,
-          latestChapter: entry['latestChapter'] as String?,
-        ),
-      );
-    }
-  }
-  return _SearchRenderPrepareRequest(
-    keyword: (message['keyword'] as String?) ?? '',
-    preciseMatch: message['preciseMatch'] == true,
-    books: books,
-  );
-}
-
-Map<String, Object?> _searchRenderPrepareResultToMessage(
-  _SearchRenderPrepareResult result,
-) {
-  return <String, Object?>{
-    'visibleBookIds': result.visibleBookIds,
-    'normalizedIntros': result.normalizedIntros,
-    'normalizedLatestChapters': result.normalizedLatestChapters,
-  };
-}
-
-_SearchRenderPrepareResult _searchRenderPrepareResultFromMessage(
-  Map<String, Object?> message,
-) {
-  final visibleBookIds = <String>[];
-  final rawVisibleBookIds = message['visibleBookIds'];
-  if (rawVisibleBookIds is List) {
-    for (final id in rawVisibleBookIds) {
-      if (id is String) {
-        visibleBookIds.add(id);
-      }
-    }
-  }
-
-  final normalizedIntros = <String, String?>{};
-  final rawIntros = message['normalizedIntros'];
-  if (rawIntros is Map) {
-    rawIntros.forEach((key, value) {
-      if (key is String) {
-        normalizedIntros[key] = value as String?;
-      }
-    });
-  }
-
-  final normalizedLatestChapters = <String, String?>{};
-  final rawLatestChapters = message['normalizedLatestChapters'];
-  if (rawLatestChapters is Map) {
-    rawLatestChapters.forEach((key, value) {
-      if (key is String) {
-        normalizedLatestChapters[key] = value as String?;
-      }
-    });
-  }
-
-  return _SearchRenderPrepareResult(
-    visibleBookIds: visibleBookIds,
-    normalizedIntros: normalizedIntros,
-    normalizedLatestChapters: normalizedLatestChapters,
-  );
 }

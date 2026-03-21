@@ -20,6 +20,7 @@ import '../../book/application/book_detail_service.dart';
 import '../../announcement/application/announcement_service.dart';
 import '../../announcement/application/announcement_read_state_service.dart';
 import 'widgets/bookshelf_grid_sliver.dart';
+import 'widgets/bookshelf_page_sections.dart';
 
 enum _BookshelfSheetAction {
   read,
@@ -73,6 +74,11 @@ class _BookshelfPageState extends State<BookshelfPage>
   Map<String, List<String>> _bookTagsByKey = const <String, List<String>>{};
   List<String> _tagOrder = const <String>[];
   List<_BookshelfFilter> _baseFilterOrder = _kDefaultBaseFilters;
+  Object? _derivedBookshelfFingerprint;
+  List<BookshelfBook> _filteredBooksCache = const <BookshelfBook>[];
+  Map<String, int> _tagBookCountCache = const <String, int>{};
+  List<String> _userTagsCache = const <String>[];
+  List<_BookshelfFilter> _orderedBaseFiltersCache = _kDefaultBaseFilters;
   bool _useGridView = false;
   _BookshelfFilter _activeFilter = _BookshelfFilter.all;
   String? _activeCustomTag;
@@ -94,6 +100,8 @@ class _BookshelfPageState extends State<BookshelfPage>
   );
   static const int _kProgressBatchSize = 24;
   static const int _kBooksModeSwitchStaggerGroup = 8;
+  static const int _kBooksModeSwitchAnimatedItemLimit = 24;
+  static const int _kBooksModeSwitchDisableThreshold = 72;
   static const double _kBooksModeSwitchStaggerStep = 0.07;
   static const double _kBooksModeSwitchCurveSpan = 0.42;
 
@@ -330,6 +338,7 @@ class _BookshelfPageState extends State<BookshelfPage>
         return _buildModeSwitchAnimatedBookItem(
           book: book,
           index: index,
+          totalCount: books.length,
           child: _buildBookCard(book),
         );
       }, childCount: books.length),
@@ -337,42 +346,7 @@ class _BookshelfPageState extends State<BookshelfPage>
   }
 
   Widget _buildEmptyCard() {
-    final colorScheme = Theme.of(context).colorScheme;
-
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(18),
-        child: Column(
-          children: [
-            Icon(
-              Icons.import_contacts_outlined,
-              color: colorScheme.primary,
-              size: 28,
-            ),
-            const SizedBox(height: 10),
-            Text(
-              '书架暂无内容',
-              style: Theme.of(
-                context,
-              ).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w700),
-            ),
-            const SizedBox(height: 6),
-            Text(
-              '请先在搜索结果或详情页加入书架。',
-              style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                color: colorScheme.onSurfaceVariant,
-              ),
-            ),
-            const SizedBox(height: 14),
-            FilledButton.icon(
-              onPressed: _openLocalLibrary,
-              icon: const Icon(Icons.library_add_rounded),
-              label: const Text('导入图文'),
-            ),
-          ],
-        ),
-      ),
-    );
+    return BookshelfEmptyCard(onImportLocal: _openLocalLibrary);
   }
 
   void _handleMoreAction(_BookshelfMoreAction action) {
@@ -393,64 +367,17 @@ class _BookshelfPageState extends State<BookshelfPage>
   }
 
   Widget _buildFilterEmptyCard() {
-    final colorScheme = Theme.of(context).colorScheme;
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Row(
-          children: [
-            Icon(Icons.filter_alt_off_rounded, color: colorScheme.primary),
-            const SizedBox(width: 10),
-            Expanded(
-              child: Text(
-                '当前“${_activeFilterLabel()}”分类暂无书籍',
-                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                  color: colorScheme.onSurfaceVariant,
-                ),
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
+    return BookshelfFilterEmptyCard(label: _activeFilterLabel());
   }
 
   Widget _buildLoadErrorCard({required String message}) {
-    final colorScheme = Theme.of(context).colorScheme;
-
-    return Card(
-      color: colorScheme.errorContainer,
-      child: Padding(
-        padding: const EdgeInsets.all(14),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              '书架加载失败',
-              style: TextStyle(
-                color: colorScheme.onErrorContainer,
-                fontWeight: FontWeight.w700,
-              ),
-            ),
-            const SizedBox(height: 6),
-            Text(
-              message,
-              style: TextStyle(color: colorScheme.onErrorContainer),
-            ),
-            const SizedBox(height: 10),
-            FilledButton.tonal(
-              onPressed: () => unawaited(_loadBookshelf()),
-              child: const Text('重试'),
-            ),
-          ],
-        ),
-      ),
+    return BookshelfLoadErrorCard(
+      message: message,
+      onRetry: () => unawaited(_loadBookshelf()),
     );
   }
 
   Widget _buildViewModeEditBar() {
-    final theme = Theme.of(context);
-    final colorScheme = Theme.of(context).colorScheme;
     final viewButtonEnabled = !_isLoading && !_isBatchDeleting;
     final editButtonEnabled =
         !_isBatchDeleting &&
@@ -460,57 +387,21 @@ class _BookshelfPageState extends State<BookshelfPage>
             ? '已选择 ${_selectedBookKeys.length} 本'
             : '${_activeFilterLabel()} · ${_filteredBooks.length} 本';
 
-    return Row(
-      children: [
-        Text(
-          summaryText,
-          style: theme.textTheme.labelMedium?.copyWith(
-            color: colorScheme.onSurfaceVariant,
-            fontWeight: FontWeight.w600,
-          ),
-        ),
-        const Spacer(),
-        IconButton(
-          tooltip: _useGridView ? '网格模式' : '列表模式',
-          onPressed: viewButtonEnabled ? _toggleBookshelfViewMode : null,
-          visualDensity: VisualDensity.compact,
-          iconSize: 20,
-          color:
-              viewButtonEnabled
-                  ? (_useGridView
-                      ? colorScheme.primary
-                      : colorScheme.onSurfaceVariant)
-                  : colorScheme.onSurfaceVariant.withValues(alpha: 0.45),
-          icon: Icon(
-            _useGridView ? Icons.grid_view_rounded : Icons.view_list_rounded,
-          ),
-        ),
-        IconButton(
-          tooltip: _isSelectionMode ? '完成编辑' : '进入编辑',
-          onPressed:
-              editButtonEnabled
-                  ? (_isSelectionMode
-                      ? _exitSelectionMode
-                      : _startSelectionMode)
-                  : null,
-          visualDensity: VisualDensity.compact,
-          iconSize: 20,
-          color:
-              editButtonEnabled
-                  ? (_isSelectionMode
-                      ? colorScheme.primary
-                      : colorScheme.onSurfaceVariant)
-                  : colorScheme.onSurfaceVariant.withValues(alpha: 0.45),
-          icon: Icon(
-            _isSelectionMode ? Icons.check_rounded : Icons.edit_outlined,
-          ),
-        ),
-      ],
+    return BookshelfViewModeEditBar(
+      summaryText: summaryText,
+      useGridView: _useGridView,
+      viewButtonEnabled: viewButtonEnabled,
+      editButtonEnabled: editButtonEnabled,
+      isSelectionMode: _isSelectionMode,
+      onToggleViewMode: _toggleBookshelfViewMode,
+      onToggleEditMode:
+          editButtonEnabled
+              ? (_isSelectionMode ? _exitSelectionMode : _startSelectionMode)
+              : null,
     );
   }
 
   Widget _buildFilterBar() {
-    final colorScheme = Theme.of(context).colorScheme;
     final baseFilters = _orderedBaseFilters;
     final customTags = _userTags;
     final visibleBaseFilters = baseFilters.take(3).toList(growable: false);
@@ -524,146 +415,43 @@ class _BookshelfPageState extends State<BookshelfPage>
             !visibleCustomTags.contains(_activeCustomTag));
     final highlightFilterAction =
         hasHiddenBaseFilterSelected || hasHiddenTagSelected;
-    final chipTextStyle = Theme.of(
-      context,
-    ).textTheme.labelMedium?.copyWith(fontWeight: FontWeight.w600);
 
-    return SizedBox(
-      height: 38,
-      child: Row(
-        children: [
-          Expanded(
-            child: ListView(
-              scrollDirection: Axis.horizontal,
-              children: [
-                ...visibleBaseFilters.map((filter) {
-                  final selected = _activeFilter == filter;
-                  final label = _filterLabel(filter);
-                  return Padding(
-                    padding: const EdgeInsets.only(right: 8),
-                    child: ChoiceChip(
-                      label: Text(label),
-                      labelPadding: const EdgeInsets.symmetric(horizontal: 4),
-                      visualDensity: VisualDensity.compact,
-                      materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                      selected: selected,
-                      showCheckmark: false,
-                      onSelected:
-                          _isBatchDeleting
-                              ? null
-                              : (_) => _activateFilter(filter),
-                      backgroundColor: colorScheme.surfaceContainerLow
-                          .withValues(alpha: 0.35),
-                      selectedColor: colorScheme.primaryContainer.withValues(
-                        alpha: 0.82,
-                      ),
-                      labelStyle: chipTextStyle?.copyWith(
-                        color:
-                            selected
-                                ? colorScheme.onPrimaryContainer
-                                : colorScheme.onSurfaceVariant,
-                        fontWeight:
-                            selected ? FontWeight.w700 : FontWeight.w600,
-                      ),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(10),
-                      ),
-                      side: BorderSide(
-                        color:
-                            selected
-                                ? colorScheme.primary.withValues(alpha: 0.26)
-                                : colorScheme.outlineVariant.withValues(
-                                  alpha: 0.72,
-                                ),
-                        width: 0.8,
-                      ),
-                    ),
-                  );
-                }),
-                ...visibleCustomTags.map((tag) {
-                  final selected =
-                      _activeFilter == _BookshelfFilter.custom &&
-                      _activeCustomTag == tag;
-                  final label = tag;
-                  return Padding(
-                    padding: const EdgeInsets.only(right: 8),
-                    child: GestureDetector(
-                      onLongPress:
-                          _isBatchDeleting
-                              ? null
-                              : () => unawaited(_showTagManageSheet(tag)),
-                      child: ChoiceChip(
-                        label: Text(label),
-                        labelPadding: const EdgeInsets.symmetric(horizontal: 4),
-                        visualDensity: VisualDensity.compact,
-                        materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                        selected: selected,
-                        showCheckmark: false,
-                        onSelected:
-                            _isBatchDeleting
-                                ? null
-                                : (_) => _activateFilter(
-                                  _BookshelfFilter.custom,
-                                  customTag: tag,
-                                ),
-                        backgroundColor: colorScheme.surfaceContainerLow
-                            .withValues(alpha: 0.35),
-                        selectedColor: colorScheme.secondaryContainer
-                            .withValues(alpha: 0.88),
-                        labelStyle: chipTextStyle?.copyWith(
-                          color:
-                              selected
-                                  ? colorScheme.onSecondaryContainer
-                                  : colorScheme.onSurfaceVariant,
-                          fontWeight:
-                              selected ? FontWeight.w700 : FontWeight.w600,
-                        ),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(10),
-                        ),
-                        side: BorderSide(
-                          color:
-                              selected
-                                  ? colorScheme.secondary.withValues(
-                                    alpha: 0.26,
-                                  )
-                                  : colorScheme.outlineVariant.withValues(
-                                    alpha: 0.72,
-                                  ),
-                          width: 0.8,
-                        ),
-                      ),
-                    ),
-                  );
-                }),
-              ],
+    return BookshelfFilterBar(
+      baseChips: visibleBaseFilters
+          .map(
+            (filter) => BookshelfFilterChipData(
+              label: _filterLabel(filter),
+              selected: _activeFilter == filter,
+              onTap: _isBatchDeleting ? null : () => _activateFilter(filter),
             ),
-          ),
-          const SizedBox(width: 6),
-          Tooltip(
-            message:
-                highlightFilterAction
-                    ? '当前筛选：${_activeFilterLabel()}'
-                    : '打开完整筛选',
-            child: TextButton.icon(
-              onPressed:
-                  _isBatchDeleting ? null : () => unawaited(_showFilterSheet()),
-              style: TextButton.styleFrom(
-                minimumSize: const Size(0, 38),
-                padding: const EdgeInsets.symmetric(horizontal: 6),
-                visualDensity: VisualDensity.compact,
-                tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                foregroundColor:
-                    highlightFilterAction
-                        ? colorScheme.primary
-                        : colorScheme.onSurfaceVariant,
-              ),
-              icon: const Icon(Icons.filter_list_rounded, size: 18),
-              label: const Text('筛选'),
+          )
+          .toList(growable: false),
+      customChips: visibleCustomTags
+          .map(
+            (tag) => BookshelfFilterChipData(
+              label: tag,
+              selected:
+                  _activeFilter == _BookshelfFilter.custom &&
+                  _activeCustomTag == tag,
+              onTap:
+                  _isBatchDeleting
+                      ? null
+                      : () => _activateFilter(
+                        _BookshelfFilter.custom,
+                        customTag: tag,
+                      ),
+              onLongPress:
+                  _isBatchDeleting
+                      ? null
+                      : () => unawaited(_showTagManageSheet(tag)),
             ),
-          ),
-        ],
-      ),
+          )
+          .toList(growable: false),
+      highlightFilterAction: highlightFilterAction,
+      filterActionMessage:
+          highlightFilterAction ? '当前筛选：${_activeFilterLabel()}' : '打开完整筛选',
+      onOpenFilterSheet:
+          _isBatchDeleting ? null : () => unawaited(_showFilterSheet()),
     );
   }
 
@@ -722,10 +510,9 @@ class _BookshelfPageState extends State<BookshelfPage>
               setSheetState(() {
                 customTags = nextTags;
               });
-              await _persistTagOrder(nextTags);
             }
 
-            Future<void> moveBaseFilter(int index, int offset) async {
+            void moveBaseFilter(int index, int offset) {
               final nextIndex = index + offset;
               if (nextIndex < 0 || nextIndex >= baseFilters.length) {
                 return;
@@ -736,7 +523,6 @@ class _BookshelfPageState extends State<BookshelfPage>
               setSheetState(() {
                 baseFilters = nextFilters;
               });
-              await _persistBaseFilterOrder(nextFilters);
             }
 
             return Padding(
@@ -802,9 +588,7 @@ class _BookshelfPageState extends State<BookshelfPage>
                                   tooltip: '上移',
                                   onPressed:
                                       index > 0
-                                          ? () => unawaited(
-                                            moveBaseFilter(index, -1),
-                                          )
+                                          ? () => moveBaseFilter(index, -1)
                                           : null,
                                   visualDensity: VisualDensity.compact,
                                   padding: EdgeInsets.zero,
@@ -821,9 +605,7 @@ class _BookshelfPageState extends State<BookshelfPage>
                                   tooltip: '下移',
                                   onPressed:
                                       index < baseFilters.length - 1
-                                          ? () => unawaited(
-                                            moveBaseFilter(index, 1),
-                                          )
+                                          ? () => moveBaseFilter(index, 1)
                                           : null,
                                   visualDensity: VisualDensity.compact,
                                   padding: EdgeInsets.zero,
@@ -907,8 +689,7 @@ class _BookshelfPageState extends State<BookshelfPage>
                                     tooltip: '上移',
                                     onPressed:
                                         index > 0
-                                            ? () =>
-                                                unawaited(moveTag(index, -1))
+                                            ? () => moveTag(index, -1)
                                             : null,
                                     visualDensity: VisualDensity.compact,
                                     padding: EdgeInsets.zero,
@@ -925,7 +706,7 @@ class _BookshelfPageState extends State<BookshelfPage>
                                     tooltip: '下移',
                                     onPressed:
                                         index < customTags.length - 1
-                                            ? () => unawaited(moveTag(index, 1))
+                                            ? () => moveTag(index, 1)
                                             : null,
                                     visualDensity: VisualDensity.compact,
                                     padding: EdgeInsets.zero,
@@ -953,6 +734,17 @@ class _BookshelfPageState extends State<BookshelfPage>
         );
       },
     );
+
+    if (!mounted) {
+      return;
+    }
+
+    if (!_sameBaseFilterOrder(baseFilters, _orderedBaseFilters)) {
+      await _persistBaseFilterOrder(baseFilters);
+    }
+    if (!_sameStringOrder(customTags, _userTags)) {
+      await _persistTagOrder(customTags);
+    }
 
     if (!mounted || selected == null) {
       return;
@@ -1085,6 +877,7 @@ class _BookshelfPageState extends State<BookshelfPage>
         return _buildModeSwitchAnimatedBookItem(
           book: book,
           index: index,
+          totalCount: books.length,
           child: _buildGridCard(book),
         );
       },
@@ -1094,36 +887,49 @@ class _BookshelfPageState extends State<BookshelfPage>
   Widget _buildModeSwitchAnimatedBookItem({
     required BookshelfBook book,
     required int index,
+    required int totalCount,
     required Widget child,
   }) {
+    if (totalCount > _kBooksModeSwitchDisableThreshold ||
+        index >= _kBooksModeSwitchAnimatedItemLimit) {
+      return RepaintBoundary(
+        key: ValueKey<String>(
+          'bookshelf_static_${_useGridView ? 'grid' : 'list'}_${book.bookId}',
+        ),
+        child: child,
+      );
+    }
+
     final delay =
         (index % _kBooksModeSwitchStaggerGroup) * _kBooksModeSwitchStaggerStep;
     final begin = delay.clamp(0.0, 1 - _kBooksModeSwitchCurveSpan);
     final end = begin + _kBooksModeSwitchCurveSpan;
 
-    return TweenAnimationBuilder<double>(
-      key: ValueKey<String>(
-        'bookshelf_mode_${_useGridView ? 'grid' : 'list'}_${book.bookId}',
-      ),
-      tween: Tween<double>(begin: 0, end: 1),
-      duration: _kBooksModeSwitchItemDuration,
-      curve: Interval(begin, end, curve: Curves.easeOutCubic),
-      child: child,
-      builder: (context, value, builtChild) {
-        final translateY = (1 - value) * 16;
-        final scale = 0.986 + (0.014 * value);
-        return Opacity(
-          opacity: value,
-          child: Transform.translate(
-            offset: Offset(0, translateY),
-            child: Transform.scale(
-              alignment: Alignment.topCenter,
-              scale: scale,
-              child: builtChild,
+    return RepaintBoundary(
+      child: TweenAnimationBuilder<double>(
+        key: ValueKey<String>(
+          'bookshelf_mode_${_useGridView ? 'grid' : 'list'}_${book.bookId}',
+        ),
+        tween: Tween<double>(begin: 0, end: 1),
+        duration: _kBooksModeSwitchItemDuration,
+        curve: Interval(begin, end, curve: Curves.easeOutCubic),
+        child: child,
+        builder: (context, value, builtChild) {
+          final translateY = (1 - value) * 16;
+          final scale = 0.986 + (0.014 * value);
+          return Opacity(
+            opacity: value,
+            child: Transform.translate(
+              offset: Offset(0, translateY),
+              child: Transform.scale(
+                alignment: Alignment.topCenter,
+                scale: scale,
+                child: builtChild,
+              ),
             ),
-          ),
-        );
-      },
+          );
+        },
+      ),
     );
   }
 
@@ -1564,9 +1370,8 @@ class _BookshelfPageState extends State<BookshelfPage>
   }
 
   List<BookshelfBook> get _filteredBooks {
-    return _books
-        .where((book) => _bookMatchesFilter(book, _activeFilter))
-        .toList(growable: false);
+    _ensureDerivedBookshelfState();
+    return _filteredBooksCache;
   }
 
   bool _bookMatchesFilter(BookshelfBook book, _BookshelfFilter filter) {
@@ -1608,7 +1413,41 @@ class _BookshelfPageState extends State<BookshelfPage>
   }
 
   List<String> get _userTags {
-    final counts = _buildTagBookCount();
+    _ensureDerivedBookshelfState();
+    return _userTagsCache;
+  }
+
+  List<_BookshelfFilter> get _orderedBaseFilters {
+    _ensureDerivedBookshelfState();
+    return _orderedBaseFiltersCache;
+  }
+
+  Map<String, int> _buildTagBookCount() {
+    _ensureDerivedBookshelfState();
+    return _tagBookCountCache;
+  }
+
+  void _ensureDerivedBookshelfState() {
+    final fingerprint = Object.hash(
+      _activeFilter,
+      _activeCustomTag,
+      identityHashCode(_books),
+      identityHashCode(_sourceTypeBySourceId),
+      identityHashCode(_bookTagsByKey),
+      identityHashCode(_tagOrder),
+      identityHashCode(_baseFilterOrder),
+    );
+    if (_derivedBookshelfFingerprint == fingerprint) {
+      return;
+    }
+
+    final counts = <String, int>{};
+    for (final book in _books) {
+      for (final tag in _tagsOfBook(book)) {
+        counts[tag] = (counts[tag] ?? 0) + 1;
+      }
+    }
+
     final tags = <String>[];
     for (final tag in _tagOrder) {
       if ((counts[tag] ?? 0) <= 0 || tags.contains(tag)) {
@@ -1626,33 +1465,32 @@ class _BookshelfPageState extends State<BookshelfPage>
       }
       return a.compareTo(b);
     });
-    return <String>[...tags, ...remaining];
-  }
 
-  List<_BookshelfFilter> get _orderedBaseFilters {
-    final ordered = <_BookshelfFilter>[];
+    final orderedBaseFilters = <_BookshelfFilter>[];
     for (final filter in _baseFilterOrder) {
-      if (!_kDefaultBaseFilters.contains(filter) || ordered.contains(filter)) {
+      if (!_kDefaultBaseFilters.contains(filter) ||
+          orderedBaseFilters.contains(filter)) {
         continue;
       }
-      ordered.add(filter);
+      orderedBaseFilters.add(filter);
     }
     for (final filter in _kDefaultBaseFilters) {
-      if (!ordered.contains(filter)) {
-        ordered.add(filter);
+      if (!orderedBaseFilters.contains(filter)) {
+        orderedBaseFilters.add(filter);
       }
     }
-    return List<_BookshelfFilter>.unmodifiable(ordered);
-  }
 
-  Map<String, int> _buildTagBookCount() {
-    final counts = <String, int>{};
-    for (final book in _books) {
-      for (final tag in _tagsOfBook(book)) {
-        counts[tag] = (counts[tag] ?? 0) + 1;
-      }
-    }
-    return counts;
+    _tagBookCountCache = Map<String, int>.unmodifiable(counts);
+    _userTagsCache = List<String>.unmodifiable(<String>[...tags, ...remaining]);
+    _orderedBaseFiltersCache = List<_BookshelfFilter>.unmodifiable(
+      orderedBaseFilters,
+    );
+    _filteredBooksCache = List<BookshelfBook>.unmodifiable(
+      _books
+          .where((book) => _bookMatchesFilter(book, _activeFilter))
+          .toList(growable: false),
+    );
+    _derivedBookshelfFingerprint = fingerprint;
   }
 
   Future<void> _persistTagOrder(List<String> tags) async {
@@ -1671,6 +1509,33 @@ class _BookshelfPageState extends State<BookshelfPage>
       }
       _showMessage('分组排序保存失败，请重试。');
     }
+  }
+
+  bool _sameStringOrder(List<String> left, List<String> right) {
+    if (left.length != right.length) {
+      return false;
+    }
+    for (var index = 0; index < left.length; index += 1) {
+      if (left[index] != right[index]) {
+        return false;
+      }
+    }
+    return true;
+  }
+
+  bool _sameBaseFilterOrder(
+    List<_BookshelfFilter> left,
+    List<_BookshelfFilter> right,
+  ) {
+    if (left.length != right.length) {
+      return false;
+    }
+    for (var index = 0; index < left.length; index += 1) {
+      if (left[index] != right[index]) {
+        return false;
+      }
+    }
+    return true;
   }
 
   Future<void> _persistBaseFilterOrder(List<_BookshelfFilter> filters) async {
