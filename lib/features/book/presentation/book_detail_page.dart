@@ -12,13 +12,9 @@ import '../../../core/errors/app_exception.dart';
 import '../../../core/errors/error_codes.dart';
 import '../../../core/errors/error_stage.dart';
 import '../../../data/datasources/local/app_database.dart';
-import '../../../data/repositories/local_book_repository_impl.dart';
-import '../../../domain/entities/book.dart';
 import '../../../domain/entities/bookshelf_book.dart';
 import '../../../domain/entities/chapter.dart';
 import '../../../domain/entities/local_book.dart';
-import '../../../domain/entities/source_definition.dart';
-import '../../../domain/repositories/local_book_repository.dart';
 import '../../bookshelf/application/local_book_import_service.dart';
 import '../../bookshelf/application/bookshelf_service.dart';
 import '../../reader/application/content_provider.dart';
@@ -31,6 +27,8 @@ import '../../reader/presentation/chapter_cache_sheets.dart';
 import '../../search/application/search_hit_cache_service.dart';
 import '../../search/application/search_service.dart';
 import '../application/book_detail_service.dart';
+import 'book_detail_switch_source_helper.dart';
+import 'book_detail_toc_helper.dart';
 import 'widgets/book_detail_primary_actions.dart';
 import 'widgets/book_detail_sections.dart';
 
@@ -69,31 +67,10 @@ class _BookDetailPageState extends State<BookDetailPage> {
   late final SearchService _switchSourceSearchService;
   late final Stream<int> Function(String bookId)
   _cachedChapterCountStreamBuilder;
-  final TxtTocRuleSettingsService _txtTocRuleSettingsService =
-      TxtTocRuleSettingsService();
-  final LocalBookRepository _localBookRepository = LocalBookRepositoryImpl(
-    AppDatabase.instance,
-  );
+  late final BookDetailSwitchSourceHelper _switchSourceHelper;
+  late final BookDetailTocHelper _tocHelper;
 
   static const int _tocPreviewLimit = 80;
-  static const int _kSwitchSourceCandidateLimit = 24;
-  static const int _kSwitchSourceLagTolerance = 20;
-  static const int _kSwitchSourceScoreStep = 6;
-  static const int _kSwitchSourceHitCountCap = 12;
-  static const int _kSwitchSourceHitCountWeight = 3;
-  static const Duration _kSwitchSourceScopeLoadTimeout = Duration(
-    milliseconds: 1600,
-  );
-  static const Duration _kSwitchSourceHitCountLoadTimeout = Duration(
-    milliseconds: 1200,
-  );
-  static final RegExp _kSwitchSourceChapterPattern = RegExp(
-    r'第?\s*(\d{1,5})\s*章',
-  );
-  static final RegExp _kSwitchSourceChapterEnglishPattern = RegExp(
-    r'^(chapter|chap)\s*\d{1,5}\b',
-  );
-
   bool _isLoading = false;
   bool _isSwitchingSource = false;
   bool _manualTocReversed = false;
@@ -126,6 +103,14 @@ class _BookDetailPageState extends State<BookDetailPage> {
     _bookshelfService = widget.bookshelfService ?? BookshelfService();
     _switchSourceSearchService =
         widget.switchSourceSearchService ?? SearchService();
+    _switchSourceHelper = BookDetailSwitchSourceHelper(
+      switchSourceSearchService: _switchSourceSearchService,
+      searchHitCacheService: _searchHitCacheService,
+      switchSourceScoreService: _switchSourceScoreService,
+    );
+    _tocHelper = BookDetailTocHelper(
+      txtTocRuleSettingsService: TxtTocRuleSettingsService(),
+    );
     _cachedChapterCountStreamBuilder =
         widget.cachedChapterCountStreamBuilder ??
         AppDatabase.instance.watchCachedChapterCount;
@@ -774,11 +759,7 @@ class _BookDetailPageState extends State<BookDetailPage> {
   }
 
   List<Chapter> _buildDisplayedChapters(List<Chapter> chapters) {
-    if (!_manualTocReversed) {
-      return chapters;
-    }
-
-    return chapters.reversed.toList(growable: false);
+    return _tocHelper.buildDisplayedChapters(chapters, _manualTocReversed);
   }
 
   String? _normalizeRouteParam(String? value) {
@@ -839,9 +820,30 @@ class _BookDetailPageState extends State<BookDetailPage> {
       return;
     }
 
-    final keyword = await _resolveSwitchSourceSearchKeyword(
-      currentSourceId: currentSourceId,
-      currentDetailUrl: currentDetailUrl,
+    final keyword = await _switchSourceHelper.resolveSearchKeyword(
+      currentTitle: (_result?.detail.title ?? _displayTitle ?? '').trim(),
+      reloadTitle: (currentTitle) async {
+        final detailProvider = _requireContentProvider(
+          sourceId: currentSourceId,
+          stage: ErrorStage.detail,
+        );
+        final detailResult = await detailProvider.loadDetail(
+          sourceId: currentSourceId,
+          bookId: _activeBookId,
+          detailUrl: currentDetailUrl,
+          fallbackTitle: currentTitle.isEmpty ? null : currentTitle,
+        );
+        return detailResult.detail.title;
+      },
+      onResolvedTitle: (refreshedTitle) {
+        if (mounted && refreshedTitle != _displayTitle) {
+          setState(() {
+            _displayTitle = refreshedTitle;
+          });
+        } else {
+          _displayTitle = refreshedTitle;
+        }
+      },
     );
     if (!mounted) {
       return;
@@ -852,9 +854,11 @@ class _BookDetailPageState extends State<BookDetailPage> {
     }
     final author = _result?.detail.author?.trim();
 
-    _DetailSwitchSourceScope scope;
+    BookDetailSwitchSourceScope scope;
     try {
-      scope = await _buildSwitchSourceScope(currentSourceId: currentSourceId);
+      scope = await _switchSourceHelper.buildScope(
+        currentSourceId: currentSourceId,
+      );
       if (scope.sourceIds.isEmpty && !scope.allowUnscopedSearch) {
         _showMessage('暂无可切换的同类型书源。');
         return;
@@ -867,7 +871,7 @@ class _BookDetailPageState extends State<BookDetailPage> {
       return;
     }
 
-    final scoreStore = await _loadSwitchSourceScoreStoreSafely();
+    final scoreStore = await _switchSourceHelper.loadScoreStoreSafely();
     const scoreRankingEnabled = true;
     if (!mounted) {
       return;
@@ -887,11 +891,12 @@ class _BookDetailPageState extends State<BookDetailPage> {
       _isSwitchingSource = true;
     });
 
-    final searchFuture = _loadSwitchSourceCandidatesProgressively(
+    final searchFuture = _switchSourceHelper.loadCandidatesProgressively(
       keyword: keyword,
       author: author,
       scope: scope,
       currentSourceId: currentSourceId,
+      currentChapterCount: _result?.chapters.length ?? 0,
       lookupStateNotifier: lookupStateNotifier,
       cancellationToken: cancellationToken,
       scoreStore: scoreStore,
@@ -948,295 +953,6 @@ class _BookDetailPageState extends State<BookDetailPage> {
     }
   }
 
-  Future<_DetailSwitchSourceScope> _buildSwitchSourceScope({
-    required String currentSourceId,
-  }) async {
-    List<SourceDefinition> sources;
-    try {
-      sources = await AppDatabase.instance.getAllSources().timeout(
-        _kSwitchSourceScopeLoadTimeout,
-      );
-    } catch (_) {
-      return const _DetailSwitchSourceScope(
-        sourceIds: <String>[],
-        contentMode: SearchContentMode.novel,
-        allowUnscopedSearch: true,
-      );
-    }
-    if (sources.isEmpty) {
-      return const _DetailSwitchSourceScope(
-        sourceIds: <String>[],
-        contentMode: SearchContentMode.novel,
-        allowUnscopedSearch: true,
-      );
-    }
-
-    SourceDefinition? currentSource;
-    for (final source in sources) {
-      if (source.id == currentSourceId) {
-        currentSource = source;
-        break;
-      }
-    }
-
-    if (currentSource == null) {
-      final fallbackSourceIds = sources
-          .where((source) => source.enabled && source.id != currentSourceId)
-          .map((source) => source.id)
-          .toList(growable: false);
-      if (fallbackSourceIds.isEmpty) {
-        return const _DetailSwitchSourceScope(
-          sourceIds: <String>[],
-          contentMode: SearchContentMode.novel,
-          allowUnscopedSearch: true,
-        );
-      }
-      return _DetailSwitchSourceScope(
-        sourceIds: fallbackSourceIds,
-        contentMode: SearchContentMode.novel,
-      );
-    }
-
-    final isMangaType = currentSource.isMangaSource;
-    final sourceIds = sources
-        .where(
-          (source) =>
-              source.enabled &&
-              source.id != currentSourceId &&
-              source.isMangaSource == isMangaType,
-        )
-        .map((source) => source.id)
-        .toList(growable: false);
-    if (sourceIds.isEmpty) {
-      return _DetailSwitchSourceScope(
-        sourceIds: const <String>[],
-        contentMode:
-            isMangaType ? SearchContentMode.manga : SearchContentMode.novel,
-        allowUnscopedSearch: true,
-      );
-    }
-    return _DetailSwitchSourceScope(
-      sourceIds: sourceIds,
-      contentMode:
-          isMangaType ? SearchContentMode.manga : SearchContentMode.novel,
-    );
-  }
-
-  Future<void> _loadSwitchSourceCandidatesProgressively({
-    required String keyword,
-    required String? author,
-    required _DetailSwitchSourceScope scope,
-    required String currentSourceId,
-    required ValueNotifier<SwitchSourceLookupState> lookupStateNotifier,
-    required SearchCancellationToken cancellationToken,
-    required SourceSwitchScoreStore scoreStore,
-    required bool scoreRankingEnabled,
-  }) async {
-    final requestScopedSourceIds =
-        scope.allowUnscopedSearch && scope.sourceIds.isEmpty
-            ? null
-            : scope.sourceIds;
-    try {
-      final hitCountBySource = await _loadSwitchSourceHitCountsSafely(
-        title: keyword,
-        author: author,
-      );
-      final report = await _switchSourceSearchService.search(
-        keyword: keyword,
-        pageSize: 16,
-        contentMode: scope.contentMode,
-        sourceIds: requestScopedSourceIds,
-        cancellationToken: cancellationToken,
-        onProgress: (progress) {
-          if (cancellationToken.isCancelled) {
-            return;
-          }
-
-          final candidates = _buildSwitchSourceCandidates(
-            books: progress.books,
-            sourceNames: progress.sourceNames,
-            currentSourceId: currentSourceId,
-            currentChapterCount: _result?.chapters.length ?? 0,
-            targetTitle: keyword,
-            targetAuthor: author,
-            hitCountBySource: hitCountBySource,
-            scoreStore: scoreStore,
-            scoreRankingEnabled: scoreRankingEnabled,
-          );
-          lookupStateNotifier.value = SwitchSourceLookupState(
-            isLoading: true,
-            sourceCount: progress.sourceCount,
-            processedSourceCount: progress.processedSourceCount,
-            candidates: candidates,
-            errorText: null,
-            scoreRankingEnabled: scoreRankingEnabled,
-          );
-        },
-      );
-
-      if (cancellationToken.isCancelled) {
-        return;
-      }
-
-      final candidates = _buildSwitchSourceCandidates(
-        books: report.books,
-        sourceNames: report.sourceNames,
-        currentSourceId: currentSourceId,
-        currentChapterCount: _result?.chapters.length ?? 0,
-        targetTitle: keyword,
-        targetAuthor: author,
-        hitCountBySource: hitCountBySource,
-        scoreStore: scoreStore,
-        scoreRankingEnabled: scoreRankingEnabled,
-      );
-      lookupStateNotifier.value = SwitchSourceLookupState(
-        isLoading: false,
-        sourceCount: report.sourceCount,
-        processedSourceCount: report.processedSourceCount,
-        candidates: candidates,
-        errorText: candidates.isEmpty ? '没有检索到可切换书源，请稍后重试。' : null,
-        scoreRankingEnabled: scoreRankingEnabled,
-      );
-    } on AppException catch (error) {
-      if (cancellationToken.isCancelled) {
-        return;
-      }
-      lookupStateNotifier.value = SwitchSourceLookupState(
-        isLoading: false,
-        sourceCount:
-            requestScopedSourceIds == null ? 0 : requestScopedSourceIds.length,
-        processedSourceCount: 0,
-        candidates: const <SwitchSourceCandidate>[],
-        errorText: '查找可切换书源失败：${error.briefMessage}',
-        scoreRankingEnabled: scoreRankingEnabled,
-      );
-    } catch (_) {
-      if (cancellationToken.isCancelled) {
-        return;
-      }
-      lookupStateNotifier.value = SwitchSourceLookupState(
-        isLoading: false,
-        sourceCount:
-            requestScopedSourceIds == null ? 0 : requestScopedSourceIds.length,
-        processedSourceCount: 0,
-        candidates: const <SwitchSourceCandidate>[],
-        errorText: '查找可切换书源失败，请稍后重试。',
-        scoreRankingEnabled: scoreRankingEnabled,
-      );
-    }
-  }
-
-  Future<SourceSwitchScoreStore> _loadSwitchSourceScoreStoreSafely() async {
-    try {
-      return await _switchSourceScoreService.loadStore();
-    } catch (_) {
-      return SourceSwitchScoreStore(
-        sourceScores: <String, int>{},
-        bookScores: <String, int>{},
-      );
-    }
-  }
-
-  Future<Map<String, int>> _loadSwitchSourceHitCountsSafely({
-    required String title,
-    required String? author,
-  }) async {
-    try {
-      return await _searchHitCacheService
-          .loadSourceHitCounts(title: title, author: author)
-          .timeout(_kSwitchSourceHitCountLoadTimeout);
-    } catch (_) {
-      return <String, int>{};
-    }
-  }
-
-  List<SwitchSourceCandidate> _buildSwitchSourceCandidates({
-    required List<Book> books,
-    required Map<String, String> sourceNames,
-    required String currentSourceId,
-    required int currentChapterCount,
-    required String targetTitle,
-    required String? targetAuthor,
-    required Map<String, int> hitCountBySource,
-    required SourceSwitchScoreStore scoreStore,
-    required bool scoreRankingEnabled,
-  }) {
-    return buildSwitchSourceCandidates(
-      books: books,
-      sourceNames: sourceNames,
-      currentSourceId: currentSourceId,
-      currentChapterCount: currentChapterCount,
-      targetTitle: targetTitle,
-      targetAuthor: targetAuthor,
-      hitCountBySource: hitCountBySource,
-      scoreStore: scoreStore,
-      scoreRankingEnabled: scoreRankingEnabled,
-      buildBookScoreKey: _switchSourceScoreService.buildBookScoreKey,
-      lagTolerance: _kSwitchSourceLagTolerance,
-      hitCountCap: _kSwitchSourceHitCountCap,
-      hitCountWeight: _kSwitchSourceHitCountWeight,
-      candidateLimit: _kSwitchSourceCandidateLimit,
-    );
-  }
-
-  Future<String?> _resolveSwitchSourceSearchKeyword({
-    required String currentSourceId,
-    required String currentDetailUrl,
-  }) async {
-    final currentTitle = (_result?.detail.title ?? _displayTitle ?? '').trim();
-    if (_isSwitchSourceBookTitleUsable(currentTitle)) {
-      return currentTitle;
-    }
-
-    try {
-      final detailProvider = _requireContentProvider(
-        sourceId: currentSourceId,
-        stage: ErrorStage.detail,
-      );
-      final detailResult = await detailProvider.loadDetail(
-        sourceId: currentSourceId,
-        bookId: _activeBookId,
-        detailUrl: currentDetailUrl,
-        fallbackTitle: currentTitle.isEmpty ? null : currentTitle,
-      );
-      final refreshedTitle = detailResult.detail.title.trim();
-      if (_isSwitchSourceBookTitleUsable(refreshedTitle)) {
-        if (mounted && refreshedTitle != _displayTitle) {
-          setState(() {
-            _displayTitle = refreshedTitle;
-          });
-        } else {
-          _displayTitle = refreshedTitle;
-        }
-        return refreshedTitle;
-      }
-    } catch (_) {
-      // Fall through to null and let caller show user-facing message.
-    }
-
-    return null;
-  }
-
-  bool _isSwitchSourceBookTitleUsable(String title) {
-    final trimmed = title.trim();
-    if (trimmed.isEmpty) {
-      return false;
-    }
-    return !_looksLikeSwitchSourceChapterTitle(trimmed);
-  }
-
-  bool _looksLikeSwitchSourceChapterTitle(String text) {
-    final trimmed = text.trim();
-    if (trimmed.isEmpty) {
-      return false;
-    }
-    if (_kSwitchSourceChapterPattern.hasMatch(trimmed)) {
-      return true;
-    }
-    final lower = trimmed.toLowerCase();
-    return _kSwitchSourceChapterEnglishPattern.hasMatch(lower);
-  }
-
   Future<SwitchSourceCandidate?> _showSwitchSourceCandidateSheet(
     ValueNotifier<SwitchSourceLookupState> lookupStateNotifier, {
     required SourceSwitchScoreStore scoreStore,
@@ -1248,111 +964,16 @@ class _BookDetailPageState extends State<BookDetailPage> {
       currentTitle: (_result?.detail.title ?? _displayTitle ?? '').trim(),
       currentChapterCount: _result?.chapters.length ?? 0,
       onScoreAction: (candidate, action) {
-        return _applySwitchSourceScoreAction(
+        return _switchSourceHelper.applyScoreAction(
           candidate: candidate,
           action: action,
           lookupStateNotifier: lookupStateNotifier,
           scoreStore: scoreStore,
           scoreRankingEnabled: scoreRankingEnabled,
+          onMessage: _showMessage,
         );
       },
     );
-  }
-
-  Future<void> _applySwitchSourceScoreAction({
-    required SwitchSourceCandidate candidate,
-    required SwitchSourceScoreAction action,
-    required ValueNotifier<SwitchSourceLookupState> lookupStateNotifier,
-    required SourceSwitchScoreStore scoreStore,
-    required bool scoreRankingEnabled,
-  }) async {
-    try {
-      final update = switch (action) {
-        SwitchSourceScoreAction.upvote => _switchSourceScoreService
-            .adjustBookScore(
-              sourceId: candidate.book.sourceId,
-              title: candidate.book.title,
-              author: candidate.book.author,
-              delta: _kSwitchSourceScoreStep,
-            ),
-        SwitchSourceScoreAction.downvote => _switchSourceScoreService
-            .adjustBookScore(
-              sourceId: candidate.book.sourceId,
-              title: candidate.book.title,
-              author: candidate.book.author,
-              delta: -_kSwitchSourceScoreStep,
-            ),
-        SwitchSourceScoreAction.reset => _switchSourceScoreService
-            .resetBookScore(
-              sourceId: candidate.book.sourceId,
-              title: candidate.book.title,
-              author: candidate.book.author,
-            ),
-      };
-      final resolved = await update;
-
-      if (resolved.sourceScore == 0) {
-        scoreStore.sourceScores.remove(candidate.book.sourceId);
-      } else {
-        scoreStore.sourceScores[candidate.book.sourceId] = resolved.sourceScore;
-      }
-      if (resolved.bookScore == 0) {
-        scoreStore.bookScores.remove(resolved.bookScoreKey);
-      } else {
-        scoreStore.bookScores[resolved.bookScoreKey] = resolved.bookScore;
-      }
-
-      final current = lookupStateNotifier.value;
-      final nextCandidates = current.candidates
-          .map(
-            (item) => _rebuildSwitchSourceCandidateScore(
-              item,
-              scoreStore: scoreStore,
-              scoreRankingEnabled: scoreRankingEnabled,
-            ),
-          )
-          .toList(growable: false);
-      lookupStateNotifier.value = current.copyWith(
-        candidates: sortSwitchSourceCandidates(nextCandidates),
-      );
-
-      if (!mounted) {
-        return;
-      }
-
-      final actionLabel = switch (action) {
-        SwitchSourceScoreAction.upvote => '已推荐',
-        SwitchSourceScoreAction.downvote => '已降权',
-        SwitchSourceScoreAction.reset => '已重置',
-      };
-      _showMessage(
-        '$actionLabel ${candidate.sourceName}（源评 ${_formatSignedScore(resolved.sourceScore)}，书评 ${_formatSignedScore(resolved.bookScore)}）',
-      );
-    } catch (_) {
-      _showMessage('更新评分失败，请稍后重试。');
-    }
-  }
-
-  SwitchSourceCandidate _rebuildSwitchSourceCandidateScore(
-    SwitchSourceCandidate candidate, {
-    required SourceSwitchScoreStore scoreStore,
-    required bool scoreRankingEnabled,
-  }) {
-    return rebuildSwitchSourceCandidateScore(
-      candidate,
-      scoreStore: scoreStore,
-      scoreRankingEnabled: scoreRankingEnabled,
-      buildBookScoreKey: _switchSourceScoreService.buildBookScoreKey,
-      hitCountCap: _kSwitchSourceHitCountCap,
-      hitCountWeight: _kSwitchSourceHitCountWeight,
-    );
-  }
-
-  String _formatSignedScore(int score) {
-    if (score > 0) {
-      return '+$score';
-    }
-    return '$score';
   }
 
   Future<_DetailSwitchSourceApplyResult> _switchToCandidateSource(
@@ -1564,38 +1185,19 @@ class _BookDetailPageState extends State<BookDetailPage> {
   }
 
   Future<void> _syncLocalTxtContext() async {
-    if (!_isLocalContent) {
-      if (!mounted) {
-        _localBookMeta = null;
-        _selectedTxtTocRule = null;
-        return;
-      }
-      setState(() {
-        _localBookMeta = null;
-        _selectedTxtTocRule = null;
-      });
-      return;
-    }
-
-    final localBook = await _localBookRepository.getBookById(_activeBookId);
-    final selection =
-        localBook == null ||
-                (localBook.txtTocRuleName?.trim().isEmpty ?? true) ||
-                (localBook.txtTocRulePattern?.trim().isEmpty ?? true)
-            ? null
-            : TxtBookTocRuleSelection(
-              ruleName: localBook.txtTocRuleName!.trim(),
-              pattern: localBook.txtTocRulePattern!.trim(),
-            );
+    final tocContext = await _tocHelper.loadContext(
+      isLocalContent: _isLocalContent,
+      activeBookId: _activeBookId,
+    );
     if (!mounted) {
-      _localBookMeta = localBook;
-      _selectedTxtTocRule = selection;
+      _localBookMeta = tocContext.localBookMeta;
+      _selectedTxtTocRule = tocContext.selectedTxtTocRule;
       return;
     }
 
     setState(() {
-      _localBookMeta = localBook;
-      _selectedTxtTocRule = selection;
+      _localBookMeta = tocContext.localBookMeta;
+      _selectedTxtTocRule = tocContext.selectedTxtTocRule;
     });
   }
 
@@ -1604,131 +1206,34 @@ class _BookDetailPageState extends State<BookDetailPage> {
       return;
     }
 
-    final rules = await _txtTocRuleSettingsService.loadRules();
-    final localBook = await _localBookRepository.getBookById(_activeBookId);
-    final currentSelection =
-        localBook == null ||
-                (localBook.txtTocRuleName?.trim().isEmpty ?? true) ||
-                (localBook.txtTocRulePattern?.trim().isEmpty ?? true)
-            ? null
-            : TxtBookTocRuleSelection(
-              ruleName: localBook.txtTocRuleName!.trim(),
-              pattern: localBook.txtTocRulePattern!.trim(),
-            );
-    if (!mounted) {
-      return;
-    }
-
-    final selected = await showModalBottomSheet<_TxtTocRuleSheetResult>(
+    final selected = await _tocHelper.showRuleSheet(
       context: context,
-      useSafeArea: true,
-      showDragHandle: true,
-      builder: (context) {
-        final colorScheme = Theme.of(context).colorScheme;
-        final currentPattern = currentSelection?.pattern.trim() ?? '';
-        return ListView(
-          shrinkWrap: true,
-          padding: const EdgeInsets.fromLTRB(12, 0, 12, 16),
-          children: [
-            ListTile(
-              leading: Icon(
-                currentSelection == null
-                    ? Icons.radio_button_checked_rounded
-                    : Icons.radio_button_off_rounded,
-              ),
-              title: const Text('自动探测'),
-              subtitle: const Text('按全局启用规则自动选择最匹配的 TXT 目录规则。'),
-              onTap:
-                  () => Navigator.of(
-                    context,
-                  ).pop(const _TxtTocRuleSheetResult.clear()),
-            ),
-            const Divider(height: 1),
-            for (final rule in rules) ...[
-              ListTile(
-                leading: Icon(
-                  currentPattern == rule.pattern.trim()
-                      ? Icons.radio_button_checked_rounded
-                      : Icons.radio_button_off_rounded,
-                ),
-                title: Text(rule.name),
-                subtitle: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    if ((rule.example ?? '').trim().isNotEmpty)
-                      Text(
-                        '示例：${rule.example!.trim()}',
-                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                          color: colorScheme.onSurfaceVariant,
-                        ),
-                      ),
-                    const SizedBox(height: 4),
-                    Text(
-                      rule.enabled ? '全局自动识别：已启用' : '全局自动识别：未启用',
-                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                        color: colorScheme.onSurfaceVariant,
-                      ),
-                    ),
-                  ],
-                ),
-                isThreeLine: (rule.example ?? '').trim().isNotEmpty,
-                onTap:
-                    () => Navigator.of(
-                      context,
-                    ).pop(_TxtTocRuleSheetResult.select(rule)),
-              ),
-              const Divider(height: 1),
-            ],
-          ],
-        );
-      },
+      activeBookId: _activeBookId,
     );
 
     if (!mounted || selected == null) {
       return;
     }
 
-    final latestBook = await _localBookRepository.getBookById(_activeBookId);
-    if (latestBook == null) {
-      return;
-    }
-
-    if (selected.clearSelection) {
-      await _localBookRepository.upsertBook(
-        latestBook.copyWith(
-          clearTxtTocRuleName: true,
-          clearTxtTocRulePattern: true,
-          updatedAt: DateTime.now(),
-        ),
-      );
-      _showMessage('已切换为自动探测目录规则。');
-    } else if (selected.rule != null) {
-      await _localBookRepository.upsertBook(
-        latestBook.copyWith(
-          txtTocRuleName: selected.rule!.name,
-          txtTocRulePattern: selected.rule!.pattern,
-          updatedAt: DateTime.now(),
-        ),
-      );
-      _showMessage('已切换目录规则：${selected.rule!.name}');
+    final message = await _tocHelper.applyRuleSheetResult(
+      activeBookId: _activeBookId,
+      selected: selected,
+    );
+    if (message != null) {
+      _showMessage(message);
     }
 
     await _load(forceRefresh: true);
   }
 
   Future<void> _toggleSplitLongChapter() async {
-    final localBook = await _localBookRepository.getBookById(_activeBookId);
-    if (localBook == null) {
+    final nextValue = await _tocHelper.toggleSplitLongChapter(
+      activeBookId: _activeBookId,
+    );
+    if (nextValue == null) {
       return;
     }
 
-    final nextValue = !localBook.splitLongChapter;
-    await _localBookRepository.upsertBook(
-      localBook.copyWith(
-        splitLongChapter: nextValue,
-        updatedAt: DateTime.now(),
-      ),
-    );
     _showMessage(nextValue ? '已开启长章节拆分。' : '已关闭长章节拆分。');
     await _load(forceRefresh: true);
   }
@@ -1906,24 +1411,4 @@ enum _DetailSwitchSourceApplyResult {
   switched,
   switchedWithBookshelfSyncFailed,
   failed,
-}
-
-class _TxtTocRuleSheetResult {
-  const _TxtTocRuleSheetResult.select(this.rule) : clearSelection = false;
-  const _TxtTocRuleSheetResult.clear() : rule = null, clearSelection = true;
-
-  final TxtTocRuleState? rule;
-  final bool clearSelection;
-}
-
-class _DetailSwitchSourceScope {
-  const _DetailSwitchSourceScope({
-    required this.sourceIds,
-    required this.contentMode,
-    this.allowUnscopedSearch = false,
-  });
-
-  final List<String> sourceIds;
-  final SearchContentMode contentMode;
-  final bool allowUnscopedSearch;
 }
