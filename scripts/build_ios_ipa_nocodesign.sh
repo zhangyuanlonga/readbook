@@ -10,6 +10,7 @@ PROJECT_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
 FLUTTER_CMD="${FLUTTER_CMD:-flutter}"
 APP_NAME="${APP_NAME:-Runner}"
 OUTPUT_DIR="${OUTPUT_DIR:-${PROJECT_ROOT}/build/ios/ipa}"
+ARTIFACT_NAME="${ARTIFACT_NAME:-书享阅读}"
 BUILD_MODE="${BUILD_MODE:-release}"
 BUILD_NAME="${BUILD_NAME:-}"
 BUILD_NUMBER="${BUILD_NUMBER:-}"
@@ -61,6 +62,22 @@ if [[ "${SKIP_POD_INSTALL}" != "1" ]]; then
   fi
 fi
 
+artifact_base_name() {
+  local base="${ARTIFACT_NAME}"
+  if [[ -n "${BUILD_NAME}" ]]; then
+    base="${base} v${BUILD_NAME}"
+  fi
+  echo "${base}"
+}
+
+artifact_mode_suffix() {
+  if [[ "${BUILD_MODE}" == "release" ]]; then
+    echo ""
+  else
+    echo " ${BUILD_MODE}"
+  fi
+}
+
 echo "==> flutter build ios --${BUILD_MODE} --no-codesign"
 CMD=("${FLUTTER_CMD}" build ios --"${BUILD_MODE}" --no-codesign)
 if [[ -n "${BUILD_NAME}" ]]; then
@@ -81,7 +98,7 @@ fi
 echo "==> iOS intermediate output (.app): ${APP_PATH}"
 
 TIMESTAMP="$(date +%Y%m%d-%H%M%S)"
-IPA_PATH="${OUTPUT_DIR}/${APP_NAME}-nocodesign-${BUILD_MODE}-${TIMESTAMP}.ipa"
+IPA_PATH="${OUTPUT_DIR}/$(artifact_base_name) iOS$(artifact_mode_suffix) ${TIMESTAMP}.ipa"
 TMP_DIR="${PROJECT_ROOT}/build/ios/ipa/.tmp-${TIMESTAMP}"
 
 mkdir -p "${OUTPUT_DIR}"

@@ -14,6 +14,7 @@ ANDROID_TARGET="${ANDROID_TARGET:-both}" # apk | appbundle | both
 SPLIT_PER_ABI="${SPLIT_PER_ABI:-0}"      # Android APK only
 APP_NAME="${APP_NAME:-Runner}"           # iOS APP_NAME
 MACOS_APP_NAME="${MACOS_APP_NAME:-}"     # macOS APP_NAME
+ARTIFACT_NAME="${ARTIFACT_NAME:-书享阅读}"
 BUILD_NAME="${BUILD_NAME:-}"
 BUILD_NUMBER="${BUILD_NUMBER:-}"
 VERSION_PROMPT="${VERSION_PROMPT:-1}"
@@ -223,7 +224,7 @@ copy_artifacts_from_staging() {
     has_file=1
     local base dest unique_dest idx
     base="$(basename "${file}")"
-    dest="${SESSION_DIR}/${platform}-${base}"
+    dest="${SESSION_DIR}/${base}"
     unique_dest="${dest}"
     idx=1
 

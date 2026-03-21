@@ -12,6 +12,7 @@ TARGET="${1:-${TARGET:-apk}}"            # apk | appbundle | both
 BUILD_MODE="${2:-${BUILD_MODE:-release}}" # debug | profile | release
 SPLIT_PER_ABI="${SPLIT_PER_ABI:-0}"      # 1 to pass --split-per-abi for APK
 OUTPUT_DIR="${OUTPUT_DIR:-${PROJECT_ROOT}/build/android/artifacts}"
+ARTIFACT_NAME="${ARTIFACT_NAME:-书享阅读}"
 BUILD_NAME="${BUILD_NAME:-}"
 BUILD_NUMBER="${BUILD_NUMBER:-}"
 SKIP_CLEAN="${SKIP_CLEAN:-0}"
@@ -30,6 +31,7 @@ Environment variables:
   FLUTTER_CMD   Flutter command path (default: flutter)
   SPLIT_PER_ABI 1 to add --split-per-abi for APK (default: 0)
   OUTPUT_DIR    Output artifacts folder (default: build/android/artifacts)
+  ARTIFACT_NAME Final artifact display name prefix (default: 书享阅读)
   BUILD_NAME    Override Flutter --build-name
   BUILD_NUMBER  Override Flutter --build-number
   SKIP_CLEAN    1 to skip flutter clean
@@ -65,9 +67,41 @@ if ! command -v "${FLUTTER_CMD}" >/dev/null 2>&1; then
 fi
 
 TIMESTAMP="$(date +%Y%m%d-%H%M%S)"
-APP_SLUG="$(basename "${PROJECT_ROOT}")"
 SESSION_DIR="${OUTPUT_DIR}/${TIMESTAMP}-${BUILD_MODE}"
 mkdir -p "${SESSION_DIR}"
+
+artifact_base_name() {
+  local base="${ARTIFACT_NAME}"
+  if [[ -n "${BUILD_NAME}" ]]; then
+    base="${base} v${BUILD_NAME}"
+  fi
+  echo "${base}"
+}
+
+artifact_mode_suffix() {
+  if [[ "${BUILD_MODE}" == "release" ]]; then
+    echo ""
+  else
+    echo " ${BUILD_MODE}"
+  fi
+}
+
+android_apk_name() {
+  local abi_label="$1"
+  local name
+  name="$(artifact_base_name) 安卓"
+  if [[ -n "${abi_label}" ]]; then
+    name="${name} ${abi_label}"
+  fi
+  name="${name}$(artifact_mode_suffix).apk"
+  echo "${name}"
+}
+
+android_aab_name() {
+  local name
+  name="$(artifact_base_name) 安卓$(artifact_mode_suffix).aab"
+  echo "${name}"
+}
 
 echo "==> Project root: ${PROJECT_ROOT}"
 echo "==> Flutter cmd : ${FLUTTER_CMD}"
@@ -110,13 +144,19 @@ build_apk() {
     while IFS= read -r -d '' file; do
       local base
       base="$(basename "${file}")"
-      cp "${file}" "${SESSION_DIR}/${APP_SLUG}-${base}"
+      local abi_label=""
+      case "${base}" in
+        *arm64-v8a*) abi_label="arm64-v8a" ;;
+        *armeabi-v7a*) abi_label="armeabi-v7a" ;;
+        *x86_64*) abi_label="x86_64" ;;
+      esac
+      cp "${file}" "${SESSION_DIR}/$(android_apk_name "${abi_label}")"
       copied=1
     done < <(find "${apk_dir}" -maxdepth 1 -type f -name "app-*-${BUILD_MODE}.apk" -print0)
   else
     local apk_file="${apk_dir}/app-${BUILD_MODE}.apk"
     if [[ -f "${apk_file}" ]]; then
-      cp "${apk_file}" "${SESSION_DIR}/${APP_SLUG}-app-${BUILD_MODE}.apk"
+      cp "${apk_file}" "${SESSION_DIR}/$(android_apk_name "")"
       copied=1
     fi
   fi
@@ -144,7 +184,7 @@ build_appbundle() {
     exit 1
   fi
 
-  cp "${aab_file}" "${SESSION_DIR}/${APP_SLUG}-app-${BUILD_MODE}.aab"
+  cp "${aab_file}" "${SESSION_DIR}/$(android_aab_name)"
 }
 
 if [[ "${TARGET}" == "apk" || "${TARGET}" == "both" ]]; then

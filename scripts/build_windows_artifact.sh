@@ -9,6 +9,7 @@ PROJECT_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
 FLUTTER_CMD="${FLUTTER_CMD:-flutter}"
 BUILD_MODE="${1:-${BUILD_MODE:-release}}" # debug | profile | release
 OUTPUT_DIR="${OUTPUT_DIR:-${PROJECT_ROOT}/build/windows/artifacts}"
+ARTIFACT_NAME="${ARTIFACT_NAME:-书享阅读}"
 BUILD_NAME="${BUILD_NAME:-}"
 BUILD_NUMBER="${BUILD_NUMBER:-}"
 SKIP_CLEAN="${SKIP_CLEAN:-0}"
@@ -25,6 +26,7 @@ Arguments:
 Environment variables:
   FLUTTER_CMD  Flutter command path (default: flutter)
   OUTPUT_DIR   Output artifacts folder (default: build/windows/artifacts)
+  ARTIFACT_NAME Final artifact display name prefix (default: 书享阅读)
   BUILD_NAME   Override Flutter --build-name
   BUILD_NUMBER Override Flutter --build-number
   SKIP_CLEAN   1 to skip flutter clean
@@ -131,10 +133,25 @@ if [[ ! -d "${RUNNER_DIR}" ]]; then
   exit 1
 fi
 
+artifact_base_name() {
+  local base="${ARTIFACT_NAME}"
+  if [[ -n "${BUILD_NAME}" ]]; then
+    base="${base} v${BUILD_NAME}"
+  fi
+  echo "${base}"
+}
+
+artifact_mode_suffix() {
+  if [[ "${BUILD_MODE}" == "release" ]]; then
+    echo ""
+  else
+    echo " ${BUILD_MODE}"
+  fi
+}
+
 TIMESTAMP="$(date +%Y%m%d-%H%M%S)"
-APP_SLUG="$(basename "${PROJECT_ROOT}")"
 ARTIFACT_DIR="${OUTPUT_DIR}/${TIMESTAMP}-${BUILD_MODE}"
-ARCHIVE_PATH="${ARTIFACT_DIR}/${APP_SLUG}-windows-${BUILD_MODE}.zip"
+ARCHIVE_PATH="${ARTIFACT_DIR}/$(artifact_base_name) Windows$(artifact_mode_suffix).zip"
 
 mkdir -p "${ARTIFACT_DIR}"
 

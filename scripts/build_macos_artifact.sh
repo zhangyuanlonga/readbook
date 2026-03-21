@@ -10,6 +10,7 @@ FLUTTER_CMD="${FLUTTER_CMD:-flutter}"
 BUILD_MODE="${1:-${BUILD_MODE:-release}}" # debug | profile | release
 APP_NAME="${APP_NAME:-}"                  # optional, e.g. YuanRead
 OUTPUT_DIR="${OUTPUT_DIR:-${PROJECT_ROOT}/build/macos/artifacts}"
+ARTIFACT_NAME="${ARTIFACT_NAME:-书享阅读}"
 BUILD_NAME="${BUILD_NAME:-}"
 BUILD_NUMBER="${BUILD_NUMBER:-}"
 SKIP_CLEAN="${SKIP_CLEAN:-0}"
@@ -27,6 +28,7 @@ Environment variables:
   FLUTTER_CMD  Flutter command path (default: flutter)
   APP_NAME     Optional .app name (without .app), e.g. YuanRead
   OUTPUT_DIR   Output artifacts folder (default: build/macos/artifacts)
+  ARTIFACT_NAME Final artifact display name prefix (default: 书享阅读)
   BUILD_NAME   Override Flutter --build-name
   BUILD_NUMBER Override Flutter --build-number
   SKIP_CLEAN   1 to skip flutter clean
@@ -126,7 +128,7 @@ fi
 TIMESTAMP="$(date +%Y%m%d-%H%M%S)"
 APP_BASENAME="$(basename "${APP_PATH}" .app)"
 ARTIFACT_DIR="${OUTPUT_DIR}/${TIMESTAMP}-${BUILD_MODE}"
-ARCHIVE_PATH="${ARTIFACT_DIR}/${APP_BASENAME}-macos-${BUILD_MODE}.zip"
+ARCHIVE_PATH="${ARTIFACT_DIR}/$(artifact_base_name) macOS$(artifact_mode_suffix).zip"
 TMP_DIR="${ARTIFACT_DIR}/.tmp"
 
 mkdir -p "${ARTIFACT_DIR}"
@@ -144,3 +146,18 @@ rm -rf "${TMP_DIR}"
 echo ""
 echo "Done. macOS artifact is ready:"
 echo "${ARCHIVE_PATH}"
+artifact_base_name() {
+  local base="${ARTIFACT_NAME}"
+  if [[ -n "${BUILD_NAME}" ]]; then
+    base="${base} v${BUILD_NAME}"
+  fi
+  echo "${base}"
+}
+
+artifact_mode_suffix() {
+  if [[ "${BUILD_MODE}" == "release" ]]; then
+    echo ""
+  else
+    echo " ${BUILD_MODE}"
+  fi
+}
