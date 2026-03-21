@@ -36,6 +36,7 @@ class XPathExecutor {
     StackTrace? nativeStackTrace;
     try {
       final xmlDocument = _parseHtmlAsXml(content);
+      // ignore: experimental_member_use
       final value = xmlDocument.xpathEvaluate(expression);
       final extracted = _extractXPathValue(value, rule.extractor);
       if (extracted.isNotEmpty) {

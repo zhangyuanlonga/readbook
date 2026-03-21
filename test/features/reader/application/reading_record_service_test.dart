@@ -43,6 +43,43 @@ void main() {
       expect(record, isNull);
     });
 
+    test('stores short sessions when progress is meaningful', () async {
+      final start = DateTime.parse('2026-03-21T10:00:00.000Z');
+      final end = start.add(const Duration(seconds: 5));
+
+      await service.commitSession(
+        ReadingRecordCommitInput(
+          bookId: 'book_short_progress',
+          sourceId: 'source_1',
+          detailUrl: 'https://example.com/book/short-progress',
+          bookTitle: '短时阅读',
+          chapterId: 'chapter_1',
+          chapterTitle: '第一章',
+          chapterIndex: 0,
+          chapterUrl: 'https://example.com/book/short-progress/1',
+          startAt: start,
+          endAt: end,
+          readChars: 600,
+          startPositionRatio: 0.0,
+          endPositionRatio: 0.2,
+        ),
+      );
+
+      final record = await database.getReadingRecordByBookId(
+        'book_short_progress',
+      );
+      expect(record, isNotNull);
+      expect(
+        record!.totalReadMillis,
+        const Duration(seconds: 5).inMilliseconds,
+      );
+
+      final sessions = await database.listReadingRecordSessionsByBookId(
+        'book_short_progress',
+      );
+      expect(sessions, hasLength(1));
+    });
+
     test('stores aggregate, daily, and session records', () async {
       final start = DateTime.parse('2026-03-21T10:00:00.000Z');
       final end = start.add(const Duration(minutes: 12));

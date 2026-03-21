@@ -33,9 +33,11 @@ class ReaderSystemSettingsService {
     return prefs.getBool(_readRecordEnabledKey) ?? true;
   }
 
-  Stream<bool> watchReadRecordEnabled() async* {
-    yield await loadReadRecordEnabled();
-    yield* _readRecordEnabledController.stream.distinct();
+  Stream<bool> watchReadRecordEnabled() {
+    return (() async* {
+      yield await loadReadRecordEnabled();
+      yield* _readRecordEnabledController.stream.distinct();
+    }()).asBroadcastStream();
   }
 
   Future<void> saveReadRecordEnabled(bool enabled) async {

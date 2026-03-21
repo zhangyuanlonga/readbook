@@ -15,6 +15,8 @@ BUILD_NAME="${BUILD_NAME:-}"
 BUILD_NUMBER="${BUILD_NUMBER:-}"
 SKIP_CLEAN="${SKIP_CLEAN:-0}"
 SKIP_PUB_GET="${SKIP_PUB_GET:-0}"
+SKIP_POD_INSTALL="${SKIP_POD_INSTALL:-0}"
+PREPARE_APPLE_PODS="${PREPARE_APPLE_PODS:-1}"
 
 usage() {
   cat <<USAGE
@@ -33,6 +35,7 @@ Environment variables:
   BUILD_NUMBER Override Flutter --build-number
   SKIP_CLEAN   1 to skip flutter clean
   SKIP_PUB_GET 1 to skip flutter pub get
+  SKIP_POD_INSTALL 1 to skip pod install in macos/
 
 Examples:
   ./scripts/build_macos_artifact.sh release
@@ -90,6 +93,20 @@ fi
 if [[ "${SKIP_PUB_GET}" != "1" ]]; then
   echo "==> flutter pub get"
   "${FLUTTER_CMD}" pub get
+fi
+
+if [[ "${PREPARE_APPLE_PODS}" == "1" ]]; then
+  echo "==> prepare Apple podspec overrides"
+  "${SCRIPT_DIR}/prepare_apple_podspec_overrides.sh"
+fi
+
+if [[ "${SKIP_POD_INSTALL}" != "1" ]]; then
+  if command -v pod >/dev/null 2>&1; then
+    echo "==> pod install --no-repo-update (macos/)"
+    (cd macos && pod install --no-repo-update)
+  else
+    echo "==> Warning: CocoaPods (pod) not found, skip pod install"
+  fi
 fi
 
 echo "==> flutter build macos --${BUILD_MODE}"

@@ -17,6 +17,7 @@ BUILD_NUMBER="${BUILD_NUMBER:-}"
 SKIP_CLEAN="${SKIP_CLEAN:-0}"
 SKIP_PUB_GET="${SKIP_PUB_GET:-0}"
 SKIP_POD_INSTALL="${SKIP_POD_INSTALL:-0}"
+PREPARE_APPLE_PODS="${PREPARE_APPLE_PODS:-1}"
 
 if [[ "${BUILD_MODE}" != "release" && "${BUILD_MODE}" != "profile" ]]; then
   echo "Error: BUILD_MODE must be 'release' or 'profile'. Current: ${BUILD_MODE}" >&2
@@ -53,10 +54,15 @@ if [[ "${SKIP_PUB_GET}" != "1" ]]; then
   "${FLUTTER_CMD}" pub get
 fi
 
+if [[ "${PREPARE_APPLE_PODS}" == "1" ]]; then
+  echo "==> prepare Apple podspec overrides"
+  "${SCRIPT_DIR}/prepare_apple_podspec_overrides.sh"
+fi
+
 if [[ "${SKIP_POD_INSTALL}" != "1" ]]; then
   if command -v pod >/dev/null 2>&1; then
-    echo "==> pod install (ios/)"
-    (cd ios && pod install)
+    echo "==> pod install --no-repo-update (ios/)"
+    (cd ios && pod install --no-repo-update)
   else
     echo "==> Warning: CocoaPods (pod) not found, skip pod install"
   fi

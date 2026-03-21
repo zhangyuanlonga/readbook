@@ -251,7 +251,7 @@ class _FeedbackPageState extends State<FeedbackPage>
         SizedBox(
           width: 126,
           child: DropdownButtonFormField<_FeedbackStatusFilter>(
-            value: _statusFilter,
+            initialValue: _statusFilter,
             isExpanded: true,
             decoration: const InputDecoration(
               isDense: true,

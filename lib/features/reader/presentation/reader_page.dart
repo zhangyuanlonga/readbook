@@ -5271,7 +5271,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
     });
 
     _restoreScrollPosition(snapshot.scrollRatio);
-    _maybeStartReadingRecordSession(initialRatio: snapshot.scrollRatio);
+    _scheduleReadingRecordSessionStart(initialRatio: snapshot.scrollRatio);
     _scheduleAutoReadResume();
   }
 
@@ -5827,9 +5827,21 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
         setState(() {
           _isBootstrapping = false;
         });
+        _scheduleReadingRecordSessionStart(initialRatio: _currentScrollRatio());
         _reconcileAutoRead(restart: true);
       }
     }
+  }
+
+  void _scheduleReadingRecordSessionStart({double? initialRatio}) {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted || _isBootstrapping || _isLoadingContent) {
+        return;
+      }
+      _maybeStartReadingRecordSession(
+        initialRatio: initialRatio ?? _currentScrollRatio(),
+      );
+    });
   }
 
   String _toUserReadableError(AppException error) {
@@ -6032,11 +6044,13 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
 
     controller.value =
         Matrix4.identity()
-          ..translate(
+          ..translateByDouble(
             -tapPoint.dx * (zoomScale - 1),
             -tapPoint.dy * (zoomScale - 1),
+            0,
+            1,
           )
-          ..scale(zoomScale);
+          ..scaleByDouble(zoomScale, zoomScale, 1, 1);
 
     setState(() {
       _mangaZoomedPageIndexes.add(index);
@@ -7028,7 +7042,6 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
 
     await _saveProgress();
     _hasPromptedMissingSourceSwitch = false;
-    _maybeStartReadingRecordSession(initialRatio: targetRatio);
     final preloadTaskToken = ++_preloadTaskToken;
     unawaited(_preloadNeighbors(taskToken: preloadTaskToken));
   }
@@ -7092,7 +7105,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
       });
 
       _restoreScrollPosition(previewRatio);
-      _maybeStartReadingRecordSession(initialRatio: previewRatio);
+      _scheduleReadingRecordSessionStart(initialRatio: previewRatio);
       return true;
     } catch (_) {
       return false;
@@ -7247,6 +7260,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
       return false;
     }
 
+    double? readingRecordStartRatio;
     final sourceId = sourceIdOverride ?? _sourceId;
     final chapterId = chapterIdOverride ?? _chapterId;
     final chapterUrl = chapterUrlOverride ?? _chapterUrl;
@@ -7299,6 +7313,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
         targetRatio: targetRatio,
         commitChapterIdentity: commitChapterIdentity,
       );
+      readingRecordStartRatio = targetRatio;
       return true;
     } on AppException catch (error) {
       if (!mounted) {
@@ -7329,6 +7344,11 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
         setState(() {
           _isLoadingContent = false;
         });
+        if (readingRecordStartRatio != null) {
+          _scheduleReadingRecordSessionStart(
+            initialRatio: readingRecordStartRatio,
+          );
+        }
         _reconcileAutoRead(restart: true);
       }
     }
@@ -8290,6 +8310,18 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
                                   currentIndex == null
                                       ? null
                                       : FilledButton.tonalIcon(
+                                        style: FilledButton.styleFrom(
+                                          backgroundColor:
+                                              colorScheme.primaryContainer,
+                                          foregroundColor:
+                                              colorScheme.onPrimaryContainer,
+                                          padding: const EdgeInsets.symmetric(
+                                            horizontal: 14,
+                                            vertical: 10,
+                                          ),
+                                          minimumSize: const Size(0, 40),
+                                          shape: const StadiumBorder(),
+                                        ),
                                         onPressed: () {
                                           final target =
                                               ((currentIndex - 2).clamp(
@@ -9029,86 +9061,111 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
   }) {
     final colorScheme = Theme.of(context).colorScheme;
     final textTheme = Theme.of(context).textTheme;
+    final borderRadius = BorderRadius.circular(18);
+    final selectedBackground = Color.alphaBlend(
+      colorScheme.primary.withValues(alpha: 0.18),
+      colorScheme.surfaceContainerLow,
+    );
+    final unselectedBackground = colorScheme.surface.withValues(alpha: 0.78);
 
     return Material(
-      color:
-          selected
-              ? colorScheme.primaryContainer.withValues(alpha: 0.5)
-              : colorScheme.surface.withValues(alpha: 0.72),
-      borderRadius: BorderRadius.circular(18),
+      color: Colors.transparent,
+      borderRadius: borderRadius,
       child: InkWell(
-        borderRadius: BorderRadius.circular(18),
+        borderRadius: borderRadius,
         onTap: onTap,
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(12, 11, 12, 11),
-          child: Row(
-            children: [
-              Container(
-                width: 36,
-                height: 36,
-                alignment: Alignment.center,
-                decoration: BoxDecoration(
+        child: Ink(
+          decoration: BoxDecoration(
+            color: selected ? selectedBackground : unselectedBackground,
+            borderRadius: borderRadius,
+            border: Border.all(
+              color:
+                  selected
+                      ? colorScheme.primary.withValues(alpha: 0.28)
+                      : colorScheme.outlineVariant.withValues(alpha: 0.18),
+            ),
+            boxShadow:
+                selected
+                    ? [
+                      BoxShadow(
+                        color: colorScheme.primary.withValues(alpha: 0.10),
+                        blurRadius: 18,
+                        offset: const Offset(0, 8),
+                      ),
+                    ]
+                    : const [],
+          ),
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(12, 11, 12, 11),
+            child: Row(
+              children: [
+                Container(
+                  width: 36,
+                  height: 36,
+                  alignment: Alignment.center,
+                  decoration: BoxDecoration(
+                    color:
+                        selected
+                            ? colorScheme.primary
+                            : colorScheme.surfaceContainerHigh,
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Text(
+                    '${index + 1}',
+                    style: textTheme.labelMedium?.copyWith(
+                      fontWeight: FontWeight.w800,
+                      color:
+                          selected
+                              ? colorScheme.onPrimary
+                              : colorScheme.onSurfaceVariant,
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      if (selected)
+                        Padding(
+                          padding: const EdgeInsets.only(bottom: 3),
+                          child: Text(
+                            '当前阅读',
+                            style: textTheme.labelSmall?.copyWith(
+                              color: colorScheme.primary,
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
+                        ),
+                      Text(
+                        chapter.title,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: textTheme.bodyLarge?.copyWith(
+                          fontWeight:
+                              selected ? FontWeight.w700 : FontWeight.w500,
+                          color:
+                              selected
+                                  ? colorScheme.primary
+                                  : colorScheme.onSurface,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(width: 10),
+                Icon(
+                  selected
+                      ? Icons.play_circle_fill_rounded
+                      : Icons.chevron_right_rounded,
+                  size: selected ? 20 : 18,
                   color:
                       selected
                           ? colorScheme.primary
-                          : colorScheme.surfaceContainerHigh,
-                  borderRadius: BorderRadius.circular(12),
+                          : colorScheme.onSurfaceVariant,
                 ),
-                child: Text(
-                  '${index + 1}',
-                  style: textTheme.labelMedium?.copyWith(
-                    fontWeight: FontWeight.w800,
-                    color:
-                        selected
-                            ? colorScheme.onPrimary
-                            : colorScheme.onSurfaceVariant,
-                  ),
-                ),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    if (selected)
-                      Padding(
-                        padding: const EdgeInsets.only(bottom: 3),
-                        child: Text(
-                          '当前阅读',
-                          style: textTheme.labelSmall?.copyWith(
-                            color: colorScheme.primary,
-                            fontWeight: FontWeight.w700,
-                          ),
-                        ),
-                      ),
-                    Text(
-                      chapter.title,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: textTheme.bodyLarge?.copyWith(
-                        fontWeight:
-                            selected ? FontWeight.w700 : FontWeight.w500,
-                        color:
-                            selected
-                                ? colorScheme.primary
-                                : colorScheme.onSurface,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              const SizedBox(width: 10),
-              Icon(
-                selected
-                    ? Icons.play_circle_fill_rounded
-                    : Icons.chevron_right_rounded,
-                size: selected ? 20 : 18,
-                color:
-                    selected
-                        ? colorScheme.primary
-                        : colorScheme.onSurfaceVariant,
-              ),
-            ],
+              ],
+            ),
           ),
         ),
       ),

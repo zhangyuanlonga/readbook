@@ -411,25 +411,63 @@ class AppDatabase extends _$AppDatabase {
           await migrator.createTable(storedBookmarks);
         }
         if (from == 6) {
-          await migrator.addColumn(storedBookmarks, storedBookmarks.isBold);
-          await migrator.addColumn(
-            storedBookmarks,
-            storedBookmarks.isUnderline,
+          await _addColumnIfMissing(
+            migrator: migrator,
+            tableName: storedBookmarks.tableName,
+            columnName: 'is_bold',
+            addColumn:
+                () =>
+                    migrator.addColumn(storedBookmarks, storedBookmarks.isBold),
           );
-          await migrator.addColumn(storedBookmarks, storedBookmarks.isWavy);
+          await _addColumnIfMissing(
+            migrator: migrator,
+            tableName: storedBookmarks.tableName,
+            columnName: 'is_underline',
+            addColumn:
+                () => migrator.addColumn(
+                  storedBookmarks,
+                  storedBookmarks.isUnderline,
+                ),
+          );
+          await _addColumnIfMissing(
+            migrator: migrator,
+            tableName: storedBookmarks.tableName,
+            columnName: 'is_wavy',
+            addColumn:
+                () =>
+                    migrator.addColumn(storedBookmarks, storedBookmarks.isWavy),
+          );
         }
         if (from < 8) {
-          await migrator.addColumn(
-            storedLocalBooks,
-            storedLocalBooks.txtTocRuleName,
+          await _addColumnIfMissing(
+            migrator: migrator,
+            tableName: storedLocalBooks.tableName,
+            columnName: 'txt_toc_rule_name',
+            addColumn:
+                () => migrator.addColumn(
+                  storedLocalBooks,
+                  storedLocalBooks.txtTocRuleName,
+                ),
           );
-          await migrator.addColumn(
-            storedLocalBooks,
-            storedLocalBooks.txtTocRulePattern,
+          await _addColumnIfMissing(
+            migrator: migrator,
+            tableName: storedLocalBooks.tableName,
+            columnName: 'txt_toc_rule_pattern',
+            addColumn:
+                () => migrator.addColumn(
+                  storedLocalBooks,
+                  storedLocalBooks.txtTocRulePattern,
+                ),
           );
-          await migrator.addColumn(
-            storedLocalBooks,
-            storedLocalBooks.splitLongChapter,
+          await _addColumnIfMissing(
+            migrator: migrator,
+            tableName: storedLocalBooks.tableName,
+            columnName: 'split_long_chapter',
+            addColumn:
+                () => migrator.addColumn(
+                  storedLocalBooks,
+                  storedLocalBooks.splitLongChapter,
+                ),
           );
         }
         if (from < 9) {
@@ -444,21 +482,64 @@ class AppDatabase extends _$AppDatabase {
           await customStatement(_readerReplacePreferencesCreateSql);
         }
         if (from < 12) {
-          await migrator.addColumn(
-            storedReadingRecords,
-            storedReadingRecords.totalReadChars,
+          await _addColumnIfMissing(
+            migrator: migrator,
+            tableName: storedReadingRecords.tableName,
+            columnName: 'total_read_chars',
+            addColumn:
+                () => migrator.addColumn(
+                  storedReadingRecords,
+                  storedReadingRecords.totalReadChars,
+                ),
           );
-          await migrator.addColumn(
-            storedReadingRecordDays,
-            storedReadingRecordDays.readChars,
+          await _addColumnIfMissing(
+            migrator: migrator,
+            tableName: storedReadingRecordDays.tableName,
+            columnName: 'read_chars',
+            addColumn:
+                () => migrator.addColumn(
+                  storedReadingRecordDays,
+                  storedReadingRecordDays.readChars,
+                ),
           );
-          await migrator.addColumn(
-            storedReadingRecordSessions,
-            storedReadingRecordSessions.readChars,
+          await _addColumnIfMissing(
+            migrator: migrator,
+            tableName: storedReadingRecordSessions.tableName,
+            columnName: 'read_chars',
+            addColumn:
+                () => migrator.addColumn(
+                  storedReadingRecordSessions,
+                  storedReadingRecordSessions.readChars,
+                ),
           );
         }
       },
     );
+  }
+
+  Future<void> _addColumnIfMissing({
+    required Migrator migrator,
+    required String tableName,
+    required String columnName,
+    required Future<void> Function() addColumn,
+  }) async {
+    if (await _tableHasColumn(tableName, columnName)) {
+      return;
+    }
+    await addColumn();
+  }
+
+  Future<bool> _tableHasColumn(String tableName, String columnName) async {
+    final rows =
+        await customSelect(
+          'PRAGMA table_info(${_quoteIdentifier(tableName)})',
+        ).get();
+    return rows.any((row) => row.data['name'] == columnName);
+  }
+
+  String _quoteIdentifier(String identifier) {
+    final escaped = identifier.replaceAll('"', '""');
+    return '"$escaped"';
   }
 
   Future<List<SourceDefinition>> getAllSources() async {

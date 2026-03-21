@@ -102,6 +102,8 @@ class ReadingRecordService {
   final AppDatabase _database;
 
   static const Duration minimumSessionDuration = Duration(seconds: 10);
+  static const int minimumMeaningfulReadChars = 200;
+  static const double minimumMeaningfulProgressDelta = 0.08;
 
   Stream<List<ReadingRecord>> watchLatestRecords({String query = ''}) {
     return _database.watchLatestReadingRecords(query: query);
@@ -365,8 +367,15 @@ class ReadingRecordService {
     if (normalizedBookId.isEmpty ||
         normalizedSourceId.isEmpty ||
         normalizedDetailUrl.isEmpty ||
-        normalizedTitle.isEmpty ||
-        durationMillis < minimumSessionDuration.inMilliseconds) {
+        normalizedTitle.isEmpty) {
+      return;
+    }
+
+    final shortButMeaningful =
+        safeReadChars >= minimumMeaningfulReadChars ||
+        _readingProgressDelta(input) >= minimumMeaningfulProgressDelta;
+    if (durationMillis < minimumSessionDuration.inMilliseconds &&
+        !shortButMeaningful) {
       return;
     }
 
@@ -445,6 +454,12 @@ class ReadingRecordService {
         ),
       );
     });
+  }
+
+  double _readingProgressDelta(ReadingRecordCommitInput input) {
+    final start = input.startPositionRatio.clamp(0.0, 1.0).toDouble();
+    final end = input.endPositionRatio.clamp(0.0, 1.0).toDouble();
+    return (end - start).abs();
   }
 
   DateTime _earlier(DateTime a, DateTime b) => a.isBefore(b) ? a : b;

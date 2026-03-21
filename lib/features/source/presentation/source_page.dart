@@ -2972,26 +2972,8 @@ class _SourceGroupFilterSheet extends StatelessWidget {
     final selectedValue =
         initialUngrouped ? _kUngroupedValue : (initialGroup ?? _kAllValue);
     final tiles = <Widget>[
-      RadioListTile<String>(
-        value: _kAllValue,
-        groupValue: selectedValue,
-        title: const Text('全部分组'),
-        onChanged: (_) {
-          Navigator.of(
-            context,
-          ).pop(const _GroupFilterResult(group: null, ungrouped: false));
-        },
-      ),
-      RadioListTile<String>(
-        value: _kUngroupedValue,
-        groupValue: selectedValue,
-        title: const Text('仅未分组'),
-        onChanged: (_) {
-          Navigator.of(
-            context,
-          ).pop(const _GroupFilterResult(group: null, ungrouped: true));
-        },
-      ),
+      const RadioListTile<String>(value: _kAllValue, title: Text('全部分组')),
+      const RadioListTile<String>(value: _kUngroupedValue, title: Text('仅未分组')),
     ];
 
     if (availableGroups.isEmpty) {
@@ -3010,18 +2992,7 @@ class _SourceGroupFilterSheet extends StatelessWidget {
       );
     } else {
       for (final group in availableGroups) {
-        tiles.add(
-          RadioListTile<String>(
-            value: group,
-            groupValue: selectedValue,
-            title: Text(group),
-            onChanged: (_) {
-              Navigator.of(
-                context,
-              ).pop(_GroupFilterResult(group: group, ungrouped: false));
-            },
-          ),
-        );
+        tiles.add(RadioListTile<String>(value: group, title: Text(group)));
       }
     }
 
@@ -3050,7 +3021,27 @@ class _SourceGroupFilterSheet extends StatelessWidget {
               constraints: BoxConstraints(
                 maxHeight: MediaQuery.sizeOf(context).height * 0.6,
               ),
-              child: ListView(shrinkWrap: true, children: tiles),
+              child: RadioGroup<String>(
+                groupValue: selectedValue,
+                onChanged: (value) {
+                  if (value == _kAllValue) {
+                    Navigator.of(context).pop(
+                      const _GroupFilterResult(group: null, ungrouped: false),
+                    );
+                    return;
+                  }
+                  if (value == _kUngroupedValue) {
+                    Navigator.of(context).pop(
+                      const _GroupFilterResult(group: null, ungrouped: true),
+                    );
+                    return;
+                  }
+                  Navigator.of(
+                    context,
+                  ).pop(_GroupFilterResult(group: value, ungrouped: false));
+                },
+                child: ListView(shrinkWrap: true, children: tiles),
+              ),
             ),
           ],
         ),

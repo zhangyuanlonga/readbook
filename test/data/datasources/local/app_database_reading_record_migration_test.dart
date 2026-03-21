@@ -29,9 +29,7 @@ void main() {
     });
 
     test('migrates reading record tables from v11 to v12', () async {
-      final seedDatabase = AppDatabase(executor: NativeDatabase(dbFile));
-      await seedDatabase.customSelect('SELECT 1').get();
-      await seedDatabase.close();
+      await _seedCurrentSchema(dbFile);
 
       final sqliteDb = sqlite.sqlite3.open(dbFile.path);
       try {
@@ -211,5 +209,98 @@ void main() {
         isTrue,
       );
     });
+
+    test(
+      'upgrades v8 database without re-adding reading record columns',
+      () async {
+        await _seedCurrentSchema(dbFile);
+
+        final sqliteDb = sqlite.sqlite3.open(dbFile.path);
+        try {
+          sqliteDb.execute('DROP TABLE reading_records;');
+          sqliteDb.execute('DROP TABLE reading_record_days;');
+          sqliteDb.execute('DROP TABLE reading_record_sessions;');
+          sqliteDb.execute('PRAGMA user_version = 8;');
+        } finally {
+          sqliteDb.close();
+        }
+
+        final database = AppDatabase(executor: NativeDatabase(dbFile));
+        addTearDown(database.close);
+
+        final recordColumns =
+            await database
+                .customSelect('PRAGMA table_info(reading_records)')
+                .get();
+        final dayColumns =
+            await database
+                .customSelect('PRAGMA table_info(reading_record_days)')
+                .get();
+        final sessionColumns =
+            await database
+                .customSelect('PRAGMA table_info(reading_record_sessions)')
+                .get();
+
+        expect(
+          recordColumns.any((row) => row.data['name'] == 'total_read_chars'),
+          isTrue,
+        );
+        expect(
+          dayColumns.any((row) => row.data['name'] == 'read_chars'),
+          isTrue,
+        );
+        expect(
+          sessionColumns.any((row) => row.data['name'] == 'read_chars'),
+          isTrue,
+        );
+      },
+    );
+
+    test('upgrades v2 database without re-adding local book columns', () async {
+      await _seedCurrentSchema(dbFile);
+
+      final sqliteDb = sqlite.sqlite3.open(dbFile.path);
+      try {
+        sqliteDb.execute('DROP TABLE local_chapters;');
+        sqliteDb.execute('DROP TABLE local_books;');
+        sqliteDb.execute('DROP TABLE search_source_hits;');
+        sqliteDb.execute('DROP TABLE bookmarks;');
+        sqliteDb.execute('DROP TABLE reading_records;');
+        sqliteDb.execute('DROP TABLE reading_record_days;');
+        sqliteDb.execute('DROP TABLE reading_record_sessions;');
+        sqliteDb.execute('DROP TABLE reader_replace_rules;');
+        sqliteDb.execute('DROP TABLE reader_replace_preferences;');
+        sqliteDb.execute('PRAGMA user_version = 2;');
+      } finally {
+        sqliteDb.close();
+      }
+
+      final database = AppDatabase(executor: NativeDatabase(dbFile));
+      addTearDown(database.close);
+
+      final localBookColumns =
+          await database.customSelect('PRAGMA table_info(local_books)').get();
+
+      expect(
+        localBookColumns.any((row) => row.data['name'] == 'txt_toc_rule_name'),
+        isTrue,
+      );
+      expect(
+        localBookColumns.any(
+          (row) => row.data['name'] == 'txt_toc_rule_pattern',
+        ),
+        isTrue,
+      );
+      expect(
+        localBookColumns.any((row) => row.data['name'] == 'split_long_chapter'),
+        isTrue,
+      );
+    });
   });
+}
+
+Future<void> _seedCurrentSchema(File dbFile) async {
+  final seedDatabase = AppDatabase(executor: NativeDatabase(dbFile));
+  await seedDatabase.customSelect('SELECT 1').get();
+  await seedDatabase.close();
 }

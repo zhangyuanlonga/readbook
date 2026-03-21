@@ -39,5 +39,26 @@ void main() {
       expect(values, <bool>[true, false]);
       expect(await service.loadReadRecordEnabled(), isFalse);
     });
+
+    test('allows multiple listeners on the same read record stream', () async {
+      final service = ReaderSystemSettingsService();
+      final stream = service.watchReadRecordEnabled();
+      final firstValues = <bool>[];
+      final secondValues = <bool>[];
+      final firstSubscription = stream.listen(firstValues.add);
+      final secondSubscription = stream.listen(secondValues.add);
+      addTearDown(firstSubscription.cancel);
+      addTearDown(secondSubscription.cancel);
+
+      await Future<void>.delayed(Duration.zero);
+      expect(firstValues, <bool>[true]);
+      expect(secondValues, <bool>[true]);
+
+      await service.saveReadRecordEnabled(false);
+      await Future<void>.delayed(Duration.zero);
+
+      expect(firstValues, <bool>[true, false]);
+      expect(secondValues, <bool>[true, false]);
+    });
   });
 }

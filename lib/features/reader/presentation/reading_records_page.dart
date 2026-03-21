@@ -49,7 +49,7 @@ class _ReadingRecordsPageState extends State<ReadingRecordsPage> {
   String? _selectedDateKey;
   _ReadingRecordsView _view = _ReadingRecordsView.latest;
   _HeatmapMetricMode _heatmapMode = _HeatmapMetricMode.duration;
-  _HeatmapRangeMode _heatmapRangeMode = _HeatmapRangeMode.oneYear;
+  _HeatmapRangeMode _heatmapRangeMode = _HeatmapRangeMode.threeMonths;
   bool _skipDeleteConfirmForThisPage = false;
   bool _showSearch = false;
 
@@ -308,30 +308,55 @@ class _ReadingRecordsPageState extends State<ReadingRecordsPage> {
   }
 
   Future<void> _openHeatmapSheet() async {
+    final heightFactor = AppLayout.sheetHeightFactor(
+      context,
+      compact: 0.78,
+      regular: 0.72,
+      large: 0.66,
+    );
+    final horizontal = AppSpacing.pageHorizontal(context);
+
     await showModalBottomSheet<void>(
       context: context,
       isScrollControlled: true,
+      useSafeArea: true,
       showDragHandle: true,
       builder: (sheetContext) {
         final bottomInset = MediaQuery.viewInsetsOf(sheetContext).bottom;
-        return SafeArea(
+        return FractionallySizedBox(
+          heightFactor: heightFactor,
           child: StatefulBuilder(
             builder: (context, sheetSetState) {
               return Padding(
-                padding: EdgeInsets.fromLTRB(12, 0, 12, 12 + bottomInset),
-                child: StreamBuilder<List<ReadingRecordDay>>(
-                  stream: _readingRecordService.watchDailyRecords(
-                    query: _searchKeyword,
-                  ),
-                  builder: (context, snapshot) {
-                    final dailyRecords =
-                        snapshot.data ?? const <ReadingRecordDay>[];
-                    return SingleChildScrollView(
-                      child: _buildHeatmapCard(
-                        dailyRecords,
-                        inSheet: true,
-                        sheetSetState: sheetSetState,
+                padding: EdgeInsets.fromLTRB(
+                  horizontal,
+                  4,
+                  horizontal,
+                  12 + bottomInset,
+                ),
+                child: LayoutBuilder(
+                  builder: (context, constraints) {
+                    return StreamBuilder<List<ReadingRecordDay>>(
+                      stream: _readingRecordService.watchDailyRecords(
+                        query: _searchKeyword,
                       ),
+                      builder: (context, snapshot) {
+                        final dailyRecords =
+                            snapshot.data ?? const <ReadingRecordDay>[];
+                        return SingleChildScrollView(
+                          child: ConstrainedBox(
+                            constraints: BoxConstraints(
+                              minWidth: constraints.maxWidth,
+                              minHeight: constraints.maxHeight,
+                            ),
+                            child: _buildHeatmapCard(
+                              dailyRecords,
+                              inSheet: true,
+                              sheetSetState: sheetSetState,
+                            ),
+                          ),
+                        );
+                      },
                     );
                   },
                 ),
@@ -868,7 +893,9 @@ class _ReadingRecordsPageState extends State<ReadingRecordsPage> {
             ),
           ),
           const SizedBox(height: 12),
-          Row(
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
             children: [
               _buildHeatmapMenu<_HeatmapMetricMode>(
                 icon: Icons.auto_graph_rounded,
@@ -890,7 +917,6 @@ class _ReadingRecordsPageState extends State<ReadingRecordsPage> {
                   sheetSetState?.call(() {});
                 },
               ),
-              const SizedBox(width: 8),
               _buildHeatmapMenu<_HeatmapRangeMode>(
                 icon: Icons.date_range_rounded,
                 label: _heatmapRangeLabel,
@@ -1578,17 +1604,26 @@ class _ReadingRecordsPageState extends State<ReadingRecordsPage> {
                 trailing: SizedBox(
                   width: 76,
                   child: Column(
+                    mainAxisSize: MainAxisSize.min,
                     mainAxisAlignment: MainAxisAlignment.center,
                     crossAxisAlignment: CrossAxisAlignment.end,
                     children: [
                       Text(
                         _formatDuration(record.totalReadMillis),
                         textAlign: TextAlign.right,
-                        style: Theme.of(context).textTheme.labelMedium,
+                        style: Theme.of(context).textTheme.labelSmall,
                       ),
+                      const SizedBox(height: 2),
                       IconButton(
                         tooltip: '合并记录',
                         visualDensity: VisualDensity.compact,
+                        iconSize: 18,
+                        splashRadius: 18,
+                        padding: EdgeInsets.zero,
+                        constraints: const BoxConstraints.tightFor(
+                          width: 28,
+                          height: 28,
+                        ),
                         onPressed: () => unawaited(_mergeRecord(record)),
                         icon: const Icon(Icons.merge_type_rounded),
                       ),
@@ -1917,8 +1952,11 @@ class _ReadingRecordsPageState extends State<ReadingRecordsPage> {
   }
 
   Widget _buildEmptyCard(String message) {
-    return Card(
-      child: Padding(padding: const EdgeInsets.all(20), child: Text(message)),
+    return SizedBox(
+      width: double.infinity,
+      child: Card(
+        child: Padding(padding: const EdgeInsets.all(20), child: Text(message)),
+      ),
     );
   }
 

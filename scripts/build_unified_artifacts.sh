@@ -50,7 +50,7 @@ Environment variables:
   VERSION_PROMPT   1 to ask interactively before build when TTY is available
   SKIP_CLEAN       1 to skip flutter clean
   SKIP_PUB_GET     1 to skip flutter pub get
-  SKIP_POD_INSTALL 1 to skip pod install for iOS
+  SKIP_POD_INSTALL 1 to skip pod install for iOS/macOS
   ALLOW_PARTIAL    1 to continue when one platform fails (default: 1)
   KEEP_STAGING     1 to keep temporary staging files
 
@@ -126,6 +126,13 @@ read_pubspec_version() {
   echo "${version_line}"
 }
 
+trim_whitespace() {
+  local value="$1"
+  value="${value#"${value%%[![:space:]]*}"}"
+  value="${value%"${value##*[![:space:]]}"}"
+  echo "${value}"
+}
+
 resolve_version_overrides() {
   local pubspec_version current_name current_number input
 
@@ -146,14 +153,19 @@ resolve_version_overrides() {
   if [[ "${VERSION_PROMPT}" == "1" && -t 0 ]]; then
     echo "==> Current pubspec version: ${pubspec_version:-unknown}"
     read -r -p "==> Confirm build name [${BUILD_NAME:-none}]: " input
+    input="$(trim_whitespace "${input}")"
     if [[ -n "${input}" ]]; then
       BUILD_NAME="${input}"
     fi
     read -r -p "==> Confirm build number [${BUILD_NUMBER:-none}]: " input
+    input="$(trim_whitespace "${input}")"
     if [[ -n "${input}" ]]; then
       BUILD_NUMBER="${input}"
     fi
   fi
+
+  BUILD_NAME="$(trim_whitespace "${BUILD_NAME}")"
+  BUILD_NUMBER="$(trim_whitespace "${BUILD_NUMBER}")"
 
   if [[ -n "${BUILD_NAME}" && ! "${BUILD_NAME}" =~ ^[0-9]+(\.[0-9]+){0,2}$ ]]; then
     echo "Error: BUILD_NAME must look like 1.0.6." >&2
@@ -400,6 +412,7 @@ for platform in "${PLATFORMS[@]-}"; do
         APP_NAME="${MACOS_APP_NAME}" \
         SKIP_CLEAN=1 \
         SKIP_PUB_GET=1 \
+        SKIP_POD_INSTALL="${SKIP_POD_INSTALL}" \
         BUILD_NAME="${BUILD_NAME}" \
         BUILD_NUMBER="${BUILD_NUMBER}" \
         "${SCRIPT_DIR}/build_macos_artifact.sh" "${BUILD_MODE}"
