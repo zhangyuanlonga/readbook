@@ -295,6 +295,26 @@ void main() {
         localBookColumns.any((row) => row.data['name'] == 'split_long_chapter'),
         isTrue,
       );
+      expect(
+        localBookColumns.any((row) => row.data['name'] == 'charset'),
+        isTrue,
+      );
+      expect(
+        localBookColumns.any((row) => row.data['name'] == 'source_file_size'),
+        isTrue,
+      );
+      expect(
+        localBookColumns.any(
+          (row) => row.data['name'] == 'source_file_last_modified_ms',
+        ),
+        isTrue,
+      );
+      expect(
+        localBookColumns.any(
+          (row) => row.data['name'] == 'storage_file_last_modified_ms',
+        ),
+        isTrue,
+      );
     });
   });
 }

@@ -1,5 +1,6 @@
 import 'dart:io';
 
+import 'package:charset/charset.dart';
 import 'package:drift/native.dart';
 import 'package:flutter_appread/data/datasources/local/app_database.dart';
 import 'package:flutter_appread/data/repositories/local_book_repository_impl.dart';
@@ -88,5 +89,77 @@ void main() {
         expect(chapter.content, isNot(contains('第2章 继续')));
       },
     );
+
+    test('loads gbk txt chapter content with detected charset', () async {
+      final file = File('${tempDir.path}/offset_book_gbk.txt');
+      final gbk = Charset.getByName('gbk');
+      expect(gbk, isNotNull);
+
+      const content = '第1章 开始\n第一章内容。\n\n第2章 继续\n第二章内容。';
+      await file.writeAsBytes(gbk!.encode(content), flush: true);
+
+      final now = DateTime.parse('2026-03-21T12:00:00.000Z');
+      await repository.upsertBook(
+        LocalBook(
+          id: 'local_offset_gbk_1',
+          title: '偏移读取 GBK 测试',
+          format: LocalBookFormat.txt,
+          storagePath: file.path,
+          fileSize: await file.length(),
+          createdAt: now,
+          updatedAt: now,
+        ),
+      );
+
+      await indexService.ensureIndexed(bookId: 'local_offset_gbk_1');
+
+      final indexedBook = await repository.getBookById('local_offset_gbk_1');
+      expect(indexedBook, isNotNull);
+      expect(indexedBook!.charset, 'gbk');
+
+      final chapter = await contentService.load(
+        bookId: 'local_offset_gbk_1',
+        chapterIndex: 1,
+      );
+      expect(chapter.title, '第2章 继续');
+      expect(chapter.content, contains('第二章内容'));
+    });
+
+    test('loads utf-16be txt chapter content with detected charset', () async {
+      final file = File('${tempDir.path}/offset_book_utf16be.txt');
+      final utf16be = Charset.getByName('utf-16be');
+      expect(utf16be, isNotNull);
+
+      const content = '第1章 开始\n第一章内容。\n\n第2章 继续\n第二章内容。';
+      await file.writeAsBytes(utf16be!.encode(content), flush: true);
+
+      final now = DateTime.parse('2026-03-21T12:00:00.000Z');
+      await repository.upsertBook(
+        LocalBook(
+          id: 'local_offset_utf16be_1',
+          title: '偏移读取 UTF16BE 测试',
+          format: LocalBookFormat.txt,
+          storagePath: file.path,
+          fileSize: await file.length(),
+          createdAt: now,
+          updatedAt: now,
+        ),
+      );
+
+      await indexService.ensureIndexed(bookId: 'local_offset_utf16be_1');
+
+      final indexedBook = await repository.getBookById(
+        'local_offset_utf16be_1',
+      );
+      expect(indexedBook, isNotNull);
+      expect(indexedBook!.charset, 'utf-16be');
+
+      final chapter = await contentService.load(
+        bookId: 'local_offset_utf16be_1',
+        chapterIndex: 1,
+      );
+      expect(chapter.title, '第2章 继续');
+      expect(chapter.content, contains('第二章内容'));
+    });
   });
 }

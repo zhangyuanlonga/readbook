@@ -17,6 +17,8 @@ class ReaderSystemSettingsService {
   static const String _autoSwitchSourceOnFailureKey =
       'reader.system.autoSwitchSourceOnFailure';
   static const String _readRecordEnabledKey = 'reader.system.readRecordEnabled';
+  static const String _localTxtSplitLongChapterEnabledKey =
+      'reader.system.localTxtSplitLongChapterEnabled';
 
   Future<bool> loadAutoSwitchSourceOnFailureEnabled() async {
     final prefs = await _preferencesFuture;
@@ -33,6 +35,11 @@ class ReaderSystemSettingsService {
     return prefs.getBool(_readRecordEnabledKey) ?? true;
   }
 
+  Future<bool> loadLocalTxtSplitLongChapterEnabled() async {
+    final prefs = await _preferencesFuture;
+    return prefs.getBool(_localTxtSplitLongChapterEnabledKey) ?? true;
+  }
+
   Stream<bool> watchReadRecordEnabled() {
     return (() async* {
       yield await loadReadRecordEnabled();
@@ -44,5 +51,10 @@ class ReaderSystemSettingsService {
     final prefs = await _preferencesFuture;
     await prefs.setBool(_readRecordEnabledKey, enabled);
     _readRecordEnabledController.add(enabled);
+  }
+
+  Future<void> saveLocalTxtSplitLongChapterEnabled(bool enabled) async {
+    final prefs = await _preferencesFuture;
+    await prefs.setBool(_localTxtSplitLongChapterEnabledKey, enabled);
   }
 }

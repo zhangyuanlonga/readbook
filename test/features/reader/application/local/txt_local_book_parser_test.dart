@@ -1,5 +1,6 @@
 import 'dart:io';
 
+import 'package:charset/charset.dart';
 import 'package:flutter_appread/domain/entities/local_book.dart';
 import 'package:flutter_appread/features/reader/application/local/txt_toc_rule_settings_service.dart';
 import 'package:flutter_appread/features/reader/application/local/txt_local_book_parser.dart';
@@ -51,6 +52,8 @@ void main() {
       expect(result.chapters, hasLength(2));
       expect(result.chapters.first.title, '第1章 初始');
       expect(result.chapters.last.title, '第2章 继续');
+      expect(result.charset, 'utf-8');
+      expect(result.txtTocRulePattern, isNotNull);
     });
 
     test('falls back to fixed chunks when title pattern missing', () async {
@@ -159,6 +162,61 @@ $longContent
 
       expect(result.chapters.length, greaterThan(1));
       expect(result.chapters.first.title, '第1章 长章节(1)');
+    });
+
+    test('detects gbk text without rewriting original bytes', () async {
+      final file = File('${tempDir.path}/gbk_book.txt');
+      final gbk = Charset.getByName('gbk');
+      expect(gbk, isNotNull);
+
+      const content = '第1章 开始\n第一章内容。\n\n第2章 继续\n第二章内容。';
+      final rawBytes = gbk!.encode(content);
+      await file.writeAsBytes(rawBytes, flush: true);
+
+      final now = DateTime.parse('2026-02-23T12:00:00.000Z');
+      final result = await parser.parse(
+        LocalBook(
+          id: 'local_txt_gbk',
+          title: 'GBK 测试书',
+          format: LocalBookFormat.txt,
+          storagePath: file.path,
+          fileSize: await file.length(),
+          createdAt: now,
+          updatedAt: now,
+        ),
+      );
+
+      expect(result.charset, 'gbk');
+      expect(result.chapters, hasLength(2));
+      expect(await file.readAsBytes(), rawBytes);
+    });
+
+    test('detects utf-16be text without rewriting original bytes', () async {
+      final file = File('${tempDir.path}/utf16be_book.txt');
+      final utf16be = Charset.getByName('utf-16be');
+      expect(utf16be, isNotNull);
+
+      const content = '第1章 开始\n第一章内容。\n\n第2章 继续\n第二章内容。';
+      final rawBytes = utf16be!.encode(content);
+      await file.writeAsBytes(rawBytes, flush: true);
+
+      final now = DateTime.parse('2026-02-23T12:00:00.000Z');
+      final result = await parser.parse(
+        LocalBook(
+          id: 'local_txt_utf16be',
+          title: 'UTF16BE 测试书',
+          format: LocalBookFormat.txt,
+          storagePath: file.path,
+          fileSize: await file.length(),
+          createdAt: now,
+          updatedAt: now,
+        ),
+      );
+
+      expect(result.charset, 'utf-16be');
+      expect(result.chapters, hasLength(2));
+      expect(result.chapters.first.title, '第1章 开始');
+      expect(await file.readAsBytes(), rawBytes);
     });
   });
 }

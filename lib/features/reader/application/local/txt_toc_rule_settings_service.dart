@@ -229,8 +229,68 @@ class TxtTocRuleSettingsService {
 
   Future<void> resetRules() async {
     final prefs = await _preferencesFuture;
-    await prefs.remove(_rulesKey);
+    final current = await loadRules();
+    final restoredDefaults = _defaultRuleStates();
+    final customRules = current
+        .where((rule) => !_isDefaultRuleId(rule.id))
+        .map(
+          (rule) => rule.copyWith(
+            id: rule.id.trim(),
+            name: rule.name.trim(),
+            pattern: rule.pattern.trim(),
+          ),
+        )
+        .where((rule) => rule.name.isNotEmpty)
+        .toList(growable: false);
+
+    final merged = <TxtTocRuleState>[
+      ...restoredDefaults,
+      ...customRules.asMap().entries.map(
+        (entry) => entry.value.copyWith(
+          serialNumber: restoredDefaults.length + entry.key,
+        ),
+      ),
+    ];
+
+    await _saveRules(prefs, _normalizeRuleList(merged));
     await prefs.remove(_legacyEnabledOverridesKey);
+  }
+
+  Future<void> reorderRules(List<String> orderedRuleIds) async {
+    final current = await loadRules();
+    if (current.length <= 1) {
+      return;
+    }
+
+    final normalizedIds = orderedRuleIds
+        .map((item) => item.trim())
+        .where((item) => item.isNotEmpty)
+        .toList(growable: false);
+    if (normalizedIds.isEmpty) {
+      return;
+    }
+
+    final remaining = <String, TxtTocRuleState>{
+      for (final rule in current) rule.id: rule,
+    };
+    final reordered = <TxtTocRuleState>[];
+    for (final id in normalizedIds) {
+      final rule = remaining.remove(id);
+      if (rule != null) {
+        reordered.add(rule);
+      }
+    }
+
+    final trailing = remaining.values.toList(growable: false)
+      ..sort((a, b) => a.serialNumber.compareTo(b.serialNumber));
+    reordered.addAll(trailing);
+    await saveRules(
+      reordered
+          .asMap()
+          .entries
+          .map((entry) => entry.value.copyWith(serialNumber: entry.key))
+          .toList(growable: false),
+    );
   }
 
   Future<int> importRulesFromJson(
@@ -316,19 +376,25 @@ class TxtTocRuleSettingsService {
   List<TxtTocRuleState> _buildInitialRules(SharedPreferences prefs) {
     final overrides = _readLegacyEnabledOverrides(prefs);
     return _normalizeRuleList(
-      defaultTxtTocRules
-          .map(
-            (rule) => TxtTocRuleState(
-              id: 'default_${rule.serialNumber}',
-              name: rule.name,
-              pattern: rule.pattern,
-              example: rule.example,
-              serialNumber: rule.serialNumber,
-              enabled: overrides[rule.name] ?? rule.enabled,
-            ),
-          )
-          .toList(growable: false),
+      _defaultRuleStates(enabledOverrides: overrides).toList(growable: false),
     );
+  }
+
+  List<TxtTocRuleState> _defaultRuleStates({
+    Map<String, bool>? enabledOverrides,
+  }) {
+    return defaultTxtTocRules
+        .map(
+          (rule) => TxtTocRuleState(
+            id: 'default_${rule.serialNumber}',
+            name: rule.name,
+            pattern: rule.pattern,
+            example: rule.example,
+            serialNumber: rule.serialNumber,
+            enabled: enabledOverrides?[rule.name] ?? rule.enabled,
+          ),
+        )
+        .toList(growable: false);
   }
 
   List<TxtTocRuleState> _normalizeRuleList(List<TxtTocRuleState> rules) {
@@ -396,4 +462,9 @@ class TxtTocRuleSettingsService {
   }
 
   String _buildRuleId() => 'rule_${DateTime.now().microsecondsSinceEpoch}';
+
+  bool _isDefaultRuleId(String ruleId) {
+    final normalized = ruleId.trim();
+    return normalized.startsWith('default_');
+  }
 }

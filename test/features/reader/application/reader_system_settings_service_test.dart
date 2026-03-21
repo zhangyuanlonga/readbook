@@ -60,5 +60,20 @@ void main() {
       expect(firstValues, <bool>[true, false]);
       expect(secondValues, <bool>[true, false]);
     });
+
+    test(
+      'loads true by default and persists local txt split setting',
+      () async {
+        final service = ReaderSystemSettingsService();
+
+        expect(await service.loadLocalTxtSplitLongChapterEnabled(), isTrue);
+
+        await service.saveLocalTxtSplitLongChapterEnabled(false);
+        expect(await service.loadLocalTxtSplitLongChapterEnabled(), isFalse);
+
+        await service.saveLocalTxtSplitLongChapterEnabled(true);
+        expect(await service.loadLocalTxtSplitLongChapterEnabled(), isTrue);
+      },
+    );
   });
 }

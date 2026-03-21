@@ -1,3 +1,8 @@
+import 'dart:convert';
+import 'dart:io';
+
+import 'package:charset/charset.dart';
+
 import '../../../../core/errors/app_exception.dart';
 import '../../../../core/errors/error_codes.dart';
 import '../../../../core/errors/error_stage.dart';
@@ -6,8 +11,6 @@ import '../../../../data/repositories/local_book_repository_impl.dart';
 import '../../../../domain/entities/local_book.dart';
 import '../../../../domain/entities/local_chapter.dart';
 import '../../../../domain/repositories/local_book_repository.dart';
-import 'dart:convert';
-import 'dart:io';
 
 import 'local_book_index_service.dart';
 
@@ -125,6 +128,7 @@ class LocalChapterContentService {
       storagePath: book.storagePath,
       startOffset: startOffset,
       endOffset: endOffset,
+      charsetName: book.charset,
     );
     if (content.trim().isEmpty) {
       throw AppException(
@@ -141,6 +145,7 @@ class LocalChapterContentService {
     required String storagePath,
     required int startOffset,
     required int endOffset,
+    required String? charsetName,
   }) async {
     final file = File(storagePath);
     if (!await file.exists()) {
@@ -162,9 +167,78 @@ class LocalChapterContentService {
     try {
       await fileHandle.setPosition(safeStart);
       final bytes = await fileHandle.read(safeEnd - safeStart);
-      return utf8.decode(bytes, allowMalformed: true).trim();
+      return _decodeText(bytes, charsetName).trim();
     } finally {
       await fileHandle.close();
+    }
+  }
+
+  String _decodeText(List<int> bytes, String? charsetName) {
+    final preferredCharset = _normalizeCharsetName(charsetName);
+    if (preferredCharset != null) {
+      final preferredText = _tryDecodeByCharset(bytes, preferredCharset);
+      if (preferredText != null) {
+        return preferredText;
+      }
+    }
+
+    for (final candidate in const <String>[
+      'utf-8',
+      'utf-16be',
+      'utf-16le',
+      'gbk',
+      'gb18030',
+    ]) {
+      final decoded = _tryDecodeByCharset(bytes, candidate);
+      if (decoded != null) {
+        return decoded;
+      }
+    }
+
+    return utf8.decode(bytes, allowMalformed: true);
+  }
+
+  String? _normalizeCharsetName(String? value) {
+    final normalized = value?.trim().toLowerCase() ?? '';
+    if (normalized.isEmpty) {
+      return null;
+    }
+    return switch (normalized) {
+      'utf8' => 'utf-8',
+      'utf-8' => 'utf-8',
+      'utf16' => 'utf-16',
+      'utf-16' => 'utf-16',
+      'utf16be' => 'utf-16be',
+      'utf-16be' => 'utf-16be',
+      'utf16le' => 'utf-16le',
+      'utf-16le' => 'utf-16le',
+      'gb2312' => 'gbk',
+      'gbk' => 'gbk',
+      'gb18030' => 'gb18030',
+      'latin1' => 'latin1',
+      'iso-8859-1' => 'latin1',
+      _ => normalized,
+    };
+  }
+
+  String? _tryDecodeByCharset(List<int> bytes, String charsetName) {
+    try {
+      switch (charsetName) {
+        case 'utf-8':
+          return utf8.decode(bytes, allowMalformed: false);
+        case 'latin1':
+          return latin1.decode(bytes, allowInvalid: true);
+        default:
+          final encoding = Charset.getByName(charsetName);
+          if (encoding == null) {
+            return null;
+          }
+          return encoding.decode(bytes);
+      }
+    } on FormatException {
+      return null;
+    } on ArgumentError {
+      return null;
     }
   }
 }

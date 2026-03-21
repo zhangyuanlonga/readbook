@@ -6,6 +6,7 @@ import 'package:flutter_appread/data/datasources/local/app_database.dart';
 import 'package:flutter_appread/data/repositories/local_book_repository_impl.dart';
 import 'package:flutter_appread/features/bookshelf/application/bookshelf_service.dart';
 import 'package:flutter_appread/features/bookshelf/application/local_book_import_service.dart';
+import 'package:flutter_appread/features/reader/application/reader_system_settings_service.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -51,6 +52,10 @@ void main() {
       final stored = await database.getLocalBookById(result.localBook.id);
       expect(stored, isNotNull);
       expect(stored!.sourcePath, sourceFile.path);
+      expect(stored.sourceFileSize, await sourceFile.length());
+      expect(stored.sourceFileLastModifiedMs, isNotNull);
+      expect(stored.storageFileLastModifiedMs, isNotNull);
+      expect(stored.charset, isNull);
 
       final bookshelf = await BookshelfService(preferences: prefs).getAll();
       expect(bookshelf, hasLength(1));
@@ -82,6 +87,7 @@ void main() {
       expect(second.localBook.id, first.localBook.id);
       expect(second.localBook.storagePath, first.localBook.storagePath);
       expect(File(second.localBook.storagePath).readAsStringSync(), '覆盖内容');
+      expect(second.localBook.sourceFileSize, await sourceFile.length());
     });
 
     test('removes local book storage and records', () async {
@@ -132,5 +138,33 @@ void main() {
         ),
       );
     });
+
+    test(
+      'uses system setting for local txt split long chapter default',
+      () async {
+        final sourceFile = File('${tempDir.path}/system_split.txt');
+        await sourceFile.writeAsString('第一章\n内容');
+
+        final prefs = await SharedPreferences.getInstance();
+        final systemSettingsService = ReaderSystemSettingsService(
+          preferences: prefs,
+        );
+        await systemSettingsService.saveLocalTxtSplitLongChapterEnabled(false);
+
+        final service = LocalBookImportService(
+          localBookRepository: LocalBookRepositoryImpl(database),
+          bookshelfService: BookshelfService(preferences: prefs),
+          readerSystemSettingsService: systemSettingsService,
+          supportDirectoryProvider: () async => tempDir,
+        );
+
+        final result = await service.importFromFile(filePath: sourceFile.path);
+        expect(result.localBook.splitLongChapter, isFalse);
+
+        final stored = await database.getLocalBookById(result.localBook.id);
+        expect(stored, isNotNull);
+        expect(stored!.splitLongChapter, isFalse);
+      },
+    );
   });
 }

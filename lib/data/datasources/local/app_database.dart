@@ -62,9 +62,13 @@ class StoredLocalBooks extends Table {
   TextColumn get format => text()();
   TextColumn get storagePath => text()();
   TextColumn get sourcePath => text().nullable()();
+  TextColumn get charset => text().nullable()();
   IntColumn get fileSize => integer()();
   TextColumn get author => text().nullable()();
   TextColumn get coverPath => text().nullable()();
+  IntColumn get sourceFileSize => integer().nullable()();
+  IntColumn get sourceFileLastModifiedMs => integer().nullable()();
+  IntColumn get storageFileLastModifiedMs => integer().nullable()();
   TextColumn get indexStatus => text().withDefault(const Constant('pending'))();
   IntColumn get chapterCount => integer().withDefault(const Constant(0))();
   TextColumn get lastError => text().nullable()();
@@ -379,7 +383,7 @@ class AppDatabase extends _$AppDatabase {
   static final AppDatabase instance = AppDatabase();
 
   @override
-  int get schemaVersion => 12;
+  int get schemaVersion => 13;
 
   static const String _mangaSourceMatcherSql =
       '(raw_json LIKE \'%"sourceType":2,%\' OR '
@@ -510,6 +514,48 @@ class AppDatabase extends _$AppDatabase {
                 () => migrator.addColumn(
                   storedReadingRecordSessions,
                   storedReadingRecordSessions.readChars,
+                ),
+          );
+        }
+        if (from < 13) {
+          await _addColumnIfMissing(
+            migrator: migrator,
+            tableName: storedLocalBooks.tableName,
+            columnName: 'charset',
+            addColumn:
+                () => migrator.addColumn(
+                  storedLocalBooks,
+                  storedLocalBooks.charset,
+                ),
+          );
+          await _addColumnIfMissing(
+            migrator: migrator,
+            tableName: storedLocalBooks.tableName,
+            columnName: 'source_file_size',
+            addColumn:
+                () => migrator.addColumn(
+                  storedLocalBooks,
+                  storedLocalBooks.sourceFileSize,
+                ),
+          );
+          await _addColumnIfMissing(
+            migrator: migrator,
+            tableName: storedLocalBooks.tableName,
+            columnName: 'source_file_last_modified_ms',
+            addColumn:
+                () => migrator.addColumn(
+                  storedLocalBooks,
+                  storedLocalBooks.sourceFileLastModifiedMs,
+                ),
+          );
+          await _addColumnIfMissing(
+            migrator: migrator,
+            tableName: storedLocalBooks.tableName,
+            columnName: 'storage_file_last_modified_ms',
+            addColumn:
+                () => migrator.addColumn(
+                  storedLocalBooks,
+                  storedLocalBooks.storageFileLastModifiedMs,
                 ),
           );
         }
@@ -1328,9 +1374,13 @@ class AppDatabase extends _$AppDatabase {
         format: Value(book.format.name),
         storagePath: Value(normalizedStoragePath),
         sourcePath: Value(_nullableString(book.sourcePath)),
+        charset: Value(_nullableString(book.charset)),
         fileSize: Value(book.fileSize < 0 ? 0 : book.fileSize),
         author: Value(_nullableString(book.author)),
         coverPath: Value(_nullableString(book.coverPath)),
+        sourceFileSize: Value(book.sourceFileSize),
+        sourceFileLastModifiedMs: Value(book.sourceFileLastModifiedMs),
+        storageFileLastModifiedMs: Value(book.storageFileLastModifiedMs),
         indexStatus: Value(book.indexStatus.name),
         chapterCount: Value(book.chapterCount < 0 ? 0 : book.chapterCount),
         lastError: Value(_nullableString(book.lastError)),
@@ -2052,8 +2102,12 @@ class AppDatabase extends _$AppDatabase {
       createdAt: row.createdAt,
       updatedAt: row.updatedAt,
       sourcePath: row.sourcePath,
+      charset: row.charset,
       author: row.author,
       coverPath: row.coverPath,
+      sourceFileSize: row.sourceFileSize,
+      sourceFileLastModifiedMs: row.sourceFileLastModifiedMs,
+      storageFileLastModifiedMs: row.storageFileLastModifiedMs,
       indexStatus: LocalBookIndexStatus.values.firstWhere(
         (item) => item.name == row.indexStatus,
         orElse: () => LocalBookIndexStatus.pending,

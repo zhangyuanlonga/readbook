@@ -34,6 +34,7 @@ void main() {
       final loaded = await database.getLocalBookById('local_1');
       expect(loaded, isNotNull);
       expect(loaded!.title, '本地测试书');
+      expect(loaded.charset, isNull);
       expect(loaded.indexStatus, LocalBookIndexStatus.pending);
 
       await database.updateLocalBookIndexState(
@@ -46,6 +47,33 @@ void main() {
       expect(updated, isNotNull);
       expect(updated!.indexStatus, LocalBookIndexStatus.ready);
       expect(updated.chapterCount, 18);
+    });
+
+    test('persists charset and file metadata fields', () async {
+      final now = DateTime.parse('2026-02-23T12:00:00.000Z');
+      await database.upsertLocalBook(
+        LocalBook(
+          id: 'local_meta_1',
+          title: '元数据测试书',
+          format: LocalBookFormat.txt,
+          storagePath: '/tmp/local_meta_1.txt',
+          sourcePath: '/input/meta.txt',
+          charset: 'gbk',
+          fileSize: 2048,
+          sourceFileSize: 4096,
+          sourceFileLastModifiedMs: 123456789,
+          storageFileLastModifiedMs: 987654321,
+          createdAt: now,
+          updatedAt: now,
+        ),
+      );
+
+      final loaded = await database.getLocalBookById('local_meta_1');
+      expect(loaded, isNotNull);
+      expect(loaded!.charset, 'gbk');
+      expect(loaded.sourceFileSize, 4096);
+      expect(loaded.sourceFileLastModifiedMs, 123456789);
+      expect(loaded.storageFileLastModifiedMs, 987654321);
     });
 
     test('replace chapters and delete local book', () async {

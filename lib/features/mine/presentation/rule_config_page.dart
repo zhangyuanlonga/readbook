@@ -77,7 +77,7 @@ class _RuleConfigPageState extends State<RuleConfigPage> {
     });
     ScaffoldMessenger.of(
       context,
-    ).showSnackBar(const SnackBar(content: Text('已恢复默认 TXT 目录规则开关。')));
+    ).showSnackBar(const SnackBar(content: Text('已恢复默认 TXT 目录规则，并保留自定义规则。')));
   }
 
   Future<void> _showRuleEditor({TxtTocRuleState? rule}) async {
@@ -567,11 +567,120 @@ class _RuleConfigPageState extends State<RuleConfigPage> {
     });
   }
 
+  Future<void> _handleReorder(int oldIndex, int newIndex) async {
+    if (_searchKeyword.isNotEmpty || _rules.length <= 1) {
+      return;
+    }
+
+    var targetIndex = newIndex;
+    if (targetIndex > oldIndex) {
+      targetIndex -= 1;
+    }
+    if (targetIndex < 0 || targetIndex >= _rules.length) {
+      return;
+    }
+
+    final reordered = List<TxtTocRuleState>.from(_rules);
+    final moved = reordered.removeAt(oldIndex);
+    reordered.insert(targetIndex, moved);
+
+    setState(() {
+      _rules = reordered
+          .asMap()
+          .entries
+          .map((entry) => entry.value.copyWith(serialNumber: entry.key))
+          .toList(growable: false);
+    });
+
+    await _txtTocRuleSettingsService.reorderRules(
+      _rules.map((rule) => rule.id).toList(growable: false),
+    );
+    await _loadRules();
+  }
+
+  Widget _buildRuleCard(
+    BuildContext context,
+    TxtTocRuleState rule, {
+    Widget? dragHandle,
+  }) {
+    final colorScheme = Theme.of(context).colorScheme;
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(14, 10, 10, 10),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        rule.name,
+                        style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        rule.enabled ? '自动识别：已启用' : '自动识别：未启用',
+                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                          color: colorScheme.onSurfaceVariant,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Switch(
+                  value: rule.enabled,
+                  onChanged: (value) => _toggleRule(rule, value),
+                ),
+                IconButton(
+                  tooltip: '编辑',
+                  onPressed: () => _showRuleEditor(rule: rule),
+                  icon: const Icon(Icons.edit_outlined),
+                ),
+                IconButton(
+                  tooltip: '删除',
+                  onPressed: () => _deleteRule(rule),
+                  icon: const Icon(Icons.delete_outline),
+                ),
+                if (dragHandle != null) dragHandle,
+              ],
+            ),
+            if ((rule.example ?? '').trim().isNotEmpty) ...[
+              const SizedBox(height: 6),
+              Text(
+                '示例：${rule.example!.trim()}',
+                style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                  color: colorScheme.onSurfaceVariant,
+                ),
+              ),
+            ],
+            const SizedBox(height: 6),
+            Text(
+              rule.pattern.isEmpty ? '空规则，作为无规则兜底占位' : rule.pattern,
+              style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                color: colorScheme.onSurfaceVariant,
+                fontFamily: 'monospace',
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final horizontal = AppSpacing.pageHorizontal(context);
     final bottomSafe = MediaQuery.viewPaddingOf(context).bottom;
     final colorScheme = Theme.of(context).colorScheme;
+    final canReorderRules =
+        !_isLoading && _searchKeyword.isEmpty && _rules.length > 1;
     final filteredRules =
         _searchKeyword.isEmpty
             ? _rules
@@ -650,172 +759,155 @@ class _RuleConfigPageState extends State<RuleConfigPage> {
               alignment: Alignment.topCenter,
               child: ConstrainedBox(
                 constraints: BoxConstraints(maxWidth: maxWidth),
-                child: ListView(
-                  padding: EdgeInsets.fromLTRB(
-                    horizontal,
-                    12,
-                    horizontal,
-                    12 + bottomSafe,
-                  ),
-                  children: [
-                    Card(
-                      child: Padding(
-                        padding: const EdgeInsets.all(12),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              'TXT 目录规则',
-                              style: Theme.of(context).textTheme.titleSmall
-                                  ?.copyWith(fontWeight: FontWeight.w700),
-                            ),
-                            const SizedBox(height: 8),
-                            Text(
-                              '这里控制 TXT 本地书自动识别目录时会参与匹配的规则。关闭高误伤规则可以减少误判；对单本书的具体选规则，会在本地书详情页里单独处理。',
-                              style: Theme.of(
-                                context,
-                              ).textTheme.bodySmall?.copyWith(
-                                color: colorScheme.onSurfaceVariant,
-                                height: 1.4,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ),
-                    const SizedBox(height: 10),
-                    Card(
-                      child: Padding(
-                        padding: const EdgeInsets.fromLTRB(12, 10, 12, 10),
-                        child: TextField(
-                          controller: _searchController,
-                          decoration: InputDecoration(
-                            hintText: '搜索规则名称、示例或正则',
-                            prefixIcon: const Icon(Icons.search_rounded),
-                            suffixIcon:
-                                _searchKeyword.isEmpty
-                                    ? null
-                                    : IconButton(
-                                      tooltip: '清空',
-                                      onPressed: _searchController.clear,
-                                      icon: const Icon(Icons.close_rounded),
-                                    ),
-                            border: const OutlineInputBorder(),
-                            isDense: true,
-                          ),
-                        ),
-                      ),
-                    ),
-                    const SizedBox(height: 10),
-                    if (_isLoading)
-                      const Card(
-                        child: Padding(
-                          padding: EdgeInsets.all(20),
-                          child: Center(
-                            child: SizedBox(
-                              width: 22,
-                              height: 22,
-                              child: CircularProgressIndicator(strokeWidth: 2),
-                            ),
-                          ),
-                        ),
-                      )
-                    else ...[
-                      if (filteredRules.isEmpty)
-                        const Card(
-                          child: Padding(
-                            padding: EdgeInsets.all(20),
-                            child: Text('没有匹配到规则。'),
-                          ),
-                        ),
-                      for (final rule in filteredRules) ...[
+                child: Builder(
+                  builder: (context) {
+                    final listPadding = EdgeInsets.fromLTRB(
+                      horizontal,
+                      12,
+                      horizontal,
+                      12 + bottomSafe,
+                    );
+                    final header = Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
                         Card(
                           child: Padding(
-                            padding: const EdgeInsets.fromLTRB(14, 10, 10, 10),
+                            padding: const EdgeInsets.all(12),
                             child: Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
-                                Row(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    Expanded(
-                                      child: Column(
-                                        crossAxisAlignment:
-                                            CrossAxisAlignment.start,
-                                        children: [
-                                          Text(
-                                            rule.name,
-                                            style: Theme.of(
-                                              context,
-                                            ).textTheme.titleSmall?.copyWith(
-                                              fontWeight: FontWeight.w700,
-                                            ),
-                                          ),
-                                          const SizedBox(height: 4),
-                                          Text(
-                                            rule.enabled
-                                                ? '自动识别：已启用'
-                                                : '自动识别：未启用',
-                                            style: Theme.of(
-                                              context,
-                                            ).textTheme.bodySmall?.copyWith(
-                                              color:
-                                                  colorScheme.onSurfaceVariant,
-                                            ),
-                                          ),
-                                        ],
-                                      ),
-                                    ),
-                                    const SizedBox(width: 8),
-                                    Switch(
-                                      value: rule.enabled,
-                                      onChanged:
-                                          (value) => _toggleRule(rule, value),
-                                    ),
-                                    IconButton(
-                                      tooltip: '编辑',
-                                      onPressed:
-                                          () => _showRuleEditor(rule: rule),
-                                      icon: const Icon(Icons.edit_outlined),
-                                    ),
-                                    IconButton(
-                                      tooltip: '删除',
-                                      onPressed: () => _deleteRule(rule),
-                                      icon: const Icon(Icons.delete_outline),
-                                    ),
-                                  ],
-                                ),
-                                if ((rule.example ?? '').trim().isNotEmpty) ...[
-                                  const SizedBox(height: 6),
-                                  Text(
-                                    '示例：${rule.example!.trim()}',
-                                    style: Theme.of(
-                                      context,
-                                    ).textTheme.bodySmall?.copyWith(
-                                      color: colorScheme.onSurfaceVariant,
-                                    ),
-                                  ),
-                                ],
-                                const SizedBox(height: 6),
                                 Text(
-                                  rule.pattern.isEmpty
-                                      ? '空规则，作为无规则兜底占位'
-                                      : rule.pattern,
+                                  'TXT 目录规则',
+                                  style: Theme.of(context).textTheme.titleSmall
+                                      ?.copyWith(fontWeight: FontWeight.w700),
+                                ),
+                                const SizedBox(height: 8),
+                                Text(
+                                  '这里控制 TXT 本地书自动识别目录时会参与匹配的规则。关闭高误伤规则可以减少误判；对单本书的具体选规则，会在本地书详情页里单独处理。',
                                   style: Theme.of(
                                     context,
                                   ).textTheme.bodySmall?.copyWith(
                                     color: colorScheme.onSurfaceVariant,
-                                    fontFamily: 'monospace',
+                                    height: 1.4,
                                   ),
                                 ),
                               ],
                             ),
                           ),
                         ),
-                        const SizedBox(height: 8),
+                        const SizedBox(height: 10),
+                        Card(
+                          child: Padding(
+                            padding: const EdgeInsets.fromLTRB(12, 10, 12, 10),
+                            child: TextField(
+                              controller: _searchController,
+                              decoration: InputDecoration(
+                                hintText: '搜索规则名称、示例或正则',
+                                prefixIcon: const Icon(Icons.search_rounded),
+                                suffixIcon:
+                                    _searchKeyword.isEmpty
+                                        ? null
+                                        : IconButton(
+                                          tooltip: '清空',
+                                          onPressed: _searchController.clear,
+                                          icon: const Icon(Icons.close_rounded),
+                                        ),
+                                border: const OutlineInputBorder(),
+                                isDense: true,
+                              ),
+                            ),
+                          ),
+                        ),
+                        const SizedBox(height: 10),
+                        if (!_isLoading)
+                          Card(
+                            child: Padding(
+                              padding: const EdgeInsets.all(12),
+                              child: Text(
+                                canReorderRules
+                                    ? '可拖拽右侧手柄调整排序；越靠前的规则，自动识别时优先级越高。'
+                                    : _searchKeyword.isNotEmpty
+                                    ? '搜索结果中暂不支持拖拽排序，请清空搜索后调整优先级。'
+                                    : '当前规则数量较少，暂不需要拖拽排序。',
+                                style: Theme.of(
+                                  context,
+                                ).textTheme.bodySmall?.copyWith(
+                                  color: colorScheme.onSurfaceVariant,
+                                  height: 1.4,
+                                ),
+                              ),
+                            ),
+                          ),
+                        if (!_isLoading) const SizedBox(height: 10),
                       ],
-                    ],
-                  ],
+                    );
+
+                    if (canReorderRules) {
+                      return ReorderableListView.builder(
+                        padding: listPadding,
+                        buildDefaultDragHandles: false,
+                        header: header,
+                        itemCount: _rules.length,
+                        onReorder: _handleReorder,
+                        itemBuilder: (context, index) {
+                          final rule = _rules[index];
+                          return Padding(
+                            key: ValueKey('rule_${rule.id}'),
+                            padding: const EdgeInsets.only(bottom: 8),
+                            child: _buildRuleCard(
+                              context,
+                              rule,
+                              dragHandle: ReorderableDragStartListener(
+                                index: index,
+                                child: const Tooltip(
+                                  message: '拖拽排序',
+                                  child: Padding(
+                                    padding: EdgeInsets.all(8),
+                                    child: Icon(Icons.drag_handle_rounded),
+                                  ),
+                                ),
+                              ),
+                            ),
+                          );
+                        },
+                      );
+                    }
+
+                    return ListView(
+                      padding: listPadding,
+                      children: [
+                        header,
+                        if (_isLoading)
+                          const Card(
+                            child: Padding(
+                              padding: EdgeInsets.all(20),
+                              child: Center(
+                                child: SizedBox(
+                                  width: 22,
+                                  height: 22,
+                                  child: CircularProgressIndicator(
+                                    strokeWidth: 2,
+                                  ),
+                                ),
+                              ),
+                            ),
+                          )
+                        else ...[
+                          if (filteredRules.isEmpty)
+                            const Card(
+                              child: Padding(
+                                padding: EdgeInsets.all(20),
+                                child: Text('没有匹配到规则。'),
+                              ),
+                            ),
+                          for (final rule in filteredRules) ...[
+                            _buildRuleCard(context, rule),
+                            const SizedBox(height: 8),
+                          ],
+                        ],
+                      ],
+                    );
+                  },
                 ),
               ),
             );

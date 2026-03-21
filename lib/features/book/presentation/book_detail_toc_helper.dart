@@ -5,6 +5,7 @@ import '../../../data/repositories/local_book_repository_impl.dart';
 import '../../../domain/entities/chapter.dart';
 import '../../../domain/entities/local_book.dart';
 import '../../../domain/repositories/local_book_repository.dart';
+import '../../reader/application/local/local_book_index_service.dart';
 import '../../reader/application/local/txt_toc_rule_settings_service.dart';
 
 class BookDetailTocContext {
@@ -32,10 +33,15 @@ class BookDetailTocHelper {
   BookDetailTocHelper({
     required TxtTocRuleSettingsService txtTocRuleSettingsService,
   }) : _txtTocRuleSettingsService = txtTocRuleSettingsService,
-       _localBookRepository = LocalBookRepositoryImpl(AppDatabase.instance);
+       _localBookRepository = LocalBookRepositoryImpl(AppDatabase.instance),
+       _localBookIndexService = LocalBookIndexService(
+         localBookRepository: LocalBookRepositoryImpl(AppDatabase.instance),
+         txtTocRuleSettingsService: txtTocRuleSettingsService,
+       );
 
   final TxtTocRuleSettingsService _txtTocRuleSettingsService;
   final LocalBookRepository _localBookRepository;
+  final LocalBookIndexService _localBookIndexService;
 
   Future<BookDetailTocContext> loadContext({
     required bool isLocalContent,
@@ -182,20 +188,62 @@ class BookDetailTocHelper {
     return null;
   }
 
-  Future<bool?> toggleSplitLongChapter({required String activeBookId}) async {
-    final localBook = await _localBookRepository.getBookById(activeBookId);
-    if (localBook == null) {
-      return null;
+  Future<String> tryAutoRepair({required String activeBookId}) async {
+    final latestBook = await _localBookRepository.getBookById(activeBookId);
+    if (latestBook == null) {
+      return '未找到本地图书，请重新导入后再试。';
     }
 
-    final nextValue = !localBook.splitLongChapter;
+    final hasManualRule =
+        (latestBook.txtTocRuleName?.trim().isNotEmpty ?? false) &&
+        (latestBook.txtTocRulePattern?.trim().isNotEmpty ?? false);
+    if (hasManualRule) {
+      await _localBookRepository.upsertBook(
+        latestBook.copyWith(
+          clearTxtTocRuleName: true,
+          clearTxtTocRulePattern: true,
+          updatedAt: DateTime.now(),
+        ),
+      );
+      return '已切回自动探测，正在重新尝试识别目录。';
+    }
+
+    final enabledRules = await _txtTocRuleSettingsService.loadEnabledRules();
+    for (final rule in enabledRules) {
+      final pattern = rule.pattern.trim();
+      if (pattern.isEmpty) {
+        continue;
+      }
+
+      await _localBookRepository.upsertBook(
+        latestBook.copyWith(
+          txtTocRuleName: rule.name,
+          txtTocRulePattern: pattern,
+          updatedAt: DateTime.now(),
+        ),
+      );
+
+      try {
+        final chapters = await _localBookIndexService.ensureIndexed(
+          bookId: activeBookId,
+          force: true,
+        );
+        if (chapters.isNotEmpty) {
+          return '已自动尝试备用目录规则：${rule.name}';
+        }
+      } catch (_) {
+        // Continue to next candidate rule.
+      }
+    }
+
     await _localBookRepository.upsertBook(
-      localBook.copyWith(
-        splitLongChapter: nextValue,
+      latestBook.copyWith(
+        clearTxtTocRuleName: true,
+        clearTxtTocRulePattern: true,
         updatedAt: DateTime.now(),
       ),
     );
-    return nextValue;
+    return '已尝试自动修复，但仍未找到稳定目录，可查看高级选项。';
   }
 
   List<Chapter> buildDisplayedChapters(List<Chapter> chapters, bool reversed) {

@@ -1,7 +1,11 @@
 import 'dart:async';
+import 'dart:io';
+
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
 import 'package:html/parser.dart' as html_parser;
+import 'package:path/path.dart' as p;
 
 import '../../../app/layout/app_layout.dart';
 import '../../../app/layout/app_spacing.dart';
@@ -19,6 +23,7 @@ import '../../bookshelf/application/local_book_import_service.dart';
 import '../../bookshelf/application/bookshelf_service.dart';
 import '../../reader/application/content_provider.dart';
 import '../../reader/application/local_content_provider.dart';
+import '../../reader/application/reader_system_settings_service.dart';
 import '../../reader/application/local/txt_toc_rule_settings_service.dart';
 import '../../reader/application/source_content_provider.dart';
 import '../../reader/application/source_switch_score_service.dart';
@@ -76,6 +81,8 @@ class _BookDetailPageState extends State<BookDetailPage> {
   bool _manualTocReversed = false;
   bool _isShelfActionLoading = false;
   bool _isInBookshelf = false;
+  bool _showLocalAdvancedOptions = false;
+  bool _isAttemptingLocalRepair = false;
   SearchCancellationToken? _activeSwitchSourceCancellationToken;
   String? _errorText;
   String? _tocWarningText;
@@ -89,6 +96,8 @@ class _BookDetailPageState extends State<BookDetailPage> {
   final SearchHitCacheService _searchHitCacheService = SearchHitCacheService();
   final SourceSwitchScoreService _switchSourceScoreService =
       SourceSwitchScoreService();
+  final ReaderSystemSettingsService _readerSystemSettingsService =
+      ReaderSystemSettingsService();
 
   @override
   void initState() {
@@ -577,34 +586,7 @@ class _BookDetailPageState extends State<BookDetailPage> {
         .toList(growable: false);
     final hasMoreChapters = displayedChapters.length > previewCount;
 
-    final localTxtControls =
-        _isLocalTxtContent
-            ? Wrap(
-              spacing: 8,
-              runSpacing: 8,
-              children: [
-                OutlinedButton.icon(
-                  onPressed: _isLoading ? null : _showTxtTocRuleSheet,
-                  icon: const Icon(Icons.rule_folder_outlined, size: 18),
-                  label: Text(
-                    '目录规则：${_selectedTxtTocRule?.ruleName ?? '自动探测'}',
-                  ),
-                ),
-                FilterChip(
-                  label: const Text('长章节拆分'),
-                  selected: _localBookMeta?.splitLongChapter ?? false,
-                  onSelected:
-                      _isLoading ? null : (_) => _toggleSplitLongChapter(),
-                ),
-                OutlinedButton.icon(
-                  onPressed:
-                      _isLoading ? null : () => _load(forceRefresh: true),
-                  icon: const Icon(Icons.refresh, size: 18),
-                  label: const Text('重新索引'),
-                ),
-              ],
-            )
-            : null;
+    final localTxtControls = _buildLocalRecoveryPanel();
 
     final primaryActions =
         displayedChapters.isNotEmpty
@@ -1239,6 +1221,10 @@ class _BookDetailPageState extends State<BookDetailPage> {
     setState(() {
       _localBookMeta = tocContext.localBookMeta;
       _selectedTxtTocRule = tocContext.selectedTxtTocRule;
+      if (tocContext.localBookMeta != null &&
+          !_hasLocalRepairIssue(tocContext.localBookMeta!)) {
+        _showLocalAdvancedOptions = false;
+      }
     });
   }
 
@@ -1267,16 +1253,441 @@ class _BookDetailPageState extends State<BookDetailPage> {
     await _load(forceRefresh: true);
   }
 
-  Future<void> _toggleSplitLongChapter() async {
-    final nextValue = await _tocHelper.toggleSplitLongChapter(
-      activeBookId: _activeBookId,
+  Widget? _buildLocalRecoveryPanel() {
+    if (!_isLocalTxtContent) {
+      return null;
+    }
+
+    final localBook = _localBookMeta;
+    if (localBook == null) {
+      return null;
+    }
+
+    final hasIssue = _hasLocalRepairIssue(localBook);
+    if (!hasIssue && !_showLocalAdvancedOptions) {
+      return null;
+    }
+
+    return _buildLocalDiagnosticsPanel();
+  }
+
+  bool _hasLocalRepairIssue(LocalBook localBook) {
+    return _tocWarningText != null ||
+        localBook.indexStatus == LocalBookIndexStatus.failed ||
+        localBook.chapterCount <= 0 ||
+        (localBook.lastError?.trim().isNotEmpty ?? false);
+  }
+
+  Widget _buildLocalDiagnosticsPanel() {
+    final localBook = _localBookMeta;
+    if (!_isLocalContent || localBook == null) {
+      return const SizedBox.shrink();
+    }
+
+    return FutureBuilder<_LocalBookDiagnosticsSnapshot>(
+      future: _loadLocalDiagnosticsSnapshot(localBook),
+      builder: (context, snapshot) {
+        final diagnostics = snapshot.data;
+        final colorScheme = Theme.of(context).colorScheme;
+        final hasIssue = _hasLocalRepairIssue(localBook);
+        final hasCurrentRule =
+            (_selectedTxtTocRule?.ruleName.trim().isNotEmpty ?? false) ||
+            (localBook.txtTocRuleName?.trim().isNotEmpty ?? false);
+        final ruleLabel =
+            _selectedTxtTocRule?.ruleName.trim().isNotEmpty ?? false
+                ? _selectedTxtTocRule!.ruleName.trim()
+                : (localBook.txtTocRuleName?.trim().isNotEmpty ?? false)
+                ? localBook.txtTocRuleName!.trim()
+                : '自动探测/未命中';
+
+        return Container(
+          width: double.infinity,
+          padding: const EdgeInsets.all(12),
+          decoration: BoxDecoration(
+            color: colorScheme.surfaceContainerLow,
+            borderRadius: BorderRadius.circular(14),
+            border: Border.all(color: colorScheme.outlineVariant),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  Icon(
+                    hasIssue
+                        ? Icons.auto_fix_high_rounded
+                        : Icons.health_and_safety_outlined,
+                    size: 18,
+                    color: colorScheme.primary,
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      hasIssue ? '这本书识别不太理想' : '本地图书诊断',
+                      style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 8),
+              Text(
+                hasIssue
+                    ? '系统已经优先按自动探测目录规则处理；如果目录仍然不对，可以先尝试自动修复。'
+                    : '当前本地图书看起来正常。只有遇到识别问题时，才需要使用高级选项。',
+                style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                  color: colorScheme.onSurfaceVariant,
+                  height: 1.4,
+                ),
+              ),
+              const SizedBox(height: 10),
+              Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: [
+                  if (hasIssue)
+                    FilledButton.tonalIcon(
+                      onPressed:
+                          _isAttemptingLocalRepair ? null : _attemptLocalRepair,
+                      icon:
+                          _isAttemptingLocalRepair
+                              ? const SizedBox(
+                                width: 16,
+                                height: 16,
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2,
+                                ),
+                              )
+                              : const Icon(
+                                Icons.auto_fix_high_rounded,
+                                size: 18,
+                              ),
+                      label: Text(_isAttemptingLocalRepair ? '修复中…' : '尝试修复'),
+                    ),
+                  TextButton.icon(
+                    onPressed: () {
+                      setState(() {
+                        _showLocalAdvancedOptions = !_showLocalAdvancedOptions;
+                      });
+                    },
+                    icon: Icon(
+                      _showLocalAdvancedOptions
+                          ? Icons.expand_less_rounded
+                          : Icons.expand_more_rounded,
+                      size: 18,
+                    ),
+                    label: Text(_showLocalAdvancedOptions ? '收起高级选项' : '高级选项'),
+                  ),
+                ],
+              ),
+              if (_showLocalAdvancedOptions) ...[
+                const SizedBox(height: 10),
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
+                  children: [
+                    BookDetailMetaChip(
+                      label: '格式',
+                      value: localBook.format.name.toUpperCase(),
+                    ),
+                    BookDetailMetaChip(
+                      label: '编码',
+                      value: _normalizeSingleLineText(
+                        localBook.charset?.trim().isNotEmpty ?? false
+                            ? localBook.charset!.trim()
+                            : '未探测',
+                      ),
+                    ),
+                    BookDetailMetaChip(
+                      label: '索引',
+                      value: _localIndexStatusText(localBook.indexStatus),
+                    ),
+                    BookDetailMetaChip(
+                      label: '章节',
+                      value: '${localBook.chapterCount}',
+                    ),
+                    BookDetailMetaChip(
+                      label: hasCurrentRule ? '规则快照' : '规则状态',
+                      value: _normalizeSingleLineText(ruleLabel),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 10),
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
+                  children: [
+                    OutlinedButton.icon(
+                      onPressed: _isLoading ? null : _showTxtTocRuleSheet,
+                      icon: const Icon(Icons.rule_folder_outlined, size: 18),
+                      label: const Text('切换目录规则'),
+                    ),
+                    OutlinedButton.icon(
+                      onPressed:
+                          _isLoading ? null : () => _load(forceRefresh: true),
+                      icon: const Icon(Icons.refresh, size: 18),
+                      label: const Text('重新索引'),
+                    ),
+                    TextButton.icon(
+                      onPressed:
+                          () => _copyLocalDiagnostics(
+                            localBook,
+                            diagnostics: diagnostics,
+                          ),
+                      icon: const Icon(Icons.copy_rounded, size: 16),
+                      label: const Text('复制诊断信息'),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 10),
+                _buildLocalDiagnosticLine(
+                  context,
+                  label: '原文件',
+                  value:
+                      diagnostics == null
+                          ? _localFileName(localBook.sourcePath)
+                          : '${_localFileName(localBook.sourcePath)} · ${diagnostics.sourceFileExists ? '已找到' : '缺失'}',
+                ),
+                _buildLocalDiagnosticLine(
+                  context,
+                  label: '应用副本',
+                  value:
+                      diagnostics == null
+                          ? _localFileName(localBook.storagePath)
+                          : '${_localFileName(localBook.storagePath)} · ${diagnostics.storageFileExists ? '已找到' : '缺失'}',
+                ),
+                _buildLocalDiagnosticLine(
+                  context,
+                  label: '文件变化',
+                  value:
+                      diagnostics == null
+                          ? '检查中…'
+                          : diagnostics.sourcePath.isEmpty
+                          ? '未记录原文件路径'
+                          : diagnostics.sourceFileChanged
+                          ? '检测到原文件变化，建议重新导入或重新索引'
+                          : '与上次导入记录一致',
+                  emphasize: diagnostics?.sourceFileChanged ?? false,
+                ),
+                _buildLocalDiagnosticLine(
+                  context,
+                  label: '长章节拆分',
+                  value:
+                      diagnostics == null
+                          ? '读取中…'
+                          : diagnostics.globalSplitLongChapterEnabled
+                          ? diagnostics.splitSettingNeedsReindex
+                              ? '系统默认开启（当前书需重新索引生效）'
+                              : '系统默认开启'
+                          : diagnostics.splitSettingNeedsReindex
+                          ? '系统默认关闭（当前书需重新索引生效）'
+                          : '系统默认关闭',
+                  emphasize: diagnostics?.splitSettingNeedsReindex ?? false,
+                ),
+                if ((localBook.lastError?.trim().isNotEmpty ?? false)) ...[
+                  const SizedBox(height: 8),
+                  Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.all(10),
+                    decoration: BoxDecoration(
+                      color: colorScheme.errorContainer,
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: Text(
+                      '最近错误：${localBook.lastError!.trim()}',
+                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                        color: colorScheme.onErrorContainer,
+                      ),
+                    ),
+                  ),
+                ],
+              ],
+            ],
+          ),
+        );
+      },
     );
-    if (nextValue == null) {
+  }
+
+  Future<void> _attemptLocalRepair() async {
+    if (_isAttemptingLocalRepair || !_isLocalTxtContent) {
       return;
     }
 
-    _showMessage(nextValue ? '已开启长章节拆分。' : '已关闭长章节拆分。');
-    await _load(forceRefresh: true);
+    setState(() {
+      _isAttemptingLocalRepair = true;
+    });
+    try {
+      final message = await _tocHelper.tryAutoRepair(
+        activeBookId: _activeBookId,
+      );
+      if (mounted) {
+        _showMessage(message);
+      }
+      await _load(forceRefresh: true);
+      if (mounted) {
+        final localBook = _localBookMeta;
+        setState(() {
+          _showLocalAdvancedOptions =
+              localBook == null ? true : _hasLocalRepairIssue(localBook);
+        });
+      }
+    } catch (_) {
+      if (mounted) {
+        _showMessage('自动修复失败，请稍后重试。');
+        setState(() {
+          _showLocalAdvancedOptions = true;
+        });
+      }
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isAttemptingLocalRepair = false;
+        });
+      }
+    }
+  }
+
+  Widget _buildLocalDiagnosticLine(
+    BuildContext context, {
+    required String label,
+    required String value,
+    bool emphasize = false,
+  }) {
+    final colorScheme = Theme.of(context).colorScheme;
+    final textColor =
+        emphasize ? colorScheme.error : colorScheme.onSurfaceVariant;
+    return Padding(
+      padding: const EdgeInsets.only(top: 4),
+      child: Text.rich(
+        TextSpan(
+          children: [
+            TextSpan(
+              text: '$label：',
+              style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                fontWeight: FontWeight.w700,
+                color: Theme.of(context).colorScheme.onSurface,
+              ),
+            ),
+            TextSpan(
+              text: value,
+              style: Theme.of(
+                context,
+              ).textTheme.bodySmall?.copyWith(color: textColor, height: 1.4),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Future<_LocalBookDiagnosticsSnapshot> _loadLocalDiagnosticsSnapshot(
+    LocalBook book,
+  ) async {
+    final sourcePath = book.sourcePath?.trim() ?? '';
+    final storagePath = book.storagePath.trim();
+    final sourceStat = await _tryStatFile(sourcePath);
+    final storageStat = await _tryStatFile(storagePath);
+
+    final sourceFileExists = sourceStat != null;
+    final storageFileExists = storageStat != null;
+    final sourceFileChanged =
+        sourceFileExists &&
+        (book.sourceFileSize != sourceStat.size ||
+            book.sourceFileLastModifiedMs !=
+                sourceStat.modified.millisecondsSinceEpoch);
+    final globalSplitLongChapterEnabled =
+        await _readerSystemSettingsService
+            .loadLocalTxtSplitLongChapterEnabled();
+
+    return _LocalBookDiagnosticsSnapshot(
+      sourcePath: sourcePath,
+      storagePath: storagePath,
+      sourceFileExists: sourceFileExists,
+      storageFileExists: storageFileExists,
+      sourceFileChanged: sourceFileChanged,
+      globalSplitLongChapterEnabled: globalSplitLongChapterEnabled,
+      splitSettingNeedsReindex:
+          book.splitLongChapter != globalSplitLongChapterEnabled,
+    );
+  }
+
+  Future<FileStat?> _tryStatFile(String path) async {
+    final normalized = path.trim();
+    if (normalized.isEmpty) {
+      return null;
+    }
+    try {
+      final file = File(normalized);
+      if (!await file.exists()) {
+        return null;
+      }
+      return file.stat();
+    } catch (_) {
+      return null;
+    }
+  }
+
+  Future<void> _copyLocalDiagnostics(
+    LocalBook book, {
+    _LocalBookDiagnosticsSnapshot? diagnostics,
+  }) async {
+    final snapshot = diagnostics ?? await _loadLocalDiagnosticsSnapshot(book);
+    final content = _buildLocalDiagnosticsText(book, snapshot);
+    await Clipboard.setData(ClipboardData(text: content));
+    if (!mounted) {
+      return;
+    }
+    _showMessage('已复制本地图书诊断信息。');
+  }
+
+  String _buildLocalDiagnosticsText(
+    LocalBook book,
+    _LocalBookDiagnosticsSnapshot diagnostics,
+  ) {
+    final ruleLabel =
+        (_selectedTxtTocRule?.ruleName.trim().isNotEmpty ?? false)
+            ? _selectedTxtTocRule!.ruleName.trim()
+            : (book.txtTocRuleName?.trim().isNotEmpty ?? false)
+            ? book.txtTocRuleName!.trim()
+            : '自动探测/未命中';
+    return [
+      '本地图书诊断',
+      '书名: ${_displayTitle?.trim().isNotEmpty ?? false ? _displayTitle!.trim() : book.title}',
+      '格式: ${book.format.name.toUpperCase()}',
+      '编码: ${book.charset?.trim().isNotEmpty ?? false ? book.charset!.trim() : '未探测'}',
+      '索引状态: ${_localIndexStatusText(book.indexStatus)}',
+      '章节数: ${book.chapterCount}',
+      '规则快照: $ruleLabel',
+      '长章节拆分(系统): ${diagnostics.globalSplitLongChapterEnabled ? '默认开启' : '默认关闭'}${diagnostics.splitSettingNeedsReindex ? '，当前书需重新索引生效' : ''}',
+      '原文件: ${_localFileName(book.sourcePath)} / ${diagnostics.sourceFileExists ? '已找到' : '缺失'}',
+      '应用副本: ${_localFileName(book.storagePath)} / ${diagnostics.storageFileExists ? '已找到' : '缺失'}',
+      '文件变化: ${diagnostics.sourcePath.isEmpty
+          ? '未记录原文件路径'
+          : diagnostics.sourceFileChanged
+          ? '检测到原文件变化'
+          : '与上次导入记录一致'}',
+      if ((book.lastError?.trim().isNotEmpty ?? false))
+        '最近错误: ${book.lastError!.trim()}',
+    ].join('\n');
+  }
+
+  String _localFileName(String? path) {
+    final normalized = path?.trim() ?? '';
+    if (normalized.isEmpty) {
+      return '未记录';
+    }
+    return p.basename(normalized);
+  }
+
+  String _localIndexStatusText(LocalBookIndexStatus status) {
+    return switch (status) {
+      LocalBookIndexStatus.pending => '待建立',
+      LocalBookIndexStatus.indexing => '索引中',
+      LocalBookIndexStatus.ready => '已就绪',
+      LocalBookIndexStatus.failed => '失败',
+    };
   }
 
   String _toUserReadableError(AppException error) {
@@ -1446,6 +1857,26 @@ class _BookDetailPageState extends State<BookDetailPage> {
     _activeSwitchSourceCancellationToken?.cancel();
     _activeSwitchSourceCancellationToken = null;
   }
+}
+
+class _LocalBookDiagnosticsSnapshot {
+  const _LocalBookDiagnosticsSnapshot({
+    required this.sourcePath,
+    required this.storagePath,
+    required this.sourceFileExists,
+    required this.storageFileExists,
+    required this.sourceFileChanged,
+    required this.globalSplitLongChapterEnabled,
+    required this.splitSettingNeedsReindex,
+  });
+
+  final String sourcePath;
+  final String storagePath;
+  final bool sourceFileExists;
+  final bool storageFileExists;
+  final bool sourceFileChanged;
+  final bool globalSplitLongChapterEnabled;
+  final bool splitSettingNeedsReindex;
 }
 
 enum _DetailSwitchSourceApplyResult {

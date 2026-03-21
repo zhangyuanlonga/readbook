@@ -13,6 +13,7 @@ import '../../../data/repositories/local_book_repository_impl.dart';
 import '../../../domain/entities/bookshelf_book.dart';
 import '../../../domain/entities/local_book.dart';
 import '../../../domain/repositories/local_book_repository.dart';
+import '../../reader/application/reader_system_settings_service.dart';
 import 'bookshelf_service.dart';
 
 class LocalBookImportResult {
@@ -29,11 +30,14 @@ class LocalBookImportService {
   LocalBookImportService({
     LocalBookRepository? localBookRepository,
     BookshelfService? bookshelfService,
+    ReaderSystemSettingsService? readerSystemSettingsService,
     AppLogger? logger,
     Future<Directory> Function()? supportDirectoryProvider,
   }) : _localBookRepository =
            localBookRepository ?? LocalBookRepositoryImpl(AppDatabase.instance),
        _bookshelfService = bookshelfService ?? BookshelfService(),
+       _readerSystemSettingsService =
+           readerSystemSettingsService ?? ReaderSystemSettingsService(),
        _logger = logger ?? AppLogger.instance,
        _supportDirectoryProvider =
            supportDirectoryProvider ?? getApplicationSupportDirectory;
@@ -42,6 +46,7 @@ class LocalBookImportService {
 
   final LocalBookRepository _localBookRepository;
   final BookshelfService _bookshelfService;
+  final ReaderSystemSettingsService _readerSystemSettingsService;
   final AppLogger _logger;
   final Future<Directory> Function() _supportDirectoryProvider;
   final Uuid _uuid = const Uuid();
@@ -79,6 +84,9 @@ class LocalBookImportService {
 
     final sourceStat = await sourceFile.stat();
     final now = DateTime.now();
+    final splitLongChapterDefault =
+        await _readerSystemSettingsService
+            .loadLocalTxtSplitLongChapterEnabled();
     final existingBook = await _findBySourcePath(normalizedPath);
     final bookId = existingBook?.id ?? _buildBookId();
 
@@ -91,22 +99,46 @@ class LocalBookImportService {
       await targetFile.delete();
     }
     await sourceFile.copy(targetFile.path);
+    final targetStat = await targetFile.stat();
 
     final title = _resolveTitle(displayName ?? p.basename(normalizedPath));
-    final localBook = LocalBook(
-      id: bookId,
-      title: title,
-      format: format,
-      storagePath: targetFile.path,
-      sourcePath: normalizedPath,
-      fileSize: sourceStat.size,
-      indexStatus: LocalBookIndexStatus.pending,
-      chapterCount: 0,
-      createdAt: existingBook?.createdAt ?? now,
-      updatedAt: now,
-      author: existingBook?.author,
-      coverPath: existingBook?.coverPath,
-    );
+    final localBook =
+        existingBook?.copyWith(
+          title: title,
+          format: format,
+          storagePath: targetFile.path,
+          sourcePath: normalizedPath,
+          fileSize: targetStat.size,
+          sourceFileSize: sourceStat.size,
+          sourceFileLastModifiedMs: sourceStat.modified.millisecondsSinceEpoch,
+          storageFileLastModifiedMs: targetStat.modified.millisecondsSinceEpoch,
+          indexStatus: LocalBookIndexStatus.pending,
+          chapterCount: 0,
+          splitLongChapter: splitLongChapterDefault,
+          updatedAt: now,
+          clearCharset: true,
+          clearLastError: true,
+          clearTxtTocRuleName: true,
+          clearTxtTocRulePattern: true,
+        ) ??
+        LocalBook(
+          id: bookId,
+          title: title,
+          format: format,
+          storagePath: targetFile.path,
+          sourcePath: normalizedPath,
+          fileSize: targetStat.size,
+          sourceFileSize: sourceStat.size,
+          sourceFileLastModifiedMs: sourceStat.modified.millisecondsSinceEpoch,
+          storageFileLastModifiedMs: targetStat.modified.millisecondsSinceEpoch,
+          indexStatus: LocalBookIndexStatus.pending,
+          chapterCount: 0,
+          splitLongChapter: splitLongChapterDefault,
+          createdAt: now,
+          updatedAt: now,
+          author: existingBook?.author,
+          coverPath: existingBook?.coverPath,
+        );
 
     await _localBookRepository.upsertBook(localBook);
     await _localBookRepository.replaceChapters(

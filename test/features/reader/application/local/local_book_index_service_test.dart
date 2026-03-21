@@ -5,9 +5,11 @@ import 'package:flutter_appread/core/errors/app_exception.dart';
 import 'package:flutter_appread/data/datasources/local/app_database.dart';
 import 'package:flutter_appread/data/repositories/local_book_repository_impl.dart';
 import 'package:flutter_appread/domain/entities/local_book.dart';
+import 'package:flutter_appread/features/reader/application/reader_system_settings_service.dart';
 import 'package:flutter_appread/features/reader/application/local/local_book_index_service.dart';
 import 'package:flutter_appread/features/reader/application/local/local_book_parser.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 void main() {
   group('LocalBookIndexService', () {
@@ -15,6 +17,7 @@ void main() {
     late LocalBookRepositoryImpl repository;
 
     setUp(() {
+      SharedPreferences.setMockInitialValues({});
       database = AppDatabase(executor: NativeDatabase.memory());
       repository = LocalBookRepositoryImpl(database);
     });
@@ -80,6 +83,40 @@ void main() {
       expect(updated!.indexStatus, LocalBookIndexStatus.failed);
       expect(updated.chapterCount, 0);
       expect(updated.lastError, contains('模拟解析失败'));
+    });
+
+    test('syncs split long chapter from system setting on reindex', () async {
+      final now = DateTime.parse('2026-02-23T12:00:00.000Z');
+      await repository.upsertBook(
+        LocalBook(
+          id: 'local_index_split_1',
+          title: '系统设置同步测试',
+          format: LocalBookFormat.txt,
+          storagePath: '/tmp/demo.txt',
+          fileSize: 1,
+          splitLongChapter: true,
+          createdAt: now,
+          updatedAt: now,
+        ),
+      );
+
+      final prefs = await SharedPreferences.getInstance();
+      final systemSettingsService = ReaderSystemSettingsService(
+        preferences: prefs,
+      );
+      await systemSettingsService.saveLocalTxtSplitLongChapterEnabled(false);
+
+      final service = LocalBookIndexService(
+        localBookRepository: repository,
+        parsers: const [_FakeSuccessParser()],
+        readerSystemSettingsService: systemSettingsService,
+      );
+
+      await service.ensureIndexed(bookId: 'local_index_split_1');
+
+      final updated = await repository.getBookById('local_index_split_1');
+      expect(updated, isNotNull);
+      expect(updated!.splitLongChapter, isFalse);
     });
   });
 }

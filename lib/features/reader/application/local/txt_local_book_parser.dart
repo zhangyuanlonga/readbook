@@ -9,15 +9,17 @@ import '../../../../core/errors/error_stage.dart';
 import '../../../../domain/entities/local_book.dart';
 import 'local_book_parser.dart';
 import 'txt_toc_rule_settings_service.dart';
+import 'txt_toc_rules.dart';
 
 class TxtLocalBookParser implements LocalBookParser {
   TxtLocalBookParser({TxtTocRuleSettingsService? ruleSettingsService})
     : _ruleSettingsService = ruleSettingsService ?? TxtTocRuleSettingsService();
 
-  static const int _chunkLengthWithoutToc = 4000;
+  static const int _chunkLengthWithoutToc = 10 * 1024;
   static const int _tocDetectionSampleLength = 200000;
   static const int _tocDetectionGapThreshold = 1000;
   static const int _maxLengthWithToc = 102400;
+  static const int _splitBreakMinDistance = 800;
 
   final TxtTocRuleSettingsService _ruleSettingsService;
 
@@ -46,9 +48,9 @@ class TxtLocalBookParser implements LocalBookParser {
       );
     }
 
-    final decoded = _decodeText(bytes);
-    final normalized = _normalizeText(decoded);
-    if (normalized.isEmpty) {
+    final decoded = await _decodeBookText(book, bytes);
+    final text = decoded.text;
+    if (text.trim().isEmpty) {
       throw AppException(
         code: ErrorCode.ruleMatchEmpty,
         stage: ErrorStage.content,
@@ -56,10 +58,17 @@ class TxtLocalBookParser implements LocalBookParser {
       );
     }
 
-    final normalizedBytes = utf8.encode(normalized);
-    final chapters = _withUtf8ByteOffsets(
-      await _splitChapters(book, normalized),
-      normalized,
+    final selectedRule = await _resolveTocRule(book, text);
+    final chapters = _withByteOffsets(
+      _splitChapters(
+        text: text,
+        charsetName: decoded.charsetName,
+        selectedRule: selectedRule,
+        splitLongChapter: book.splitLongChapter,
+      ),
+      text: text,
+      charsetName: decoded.charsetName,
+      bomLength: decoded.bomLength,
     );
     if (chapters.isEmpty) {
       throw AppException(
@@ -69,77 +78,47 @@ class TxtLocalBookParser implements LocalBookParser {
       );
     }
 
-    if (!_listEquals(bytes, normalizedBytes)) {
-      await file.writeAsBytes(normalizedBytes, flush: true);
-    }
-
-    return LocalParsedBook(chapters: chapters);
+    return LocalParsedBook(
+      chapters: chapters,
+      charset: decoded.charsetName,
+      txtTocRuleName: selectedRule?.ruleName,
+      txtTocRulePattern: selectedRule?.pattern,
+    );
   }
 
-  String _decodeText(List<int> bytes) {
-    try {
-      return utf8.decode(bytes, allowMalformed: false);
-    } on FormatException {
-      final gbk = Charset.getByName('gbk');
-      if (gbk != null) {
-        try {
-          return gbk.decode(bytes);
-        } on FormatException {
-          return utf8.decode(bytes, allowMalformed: true);
-        }
-      }
-      return utf8.decode(bytes, allowMalformed: true);
-    }
-  }
-
-  String _normalizeText(String raw) {
-    return raw
-        .replaceAll('\r\n', '\n')
-        .replaceAll('\r', '\n')
-        .replaceAll('\u0000', '')
-        .trimRight();
-  }
-
-  Future<List<LocalParsedChapter>> _splitChapters(
+  Future<_ResolvedTxtTocRule?> _resolveTocRule(
     LocalBook book,
     String text,
   ) async {
-    final pattern =
-        _resolveConfiguredPattern(book.txtTocRulePattern) ??
-        await _detectTocPattern(text);
-    if (pattern == null) {
-      return _splitByFixedLength(text);
+    final configuredPattern = book.txtTocRulePattern?.trim() ?? '';
+    if (configuredPattern.isNotEmpty) {
+      try {
+        final pattern = RegExp(
+          configuredPattern,
+          multiLine: true,
+          caseSensitive: false,
+        );
+        return _ResolvedTxtTocRule(
+          ruleName: _normalizeRuleName(book.txtTocRuleName),
+          pattern: configuredPattern,
+          compiled: pattern,
+        );
+      } on FormatException {
+        return _detectTocRule(text);
+      } on ArgumentError {
+        return _detectTocRule(text);
+      }
     }
-    final chapters = _splitByPattern(text, pattern);
-    if (chapters.isEmpty) {
-      return _splitByFixedLength(text);
-    }
-    if (book.splitLongChapter) {
-      return _splitLongChapters(chapters);
-    }
-    return chapters;
+
+    return _detectTocRule(text);
   }
 
-  RegExp? _resolveConfiguredPattern(String? configuredPattern) {
-    final pattern = configuredPattern?.trim() ?? '';
-    if (pattern.isEmpty) {
-      return null;
-    }
-    try {
-      return RegExp(pattern, multiLine: true, caseSensitive: false);
-    } on FormatException {
-      return null;
-    } on ArgumentError {
-      return null;
-    }
-  }
-
-  Future<RegExp?> _detectTocPattern(String text) async {
+  Future<_ResolvedTxtTocRule?> _detectTocRule(String text) async {
     final sample =
         text.length > _tocDetectionSampleLength
             ? text.substring(0, _tocDetectionSampleLength)
             : text;
-    RegExp? selectedPattern;
+    _ResolvedTxtTocRule? selectedRule;
     var maxHits = 0;
     var maxRawMatches = 0;
     int? earliestStart;
@@ -151,6 +130,7 @@ class TxtLocalBookParser implements LocalBookParser {
       if (matches.isEmpty) {
         continue;
       }
+
       var hits = 0;
       int? lastAcceptedEnd;
       for (final match in matches) {
@@ -160,6 +140,7 @@ class TxtLocalBookParser implements LocalBookParser {
           lastAcceptedEnd = match.end;
         }
       }
+
       final firstMatchStart = matches.first.start;
       final shouldSelect =
           hits > maxHits ||
@@ -167,15 +148,41 @@ class TxtLocalBookParser implements LocalBookParser {
           (hits == maxHits &&
               matches.length == maxRawMatches &&
               (earliestStart == null || firstMatchStart < earliestStart));
-      if (shouldSelect && hits > 0) {
-        maxHits = hits;
-        maxRawMatches = matches.length;
-        earliestStart = firstMatchStart;
-        selectedPattern = pattern;
+      if (!shouldSelect || hits <= 0) {
+        continue;
       }
+
+      maxHits = hits;
+      maxRawMatches = matches.length;
+      earliestStart = firstMatchStart;
+      selectedRule = _ResolvedTxtTocRule(
+        ruleName: rule.name.trim(),
+        pattern: rule.pattern.trim(),
+        compiled: pattern,
+      );
     }
 
-    return selectedPattern;
+    return selectedRule;
+  }
+
+  List<LocalParsedChapter> _splitChapters({
+    required String text,
+    required String charsetName,
+    required _ResolvedTxtTocRule? selectedRule,
+    required bool splitLongChapter,
+  }) {
+    final chapters =
+        selectedRule == null
+            ? _splitByFixedLength(text, charsetName: charsetName)
+            : _splitByPattern(text, selectedRule.compiled);
+
+    if (chapters.isEmpty) {
+      return _splitByFixedLength(text, charsetName: charsetName);
+    }
+    if (!splitLongChapter || selectedRule == null) {
+      return chapters;
+    }
+    return _splitLongChapters(chapters, charsetName: charsetName);
   }
 
   List<LocalParsedChapter> _splitByPattern(String text, RegExp pattern) {
@@ -185,24 +192,28 @@ class TxtLocalBookParser implements LocalBookParser {
     }
 
     final chapters = <LocalParsedChapter>[];
-    final preface = text.substring(0, matches.first.start).trim();
-    if (preface.isNotEmpty) {
-      chapters.add(
-        LocalParsedChapter(
-          title: '前言',
-          content: preface,
-          startOffset: 0,
-          endOffset: matches.first.start,
-        ),
-      );
+    final prefaceEnd = matches.first.start;
+    final prefaceStart = _firstContentIndex(text, 0, prefaceEnd);
+    if (prefaceStart >= 0 && prefaceStart < prefaceEnd) {
+      final preface = text.substring(prefaceStart, prefaceEnd).trim();
+      if (preface.isNotEmpty) {
+        chapters.add(
+          LocalParsedChapter(
+            title: '前言',
+            content: preface,
+            startOffset: prefaceStart,
+            endOffset: prefaceEnd,
+          ),
+        );
+      }
     }
 
-    for (var i = 0; i < matches.length; i += 1) {
-      final match = matches[i];
+    for (var index = 0; index < matches.length; index += 1) {
+      final match = matches[index];
       final chapterEnd =
-          i + 1 < matches.length ? matches[i + 1].start : text.length;
-      final title = match.group(0)?.trim();
-      if (title == null || title.isEmpty) {
+          index + 1 < matches.length ? matches[index + 1].start : text.length;
+      final title = match.group(0)?.trim() ?? '';
+      if (title.isEmpty) {
         continue;
       }
 
@@ -224,27 +235,29 @@ class TxtLocalBookParser implements LocalBookParser {
     return chapters;
   }
 
-  List<LocalParsedChapter> _splitByFixedLength(String text) {
-    final normalized = text.trim();
-    if (normalized.isEmpty) {
+  List<LocalParsedChapter> _splitByFixedLength(
+    String text, {
+    required String charsetName,
+  }) {
+    if (text.trim().isEmpty) {
       return const <LocalParsedChapter>[];
     }
 
     final chapters = <LocalParsedChapter>[];
-    var start = 0;
+    var start = _skipLeadingLineBreaks(text, 0);
     var index = 0;
-    while (start < normalized.length) {
-      var end = start + _chunkLengthWithoutToc;
-      if (end >= normalized.length) {
-        end = normalized.length;
-      } else {
-        final nextBreak = normalized.lastIndexOf('\n', end);
-        if (nextBreak > start + 800) {
-          end = nextBreak;
-        }
+    while (start < text.length) {
+      var end = _findChunkEndByMaxBytes(
+        text,
+        start,
+        _chunkLengthWithoutToc,
+        charsetName,
+      );
+      if (end <= start) {
+        end = text.length;
       }
 
-      final content = normalized.substring(start, end).trim();
+      final content = text.substring(start, end).trim();
       if (content.isNotEmpty) {
         index += 1;
         chapters.add(
@@ -257,41 +270,43 @@ class TxtLocalBookParser implements LocalBookParser {
         );
       }
 
-      start = end;
-      while (start < normalized.length && normalized[start] == '\n') {
-        start += 1;
-      }
+      start = _skipLeadingLineBreaks(text, end);
     }
 
     return chapters;
   }
 
   List<LocalParsedChapter> _splitLongChapters(
-    List<LocalParsedChapter> chapters,
-  ) {
+    List<LocalParsedChapter> chapters, {
+    required String charsetName,
+  }) {
     final output = <LocalParsedChapter>[];
 
     for (final chapter in chapters) {
       final content = chapter.content.trim();
-      if (content.isEmpty || content.length <= _maxLengthWithToc) {
+      if (content.isEmpty) {
+        continue;
+      }
+      final contentBytes = _encodedLength(content, charsetName);
+      if (contentBytes <= _maxLengthWithToc) {
         output.add(chapter);
         continue;
       }
 
-      var start = 0;
+      var relativeStart = 0;
       var splitIndex = 0;
-      while (start < content.length) {
-        var end = start + _maxLengthWithToc;
-        if (end >= content.length) {
-          end = content.length;
-        } else {
-          final nextBreak = content.lastIndexOf('\n', end);
-          if (nextBreak > start + 800) {
-            end = nextBreak;
-          }
+      while (relativeStart < content.length) {
+        var relativeEnd = _findChunkEndByMaxBytes(
+          content,
+          relativeStart,
+          _maxLengthWithToc,
+          charsetName,
+        );
+        if (relativeEnd <= relativeStart) {
+          relativeEnd = content.length;
         }
 
-        final piece = content.substring(start, end).trim();
+        final piece = content.substring(relativeStart, relativeEnd).trim();
         if (piece.isNotEmpty) {
           splitIndex += 1;
           final baseStart = chapter.startOffset ?? 0;
@@ -299,26 +314,25 @@ class TxtLocalBookParser implements LocalBookParser {
             LocalParsedChapter(
               title: '${chapter.title}($splitIndex)',
               content: piece,
-              startOffset: baseStart + start,
-              endOffset: baseStart + end,
+              startOffset: baseStart + relativeStart,
+              endOffset: baseStart + relativeEnd,
             ),
           );
         }
 
-        start = end;
-        while (start < content.length && content[start] == '\n') {
-          start += 1;
-        }
+        relativeStart = _skipLeadingLineBreaks(content, relativeEnd);
       }
     }
 
     return output;
   }
 
-  List<LocalParsedChapter> _withUtf8ByteOffsets(
-    List<LocalParsedChapter> chapters,
-    String normalizedText,
-  ) {
+  List<LocalParsedChapter> _withByteOffsets(
+    List<LocalParsedChapter> chapters, {
+    required String text,
+    required String charsetName,
+    required int bomLength,
+  }) {
     if (chapters.isEmpty) {
       return const <LocalParsedChapter>[];
     }
@@ -326,52 +340,393 @@ class TxtLocalBookParser implements LocalBookParser {
     final checkpoints = chapters
       .expand((chapter) => <int?>[chapter.startOffset, chapter.endOffset])
       .whereType<int>()
-      .where((index) => index >= 0 && index <= normalizedText.length)
+      .where((index) => index >= 0 && index <= text.length)
       .toSet()
       .toList(growable: false)..sort();
 
-    final byteOffsets = <int, int>{0: 0};
+    final byteOffsets = <int, int>{0: bomLength};
     var previousIndex = 0;
-    var accumulatedBytes = 0;
+    var accumulatedBytes = bomLength;
     for (final index in checkpoints) {
       if (index > previousIndex) {
-        accumulatedBytes +=
-            utf8.encode(normalizedText.substring(previousIndex, index)).length;
+        accumulatedBytes += _encodedLength(
+          text.substring(previousIndex, index),
+          charsetName,
+        );
         previousIndex = index;
       }
       byteOffsets[index] = accumulatedBytes;
     }
 
     return chapters
-        .map((chapter) {
-          final startOffset = chapter.startOffset;
-          final endOffset = chapter.endOffset;
-          return LocalParsedChapter(
+        .map(
+          (chapter) => LocalParsedChapter(
             title: chapter.title,
             content: chapter.content,
             startOffset:
-                startOffset == null ? null : byteOffsets[startOffset] ?? 0,
-            endOffset:
-                endOffset == null
+                chapter.startOffset == null
                     ? null
-                    : byteOffsets[endOffset] ?? accumulatedBytes,
-          );
-        })
+                    : byteOffsets[chapter.startOffset] ?? bomLength,
+            endOffset:
+                chapter.endOffset == null
+                    ? null
+                    : byteOffsets[chapter.endOffset] ?? accumulatedBytes,
+          ),
+        )
         .toList(growable: false);
   }
 
-  bool _listEquals(List<int> left, List<int> right) {
-    if (identical(left, right)) {
-      return true;
-    }
-    if (left.length != right.length) {
-      return false;
-    }
-    for (var index = 0; index < left.length; index += 1) {
-      if (left[index] != right[index]) {
-        return false;
+  Future<_DecodedBookText> _decodeBookText(
+    LocalBook book,
+    List<int> bytes,
+  ) async {
+    final bomInfo = _detectBom(bytes);
+    final bomLength = bomInfo.length;
+    final contentBytes =
+        bomLength > 0 ? bytes.sublist(bomLength) : List<int>.from(bytes);
+    final enabledRules = await _ruleSettingsService.loadEnabledRules();
+
+    final preferredCharset = _normalizeCharsetName(book.charset);
+    final hintedCharset =
+        preferredCharset ??
+        bomInfo.charsetName ??
+        _detectUtf16ZeroPattern(bytes);
+
+    final candidateCharsets = <String>[
+      if (hintedCharset != null) hintedCharset,
+      'utf-8',
+      'utf-16be',
+      'utf-16le',
+      'gbk',
+      'gb18030',
+    ];
+
+    _DecodedBookText? best;
+    var bestScore = -0x7fffffff;
+    final seen = <String>{};
+    for (final rawCandidate in candidateCharsets) {
+      final candidate = _normalizeCharsetName(rawCandidate);
+      if (candidate == null || !seen.add(candidate)) {
+        continue;
+      }
+      final text = _tryDecodeByCharset(contentBytes, candidate);
+      if (text == null) {
+        continue;
+      }
+
+      final score = _scoreDecodedText(
+        text,
+        enabledRules: enabledRules,
+        charsetName: candidate,
+        hintedCharset: hintedCharset,
+      );
+      if (best == null || score > bestScore) {
+        best = _DecodedBookText(
+          text: text,
+          charsetName: candidate,
+          bomLength: bomLength,
+        );
+        bestScore = score;
       }
     }
-    return true;
+
+    if (best != null) {
+      return best;
+    }
+
+    return _DecodedBookText(
+      text: utf8.decode(contentBytes, allowMalformed: true),
+      charsetName: 'utf-8',
+      bomLength: bomLength,
+    );
   }
+
+  _BomInfo _detectBom(List<int> bytes) {
+    if (bytes.length >= 3 &&
+        bytes[0] == 0xEF &&
+        bytes[1] == 0xBB &&
+        bytes[2] == 0xBF) {
+      return const _BomInfo(length: 3, charsetName: 'utf-8');
+    }
+    if (bytes.length >= 2 && bytes[0] == 0xFE && bytes[1] == 0xFF) {
+      return const _BomInfo(length: 2, charsetName: 'utf-16be');
+    }
+    if (bytes.length >= 2 && bytes[0] == 0xFF && bytes[1] == 0xFE) {
+      return const _BomInfo(length: 2, charsetName: 'utf-16le');
+    }
+    return const _BomInfo(length: 0, charsetName: null);
+  }
+
+  String? _detectUtf16ZeroPattern(List<int> bytes) {
+    final sampleLength = bytes.length < 2048 ? bytes.length : 2048;
+    if (sampleLength < 8) {
+      return null;
+    }
+
+    var evenZeroCount = 0;
+    var oddZeroCount = 0;
+    var pairCount = 0;
+    for (var index = 0; index + 1 < sampleLength; index += 2) {
+      pairCount += 1;
+      if (bytes[index] == 0) {
+        evenZeroCount += 1;
+      }
+      if (bytes[index + 1] == 0) {
+        oddZeroCount += 1;
+      }
+    }
+    if (pairCount == 0) {
+      return null;
+    }
+
+    final evenZeroRatio = evenZeroCount / pairCount;
+    final oddZeroRatio = oddZeroCount / pairCount;
+    if (evenZeroRatio >= 0.2 && oddZeroRatio <= 0.05) {
+      return 'utf-16be';
+    }
+    if (oddZeroRatio >= 0.2 && evenZeroRatio <= 0.05) {
+      return 'utf-16le';
+    }
+    return null;
+  }
+
+  int _scoreDecodedText(
+    String text, {
+    required List<TxtTocRuleDefinition> enabledRules,
+    required String charsetName,
+    required String? hintedCharset,
+  }) {
+    final sample =
+        text.length > _tocDetectionSampleLength
+            ? text.substring(0, _tocDetectionSampleLength)
+            : text;
+    if (sample.trim().isEmpty) {
+      return -0x3fffffff;
+    }
+
+    var replacementCount = 0;
+    var nulCount = 0;
+    var controlCount = 0;
+    var hanCount = 0;
+    var asciiCount = 0;
+    for (final rune in sample.runes) {
+      if (rune == 0xFFFD) {
+        replacementCount += 1;
+      }
+      if (rune == 0) {
+        nulCount += 1;
+      }
+      if (rune < 0x20 && rune != 0x09 && rune != 0x0A && rune != 0x0D) {
+        controlCount += 1;
+      }
+      if (rune >= 0x4E00 && rune <= 0x9FFF) {
+        hanCount += 1;
+      }
+      if (rune >= 0x20 && rune <= 0x7E) {
+        asciiCount += 1;
+      }
+    }
+
+    var bestRuleHits = 0;
+    var bestRawMatches = 0;
+    for (final rule in enabledRules) {
+      final matches = rule.compiled.allMatches(sample).toList(growable: false);
+      if (matches.isEmpty) {
+        continue;
+      }
+
+      var hits = 0;
+      int? lastAcceptedEnd;
+      for (final match in matches) {
+        if (lastAcceptedEnd == null ||
+            match.start - lastAcceptedEnd > _tocDetectionGapThreshold) {
+          hits += 1;
+          lastAcceptedEnd = match.end;
+        }
+      }
+      if (hits > bestRuleHits ||
+          (hits == bestRuleHits && matches.length > bestRawMatches)) {
+        bestRuleHits = hits;
+        bestRawMatches = matches.length;
+      }
+    }
+
+    var score = 0;
+    score += bestRuleHits * 200;
+    score += bestRawMatches * 12;
+    score += hanCount * 2;
+    if (hanCount > asciiCount) {
+      score += 80;
+    }
+    score -= replacementCount * 120;
+    score -= nulCount * 240;
+    score -= controlCount * 80;
+    if (hintedCharset != null && hintedCharset == charsetName) {
+      score += 160;
+    }
+    return score;
+  }
+
+  int _findChunkEndByMaxBytes(
+    String text,
+    int start,
+    int maxBytes,
+    String charsetName,
+  ) {
+    if (start >= text.length) {
+      return text.length;
+    }
+
+    var low = start + 1;
+    var high = text.length;
+    var best = text.length;
+    while (low <= high) {
+      final mid = low + ((high - low) >> 1);
+      final byteLength = _encodedLength(
+        text.substring(start, mid),
+        charsetName,
+      );
+      if (byteLength <= maxBytes) {
+        best = mid;
+        low = mid + 1;
+      } else {
+        high = mid - 1;
+      }
+    }
+
+    if (best >= text.length) {
+      return text.length;
+    }
+
+    final nextBreak = text.lastIndexOf('\n', best);
+    if (nextBreak > start + _splitBreakMinDistance) {
+      return nextBreak;
+    }
+    return best;
+  }
+
+  int _skipLeadingLineBreaks(String text, int index) {
+    var next = index;
+    while (next < text.length) {
+      final char = text[next];
+      if (char == '\n' || char == '\r') {
+        next += 1;
+        continue;
+      }
+      if (char.trim().isEmpty) {
+        next += 1;
+        continue;
+      }
+      break;
+    }
+    return next;
+  }
+
+  int _firstContentIndex(String text, int start, int end) {
+    for (var index = start; index < end; index += 1) {
+      if (text[index].trim().isNotEmpty) {
+        return index;
+      }
+    }
+    return -1;
+  }
+
+  String? _normalizeRuleName(String? value) {
+    final normalized = value?.trim() ?? '';
+    return normalized.isEmpty ? null : normalized;
+  }
+
+  String? _normalizeCharsetName(String? value) {
+    final normalized = value?.trim().toLowerCase() ?? '';
+    if (normalized.isEmpty) {
+      return null;
+    }
+    return switch (normalized) {
+      'utf8' => 'utf-8',
+      'utf-8' => 'utf-8',
+      'utf16' => 'utf-16',
+      'utf-16' => 'utf-16',
+      'utf16be' => 'utf-16be',
+      'utf-16be' => 'utf-16be',
+      'utf16le' => 'utf-16le',
+      'utf-16le' => 'utf-16le',
+      'gb2312' => 'gbk',
+      'gbk' => 'gbk',
+      'gb18030' => 'gb18030',
+      'latin1' => 'latin1',
+      'iso-8859-1' => 'latin1',
+      _ => normalized,
+    };
+  }
+
+  String? _tryDecodeByCharset(List<int> bytes, String charsetName) {
+    try {
+      switch (charsetName) {
+        case 'utf-8':
+          return utf8.decode(bytes, allowMalformed: false);
+        case 'latin1':
+          return latin1.decode(bytes, allowInvalid: true);
+        default:
+          final encoding = Charset.getByName(charsetName);
+          if (encoding == null) {
+            return null;
+          }
+          return encoding.decode(bytes);
+      }
+    } on FormatException {
+      return null;
+    } on ArgumentError {
+      return null;
+    }
+  }
+
+  int _encodedLength(String text, String charsetName) {
+    switch (charsetName) {
+      case 'utf-8':
+        return utf8.encode(text).length;
+      case 'utf-16':
+      case 'utf-16be':
+      case 'utf-16le':
+        return text.codeUnits.length * 2;
+      case 'latin1':
+        return latin1.encode(text).length;
+      default:
+        final encoding = Charset.getByName(charsetName);
+        if (encoding == null) {
+          return utf8.encode(text).length;
+        }
+        return encoding.encode(text).length;
+    }
+  }
+}
+
+class _DecodedBookText {
+  const _DecodedBookText({
+    required this.text,
+    required this.charsetName,
+    required this.bomLength,
+  });
+
+  final String text;
+  final String charsetName;
+  final int bomLength;
+}
+
+class _BomInfo {
+  const _BomInfo({required this.length, required this.charsetName});
+
+  final int length;
+  final String? charsetName;
+}
+
+class _ResolvedTxtTocRule {
+  const _ResolvedTxtTocRule({
+    required this.ruleName,
+    required this.pattern,
+    required this.compiled,
+  });
+
+  final String? ruleName;
+  final String pattern;
+  final RegExp compiled;
 }

@@ -1408,6 +1408,17 @@ class $StoredLocalBooksTable extends StoredLocalBooks
     type: DriftSqlType.string,
     requiredDuringInsert: false,
   );
+  static const VerificationMeta _charsetMeta = const VerificationMeta(
+    'charset',
+  );
+  @override
+  late final GeneratedColumn<String> charset = GeneratedColumn<String>(
+    'charset',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
   static const VerificationMeta _fileSizeMeta = const VerificationMeta(
     'fileSize',
   );
@@ -1439,6 +1450,39 @@ class $StoredLocalBooksTable extends StoredLocalBooks
     type: DriftSqlType.string,
     requiredDuringInsert: false,
   );
+  static const VerificationMeta _sourceFileSizeMeta = const VerificationMeta(
+    'sourceFileSize',
+  );
+  @override
+  late final GeneratedColumn<int> sourceFileSize = GeneratedColumn<int>(
+    'source_file_size',
+    aliasedName,
+    true,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _sourceFileLastModifiedMsMeta =
+      const VerificationMeta('sourceFileLastModifiedMs');
+  @override
+  late final GeneratedColumn<int> sourceFileLastModifiedMs =
+      GeneratedColumn<int>(
+        'source_file_last_modified_ms',
+        aliasedName,
+        true,
+        type: DriftSqlType.int,
+        requiredDuringInsert: false,
+      );
+  static const VerificationMeta _storageFileLastModifiedMsMeta =
+      const VerificationMeta('storageFileLastModifiedMs');
+  @override
+  late final GeneratedColumn<int> storageFileLastModifiedMs =
+      GeneratedColumn<int>(
+        'storage_file_last_modified_ms',
+        aliasedName,
+        true,
+        type: DriftSqlType.int,
+        requiredDuringInsert: false,
+      );
   static const VerificationMeta _indexStatusMeta = const VerificationMeta(
     'indexStatus',
   );
@@ -1543,9 +1587,13 @@ class $StoredLocalBooksTable extends StoredLocalBooks
     format,
     storagePath,
     sourcePath,
+    charset,
     fileSize,
     author,
     coverPath,
+    sourceFileSize,
+    sourceFileLastModifiedMs,
+    storageFileLastModifiedMs,
     indexStatus,
     chapterCount,
     lastError,
@@ -1605,6 +1653,12 @@ class $StoredLocalBooksTable extends StoredLocalBooks
         sourcePath.isAcceptableOrUnknown(data['source_path']!, _sourcePathMeta),
       );
     }
+    if (data.containsKey('charset')) {
+      context.handle(
+        _charsetMeta,
+        charset.isAcceptableOrUnknown(data['charset']!, _charsetMeta),
+      );
+    }
     if (data.containsKey('file_size')) {
       context.handle(
         _fileSizeMeta,
@@ -1623,6 +1677,33 @@ class $StoredLocalBooksTable extends StoredLocalBooks
       context.handle(
         _coverPathMeta,
         coverPath.isAcceptableOrUnknown(data['cover_path']!, _coverPathMeta),
+      );
+    }
+    if (data.containsKey('source_file_size')) {
+      context.handle(
+        _sourceFileSizeMeta,
+        sourceFileSize.isAcceptableOrUnknown(
+          data['source_file_size']!,
+          _sourceFileSizeMeta,
+        ),
+      );
+    }
+    if (data.containsKey('source_file_last_modified_ms')) {
+      context.handle(
+        _sourceFileLastModifiedMsMeta,
+        sourceFileLastModifiedMs.isAcceptableOrUnknown(
+          data['source_file_last_modified_ms']!,
+          _sourceFileLastModifiedMsMeta,
+        ),
+      );
+    }
+    if (data.containsKey('storage_file_last_modified_ms')) {
+      context.handle(
+        _storageFileLastModifiedMsMeta,
+        storageFileLastModifiedMs.isAcceptableOrUnknown(
+          data['storage_file_last_modified_ms']!,
+          _storageFileLastModifiedMsMeta,
+        ),
       );
     }
     if (data.containsKey('index_status')) {
@@ -1721,6 +1802,10 @@ class $StoredLocalBooksTable extends StoredLocalBooks
         DriftSqlType.string,
         data['${effectivePrefix}source_path'],
       ),
+      charset: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}charset'],
+      ),
       fileSize:
           attachedDatabase.typeMapping.read(
             DriftSqlType.int,
@@ -1733,6 +1818,18 @@ class $StoredLocalBooksTable extends StoredLocalBooks
       coverPath: attachedDatabase.typeMapping.read(
         DriftSqlType.string,
         data['${effectivePrefix}cover_path'],
+      ),
+      sourceFileSize: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}source_file_size'],
+      ),
+      sourceFileLastModifiedMs: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}source_file_last_modified_ms'],
+      ),
+      storageFileLastModifiedMs: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}storage_file_last_modified_ms'],
       ),
       indexStatus:
           attachedDatabase.typeMapping.read(
@@ -1786,9 +1883,13 @@ class StoredLocalBook extends DataClass implements Insertable<StoredLocalBook> {
   final String format;
   final String storagePath;
   final String? sourcePath;
+  final String? charset;
   final int fileSize;
   final String? author;
   final String? coverPath;
+  final int? sourceFileSize;
+  final int? sourceFileLastModifiedMs;
+  final int? storageFileLastModifiedMs;
   final String indexStatus;
   final int chapterCount;
   final String? lastError;
@@ -1803,9 +1904,13 @@ class StoredLocalBook extends DataClass implements Insertable<StoredLocalBook> {
     required this.format,
     required this.storagePath,
     this.sourcePath,
+    this.charset,
     required this.fileSize,
     this.author,
     this.coverPath,
+    this.sourceFileSize,
+    this.sourceFileLastModifiedMs,
+    this.storageFileLastModifiedMs,
     required this.indexStatus,
     required this.chapterCount,
     this.lastError,
@@ -1825,12 +1930,28 @@ class StoredLocalBook extends DataClass implements Insertable<StoredLocalBook> {
     if (!nullToAbsent || sourcePath != null) {
       map['source_path'] = Variable<String>(sourcePath);
     }
+    if (!nullToAbsent || charset != null) {
+      map['charset'] = Variable<String>(charset);
+    }
     map['file_size'] = Variable<int>(fileSize);
     if (!nullToAbsent || author != null) {
       map['author'] = Variable<String>(author);
     }
     if (!nullToAbsent || coverPath != null) {
       map['cover_path'] = Variable<String>(coverPath);
+    }
+    if (!nullToAbsent || sourceFileSize != null) {
+      map['source_file_size'] = Variable<int>(sourceFileSize);
+    }
+    if (!nullToAbsent || sourceFileLastModifiedMs != null) {
+      map['source_file_last_modified_ms'] = Variable<int>(
+        sourceFileLastModifiedMs,
+      );
+    }
+    if (!nullToAbsent || storageFileLastModifiedMs != null) {
+      map['storage_file_last_modified_ms'] = Variable<int>(
+        storageFileLastModifiedMs,
+      );
     }
     map['index_status'] = Variable<String>(indexStatus);
     map['chapter_count'] = Variable<int>(chapterCount);
@@ -1859,6 +1980,10 @@ class StoredLocalBook extends DataClass implements Insertable<StoredLocalBook> {
           sourcePath == null && nullToAbsent
               ? const Value.absent()
               : Value(sourcePath),
+      charset:
+          charset == null && nullToAbsent
+              ? const Value.absent()
+              : Value(charset),
       fileSize: Value(fileSize),
       author:
           author == null && nullToAbsent ? const Value.absent() : Value(author),
@@ -1866,6 +1991,18 @@ class StoredLocalBook extends DataClass implements Insertable<StoredLocalBook> {
           coverPath == null && nullToAbsent
               ? const Value.absent()
               : Value(coverPath),
+      sourceFileSize:
+          sourceFileSize == null && nullToAbsent
+              ? const Value.absent()
+              : Value(sourceFileSize),
+      sourceFileLastModifiedMs:
+          sourceFileLastModifiedMs == null && nullToAbsent
+              ? const Value.absent()
+              : Value(sourceFileLastModifiedMs),
+      storageFileLastModifiedMs:
+          storageFileLastModifiedMs == null && nullToAbsent
+              ? const Value.absent()
+              : Value(storageFileLastModifiedMs),
       indexStatus: Value(indexStatus),
       chapterCount: Value(chapterCount),
       lastError:
@@ -1897,9 +2034,17 @@ class StoredLocalBook extends DataClass implements Insertable<StoredLocalBook> {
       format: serializer.fromJson<String>(json['format']),
       storagePath: serializer.fromJson<String>(json['storagePath']),
       sourcePath: serializer.fromJson<String?>(json['sourcePath']),
+      charset: serializer.fromJson<String?>(json['charset']),
       fileSize: serializer.fromJson<int>(json['fileSize']),
       author: serializer.fromJson<String?>(json['author']),
       coverPath: serializer.fromJson<String?>(json['coverPath']),
+      sourceFileSize: serializer.fromJson<int?>(json['sourceFileSize']),
+      sourceFileLastModifiedMs: serializer.fromJson<int?>(
+        json['sourceFileLastModifiedMs'],
+      ),
+      storageFileLastModifiedMs: serializer.fromJson<int?>(
+        json['storageFileLastModifiedMs'],
+      ),
       indexStatus: serializer.fromJson<String>(json['indexStatus']),
       chapterCount: serializer.fromJson<int>(json['chapterCount']),
       lastError: serializer.fromJson<String?>(json['lastError']),
@@ -1921,9 +2066,17 @@ class StoredLocalBook extends DataClass implements Insertable<StoredLocalBook> {
       'format': serializer.toJson<String>(format),
       'storagePath': serializer.toJson<String>(storagePath),
       'sourcePath': serializer.toJson<String?>(sourcePath),
+      'charset': serializer.toJson<String?>(charset),
       'fileSize': serializer.toJson<int>(fileSize),
       'author': serializer.toJson<String?>(author),
       'coverPath': serializer.toJson<String?>(coverPath),
+      'sourceFileSize': serializer.toJson<int?>(sourceFileSize),
+      'sourceFileLastModifiedMs': serializer.toJson<int?>(
+        sourceFileLastModifiedMs,
+      ),
+      'storageFileLastModifiedMs': serializer.toJson<int?>(
+        storageFileLastModifiedMs,
+      ),
       'indexStatus': serializer.toJson<String>(indexStatus),
       'chapterCount': serializer.toJson<int>(chapterCount),
       'lastError': serializer.toJson<String?>(lastError),
@@ -1941,9 +2094,13 @@ class StoredLocalBook extends DataClass implements Insertable<StoredLocalBook> {
     String? format,
     String? storagePath,
     Value<String?> sourcePath = const Value.absent(),
+    Value<String?> charset = const Value.absent(),
     int? fileSize,
     Value<String?> author = const Value.absent(),
     Value<String?> coverPath = const Value.absent(),
+    Value<int?> sourceFileSize = const Value.absent(),
+    Value<int?> sourceFileLastModifiedMs = const Value.absent(),
+    Value<int?> storageFileLastModifiedMs = const Value.absent(),
     String? indexStatus,
     int? chapterCount,
     Value<String?> lastError = const Value.absent(),
@@ -1958,9 +2115,20 @@ class StoredLocalBook extends DataClass implements Insertable<StoredLocalBook> {
     format: format ?? this.format,
     storagePath: storagePath ?? this.storagePath,
     sourcePath: sourcePath.present ? sourcePath.value : this.sourcePath,
+    charset: charset.present ? charset.value : this.charset,
     fileSize: fileSize ?? this.fileSize,
     author: author.present ? author.value : this.author,
     coverPath: coverPath.present ? coverPath.value : this.coverPath,
+    sourceFileSize:
+        sourceFileSize.present ? sourceFileSize.value : this.sourceFileSize,
+    sourceFileLastModifiedMs:
+        sourceFileLastModifiedMs.present
+            ? sourceFileLastModifiedMs.value
+            : this.sourceFileLastModifiedMs,
+    storageFileLastModifiedMs:
+        storageFileLastModifiedMs.present
+            ? storageFileLastModifiedMs.value
+            : this.storageFileLastModifiedMs,
     indexStatus: indexStatus ?? this.indexStatus,
     chapterCount: chapterCount ?? this.chapterCount,
     lastError: lastError.present ? lastError.value : this.lastError,
@@ -1983,9 +2151,22 @@ class StoredLocalBook extends DataClass implements Insertable<StoredLocalBook> {
           data.storagePath.present ? data.storagePath.value : this.storagePath,
       sourcePath:
           data.sourcePath.present ? data.sourcePath.value : this.sourcePath,
+      charset: data.charset.present ? data.charset.value : this.charset,
       fileSize: data.fileSize.present ? data.fileSize.value : this.fileSize,
       author: data.author.present ? data.author.value : this.author,
       coverPath: data.coverPath.present ? data.coverPath.value : this.coverPath,
+      sourceFileSize:
+          data.sourceFileSize.present
+              ? data.sourceFileSize.value
+              : this.sourceFileSize,
+      sourceFileLastModifiedMs:
+          data.sourceFileLastModifiedMs.present
+              ? data.sourceFileLastModifiedMs.value
+              : this.sourceFileLastModifiedMs,
+      storageFileLastModifiedMs:
+          data.storageFileLastModifiedMs.present
+              ? data.storageFileLastModifiedMs.value
+              : this.storageFileLastModifiedMs,
       indexStatus:
           data.indexStatus.present ? data.indexStatus.value : this.indexStatus,
       chapterCount:
@@ -2018,9 +2199,13 @@ class StoredLocalBook extends DataClass implements Insertable<StoredLocalBook> {
           ..write('format: $format, ')
           ..write('storagePath: $storagePath, ')
           ..write('sourcePath: $sourcePath, ')
+          ..write('charset: $charset, ')
           ..write('fileSize: $fileSize, ')
           ..write('author: $author, ')
           ..write('coverPath: $coverPath, ')
+          ..write('sourceFileSize: $sourceFileSize, ')
+          ..write('sourceFileLastModifiedMs: $sourceFileLastModifiedMs, ')
+          ..write('storageFileLastModifiedMs: $storageFileLastModifiedMs, ')
           ..write('indexStatus: $indexStatus, ')
           ..write('chapterCount: $chapterCount, ')
           ..write('lastError: $lastError, ')
@@ -2040,9 +2225,13 @@ class StoredLocalBook extends DataClass implements Insertable<StoredLocalBook> {
     format,
     storagePath,
     sourcePath,
+    charset,
     fileSize,
     author,
     coverPath,
+    sourceFileSize,
+    sourceFileLastModifiedMs,
+    storageFileLastModifiedMs,
     indexStatus,
     chapterCount,
     lastError,
@@ -2061,9 +2250,13 @@ class StoredLocalBook extends DataClass implements Insertable<StoredLocalBook> {
           other.format == this.format &&
           other.storagePath == this.storagePath &&
           other.sourcePath == this.sourcePath &&
+          other.charset == this.charset &&
           other.fileSize == this.fileSize &&
           other.author == this.author &&
           other.coverPath == this.coverPath &&
+          other.sourceFileSize == this.sourceFileSize &&
+          other.sourceFileLastModifiedMs == this.sourceFileLastModifiedMs &&
+          other.storageFileLastModifiedMs == this.storageFileLastModifiedMs &&
           other.indexStatus == this.indexStatus &&
           other.chapterCount == this.chapterCount &&
           other.lastError == this.lastError &&
@@ -2080,9 +2273,13 @@ class StoredLocalBooksCompanion extends UpdateCompanion<StoredLocalBook> {
   final Value<String> format;
   final Value<String> storagePath;
   final Value<String?> sourcePath;
+  final Value<String?> charset;
   final Value<int> fileSize;
   final Value<String?> author;
   final Value<String?> coverPath;
+  final Value<int?> sourceFileSize;
+  final Value<int?> sourceFileLastModifiedMs;
+  final Value<int?> storageFileLastModifiedMs;
   final Value<String> indexStatus;
   final Value<int> chapterCount;
   final Value<String?> lastError;
@@ -2098,9 +2295,13 @@ class StoredLocalBooksCompanion extends UpdateCompanion<StoredLocalBook> {
     this.format = const Value.absent(),
     this.storagePath = const Value.absent(),
     this.sourcePath = const Value.absent(),
+    this.charset = const Value.absent(),
     this.fileSize = const Value.absent(),
     this.author = const Value.absent(),
     this.coverPath = const Value.absent(),
+    this.sourceFileSize = const Value.absent(),
+    this.sourceFileLastModifiedMs = const Value.absent(),
+    this.storageFileLastModifiedMs = const Value.absent(),
     this.indexStatus = const Value.absent(),
     this.chapterCount = const Value.absent(),
     this.lastError = const Value.absent(),
@@ -2117,9 +2318,13 @@ class StoredLocalBooksCompanion extends UpdateCompanion<StoredLocalBook> {
     required String format,
     required String storagePath,
     this.sourcePath = const Value.absent(),
+    this.charset = const Value.absent(),
     required int fileSize,
     this.author = const Value.absent(),
     this.coverPath = const Value.absent(),
+    this.sourceFileSize = const Value.absent(),
+    this.sourceFileLastModifiedMs = const Value.absent(),
+    this.storageFileLastModifiedMs = const Value.absent(),
     this.indexStatus = const Value.absent(),
     this.chapterCount = const Value.absent(),
     this.lastError = const Value.absent(),
@@ -2140,9 +2345,13 @@ class StoredLocalBooksCompanion extends UpdateCompanion<StoredLocalBook> {
     Expression<String>? format,
     Expression<String>? storagePath,
     Expression<String>? sourcePath,
+    Expression<String>? charset,
     Expression<int>? fileSize,
     Expression<String>? author,
     Expression<String>? coverPath,
+    Expression<int>? sourceFileSize,
+    Expression<int>? sourceFileLastModifiedMs,
+    Expression<int>? storageFileLastModifiedMs,
     Expression<String>? indexStatus,
     Expression<int>? chapterCount,
     Expression<String>? lastError,
@@ -2159,9 +2368,15 @@ class StoredLocalBooksCompanion extends UpdateCompanion<StoredLocalBook> {
       if (format != null) 'format': format,
       if (storagePath != null) 'storage_path': storagePath,
       if (sourcePath != null) 'source_path': sourcePath,
+      if (charset != null) 'charset': charset,
       if (fileSize != null) 'file_size': fileSize,
       if (author != null) 'author': author,
       if (coverPath != null) 'cover_path': coverPath,
+      if (sourceFileSize != null) 'source_file_size': sourceFileSize,
+      if (sourceFileLastModifiedMs != null)
+        'source_file_last_modified_ms': sourceFileLastModifiedMs,
+      if (storageFileLastModifiedMs != null)
+        'storage_file_last_modified_ms': storageFileLastModifiedMs,
       if (indexStatus != null) 'index_status': indexStatus,
       if (chapterCount != null) 'chapter_count': chapterCount,
       if (lastError != null) 'last_error': lastError,
@@ -2180,9 +2395,13 @@ class StoredLocalBooksCompanion extends UpdateCompanion<StoredLocalBook> {
     Value<String>? format,
     Value<String>? storagePath,
     Value<String?>? sourcePath,
+    Value<String?>? charset,
     Value<int>? fileSize,
     Value<String?>? author,
     Value<String?>? coverPath,
+    Value<int?>? sourceFileSize,
+    Value<int?>? sourceFileLastModifiedMs,
+    Value<int?>? storageFileLastModifiedMs,
     Value<String>? indexStatus,
     Value<int>? chapterCount,
     Value<String?>? lastError,
@@ -2199,9 +2418,15 @@ class StoredLocalBooksCompanion extends UpdateCompanion<StoredLocalBook> {
       format: format ?? this.format,
       storagePath: storagePath ?? this.storagePath,
       sourcePath: sourcePath ?? this.sourcePath,
+      charset: charset ?? this.charset,
       fileSize: fileSize ?? this.fileSize,
       author: author ?? this.author,
       coverPath: coverPath ?? this.coverPath,
+      sourceFileSize: sourceFileSize ?? this.sourceFileSize,
+      sourceFileLastModifiedMs:
+          sourceFileLastModifiedMs ?? this.sourceFileLastModifiedMs,
+      storageFileLastModifiedMs:
+          storageFileLastModifiedMs ?? this.storageFileLastModifiedMs,
       indexStatus: indexStatus ?? this.indexStatus,
       chapterCount: chapterCount ?? this.chapterCount,
       lastError: lastError ?? this.lastError,
@@ -2232,6 +2457,9 @@ class StoredLocalBooksCompanion extends UpdateCompanion<StoredLocalBook> {
     if (sourcePath.present) {
       map['source_path'] = Variable<String>(sourcePath.value);
     }
+    if (charset.present) {
+      map['charset'] = Variable<String>(charset.value);
+    }
     if (fileSize.present) {
       map['file_size'] = Variable<int>(fileSize.value);
     }
@@ -2240,6 +2468,19 @@ class StoredLocalBooksCompanion extends UpdateCompanion<StoredLocalBook> {
     }
     if (coverPath.present) {
       map['cover_path'] = Variable<String>(coverPath.value);
+    }
+    if (sourceFileSize.present) {
+      map['source_file_size'] = Variable<int>(sourceFileSize.value);
+    }
+    if (sourceFileLastModifiedMs.present) {
+      map['source_file_last_modified_ms'] = Variable<int>(
+        sourceFileLastModifiedMs.value,
+      );
+    }
+    if (storageFileLastModifiedMs.present) {
+      map['storage_file_last_modified_ms'] = Variable<int>(
+        storageFileLastModifiedMs.value,
+      );
     }
     if (indexStatus.present) {
       map['index_status'] = Variable<String>(indexStatus.value);
@@ -2279,9 +2520,13 @@ class StoredLocalBooksCompanion extends UpdateCompanion<StoredLocalBook> {
           ..write('format: $format, ')
           ..write('storagePath: $storagePath, ')
           ..write('sourcePath: $sourcePath, ')
+          ..write('charset: $charset, ')
           ..write('fileSize: $fileSize, ')
           ..write('author: $author, ')
           ..write('coverPath: $coverPath, ')
+          ..write('sourceFileSize: $sourceFileSize, ')
+          ..write('sourceFileLastModifiedMs: $sourceFileLastModifiedMs, ')
+          ..write('storageFileLastModifiedMs: $storageFileLastModifiedMs, ')
           ..write('indexStatus: $indexStatus, ')
           ..write('chapterCount: $chapterCount, ')
           ..write('lastError: $lastError, ')
@@ -7892,9 +8137,13 @@ typedef $$StoredLocalBooksTableCreateCompanionBuilder =
       required String format,
       required String storagePath,
       Value<String?> sourcePath,
+      Value<String?> charset,
       required int fileSize,
       Value<String?> author,
       Value<String?> coverPath,
+      Value<int?> sourceFileSize,
+      Value<int?> sourceFileLastModifiedMs,
+      Value<int?> storageFileLastModifiedMs,
       Value<String> indexStatus,
       Value<int> chapterCount,
       Value<String?> lastError,
@@ -7912,9 +8161,13 @@ typedef $$StoredLocalBooksTableUpdateCompanionBuilder =
       Value<String> format,
       Value<String> storagePath,
       Value<String?> sourcePath,
+      Value<String?> charset,
       Value<int> fileSize,
       Value<String?> author,
       Value<String?> coverPath,
+      Value<int?> sourceFileSize,
+      Value<int?> sourceFileLastModifiedMs,
+      Value<int?> storageFileLastModifiedMs,
       Value<String> indexStatus,
       Value<int> chapterCount,
       Value<String?> lastError,
@@ -7960,6 +8213,11 @@ class $$StoredLocalBooksTableFilterComposer
     builder: (column) => ColumnFilters(column),
   );
 
+  ColumnFilters<String> get charset => $composableBuilder(
+    column: $table.charset,
+    builder: (column) => ColumnFilters(column),
+  );
+
   ColumnFilters<int> get fileSize => $composableBuilder(
     column: $table.fileSize,
     builder: (column) => ColumnFilters(column),
@@ -7972,6 +8230,21 @@ class $$StoredLocalBooksTableFilterComposer
 
   ColumnFilters<String> get coverPath => $composableBuilder(
     column: $table.coverPath,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get sourceFileSize => $composableBuilder(
+    column: $table.sourceFileSize,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get sourceFileLastModifiedMs => $composableBuilder(
+    column: $table.sourceFileLastModifiedMs,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get storageFileLastModifiedMs => $composableBuilder(
+    column: $table.storageFileLastModifiedMs,
     builder: (column) => ColumnFilters(column),
   );
 
@@ -8050,6 +8323,11 @@ class $$StoredLocalBooksTableOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
+  ColumnOrderings<String> get charset => $composableBuilder(
+    column: $table.charset,
+    builder: (column) => ColumnOrderings(column),
+  );
+
   ColumnOrderings<int> get fileSize => $composableBuilder(
     column: $table.fileSize,
     builder: (column) => ColumnOrderings(column),
@@ -8062,6 +8340,21 @@ class $$StoredLocalBooksTableOrderingComposer
 
   ColumnOrderings<String> get coverPath => $composableBuilder(
     column: $table.coverPath,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get sourceFileSize => $composableBuilder(
+    column: $table.sourceFileSize,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get sourceFileLastModifiedMs => $composableBuilder(
+    column: $table.sourceFileLastModifiedMs,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get storageFileLastModifiedMs => $composableBuilder(
+    column: $table.storageFileLastModifiedMs,
     builder: (column) => ColumnOrderings(column),
   );
 
@@ -8134,6 +8427,9 @@ class $$StoredLocalBooksTableAnnotationComposer
     builder: (column) => column,
   );
 
+  GeneratedColumn<String> get charset =>
+      $composableBuilder(column: $table.charset, builder: (column) => column);
+
   GeneratedColumn<int> get fileSize =>
       $composableBuilder(column: $table.fileSize, builder: (column) => column);
 
@@ -8142,6 +8438,21 @@ class $$StoredLocalBooksTableAnnotationComposer
 
   GeneratedColumn<String> get coverPath =>
       $composableBuilder(column: $table.coverPath, builder: (column) => column);
+
+  GeneratedColumn<int> get sourceFileSize => $composableBuilder(
+    column: $table.sourceFileSize,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<int> get sourceFileLastModifiedMs => $composableBuilder(
+    column: $table.sourceFileLastModifiedMs,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<int> get storageFileLastModifiedMs => $composableBuilder(
+    column: $table.storageFileLastModifiedMs,
+    builder: (column) => column,
+  );
 
   GeneratedColumn<String> get indexStatus => $composableBuilder(
     column: $table.indexStatus,
@@ -8227,9 +8538,13 @@ class $$StoredLocalBooksTableTableManager
                 Value<String> format = const Value.absent(),
                 Value<String> storagePath = const Value.absent(),
                 Value<String?> sourcePath = const Value.absent(),
+                Value<String?> charset = const Value.absent(),
                 Value<int> fileSize = const Value.absent(),
                 Value<String?> author = const Value.absent(),
                 Value<String?> coverPath = const Value.absent(),
+                Value<int?> sourceFileSize = const Value.absent(),
+                Value<int?> sourceFileLastModifiedMs = const Value.absent(),
+                Value<int?> storageFileLastModifiedMs = const Value.absent(),
                 Value<String> indexStatus = const Value.absent(),
                 Value<int> chapterCount = const Value.absent(),
                 Value<String?> lastError = const Value.absent(),
@@ -8245,9 +8560,13 @@ class $$StoredLocalBooksTableTableManager
                 format: format,
                 storagePath: storagePath,
                 sourcePath: sourcePath,
+                charset: charset,
                 fileSize: fileSize,
                 author: author,
                 coverPath: coverPath,
+                sourceFileSize: sourceFileSize,
+                sourceFileLastModifiedMs: sourceFileLastModifiedMs,
+                storageFileLastModifiedMs: storageFileLastModifiedMs,
                 indexStatus: indexStatus,
                 chapterCount: chapterCount,
                 lastError: lastError,
@@ -8265,9 +8584,13 @@ class $$StoredLocalBooksTableTableManager
                 required String format,
                 required String storagePath,
                 Value<String?> sourcePath = const Value.absent(),
+                Value<String?> charset = const Value.absent(),
                 required int fileSize,
                 Value<String?> author = const Value.absent(),
                 Value<String?> coverPath = const Value.absent(),
+                Value<int?> sourceFileSize = const Value.absent(),
+                Value<int?> sourceFileLastModifiedMs = const Value.absent(),
+                Value<int?> storageFileLastModifiedMs = const Value.absent(),
                 Value<String> indexStatus = const Value.absent(),
                 Value<int> chapterCount = const Value.absent(),
                 Value<String?> lastError = const Value.absent(),
@@ -8283,9 +8606,13 @@ class $$StoredLocalBooksTableTableManager
                 format: format,
                 storagePath: storagePath,
                 sourcePath: sourcePath,
+                charset: charset,
                 fileSize: fileSize,
                 author: author,
                 coverPath: coverPath,
+                sourceFileSize: sourceFileSize,
+                sourceFileLastModifiedMs: sourceFileLastModifiedMs,
+                storageFileLastModifiedMs: storageFileLastModifiedMs,
                 indexStatus: indexStatus,
                 chapterCount: chapterCount,
                 lastError: lastError,

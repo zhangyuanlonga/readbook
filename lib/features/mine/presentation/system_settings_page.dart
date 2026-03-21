@@ -61,12 +61,22 @@ class SystemSettingsPage extends StatelessWidget {
                                   ),
                                   SizedBox(width: 12),
                                   Expanded(
-                                    child: _SearchAggregationSettingPanel(),
+                                    child:
+                                        _LocalTxtSplitLongChapterSettingPanel(),
                                   ),
                                 ],
                               ),
                               SizedBox(height: 12),
-                              _ReadingRecordSettingPanel(),
+                              Row(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Expanded(
+                                    child: _SearchAggregationSettingPanel(),
+                                  ),
+                                  SizedBox(width: 12),
+                                  Expanded(child: _ReadingRecordSettingPanel()),
+                                ],
+                              ),
                             ],
                           );
                         }
@@ -74,6 +84,8 @@ class SystemSettingsPage extends StatelessWidget {
                         return const Column(
                           children: [
                             _ReaderAutoSwitchSettingPanel(),
+                            SizedBox(height: 12),
+                            _LocalTxtSplitLongChapterSettingPanel(),
                             SizedBox(height: 12),
                             _SearchAggregationSettingPanel(),
                             SizedBox(height: 12),
@@ -577,6 +589,106 @@ class _SearchAggregationSettingPanelState
       description: '按书名与作者合并多源命中结果。',
       stateDescription: _enabled ? '多源命中时自动合并展示。' : '按原始结果逐条展示。',
       stateLabel: _enabled ? '聚合中' : '原始列表',
+      value: _enabled,
+      isLoading: _isLoading,
+      isSaving: _isSaving,
+      onChanged: _isLoading || _isSaving ? null : _toggle,
+      errorText: _errorText,
+    );
+  }
+}
+
+class _LocalTxtSplitLongChapterSettingPanel extends StatefulWidget {
+  const _LocalTxtSplitLongChapterSettingPanel();
+
+  @override
+  State<_LocalTxtSplitLongChapterSettingPanel> createState() =>
+      _LocalTxtSplitLongChapterSettingPanelState();
+}
+
+class _LocalTxtSplitLongChapterSettingPanelState
+    extends State<_LocalTxtSplitLongChapterSettingPanel> {
+  final ReaderSystemSettingsService _systemSettingsService =
+      ReaderSystemSettingsService();
+
+  bool _isLoading = true;
+  bool _isSaving = false;
+  bool _enabled = true;
+  String? _errorText;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadSetting();
+  }
+
+  Future<void> _loadSetting() async {
+    try {
+      final enabled =
+          await _systemSettingsService.loadLocalTxtSplitLongChapterEnabled();
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _enabled = enabled;
+        _errorText = null;
+      });
+    } catch (_) {
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _errorText = '读取长章节拆分开关失败，请稍后重试。';
+      });
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+        });
+      }
+    }
+  }
+
+  Future<void> _toggle(bool enabled) async {
+    if (_isSaving) {
+      return;
+    }
+
+    final previous = _enabled;
+    setState(() {
+      _enabled = enabled;
+      _isSaving = true;
+      _errorText = null;
+    });
+
+    try {
+      await _systemSettingsService.saveLocalTxtSplitLongChapterEnabled(enabled);
+    } catch (_) {
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _enabled = previous;
+        _errorText = '保存长章节拆分开关失败，请稍后重试。';
+      });
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isSaving = false;
+        });
+      }
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return _buildCompactSettingCard(
+      context,
+      icon: Icons.splitscreen_outlined,
+      title: '本地 TXT 长章节拆分',
+      description: 'TXT 目录规则分章时，超长章节自动拆成多章。',
+      stateDescription: _enabled ? '新导入或重新索引时默认开启。' : '保留原大章节，不自动拆分。',
+      stateLabel: _enabled ? '默认开启' : '默认关闭',
       value: _enabled,
       isLoading: _isLoading,
       isSaving: _isSaving,
