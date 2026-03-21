@@ -2,6 +2,12 @@
 
 更新时间：2026-03-21
 
+补充说明：
+
+- 本文主体是阅读记录专题的分析与路线图。
+- 2026-03-21 的执行版补充见：
+  - [`docs/reading_record_execution_update_2026-03-21.md`](/Users/zhangyuanlong/storage/FlutterProject/flutterreadbook/docs/reading_record_execution_update_2026-03-21.md)
+
 ## 背景
 
 本文基于两部分现状整理：

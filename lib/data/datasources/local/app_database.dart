@@ -1700,6 +1700,25 @@ class AppDatabase extends _$AppDatabase {
     return row == null ? null : _mapRowToReadingRecordDay(row);
   }
 
+  Future<List<ReadingRecordDay>> listReadingRecordDaysByBookId(
+    String bookId,
+  ) async {
+    final normalizedBookId = bookId.trim();
+    if (normalizedBookId.isEmpty) {
+      return const <ReadingRecordDay>[];
+    }
+
+    final rows =
+        await (select(storedReadingRecordDays)
+              ..where((table) => table.bookId.equals(normalizedBookId))
+              ..orderBy([
+                (table) => OrderingTerm.desc(table.dateKey),
+                (table) => OrderingTerm.desc(table.lastReadAt),
+              ]))
+            .get();
+    return rows.map(_mapRowToReadingRecordDay).toList(growable: false);
+  }
+
   Future<void> insertReadingRecordSession(ReadingRecordSession session) async {
     await into(storedReadingRecordSessions).insert(
       StoredReadingRecordSessionsCompanion.insert(
@@ -1771,6 +1790,34 @@ class AppDatabase extends _$AppDatabase {
     final rows =
         await (select(storedReadingRecordSessions)
               ..where((table) => table.bookId.equals(normalizedBookId))
+              ..orderBy([(table) => OrderingTerm.asc(table.startAt)]))
+            .get();
+    return rows.map(_mapRowToReadingRecordSession).toList(growable: false);
+  }
+
+  Future<List<ReadingRecordSession>> listReadingRecordSessionsByBookIdAndDate({
+    required String bookId,
+    required String dateKey,
+  }) async {
+    final normalizedBookId = bookId.trim();
+    final normalizedDateKey = dateKey.trim();
+    if (normalizedBookId.isEmpty || normalizedDateKey.isEmpty) {
+      return const <ReadingRecordSession>[];
+    }
+
+    final startAt = DateTime.tryParse(normalizedDateKey);
+    if (startAt == null) {
+      return const <ReadingRecordSession>[];
+    }
+    final endAt = startAt.add(const Duration(days: 1));
+
+    final rows =
+        await (select(storedReadingRecordSessions)
+              ..where((table) => table.bookId.equals(normalizedBookId))
+              ..where((table) {
+                return table.endAt.isBiggerOrEqualValue(startAt) &
+                    table.endAt.isSmallerThanValue(endAt);
+              })
               ..orderBy([(table) => OrderingTerm.asc(table.startAt)]))
             .get();
     return rows.map(_mapRowToReadingRecordSession).toList(growable: false);

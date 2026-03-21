@@ -23,5 +23,21 @@ void main() {
           await service.loadAutoSwitchSourceOnFailureEnabled();
       expect(disabledValue, isFalse);
     });
+
+    test('watches and persists read record toggle value', () async {
+      final service = ReaderSystemSettingsService();
+      final values = <bool>[];
+      final subscription = service.watchReadRecordEnabled().listen(values.add);
+      addTearDown(subscription.cancel);
+
+      await Future<void>.delayed(Duration.zero);
+      expect(values, <bool>[true]);
+
+      await service.saveReadRecordEnabled(false);
+      await Future<void>.delayed(Duration.zero);
+
+      expect(values, <bool>[true, false]);
+      expect(await service.loadReadRecordEnabled(), isFalse);
+    });
   });
 }

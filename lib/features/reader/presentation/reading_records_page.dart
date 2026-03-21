@@ -18,32 +18,52 @@ enum _ReadingRecordsView { latest, daily, timeline }
 
 enum _HeatmapMetricMode { duration, count }
 
+enum _HeatmapRangeMode { threeMonths, sixMonths, oneYear, all }
+
 class ReadingRecordsPage extends StatefulWidget {
-  const ReadingRecordsPage({super.key});
+  const ReadingRecordsPage({
+    super.key,
+    ReadingRecordService? readingRecordService,
+    ReaderPreferencesService? preferencesService,
+    ReaderSystemSettingsService? readerSystemSettingsService,
+  }) : _readingRecordService = readingRecordService,
+       _preferencesService = preferencesService,
+       _readerSystemSettingsService = readerSystemSettingsService;
+
+  final ReadingRecordService? _readingRecordService;
+  final ReaderPreferencesService? _preferencesService;
+  final ReaderSystemSettingsService? _readerSystemSettingsService;
 
   @override
   State<ReadingRecordsPage> createState() => _ReadingRecordsPageState();
 }
 
 class _ReadingRecordsPageState extends State<ReadingRecordsPage> {
-  final ReadingRecordService _readingRecordService = ReadingRecordService();
-  final ReaderPreferencesService _preferencesService =
-      ReaderPreferencesService();
-  final ReaderSystemSettingsService _readerSystemSettingsService =
-      ReaderSystemSettingsService();
   final TextEditingController _searchController = TextEditingController();
-  late final Future<bool> _readRecordEnabledFuture;
+  late final ReadingRecordService _readingRecordService;
+  late final ReaderPreferencesService _preferencesService;
+  late final ReaderSystemSettingsService _readerSystemSettingsService;
+  late final Stream<bool> _readRecordEnabledStream;
 
   String _searchKeyword = '';
   String? _selectedDateKey;
   _ReadingRecordsView _view = _ReadingRecordsView.latest;
   _HeatmapMetricMode _heatmapMode = _HeatmapMetricMode.duration;
+  _HeatmapRangeMode _heatmapRangeMode = _HeatmapRangeMode.oneYear;
+  bool _skipDeleteConfirmForThisPage = false;
+  bool _showSearch = false;
 
   @override
   void initState() {
     super.initState();
-    _readRecordEnabledFuture =
-        _readerSystemSettingsService.loadReadRecordEnabled();
+    _readingRecordService =
+        widget._readingRecordService ?? ReadingRecordService();
+    _preferencesService =
+        widget._preferencesService ?? ReaderPreferencesService();
+    _readerSystemSettingsService =
+        widget._readerSystemSettingsService ?? ReaderSystemSettingsService();
+    _readRecordEnabledStream =
+        _readerSystemSettingsService.watchReadRecordEnabled();
     _searchController.addListener(_handleSearchChanged);
   }
 
@@ -62,6 +82,24 @@ class _ReadingRecordsPageState extends State<ReadingRecordsPage> {
     setState(() {
       _searchKeyword = keyword;
     });
+  }
+
+  void _cycleView() {
+    setState(() {
+      _view = switch (_view) {
+        _ReadingRecordsView.latest => _ReadingRecordsView.daily,
+        _ReadingRecordsView.daily => _ReadingRecordsView.timeline,
+        _ReadingRecordsView.timeline => _ReadingRecordsView.latest,
+      };
+    });
+  }
+
+  IconData get _viewCycleIcon {
+    return switch (_view) {
+      _ReadingRecordsView.latest => Icons.calendar_today_rounded,
+      _ReadingRecordsView.daily => Icons.timeline_rounded,
+      _ReadingRecordsView.timeline => Icons.schedule_rounded,
+    };
   }
 
   Future<void> _openRecord(ReadingRecord record) async {
@@ -159,26 +197,79 @@ class _ReadingRecordsPageState extends State<ReadingRecordsPage> {
     required String title,
     required String message,
   }) async {
-    final result = await showDialog<bool>(
+    if (_skipDeleteConfirmForThisPage) {
+      return true;
+    }
+
+    final result = await showDialog<_DeleteConfirmResult>(
       context: context,
       builder: (dialogContext) {
-        return AlertDialog(
-          title: Text(title),
-          content: Text(message),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.of(dialogContext).pop(false),
-              child: const Text('取消'),
-            ),
-            FilledButton(
-              onPressed: () => Navigator.of(dialogContext).pop(true),
-              child: const Text('删除'),
-            ),
-          ],
+        var skipConfirm = false;
+        return StatefulBuilder(
+          builder: (context, setDialogState) {
+            return AlertDialog(
+              title: Text(title),
+              content: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(message),
+                  const SizedBox(height: 12),
+                  InkWell(
+                    borderRadius: BorderRadius.circular(10),
+                    onTap:
+                        () => setDialogState(() {
+                          skipConfirm = !skipConfirm;
+                        }),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Checkbox(
+                          value: skipConfirm,
+                          onChanged:
+                              (value) => setDialogState(() {
+                                skipConfirm = value ?? false;
+                              }),
+                        ),
+                        const Flexible(child: Text('本次不再确认')),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+              actions: [
+                TextButton(
+                  onPressed:
+                      () => Navigator.of(
+                        dialogContext,
+                      ).pop(const _DeleteConfirmResult(confirmed: false)),
+                  child: const Text('取消'),
+                ),
+                FilledButton(
+                  onPressed:
+                      () => Navigator.of(dialogContext).pop(
+                        _DeleteConfirmResult(
+                          confirmed: true,
+                          skipConfirmForThisPage: skipConfirm,
+                        ),
+                      ),
+                  child: const Text('删除'),
+                ),
+              ],
+            );
+          },
         );
       },
     );
-    return result ?? false;
+    if (!mounted || result == null) {
+      return false;
+    }
+    if (result.skipConfirmForThisPage) {
+      setState(() {
+        _skipDeleteConfirmForThisPage = true;
+      });
+    }
+    return result.confirmed;
   }
 
   void _showMessage(String message) {
@@ -190,21 +281,88 @@ class _ReadingRecordsPageState extends State<ReadingRecordsPage> {
     ).showSnackBar(SnackBar(content: Text(message)));
   }
 
-  Future<void> _mergeRecord(ReadingRecord target) async {
-    final candidates = await _readingRecordService.getMergeCandidates(target);
+  Future<void> _showUndoSnackBar({
+    required String message,
+    required Future<void> Function() onUndo,
+  }) async {
     if (!mounted) {
       return;
     }
+    final messenger = ScaffoldMessenger.of(context);
+    messenger.hideCurrentSnackBar();
+    final controller = messenger.showSnackBar(
+      SnackBar(
+        content: Text(message),
+        action: SnackBarAction(label: '撤销', onPressed: () {}),
+      ),
+    );
+    final reason = await controller.closed;
+    if (!mounted || reason != SnackBarClosedReason.action) {
+      return;
+    }
+    await onUndo();
+    if (!mounted) {
+      return;
+    }
+    messenger.showSnackBar(const SnackBar(content: Text('已撤销。')));
+  }
+
+  Future<void> _openHeatmapSheet() async {
+    await showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      showDragHandle: true,
+      builder: (sheetContext) {
+        final bottomInset = MediaQuery.viewInsetsOf(sheetContext).bottom;
+        return SafeArea(
+          child: StatefulBuilder(
+            builder: (context, sheetSetState) {
+              return Padding(
+                padding: EdgeInsets.fromLTRB(12, 0, 12, 12 + bottomInset),
+                child: StreamBuilder<List<ReadingRecordDay>>(
+                  stream: _readingRecordService.watchDailyRecords(
+                    query: _searchKeyword,
+                  ),
+                  builder: (context, snapshot) {
+                    final dailyRecords =
+                        snapshot.data ?? const <ReadingRecordDay>[];
+                    return SingleChildScrollView(
+                      child: _buildHeatmapCard(
+                        dailyRecords,
+                        inSheet: true,
+                        sheetSetState: sheetSetState,
+                      ),
+                    );
+                  },
+                ),
+              );
+            },
+          ),
+        );
+      },
+    );
+  }
+
+  Future<void> _mergeRecord(ReadingRecord target) async {
+    final result = await _readingRecordService.getMergeCandidates(target);
+    if (!mounted) {
+      return;
+    }
+    final candidates = result.candidates;
     if (candidates.isEmpty) {
-      _showMessage('没有可合并的同标题阅读记录。');
+      final blockedSuffix =
+          result.blockedCount > 0
+              ? ' 已自动过滤 ${result.blockedCount} 条作者不一致的同标题记录。'
+              : '';
+      _showMessage('没有可合并的低风险阅读记录。$blockedSuffix');
       return;
     }
 
-    final selected = await showDialog<List<ReadingRecord>>(
+    final selected = await showDialog<List<ReadingRecordMergeCandidate>>(
       context: context,
       builder: (dialogContext) {
         final selectedBookIds = <String>{
-          for (final item in candidates) item.bookId,
+          for (final item in candidates) item.record.bookId,
         };
         return StatefulBuilder(
           builder: (context, setDialogState) {
@@ -217,6 +375,16 @@ class _ReadingRecordsPageState extends State<ReadingRecordsPage> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text('将以下《${target.bookTitle}》记录合并到当前条目：'),
+                    if (result.blockedCount > 0) ...[
+                      const SizedBox(height: 8),
+                      Text(
+                        '已自动过滤 ${result.blockedCount} 条作者明显不一致的同标题记录，避免误并。',
+                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                          color: Theme.of(context).colorScheme.onSurfaceVariant,
+                          height: 1.35,
+                        ),
+                      ),
+                    ],
                     const SizedBox(height: 12),
                     SizedBox(
                       height: 320,
@@ -226,24 +394,40 @@ class _ReadingRecordsPageState extends State<ReadingRecordsPage> {
                             for (final item in candidates)
                               CheckboxListTile(
                                 contentPadding: EdgeInsets.zero,
-                                value: selectedBookIds.contains(item.bookId),
+                                value: selectedBookIds.contains(
+                                  item.record.bookId,
+                                ),
                                 onChanged: (checked) {
                                   setDialogState(() {
                                     if (checked ?? false) {
-                                      selectedBookIds.add(item.bookId);
+                                      selectedBookIds.add(item.record.bookId);
                                     } else {
-                                      selectedBookIds.remove(item.bookId);
+                                      selectedBookIds.remove(
+                                        item.record.bookId,
+                                      );
                                     }
                                   });
                                 },
-                                title: Text(
-                                  item.bookAuthor?.trim().isNotEmpty == true
-                                      ? item.bookAuthor!.trim()
-                                      : '未知作者',
+                                title: Row(
+                                  children: [
+                                    Expanded(
+                                      child: Text(
+                                        item.record.bookAuthor
+                                                    ?.trim()
+                                                    .isNotEmpty ==
+                                                true
+                                            ? item.record.bookAuthor!.trim()
+                                            : '未知作者',
+                                      ),
+                                    ),
+                                    const SizedBox(width: 8),
+                                    _buildMergeRiskChip(item.risk),
+                                  ],
                                 ),
                                 subtitle: Text(
-                                  '${_formatDuration(item.totalReadMillis)} · ${_formatDateTime(item.lastReadAt)}',
+                                  '${_formatDuration(item.record.totalReadMillis)} · ${_formatDateTime(item.record.lastReadAt)}\n${item.hint}',
                                 ),
+                                isThreeLine: true,
                                 controlAffinity:
                                     ListTileControlAffinity.leading,
                               ),
@@ -262,7 +446,10 @@ class _ReadingRecordsPageState extends State<ReadingRecordsPage> {
                 FilledButton(
                   onPressed: () {
                     final selectedItems = candidates
-                        .where((item) => selectedBookIds.contains(item.bookId))
+                        .where(
+                          (item) =>
+                              selectedBookIds.contains(item.record.bookId),
+                        )
                         .toList(growable: false);
                     Navigator.of(dialogContext).pop(selectedItems);
                   },
@@ -279,11 +466,71 @@ class _ReadingRecordsPageState extends State<ReadingRecordsPage> {
       return;
     }
 
-    await _readingRecordService.mergeRecords(target: target, sources: selected);
+    final reviewCandidates = selected
+        .where((item) => item.requiresExtraConfirmation)
+        .toList(growable: false);
+    if (reviewCandidates.isNotEmpty) {
+      final confirmed = await _confirmMergeRisk(
+        target: target,
+        reviewCandidates: reviewCandidates,
+      );
+      if (!mounted || !confirmed) {
+        return;
+      }
+    }
+
+    await _readingRecordService.mergeRecords(
+      target: target,
+      sources: selected.map((item) => item.record).toList(growable: false),
+    );
     if (!mounted) {
       return;
     }
     _showMessage('已合并 ${selected.length} 条阅读记录。');
+  }
+
+  Future<bool> _confirmMergeRisk({
+    required ReadingRecord target,
+    required List<ReadingRecordMergeCandidate> reviewCandidates,
+  }) async {
+    final result = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) {
+        return AlertDialog(
+          title: const Text('合并前确认'),
+          content: SizedBox(
+            width: 420,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text('以下候选需要你再确认一次，避免把同标题但不是同一本书的记录合并到《${target.bookTitle}》。'),
+                const SizedBox(height: 12),
+                for (final item in reviewCandidates)
+                  Padding(
+                    padding: const EdgeInsets.only(bottom: 10),
+                    child: Text(
+                      '• ${item.record.bookAuthor?.trim().isNotEmpty == true ? item.record.bookAuthor!.trim() : '未知作者'} · ${item.hint}',
+                      style: Theme.of(context).textTheme.bodySmall,
+                    ),
+                  ),
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(dialogContext).pop(false),
+              child: const Text('取消'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.of(dialogContext).pop(true),
+              child: const Text('继续合并'),
+            ),
+          ],
+        );
+      },
+    );
+    return result ?? false;
   }
 
   String get _viewLabel {
@@ -298,9 +545,51 @@ class _ReadingRecordsPageState extends State<ReadingRecordsPage> {
   Widget build(BuildContext context) {
     final horizontal = AppSpacing.pageHorizontal(context);
     final bottomSafe = MediaQuery.viewPaddingOf(context).bottom;
+    final theme = Theme.of(context);
 
     return Scaffold(
-      appBar: AppBar(title: const Text('阅读记录')),
+      appBar: AppBar(
+        title: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Text('阅读记录'),
+            Text(
+              _viewLabel,
+              style: theme.textTheme.labelMedium?.copyWith(
+                color: theme.colorScheme.onSurfaceVariant,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          IconButton(
+            tooltip: '切换视图',
+            onPressed: _cycleView,
+            icon: Icon(_viewCycleIcon),
+          ),
+          IconButton(
+            tooltip: '热力图',
+            onPressed: _openHeatmapSheet,
+            icon: const Icon(Icons.calendar_month_rounded),
+          ),
+          IconButton(
+            tooltip: _showSearch ? '收起搜索' : '搜索',
+            onPressed: () {
+              setState(() {
+                _showSearch = !_showSearch;
+                if (!_showSearch) {
+                  _searchController.clear();
+                }
+              });
+            },
+            icon: Icon(
+              _showSearch ? Icons.close_rounded : Icons.search_rounded,
+            ),
+          ),
+        ],
+      ),
       body: LayoutBuilder(
         builder: (context, _) {
           final maxWidth = AppLayout.pageContentMaxWidth(
@@ -353,9 +642,7 @@ class _ReadingRecordsPageState extends State<ReadingRecordsPage> {
                             ),
                             children: [
                               _buildControlsCard(),
-                              const SizedBox(height: 12),
-                              _buildHeatmapCard(dailyRecords),
-                              const SizedBox(height: 12),
+                              const SizedBox(height: 8),
                               _buildSummaryCard(
                                 latestRecords: latestRecords,
                                 filteredLatestRecords: filteredLatest,
@@ -385,138 +672,131 @@ class _ReadingRecordsPageState extends State<ReadingRecordsPage> {
   }
 
   Widget _buildControlsCard() {
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(12),
-        child: Column(
-          children: [
-            TextField(
-              controller: _searchController,
-              decoration: InputDecoration(
-                hintText: '搜索书名或作者',
-                prefixIcon: const Icon(Icons.search_rounded),
-                suffixIcon:
-                    _searchKeyword.isEmpty
-                        ? null
-                        : IconButton(
-                          tooltip: '清空',
-                          onPressed: _searchController.clear,
-                          icon: const Icon(Icons.close_rounded),
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        AnimatedSwitcher(
+          duration: const Duration(milliseconds: 180),
+          child:
+              !_showSearch
+                  ? const SizedBox.shrink()
+                  : Container(
+                    key: const ValueKey('reading_record_search'),
+                    margin: const EdgeInsets.only(bottom: 10),
+                    decoration: BoxDecoration(
+                      color: Theme.of(context).colorScheme.surface,
+                      borderRadius: BorderRadius.circular(18),
+                      border: Border.all(
+                        color: Theme.of(
+                          context,
+                        ).colorScheme.outlineVariant.withValues(alpha: 0.5),
+                      ),
+                    ),
+                    child: TextField(
+                      controller: _searchController,
+                      decoration: InputDecoration(
+                        hintText: '搜索书名或作者',
+                        prefixIcon: const Icon(Icons.search_rounded),
+                        suffixIcon:
+                            _searchKeyword.isEmpty
+                                ? null
+                                : IconButton(
+                                  tooltip: '清空',
+                                  onPressed: _searchController.clear,
+                                  icon: const Icon(Icons.close_rounded),
+                                ),
+                        border: InputBorder.none,
+                        contentPadding: const EdgeInsets.symmetric(
+                          horizontal: 16,
+                          vertical: 14,
                         ),
-                border: const OutlineInputBorder(),
-                isDense: true,
+                        isDense: true,
+                      ),
+                    ),
+                  ),
+        ),
+        Row(
+          children: [
+            _buildViewPill(icon: Icons.schedule_rounded, label: _viewLabel),
+            if (_searchKeyword.isNotEmpty) ...[
+              const SizedBox(width: 8),
+              _buildViewPill(
+                icon: Icons.search_rounded,
+                label: '搜索“$_searchKeyword”',
               ),
-            ),
-            const SizedBox(height: 12),
-            SegmentedButton<_ReadingRecordsView>(
-              segments: const [
-                ButtonSegment(
-                  value: _ReadingRecordsView.latest,
-                  icon: Icon(Icons.schedule_rounded),
-                  label: Text('最近阅读'),
+            ],
+          ],
+        ),
+        if (_selectedDateKey != null) ...[
+          const SizedBox(height: 8),
+          Row(
+            children: [
+              Expanded(
+                child: _buildViewPill(
+                  icon: Icons.event_available_rounded,
+                  label: '已按 $_selectedDateKey 过滤',
                 ),
-                ButtonSegment(
-                  value: _ReadingRecordsView.daily,
-                  icon: Icon(Icons.calendar_today_rounded),
-                  label: Text('按天汇总'),
-                ),
-                ButtonSegment(
-                  value: _ReadingRecordsView.timeline,
-                  icon: Icon(Icons.timeline_rounded),
-                  label: Text('时间线'),
-                ),
-              ],
-              selected: <_ReadingRecordsView>{_view},
-              onSelectionChanged: (selection) {
-                if (selection.isEmpty) {
-                  return;
-                }
-                setState(() {
-                  _view = selection.first;
-                });
-              },
-            ),
-            if (_selectedDateKey != null) ...[
-              const SizedBox(height: 12),
-              Row(
+              ),
+              const SizedBox(width: 8),
+              TextButton(
+                onPressed: () {
+                  setState(() {
+                    _selectedDateKey = null;
+                  });
+                },
+                child: const Text('清除'),
+              ),
+            ],
+          ),
+        ],
+        const SizedBox(height: 8),
+        StreamBuilder<bool>(
+          stream: _readRecordEnabledStream,
+          initialData: true,
+          builder: (context, snapshot) {
+            final enabled = snapshot.data ?? true;
+            if (enabled) {
+              return const SizedBox.shrink();
+            }
+            final colorScheme = Theme.of(context).colorScheme;
+            return Container(
+              width: double.infinity,
+              padding: const EdgeInsets.fromLTRB(12, 10, 12, 10),
+              decoration: BoxDecoration(
+                color: colorScheme.tertiaryContainer,
+                borderRadius: BorderRadius.circular(14),
+              ),
+              child: Row(
                 children: [
                   Icon(
-                    Icons.event_available_rounded,
+                    Icons.pause_circle_outline_rounded,
                     size: 18,
-                    color: Theme.of(context).colorScheme.primary,
+                    color: colorScheme.onTertiaryContainer,
                   ),
                   const SizedBox(width: 8),
                   Expanded(
                     child: Text(
-                      '已按 $_selectedDateKey 过滤',
-                      style: Theme.of(context).textTheme.bodyMedium,
+                      '阅读记录已关闭，当前不会继续新增记录。',
+                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                        color: colorScheme.onTertiaryContainer,
+                        height: 1.35,
+                      ),
                     ),
-                  ),
-                  TextButton(
-                    onPressed: () {
-                      setState(() {
-                        _selectedDateKey = null;
-                      });
-                    },
-                    child: const Text('清除'),
                   ),
                 ],
               ),
-            ],
-            const SizedBox(height: 12),
-            FutureBuilder<bool>(
-              future: _readRecordEnabledFuture,
-              builder: (context, snapshot) {
-                final enabled = snapshot.data ?? true;
-                final colorScheme = Theme.of(context).colorScheme;
-                final backgroundColor =
-                    enabled
-                        ? colorScheme.surfaceContainerHighest
-                        : colorScheme.tertiaryContainer;
-                final foregroundColor =
-                    enabled
-                        ? colorScheme.onSurface
-                        : colorScheme.onTertiaryContainer;
-
-                return Container(
-                  width: double.infinity,
-                  padding: const EdgeInsets.fromLTRB(12, 10, 12, 10),
-                  decoration: BoxDecoration(
-                    color: backgroundColor,
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  child: Row(
-                    children: [
-                      Icon(
-                        enabled
-                            ? Icons.history_toggle_off_rounded
-                            : Icons.pause_circle_outline_rounded,
-                        size: 18,
-                        color:
-                            enabled
-                                ? colorScheme.primary
-                                : colorScheme.onTertiaryContainer,
-                      ),
-                      const SizedBox(width: 8),
-                      Expanded(
-                        child: Text(
-                          enabled ? '阅读记录正在自动累计。' : '阅读记录已关闭，当前不会继续新增记录。',
-                          style: Theme.of(context).textTheme.bodySmall
-                              ?.copyWith(color: foregroundColor, height: 1.35),
-                        ),
-                      ),
-                    ],
-                  ),
-                );
-              },
-            ),
-          ],
+            );
+          },
         ),
-      ),
+      ],
     );
   }
 
-  Widget _buildHeatmapCard(List<ReadingRecordDay> allDays) {
+  Widget _buildHeatmapCard(
+    List<ReadingRecordDay> allDays, {
+    bool inSheet = false,
+    StateSetter? sheetSetState,
+  }) {
     if (allDays.isEmpty) {
       return _buildEmptyCard('还没有可以展示的阅读热力图。');
     }
@@ -529,14 +809,13 @@ class _ReadingRecordsPageState extends State<ReadingRecordsPage> {
           today,
           (current, item) => item.isBefore(current) ? item : current,
         );
-    final startDate = _startOfWeek(
-      today.subtract(
-        Duration(
-          days: math.max(0, today.difference(firstDate).inDays).clamp(0, 364),
-        ),
-      ),
+    final startDate = _resolveHeatmapStartDate(
+      firstDate: firstDate,
+      today: today,
     );
+    final showEarlierDataIndicator = _heatmapRangeMode != _HeatmapRangeMode.all;
     final weeks = _buildHeatmapWeeks(startDate: startDate, endDate: today);
+    final monthLabels = _buildHeatmapMonthLabels(weeks);
     final maxValue = statsByDate.values.fold<int>(
       0,
       (current, item) => math.max(
@@ -547,124 +826,287 @@ class _ReadingRecordsPageState extends State<ReadingRecordsPage> {
       ),
     );
 
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              '阅读热力图',
-              style: Theme.of(
-                context,
-              ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700),
-            ),
-            const SizedBox(height: 6),
-            Text(
-              '点击某一天可过滤下方列表。',
-              style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                color: Theme.of(context).colorScheme.onSurfaceVariant,
-              ),
-            ),
-            const SizedBox(height: 6),
-            Text(
-              '${_dateKeyFor(startDate)} 至 ${_dateKeyFor(today)}',
-              style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                color: Theme.of(context).colorScheme.onSurfaceVariant,
-              ),
-            ),
-            const SizedBox(height: 12),
-            Wrap(
-              spacing: 8,
-              runSpacing: 8,
-              children: [
-                ChoiceChip(
-                  label: const Text('按时长'),
-                  selected: _heatmapMode == _HeatmapMetricMode.duration,
-                  onSelected: (_) {
-                    setState(() {
-                      _heatmapMode = _HeatmapMetricMode.duration;
-                    });
-                  },
-                ),
-                ChoiceChip(
-                  label: const Text('按本数'),
-                  selected: _heatmapMode == _HeatmapMetricMode.count,
-                  onSelected: (_) {
-                    setState(() {
-                      _heatmapMode = _HeatmapMetricMode.count;
-                    });
-                  },
-                ),
-              ],
-            ),
-            const SizedBox(height: 14),
-            SingleChildScrollView(
-              scrollDirection: Axis.horizontal,
-              child: Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Padding(
-                    padding: const EdgeInsets.only(right: 8),
-                    child: Column(
-                      children: const [
-                        _WeekdayLabel('一'),
-                        SizedBox(height: 4),
-                        _WeekdayLabel('二'),
-                        SizedBox(height: 4),
-                        _WeekdayLabel('三'),
-                        SizedBox(height: 4),
-                        _WeekdayLabel('四'),
-                        SizedBox(height: 4),
-                        _WeekdayLabel('五'),
-                        SizedBox(height: 4),
-                        _WeekdayLabel('六'),
-                        SizedBox(height: 4),
-                        _WeekdayLabel('日'),
-                      ],
-                    ),
+    final content = Padding(
+      padding: const EdgeInsets.all(16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Expanded(
+                child: Text(
+                  '阅读热力图',
+                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                    fontWeight: FontWeight.w700,
                   ),
-                  for (final week in weeks)
-                    Padding(
-                      padding: const EdgeInsets.only(right: 4),
-                      child: Column(
-                        children: [
-                          for (final day in week)
-                            Padding(
-                              padding: const EdgeInsets.only(bottom: 4),
-                              child: _buildHeatmapCell(
-                                day: day,
-                                stats: statsByDate[_dateKeyFor(day)],
-                                maxValue: maxValue,
-                              ),
-                            ),
-                        ],
-                      ),
-                    ),
+                ),
+              ),
+              if (_selectedDateKey != null)
+                TextButton(
+                  onPressed: () {
+                    setState(() {
+                      _selectedDateKey = null;
+                    });
+                    sheetSetState?.call(() {});
+                  },
+                  child: const Text('清除'),
+                ),
+            ],
+          ),
+          const SizedBox(height: 6),
+          Text(
+            '颜色越深，表示当天阅读更多。',
+            style: Theme.of(context).textTheme.bodySmall?.copyWith(
+              color: Theme.of(context).colorScheme.onSurfaceVariant,
+            ),
+          ),
+          const SizedBox(height: 6),
+          Text(
+            '${_dateKeyFor(startDate)} 至 ${_dateKeyFor(today)}',
+            style: Theme.of(context).textTheme.labelSmall?.copyWith(
+              color: Theme.of(context).colorScheme.onSurfaceVariant,
+            ),
+          ),
+          const SizedBox(height: 12),
+          Row(
+            children: [
+              _buildHeatmapMenu<_HeatmapMetricMode>(
+                icon: Icons.auto_graph_rounded,
+                label: _heatmapModeLabel,
+                items: const [
+                  PopupMenuItem(
+                    value: _HeatmapMetricMode.duration,
+                    child: Text('按时长'),
+                  ),
+                  PopupMenuItem(
+                    value: _HeatmapMetricMode.count,
+                    child: Text('按次数'),
+                  ),
                 ],
+                onSelected: (value) {
+                  setState(() {
+                    _heatmapMode = value;
+                  });
+                  sheetSetState?.call(() {});
+                },
+              ),
+              const SizedBox(width: 8),
+              _buildHeatmapMenu<_HeatmapRangeMode>(
+                icon: Icons.date_range_rounded,
+                label: _heatmapRangeLabel,
+                items: const [
+                  PopupMenuItem(
+                    value: _HeatmapRangeMode.threeMonths,
+                    child: Text('近 3 个月'),
+                  ),
+                  PopupMenuItem(
+                    value: _HeatmapRangeMode.sixMonths,
+                    child: Text('近 6 个月'),
+                  ),
+                  PopupMenuItem(
+                    value: _HeatmapRangeMode.oneYear,
+                    child: Text('近 1 年'),
+                  ),
+                  PopupMenuItem(
+                    value: _HeatmapRangeMode.all,
+                    child: Text('全部'),
+                  ),
+                ],
+                onSelected: (value) {
+                  setState(() {
+                    _heatmapRangeMode = value;
+                  });
+                  sheetSetState?.call(() {});
+                },
+              ),
+            ],
+          ),
+          const SizedBox(height: 14),
+          SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Padding(
+                  padding: const EdgeInsets.only(bottom: 8),
+                  child: Row(
+                    children: [
+                      SizedBox(
+                        width: _heatmapLeadingAreaWidth(
+                          showEarlierDataIndicator,
+                        ),
+                      ),
+                      for (final label in monthLabels)
+                        Padding(
+                          padding: const EdgeInsets.only(right: 4),
+                          child: SizedBox(
+                            width: 28,
+                            child: Text(
+                              label,
+                              style: Theme.of(
+                                context,
+                              ).textTheme.labelSmall?.copyWith(
+                                color:
+                                    Theme.of(
+                                      context,
+                                    ).colorScheme.onSurfaceVariant,
+                                fontWeight: FontWeight.w600,
+                              ),
+                              maxLines: 1,
+                              softWrap: false,
+                              overflow: TextOverflow.clip,
+                            ),
+                          ),
+                        ),
+                    ],
+                  ),
+                ),
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Padding(
+                      padding: const EdgeInsets.only(right: 12),
+                      child: SizedBox(
+                        width: 18,
+                        child: Column(
+                          children: const [
+                            _WeekdayLabel('一'),
+                            SizedBox(height: 4),
+                            _WeekdayLabel(''),
+                            SizedBox(height: 4),
+                            _WeekdayLabel('三'),
+                            SizedBox(height: 4),
+                            _WeekdayLabel(''),
+                            SizedBox(height: 4),
+                            _WeekdayLabel('五'),
+                            SizedBox(height: 4),
+                            _WeekdayLabel(''),
+                            SizedBox(height: 4),
+                            _WeekdayLabel('日'),
+                          ],
+                        ),
+                      ),
+                    ),
+                    if (showEarlierDataIndicator) ...[
+                      _buildEarlierDataPlaceholderColumn(),
+                      const SizedBox(width: 8),
+                      _buildEarlierDataHint(),
+                      const SizedBox(width: 12),
+                    ],
+                    for (final week in weeks)
+                      Padding(
+                        padding: const EdgeInsets.only(right: 4),
+                        child: Column(
+                          children: [
+                            for (final day in week)
+                              Padding(
+                                padding: const EdgeInsets.only(bottom: 4),
+                                child: _buildHeatmapCell(
+                                  day: day,
+                                  stats: statsByDate[_dateKeyFor(day)],
+                                  maxValue: maxValue,
+                                  sheetSetState: sheetSetState,
+                                ),
+                              ),
+                          ],
+                        ),
+                      ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 12),
+          Row(
+            children: [
+              Text('少', style: Theme.of(context).textTheme.labelSmall),
+              const SizedBox(width: 8),
+              for (final opacity in const [0.15, 0.35, 0.6, 0.9])
+                Padding(
+                  padding: const EdgeInsets.only(right: 4),
+                  child: DecoratedBox(
+                    decoration: BoxDecoration(
+                      color: Theme.of(
+                        context,
+                      ).colorScheme.primary.withValues(alpha: opacity),
+                      borderRadius: BorderRadius.circular(4),
+                    ),
+                    child: const SizedBox(width: 12, height: 12),
+                  ),
+                ),
+              const SizedBox(width: 4),
+              Text('多', style: Theme.of(context).textTheme.labelSmall),
+            ],
+          ),
+          const SizedBox(height: 10),
+          Text(
+            '点击某一天可筛选下方阅读记录。',
+            style: Theme.of(context).textTheme.bodySmall?.copyWith(
+              color: Theme.of(context).colorScheme.onSurfaceVariant,
+            ),
+          ),
+        ],
+      ),
+    );
+
+    if (inSheet) {
+      return content;
+    }
+    return Card(child: content);
+  }
+
+  String get _heatmapModeLabel {
+    return switch (_heatmapMode) {
+      _HeatmapMetricMode.duration => '按时长',
+      _HeatmapMetricMode.count => '按次数',
+    };
+  }
+
+  String get _heatmapRangeLabel {
+    return switch (_heatmapRangeMode) {
+      _HeatmapRangeMode.threeMonths => '近 3 个月',
+      _HeatmapRangeMode.sixMonths => '近 6 个月',
+      _HeatmapRangeMode.oneYear => '近 1 年',
+      _HeatmapRangeMode.all => '全部',
+    };
+  }
+
+  Widget _buildHeatmapMenu<T>({
+    required IconData icon,
+    required String label,
+    required List<PopupMenuEntry<T>> items,
+    required ValueChanged<T> onSelected,
+  }) {
+    final colorScheme = Theme.of(context).colorScheme;
+    return PopupMenuButton<T>(
+      itemBuilder: (context) => items,
+      onSelected: onSelected,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
+        decoration: BoxDecoration(
+          color: colorScheme.surface,
+          borderRadius: BorderRadius.circular(999),
+          border: Border.all(
+            color: colorScheme.outlineVariant.withValues(alpha: 0.32),
+          ),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(icon, size: 16, color: colorScheme.primary),
+            const SizedBox(width: 6),
+            Text(
+              label,
+              style: Theme.of(context).textTheme.labelMedium?.copyWith(
+                color: colorScheme.onSurfaceVariant,
+                fontWeight: FontWeight.w600,
               ),
             ),
-            const SizedBox(height: 12),
-            Row(
-              children: [
-                Text('少', style: Theme.of(context).textTheme.labelSmall),
-                const SizedBox(width: 8),
-                for (final opacity in const [0.15, 0.35, 0.6, 0.9])
-                  Padding(
-                    padding: const EdgeInsets.only(right: 4),
-                    child: DecoratedBox(
-                      decoration: BoxDecoration(
-                        color: Theme.of(
-                          context,
-                        ).colorScheme.primary.withValues(alpha: opacity),
-                        borderRadius: BorderRadius.circular(4),
-                      ),
-                      child: const SizedBox(width: 12, height: 12),
-                    ),
-                  ),
-                const SizedBox(width: 4),
-                Text('多', style: Theme.of(context).textTheme.labelSmall),
-              ],
+            const SizedBox(width: 4),
+            Icon(
+              Icons.keyboard_arrow_down_rounded,
+              size: 18,
+              color: colorScheme.onSurfaceVariant,
             ),
           ],
         ),
@@ -672,10 +1114,75 @@ class _ReadingRecordsPageState extends State<ReadingRecordsPage> {
     );
   }
 
+  Widget _buildEarlierDataPlaceholderColumn() {
+    return Column(
+      children: List<Widget>.generate(7, (index) {
+        return Padding(
+          padding: EdgeInsets.only(bottom: index == 6 ? 0 : 4),
+          child: Container(
+            width: 14,
+            height: 14,
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(5),
+              border: Border.all(
+                color: Theme.of(
+                  context,
+                ).colorScheme.outlineVariant.withValues(alpha: 0.3),
+              ),
+            ),
+          ),
+        );
+      }),
+    );
+  }
+
+  Widget _buildEarlierDataHint() {
+    final characters = '没有更早数据'.split('');
+    return SizedBox(
+      width: 22,
+      child: Padding(
+        padding: const EdgeInsets.only(top: 2, left: 2),
+        child: Column(
+          children: [
+            for (var index = 0; index < characters.length; index++) ...[
+              Text(
+                characters[index],
+                style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                  color: Theme.of(context).colorScheme.onSurfaceVariant,
+                  fontSize: 11,
+                ),
+              ),
+              if (index < characters.length - 1) const SizedBox(height: 2),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+
+  double _heatmapLeadingAreaWidth(bool showEarlierDataIndicator) {
+    const weekdayLabelWidth = 18.0;
+    const gapAfterWeekdayLabels = 12.0;
+    if (!showEarlierDataIndicator) {
+      return weekdayLabelWidth + gapAfterWeekdayLabels;
+    }
+    const placeholderWidth = 14.0;
+    const gapBetweenPlaceholderAndHint = 8.0;
+    const hintWidth = 22.0;
+    const gapBeforeHeatmap = 12.0;
+    return weekdayLabelWidth +
+        gapAfterWeekdayLabels +
+        placeholderWidth +
+        gapBetweenPlaceholderAndHint +
+        hintWidth +
+        gapBeforeHeatmap;
+  }
+
   Widget _buildHeatmapCell({
     required DateTime day,
     required _DailyHeatmapStat? stats,
     required int maxValue,
+    StateSetter? sheetSetState,
   }) {
     final dateKey = _dateKeyFor(day);
     final value =
@@ -705,6 +1212,7 @@ class _ReadingRecordsPageState extends State<ReadingRecordsPage> {
           setState(() {
             _selectedDateKey = _selectedDateKey == dateKey ? null : dateKey;
           });
+          sheetSetState?.call(() {});
         },
         child: DecoratedBox(
           decoration: BoxDecoration(
@@ -712,9 +1220,9 @@ class _ReadingRecordsPageState extends State<ReadingRecordsPage> {
             borderRadius: BorderRadius.circular(5),
             border:
                 isSelected
-                    ? Border.all(color: colorScheme.primary, width: 1.5)
+                    ? Border.all(color: colorScheme.onSurface, width: 2)
                     : Border.all(
-                      color: colorScheme.outlineVariant.withValues(alpha: 0.25),
+                      color: colorScheme.outlineVariant.withValues(alpha: 0.18),
                     ),
           ),
           child: const SizedBox(width: 14, height: 14),
@@ -926,6 +1434,78 @@ class _ReadingRecordsPageState extends State<ReadingRecordsPage> {
     );
   }
 
+  Widget _buildViewPill({required IconData icon, required String label}) {
+    final colorScheme = Theme.of(context).colorScheme;
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+      decoration: BoxDecoration(
+        color: colorScheme.surfaceContainerLow,
+        borderRadius: BorderRadius.circular(999),
+        border: Border.all(
+          color: colorScheme.outlineVariant.withValues(alpha: 0.35),
+        ),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 16, color: colorScheme.primary),
+          const SizedBox(width: 6),
+          Flexible(
+            child: Text(
+              label,
+              style: Theme.of(context).textTheme.labelMedium?.copyWith(
+                color: colorScheme.onSurfaceVariant,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildSectionHeading(String title, {String? subtitle}) {
+    return Padding(
+      padding: const EdgeInsets.only(top: 12, bottom: 8),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.end,
+        children: [
+          Text(
+            title,
+            style: Theme.of(
+              context,
+            ).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w700),
+          ),
+          if (subtitle != null) ...[
+            const SizedBox(width: 8),
+            Expanded(
+              child: Text(
+                subtitle,
+                style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                  color: Theme.of(context).colorScheme.onSurfaceVariant,
+                ),
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  Widget _buildRecordSurface(Widget child) {
+    final colorScheme = Theme.of(context).colorScheme;
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        color: colorScheme.surface,
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(
+          color: colorScheme.outlineVariant.withValues(alpha: 0.3),
+        ),
+      ),
+      child: child,
+    );
+  }
+
   Widget _buildActiveSection({
     required List<ReadingRecord> latestRecords,
     required List<ReadingRecordDay> dailyRecords,
@@ -951,6 +1531,7 @@ class _ReadingRecordsPageState extends State<ReadingRecordsPage> {
 
     return Column(
       children: [
+        _buildSectionHeading('最近阅读', subtitle: '按最后阅读时间排序'),
         for (final record in records) ...[
           Dismissible(
             key: ValueKey('reading_record_${record.bookId}'),
@@ -964,14 +1545,27 @@ class _ReadingRecordsPageState extends State<ReadingRecordsPage> {
               if (!confirmed) {
                 return false;
               }
-              await _readingRecordService.deleteRecord(record);
+              final snapshot = await _readingRecordService
+                  .deleteRecordWithSnapshot(record);
+              if (snapshot == null) {
+                return false;
+              }
               if (mounted) {
-                _showMessage('已删除《${record.bookTitle}》的阅读记录。');
+                unawaited(
+                  _showUndoSnackBar(
+                    message: '已删除《${record.bookTitle}》的阅读记录。',
+                    onUndo:
+                        () => _readingRecordService.restoreDeletedRecord(
+                          snapshot,
+                        ),
+                  ),
+                );
               }
               return true;
             },
-            child: Card(
-              child: ListTile(
+            child: _buildRecordSurface(
+              ListTile(
+                contentPadding: const EdgeInsets.fromLTRB(12, 8, 8, 8),
                 onTap: () => _openRecord(record),
                 leading: _buildCover(record.coverUrl),
                 title: Text(record.bookTitle),
@@ -1004,7 +1598,7 @@ class _ReadingRecordsPageState extends State<ReadingRecordsPage> {
               ),
             ),
           ),
-          const SizedBox(height: 8),
+          const SizedBox(height: 10),
         ],
       ],
     );
@@ -1029,6 +1623,7 @@ class _ReadingRecordsPageState extends State<ReadingRecordsPage> {
     }
 
     return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
       children: grouped.entries
           .map((entry) {
             final total = entry.value.fold<int>(
@@ -1036,118 +1631,118 @@ class _ReadingRecordsPageState extends State<ReadingRecordsPage> {
               (sum, item) => sum + item.readMillis,
             );
             return Padding(
-              padding: const EdgeInsets.only(bottom: 8),
-              child: Card(
-                child: Padding(
-                  padding: const EdgeInsets.all(12),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        '${entry.key} · ${_formatDuration(total)}',
-                        style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                          fontWeight: FontWeight.w700,
+              padding: const EdgeInsets.only(bottom: 10),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  _buildSectionHeading(
+                    entry.key,
+                    subtitle: _formatDuration(total),
+                  ),
+                  for (final item in entry.value)
+                    Padding(
+                      padding: const EdgeInsets.only(bottom: 10),
+                      child: Dismissible(
+                        key: ValueKey(
+                          'reading_day_${item.bookId}_${item.dateKey}',
                         ),
-                      ),
-                      const SizedBox(height: 8),
-                      for (final item in entry.value)
-                        Padding(
-                          padding: const EdgeInsets.only(bottom: 8),
-                          child: Dismissible(
-                            key: ValueKey(
-                              'reading_day_${item.bookId}_${item.dateKey}',
-                            ),
-                            direction: DismissDirection.endToStart,
-                            background: _buildDismissibleDeleteBackground(),
-                            confirmDismiss: (_) async {
-                              final confirmed = await _confirmDelete(
-                                title: '删除当日记录',
+                        direction: DismissDirection.endToStart,
+                        background: _buildDismissibleDeleteBackground(),
+                        confirmDismiss: (_) async {
+                          final confirmed = await _confirmDelete(
+                            title: '删除当日记录',
+                            message:
+                                '将删除《${item.bookTitle}》在 ${item.dateKey} 的阅读记录。',
+                          );
+                          if (!confirmed) {
+                            return false;
+                          }
+                          final snapshot = await _readingRecordService
+                              .deleteDayRecordWithSnapshot(item);
+                          if (snapshot == null) {
+                            return false;
+                          }
+                          if (mounted) {
+                            unawaited(
+                              _showUndoSnackBar(
                                 message:
-                                    '将删除《${item.bookTitle}》在 ${item.dateKey} 的阅读记录。',
-                              );
-                              if (!confirmed) {
-                                return false;
+                                    '已删除《${item.bookTitle}》在 ${item.dateKey} 的阅读记录。',
+                                onUndo:
+                                    () => _readingRecordService
+                                        .restoreDeletedDayRecord(snapshot),
+                              ),
+                            );
+                          }
+                          return true;
+                        },
+                        child: _buildRecordSurface(
+                          InkWell(
+                            borderRadius: BorderRadius.circular(18),
+                            onTap: () {
+                              final latest = latestByBookId[item.bookId];
+                              if (latest != null) {
+                                unawaited(_openRecord(latest));
+                                return;
                               }
-                              await _readingRecordService.deleteDayRecord(item);
-                              if (mounted) {
-                                _showMessage(
-                                  '已删除《${item.bookTitle}》在 ${item.dateKey} 的阅读记录。',
-                                );
-                              }
-                              return true;
+                              context.push('/book/${item.bookId}');
                             },
-                            child: InkWell(
-                              borderRadius: BorderRadius.circular(12),
-                              onTap: () {
-                                final latest = latestByBookId[item.bookId];
-                                if (latest != null) {
-                                  unawaited(_openRecord(latest));
-                                  return;
-                                }
-                                context.push('/book/${item.bookId}');
-                              },
-                              child: Padding(
-                                padding: const EdgeInsets.symmetric(
-                                  horizontal: 4,
-                                  vertical: 6,
-                                ),
-                                child: Row(
-                                  children: [
-                                    _buildCover(
-                                      item.coverUrl,
-                                      width: 42,
-                                      height: 58,
-                                    ),
-                                    const SizedBox(width: 10),
-                                    Expanded(
-                                      child: Column(
-                                        crossAxisAlignment:
-                                            CrossAxisAlignment.start,
-                                        children: [
-                                          Text(item.bookTitle),
-                                          Text(
-                                            item.bookAuthor
-                                                        ?.trim()
-                                                        .isNotEmpty ==
-                                                    true
-                                                ? item.bookAuthor!.trim()
-                                                : '未知作者',
-                                            style:
+                            child: Padding(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 12,
+                                vertical: 10,
+                              ),
+                              child: Row(
+                                children: [
+                                  _buildCover(
+                                    item.coverUrl,
+                                    width: 42,
+                                    height: 58,
+                                  ),
+                                  const SizedBox(width: 10),
+                                  Expanded(
+                                    child: Column(
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.start,
+                                      children: [
+                                        Text(item.bookTitle),
+                                        Text(
+                                          item.bookAuthor?.trim().isNotEmpty ==
+                                                  true
+                                              ? item.bookAuthor!.trim()
+                                              : '未知作者',
+                                          style:
+                                              Theme.of(
+                                                context,
+                                              ).textTheme.bodySmall,
+                                        ),
+                                        Text(
+                                          '阅读字数 ${_formatReadChars(item.readChars)}',
+                                          style: Theme.of(
+                                            context,
+                                          ).textTheme.labelSmall?.copyWith(
+                                            color:
                                                 Theme.of(
                                                   context,
-                                                ).textTheme.bodySmall,
+                                                ).colorScheme.onSurfaceVariant,
                                           ),
-                                          Text(
-                                            '阅读字数 ${_formatReadChars(item.readChars)}',
-                                            style: Theme.of(
-                                              context,
-                                            ).textTheme.labelSmall?.copyWith(
-                                              color:
-                                                  Theme.of(context)
-                                                      .colorScheme
-                                                      .onSurfaceVariant,
-                                            ),
-                                          ),
-                                        ],
-                                      ),
+                                        ),
+                                      ],
                                     ),
-                                    const SizedBox(width: 8),
-                                    Text(
-                                      _formatDuration(item.readMillis),
-                                      style:
-                                          Theme.of(
-                                            context,
-                                          ).textTheme.labelMedium,
-                                    ),
-                                  ],
-                                ),
+                                  ),
+                                  const SizedBox(width: 8),
+                                  Text(
+                                    _formatDuration(item.readMillis),
+                                    style:
+                                        Theme.of(context).textTheme.labelMedium,
+                                  ),
+                                ],
                               ),
                             ),
                           ),
                         ),
-                    ],
-                  ),
-                ),
+                      ),
+                    ),
+                ],
               ),
             );
           })
@@ -1169,6 +1764,7 @@ class _ReadingRecordsPageState extends State<ReadingRecordsPage> {
     }
 
     return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
       children: grouped.entries
           .map((entry) {
             final total = entry.value.fold<int>(
@@ -1176,142 +1772,143 @@ class _ReadingRecordsPageState extends State<ReadingRecordsPage> {
               (sum, item) => sum + item.durationMillis,
             );
             return Padding(
-              padding: const EdgeInsets.only(bottom: 8),
-              child: Card(
-                child: Padding(
-                  padding: const EdgeInsets.all(12),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        '${entry.key} · ${_formatDuration(total)}',
-                        style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                          fontWeight: FontWeight.w700,
-                        ),
-                      ),
-                      const SizedBox(height: 8),
-                      for (final session in entry.value)
-                        Padding(
-                          padding: const EdgeInsets.only(bottom: 8),
-                          child: Dismissible(
-                            key: ValueKey('reading_session_${session.id}'),
-                            direction: DismissDirection.endToStart,
-                            background: _buildDismissibleDeleteBackground(),
-                            confirmDismiss: (_) async {
-                              final confirmed = await _confirmDelete(
-                                title: '删除阅读会话',
-                                message:
-                                    '将删除《${session.bookTitle}》的一条阅读会话，并自动重算统计。',
-                              );
-                              if (!confirmed) {
-                                return false;
-                              }
-                              await _readingRecordService.deleteSession(
-                                session,
-                              );
-                              if (mounted) {
-                                _showMessage('已删除一条阅读会话。');
-                              }
-                              return true;
-                            },
-                            child: InkWell(
-                              borderRadius: BorderRadius.circular(12),
-                              onTap: () => _openSessionRecord(session),
-                              child: Padding(
-                                padding: const EdgeInsets.symmetric(
-                                  horizontal: 4,
-                                  vertical: 6,
-                                ),
-                                child: Row(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    _buildCover(
-                                      session.coverUrl,
-                                      width: 42,
-                                      height: 58,
-                                    ),
-                                    const SizedBox(width: 10),
-                                    Column(
+              padding: const EdgeInsets.only(bottom: 10),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  _buildSectionHeading(
+                    entry.key,
+                    subtitle: _formatDuration(total),
+                  ),
+                  for (final session in entry.value)
+                    Padding(
+                      padding: const EdgeInsets.only(bottom: 10),
+                      child: Dismissible(
+                        key: ValueKey('reading_session_${session.id}'),
+                        direction: DismissDirection.endToStart,
+                        background: _buildDismissibleDeleteBackground(),
+                        confirmDismiss: (_) async {
+                          final confirmed = await _confirmDelete(
+                            title: '删除阅读会话',
+                            message:
+                                '将删除《${session.bookTitle}》的一条阅读会话，并自动重算统计。',
+                          );
+                          if (!confirmed) {
+                            return false;
+                          }
+                          final snapshot = await _readingRecordService
+                              .deleteSessionWithSnapshot(session);
+                          if (snapshot == null) {
+                            return false;
+                          }
+                          if (mounted) {
+                            unawaited(
+                              _showUndoSnackBar(
+                                message: '已删除一条阅读会话。',
+                                onUndo:
+                                    () => _readingRecordService
+                                        .restoreDeletedSession(snapshot),
+                              ),
+                            );
+                          }
+                          return true;
+                        },
+                        child: _buildRecordSurface(
+                          InkWell(
+                            borderRadius: BorderRadius.circular(18),
+                            onTap: () => _openSessionRecord(session),
+                            child: Padding(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 12,
+                                vertical: 10,
+                              ),
+                              child: Row(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  _buildCover(
+                                    session.coverUrl,
+                                    width: 42,
+                                    height: 58,
+                                  ),
+                                  const SizedBox(width: 10),
+                                  Column(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
+                                    children: [
+                                      Text(
+                                        _formatTime(session.startAt),
+                                        style:
+                                            Theme.of(
+                                              context,
+                                            ).textTheme.labelLarge,
+                                      ),
+                                      Text(
+                                        _formatTime(session.endAt),
+                                        style:
+                                            Theme.of(
+                                              context,
+                                            ).textTheme.bodySmall,
+                                      ),
+                                    ],
+                                  ),
+                                  Expanded(
+                                    child: Column(
                                       crossAxisAlignment:
                                           CrossAxisAlignment.start,
                                       children: [
+                                        Text(session.bookTitle),
                                         Text(
-                                          _formatTime(session.startAt),
-                                          style:
-                                              Theme.of(
-                                                context,
-                                              ).textTheme.labelLarge,
-                                        ),
-                                        Text(
-                                          _formatTime(session.endAt),
+                                          session.bookAuthor
+                                                      ?.trim()
+                                                      .isNotEmpty ==
+                                                  true
+                                              ? session.bookAuthor!.trim()
+                                              : '未知作者',
                                           style:
                                               Theme.of(
                                                 context,
                                               ).textTheme.bodySmall,
                                         ),
-                                      ],
-                                    ),
-                                    Expanded(
-                                      child: Column(
-                                        crossAxisAlignment:
-                                            CrossAxisAlignment.start,
-                                        children: [
-                                          Text(session.bookTitle),
-                                          Text(
-                                            session.bookAuthor
-                                                        ?.trim()
-                                                        .isNotEmpty ==
-                                                    true
-                                                ? session.bookAuthor!.trim()
-                                                : '未知作者',
-                                            style:
+                                        const SizedBox(height: 4),
+                                        Text(
+                                          _timelineSubtitle(session),
+                                          style: Theme.of(
+                                            context,
+                                          ).textTheme.labelSmall?.copyWith(
+                                            color:
                                                 Theme.of(
                                                   context,
-                                                ).textTheme.bodySmall,
+                                                ).colorScheme.onSurfaceVariant,
                                           ),
-                                          const SizedBox(height: 4),
-                                          Text(
-                                            _timelineSubtitle(session),
-                                            style: Theme.of(
-                                              context,
-                                            ).textTheme.labelSmall?.copyWith(
-                                              color:
-                                                  Theme.of(context)
-                                                      .colorScheme
-                                                      .onSurfaceVariant,
-                                            ),
-                                          ),
-                                          Text(
-                                            '阅读字数 ${_formatReadChars(session.readChars)}',
-                                            style: Theme.of(
-                                              context,
-                                            ).textTheme.labelSmall?.copyWith(
-                                              color:
-                                                  Theme.of(context)
-                                                      .colorScheme
-                                                      .onSurfaceVariant,
-                                            ),
-                                          ),
-                                        ],
-                                      ),
-                                    ),
-                                    const SizedBox(width: 8),
-                                    Text(
-                                      _formatDuration(session.durationMillis),
-                                      style:
-                                          Theme.of(
+                                        ),
+                                        Text(
+                                          '阅读字数 ${_formatReadChars(session.readChars)}',
+                                          style: Theme.of(
                                             context,
-                                          ).textTheme.labelMedium,
+                                          ).textTheme.labelSmall?.copyWith(
+                                            color:
+                                                Theme.of(
+                                                  context,
+                                                ).colorScheme.onSurfaceVariant,
+                                          ),
+                                        ),
+                                      ],
                                     ),
-                                  ],
-                                ),
+                                  ),
+                                  const SizedBox(width: 8),
+                                  Text(
+                                    _formatDuration(session.durationMillis),
+                                    style:
+                                        Theme.of(context).textTheme.labelMedium,
+                                  ),
+                                ],
                               ),
                             ),
                           ),
                         ),
-                    ],
-                  ),
-                ),
+                      ),
+                    ),
+                ],
               ),
             );
           })
@@ -1374,6 +1971,42 @@ class _ReadingRecordsPageState extends State<ReadingRecordsPage> {
             ),
           ),
         ],
+      ),
+    );
+  }
+
+  Widget _buildMergeRiskChip(ReadingRecordMergeRisk risk) {
+    final colorScheme = Theme.of(context).colorScheme;
+    final (label, background, foreground) = switch (risk) {
+      ReadingRecordMergeRisk.safe => (
+        '低风险',
+        colorScheme.primaryContainer,
+        colorScheme.onPrimaryContainer,
+      ),
+      ReadingRecordMergeRisk.review => (
+        '需确认',
+        colorScheme.tertiaryContainer,
+        colorScheme.onTertiaryContainer,
+      ),
+      ReadingRecordMergeRisk.blocked => (
+        '已过滤',
+        colorScheme.errorContainer,
+        colorScheme.onErrorContainer,
+      ),
+    };
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+      decoration: BoxDecoration(
+        color: background,
+        borderRadius: BorderRadius.circular(999),
+      ),
+      child: Text(
+        label,
+        style: Theme.of(context).textTheme.labelSmall?.copyWith(
+          color: foreground,
+          fontWeight: FontWeight.w700,
+        ),
       ),
     );
   }
@@ -1541,6 +2174,43 @@ class _ReadingRecordsPageState extends State<ReadingRecordsPage> {
     return result;
   }
 
+  DateTime _resolveHeatmapStartDate({
+    required DateTime firstDate,
+    required DateTime today,
+  }) {
+    final safeFirstDate = _stripDate(firstDate);
+    final safeToday = _stripDate(today);
+    return switch (_heatmapRangeMode) {
+      _HeatmapRangeMode.threeMonths => _startOfWeek(
+        safeToday.subtract(const Duration(days: 89)),
+      ),
+      _HeatmapRangeMode.sixMonths => _startOfWeek(
+        safeToday.subtract(const Duration(days: 179)),
+      ),
+      _HeatmapRangeMode.oneYear => _startOfWeek(
+        safeToday.subtract(const Duration(days: 364)),
+      ),
+      _HeatmapRangeMode.all => _startOfWeek(safeFirstDate),
+    };
+  }
+
+  List<String> _buildHeatmapMonthLabels(List<List<DateTime>> weeks) {
+    final labels = <String>[];
+    DateTime? previousMonth;
+    for (final week in weeks) {
+      final weekMonth = DateTime(week.first.year, week.first.month);
+      if (previousMonth == null ||
+          previousMonth.year != weekMonth.year ||
+          previousMonth.month != weekMonth.month) {
+        labels.add('${weekMonth.month}月');
+        previousMonth = weekMonth;
+      } else {
+        labels.add('');
+      }
+    }
+    return labels;
+  }
+
   List<List<DateTime>> _buildHeatmapWeeks({
     required DateTime startDate,
     required DateTime endDate,
@@ -1626,6 +2296,16 @@ class _ReadingRecordsPageState extends State<ReadingRecordsPage> {
     final day = local.day.toString().padLeft(2, '0');
     return '${local.year}-$month-$day';
   }
+}
+
+class _DeleteConfirmResult {
+  const _DeleteConfirmResult({
+    required this.confirmed,
+    this.skipConfirmForThisPage = false,
+  });
+
+  final bool confirmed;
+  final bool skipConfirmForThisPage;
 }
 
 class _DailyHeatmapStat {
