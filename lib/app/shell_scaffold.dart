@@ -97,7 +97,11 @@ class _ShellScaffoldState extends ConsumerState<ShellScaffold>
 
   @override
   Widget build(BuildContext context) {
-    final shellChild = widget.navigationShell ?? widget.child!;
+    final disableAnimations =
+        MediaQuery.maybeOf(context)?.disableAnimations ?? false;
+    final shellChild = RepaintBoundary(
+      child: widget.navigationShell ?? widget.child!,
+    );
     final useNavigationRail = AppLayout.isMediumUp(context);
     final enableTabSwipe = _enableMobileTabSwipe && !useNavigationRail;
     final navigationState = ref.watch(appShellNavigationProvider);
@@ -119,7 +123,9 @@ class _ShellScaffoldState extends ConsumerState<ShellScaffold>
     }
 
     final shouldAnimateSwitch =
-        enableTabSwipe && _kEnableMobileTabSwitchAnimation;
+        enableTabSwipe &&
+        _kEnableMobileTabSwitchAnimation &&
+        !disableAnimations;
 
     final switchedChild =
         shouldAnimateSwitch
@@ -143,6 +149,7 @@ class _ShellScaffoldState extends ConsumerState<ShellScaffold>
               },
             )
             : shellChild;
+    final clippedChild = ClipRect(child: switchedChild);
 
     final body =
         enableTabSwipe
@@ -155,9 +162,9 @@ class _ShellScaffoldState extends ConsumerState<ShellScaffold>
                     destinations: visibleDestinations,
                     details: details,
                   ),
-              child: switchedChild,
+              child: clippedChild,
             )
-            : switchedChild;
+            : clippedChild;
 
     if (!canShowNavigation) {
       return Scaffold(body: body);

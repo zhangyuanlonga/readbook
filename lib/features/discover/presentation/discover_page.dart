@@ -95,6 +95,14 @@ class _DiscoverPageState extends State<DiscoverPage>
     return _categories[_selectedCategoryIndex];
   }
 
+  List<MapEntry<int, ExploreCategoryItem>> get _actionableCategoryEntries {
+    return _categories
+        .asMap()
+        .entries
+        .where((entry) => entry.value.isActionable)
+        .toList(growable: false);
+  }
+
   @override
   void initState() {
     super.initState();
@@ -201,15 +209,15 @@ class _DiscoverPageState extends State<DiscoverPage>
       ),
       child: RefreshIndicator(
         onRefresh: _refreshCurrentView,
-        child: ListView(
+        child: CustomScrollView(
           controller: _booksScrollController,
           physics: const AlwaysScrollableScrollPhysics(),
-          children: <Widget>[
-            _buildSourceSelectorCard(context),
-            const SizedBox(height: 12),
-            _buildCategoryStripCard(context),
-            const SizedBox(height: 12),
-            _buildBooksPaneContent(context),
+          slivers: <Widget>[
+            SliverToBoxAdapter(child: _buildSourceSelectorCard(context)),
+            const SliverToBoxAdapter(child: SizedBox(height: 12)),
+            SliverToBoxAdapter(child: _buildCategoryStripCard(context)),
+            const SliverToBoxAdapter(child: SizedBox(height: 12)),
+            ..._buildBooksPaneSlivers(context),
           ],
         ),
       ),
@@ -237,10 +245,10 @@ class _DiscoverPageState extends State<DiscoverPage>
                 ),
                 child: RefreshIndicator(
                   onRefresh: _refreshCurrentView,
-                  child: ListView(
+                  child: CustomScrollView(
                     controller: _booksScrollController,
                     physics: const AlwaysScrollableScrollPhysics(),
-                    children: <Widget>[_buildBooksPaneContent(context)],
+                    slivers: _buildBooksPaneSlivers(context),
                   ),
                 ),
               ),
@@ -434,11 +442,7 @@ class _DiscoverPageState extends State<DiscoverPage>
       return _buildInfoCard(context, message: '该书源没有可用的发现分类。');
     }
 
-    final actionableEntries = _categories
-        .asMap()
-        .entries
-        .where((entry) => entry.value.isActionable)
-        .toList(growable: false);
+    final actionableEntries = _actionableCategoryEntries;
     if (actionableEntries.isEmpty) {
       return _buildInfoCard(context, message: '该书源暂无可点击分类。');
     }
@@ -558,8 +562,7 @@ class _DiscoverPageState extends State<DiscoverPage>
     if (_discoverSources.isEmpty) {
       return _buildInfoCard(context, message: '暂无支持发现的书源。');
     }
-    final actionableCount =
-        _categories.where((item) => item.isActionable).length;
+    final actionableCount = _actionableCategoryEntries.length;
 
     return Card(
       clipBehavior: Clip.antiAlias,
@@ -597,11 +600,7 @@ class _DiscoverPageState extends State<DiscoverPage>
     if (_isLoadingCategories) {
       return const Center(child: CircularProgressIndicator());
     }
-    final actionableEntries = _categories
-        .asMap()
-        .entries
-        .where((entry) => entry.value.isActionable)
-        .toList(growable: false);
+    final actionableEntries = _actionableCategoryEntries;
     if (actionableEntries.isEmpty) {
       return _buildPanelMessage(
         context,
@@ -684,104 +683,142 @@ class _DiscoverPageState extends State<DiscoverPage>
     );
   }
 
-  Widget _buildBooksPaneContent(BuildContext context) {
+  List<Widget> _buildBooksPaneSlivers(BuildContext context) {
     if (_isLoadingSources && _discoverSources.isEmpty) {
-      return _buildLoadingCard(context, message: '正在加载发现书源...');
+      return <Widget>[
+        SliverToBoxAdapter(
+          child: _buildLoadingCard(context, message: '正在加载发现书源...'),
+        ),
+      ];
     }
     if (_discoverSources.isEmpty) {
-      return _buildNoSourceCard(context);
+      return <Widget>[SliverToBoxAdapter(child: _buildNoSourceCard(context))];
     }
     if (_sourceErrorText != null) {
-      return _buildErrorCard(
-        context,
-        message: _sourceErrorText!,
-        onRetry: _reloadCurrentSource,
-      );
+      return <Widget>[
+        SliverToBoxAdapter(
+          child: _buildErrorCard(
+            context,
+            message: _sourceErrorText!,
+            onRetry: _reloadCurrentSource,
+          ),
+        ),
+      ];
     }
     if (_isLoadingCategories) {
-      return _buildLoadingCard(context, message: '正在解析发现分类...');
+      return <Widget>[
+        SliverToBoxAdapter(
+          child: _buildLoadingCard(context, message: '正在解析发现分类...'),
+        ),
+      ];
     }
     if (_categories.isEmpty) {
-      return _buildInfoCard(context, message: '该书源没有可用的发现分类。');
+      return <Widget>[
+        SliverToBoxAdapter(
+          child: _buildInfoCard(context, message: '该书源没有可用的发现分类。'),
+        ),
+      ];
     }
 
     final category = _selectedCategory;
     if (category == null) {
-      return _buildInfoCard(context, message: '请选择分类以加载书单。');
+      return <Widget>[
+        SliverToBoxAdapter(
+          child: _buildInfoCard(context, message: '请选择分类以加载书单。'),
+        ),
+      ];
     }
     if (!category.isActionable) {
-      return _buildInfoCard(context, message: '当前分类不可点击，请切换其他分类。');
+      return <Widget>[
+        SliverToBoxAdapter(
+          child: _buildInfoCard(context, message: '当前分类不可点击，请切换其他分类。'),
+        ),
+      ];
     }
     if (_isLoadingBooks && _books.isEmpty) {
-      return _buildLoadingCard(context, message: '正在加载书单...');
+      return <Widget>[
+        SliverToBoxAdapter(
+          child: _buildLoadingCard(context, message: '正在加载书单...'),
+        ),
+      ];
     }
     if (_bookErrorText != null && _books.isEmpty) {
-      return _buildErrorCard(
-        context,
-        message: _bookErrorText!,
-        onRetry: () => _loadBooks(reset: true),
-      );
-    }
-    if (_books.isEmpty) {
-      return _buildInfoCard(context, message: '当前分类暂无书籍。');
-    }
-
-    final children = <Widget>[
-      for (final entry in _books.asMap().entries)
-        _buildBookCard(context, entry.value, listIndex: entry.key),
-    ];
-
-    if (_bookErrorText != null) {
-      children.add(
-        Padding(
-          padding: const EdgeInsets.only(bottom: 10),
+      return <Widget>[
+        SliverToBoxAdapter(
           child: _buildErrorCard(
             context,
             message: _bookErrorText!,
-            onRetry: () => _loadBooks(reset: false),
-            actionLabel: '重试翻页',
+            onRetry: () => _loadBooks(reset: true),
           ),
         ),
-      );
+      ];
+    }
+    if (_books.isEmpty) {
+      return <Widget>[
+        SliverToBoxAdapter(
+          child: _buildInfoCard(context, message: '当前分类暂无书籍。'),
+        ),
+      ];
     }
 
-    if (_isLoadingMore) {
-      children.add(
-        const Padding(
-          padding: EdgeInsets.symmetric(vertical: 16),
-          child: Center(child: CircularProgressIndicator()),
-        ),
-      );
-    } else if (_hasMore) {
-      children.add(
-        Padding(
-          padding: const EdgeInsets.only(bottom: 10),
-          child: OutlinedButton.icon(
-            onPressed: () => _loadBooks(reset: false),
-            icon: const Icon(Icons.expand_more_rounded),
-            label: const Text('加载下一页'),
-          ),
-        ),
-      );
-    } else {
-      children.add(
-        Padding(
-          padding: const EdgeInsets.only(bottom: 10),
-          child: Text(
-            '已加载全部内容',
-            textAlign: TextAlign.center,
-            style: Theme.of(context).textTheme.bodySmall?.copyWith(
-              color: Theme.of(context).colorScheme.onSurfaceVariant,
-            ),
-          ),
-        ),
-      );
-    }
+    final footerCount = (_bookErrorText != null ? 1 : 0) + 1;
+    return <Widget>[
+      SliverList(
+        delegate: SliverChildBuilderDelegate((context, index) {
+          if (index < _books.length) {
+            final book = _books[index];
+            return _buildBookCard(context, book, listIndex: index);
+          }
 
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: children,
-    );
+          var footerIndex = index - _books.length;
+          if (_bookErrorText != null) {
+            if (footerIndex == 0) {
+              return Padding(
+                padding: const EdgeInsets.only(bottom: 10),
+                child: _buildErrorCard(
+                  context,
+                  message: _bookErrorText!,
+                  onRetry: () => _loadBooks(reset: false),
+                  actionLabel: '重试翻页',
+                ),
+              );
+            }
+            footerIndex -= 1;
+          }
+
+          if (footerIndex == 0) {
+            if (_isLoadingMore) {
+              return const Padding(
+                padding: EdgeInsets.symmetric(vertical: 16),
+                child: Center(child: CircularProgressIndicator()),
+              );
+            }
+            if (_hasMore) {
+              return Padding(
+                padding: const EdgeInsets.only(bottom: 10),
+                child: OutlinedButton.icon(
+                  onPressed: () => _loadBooks(reset: false),
+                  icon: const Icon(Icons.expand_more_rounded),
+                  label: const Text('加载下一页'),
+                ),
+              );
+            }
+            return Padding(
+              padding: const EdgeInsets.only(bottom: 10),
+              child: Text(
+                '已加载全部内容',
+                textAlign: TextAlign.center,
+                style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                  color: Theme.of(context).colorScheme.onSurfaceVariant,
+                ),
+              ),
+            );
+          }
+
+          return const SizedBox.shrink();
+        }, childCount: _books.length + footerCount),
+      ),
+    ];
   }
 
   Widget _buildBookCard(
