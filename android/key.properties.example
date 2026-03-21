@@ -1,0 +1,5 @@
+# PKCS12 keystores commonly use the same value for storePassword and keyPassword.
+storePassword=replace-with-your-store-password
+keyPassword=replace-with-your-key-password
+keyAlias=appread_release
+storeFile=app/appread-release.jks
