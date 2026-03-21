@@ -126,6 +126,18 @@ class TxtBookTocRuleSelection {
   final String pattern;
 }
 
+class TxtTocRuleImportResult {
+  const TxtTocRuleImportResult({
+    required this.importedCount,
+    required this.invalidCount,
+    required this.emptyCount,
+  });
+
+  final int importedCount;
+  final int invalidCount;
+  final int emptyCount;
+}
+
 class TxtTocRuleSettingsService {
   TxtTocRuleSettingsService({SharedPreferences? preferences})
     : _preferencesFuture =
@@ -293,13 +305,17 @@ class TxtTocRuleSettingsService {
     );
   }
 
-  Future<int> importRulesFromJson(
+  Future<TxtTocRuleImportResult> importRulesFromJson(
     String jsonText, {
     bool replaceExisting = false,
   }) async {
     final normalized = jsonText.trim();
     if (normalized.isEmpty) {
-      return 0;
+      return const TxtTocRuleImportResult(
+        importedCount: 0,
+        invalidCount: 0,
+        emptyCount: 0,
+      );
     }
 
     final decoded = jsonDecode(normalized);
@@ -321,11 +337,18 @@ class TxtTocRuleSettingsService {
     }
 
     if (imported.isEmpty) {
-      return 0;
+      return const TxtTocRuleImportResult(
+        importedCount: 0,
+        invalidCount: 0,
+        emptyCount: 0,
+      );
     }
 
     final current = replaceExisting ? <TxtTocRuleState>[] : await loadRules();
     final merged = List<TxtTocRuleState>.from(current);
+    var importedCount = 0;
+    var invalidCount = 0;
+    var emptyCount = 0;
 
     for (final importedRule in imported) {
       final normalizedImported = importedRule.copyWith(
@@ -338,6 +361,12 @@ class TxtTocRuleSettingsService {
       );
       if (normalizedImported.name.isEmpty ||
           normalizedImported.pattern.isEmpty) {
+        emptyCount += 1;
+        continue;
+      }
+
+      if (!_isValidPattern(normalizedImported.pattern)) {
+        invalidCount += 1;
         continue;
       }
 
@@ -352,6 +381,7 @@ class TxtTocRuleSettingsService {
           id: merged[duplicateIndex].id,
           serialNumber: merged[duplicateIndex].serialNumber,
         );
+        importedCount += 1;
       } else {
         merged.add(
           normalizedImported.copyWith(
@@ -359,11 +389,26 @@ class TxtTocRuleSettingsService {
             serialNumber: merged.length,
           ),
         );
+        importedCount += 1;
       }
     }
 
     await saveRules(merged);
-    return imported.length;
+    return TxtTocRuleImportResult(
+      importedCount: importedCount,
+      invalidCount: invalidCount,
+      emptyCount: emptyCount,
+    );
+  }
+
+  Future<int> clearCustomRules() async {
+    final current = await loadRules();
+    final defaults = current
+        .where((rule) => _isDefaultRuleId(rule.id))
+        .toList(growable: false);
+    final removedCount = current.length - defaults.length;
+    await saveRules(defaults);
+    return removedCount;
   }
 
   Future<String> exportRulesToJson() async {
@@ -462,6 +507,15 @@ class TxtTocRuleSettingsService {
   }
 
   String _buildRuleId() => 'rule_${DateTime.now().microsecondsSinceEpoch}';
+
+  bool _isValidPattern(String pattern) {
+    try {
+      RegExp(pattern, multiLine: true, caseSensitive: false);
+      return true;
+    } catch (_) {
+      return false;
+    }
+  }
 
   bool _isDefaultRuleId(String ruleId) {
     final normalized = ruleId.trim();

@@ -45,7 +45,7 @@ void main() {
     });
 
     test('imports and exports json rules', () async {
-      final count = await service.importRulesFromJson('''
+      final result = await service.importRulesFromJson('''
 [
   {
     "name": "导入规则",
@@ -56,7 +56,8 @@ void main() {
 ]
 ''');
 
-      expect(count, 1);
+      expect(result.importedCount, 1);
+      expect(result.invalidCount, 0);
 
       final rules = await service.loadRules();
       expect(rules.any((item) => item.name == '导入规则'), isTrue);
@@ -116,6 +117,50 @@ void main() {
       expect(reordered[0].id, initial[1].id);
       expect(reordered[1].id, initial[2].id);
       expect(reordered[2].id, initial[0].id);
+    });
+
+    test('skips invalid regex rules during import', () async {
+      final result = await service.importRulesFromJson('''
+[
+  {
+    "name": "合法规则",
+    "pattern": "^第\\d+章.*\$",
+    "enabled": true
+  },
+  {
+    "name": "非法规则",
+    "pattern": "(",
+    "enabled": true
+  }
+]
+''');
+
+      expect(result.importedCount, 1);
+      expect(result.invalidCount, 1);
+
+      final rules = await service.loadRules();
+      expect(rules.any((item) => item.name == '合法规则'), isTrue);
+      expect(rules.any((item) => item.name == '非法规则'), isFalse);
+    });
+
+    test('clearCustomRules removes custom rules and keeps defaults', () async {
+      final initial = await service.loadRules();
+      await service.saveRule(
+        TxtTocRuleState(
+          id: 'custom_clear_1',
+          name: '待清空规则',
+          pattern: r'^第\d+章.*$',
+          serialNumber: initial.length,
+          enabled: true,
+        ),
+      );
+
+      final removed = await service.clearCustomRules();
+      expect(removed, 1);
+
+      final rules = await service.loadRules();
+      expect(rules.any((item) => item.id == 'custom_clear_1'), isFalse);
+      expect(rules.any((item) => item.id.startsWith('default_')), isTrue);
     });
   });
 }

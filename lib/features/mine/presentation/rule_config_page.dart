@@ -80,6 +80,48 @@ class _RuleConfigPageState extends State<RuleConfigPage> {
     ).showSnackBar(const SnackBar(content: Text('已恢复默认 TXT 目录规则，并保留自定义规则。')));
   }
 
+  Future<void> _clearCustomRules() async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) {
+        return AlertDialog(
+          title: const Text('清空自定义规则'),
+          content: const Text('只删除你导入或新增的自定义规则，默认规则会保留。'),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(dialogContext).pop(false),
+              child: const Text('取消'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.of(dialogContext).pop(true),
+              child: const Text('清空'),
+            ),
+          ],
+        );
+      },
+    );
+    if (confirmed != true) {
+      return;
+    }
+
+    setState(() {
+      _isResetting = true;
+    });
+    final removed = await _txtTocRuleSettingsService.clearCustomRules();
+    await _loadRules();
+    if (!mounted) {
+      return;
+    }
+    setState(() {
+      _isResetting = false;
+    });
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(removed > 0 ? '已清空 $removed 条自定义规则。' : '当前没有可清空的自定义规则。'),
+      ),
+    );
+  }
+
   Future<void> _showRuleEditor({TxtTocRuleState? rule}) async {
     final nameController = TextEditingController(text: rule?.name ?? '');
     final patternController = TextEditingController(text: rule?.pattern ?? '');
@@ -437,7 +479,11 @@ class _RuleConfigPageState extends State<RuleConfigPage> {
       }
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text(imported > 0 ? '已导入 $imported 条规则。' : '没有可导入的规则。'),
+          content: Text(
+            imported.importedCount > 0
+                ? '已导入 ${imported.importedCount} 条规则。${imported.invalidCount > 0 ? ' 跳过 ${imported.invalidCount} 条非法正则。' : ''}${imported.emptyCount > 0 ? ' 跳过 ${imported.emptyCount} 条空规则。' : ''}'
+                : '没有可导入的规则。',
+          ),
         ),
       );
     } catch (error) {
@@ -745,6 +791,11 @@ class _RuleConfigPageState extends State<RuleConfigPage> {
                         child: CircularProgressIndicator(strokeWidth: 2),
                       )
                       : const Icon(Icons.restart_alt_rounded),
+            ),
+            IconButton(
+              tooltip: '清空自定义',
+              onPressed: _isLoading || _isResetting ? null : _clearCustomRules,
+              icon: const Icon(Icons.delete_sweep_rounded),
             ),
           ],
         ),
