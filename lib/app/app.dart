@@ -79,7 +79,7 @@ class _SystemUiOverlayWrapper extends StatefulWidget {
 
 class _SystemUiOverlayWrapperState extends State<_SystemUiOverlayWrapper>
     with WidgetsBindingObserver {
-  StreamSubscription<IncomingSourceImportPayload>? _incomingImportSub;
+  StreamSubscription<IncomingExternalImportPayload>? _incomingImportSub;
   StreamSubscription<AuthEvent>? _authEventSub;
   Brightness? _lastBrightness;
   bool _hasShownStartupAnnouncement = false;
@@ -121,10 +121,11 @@ class _SystemUiOverlayWrapperState extends State<_SystemUiOverlayWrapper>
     super.initState();
     ApiClient.defaultAuthTokenRefresher ??= _authTokenRefresher;
     WidgetsBinding.instance.addObserver(this);
-    _incomingImportSub = ExternalSourceImportBridge.instance.payloadStream
-        .listen(_onIncomingSourceImportPayload);
+    _incomingImportSub = ExternalImportBridge.instance.payloadStream.listen(
+      _onIncomingSourceImportPayload,
+    );
     _authEventSub = AuthEventBus.instance.stream.listen(_handleAuthEvent);
-    unawaited(ExternalSourceImportBridge.instance.initialize());
+    unawaited(ExternalImportBridge.instance.initialize());
     unawaited(_prepareStartup());
     unawaited(_sendHeartbeat());
     unawaited(_sendVisitEvent());
@@ -670,12 +671,19 @@ class _SystemUiOverlayWrapperState extends State<_SystemUiOverlayWrapper>
     return '$month-$day $hour:$minute';
   }
 
-  void _onIncomingSourceImportPayload(IncomingSourceImportPayload _) {
+  void _onIncomingSourceImportPayload(IncomingExternalImportPayload payload) {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) {
         return;
       }
-      appRouter.go('/source');
+      switch (payload.type) {
+        case ExternalImportPayloadType.source:
+          appRouter.go('/source');
+          break;
+        case ExternalImportPayloadType.localBook:
+          appRouter.go('/bookshelf');
+          break;
+      }
     });
   }
 

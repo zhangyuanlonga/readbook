@@ -56,13 +56,21 @@ class TxtLocalBookParser implements LocalBookParser {
       );
     }
 
-    final chapters = await _splitChapters(book, normalized);
+    final normalizedBytes = utf8.encode(normalized);
+    final chapters = _withUtf8ByteOffsets(
+      await _splitChapters(book, normalized),
+      normalized,
+    );
     if (chapters.isEmpty) {
       throw AppException(
         code: ErrorCode.ruleMatchEmpty,
         stage: ErrorStage.content,
         briefMessage: '未解析出有效章节，请检查文本编码或内容格式。',
       );
+    }
+
+    if (!_listEquals(bytes, normalizedBytes)) {
+      await file.writeAsBytes(normalizedBytes, flush: true);
     }
 
     return LocalParsedBook(chapters: chapters);
@@ -191,7 +199,6 @@ class TxtLocalBookParser implements LocalBookParser {
 
     for (var i = 0; i < matches.length; i += 1) {
       final match = matches[i];
-      final chapterStart = match.start;
       final chapterEnd =
           i + 1 < matches.length ? matches[i + 1].start : text.length;
       final title = match.group(0)?.trim();
@@ -208,7 +215,7 @@ class TxtLocalBookParser implements LocalBookParser {
         LocalParsedChapter(
           title: title,
           content: content,
-          startOffset: chapterStart,
+          startOffset: match.end,
           endOffset: chapterEnd,
         ),
       );
@@ -259,7 +266,9 @@ class TxtLocalBookParser implements LocalBookParser {
     return chapters;
   }
 
-  List<LocalParsedChapter> _splitLongChapters(List<LocalParsedChapter> chapters) {
+  List<LocalParsedChapter> _splitLongChapters(
+    List<LocalParsedChapter> chapters,
+  ) {
     final output = <LocalParsedChapter>[];
 
     for (final chapter in chapters) {
@@ -304,5 +313,65 @@ class TxtLocalBookParser implements LocalBookParser {
     }
 
     return output;
+  }
+
+  List<LocalParsedChapter> _withUtf8ByteOffsets(
+    List<LocalParsedChapter> chapters,
+    String normalizedText,
+  ) {
+    if (chapters.isEmpty) {
+      return const <LocalParsedChapter>[];
+    }
+
+    final checkpoints = chapters
+      .expand((chapter) => <int?>[chapter.startOffset, chapter.endOffset])
+      .whereType<int>()
+      .where((index) => index >= 0 && index <= normalizedText.length)
+      .toSet()
+      .toList(growable: false)..sort();
+
+    final byteOffsets = <int, int>{0: 0};
+    var previousIndex = 0;
+    var accumulatedBytes = 0;
+    for (final index in checkpoints) {
+      if (index > previousIndex) {
+        accumulatedBytes +=
+            utf8.encode(normalizedText.substring(previousIndex, index)).length;
+        previousIndex = index;
+      }
+      byteOffsets[index] = accumulatedBytes;
+    }
+
+    return chapters
+        .map((chapter) {
+          final startOffset = chapter.startOffset;
+          final endOffset = chapter.endOffset;
+          return LocalParsedChapter(
+            title: chapter.title,
+            content: chapter.content,
+            startOffset:
+                startOffset == null ? null : byteOffsets[startOffset] ?? 0,
+            endOffset:
+                endOffset == null
+                    ? null
+                    : byteOffsets[endOffset] ?? accumulatedBytes,
+          );
+        })
+        .toList(growable: false);
+  }
+
+  bool _listEquals(List<int> left, List<int> right) {
+    if (identical(left, right)) {
+      return true;
+    }
+    if (left.length != right.length) {
+      return false;
+    }
+    for (var index = 0; index < left.length; index += 1) {
+      if (left[index] != right[index]) {
+        return false;
+      }
+    }
+    return true;
   }
 }

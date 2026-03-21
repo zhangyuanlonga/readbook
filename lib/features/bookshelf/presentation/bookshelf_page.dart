@@ -19,6 +19,7 @@ import '../../reader/application/reader_preferences_service.dart';
 import '../../book/application/book_detail_service.dart';
 import '../../announcement/application/announcement_service.dart';
 import '../../announcement/application/announcement_read_state_service.dart';
+import '../../source/application/external_source_import_bridge.dart';
 import 'widgets/bookshelf_grid_sliver.dart';
 import 'widgets/bookshelf_page_sections.dart';
 
@@ -64,6 +65,7 @@ class _BookshelfPageState extends State<BookshelfPage>
   final AnnouncementService _announcementService = AnnouncementService();
   final AnnouncementReadStateService _announcementReadStateService =
       AnnouncementReadStateService();
+  StreamSubscription<IncomingExternalImportPayload>? _incomingImportSub;
 
   bool _isLoading = true;
   List<BookshelfBook> _books = const <BookshelfBook>[];
@@ -84,6 +86,7 @@ class _BookshelfPageState extends State<BookshelfPage>
   String? _activeCustomTag;
   String? _openingBookId;
   String? _loadErrorText;
+  bool _isConsumingExternalImportPayloads = false;
   bool _isSelectionMode = false;
   bool _isBatchDeleting = false;
   final Set<String> _selectedBookKeys = <String>{};
@@ -108,10 +111,19 @@ class _BookshelfPageState extends State<BookshelfPage>
   @override
   void initState() {
     super.initState();
+    _incomingImportSub = ExternalImportBridge.instance.payloadStream.listen((
+      payload,
+    ) {
+      if (payload.type != ExternalImportPayloadType.localBook) {
+        return;
+      }
+      unawaited(_consumePendingExternalImportPayloads());
+    });
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) {
         return;
       }
+      unawaited(_consumePendingExternalImportPayloads());
       unawaited(_restoreViewModePreference());
       unawaited(_loadBookshelf());
       unawaited(_prefetchLatestAnnouncement());
@@ -121,6 +133,7 @@ class _BookshelfPageState extends State<BookshelfPage>
   @override
   void dispose() {
     _loadTicket += 1;
+    _incomingImportSub?.cancel();
     super.dispose();
   }
 
@@ -178,7 +191,7 @@ class _BookshelfPageState extends State<BookshelfPage>
                         children: [
                           Icon(Icons.library_add_rounded, size: 18),
                           SizedBox(width: 10),
-                          Text('导入图文'),
+                          Text('导入本地图书'),
                         ],
                       ),
                     ),
@@ -364,6 +377,70 @@ class _BookshelfPageState extends State<BookshelfPage>
       }
       unawaited(_loadBookshelf());
     });
+  }
+
+  Future<void> _consumePendingExternalImportPayloads() async {
+    if (_isConsumingExternalImportPayloads || !mounted) {
+      return;
+    }
+
+    _isConsumingExternalImportPayloads = true;
+    try {
+      while (mounted) {
+        final payload = ExternalImportBridge.instance.consumePendingPayload(
+          type: ExternalImportPayloadType.localBook,
+        );
+        if (payload == null) {
+          break;
+        }
+        await _importFromExternalPayload(payload);
+      }
+    } finally {
+      _isConsumingExternalImportPayloads = false;
+    }
+  }
+
+  Future<void> _importFromExternalPayload(
+    IncomingExternalImportPayload payload,
+  ) async {
+    final cached = await ExternalImportBridge.instance.cacheExternalFileFromUri(
+      payload,
+    );
+    if (cached == null) {
+      _showMessage('读取外部图书失败：${payload.label}');
+      return;
+    }
+
+    final tempFile = File(cached.path);
+    try {
+      final extension = p.extension(cached.label).toLowerCase();
+      if (extension != '.txt' && extension != '.epub') {
+        _showMessage('暂不支持导入该文件：${cached.label}');
+        return;
+      }
+
+      await _localBookImportService.importFromFile(
+        filePath: cached.path,
+        displayName: cached.label,
+      );
+      await _loadBookshelf();
+      if (!mounted) {
+        return;
+      }
+      _showMessage('已导入 ${cached.label}');
+    } on AppException catch (error) {
+      _showMessage(error.briefMessage);
+    } catch (error) {
+      _showMessage('导入失败：$error');
+    } finally {
+      try {
+        if (await tempFile.exists()) {
+          await tempFile.delete();
+        }
+      } catch (_) {
+        // ignore cleanup failure
+      }
+    }
   }
 
   Widget _buildFilterEmptyCard() {

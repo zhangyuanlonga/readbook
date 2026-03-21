@@ -4,6 +4,7 @@ import 'dart:io';
 import 'package:dio/dio.dart';
 import 'package:file_selector/file_selector.dart';
 import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
 import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
 
@@ -55,7 +56,7 @@ class _LocalLibraryPageState extends State<LocalLibraryPage> {
           ],
         ),
       ],
-      confirmButtonText: '选择图书',
+      confirmButtonText: '选择本地图书',
     );
 
     if (!mounted || files.isEmpty) {
@@ -150,17 +151,22 @@ class _LocalLibraryPageState extends State<LocalLibraryPage> {
     final succeededKeys = <String>{};
     var successCount = 0;
     var failureCount = 0;
+    LocalBookImportResult? singleImportedResult;
 
     for (final item in selected) {
       try {
         item.errorText = null;
+        LocalBookImportResult result;
         if (item.type == _PendingImportType.file) {
-          await _importFromFileItem(item);
+          result = await _importFromFileItem(item);
         } else {
-          await _importFromUrlItem(item);
+          result = await _importFromUrlItem(item);
         }
         succeededKeys.add(item.key);
         successCount += 1;
+        if (selected.length == 1) {
+          singleImportedResult = result;
+        }
       } on AppException catch (error) {
         item.errorText = error.briefMessage;
         failureCount += 1;
@@ -188,6 +194,15 @@ class _LocalLibraryPageState extends State<LocalLibraryPage> {
 
     _setImporting(false);
 
+    if (successCount == 1 &&
+        failureCount == 0 &&
+        singleImportedResult != null &&
+        mounted) {
+      _showMessage('已导入 1 本书。');
+      context.go('/local/book/${singleImportedResult.localBook.id}');
+      return;
+    }
+
     if (successCount > 0 && failureCount > 0) {
       _showMessage('已导入 $successCount 本书，失败 $failureCount 本。');
     } else if (successCount > 0) {
@@ -197,19 +212,23 @@ class _LocalLibraryPageState extends State<LocalLibraryPage> {
     }
   }
 
-  Future<void> _importFromFileItem(_PendingImportItem item) async {
+  Future<LocalBookImportResult> _importFromFileItem(
+    _PendingImportItem item,
+  ) async {
     final path = item.path?.trim() ?? '';
     if (path.isEmpty) {
       throw const _ImportException('文件路径无效。');
     }
 
-    await _localBookImportService.importFromFile(
+    return _localBookImportService.importFromFile(
       filePath: path,
       displayName: item.title,
     );
   }
 
-  Future<void> _importFromUrlItem(_PendingImportItem item) async {
+  Future<LocalBookImportResult> _importFromUrlItem(
+    _PendingImportItem item,
+  ) async {
     final rawUrl = item.url?.trim() ?? '';
     if (rawUrl.isEmpty) {
       throw const _ImportException('链接不能为空。');
@@ -265,7 +284,7 @@ class _LocalLibraryPageState extends State<LocalLibraryPage> {
       final finalized = await tempFile.rename(finalPath);
 
       try {
-        await _localBookImportService.importFromFile(
+        return await _localBookImportService.importFromFile(
           filePath: finalized.path,
           displayName: '$safeBase$extension',
         );
@@ -424,7 +443,7 @@ class _LocalLibraryPageState extends State<LocalLibraryPage> {
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('导入图文'),
+        title: const Text('导入本地图书'),
         actions: [
           if (_isImporting) ...[
             Padding(
@@ -537,7 +556,7 @@ class _LocalLibraryPageState extends State<LocalLibraryPage> {
           ),
           const SizedBox(height: 6),
           Text(
-            '先选择图书，确认后再导入，避免一次性导入过多卡顿。',
+            '先选择本地图书，确认后再导入；单本成功会直接打开详情页。',
             style: Theme.of(context).textTheme.bodySmall?.copyWith(
               color: colorScheme.onSurfaceVariant,
             ),
@@ -828,7 +847,7 @@ class _LocalUrlImportPageState extends State<_LocalUrlImportPage> {
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('链接导入图文'),
+        title: const Text('链接导入本地图书'),
         actions: [
           TextButton(
             onPressed: canSubmit ? _submit : null,

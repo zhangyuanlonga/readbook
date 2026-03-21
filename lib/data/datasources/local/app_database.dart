@@ -1413,17 +1413,26 @@ class AppDatabase extends _$AppDatabase {
       await (delete(storedLocalChapters)
         ..where((table) => table.bookId.equals(normalizedBookId))).go();
 
-      if (chapters.isNotEmpty) {
-        await batch((batch) {
-          for (final chapter in chapters) {
+      final sanitizedChapters = chapters
+          .where((chapter) {
             final normalizedId = chapter.id.trim();
             final normalizedTitle = chapter.title.trim();
             final normalizedContent = chapter.content.trim();
-            if (normalizedId.isEmpty ||
-                normalizedTitle.isEmpty ||
-                normalizedContent.isEmpty) {
-              continue;
-            }
+            final hasExternalRange =
+                chapter.startOffset != null &&
+                chapter.endOffset != null &&
+                chapter.endOffset! > chapter.startOffset!;
+            return normalizedId.isNotEmpty &&
+                normalizedTitle.isNotEmpty &&
+                (normalizedContent.isNotEmpty || hasExternalRange);
+          })
+          .toList(growable: false);
+
+      if (sanitizedChapters.isNotEmpty) {
+        await batch((batch) {
+          for (final chapter in sanitizedChapters) {
+            final normalizedId = chapter.id.trim();
+            final normalizedTitle = chapter.title.trim();
 
             batch.insert(
               storedLocalChapters,
@@ -1447,7 +1456,7 @@ class AppDatabase extends _$AppDatabase {
       await (update(storedLocalBooks)
         ..where((table) => table.id.equals(normalizedBookId))).write(
         StoredLocalBooksCompanion(
-          chapterCount: Value(chapters.length),
+          chapterCount: Value(sanitizedChapters.length),
           updatedAt: Value(DateTime.now()),
         ),
       );

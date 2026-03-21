@@ -11,6 +11,7 @@ import 'epub_local_book_parser.dart';
 import 'local_book_parser.dart';
 import 'txt_local_book_parser.dart';
 import 'txt_toc_rule_settings_service.dart';
+import 'dart:io';
 
 class LocalBookIndexService {
   LocalBookIndexService({
@@ -88,11 +89,15 @@ class LocalBookIndexService {
       }
 
       final now = DateTime.now();
+      final refreshedFileSize = await File(
+        book.storagePath,
+      ).stat().then((stat) => stat.size).catchError((_) => book.fileSize);
       final updatedBook = book.copyWith(
         title: _nonEmptyOrFallback(parsed.title, fallback: book.title),
         author: _nonEmptyOrNull(parsed.author, fallback: book.author),
         indexStatus: LocalBookIndexStatus.ready,
         chapterCount: parsed.chapters.length,
+        fileSize: refreshedFileSize,
         updatedAt: now,
         clearLastError: true,
       );
@@ -110,7 +115,13 @@ class LocalBookIndexService {
                 chapter.title,
                 fallback: '第 ${entry.key + 1} 章',
               ),
-              content: chapter.content,
+              content:
+                  book.format == LocalBookFormat.txt &&
+                          chapter.startOffset != null &&
+                          chapter.endOffset != null &&
+                          chapter.endOffset! > chapter.startOffset!
+                      ? ''
+                      : chapter.content,
               createdAt: now,
               updatedAt: now,
               startOffset: chapter.startOffset,

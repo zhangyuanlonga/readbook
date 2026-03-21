@@ -4,31 +4,63 @@ import 'dart:collection';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 
-class IncomingSourceImportPayload {
-  const IncomingSourceImportPayload({required this.bytes, required this.label});
+enum ExternalImportPayloadType { source, localBook }
 
-  final Uint8List bytes;
+class IncomingExternalImportPayload {
+  const IncomingExternalImportPayload.source({
+    required this.bytes,
+    required this.label,
+  }) : type = ExternalImportPayloadType.source,
+       uri = null,
+       mimeType = null;
+
+  const IncomingExternalImportPayload.localBook({
+    required this.uri,
+    required this.label,
+    this.mimeType,
+  }) : type = ExternalImportPayloadType.localBook,
+       bytes = null;
+
+  final ExternalImportPayloadType type;
+  final Uint8List? bytes;
   final String label;
+  final String? uri;
+  final String? mimeType;
 }
 
-class ExternalSourceImportBridge {
-  ExternalSourceImportBridge._();
+class CachedExternalImportFile {
+  const CachedExternalImportFile({
+    required this.path,
+    required this.label,
+    this.mimeType,
+  });
 
-  static final ExternalSourceImportBridge instance =
-      ExternalSourceImportBridge._();
+  final String path;
+  final String label;
+  final String? mimeType;
+}
+
+class ExternalImportBridge {
+  ExternalImportBridge._();
+
+  static final ExternalImportBridge instance = ExternalImportBridge._();
 
   static const MethodChannel _channel = MethodChannel(
     'com.jiangyan.shuxiangread/source_import_intent',
   );
+  static const String _methodGetInitialImportPayload =
+      'getInitialImportPayload';
+  static const String _methodCacheExternalFileFromUri =
+      'cacheExternalFileFromUri';
 
-  final StreamController<IncomingSourceImportPayload> _payloadController =
-      StreamController<IncomingSourceImportPayload>.broadcast();
-  final Queue<IncomingSourceImportPayload> _pendingPayloads =
-      Queue<IncomingSourceImportPayload>();
+  final StreamController<IncomingExternalImportPayload> _payloadController =
+      StreamController<IncomingExternalImportPayload>.broadcast();
+  final Queue<IncomingExternalImportPayload> _pendingPayloads =
+      Queue<IncomingExternalImportPayload>();
 
   bool _initialized = false;
 
-  Stream<IncomingSourceImportPayload> get payloadStream =>
+  Stream<IncomingExternalImportPayload> get payloadStream =>
       _payloadController.stream;
 
   Future<void> initialize() async {
@@ -42,7 +74,7 @@ class ExternalSourceImportBridge {
 
     try {
       final payload = _parsePayload(
-        await _channel.invokeMethod<dynamic>('getInitialImportPayload'),
+        await _channel.invokeMethod<dynamic>(_methodGetInitialImportPayload),
       );
       if (payload != null) {
         _pushPayload(payload);
@@ -54,11 +86,66 @@ class ExternalSourceImportBridge {
     }
   }
 
-  IncomingSourceImportPayload? consumePendingPayload() {
+  IncomingExternalImportPayload? consumePendingPayload({
+    ExternalImportPayloadType? type,
+  }) {
     if (_pendingPayloads.isEmpty) {
       return null;
     }
-    return _pendingPayloads.removeFirst();
+    if (type == null) {
+      return _pendingPayloads.removeFirst();
+    }
+
+    final matchIndex = _pendingPayloads
+        .toList(growable: false)
+        .indexWhere((payload) => payload.type == type);
+    if (matchIndex < 0) {
+      return null;
+    }
+
+    final payload = _pendingPayloads.elementAt(matchIndex);
+    _pendingPayloads.remove(payload);
+    return payload;
+  }
+
+  Future<CachedExternalImportFile?> cacheExternalFileFromUri(
+    IncomingExternalImportPayload payload,
+  ) async {
+    if (payload.type != ExternalImportPayloadType.localBook ||
+        payload.uri == null ||
+        payload.uri!.trim().isEmpty) {
+      return null;
+    }
+
+    try {
+      final raw = await _channel.invokeMethod<dynamic>(
+        _methodCacheExternalFileFromUri,
+        <String, dynamic>{
+          'uri': payload.uri,
+          'label': payload.label,
+          'mimeType': payload.mimeType,
+        },
+      );
+      if (raw is! Map<Object?, Object?>) {
+        return null;
+      }
+
+      final path = raw['path']?.toString().trim() ?? '';
+      if (path.isEmpty) {
+        return null;
+      }
+      final label = raw['label']?.toString().trim();
+      final mimeType = raw['mimeType']?.toString().trim();
+      return CachedExternalImportFile(
+        path: path,
+        label: label == null || label.isEmpty ? payload.label : label,
+        mimeType: mimeType == null || mimeType.isEmpty ? null : mimeType,
+      );
+    } on MissingPluginException {
+      return null;
+    } on PlatformException {
+      return null;
+    }
   }
 
   Future<dynamic> _onMethodCall(MethodCall call) async {
@@ -73,16 +160,40 @@ class ExternalSourceImportBridge {
     return null;
   }
 
-  void _pushPayload(IncomingSourceImportPayload payload) {
+  void _pushPayload(IncomingExternalImportPayload payload) {
     _pendingPayloads.addLast(payload);
     if (!_payloadController.isClosed) {
       _payloadController.add(payload);
     }
   }
 
-  IncomingSourceImportPayload? _parsePayload(dynamic raw) {
+  IncomingExternalImportPayload? _parsePayload(dynamic raw) {
     if (raw is! Map<Object?, Object?>) {
       return null;
+    }
+
+    final typeRaw = raw['type']?.toString().trim().toLowerCase();
+    final labelRaw = raw['label'];
+    final label =
+        labelRaw is String && labelRaw.trim().isNotEmpty
+            ? labelRaw.trim()
+            : '外部导入';
+
+    if (typeRaw == 'localbook') {
+      final uriRaw = raw['uri']?.toString().trim() ?? '';
+      if (uriRaw.isEmpty) {
+        return null;
+      }
+      final mimeTypeRaw = raw['mimeType'];
+      final mimeType =
+          mimeTypeRaw is String && mimeTypeRaw.trim().isNotEmpty
+              ? mimeTypeRaw.trim()
+              : null;
+      return IncomingExternalImportPayload.localBook(
+        uri: uriRaw,
+        label: label,
+        mimeType: mimeType,
+      );
     }
 
     final bytesRaw = raw['bytes'];
@@ -96,12 +207,6 @@ class ExternalSourceImportBridge {
       return null;
     }
 
-    final labelRaw = raw['label'];
-    final label =
-        labelRaw is String && labelRaw.trim().isNotEmpty
-            ? labelRaw.trim()
-            : '外部书源';
-
-    return IncomingSourceImportPayload(bytes: bytes, label: label);
+    return IncomingExternalImportPayload.source(bytes: bytes, label: label);
   }
 }

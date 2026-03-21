@@ -229,7 +229,7 @@ class BookshelfEmptyCard extends StatelessWidget {
             FilledButton.icon(
               onPressed: onImportLocal,
               icon: const Icon(Icons.library_add_rounded),
-              label: const Text('导入图文'),
+              label: const Text('导入本地图书'),
             ),
           ],
         ),

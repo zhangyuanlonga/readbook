@@ -54,7 +54,8 @@ class _SourcePageState extends State<SourcePage> {
   final TextEditingController _searchController = TextEditingController();
   final ScrollController _scrollController = ScrollController();
   Timer? _searchDebounce;
-  StreamSubscription<IncomingSourceImportPayload>? _incomingImportSubscription;
+  StreamSubscription<IncomingExternalImportPayload>?
+  _incomingImportSubscription;
   String _searchKeyword = '';
   _SourceSort _sourceSort = _SourceSort.smart;
   bool _isPageLoading = false;
@@ -91,13 +92,14 @@ class _SourcePageState extends State<SourcePage> {
     super.initState();
     _searchController.addListener(_onSearchInputChanged);
     _scrollController.addListener(_onSourceListScroll);
-    _incomingImportSubscription = ExternalSourceImportBridge
-        .instance
-        .payloadStream
-        .listen((_) {
+    _incomingImportSubscription = ExternalImportBridge.instance.payloadStream
+        .listen((payload) {
+          if (payload.type != ExternalImportPayloadType.source) {
+            return;
+          }
           unawaited(_consumePendingExternalImportPayloads());
         });
-    unawaited(ExternalSourceImportBridge.instance.initialize());
+    unawaited(ExternalImportBridge.instance.initialize());
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) {
         return;
@@ -1487,8 +1489,9 @@ class _SourcePageState extends State<SourcePage> {
     _isConsumingExternalImportPayloads = true;
     try {
       while (mounted) {
-        final payload =
-            ExternalSourceImportBridge.instance.consumePendingPayload();
+        final payload = ExternalImportBridge.instance.consumePendingPayload(
+          type: ExternalImportPayloadType.source,
+        );
         if (payload == null) {
           break;
         }
@@ -1500,13 +1503,18 @@ class _SourcePageState extends State<SourcePage> {
   }
 
   Future<void> _importFromExternalPayload(
-    IncomingSourceImportPayload payload,
+    IncomingExternalImportPayload payload,
   ) async {
+    final bytes = payload.bytes;
     final sourceLabel =
         payload.label.trim().isEmpty ? '外部书源' : payload.label.trim();
 
     try {
-      final content = _importService.decodeSourceBytes(payload.bytes);
+      if (bytes == null || bytes.isEmpty) {
+        _showMessage('读取外部文件失败：$sourceLabel');
+        return;
+      }
+      final content = _importService.decodeSourceBytes(bytes);
       if (content.trim().isEmpty) {
         _showMessage('导入失败：$sourceLabel 内容为空。');
         return;

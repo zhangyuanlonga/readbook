@@ -128,7 +128,7 @@ class _MinePageState extends ConsumerState<MinePage> {
                           ),
                           _MineActionItem(
                             icon: Icons.rule_outlined,
-                            label: '规则',
+                            label: 'TXT 目录规则',
                             onTap: () => context.push('/rule-config'),
                           ),
                           _MineActionItem(

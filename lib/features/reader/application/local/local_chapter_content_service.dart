@@ -6,6 +6,9 @@ import '../../../../data/repositories/local_book_repository_impl.dart';
 import '../../../../domain/entities/local_book.dart';
 import '../../../../domain/entities/local_chapter.dart';
 import '../../../../domain/repositories/local_book_repository.dart';
+import 'dart:convert';
+import 'dart:io';
+
 import 'local_book_index_service.dart';
 
 class LocalChapterContentService {
@@ -85,11 +88,11 @@ class LocalChapterContentService {
       }
 
       if (chapter == null) {
-        final chapters =
-            await _localBookRepository.getChapters(normalizedBookId);
+        final chapters = await _localBookRepository.getChapters(
+          normalizedBookId,
+        );
         if (chapters.isNotEmpty) {
-          final fallbackIndex =
-              rawIndex.clamp(0, chapters.length - 1).toInt();
+          final fallbackIndex = rawIndex.clamp(0, chapters.length - 1).toInt();
           chapter = chapters[fallbackIndex];
         }
       }
@@ -103,6 +106,65 @@ class LocalChapterContentService {
       );
     }
 
-    return chapter;
+    if (chapter.content.trim().isNotEmpty ||
+        book.format != LocalBookFormat.txt) {
+      return chapter;
+    }
+
+    final startOffset = chapter.startOffset;
+    final endOffset = chapter.endOffset;
+    if (startOffset == null || endOffset == null || endOffset <= startOffset) {
+      throw AppException(
+        code: ErrorCode.ruleMatchEmpty,
+        stage: ErrorStage.content,
+        briefMessage: '本地章节缺少有效偏移信息，请重新索引后重试。',
+      );
+    }
+
+    final content = await _readTxtChapterContent(
+      storagePath: book.storagePath,
+      startOffset: startOffset,
+      endOffset: endOffset,
+    );
+    if (content.trim().isEmpty) {
+      throw AppException(
+        code: ErrorCode.ruleMatchEmpty,
+        stage: ErrorStage.content,
+        briefMessage: '本地章节内容为空，请重新索引后重试。',
+      );
+    }
+
+    return chapter.copyWith(content: content);
+  }
+
+  Future<String> _readTxtChapterContent({
+    required String storagePath,
+    required int startOffset,
+    required int endOffset,
+  }) async {
+    final file = File(storagePath);
+    if (!await file.exists()) {
+      throw AppException(
+        code: ErrorCode.validation,
+        stage: ErrorStage.content,
+        briefMessage: '本地文件不存在：$storagePath',
+      );
+    }
+
+    final fileLength = await file.length();
+    final safeStart = startOffset.clamp(0, fileLength).toInt();
+    final safeEnd = endOffset.clamp(0, fileLength).toInt();
+    if (safeEnd <= safeStart) {
+      return '';
+    }
+
+    final fileHandle = await file.open(mode: FileMode.read);
+    try {
+      await fileHandle.setPosition(safeStart);
+      final bytes = await fileHandle.read(safeEnd - safeStart);
+      return utf8.decode(bytes, allowMalformed: true).trim();
+    } finally {
+      await fileHandle.close();
+    }
   }
 }

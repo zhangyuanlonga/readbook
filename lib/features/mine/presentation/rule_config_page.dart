@@ -594,7 +594,7 @@ class _RuleConfigPageState extends State<RuleConfigPage> {
       },
       child: Scaffold(
         appBar: AppBar(
-          title: const Text('规则'),
+          title: const Text('TXT 目录规则'),
           actions: [
             IconButton(
               tooltip: '新增规则',
@@ -874,7 +874,7 @@ class _RulePasteImportPageState extends State<_RulePasteImportPage> {
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('粘贴导入规则'),
+        title: const Text('粘贴导入 TXT 目录规则'),
         actions: [
           TextButton(
             onPressed: canSubmit ? _submit : null,
@@ -971,7 +971,7 @@ class _RuleUrlImportPageState extends State<_RuleUrlImportPage> {
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('链接导入规则'),
+        title: const Text('链接导入 TXT 目录规则'),
         actions: [
           TextButton(
             onPressed: canSubmit ? _submit : null,
