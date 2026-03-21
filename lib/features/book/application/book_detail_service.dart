@@ -77,7 +77,27 @@ class BookDetailService {
   final UrlTemplateResolver _urlTemplateResolver;
   final SourceResponseProcessor _responseProcessor;
 
+  static final Map<String, BookDetailLoadResult> _detailCache =
+      <String, BookDetailLoadResult>{};
   static final Map<String, List<Chapter>> _tocCache = <String, List<Chapter>>{};
+
+  BookDetailLoadResult? peekCached({
+    required String sourceId,
+    required String detailUrl,
+  }) {
+    final key = '${sourceId.trim()}|${detailUrl.trim()}';
+    final cached = _detailCache[key];
+    if (cached == null) {
+      return null;
+    }
+    return BookDetailLoadResult(
+      detail: cached.detail,
+      chapters: List<Chapter>.unmodifiable(cached.chapters),
+      sourceName: cached.sourceName,
+      tocFromCache: true,
+      tocError: null,
+    );
+  }
 
   Future<BookDetailLoadResult> load({
     required String sourceId,
@@ -393,6 +413,12 @@ class BookDetailService {
         variables: bookVariableUpdates,
         stage: ErrorStage.detail,
       );
+      _detailCache[tocCacheKey] = BookDetailLoadResult(
+        detail: detail,
+        chapters: List<Chapter>.unmodifiable(cached),
+        sourceName: source.name,
+        tocFromCache: false,
+      );
       return BookDetailLoadResult(
         detail: detail,
         chapters: List.unmodifiable(cached),
@@ -517,13 +543,20 @@ class BookDetailService {
       variables: bookVariableUpdates,
       stage: ErrorStage.detail,
     );
-    return BookDetailLoadResult(
+    final result = BookDetailLoadResult(
       detail: detail,
       chapters: chapters,
       sourceName: source.name,
       tocFromCache: false,
       tocError: tocError,
     );
+    _detailCache[tocCacheKey] = BookDetailLoadResult(
+      detail: detail,
+      chapters: List<Chapter>.unmodifiable(chapters),
+      sourceName: source.name,
+      tocFromCache: false,
+    );
+    return result;
   }
 
   Future<SourceDefinition> _getSource(String sourceId) async {

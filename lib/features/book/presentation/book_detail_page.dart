@@ -119,6 +119,7 @@ class _BookDetailPageState extends State<BookDetailPage> {
     _activeBookId = widget.bookId.trim();
     _applyLocalSchemeFallback();
     _displayTitle = _normalizeRouteParam(widget.title);
+    _hydrateCachedDetailIfAvailable();
     _load();
   }
 
@@ -179,7 +180,7 @@ class _BookDetailPageState extends State<BookDetailPage> {
                       '缺少 sourceId/detailUrl，无法加载详情。请从搜索结果进入。bookId=${widget.bookId}',
                     ),
                   )
-                else if (_isLoading)
+                else if (_isLoading && _result == null)
                   const BookDetailStateCard(
                     child: Row(
                       children: [
@@ -193,7 +194,7 @@ class _BookDetailPageState extends State<BookDetailPage> {
                       ],
                     ),
                   )
-                else if (_errorText != null)
+                else if (_errorText != null && _result == null)
                   BookDetailStateCard(
                     color: colorScheme.errorContainer,
                     child: Column(
@@ -220,6 +221,11 @@ class _BookDetailPageState extends State<BookDetailPage> {
                     ),
                   )
                 else if (_result != null) ...[
+                  if (_isLoading)
+                    const Padding(
+                      padding: EdgeInsets.only(bottom: 12),
+                      child: LinearProgressIndicator(minHeight: 2),
+                    ),
                   _buildDetailCard(_result!),
                   if (_canSwitchSource) ...[
                     const SizedBox(height: 12),
@@ -252,6 +258,33 @@ class _BookDetailPageState extends State<BookDetailPage> {
       return;
     }
     context.go('/bookshelf');
+  }
+
+  void _hydrateCachedDetailIfAvailable() {
+    final sourceId = _activeSourceId?.trim();
+    final detailUrl = _activeDetailUrl?.trim();
+    if (sourceId == null ||
+        sourceId.isEmpty ||
+        detailUrl == null ||
+        detailUrl.isEmpty ||
+        sourceId == LocalBookImportService.localBookSourceId) {
+      return;
+    }
+
+    final cached = _sourceContentProvider.peekCachedDetail(
+      sourceId: sourceId,
+      detailUrl: detailUrl,
+    );
+    if (cached == null) {
+      return;
+    }
+
+    _result = cached;
+    _activeBookId = cached.detail.id.trim();
+    _activeSourceId = cached.detail.sourceId.trim();
+    _activeDetailUrl = cached.detail.detailUrl.trim();
+    _displayTitle = cached.detail.title.trim();
+    _tocWarningText = null;
   }
 
   bool get _isMissingParams {
@@ -1157,6 +1190,10 @@ class _BookDetailPageState extends State<BookDetailPage> {
       if (!mounted) {
         return false;
       }
+      if (_result != null) {
+        _showMessage(_toUserReadableError(error));
+        return false;
+      }
       setState(() {
         _errorText = _toUserReadableError(error);
         _tocWarningText = null;
@@ -1166,6 +1203,10 @@ class _BookDetailPageState extends State<BookDetailPage> {
       return false;
     } catch (_) {
       if (!mounted) {
+        return false;
+      }
+      if (_result != null) {
+        _showMessage('加载失败，请稍后重试。');
         return false;
       }
       setState(() {

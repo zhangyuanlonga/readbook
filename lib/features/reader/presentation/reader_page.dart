@@ -46,6 +46,7 @@ import '../application/local_content_provider.dart';
 import '../application/reader_font_registry_service.dart';
 import '../application/reader_preferences_service.dart';
 import '../application/reader_replace_rule_service.dart';
+import '../application/reading_record_metrics.dart';
 import '../application/reading_record_service.dart';
 import '../application/reader_error_center_service.dart';
 import '../application/reader_system_settings_service.dart';
@@ -232,6 +233,9 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
   final Map<String, String> _backgroundPresetBase64 = <String, String>{};
   final List<_ReaderBackgroundPreset> _backgroundPresets =
       <_ReaderBackgroundPreset>[];
+  String? _catalogSearchCacheFingerprint;
+  Map<String, List<_CatalogSearchEntry>> _catalogSearchEntriesCache =
+      const <String, List<_CatalogSearchEntry>>{};
 
   static const List<String> _kFallbackBackgroundPresetPaths = [
     'assets/reader/backgrounds/20260224-212555-700782.jpeg',
@@ -545,6 +549,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
     setState(() {
       _mangaPageIndex = target;
     });
+    _syncActiveReadingRecordSessionProgress();
     _scheduleProgressSave();
   }
 
@@ -576,6 +581,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
     setState(() {
       _mangaPageIndex = target;
     });
+    _syncActiveReadingRecordSessionProgress();
     _scheduleProgressSave();
   }
 
@@ -2673,6 +2679,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
               setState(() {
                 _mangaPageIndex = index;
               });
+              _syncActiveReadingRecordSessionProgress();
               _scheduleProgressSave();
             },
             itemBuilder: (context, index) {
@@ -5877,9 +5884,15 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
     _currentPageIndex = 0;
     _paginationSignature = null;
     _isPaginatingPages = false;
+    _resetCatalogSearchCache();
     _resetPagedTransitionState();
     _resetCurlAnimationState();
     unawaited(_refreshChapterBookmarks());
+  }
+
+  void _resetCatalogSearchCache() {
+    _catalogSearchCacheFingerprint = null;
+    _catalogSearchEntriesCache = const <String, List<_CatalogSearchEntry>>{};
   }
 
   void _disposeMangaTransformControllers() {
@@ -6546,6 +6559,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
       return;
     }
 
+    _syncActiveReadingRecordSessionProgress();
     _scheduleProgressSave();
   }
 
@@ -6585,6 +6599,9 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
         existing.bookId == _currentBookId &&
         existing.chapterId == _chapterId &&
         existing.chapterUrl == chapterUrl) {
+      _syncActiveReadingRecordSessionProgress(
+        ratio: initialRatio ?? _currentScrollRatio(),
+      );
       _scheduleReadingRecordAutoCommit();
       return;
     }
@@ -6603,8 +6620,26 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
       chapterUrl: chapterUrl,
       startAt: DateTime.now(),
       startPositionRatio: startRatio.toDouble(),
+      furthestPositionRatio: startRatio.toDouble(),
     );
     _scheduleReadingRecordAutoCommit();
+  }
+
+  void _syncActiveReadingRecordSessionProgress({double? ratio}) {
+    final session = _activeReadingRecordSession;
+    if (session == null) {
+      return;
+    }
+
+    final currentRatio =
+        (ratio ?? _currentScrollRatio()).clamp(0.0, 1.0).toDouble();
+    if (currentRatio <= session.furthestPositionRatio) {
+      return;
+    }
+
+    _activeReadingRecordSession = session.copyWith(
+      furthestPositionRatio: currentRatio,
+    );
   }
 
   void _scheduleReadingRecordAutoCommit() {
@@ -6637,13 +6672,13 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
 
     final endAt = DateTime.now();
     final endRatio = _currentScrollRatio();
-    final chapterLength = _chapterTextLength();
-    final readChars =
-        chapterLength <= 0
-            ? 0
-            : ((endRatio - session.startPositionRatio).abs() * chapterLength)
-                .round()
-                .clamp(0, chapterLength);
+    final readChars = estimateSessionReadChars(
+      chapterLength: _chapterTextLength(),
+      startRatio: session.startPositionRatio,
+      endRatio: endRatio,
+      furthestRatio: session.furthestPositionRatio,
+      countAsText: !_isMangaChapter,
+    );
     unawaited(
       _readingRecordService.commitSession(
         ReadingRecordCommitInput(
@@ -7597,6 +7632,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
       setState(() {
         _currentPageIndex = targetIndex;
       });
+      _syncActiveReadingRecordSessionProgress();
       _scheduleProgressSave();
       return;
     }
@@ -7671,6 +7707,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
         direction: _pagedTransition.direction,
       );
     });
+    _syncActiveReadingRecordSessionProgress();
     _scheduleProgressSave();
   }
 
@@ -7942,6 +7979,11 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
     );
     final scrollThumbVisible = ValueNotifier<bool>(false);
     final searchController = TextEditingController();
+    final catalogSearchNotifier = ValueNotifier<_ReaderCatalogSearchState>(
+      const _ReaderCatalogSearchState(),
+    );
+    Timer? catalogSearchDebounceTimer;
+    var catalogSearchToken = 0;
     double? selectedScrollRatio;
     final readerModalTheme = _readerModalTheme();
     var bookmarks = <Bookmark>[];
@@ -7967,6 +8009,50 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
       }
     }
 
+    void scheduleCatalogSearch(String rawKeyword) {
+      final keyword = rawKeyword.trim();
+      catalogSearchDebounceTimer?.cancel();
+      if (keyword.isEmpty) {
+        catalogSearchToken += 1;
+        catalogSearchNotifier.value = const _ReaderCatalogSearchState();
+        return;
+      }
+
+      final normalizedKeyword = keyword.toLowerCase();
+      final cachedEntries = _peekCatalogSearchEntries(normalizedKeyword);
+      if (cachedEntries != null) {
+        catalogSearchToken += 1;
+        catalogSearchNotifier.value = _ReaderCatalogSearchState(
+          keyword: keyword,
+          entries: cachedEntries,
+          isLoading: false,
+        );
+        return;
+      }
+
+      final token = ++catalogSearchToken;
+      catalogSearchNotifier.value = _ReaderCatalogSearchState(
+        keyword: keyword,
+        entries: catalogSearchNotifier.value.entries,
+        isLoading: true,
+      );
+      catalogSearchDebounceTimer = Timer(const Duration(milliseconds: 150), () {
+        final entries = _lookupCatalogSearchEntries(keyword);
+        if (token != catalogSearchToken) {
+          return;
+        }
+        catalogSearchNotifier.value = _ReaderCatalogSearchState(
+          keyword: keyword,
+          entries: entries,
+          isLoading: false,
+        );
+      });
+    }
+
+    searchController.addListener(() {
+      scheduleCatalogSearch(searchController.text);
+    });
+
     final selectedIndex = await showModalBottomSheet<int>(
       context: context,
       isScrollControlled: true,
@@ -7988,25 +8074,6 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
 
               final colorScheme = Theme.of(context).colorScheme;
               final textTheme = Theme.of(context).textTheme;
-              final keyword = searchController.text.trim();
-              final isSearching = keyword.isNotEmpty;
-              final searchEntries =
-                  isSearching
-                      ? _buildFullTextSearchEntries(keyword)
-                      : const <_CatalogSearchEntry>[];
-              final tocSearchEntries =
-                  isSearching
-                      ? searchEntries
-                          .where((entry) => !entry.isContent)
-                          .toList(growable: false)
-                      : const <_CatalogSearchEntry>[];
-              final contentSearchEntries =
-                  isSearching
-                      ? searchEntries
-                          .where((entry) => entry.isContent)
-                          .toList(growable: false)
-                      : const <_CatalogSearchEntry>[];
-
               final keyboardInset = MediaQuery.viewInsetsOf(context).bottom;
               final safeBottom = _bottomSafeInset(context);
               final sheetHeightFactor = _adaptiveReaderSheetHeightFactor(
@@ -8019,190 +8086,220 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
               final bookmarkGroups = _groupBookmarksForSheet(bookmarks);
 
               Widget buildCatalogTab() {
-                return Column(
-                  children: [
-                    Padding(
-                      padding: EdgeInsets.fromLTRB(
-                        sheetHorizontal,
-                        6,
-                        sheetHorizontal,
-                        8,
-                      ),
-                      child: LayoutBuilder(
-                        builder: (context, constraints) {
-                          final locationButton =
-                              currentIndex == null
-                                  ? null
-                                  : FilledButton.tonalIcon(
-                                    onPressed: () {
-                                      final target =
-                                          ((currentIndex - 2).clamp(
-                                                    0,
-                                                    _chapters.length - 1,
-                                                  ) *
-                                                  itemExtent)
-                                              .toDouble();
-                                      scrollController.animateTo(
-                                        target,
-                                        duration: const Duration(
-                                          milliseconds: 180,
+                return ValueListenableBuilder<_ReaderCatalogSearchState>(
+                  valueListenable: catalogSearchNotifier,
+                  builder: (context, searchState, _) {
+                    final isSearching = searchState.keyword.isNotEmpty;
+                    final searchEntries = searchState.entries;
+                    final tocSearchEntries = searchState.tocEntries;
+                    final contentSearchEntries = searchState.contentEntries;
+
+                    return Column(
+                      children: [
+                        Padding(
+                          padding: EdgeInsets.fromLTRB(
+                            sheetHorizontal,
+                            6,
+                            sheetHorizontal,
+                            8,
+                          ),
+                          child: LayoutBuilder(
+                            builder: (context, constraints) {
+                              final locationButton =
+                                  currentIndex == null
+                                      ? null
+                                      : FilledButton.tonalIcon(
+                                        onPressed: () {
+                                          final target =
+                                              ((currentIndex - 2).clamp(
+                                                        0,
+                                                        _chapters.length - 1,
+                                                      ) *
+                                                      itemExtent)
+                                                  .toDouble();
+                                          scrollController.animateTo(
+                                            target,
+                                            duration: const Duration(
+                                              milliseconds: 180,
+                                            ),
+                                            curve: Curves.easeOutCubic,
+                                          );
+                                        },
+                                        icon: const Icon(
+                                          Icons.my_location_outlined,
+                                          size: 18,
                                         ),
-                                        curve: Curves.easeOutCubic,
+                                        label: Text('定位 ${currentIndex + 1}'),
                                       );
-                                    },
-                                    icon: const Icon(
-                                      Icons.my_location_outlined,
-                                      size: 18,
-                                    ),
-                                    label: Text('定位 ${currentIndex + 1}'),
-                                  );
-                          return _buildReaderCatalogSummaryCard(
-                            context,
-                            chapterCount: _chapters.length,
-                            currentIndex: currentIndex,
-                            locateButton: locationButton,
-                          );
-                        },
-                      ),
-                    ),
-                    Padding(
-                      padding: EdgeInsets.fromLTRB(
-                        sheetHorizontal,
-                        2,
-                        sheetHorizontal,
-                        10,
-                      ),
-                      child: TextField(
-                        controller: searchController,
-                        onChanged: (_) => setModalState(() {}),
-                        decoration: InputDecoration(
-                          isDense: true,
-                          filled: true,
-                          fillColor: colorScheme.surface,
-                          hintText: '搜索目录标题或当前章节正文',
-                          prefixIcon: Icon(
-                            Icons.search_rounded,
-                            size: 18,
-                            color: colorScheme.onSurfaceVariant,
-                          ),
-                          contentPadding: const EdgeInsets.symmetric(
-                            horizontal: 14,
-                            vertical: 12,
-                          ),
-                          border: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(16),
-                          ),
-                          enabledBorder: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(16),
-                            borderSide: BorderSide(
-                              color: colorScheme.outlineVariant.withValues(
-                                alpha: 0.6,
-                              ),
-                            ),
-                          ),
-                          focusedBorder: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(16),
-                            borderSide: BorderSide(
-                              color: colorScheme.primary.withValues(alpha: 0.9),
-                              width: 1.2,
-                            ),
-                          ),
-                        ),
-                      ),
-                    ),
-                    Divider(
-                      height: 1,
-                      color: colorScheme.outlineVariant.withValues(alpha: 0.7),
-                    ),
-                    if (isSearching && searchEntries.isEmpty)
-                      Expanded(
-                        child: Center(
-                          child: Padding(
-                            padding: const EdgeInsets.symmetric(horizontal: 24),
-                            child: Column(
-                              mainAxisAlignment: MainAxisAlignment.center,
-                              children: [
-                                Text(
-                                  '未找到匹配内容',
-                                  style: textTheme.bodyMedium?.copyWith(
-                                    color: colorScheme.onSurfaceVariant,
-                                    fontWeight: FontWeight.w600,
-                                  ),
-                                ),
-                                const SizedBox(height: 8),
-                                Text(
-                                  '当前仅支持搜索目录标题与本章正文。',
-                                  textAlign: TextAlign.center,
-                                  style: textTheme.bodySmall?.copyWith(
-                                    color: colorScheme.onSurfaceVariant,
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                        ),
-                      )
-                    else if (isSearching)
-                      Expanded(
-                        child: _buildCatalogSearchResultList(
-                          context,
-                          scrollController: scrollController,
-                          tocEntries: tocSearchEntries,
-                          contentEntries: contentSearchEntries,
-                          onEntryTap: (entry) {
-                            selectedScrollRatio = entry.scrollRatio;
-                            Navigator.of(context).pop(entry.chapterIndex);
-                          },
-                        ),
-                      )
-                    else
-                      Expanded(
-                        child: NotificationListener<ScrollNotification>(
-                          onNotification: (notification) {
-                            if (notification is ScrollStartNotification ||
-                                notification is UserScrollNotification) {
-                              scrollThumbVisible.value = true;
-                            } else if (notification is ScrollEndNotification) {
-                              scrollThumbVisible.value = false;
-                            }
-                            return false;
-                          },
-                          child: ValueListenableBuilder<bool>(
-                            valueListenable: scrollThumbVisible,
-                            builder: (context, visible, child) {
-                              return Scrollbar(
-                                controller: scrollController,
-                                thumbVisibility: visible,
-                                child: child!,
+                              return _buildReaderCatalogSummaryCard(
+                                context,
+                                chapterCount: _chapters.length,
+                                currentIndex: currentIndex,
+                                locateButton: locationButton,
                               );
                             },
-                            child: ListView.separated(
-                              controller: scrollController,
-                              itemCount: _chapters.length,
-                              padding: const EdgeInsets.fromLTRB(
-                                12,
-                                10,
-                                12,
-                                12,
+                          ),
+                        ),
+                        Padding(
+                          padding: EdgeInsets.fromLTRB(
+                            sheetHorizontal,
+                            2,
+                            sheetHorizontal,
+                            10,
+                          ),
+                          child: TextField(
+                            controller: searchController,
+                            decoration: InputDecoration(
+                              isDense: true,
+                              filled: true,
+                              fillColor: colorScheme.surface,
+                              hintText: '搜索目录标题或当前章节正文',
+                              prefixIcon: Icon(
+                                Icons.search_rounded,
+                                size: 18,
+                                color: colorScheme.onSurfaceVariant,
                               ),
-                              separatorBuilder:
-                                  (_, __) => const SizedBox(height: 8),
-                              itemBuilder: (context, index) {
-                                final chapter = _chapters[index];
-                                final selected = index == currentIndex;
-                                return _buildReaderCatalogChapterTile(
-                                  context,
-                                  chapter: chapter,
-                                  index: index,
-                                  selected: selected,
-                                  onTap: () => Navigator.of(context).pop(index),
-                                );
-                              },
+                              contentPadding: const EdgeInsets.symmetric(
+                                horizontal: 14,
+                                vertical: 12,
+                              ),
+                              border: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(16),
+                              ),
+                              enabledBorder: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(16),
+                                borderSide: BorderSide(
+                                  color: colorScheme.outlineVariant.withValues(
+                                    alpha: 0.6,
+                                  ),
+                                ),
+                              ),
+                              focusedBorder: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(16),
+                                borderSide: BorderSide(
+                                  color: colorScheme.primary.withValues(
+                                    alpha: 0.9,
+                                  ),
+                                  width: 1.2,
+                                ),
+                              ),
                             ),
                           ),
                         ),
-                      ),
-                  ],
+                        Divider(
+                          height: 1,
+                          color: colorScheme.outlineVariant.withValues(
+                            alpha: 0.7,
+                          ),
+                        ),
+                        if (isSearching && searchState.isLoading)
+                          const Expanded(
+                            child: Center(
+                              child: SizedBox(
+                                width: 22,
+                                height: 22,
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2,
+                                ),
+                              ),
+                            ),
+                          )
+                        else if (isSearching && searchEntries.isEmpty)
+                          Expanded(
+                            child: Center(
+                              child: Padding(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 24,
+                                ),
+                                child: Column(
+                                  mainAxisAlignment: MainAxisAlignment.center,
+                                  children: [
+                                    Text(
+                                      '未找到匹配内容',
+                                      style: textTheme.bodyMedium?.copyWith(
+                                        color: colorScheme.onSurfaceVariant,
+                                        fontWeight: FontWeight.w600,
+                                      ),
+                                    ),
+                                    const SizedBox(height: 8),
+                                    Text(
+                                      '当前仅支持搜索目录标题与本章正文。',
+                                      textAlign: TextAlign.center,
+                                      style: textTheme.bodySmall?.copyWith(
+                                        color: colorScheme.onSurfaceVariant,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ),
+                          )
+                        else if (isSearching)
+                          Expanded(
+                            child: _buildCatalogSearchResultList(
+                              context,
+                              scrollController: scrollController,
+                              tocEntries: tocSearchEntries,
+                              contentEntries: contentSearchEntries,
+                              onEntryTap: (entry) {
+                                selectedScrollRatio = entry.scrollRatio;
+                                Navigator.of(context).pop(entry.chapterIndex);
+                              },
+                            ),
+                          )
+                        else
+                          Expanded(
+                            child: NotificationListener<ScrollNotification>(
+                              onNotification: (notification) {
+                                if (notification is ScrollStartNotification ||
+                                    notification is UserScrollNotification) {
+                                  scrollThumbVisible.value = true;
+                                } else if (notification
+                                    is ScrollEndNotification) {
+                                  scrollThumbVisible.value = false;
+                                }
+                                return false;
+                              },
+                              child: ValueListenableBuilder<bool>(
+                                valueListenable: scrollThumbVisible,
+                                builder: (context, visible, child) {
+                                  return Scrollbar(
+                                    controller: scrollController,
+                                    thumbVisibility: visible,
+                                    child: child!,
+                                  );
+                                },
+                                child: ListView.separated(
+                                  controller: scrollController,
+                                  itemCount: _chapters.length,
+                                  padding: const EdgeInsets.fromLTRB(
+                                    12,
+                                    10,
+                                    12,
+                                    12,
+                                  ),
+                                  separatorBuilder:
+                                      (_, __) => const SizedBox(height: 8),
+                                  itemBuilder: (context, index) {
+                                    final chapter = _chapters[index];
+                                    final selected = index == currentIndex;
+                                    return _buildReaderCatalogChapterTile(
+                                      context,
+                                      chapter: chapter,
+                                      index: index,
+                                      selected: selected,
+                                      onTap:
+                                          () =>
+                                              Navigator.of(context).pop(index),
+                                    );
+                                  },
+                                ),
+                              ),
+                            ),
+                          ),
+                      ],
+                    );
+                  },
                 );
               }
 
@@ -8419,6 +8516,8 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
     scrollController.dispose();
     searchController.dispose();
     scrollThumbVisible.dispose();
+    catalogSearchDebounceTimer?.cancel();
+    catalogSearchNotifier.dispose();
 
     if (didTriggerBookmarkJump) {
       return;
@@ -8509,6 +8608,53 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
     }
 
     return entries;
+  }
+
+  List<_CatalogSearchEntry>? _peekCatalogSearchEntries(
+    String normalizedKeyword,
+  ) {
+    final fingerprint = _buildCatalogSearchCacheFingerprint();
+    if (_catalogSearchCacheFingerprint != fingerprint) {
+      _resetCatalogSearchCache();
+      _catalogSearchCacheFingerprint = fingerprint;
+    }
+    return _catalogSearchEntriesCache[normalizedKeyword];
+  }
+
+  List<_CatalogSearchEntry> _lookupCatalogSearchEntries(String keyword) {
+    final normalizedKeyword = keyword.trim().toLowerCase();
+    if (normalizedKeyword.isEmpty) {
+      return const <_CatalogSearchEntry>[];
+    }
+
+    final cached = _peekCatalogSearchEntries(normalizedKeyword);
+    if (cached != null) {
+      return cached;
+    }
+
+    final entries = List<_CatalogSearchEntry>.unmodifiable(
+      _buildFullTextSearchEntries(keyword),
+    );
+    _catalogSearchEntriesCache = <String, List<_CatalogSearchEntry>>{
+      ..._catalogSearchEntriesCache,
+      normalizedKeyword: entries,
+    };
+    return entries;
+  }
+
+  String _buildCatalogSearchCacheFingerprint() {
+    final firstChapterId = _chapters.isEmpty ? '' : _chapters.first.id;
+    final lastChapterId = _chapters.isEmpty ? '' : _chapters.last.id;
+    return [
+      _chapterId,
+      _chapterUrl ?? '',
+      (_currentIndex ?? -1).toString(),
+      _chapters.length.toString(),
+      firstChapterId,
+      lastChapterId,
+      _content.hashCode.toString(),
+      _paragraphs.length.toString(),
+    ].join('|');
   }
 
   Widget _buildCatalogSearchResultList(
@@ -13760,6 +13906,24 @@ class _CatalogSearchEntry {
   final bool isContent;
 }
 
+class _ReaderCatalogSearchState {
+  const _ReaderCatalogSearchState({
+    this.keyword = '',
+    this.entries = const <_CatalogSearchEntry>[],
+    this.isLoading = false,
+  });
+
+  final String keyword;
+  final List<_CatalogSearchEntry> entries;
+  final bool isLoading;
+
+  List<_CatalogSearchEntry> get tocEntries =>
+      entries.where((entry) => !entry.isContent).toList(growable: false);
+
+  List<_CatalogSearchEntry> get contentEntries =>
+      entries.where((entry) => entry.isContent).toList(growable: false);
+}
+
 class _ChapterLoadSnapshot {
   const _ChapterLoadSnapshot({required this.result, required this.isCached});
 
@@ -14360,6 +14524,7 @@ class _ActiveReadingRecordSession {
     required this.chapterUrl,
     required this.startAt,
     required this.startPositionRatio,
+    required this.furthestPositionRatio,
   });
 
   final String bookId;
@@ -14374,6 +14539,40 @@ class _ActiveReadingRecordSession {
   final String chapterUrl;
   final DateTime startAt;
   final double startPositionRatio;
+  final double furthestPositionRatio;
+
+  _ActiveReadingRecordSession copyWith({
+    String? bookId,
+    String? sourceId,
+    String? detailUrl,
+    String? bookTitle,
+    String? bookAuthor,
+    String? coverUrl,
+    String? chapterId,
+    String? chapterTitle,
+    int? chapterIndex,
+    String? chapterUrl,
+    DateTime? startAt,
+    double? startPositionRatio,
+    double? furthestPositionRatio,
+  }) {
+    return _ActiveReadingRecordSession(
+      bookId: bookId ?? this.bookId,
+      sourceId: sourceId ?? this.sourceId,
+      detailUrl: detailUrl ?? this.detailUrl,
+      bookTitle: bookTitle ?? this.bookTitle,
+      bookAuthor: bookAuthor ?? this.bookAuthor,
+      coverUrl: coverUrl ?? this.coverUrl,
+      chapterId: chapterId ?? this.chapterId,
+      chapterTitle: chapterTitle ?? this.chapterTitle,
+      chapterIndex: chapterIndex ?? this.chapterIndex,
+      chapterUrl: chapterUrl ?? this.chapterUrl,
+      startAt: startAt ?? this.startAt,
+      startPositionRatio: startPositionRatio ?? this.startPositionRatio,
+      furthestPositionRatio:
+          furthestPositionRatio ?? this.furthestPositionRatio,
+    );
+  }
 }
 
 class _SelectionStyle {

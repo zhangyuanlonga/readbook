@@ -13,6 +13,13 @@ class SourceContentProvider extends ContentProvider {
   final BookDetailService _detailService;
   final ChapterContentService _contentService;
 
+  BookDetailLoadResult? peekCachedDetail({
+    required String sourceId,
+    required String detailUrl,
+  }) {
+    return _detailService.peekCached(sourceId: sourceId, detailUrl: detailUrl);
+  }
+
   @override
   ContentCapabilities get capabilities => const ContentCapabilities(
     canSwitchSource: true,
