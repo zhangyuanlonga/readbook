@@ -200,6 +200,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
   bool _isAutoReadAdvancingChapter = false;
   double _scrollEdgeOverscrollDistance = 0;
   bool _scrollEdgeAdvanceArmed = false;
+  int _scrollEdgeActionDirection = 0;
   double? _swipeDragStartDx;
   double? _swipeDragCurrentDx;
   int? _tapPointerId;
@@ -240,6 +241,10 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
       const <String, List<_CatalogSearchEntry>>{};
   final Map<String, _PrecomputedChapterLayout> _precomputedChapterLayouts =
       <String, _PrecomputedChapterLayout>{};
+  final Map<String, GlobalKey> _continuousTextChapterKeys =
+      <String, GlobalKey>{};
+  List<_ContinuousTextChapter> _continuousTextChapters =
+      const <_ContinuousTextChapter>[];
 
   static const List<String> _kFallbackBackgroundPresetPaths = [
     'assets/reader/backgrounds/20260224-212555-700782.jpeg',
@@ -331,6 +336,11 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
     return mode == ReaderPageTurnMode.scroll ||
         mode == ReaderPageTurnMode.tapAndScroll;
   }
+
+  bool get _shouldUseContinuousTextFlow =>
+      _pageTurnUsesScroll(_settings.pageTurnMode) &&
+      !_isMangaChapter &&
+      !_isPagedTextReaderEnabled();
 
   ReaderPageTurnMode _composePageTurnMode({
     required bool tapEnabled,
@@ -1348,6 +1358,13 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
   }
 
   Widget _buildReaderList(_ReaderThemeColors colors) {
+    if (_shouldUseContinuousTextFlow && _continuousTextChapters.isNotEmpty) {
+      return _buildContinuousTextReader(colors);
+    }
+    return _buildStandardReaderList(colors);
+  }
+
+  Widget _buildStandardReaderList(_ReaderThemeColors colors) {
     final paragraphs = _paragraphs;
 
     final bottomInset = _effectiveBottomSafeInset(context);
@@ -1422,6 +1439,126 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
         _wrapSelectionArea(child: listView),
         if (_isAutoReadSessionEnabled) _buildAutoReadIndicator(colors),
       ],
+    );
+  }
+
+  Widget _buildContinuousTextReader(_ReaderThemeColors colors) {
+    final bottomInset = _effectiveBottomSafeInset(context);
+    final bodyLeft =
+        _settings.bodyMarginLeft
+            .clamp(
+              ReaderSettings.minLayoutMargin,
+              ReaderSettings.maxLayoutMargin,
+            )
+            .toDouble();
+    final bodyTop =
+        _settings.bodyMarginTop
+            .clamp(
+              ReaderSettings.minLayoutMargin,
+              ReaderSettings.maxLayoutMargin,
+            )
+            .toDouble();
+    final bodyRight =
+        _settings.bodyMarginRight
+            .clamp(
+              ReaderSettings.minLayoutMargin,
+              ReaderSettings.maxLayoutMargin,
+            )
+            .toDouble();
+    final bodyBottom =
+        _settings.bodyMarginBottom
+            .clamp(
+              ReaderSettings.minLayoutMargin,
+              ReaderSettings.maxLayoutMargin,
+            )
+            .toDouble();
+
+    final listView = NotificationListener<ScrollNotification>(
+      onNotification: _onReaderScrollNotification,
+      child: ListView.separated(
+        controller: _scrollController,
+        cacheExtent: 1800,
+        padding: EdgeInsets.fromLTRB(
+          bodyLeft,
+          bodyTop,
+          bodyRight,
+          bodyBottom + 96 + bottomInset,
+        ),
+        itemCount: _continuousTextChapters.length,
+        separatorBuilder:
+            (_, __) =>
+                SizedBox(height: max(18.0, _settings.paragraphSpacing * 1.2)),
+        itemBuilder: (context, index) {
+          final chapter = _continuousTextChapters[index];
+          return _buildContinuousTextChapterSection(
+            chapter: chapter,
+            isActive: _isContinuousTextChapterActive(chapter),
+            colors: colors,
+          );
+        },
+      ),
+    );
+
+    return Stack(
+      key: _readerBodyKey,
+      children: [
+        listView,
+        if (_isAutoReadSessionEnabled) _buildAutoReadIndicator(colors),
+      ],
+    );
+  }
+
+  Widget _buildContinuousTextChapterSection({
+    required _ContinuousTextChapter chapter,
+    required bool isActive,
+    required _ReaderThemeColors colors,
+  }) {
+    final paragraphs =
+        chapter.paragraphs.isEmpty
+            ? <String>[chapter.content]
+            : chapter.paragraphs;
+    final body = Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        for (var index = 0; index < paragraphs.length; index += 1)
+          isActive
+              ? _buildSelectableParagraphItem(
+                paragraph: paragraphs[index],
+                paragraphIndex: index,
+                isLast: index == paragraphs.length - 1,
+                colors: colors,
+              )
+              : _buildStaticParagraphItem(
+                paragraph: paragraphs[index],
+                isLast: index == paragraphs.length - 1,
+                colors: colors,
+              ),
+      ],
+    );
+
+    return KeyedSubtree(
+      key: _continuousTextChapterKey(chapter),
+      child: isActive ? _wrapSelectionArea(child: body) : body,
+    );
+  }
+
+  Widget _buildStaticParagraphItem({
+    required String paragraph,
+    required bool isLast,
+    required _ReaderThemeColors colors,
+  }) {
+    final textStyle = _paragraphTextStyle(colors);
+    final paddingBottom = isLast ? 0.0 : _settings.paragraphSpacing;
+
+    return RepaintBoundary(
+      child: Padding(
+        padding: EdgeInsets.only(bottom: paddingBottom),
+        child: Text(
+          _applyParagraphIndent(paragraph),
+          style: textStyle,
+          textAlign: _paragraphTextAlign(_settings),
+        ),
+      ),
     );
   }
 
@@ -2513,6 +2650,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
               notification.direction == ScrollDirection.idle)) {
         _scrollEdgeOverscrollDistance = 0;
         _scrollEdgeAdvanceArmed = false;
+        _scrollEdgeActionDirection = 0;
       }
       return false;
     }
@@ -2525,46 +2663,77 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
     if (notification is ScrollStartNotification) {
       _scrollEdgeOverscrollDistance = 0;
       _scrollEdgeAdvanceArmed = false;
+      _scrollEdgeActionDirection = 0;
       return false;
     }
 
-    if (notification is UserScrollNotification) {
-      if (notification.direction == ScrollDirection.reverse) {
-        _scrollEdgeAdvanceArmed = true;
-      } else if (notification.direction == ScrollDirection.forward) {
-        _scrollEdgeAdvanceArmed = false;
-      }
-    }
-
+    final atTop =
+        metrics.pixels <=
+        metrics.minScrollExtent + _kScrollAdvanceEdgeTolerance;
     final atBottom =
         metrics.maxScrollExtent > 0 &&
         metrics.pixels >=
             metrics.maxScrollExtent - _kScrollAdvanceEdgeTolerance;
-    if (!atBottom) {
+    if (notification is UserScrollNotification) {
+      if (notification.direction == ScrollDirection.reverse && atBottom) {
+        _scrollEdgeAdvanceArmed = true;
+        _scrollEdgeActionDirection = 1;
+      } else if (notification.direction == ScrollDirection.forward && atTop) {
+        _scrollEdgeAdvanceArmed = true;
+        _scrollEdgeActionDirection = -1;
+      } else if (notification.direction == ScrollDirection.forward) {
+        _scrollEdgeAdvanceArmed = false;
+        _scrollEdgeActionDirection = 0;
+      } else if (notification.direction == ScrollDirection.idle) {
+        _scrollEdgeAdvanceArmed = false;
+        _scrollEdgeActionDirection = 0;
+      }
+    }
+
+    if (!atBottom && !atTop) {
       _scrollEdgeOverscrollDistance = 0;
       if (notification is ScrollEndNotification ||
           (notification is UserScrollNotification &&
               notification.direction == ScrollDirection.idle)) {
         _scrollEdgeAdvanceArmed = false;
+        _scrollEdgeActionDirection = 0;
       }
       return false;
     }
 
     if (notification is ScrollUpdateNotification &&
         notification.dragDetails != null &&
-        (notification.scrollDelta ?? 0) >= 0) {
-      _scrollEdgeAdvanceArmed = true;
+        notification.scrollDelta != null) {
+      final delta = notification.scrollDelta!;
+      if (atBottom && delta >= 0) {
+        _scrollEdgeAdvanceArmed = true;
+        _scrollEdgeActionDirection = 1;
+      } else if (atTop && delta <= 0) {
+        _scrollEdgeAdvanceArmed = true;
+        _scrollEdgeActionDirection = -1;
+      }
     }
 
     if (notification is OverscrollNotification &&
-        notification.overscroll > 0 &&
         notification.dragDetails != null) {
-      _scrollEdgeAdvanceArmed = true;
-      _scrollEdgeOverscrollDistance += notification.overscroll;
-      if (_scrollEdgeOverscrollDistance >= _kScrollAdvanceOverscrollTrigger) {
+      final direction =
+          notification.overscroll > 0 && atBottom
+              ? 1
+              : notification.overscroll < 0 && atTop
+              ? -1
+              : 0;
+      if (direction != 0) {
+        _scrollEdgeAdvanceArmed = true;
+        _scrollEdgeActionDirection = direction;
+        _scrollEdgeOverscrollDistance += notification.overscroll.abs();
+      }
+      if (_scrollEdgeOverscrollDistance >= _kScrollAdvanceOverscrollTrigger &&
+          _scrollEdgeActionDirection != 0) {
         _scrollEdgeOverscrollDistance = 0;
         _scrollEdgeAdvanceArmed = false;
-        unawaited(_advanceChapterFromScrollEdge());
+        final actionDirection = _scrollEdgeActionDirection;
+        _scrollEdgeActionDirection = 0;
+        unawaited(_handleScrollEdgeChapterAction(actionDirection));
       }
       return false;
     }
@@ -2573,14 +2742,35 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
         (notification is UserScrollNotification &&
             notification.direction == ScrollDirection.idle)) {
       final shouldAdvance = _scrollEdgeAdvanceArmed;
+      final actionDirection = _scrollEdgeActionDirection;
       _scrollEdgeOverscrollDistance = 0;
       _scrollEdgeAdvanceArmed = false;
-      if (shouldAdvance) {
-        unawaited(_advanceChapterFromScrollEdge());
+      _scrollEdgeActionDirection = 0;
+      if (shouldAdvance && actionDirection != 0) {
+        unawaited(_handleScrollEdgeChapterAction(actionDirection));
       }
     }
 
     return false;
+  }
+
+  Future<void> _handleScrollEdgeChapterAction(int direction) async {
+    if (direction == 0) {
+      return;
+    }
+    if (_shouldUseContinuousTextFlow) {
+      if (direction > 0) {
+        await _appendNextContinuousTextChapter();
+      } else {
+        await _prependPreviousContinuousTextChapter();
+      }
+      return;
+    }
+    if (direction > 0) {
+      await _advanceChapterFromScrollEdge();
+      return;
+    }
+    await _retreatChapterFromScrollEdge();
   }
 
   Future<void> _advanceChapterFromScrollEdge() async {
@@ -2596,6 +2786,24 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
     _isScrollEdgeAdvancingChapter = true;
     try {
       await _jumpTo(index + 1, initialScrollRatio: 0);
+    } finally {
+      _isScrollEdgeAdvancingChapter = false;
+    }
+  }
+
+  Future<void> _retreatChapterFromScrollEdge() async {
+    if (_isScrollEdgeAdvancingChapter || _isAutoReadAdvancingChapter) {
+      return;
+    }
+
+    final index = _currentIndex;
+    if (index == null || index <= 0) {
+      return;
+    }
+
+    _isScrollEdgeAdvancingChapter = true;
+    try {
+      await _jumpTo(index - 1, initialScrollRatio: 1);
     } finally {
       _isScrollEdgeAdvancingChapter = false;
     }
@@ -5952,6 +6160,367 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
     unawaited(_refreshChapterBookmarks());
   }
 
+  GlobalKey _continuousTextChapterKey(_ContinuousTextChapter chapter) {
+    final identity =
+        chapter.chapterUrl.trim().isNotEmpty
+            ? chapter.chapterUrl.trim()
+            : '${chapter.chapterIndex}:${chapter.chapterId}';
+    return _continuousTextChapterKeys.putIfAbsent(identity, () => GlobalKey());
+  }
+
+  bool _shouldBuildContinuousTextFlowFor(ChapterContentResult result) {
+    return _shouldUseContinuousTextFlow &&
+        result.imageUrls.isEmpty &&
+        result.content.trim().isNotEmpty;
+  }
+
+  _ContinuousTextChapter _buildContinuousTextChapter({
+    required Chapter chapter,
+    required int chapterIndex,
+    required _ChapterLoadSnapshot snapshot,
+  }) {
+    final displayTitle =
+        snapshot.result.displayChapterTitle?.trim().isNotEmpty == true
+            ? snapshot.result.displayChapterTitle!.trim()
+            : chapter.title.trim();
+    final paragraphs = _splitParagraphs(snapshot.result.content);
+    final effectiveParagraphs =
+        paragraphs.isEmpty && snapshot.result.content.trim().isNotEmpty
+            ? <String>[snapshot.result.content]
+            : paragraphs;
+
+    return _ContinuousTextChapter(
+      chapterId: chapter.id,
+      chapterUrl: chapter.chapterUrl.trim(),
+      chapterTitle: chapter.title.trim(),
+      displayTitle: displayTitle,
+      chapterIndex: chapterIndex,
+      content: snapshot.result.content,
+      paragraphs: List<String>.unmodifiable(effectiveParagraphs),
+      isCached: snapshot.isCached,
+      effectiveReaderReplaceRules: List<ReaderReplaceRule>.unmodifiable(
+        snapshot.result.effectiveReaderReplaceRules,
+      ),
+    );
+  }
+
+  void _replaceContinuousTextFlowWithCurrentChapter({
+    required Chapter chapter,
+    required int chapterIndex,
+    required _ChapterLoadSnapshot snapshot,
+  }) {
+    if (!_shouldBuildContinuousTextFlowFor(snapshot.result)) {
+      _continuousTextChapters = const <_ContinuousTextChapter>[];
+      return;
+    }
+
+    _continuousTextChapters = <_ContinuousTextChapter>[
+      _buildContinuousTextChapter(
+        chapter: chapter,
+        chapterIndex: chapterIndex,
+        snapshot: snapshot,
+      ),
+    ];
+  }
+
+  Future<_ContinuousTextChapter?> _loadContinuousTextChapter(
+    int chapterIndex,
+  ) async {
+    if (chapterIndex < 0 || chapterIndex >= _chapters.length) {
+      return null;
+    }
+
+    final chapter = _chapters[chapterIndex];
+    if (chapterIndex == _currentIndex &&
+        _chapterImageUrls.isEmpty &&
+        _content.trim().isNotEmpty) {
+      final currentParagraphs =
+          _paragraphs.isEmpty ? <String>[_content] : _paragraphs;
+      return _ContinuousTextChapter(
+        chapterId: _chapterId,
+        chapterUrl: (_chapterUrl ?? '').trim(),
+        chapterTitle: chapter.title.trim(),
+        displayTitle: (_chapterTitle ?? chapter.title).trim(),
+        chapterIndex: chapterIndex,
+        content: _content,
+        paragraphs: List<String>.unmodifiable(currentParagraphs),
+        isCached: _isCurrentChapterCached,
+        effectiveReaderReplaceRules: List<ReaderReplaceRule>.unmodifiable(
+          _effectiveReaderReplaceRules,
+        ),
+      );
+    }
+
+    final chapterUrl = chapter.chapterUrl.trim();
+    if (chapterUrl.isEmpty) {
+      return null;
+    }
+
+    final snapshot = await _fetchChapterContentSnapshot(
+      sourceId: (_sourceId ?? '').trim(),
+      chapterId: chapter.id,
+      chapterUrl: chapterUrl,
+      chapterTitle: chapter.title,
+      chapterIndex: chapterIndex,
+    );
+    if (!_shouldBuildContinuousTextFlowFor(snapshot.result)) {
+      return null;
+    }
+    return _buildContinuousTextChapter(
+      chapter: chapter,
+      chapterIndex: chapterIndex,
+      snapshot: snapshot,
+    );
+  }
+
+  Future<void> _appendNextContinuousTextChapter() async {
+    if (_isScrollEdgeAdvancingChapter ||
+        !_shouldUseContinuousTextFlow ||
+        _continuousTextChapters.isEmpty) {
+      return;
+    }
+
+    final targetIndex = _continuousTextChapters.last.chapterIndex + 1;
+    if (targetIndex >= _chapters.length) {
+      return;
+    }
+
+    _isScrollEdgeAdvancingChapter = true;
+    try {
+      final chapter = await _loadContinuousTextChapter(targetIndex);
+      if (!mounted || chapter == null) {
+        return;
+      }
+      if (_continuousTextChapters.any(
+        (item) => item.chapterIndex == chapter.chapterIndex,
+      )) {
+        return;
+      }
+      setState(() {
+        _continuousTextChapters = List<_ContinuousTextChapter>.unmodifiable(
+          <_ContinuousTextChapter>[..._continuousTextChapters, chapter],
+        );
+      });
+    } finally {
+      _isScrollEdgeAdvancingChapter = false;
+    }
+  }
+
+  Future<void> _prependPreviousContinuousTextChapter() async {
+    if (_isScrollEdgeAdvancingChapter ||
+        !_shouldUseContinuousTextFlow ||
+        _continuousTextChapters.isEmpty) {
+      return;
+    }
+
+    final targetIndex = _continuousTextChapters.first.chapterIndex - 1;
+    if (targetIndex < 0) {
+      return;
+    }
+
+    _isScrollEdgeAdvancingChapter = true;
+    try {
+      final chapter = await _loadContinuousTextChapter(targetIndex);
+      if (!mounted || chapter == null) {
+        return;
+      }
+      if (_continuousTextChapters.any(
+        (item) => item.chapterIndex == chapter.chapterIndex,
+      )) {
+        return;
+      }
+      setState(() {
+        _continuousTextChapters = List<_ContinuousTextChapter>.unmodifiable(
+          <_ContinuousTextChapter>[chapter, ..._continuousTextChapters],
+        );
+      });
+    } finally {
+      _isScrollEdgeAdvancingChapter = false;
+    }
+  }
+
+  bool _isContinuousTextChapterActive(_ContinuousTextChapter chapter) {
+    if (_currentIndex != null && chapter.chapterIndex == _currentIndex) {
+      return true;
+    }
+    final chapterUrl = (_chapterUrl ?? '').trim();
+    if (chapterUrl.isNotEmpty && chapter.chapterUrl == chapterUrl) {
+      return true;
+    }
+    return chapter.chapterId.trim() == _chapterId.trim();
+  }
+
+  _ContinuousTextChapter? _findCurrentContinuousTextChapter() {
+    for (final chapter in _continuousTextChapters) {
+      if (_isContinuousTextChapterActive(chapter)) {
+        return chapter;
+      }
+    }
+    return null;
+  }
+
+  _ContinuousTextChapterLayout? _measureContinuousTextChapterLayout(
+    _ContinuousTextChapter chapter,
+  ) {
+    if (!_scrollController.hasClients) {
+      return null;
+    }
+
+    final context = _continuousTextChapterKey(chapter).currentContext;
+    final renderObject = context?.findRenderObject();
+    if (renderObject is! RenderBox || !renderObject.hasSize) {
+      return null;
+    }
+
+    final viewport = RenderAbstractViewport.of(renderObject);
+    final startOffset = viewport.getOffsetToReveal(renderObject, 0).offset;
+    return _ContinuousTextChapterLayout(
+      startOffset: startOffset,
+      endOffset: startOffset + renderObject.size.height,
+    );
+  }
+
+  double _continuousTextChapterScrollRatioFor(_ContinuousTextChapter chapter) {
+    if (!_scrollController.hasClients) {
+      return 0;
+    }
+
+    final layout = _measureContinuousTextChapterLayout(chapter);
+    if (layout == null) {
+      return 0;
+    }
+
+    final viewportExtent = _scrollController.position.viewportDimension;
+    final available = (layout.endOffset - layout.startOffset - viewportExtent)
+        .clamp(0.0, double.infinity);
+    if (available <= 0) {
+      if (_scrollController.position.pixels <= layout.startOffset) {
+        return 0;
+      }
+      return 1;
+    }
+
+    final local = (_scrollController.position.pixels - layout.startOffset)
+        .clamp(0.0, available);
+    return (local / available).clamp(0.0, 1.0);
+  }
+
+  _ContinuousTextChapter? _resolveActiveContinuousTextChapter() {
+    if (!_scrollController.hasClients || _continuousTextChapters.isEmpty) {
+      return null;
+    }
+
+    final probeOffset =
+        _scrollController.position.pixels +
+        _scrollController.position.viewportDimension * 0.35;
+    _ContinuousTextChapter? fallback;
+    var fallbackDistance = double.infinity;
+
+    for (final chapter in _continuousTextChapters) {
+      final layout = _measureContinuousTextChapterLayout(chapter);
+      if (layout == null) {
+        continue;
+      }
+      if (probeOffset >= layout.startOffset && probeOffset < layout.endOffset) {
+        return chapter;
+      }
+
+      final distance =
+          probeOffset < layout.startOffset
+              ? layout.startOffset - probeOffset
+              : probeOffset - layout.endOffset;
+      if (distance < fallbackDistance) {
+        fallbackDistance = distance;
+        fallback = chapter;
+      }
+    }
+
+    return fallback;
+  }
+
+  void _activateContinuousTextChapter(_ContinuousTextChapter chapter) {
+    if (_isContinuousTextChapterActive(chapter)) {
+      return;
+    }
+
+    final initialRatio = _continuousTextChapterScrollRatioFor(chapter);
+    _commitReadingRecordSession();
+    if (!mounted) {
+      return;
+    }
+
+    setState(() {
+      _currentIndex = chapter.chapterIndex;
+      _chapterId = chapter.chapterId;
+      _chapterUrl = chapter.chapterUrl;
+      _chapterTitle = chapter.displayTitle;
+      _isCurrentChapterCached = chapter.isCached;
+      _effectiveReaderReplaceRules = List<ReaderReplaceRule>.unmodifiable(
+        chapter.effectiveReaderReplaceRules,
+      );
+      _setContent(chapter.content, precomputedParagraphs: chapter.paragraphs);
+    });
+
+    _scheduleReadingRecordSessionStart(initialRatio: initialRatio);
+    _scheduleProgressSave();
+    final preloadTaskToken = ++_preloadTaskToken;
+    unawaited(_preloadNeighbors(taskToken: preloadTaskToken));
+  }
+
+  void _syncActiveContinuousTextChapterFromScroll() {
+    if (!_shouldUseContinuousTextFlow || _continuousTextChapters.length <= 1) {
+      return;
+    }
+
+    final resolved = _resolveActiveContinuousTextChapter();
+    if (resolved == null || _isContinuousTextChapterActive(resolved)) {
+      return;
+    }
+    _activateContinuousTextChapter(resolved);
+  }
+
+  void _syncContinuousTextFlowAfterSettingsApplied() {
+    if (!_shouldUseContinuousTextFlow ||
+        _chapterImageUrls.isNotEmpty ||
+        _content.trim().isEmpty ||
+        _currentIndex == null ||
+        _currentIndex! < 0 ||
+        _currentIndex! >= _chapters.length) {
+      if (_continuousTextChapters.isEmpty) {
+        return;
+      }
+      setState(() {
+        _continuousTextChapters = const <_ContinuousTextChapter>[];
+      });
+      return;
+    }
+
+    if (_continuousTextChapters.isNotEmpty) {
+      return;
+    }
+
+    final currentChapter = _chapters[_currentIndex!];
+    final effectiveParagraphs =
+        _paragraphs.isEmpty ? <String>[_content] : _paragraphs;
+    setState(() {
+      _continuousTextChapters = <_ContinuousTextChapter>[
+        _ContinuousTextChapter(
+          chapterId: _chapterId,
+          chapterUrl: (_chapterUrl ?? '').trim(),
+          chapterTitle: currentChapter.title.trim(),
+          displayTitle: (_chapterTitle ?? currentChapter.title).trim(),
+          chapterIndex: _currentIndex!,
+          content: _content,
+          paragraphs: List<String>.unmodifiable(effectiveParagraphs),
+          isCached: _isCurrentChapterCached,
+          effectiveReaderReplaceRules: List<ReaderReplaceRule>.unmodifiable(
+            _effectiveReaderReplaceRules,
+          ),
+        ),
+      ];
+    });
+  }
+
   void _resetCatalogSearchCache() {
     _catalogSearchCacheFingerprint = null;
     _catalogSearchEntriesCache = const <String, List<_CatalogSearchEntry>>{};
@@ -6662,6 +7231,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
       return;
     }
 
+    _syncActiveContinuousTextChapterFromScroll();
     _syncActiveReadingRecordSessionProgress();
     _scheduleProgressSave();
   }
@@ -6836,6 +7406,13 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
       return (_mangaPageIndex / (total - 1)).clamp(0.0, 1.0);
     }
 
+    if (_shouldUseContinuousTextFlow) {
+      final currentChapter = _findCurrentContinuousTextChapter();
+      if (currentChapter != null) {
+        return _continuousTextChapterScrollRatioFor(currentChapter);
+      }
+    }
+
     if (!_scrollController.hasClients) {
       return 0;
     }
@@ -6959,6 +7536,19 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
       return;
     }
 
+    final resolvedContinuousIndex =
+        chapterIndex ??
+        _chapters.indexWhere(
+          (item) =>
+              item.id == chapterId ||
+              item.chapterUrl.trim() == chapterUrl.trim(),
+        );
+    final resolvedContinuousChapter =
+        resolvedContinuousIndex >= 0 &&
+                resolvedContinuousIndex < _chapters.length
+            ? _chapters[resolvedContinuousIndex]
+            : null;
+
     List<String>? precomputedParagraphs;
     List<List<_PagedSlice>>? precomputedPagedPages;
     int? precomputedPageIndex;
@@ -7041,6 +7631,15 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
         precomputedCurrentPageIndex: precomputedPageIndex,
         precomputedPaginationSignature: precomputedPaginationSignature,
       );
+      if (resolvedContinuousChapter != null) {
+        _replaceContinuousTextFlowWithCurrentChapter(
+          chapter: resolvedContinuousChapter,
+          chapterIndex: resolvedContinuousIndex,
+          snapshot: snapshot,
+        );
+      } else {
+        _continuousTextChapters = const <_ContinuousTextChapter>[];
+      }
       _pendingPageRestoreRatio =
           precomputedPaginationSignature == null ? targetRatio : null;
     });
@@ -7094,6 +7693,13 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
         return false;
       }
 
+      final resolvedCurrentChapter =
+          _currentIndex != null &&
+                  _currentIndex! >= 0 &&
+                  _currentIndex! < _chapters.length
+              ? _chapters[_currentIndex!]
+              : null;
+
       setState(() {
         _isCurrentChapterCached = true;
         _errorText = null;
@@ -7108,6 +7714,34 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
           imageUrls: decoded.imageUrls,
           imageHeaders: decoded.imageHeaders,
         );
+        if (resolvedCurrentChapter != null &&
+            _shouldUseContinuousTextFlow &&
+            decoded.imageUrls.isEmpty &&
+            contentResult.content.trim().isNotEmpty) {
+          _continuousTextChapters = <_ContinuousTextChapter>[
+            _ContinuousTextChapter(
+              chapterId: _chapterId,
+              chapterUrl: (_chapterUrl ?? '').trim(),
+              chapterTitle: resolvedCurrentChapter.title.trim(),
+              displayTitle:
+                  (_chapterTitle ?? resolvedCurrentChapter.title).trim(),
+              chapterIndex: _currentIndex!,
+              content: contentResult.content,
+              paragraphs:
+                  _paragraphs.isEmpty
+                      ? List<String>.unmodifiable(<String>[
+                        contentResult.content,
+                      ])
+                      : List<String>.unmodifiable(_paragraphs),
+              isCached: true,
+              effectiveReaderReplaceRules: List<ReaderReplaceRule>.unmodifiable(
+                effectiveRules,
+              ),
+            ),
+          ];
+        } else {
+          _continuousTextChapters = const <_ContinuousTextChapter>[];
+        }
         _pendingPageRestoreRatio = previewRatio;
       });
 
@@ -9365,6 +9999,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
         autoReadEnabled: false,
       );
     });
+    _syncContinuousTextFlowAfterSettingsApplied();
     _reconcileAutoRead(restart: true);
     if (showMessage) {
       _showMessage('已开启自动阅读。');
@@ -9387,6 +10022,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
           autoReadEnabled: false,
         );
       });
+      _syncContinuousTextFlowAfterSettingsApplied();
     } else {
       _isAutoReadSessionEnabled = false;
     }
@@ -13432,6 +14068,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
       _settings = appliedResult;
       _customFonts = refreshedCustomFonts;
     });
+    _syncContinuousTextFlowAfterSettingsApplied();
     _clearSelectionState();
     await _preferencesService.saveSettings(appliedResult);
 
@@ -14136,6 +14773,40 @@ class _ChapterLoadSnapshot {
 
   final ChapterContentResult result;
   final bool isCached;
+}
+
+class _ContinuousTextChapter {
+  const _ContinuousTextChapter({
+    required this.chapterId,
+    required this.chapterUrl,
+    required this.chapterTitle,
+    required this.displayTitle,
+    required this.chapterIndex,
+    required this.content,
+    required this.paragraphs,
+    required this.isCached,
+    required this.effectiveReaderReplaceRules,
+  });
+
+  final String chapterId;
+  final String chapterUrl;
+  final String chapterTitle;
+  final String displayTitle;
+  final int chapterIndex;
+  final String content;
+  final List<String> paragraphs;
+  final bool isCached;
+  final List<ReaderReplaceRule> effectiveReaderReplaceRules;
+}
+
+class _ContinuousTextChapterLayout {
+  const _ContinuousTextChapterLayout({
+    required this.startOffset,
+    required this.endOffset,
+  });
+
+  final double startOffset;
+  final double endOffset;
 }
 
 class _DecodedReaderChapterCache {

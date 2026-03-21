@@ -304,101 +304,111 @@ class _SourcePageState extends State<SourcePage> {
     final horizontal = AppSpacing.pageHorizontal(context);
     final bottomSafe = MediaQuery.viewPaddingOf(context).bottom;
 
-    return Scaffold(
-      appBar: AppBar(
-        leading:
-            _isSelectionMode
-                ? IconButton(
-                  onPressed: _exitSelectionMode,
-                  tooltip: '取消选择',
-                  icon: const Icon(Icons.close),
-                )
-                : IconButton(
-                  onPressed: () {
-                    if (context.canPop()) {
-                      context.pop();
-                      return;
-                    }
-                    context.go('/mine');
-                  },
-                  tooltip: '返回',
-                  icon: const Icon(Icons.arrow_back),
-                ),
-        title: Text(
-          _isSelectionMode ? '已选择 ${_selectedSourceIds.length} 项' : '书源',
-        ),
-        actions: [
-          if (!_isSelectionMode) ...[
-            IconButton(
-              onPressed: _openBatchDiagnostics,
-              tooltip: '批量诊断',
-              icon: const Icon(Icons.fact_check_outlined),
-            ),
-            if (_isImporting)
-              const Padding(
-                padding: EdgeInsets.only(right: 16),
-                child: Center(
-                  child: SizedBox(
-                    width: 18,
-                    height: 18,
-                    child: CircularProgressIndicator(strokeWidth: 2),
+    return PopScope<void>(
+      canPop: context.canPop(),
+      onPopInvokedWithResult: (didPop, _) {
+        if (didPop || !mounted || _isSelectionMode) {
+          return;
+        }
+        context.go('/mine');
+      },
+      child: Scaffold(
+        appBar: AppBar(
+          leading:
+              _isSelectionMode
+                  ? IconButton(
+                    onPressed: _exitSelectionMode,
+                    tooltip: '取消选择',
+                    icon: const Icon(Icons.close),
+                  )
+                  : IconButton(
+                    onPressed: () {
+                      if (context.canPop()) {
+                        context.pop();
+                        return;
+                      }
+                      context.go('/mine');
+                    },
+                    tooltip: '返回',
+                    icon: const Icon(Icons.arrow_back),
                   ),
-                ),
-              )
-            else
-              PopupMenuButton<_ImportAction>(
-                tooltip: '导入书源',
-                icon: const Icon(Icons.add),
-                onSelected: (action) {
-                  switch (action) {
-                    case _ImportAction.paste:
-                      _importFromPaste();
-                    case _ImportAction.url:
-                      _importFromUrl();
-                    case _ImportAction.file:
-                      _importFromFile();
-                    case _ImportAction.batchSample:
-                      _importFromBuiltInBatch();
-                  }
-                },
-                itemBuilder:
-                    (context) => const [
-                      PopupMenuItem(
-                        value: _ImportAction.paste,
-                        child: Text('粘贴导入 JSON'),
-                      ),
-                      PopupMenuItem(
-                        value: _ImportAction.url,
-                        child: Text('链接导入'),
-                      ),
-                      PopupMenuItem(
-                        value: _ImportAction.file,
-                        child: Text('文件导入'),
-                      ),
-                      PopupMenuItem(
-                        value: _ImportAction.batchSample,
-                        child: Text('批量导入 read/test'),
-                      ),
-                    ],
-              ),
-          ],
-        ],
-      ),
-      bottomNavigationBar: _isSelectionMode ? _buildSelectionActionBar() : null,
-      body: DecoratedBox(
-        decoration: BoxDecoration(
-          gradient: LinearGradient(
-            begin: Alignment.topCenter,
-            end: Alignment.bottomCenter,
-            colors: [
-              Theme.of(context).colorScheme.surface,
-              Theme.of(context).colorScheme.surfaceContainerLow,
-            ],
+          title: Text(
+            _isSelectionMode ? '已选择 ${_selectedSourceIds.length} 项' : '书源',
           ),
+          actions: [
+            if (!_isSelectionMode) ...[
+              IconButton(
+                onPressed: _openBatchDiagnostics,
+                tooltip: '批量诊断',
+                icon: const Icon(Icons.fact_check_outlined),
+              ),
+              if (_isImporting)
+                const Padding(
+                  padding: EdgeInsets.only(right: 16),
+                  child: Center(
+                    child: SizedBox(
+                      width: 18,
+                      height: 18,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    ),
+                  ),
+                )
+              else
+                PopupMenuButton<_ImportAction>(
+                  tooltip: '导入书源',
+                  icon: const Icon(Icons.add),
+                  onSelected: (action) {
+                    switch (action) {
+                      case _ImportAction.paste:
+                        _importFromPaste();
+                      case _ImportAction.url:
+                        _importFromUrl();
+                      case _ImportAction.file:
+                        _importFromFile();
+                      case _ImportAction.batchSample:
+                        _importFromBuiltInBatch();
+                    }
+                  },
+                  itemBuilder:
+                      (context) => const [
+                        PopupMenuItem(
+                          value: _ImportAction.paste,
+                          child: Text('粘贴导入 JSON'),
+                        ),
+                        PopupMenuItem(
+                          value: _ImportAction.url,
+                          child: Text('链接导入'),
+                        ),
+                        PopupMenuItem(
+                          value: _ImportAction.file,
+                          child: Text('文件导入'),
+                        ),
+                        PopupMenuItem(
+                          value: _ImportAction.batchSample,
+                          child: Text('批量导入 read/test'),
+                        ),
+                      ],
+                ),
+            ],
+          ],
         ),
-        child: _buildSourceListContent(
-          horizontal: horizontal,
-          bottomSafe: bottomSafe,
+        bottomNavigationBar:
+            _isSelectionMode ? _buildSelectionActionBar() : null,
+        body: DecoratedBox(
+          decoration: BoxDecoration(
+            gradient: LinearGradient(
+              begin: Alignment.topCenter,
+              end: Alignment.bottomCenter,
+              colors: [
+                Theme.of(context).colorScheme.surface,
+                Theme.of(context).colorScheme.surfaceContainerLow,
+              ],
+            ),
+          ),
+          child: _buildSourceListContent(
+            horizontal: horizontal,
+            bottomSafe: bottomSafe,
+          ),
         ),
       ),
     );

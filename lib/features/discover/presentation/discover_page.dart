@@ -1103,7 +1103,7 @@ class _DiscoverPageState extends State<DiscoverPage>
             ],
             const SizedBox(height: 12),
             FilledButton.icon(
-              onPressed: () => context.go('/source'),
+              onPressed: () => context.push('/source'),
               icon: const Icon(Icons.storage_rounded),
               label: const Text('前往书源页'),
             ),
