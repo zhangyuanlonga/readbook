@@ -31,7 +31,9 @@ class ReaderVolumeKeyPageBridge {
   Stream<ReaderVolumeKeyEvent>? _events;
 
   bool get isSupported =>
-      !kIsWeb && defaultTargetPlatform == TargetPlatform.android;
+      !kIsWeb &&
+      (defaultTargetPlatform == TargetPlatform.android ||
+          defaultTargetPlatform == TargetPlatform.iOS);
 
   Stream<ReaderVolumeKeyEvent> get events {
     return _events ??=

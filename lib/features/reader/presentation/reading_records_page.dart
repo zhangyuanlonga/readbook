@@ -323,8 +323,10 @@ class _ReadingRecordsPageState extends State<ReadingRecordsPage> {
       showDragHandle: true,
       builder: (sheetContext) {
         final bottomInset = MediaQuery.viewInsetsOf(sheetContext).bottom;
-        return FractionallySizedBox(
-          heightFactor: heightFactor,
+        final maxSheetHeight =
+            MediaQuery.sizeOf(sheetContext).height * heightFactor;
+        return ConstrainedBox(
+          constraints: BoxConstraints(maxHeight: maxSheetHeight),
           child: StatefulBuilder(
             builder: (context, sheetSetState) {
               return Padding(
@@ -334,29 +336,22 @@ class _ReadingRecordsPageState extends State<ReadingRecordsPage> {
                   horizontal,
                   12 + bottomInset,
                 ),
-                child: LayoutBuilder(
-                  builder: (context, constraints) {
-                    return StreamBuilder<List<ReadingRecordDay>>(
-                      stream: _readingRecordService.watchDailyRecords(
-                        query: _searchKeyword,
+                child: StreamBuilder<List<ReadingRecordDay>>(
+                  stream: _readingRecordService.watchDailyRecords(
+                    query: _searchKeyword,
+                  ),
+                  builder: (context, snapshot) {
+                    final dailyRecords =
+                        snapshot.data ?? const <ReadingRecordDay>[];
+                    return SingleChildScrollView(
+                      child: SizedBox(
+                        width: double.infinity,
+                        child: _buildHeatmapCard(
+                          dailyRecords,
+                          inSheet: true,
+                          sheetSetState: sheetSetState,
+                        ),
                       ),
-                      builder: (context, snapshot) {
-                        final dailyRecords =
-                            snapshot.data ?? const <ReadingRecordDay>[];
-                        return SingleChildScrollView(
-                          child: ConstrainedBox(
-                            constraints: BoxConstraints(
-                              minWidth: constraints.maxWidth,
-                              minHeight: constraints.maxHeight,
-                            ),
-                            child: _buildHeatmapCard(
-                              dailyRecords,
-                              inSheet: true,
-                              sheetSetState: sheetSetState,
-                            ),
-                          ),
-                        );
-                      },
                     );
                   },
                 ),
@@ -1590,42 +1585,81 @@ class _ReadingRecordsPageState extends State<ReadingRecordsPage> {
               return true;
             },
             child: _buildRecordSurface(
-              ListTile(
-                contentPadding: const EdgeInsets.fromLTRB(12, 8, 8, 8),
+              InkWell(
+                borderRadius: BorderRadius.circular(18),
                 onTap: () => _openRecord(record),
-                leading: _buildCover(record.coverUrl),
-                title: Text(record.bookTitle),
-                subtitle: Text(
-                  '${record.bookAuthor?.trim().isNotEmpty == true ? record.bookAuthor!.trim() : '未知作者'}\n'
-                  '最近阅读：${record.lastChapterTitle ?? '未知章节'} · ${_formatDateTime(record.lastReadAt)}\n'
-                  '累计字数：${_formatReadChars(record.totalReadChars)}',
-                ),
-                isThreeLine: true,
-                trailing: SizedBox(
-                  width: 76,
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    crossAxisAlignment: CrossAxisAlignment.end,
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(12, 8, 8, 8),
+                  child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text(
-                        _formatDuration(record.totalReadMillis),
-                        textAlign: TextAlign.right,
-                        style: Theme.of(context).textTheme.labelSmall,
-                      ),
-                      const SizedBox(height: 2),
-                      IconButton(
-                        tooltip: '合并记录',
-                        visualDensity: VisualDensity.compact,
-                        iconSize: 18,
-                        splashRadius: 18,
-                        padding: EdgeInsets.zero,
-                        constraints: const BoxConstraints.tightFor(
-                          width: 28,
-                          height: 28,
+                      _buildCover(record.coverUrl),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              record.bookTitle,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: Theme.of(context).textTheme.titleSmall,
+                            ),
+                            const SizedBox(height: 6),
+                            Text(
+                              '最后阅读：${_formatDateTime(record.lastReadAt)}',
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: Theme.of(context).textTheme.bodyMedium,
+                            ),
+                            const SizedBox(height: 4),
+                            Text(
+                              '累计字数：${_formatReadChars(record.totalReadChars)}',
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: Theme.of(
+                                context,
+                              ).textTheme.bodyMedium?.copyWith(
+                                color:
+                                    Theme.of(
+                                      context,
+                                    ).colorScheme.onSurfaceVariant,
+                              ),
+                            ),
+                          ],
                         ),
-                        onPressed: () => unawaited(_mergeRecord(record)),
-                        icon: const Icon(Icons.merge_type_rounded),
+                      ),
+                      const SizedBox(width: 8),
+                      SizedBox(
+                        width: 84,
+                        height: 74,
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.end,
+                          children: [
+                            FittedBox(
+                              fit: BoxFit.scaleDown,
+                              alignment: Alignment.centerRight,
+                              child: Text(
+                                _formatDurationCompact(record.totalReadMillis),
+                                maxLines: 1,
+                                softWrap: false,
+                                textAlign: TextAlign.right,
+                                style: Theme.of(
+                                  context,
+                                ).textTheme.labelMedium?.copyWith(
+                                  fontWeight: FontWeight.w700,
+                                  height: 1.0,
+                                ),
+                              ),
+                            ),
+                            const Spacer(),
+                            _buildCompactTrailingAction(
+                              tooltip: '合并记录',
+                              icon: Icons.merge_type_rounded,
+                              onTap: () => unawaited(_mergeRecord(record)),
+                            ),
+                          ],
+                        ),
                       ),
                     ],
                   ),
@@ -1956,6 +1990,40 @@ class _ReadingRecordsPageState extends State<ReadingRecordsPage> {
       width: double.infinity,
       child: Card(
         child: Padding(padding: const EdgeInsets.all(20), child: Text(message)),
+      ),
+    );
+  }
+
+  Widget _buildCompactTrailingAction({
+    required String tooltip,
+    required IconData icon,
+    required VoidCallback onTap,
+  }) {
+    final colorScheme = Theme.of(context).colorScheme;
+    return Tooltip(
+      message: tooltip,
+      child: Semantics(
+        button: true,
+        label: tooltip,
+        child: Material(
+          color: colorScheme.primaryContainer.withValues(alpha: 0.28),
+          borderRadius: BorderRadius.circular(10),
+          child: InkWell(
+            borderRadius: BorderRadius.circular(10),
+            onTap: onTap,
+            child: SizedBox(
+              width: 30,
+              height: 30,
+              child: Center(
+                child: Icon(
+                  icon,
+                  size: 18,
+                  color: colorScheme.onPrimaryContainer,
+                ),
+              ),
+            ),
+          ),
+        ),
       ),
     );
   }
@@ -2299,6 +2367,10 @@ class _ReadingRecordsPageState extends State<ReadingRecordsPage> {
     final hours = minutes ~/ 60;
     final remainMinutes = minutes % 60;
     return remainMinutes == 0 ? '$hours 小时' : '$hours 小时 $remainMinutes 分钟';
+  }
+
+  String _formatDurationCompact(int millis) {
+    return _formatDuration(millis).replaceAll(' ', '');
   }
 
   String _formatReadChars(int chars) {

@@ -14,6 +14,7 @@
 - AI 快速上下文：`docs/ai_core_context.md`
 - 文档治理规则：`docs/documentation_governance.md`
 - 文档整合映射：`docs/documentation_map_2026-03-07.md`
+- Android 发布说明：`docs/android_release_guide.md`
 - 核心基线：`docs/project_overview.md` / `docs/requirements.md` / `docs/architecture.md` / `docs/project_conventions.md`
 
 ## 快速开始
@@ -36,13 +37,17 @@ flutter run
 
 ```bash
 # 默认：auto + release
+# Android 默认产出适合直接发给用户安装的 arm64 APK
 ./scripts/build_unified_artifacts.sh
 
 # 指定平台 + 模式
 ./scripts/build_unified_artifacts.sh android,ios,macos release
 
-# 只打 Android APK（按 ABI 拆分）
-ANDROID_TARGET=apk SPLIT_PER_ABI=1 ./scripts/build_unified_artifacts.sh android release
+# 只打 Android APK（按 ABI 拆分，得到多个更小的 APK）
+ANDROID_APK_PROFILE=split ./scripts/build_unified_artifacts.sh android release
+
+# 同时产出通用 APK + AAB（APK 体积会更大，但兼容机型最全）
+ANDROID_TARGET=both ANDROID_APK_PROFILE=universal ./scripts/build_unified_artifacts.sh android release
 
 # 非交互模式手动指定版本
 BUILD_NAME=1.0.7 BUILD_NUMBER=2 ./scripts/build_unified_artifacts.sh android,ios release
@@ -50,6 +55,8 @@ BUILD_NAME=1.0.7 BUILD_NUMBER=2 ./scripts/build_unified_artifacts.sh android,ios
 
 产物默认目录：`build/unified_artifacts/<timestamp>-<mode>/`
 同目录下会生成 `manifest.txt`，方便查看每个平台对应的文件名。
+
+更完整的 Android 体积 / ABI / APK / AAB 说明见：`docs/android_release_guide.md`
 
 ## 开发检查
 

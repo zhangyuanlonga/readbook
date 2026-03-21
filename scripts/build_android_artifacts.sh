@@ -10,7 +10,8 @@ PROJECT_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
 FLUTTER_CMD="${FLUTTER_CMD:-flutter}"
 TARGET="${1:-${TARGET:-apk}}"            # apk | appbundle | both
 BUILD_MODE="${2:-${BUILD_MODE:-release}}" # debug | profile | release
-SPLIT_PER_ABI="${SPLIT_PER_ABI:-0}"      # 1 to pass --split-per-abi for APK
+SPLIT_PER_ABI="${SPLIT_PER_ABI:-}"       # legacy alias for APK_PROFILE=split
+APK_PROFILE="${APK_PROFILE:-}"           # arm64 | split | universal
 OUTPUT_DIR="${OUTPUT_DIR:-${PROJECT_ROOT}/build/android/artifacts}"
 ARTIFACT_NAME="${ARTIFACT_NAME:-书享阅读}"
 BUILD_NAME="${BUILD_NAME:-}"
@@ -29,7 +30,8 @@ Arguments:
 
 Environment variables:
   FLUTTER_CMD   Flutter command path (default: flutter)
-  SPLIT_PER_ABI 1 to add --split-per-abi for APK (default: 0)
+  APK_PROFILE   APK output profile: arm64 | split | universal (default: arm64)
+  SPLIT_PER_ABI Legacy alias. Set to 1 for APK_PROFILE=split
   OUTPUT_DIR    Output artifacts folder (default: build/android/artifacts)
   ARTIFACT_NAME Final artifact display name prefix (default: 书享阅读)
   BUILD_NAME    Override Flutter --build-name
@@ -39,7 +41,8 @@ Environment variables:
 
 Examples:
   ./scripts/build_android_artifacts.sh apk release
-  SPLIT_PER_ABI=1 ./scripts/build_android_artifacts.sh apk release
+  APK_PROFILE=split ./scripts/build_android_artifacts.sh apk release
+  APK_PROFILE=universal ./scripts/build_android_artifacts.sh apk release
   ./scripts/build_android_artifacts.sh both release
 USAGE
 }
@@ -57,6 +60,20 @@ fi
 
 if [[ "${BUILD_MODE}" != "debug" && "${BUILD_MODE}" != "profile" && "${BUILD_MODE}" != "release" ]]; then
   echo "Error: build_mode must be debug | profile | release. Current: ${BUILD_MODE}" >&2
+  usage
+  exit 1
+fi
+
+if [[ -z "${APK_PROFILE}" ]]; then
+  if [[ "${SPLIT_PER_ABI}" == "1" ]]; then
+    APK_PROFILE="split"
+  else
+    APK_PROFILE="arm64"
+  fi
+fi
+
+if [[ "${APK_PROFILE}" != "arm64" && "${APK_PROFILE}" != "split" && "${APK_PROFILE}" != "universal" ]]; then
+  echo "Error: APK_PROFILE must be arm64 | split | universal. Current: ${APK_PROFILE}" >&2
   usage
   exit 1
 fi
@@ -107,6 +124,7 @@ echo "==> Project root: ${PROJECT_ROOT}"
 echo "==> Flutter cmd : ${FLUTTER_CMD}"
 echo "==> Target      : ${TARGET}"
 echo "==> Build mode  : ${BUILD_MODE}"
+echo "==> APK profile : ${APK_PROFILE}"
 echo "==> Build name  : ${BUILD_NAME:-pubspec default}"
 echo "==> Build number: ${BUILD_NUMBER:-pubspec default}"
 echo "==> Output dir  : ${SESSION_DIR}"
@@ -124,10 +142,12 @@ if [[ "${SKIP_PUB_GET}" != "1" ]]; then
 fi
 
 build_apk() {
-  echo "==> flutter build apk --${BUILD_MODE}${SPLIT_PER_ABI:+}"
   local cmd=("${FLUTTER_CMD}" build apk "--${BUILD_MODE}")
-  if [[ "${SPLIT_PER_ABI}" == "1" ]]; then
+  if [[ "${APK_PROFILE}" == "split" || "${APK_PROFILE}" == "arm64" ]]; then
+    echo "==> flutter build apk --${BUILD_MODE} --split-per-abi"
     cmd+=(--split-per-abi)
+  else
+    echo "==> flutter build apk --${BUILD_MODE}"
   fi
   if [[ -n "${BUILD_NAME}" ]]; then
     cmd+=(--build-name="${BUILD_NAME}")
@@ -140,7 +160,7 @@ build_apk() {
   local apk_dir="${PROJECT_ROOT}/build/app/outputs/flutter-apk"
   local copied=0
 
-  if [[ "${SPLIT_PER_ABI}" == "1" ]]; then
+  if [[ "${APK_PROFILE}" == "split" || "${APK_PROFILE}" == "arm64" ]]; then
     while IFS= read -r -d '' file; do
       local base
       base="$(basename "${file}")"
@@ -150,6 +170,9 @@ build_apk() {
         *armeabi-v7a*) abi_label="armeabi-v7a" ;;
         *x86_64*) abi_label="x86_64" ;;
       esac
+      if [[ "${APK_PROFILE}" == "arm64" && "${abi_label}" != "arm64-v8a" ]]; then
+        continue
+      fi
       cp "${file}" "${SESSION_DIR}/$(android_apk_name "${abi_label}")"
       copied=1
     done < <(find "${apk_dir}" -maxdepth 1 -type f -name "app-*-${BUILD_MODE}.apk" -print0)

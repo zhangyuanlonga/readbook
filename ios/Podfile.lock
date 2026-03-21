@@ -21,8 +21,10 @@ PODS:
     - Flutter
   - shared_preferences_foundation (0.0.1):
     - Flutter
+    - FlutterMacOS
   - sqlite3_flutter_libs (0.0.1):
     - Flutter
+    - FlutterMacOS
   - url_launcher_ios (0.0.1):
     - Flutter
 
@@ -76,8 +78,8 @@ SPEC CHECKSUMS:
   image_picker_ios: e0ece4aa2a75771a7de3fa735d26d90817041326
   integration_test: 4a889634ef21a45d28d50d622cf412dc6d9f586e
   package_info_plus: af8e2ca6888548050f16fa2f1938db7b5a5df499
-  shared_preferences_foundation: 64af4cfc9225ca81295ff642349630938a82dced
-  sqlite3_flutter_libs: 73c21bd246d3ade5a7e8054765eb5856779844fc
+  shared_preferences_foundation: 7036424c3d8ec98dfe75ff1667cb0cd531ec82bb
+  sqlite3_flutter_libs: dee77ac8f88a0f0f762ac16e58ded77a82866993
   url_launcher_ios: 7a95fa5b60cc718a708b8f2966718e93db0cef1b
 
 PODFILE CHECKSUM: f8c2dcdfb50bb67645580d28a6bf814fca30bdec

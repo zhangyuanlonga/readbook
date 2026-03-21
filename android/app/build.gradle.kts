@@ -5,6 +5,23 @@ plugins {
     id("dev.flutter.flutter-gradle-plugin")
 }
 
+fun sanitizeGeneratedPluginRegistrantForNonTestBuilds() {
+    val registrantFile = file("src/main/java/io/flutter/plugins/GeneratedPluginRegistrant.java")
+    if (!registrantFile.exists()) {
+        return
+    }
+
+    val integrationTestBlock = Regex(
+        """\s*try \{\s*flutterEngine\.getPlugins\(\)\.add\(new dev\.flutter\.plugins\.integration_test\.IntegrationTestPlugin\(\)\);\s*\} catch \(Exception e\) \{\s*Log\.e\(TAG, "Error registering plugin integration_test, dev\.flutter\.plugins\.integration_test\.IntegrationTestPlugin", e\);\s*\}\s*""",
+        setOf(RegexOption.DOT_MATCHES_ALL),
+    )
+    val original = registrantFile.readText()
+    val sanitized = original.replace(integrationTestBlock, "\n")
+    if (sanitized != original) {
+        registrantFile.writeText(sanitized)
+    }
+}
+
 android {
     namespace = "com.jiangyan.shuxiangread"
     compileSdk = flutter.compileSdkVersion
@@ -41,4 +58,15 @@ android {
 
 flutter {
     source = "../.."
+}
+
+afterEvaluate {
+    listOf("Release", "Profile").forEach { variant ->
+        tasks.named("compile${variant}JavaWithJavac").configure {
+            // Work around Flutter incorrectly generating integration_test registration for non-test builds.
+            doFirst {
+                sanitizeGeneratedPluginRegistrantForNonTestBuilds()
+            }
+        }
+    }
 }

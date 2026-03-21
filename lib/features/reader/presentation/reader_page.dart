@@ -412,6 +412,16 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
     return true;
   }
 
+  String get _volumeKeyPageSupportDescription {
+    if (!ReaderVolumeKeyPageBridge.instance.isSupported) {
+      return '当前平台暂不支持音量键翻页。';
+    }
+    if (defaultTargetPlatform == TargetPlatform.iOS) {
+      return 'iOS 真机支持音量键翻页；启用后会拦截按键并维持系统音量。';
+    }
+    return '仅在阅读态生效，打开菜单或弹层时不会拦截系统音量。';
+  }
+
   Future<void> _syncVolumeKeyPageInterception() async {
     await _setVolumeKeyPageInterceptionEnabled(
       _shouldEnableVolumeKeyPageInterception,
@@ -5455,10 +5465,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
               position: AlwaysStoppedAnimation<Offset>(Offset(0, 1 - shift)),
               child: Opacity(
                 opacity: fade,
-                child: ClipRRect(
-                  borderRadius: const BorderRadius.vertical(
-                    top: Radius.circular(24),
-                  ),
+                child: ClipRect(
                   child: BackdropFilter(
                     filter: ImageFilter.blur(sigmaX: 12, sigmaY: 12),
                     child: DecoratedBox(
@@ -11142,7 +11149,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
               Widget buildSettingsSectionCard({
                 required IconData icon,
                 required String title,
-                required String subtitle,
+                String? subtitle,
                 required List<Widget> children,
               }) {
                 final colorScheme = Theme.of(context).colorScheme;
@@ -11190,14 +11197,17 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
                                     fontWeight: FontWeight.w700,
                                   ),
                                 ),
-                                const SizedBox(height: 2),
-                                Text(
-                                  subtitle,
-                                  style: textTheme.bodySmall?.copyWith(
-                                    color: colorScheme.onSurfaceVariant,
-                                    height: 1.35,
+                                if (subtitle != null &&
+                                    subtitle.trim().isNotEmpty) ...[
+                                  const SizedBox(height: 2),
+                                  Text(
+                                    subtitle,
+                                    style: textTheme.bodySmall?.copyWith(
+                                      color: colorScheme.onSurfaceVariant,
+                                      height: 1.35,
+                                    ),
                                   ),
-                                ),
+                                ],
                               ],
                             ),
                           ),
@@ -11250,6 +11260,38 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
                         ],
                       ),
                     ),
+                  ),
+                );
+              }
+
+              Widget buildCompactToggleRow({
+                required String label,
+                required bool value,
+                required ValueChanged<bool>? onChanged,
+                bool isSaving = false,
+              }) {
+                return Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 2),
+                  child: Row(
+                    children: [
+                      Expanded(
+                        child: Text(
+                          label,
+                          style: Theme.of(context).textTheme.bodyMedium
+                              ?.copyWith(fontWeight: FontWeight.w600),
+                        ),
+                      ),
+                      if (isSaving)
+                        const Padding(
+                          padding: EdgeInsets.only(right: 8),
+                          child: SizedBox(
+                            width: 16,
+                            height: 16,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          ),
+                        ),
+                      Switch.adaptive(value: value, onChanged: onChanged),
+                    ],
                   ),
                 );
               }
@@ -11977,98 +12019,57 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
                   }
                 }
 
-                final moreSettingsCard = buildSettingsSectionCard(
-                  icon: Icons.tune_rounded,
-                  title: '更多',
-                  subtitle: '正文对齐与音量键翻页',
+                final quickToggleCard = buildSettingsSectionCard(
+                  icon: Icons.toggle_on_rounded,
+                  title: '快捷开关',
                   children: [
-                    _buildSettingLine(
-                      context: context,
-                      label: '文字两端对齐',
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Row(
-                            children: [
-                              const Spacer(),
-                              Switch.adaptive(
-                                value: draft.textFullJustifyEnabled,
-                                onChanged: (enabled) {
-                                  setModalState(() {
-                                    draft = draft.copyWith(
-                                      textFullJustifyEnabled: enabled,
-                                    );
-                                  });
-                                },
+                    buildCompactToggleRow(
+                      label: '自动换源',
+                      value: draftAutoSwitchSourceOnFailureEnabled,
+                      isSaving: isSavingAutoSwitchSourceOnFailure,
+                      onChanged:
+                          isSavingAutoSwitchSourceOnFailure
+                              ? null
+                              : (value) => unawaited(
+                                updateAutoSwitchSourceOnFailure(value),
                               ),
-                            ],
-                          ),
-                          const SizedBox(height: 4),
-                          Text(
-                            '开启后正文按两端对齐排版；关闭后恢复自然左对齐。',
-                            style: Theme.of(
-                              context,
-                            ).textTheme.labelSmall?.copyWith(
-                              color:
-                                  Theme.of(
-                                    context,
-                                  ).colorScheme.onSurfaceVariant,
-                            ),
-                          ),
-                        ],
-                      ),
                     ),
                     buildSectionDivider(),
-                    _buildSettingLine(
-                      context: context,
-                      label: '音量键翻页',
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Row(
-                            children: [
-                              Expanded(
-                                child: Text(
-                                  draft.volumeKeyPageEnabled
-                                      ? '音量上键上一页，音量下键下一页'
-                                      : '保留系统音量键行为',
-                                  style: Theme.of(context).textTheme.bodyMedium,
-                                ),
-                              ),
-                              Switch.adaptive(
-                                value: draft.volumeKeyPageEnabled,
-                                onChanged:
-                                    ReaderVolumeKeyPageBridge
-                                            .instance
-                                            .isSupported
-                                        ? (enabled) {
-                                          setModalState(() {
-                                            draft = draft.copyWith(
-                                              volumeKeyPageEnabled: enabled,
-                                            );
-                                          });
-                                        }
-                                        : null,
-                              ),
-                            ],
-                          ),
-                          const SizedBox(height: 4),
-                          Text(
-                            ReaderVolumeKeyPageBridge.instance.isSupported
-                                ? '仅在阅读态生效，打开菜单或弹层时不会拦截系统音量。'
-                                : '当前平台暂不支持音量键翻页，仅 Android 原生宿主可用。',
-                            style: Theme.of(
-                              context,
-                            ).textTheme.labelSmall?.copyWith(
-                              color:
-                                  Theme.of(
-                                    context,
-                                  ).colorScheme.onSurfaceVariant,
-                            ),
-                          ),
-                        ],
-                      ),
+                    buildCompactToggleRow(
+                      label: '文字两端对齐',
+                      value: draft.textFullJustifyEnabled,
+                      onChanged: (enabled) {
+                        setModalState(() {
+                          draft = draft.copyWith(
+                            textFullJustifyEnabled: enabled,
+                          );
+                        });
+                      },
                     ),
+                    buildSectionDivider(),
+                    buildCompactToggleRow(
+                      label: '音量键翻页',
+                      value: draft.volumeKeyPageEnabled,
+                      onChanged:
+                          ReaderVolumeKeyPageBridge.instance.isSupported
+                              ? (enabled) {
+                                setModalState(() {
+                                  draft = draft.copyWith(
+                                    volumeKeyPageEnabled: enabled,
+                                  );
+                                });
+                              }
+                              : null,
+                    ),
+                    if (!ReaderVolumeKeyPageBridge.instance.isSupported) ...[
+                      const SizedBox(height: 4),
+                      Text(
+                        _volumeKeyPageSupportDescription,
+                        style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                          color: Theme.of(context).colorScheme.onSurfaceVariant,
+                        ),
+                      ),
+                    ],
                   ],
                 );
 
@@ -12148,65 +12149,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
                               ),
                             ],
                           ),
-                          buildSettingsSectionCard(
-                            icon: Icons.auto_fix_high_rounded,
-                            title: '阅读容错',
-                            subtitle: '正文加载失败时自动尝试切换到其他可用来源',
-                            children: [
-                              Row(
-                                children: [
-                                  Expanded(
-                                    child: Text(
-                                      draftAutoSwitchSourceOnFailureEnabled
-                                          ? '已开启自动补位换源'
-                                          : '当前仅支持手动换源',
-                                      style:
-                                          Theme.of(
-                                            context,
-                                          ).textTheme.bodyMedium,
-                                    ),
-                                  ),
-                                  if (isSavingAutoSwitchSourceOnFailure)
-                                    const Padding(
-                                      padding: EdgeInsets.only(right: 10),
-                                      child: SizedBox(
-                                        width: 18,
-                                        height: 18,
-                                        child: CircularProgressIndicator(
-                                          strokeWidth: 2,
-                                        ),
-                                      ),
-                                    ),
-                                  Switch.adaptive(
-                                    value:
-                                        draftAutoSwitchSourceOnFailureEnabled,
-                                    onChanged:
-                                        isSavingAutoSwitchSourceOnFailure
-                                            ? null
-                                            : (value) => unawaited(
-                                              updateAutoSwitchSourceOnFailure(
-                                                value,
-                                              ),
-                                            ),
-                                  ),
-                                ],
-                              ),
-                              const SizedBox(height: 4),
-                              Text(
-                                '这里和“我的 - 系统”里的阅读容错使用同一套系统级配置。',
-                                style: Theme.of(
-                                  context,
-                                ).textTheme.bodySmall?.copyWith(
-                                  color:
-                                      Theme.of(
-                                        context,
-                                      ).colorScheme.onSurfaceVariant,
-                                  height: 1.35,
-                                ),
-                              ),
-                            ],
-                          ),
-                          moreSettingsCard,
+                          quickToggleCard,
                           interfaceCards[2],
                           readingCards[3],
                         ];
@@ -12911,6 +12854,8 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
                                       _buildSettingLine(
                                         context: context,
                                         label: '音量键翻页',
+                                        labelWidth: 96,
+                                        stackOnCompact: true,
                                         child: Column(
                                           crossAxisAlignment:
                                               CrossAxisAlignment.start,
@@ -12951,11 +12896,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
                                             ),
                                             const SizedBox(height: 4),
                                             Text(
-                                              ReaderVolumeKeyPageBridge
-                                                      .instance
-                                                      .isSupported
-                                                  ? '仅在阅读态生效，打开菜单或弹层时不会拦截系统音量。'
-                                                  : '当前平台暂不支持音量键翻页，仅 Android 原生宿主可用。',
+                                              _volumeKeyPageSupportDescription,
                                               style: Theme.of(
                                                 context,
                                               ).textTheme.labelSmall?.copyWith(
@@ -13595,7 +13536,27 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
     required Widget child,
     double labelWidth = 42,
     String? helpText,
+    bool stackOnCompact = false,
   }) {
+    final useStackLayout =
+        stackOnCompact && MediaQuery.sizeOf(context).width < 430;
+    final labelWidget = _buildSettingLineLabel(
+      context: context,
+      label: label,
+      helpText: helpText,
+      maxLines: useStackLayout ? 2 : 1,
+    );
+
+    if (useStackLayout) {
+      return Padding(
+        padding: const EdgeInsets.symmetric(vertical: 6),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [labelWidget, const SizedBox(height: 8), child],
+        ),
+      );
+    }
+
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 6),
       child: Row(
@@ -13605,56 +13566,64 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
             width: labelWidth,
             child: Padding(
               padding: const EdgeInsets.only(top: 8),
-              child: Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Expanded(
-                    child: Text(
-                      label,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                        color: Theme.of(context).colorScheme.onSurfaceVariant,
-                      ),
-                    ),
-                  ),
-                  if (helpText != null)
-                    Padding(
-                      padding: const EdgeInsets.only(left: 4, top: 1),
-                      child: InkWell(
-                        borderRadius: BorderRadius.circular(999),
-                        onTap: () {
-                          showDialog<void>(
-                            context: context,
-                            builder:
-                                (context) => AlertDialog(
-                                  title: Text(label),
-                                  content: Text(helpText),
-                                  actions: [
-                                    TextButton(
-                                      onPressed:
-                                          () => Navigator.of(context).pop(),
-                                      child: const Text('知道了'),
-                                    ),
-                                  ],
-                                ),
-                          );
-                        },
-                        child: Icon(
-                          Icons.help_outline_rounded,
-                          size: 16,
-                          color: Theme.of(context).colorScheme.onSurfaceVariant,
-                        ),
-                      ),
-                    ),
-                ],
-              ),
+              child: labelWidget,
             ),
           ),
           const SizedBox(width: 8),
           Expanded(child: child),
         ],
       ),
+    );
+  }
+
+  Widget _buildSettingLineLabel({
+    required BuildContext context,
+    required String label,
+    String? helpText,
+    required int maxLines,
+  }) {
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Expanded(
+          child: Text(
+            label,
+            maxLines: maxLines,
+            overflow: TextOverflow.ellipsis,
+            style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+              color: Theme.of(context).colorScheme.onSurfaceVariant,
+            ),
+          ),
+        ),
+        if (helpText != null)
+          Padding(
+            padding: const EdgeInsets.only(left: 4, top: 1),
+            child: InkWell(
+              borderRadius: BorderRadius.circular(999),
+              onTap: () {
+                showDialog<void>(
+                  context: context,
+                  builder:
+                      (context) => AlertDialog(
+                        title: Text(label),
+                        content: Text(helpText),
+                        actions: [
+                          TextButton(
+                            onPressed: () => Navigator.of(context).pop(),
+                            child: const Text('知道了'),
+                          ),
+                        ],
+                      ),
+                );
+              },
+              child: Icon(
+                Icons.help_outline_rounded,
+                size: 16,
+                color: Theme.of(context).colorScheme.onSurfaceVariant,
+              ),
+            ),
+          ),
+      ],
     );
   }
 

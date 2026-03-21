@@ -33,6 +33,7 @@
 | 书源与兼容 | `docs/legado_full_compatibility_plan.md`、`docs/legado_rule_full_compat_optimal_plan.md`、`docs/legado_native_bridge_mapping.md`、`docs/legado_explore_compatibility_plan.md`、`docs/manga_source_compat_plan.md` |
 | 性能与缓存 | `docs/source_list_scaling_plan.md`、`docs/chapter_cache_plan.md` |
 | UI/组件与适配 | `docs/ui_component_next_plan.md`、`docs/responsive_adaptive_plan.md`、`docs/adaptive_ui_refactor_plan.md` |
+| 打包与发布 | `docs/android_release_guide.md` |
 | 历史实施步骤 | `docs/implementation_steps.md`、`docs/PLAN.md` |
 
 ## 4. 阶段记录与回归报告（历史快照）

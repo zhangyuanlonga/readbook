@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'dart:io';
 
+import 'package:dio/dio.dart';
 import 'package:file_selector/file_selector.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -22,6 +23,8 @@ class ReaderReplaceRulePage extends StatefulWidget {
 enum _ReaderReplaceRuleSortMode { orderAsc, orderDesc, nameAsc, nameDesc }
 
 enum _ReaderReplaceRulePageAction { persistCurrentSort }
+
+enum _ReaderReplaceRuleImportAction { paste, url, file }
 
 enum _ReaderReplaceRuleItemAction { duplicate, copyJson, delete }
 
@@ -228,22 +231,181 @@ class _ReaderReplaceRulePageState extends State<ReaderReplaceRulePage> {
   }
 
   Future<void> _importRules() async {
-    final file = await openFile(
-      acceptedTypeGroups: const [
-        XTypeGroup(label: 'json', extensions: ['json']),
+    final action = await showMenu<_ReaderReplaceRuleImportAction>(
+      context: context,
+      position: const RelativeRect.fromLTRB(1000, 80, 12, 0),
+      items: const [
+        PopupMenuItem(
+          value: _ReaderReplaceRuleImportAction.paste,
+          child: Text('粘贴导入 JSON'),
+        ),
+        PopupMenuItem(
+          value: _ReaderReplaceRuleImportAction.url,
+          child: Text('链接导入'),
+        ),
+        PopupMenuItem(
+          value: _ReaderReplaceRuleImportAction.file,
+          child: Text('文件导入'),
+        ),
       ],
-      confirmButtonText: '导入规则',
     );
-    if (file == null || !mounted) {
+    if (action == null || !mounted) {
+      return;
+    }
+
+    switch (action) {
+      case _ReaderReplaceRuleImportAction.paste:
+        await _importRulesFromPaste();
+        return;
+      case _ReaderReplaceRuleImportAction.url:
+        await _importRulesFromUrl();
+        return;
+      case _ReaderReplaceRuleImportAction.file:
+        await _importRulesFromFile();
+        return;
+    }
+  }
+
+  Future<void> _importRulesFromPaste() async {
+    final text = await _showPasteImportPage();
+    if (!mounted || text == null) {
+      return;
+    }
+
+    final content = text.trim();
+    if (content.isEmpty) {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('请先粘贴净化规则 JSON 内容。')));
+      return;
+    }
+
+    await _importRulesFromText(content);
+  }
+
+  Future<void> _importRulesFromUrl() async {
+    final input = await _showUrlImportPage();
+    if (!mounted || input == null) {
+      return;
+    }
+
+    final rawUrl = input.trim();
+    if (rawUrl.isEmpty) {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('链接不能为空。')));
+      return;
+    }
+
+    final uri = Uri.tryParse(rawUrl);
+    final scheme = uri?.scheme.toLowerCase();
+    final isHttpScheme = scheme == 'http' || scheme == 'https';
+    if (uri == null || uri.host.isEmpty || !isHttpScheme) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('链接格式无效，请输入 http/https 开头的 JSON 地址。')),
+      );
       return;
     }
 
     setState(() {
       _isImporting = true;
     });
+    try {
+      final response = await Dio(
+        BaseOptions(
+          responseType: ResponseType.plain,
+          connectTimeout: const Duration(seconds: 12),
+          receiveTimeout: const Duration(seconds: 20),
+          sendTimeout: const Duration(seconds: 12),
+          followRedirects: true,
+          maxRedirects: 5,
+          validateStatus:
+              (status) => status != null && status >= 200 && status < 400,
+          headers: const {'Accept': 'application/json,text/plain,*/*'},
+        ),
+      ).getUri(uri);
+      final content = (response.data ?? '').toString().trim();
+      if (content.isEmpty) {
+        if (!mounted) {
+          return;
+        }
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(const SnackBar(content: Text('链接导入失败：响应内容为空。')));
+        return;
+      }
+      await _importRulesFromText(content);
+    } on DioException catch (error) {
+      if (!mounted) {
+        return;
+      }
+      final statusCode = error.response?.statusCode;
+      final message =
+          statusCode != null
+              ? 'HTTP $statusCode'
+              : (error.message ?? error.type.name);
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('链接导入失败：$message')));
+    } catch (error) {
+      if (!mounted) {
+        return;
+      }
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('链接导入失败：$error')));
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isImporting = false;
+        });
+      }
+    }
+  }
+
+  Future<void> _importRulesFromFile() async {
+    XFile? file;
+    try {
+      file = await openFile(
+        acceptedTypeGroups: const [
+          XTypeGroup(
+            label: 'JSON',
+            extensions: ['json'],
+            uniformTypeIdentifiers: ['public.json'],
+          ),
+        ],
+        confirmButtonText: '导入规则',
+      );
+    } on PlatformException catch (error) {
+      if (!mounted) {
+        return;
+      }
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('打开文件选择器失败：${error.message ?? error.code}')),
+      );
+      return;
+    } catch (error) {
+      if (!mounted) {
+        return;
+      }
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('打开文件选择器失败：$error')));
+      return;
+    }
+    if (file == null || !mounted) {
+      return;
+    }
+
+    await _importRulesFromText(await file.readAsString());
+  }
+
+  Future<void> _importRulesFromText(String raw) async {
+    setState(() {
+      _isImporting = true;
+    });
 
     try {
-      final raw = await file.readAsString();
       final importedRules = _service.parseImportPayload(raw);
 
       for (final rule in importedRules) {
@@ -279,6 +441,22 @@ class _ReaderReplaceRulePageState extends State<ReaderReplaceRulePage> {
     }
   }
 
+  Future<String?> _showPasteImportPage() {
+    return Navigator.of(context).push<String>(
+      MaterialPageRoute(
+        builder: (_) => const _ReaderReplaceRulePasteImportPage(),
+      ),
+    );
+  }
+
+  Future<String?> _showUrlImportPage() {
+    return Navigator.of(context).push<String>(
+      MaterialPageRoute(
+        builder: (_) => const _ReaderReplaceRuleUrlImportPage(),
+      ),
+    );
+  }
+
   Future<void> _exportRules() async {
     setState(() {
       _isExporting = true;
@@ -295,7 +473,11 @@ class _ReaderReplaceRulePageState extends State<ReaderReplaceRulePage> {
       final location = await getSaveLocation(
         suggestedName: file.uri.pathSegments.last,
         acceptedTypeGroups: const [
-          XTypeGroup(label: 'json', extensions: ['json']),
+          XTypeGroup(
+            label: 'JSON',
+            extensions: ['json'],
+            uniformTypeIdentifiers: ['public.json'],
+          ),
         ],
         confirmButtonText: '导出规则',
       );
@@ -976,5 +1158,210 @@ class _ReaderReplaceRulePageState extends State<ReaderReplaceRulePage> {
       return '$name 2';
     }
     return '$name（副本）';
+  }
+}
+
+class _ReaderReplaceRulePasteImportPage extends StatefulWidget {
+  const _ReaderReplaceRulePasteImportPage();
+
+  @override
+  State<_ReaderReplaceRulePasteImportPage> createState() =>
+      _ReaderReplaceRulePasteImportPageState();
+}
+
+class _ReaderReplaceRulePasteImportPageState
+    extends State<_ReaderReplaceRulePasteImportPage> {
+  final TextEditingController _controller = TextEditingController();
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  void _submit() {
+    Navigator.of(context).pop(_controller.text);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final horizontal = AppSpacing.pageHorizontal(context);
+    final maxWidth = AppLayout.pageContentMaxWidth(context, maxWidth: 760);
+    final keyboardInset = AppLayout.keyboardInset(context);
+    final bottomSafe = MediaQuery.viewPaddingOf(context).bottom;
+    final canSubmit = _controller.text.trim().isNotEmpty;
+
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text('粘贴导入净化规则'),
+        actions: [
+          TextButton(
+            onPressed: canSubmit ? _submit : null,
+            child: const Text('导入'),
+          ),
+          const SizedBox(width: 8),
+        ],
+      ),
+      body: AnimatedPadding(
+        duration: const Duration(milliseconds: 180),
+        curve: Curves.easeOutCubic,
+        padding: EdgeInsets.only(bottom: keyboardInset),
+        child: SafeArea(
+          top: false,
+          child: Center(
+            child: ConstrainedBox(
+              constraints: BoxConstraints(maxWidth: maxWidth),
+              child: Padding(
+                padding: EdgeInsets.fromLTRB(
+                  horizontal,
+                  12,
+                  horizontal,
+                  12 + bottomSafe,
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    Text(
+                      '粘贴净化规则 JSON（对象或数组）',
+                      style: Theme.of(context).textTheme.bodyMedium,
+                    ),
+                    const SizedBox(height: 8),
+                    Expanded(
+                      child: TextField(
+                        controller: _controller,
+                        expands: true,
+                        minLines: null,
+                        maxLines: null,
+                        keyboardType: TextInputType.multiline,
+                        textInputAction: TextInputAction.newline,
+                        autofocus: true,
+                        onChanged: (_) => setState(() {}),
+                        decoration: const InputDecoration(
+                          hintText: '{...} 或 [{...}]',
+                          border: OutlineInputBorder(),
+                          alignLabelWithHint: true,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    FilledButton.icon(
+                      onPressed: canSubmit ? _submit : null,
+                      icon: const Icon(Icons.file_download_rounded),
+                      label: const Text('导入'),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _ReaderReplaceRuleUrlImportPage extends StatefulWidget {
+  const _ReaderReplaceRuleUrlImportPage();
+
+  @override
+  State<_ReaderReplaceRuleUrlImportPage> createState() =>
+      _ReaderReplaceRuleUrlImportPageState();
+}
+
+class _ReaderReplaceRuleUrlImportPageState
+    extends State<_ReaderReplaceRuleUrlImportPage> {
+  final TextEditingController _controller = TextEditingController();
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  void _submit() {
+    Navigator.of(context).pop(_controller.text);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final horizontal = AppSpacing.pageHorizontal(context);
+    final maxWidth = AppLayout.pageContentMaxWidth(context, maxWidth: 760);
+    final keyboardInset = AppLayout.keyboardInset(context);
+    final bottomSafe = MediaQuery.viewPaddingOf(context).bottom;
+    final canSubmit = _controller.text.trim().isNotEmpty;
+
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text('链接导入净化规则'),
+        actions: [
+          TextButton(
+            onPressed: canSubmit ? _submit : null,
+            child: const Text('导入'),
+          ),
+          const SizedBox(width: 8),
+        ],
+      ),
+      body: AnimatedPadding(
+        duration: const Duration(milliseconds: 180),
+        curve: Curves.easeOutCubic,
+        padding: EdgeInsets.only(bottom: keyboardInset),
+        child: SafeArea(
+          top: false,
+          child: Center(
+            child: ConstrainedBox(
+              constraints: BoxConstraints(maxWidth: maxWidth),
+              child: Padding(
+                padding: EdgeInsets.fromLTRB(
+                  horizontal,
+                  12,
+                  horizontal,
+                  12 + bottomSafe,
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    Text(
+                      '请输入净化规则 JSON 链接（http/https）',
+                      style: Theme.of(context).textTheme.bodyMedium,
+                    ),
+                    const SizedBox(height: 8),
+                    TextField(
+                      controller: _controller,
+                      autofocus: true,
+                      keyboardType: TextInputType.url,
+                      textInputAction: TextInputAction.done,
+                      onChanged: (_) => setState(() {}),
+                      onSubmitted: (_) {
+                        if (canSubmit) {
+                          _submit();
+                        }
+                      },
+                      decoration: const InputDecoration(
+                        hintText:
+                            'https://example.com/reader_replace_rules.json',
+                        border: OutlineInputBorder(),
+                      ),
+                    ),
+                    const SizedBox(height: 10),
+                    Text(
+                      '支持直接粘贴链接，返回后会自动校验并开始导入。',
+                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                        color: Theme.of(context).colorScheme.onSurfaceVariant,
+                      ),
+                    ),
+                    const Spacer(),
+                    FilledButton.icon(
+                      onPressed: canSubmit ? _submit : null,
+                      icon: const Icon(Icons.file_download_rounded),
+                      label: const Text('导入'),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
   }
 }

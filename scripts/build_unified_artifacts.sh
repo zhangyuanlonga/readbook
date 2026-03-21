@@ -10,8 +10,9 @@ FLUTTER_CMD="${FLUTTER_CMD:-flutter}"
 PLATFORMS_INPUT="${1:-${PLATFORMS:-auto}}"
 BUILD_MODE="${2:-${BUILD_MODE:-release}}"
 OUTPUT_ROOT="${OUTPUT_ROOT:-${PROJECT_ROOT}/build/unified_artifacts}"
-ANDROID_TARGET="${ANDROID_TARGET:-both}" # apk | appbundle | both
-SPLIT_PER_ABI="${SPLIT_PER_ABI:-0}"      # Android APK only
+ANDROID_TARGET="${ANDROID_TARGET:-apk}"  # apk | appbundle | both
+ANDROID_APK_PROFILE="${ANDROID_APK_PROFILE:-arm64}" # arm64 | split | universal
+SPLIT_PER_ABI="${SPLIT_PER_ABI:-}"       # legacy alias for ANDROID_APK_PROFILE=split
 APP_NAME="${APP_NAME:-Runner}"           # iOS APP_NAME
 MACOS_APP_NAME="${MACOS_APP_NAME:-}"     # macOS APP_NAME
 ARTIFACT_NAME="${ARTIFACT_NAME:-书享阅读}"
@@ -41,8 +42,9 @@ Arguments:
 Environment variables:
   FLUTTER_CMD      Flutter command path (default: flutter)
   OUTPUT_ROOT      Unified output root (default: build/unified_artifacts)
-  ANDROID_TARGET   apk | appbundle | both (default: both)
-  SPLIT_PER_ABI    1 to pass --split-per-abi for Android APK
+  ANDROID_TARGET   apk | appbundle | both (default: apk)
+  ANDROID_APK_PROFILE Android APK profile: arm64 | split | universal (default: arm64)
+  SPLIT_PER_ABI    Legacy alias. Set to 1 for ANDROID_APK_PROFILE=split
   APP_NAME         iOS app bundle name (default: Runner)
   MACOS_APP_NAME   Optional macOS .app name without .app
   BUILD_NAME       Override Flutter --build-name
@@ -57,7 +59,8 @@ Environment variables:
 Examples:
   ./scripts/build_unified_artifacts.sh
   ./scripts/build_unified_artifacts.sh android,ios,macos release
-  ANDROID_TARGET=apk SPLIT_PER_ABI=1 ./scripts/build_unified_artifacts.sh android release
+  ANDROID_APK_PROFILE=split ./scripts/build_unified_artifacts.sh android release
+  ANDROID_TARGET=both ANDROID_APK_PROFILE=universal ./scripts/build_unified_artifacts.sh android release
 USAGE
 }
 
@@ -353,6 +356,8 @@ echo "==> Flutter cmd  : ${FLUTTER_CMD}"
 echo "==> Host OS      : $(host_os)"
 echo "==> Platforms    : ${PLATFORMS[*]}"
 echo "==> Build mode   : ${BUILD_MODE}"
+echo "==> Android target: ${ANDROID_TARGET}"
+echo "==> Android APK  : ${ANDROID_APK_PROFILE}"
 echo "==> Build name   : ${BUILD_NAME:-pubspec default}"
 echo "==> Build number : ${BUILD_NUMBER:-pubspec default}"
 echo "==> Output folder: ${SESSION_DIR}"
@@ -377,6 +382,7 @@ for platform in "${PLATFORMS[@]-}"; do
         OUTPUT_DIR="${STAGING_ROOT}/android" \
         SKIP_CLEAN=1 \
         SKIP_PUB_GET=1 \
+        APK_PROFILE="${ANDROID_APK_PROFILE}" \
         SPLIT_PER_ABI="${SPLIT_PER_ABI}" \
         BUILD_NAME="${BUILD_NAME}" \
         BUILD_NUMBER="${BUILD_NUMBER}" \
