@@ -4,13 +4,19 @@ import 'package:flutter_inappwebview/flutter_inappwebview.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:image_picker_android/image_picker_android.dart';
 import 'package:image_picker_platform_interface/image_picker_platform_interface.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import 'app.dart';
+import 'theme/app_theme_provider.dart';
+import 'theme/app_theme_seed_provider.dart';
 
-void bootstrap() {
+Future<void> bootstrap() async {
   WidgetsFlutterBinding.ensureInitialized();
   _configureImagePicker();
   PlatformInAppWebViewController.debugLoggingSettings.enabled = false;
+  final prefs = await SharedPreferences.getInstance();
+  AppThemeModeNotifier.prime(prefs);
+  AppSeedColorNotifier.prime(prefs);
   runApp(const ProviderScope(child: App()));
 }
 

@@ -8,12 +8,26 @@ final appThemeModeProvider = NotifierProvider<AppThemeModeNotifier, ThemeMode>(
 
 class AppThemeModeNotifier extends Notifier<ThemeMode> {
   static const String _themeModeKey = 'app.themeMode';
+  static ThemeMode? _primedThemeMode;
 
   bool _loadTriggered = false;
   bool _hasExplicitSet = false;
 
+  static void prime(SharedPreferences prefs) {
+    final raw = prefs.getString(_themeModeKey);
+    _primedThemeMode = switch (raw) {
+      'dark' => ThemeMode.dark,
+      'system' => ThemeMode.system,
+      _ => ThemeMode.light,
+    };
+  }
+
   @override
   ThemeMode build() {
+    final primedThemeMode = _primedThemeMode;
+    if (primedThemeMode != null) {
+      return primedThemeMode;
+    }
     if (!_loadTriggered) {
       _loadTriggered = true;
       _load();
@@ -42,6 +56,7 @@ class AppThemeModeNotifier extends Notifier<ThemeMode> {
 
   Future<void> setThemeMode(ThemeMode mode) async {
     _hasExplicitSet = true;
+    _primedThemeMode = mode;
     if (state != mode) {
       state = mode;
     }

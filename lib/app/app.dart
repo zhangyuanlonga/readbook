@@ -113,7 +113,7 @@ class _SystemUiOverlayWrapperState extends State<_SystemUiOverlayWrapper>
     'serif',
   ];
 
-  static const Duration _kStartupMinDuration = Duration(milliseconds: 500);
+  static const Duration _kStartupMinDuration = Duration(milliseconds: 180);
   static const Duration _kHeartbeatThrottle = Duration(minutes: 2);
 
   @override
@@ -132,13 +132,6 @@ class _SystemUiOverlayWrapperState extends State<_SystemUiOverlayWrapper>
 
   Future<void> _prepareStartup() async {
     final startedAt = DateTime.now();
-
-    try {
-      await AppDatabase.instance.countSourceListItems();
-    } catch (_) {
-      // Ignore warmup failures and continue startup.
-    }
-
     final elapsed = DateTime.now().difference(startedAt);
     final remaining = _kStartupMinDuration - elapsed;
     if (remaining > Duration.zero) {
@@ -152,11 +145,22 @@ class _SystemUiOverlayWrapperState extends State<_SystemUiOverlayWrapper>
     setState(() {
       _isStartupReady = true;
     });
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      unawaited(_warmupLocalDatabase());
+    });
     await _checkStartupUpdateIfNeeded();
     if (!mounted) {
       return;
     }
     _showStartupAnnouncementIfNeeded();
+  }
+
+  Future<void> _warmupLocalDatabase() async {
+    try {
+      await AppDatabase.instance.countSourceListItems();
+    } catch (_) {
+      // Ignore warmup failures to avoid affecting app startup or first frame.
+    }
   }
 
   Future<BuildContext?> _resolveStartupDialogContext() async {

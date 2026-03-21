@@ -8,12 +8,22 @@ final appSeedColorProvider = NotifierProvider<AppSeedColorNotifier, Color>(
 
 class AppSeedColorNotifier extends Notifier<Color> {
   static const String _seedColorKey = 'app.seedColor';
+  static Color? _primedSeedColor;
 
   bool _loadTriggered = false;
   bool _hasExplicitSet = false;
 
+  static void prime(SharedPreferences prefs) {
+    final stored = prefs.getInt(_seedColorKey);
+    _primedSeedColor = stored == null ? null : Color(stored);
+  }
+
   @override
   Color build() {
+    final primedSeedColor = _primedSeedColor;
+    if (primedSeedColor != null) {
+      return primedSeedColor;
+    }
     if (!_loadTriggered) {
       _loadTriggered = true;
       _load();
@@ -41,6 +51,7 @@ class AppSeedColorNotifier extends Notifier<Color> {
 
   Future<void> setSeedColor(Color color) async {
     _hasExplicitSet = true;
+    _primedSeedColor = color;
     if (color != state) {
       state = color;
     }
