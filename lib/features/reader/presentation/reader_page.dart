@@ -218,6 +218,8 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
   String? _paginationSignature;
   int _paginationTaskId = 0;
   double? _pendingPageRestoreRatio;
+  double? _lastPaginationMaxWidth;
+  double? _lastPaginationMaxHeight;
   bool _showChapterLoadingIndicator = false;
   bool _showBlockingLoadingCard = false;
   _PagedPageTransitionState _pagedTransition =
@@ -236,6 +238,8 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
   String? _catalogSearchCacheFingerprint;
   Map<String, List<_CatalogSearchEntry>> _catalogSearchEntriesCache =
       const <String, List<_CatalogSearchEntry>>{};
+  final Map<String, _PrecomputedChapterLayout> _precomputedChapterLayouts =
+      <String, _PrecomputedChapterLayout>{};
 
   static const List<String> _kFallbackBackgroundPresetPaths = [
     'assets/reader/backgrounds/20260224-212555-700782.jpeg',
@@ -2900,6 +2904,8 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
                 _pinnedHeaderTotalHeight(context) -
                 contentPadding.vertical)
             .clamp(0.0, 4000.0);
+        _lastPaginationMaxWidth = maxWidth;
+        _lastPaginationMaxHeight = maxHeight;
 
         WidgetsBinding.instance.addPostFrameCallback((_) {
           _ensurePagination(maxWidth: maxWidth, maxHeight: maxHeight);
@@ -3876,47 +3882,14 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
     _pagedTransition = const _PagedPageTransitionState();
   }
 
-  String _buildPaginationSignature({
+  Future<List<List<_PagedSlice>>?> _paginateParagraphSlices({
+    required List<String> paragraphs,
     required double maxWidth,
     required double maxHeight,
-  }) {
-    return [
-      _chapterId,
-      maxWidth.toStringAsFixed(1),
-      maxHeight.toStringAsFixed(1),
-      _settings.fontSize.toStringAsFixed(1),
-      _settings.lineHeight.toStringAsFixed(2),
-      _settings.bodyMarginTop.toStringAsFixed(1),
-      _settings.bodyMarginBottom.toStringAsFixed(1),
-      _settings.bodyMarginLeft.toStringAsFixed(1),
-      _settings.bodyMarginRight.toStringAsFixed(1),
-      _settings.paragraphSpacing.toStringAsFixed(1),
-      _settings.paragraphIndent.toStringAsFixed(1),
-      _settings.letterSpacing.toStringAsFixed(3),
-      _settings.fontWeightLevel.name,
-      _settings.fontSource.name,
-      _settings.fontFamilyKey ?? '',
-    ].join('|');
-  }
-
-  Future<void> _paginateCurrentChapter({
-    required int taskId,
-    required double maxWidth,
-    required double maxHeight,
+    bool Function()? shouldAbort,
   }) async {
-    final paragraphs =
-        _paragraphs.isEmpty ? <String>[_content.trim()] : _paragraphs;
-
     if (paragraphs.isEmpty || paragraphs.first.trim().isEmpty) {
-      if (!mounted || taskId != _paginationTaskId) {
-        return;
-      }
-      setState(() {
-        _isPaginatingPages = false;
-        _pagedPages = const [];
-        _resetCurlAnimationState();
-      });
-      return;
+      return const <List<_PagedSlice>>[];
     }
 
     final style = _paragraphTextStyle(
@@ -3990,8 +3963,8 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
       paragraphIndex < paragraphs.length;
       paragraphIndex++
     ) {
-      if (!mounted || taskId != _paginationTaskId) {
-        return;
+      if (shouldAbort?.call() ?? false) {
+        return null;
       }
 
       final paragraph = paragraphs[paragraphIndex];
@@ -4001,8 +3974,8 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
 
       var offset = 0;
       while (offset < paragraph.length) {
-        if (!mounted || taskId != _paginationTaskId) {
-          return;
+        if (shouldAbort?.call() ?? false) {
+          return null;
         }
 
         if (currentPage.isNotEmpty) {
@@ -4069,6 +4042,62 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
 
     if (currentPage.isNotEmpty) {
       pages.add(currentPage);
+    }
+
+    return pages;
+  }
+
+  String _buildPaginationSignature({
+    required double maxWidth,
+    required double maxHeight,
+    String? chapterIdOverride,
+  }) {
+    return [
+      chapterIdOverride ?? _chapterId,
+      maxWidth.toStringAsFixed(1),
+      maxHeight.toStringAsFixed(1),
+      _settings.fontSize.toStringAsFixed(1),
+      _settings.lineHeight.toStringAsFixed(2),
+      _settings.bodyMarginTop.toStringAsFixed(1),
+      _settings.bodyMarginBottom.toStringAsFixed(1),
+      _settings.bodyMarginLeft.toStringAsFixed(1),
+      _settings.bodyMarginRight.toStringAsFixed(1),
+      _settings.paragraphSpacing.toStringAsFixed(1),
+      _settings.paragraphIndent.toStringAsFixed(1),
+      _settings.letterSpacing.toStringAsFixed(3),
+      _settings.fontWeightLevel.name,
+      _settings.fontSource.name,
+      _settings.fontFamilyKey ?? '',
+    ].join('|');
+  }
+
+  Future<void> _paginateCurrentChapter({
+    required int taskId,
+    required double maxWidth,
+    required double maxHeight,
+  }) async {
+    final paragraphs =
+        _paragraphs.isEmpty ? <String>[_content.trim()] : _paragraphs;
+    final pages = await _paginateParagraphSlices(
+      paragraphs: paragraphs,
+      maxWidth: maxWidth,
+      maxHeight: maxHeight,
+      shouldAbort: () => !mounted || taskId != _paginationTaskId,
+    );
+    if (pages == null) {
+      return;
+    }
+
+    if (pages.isEmpty) {
+      if (!mounted || taskId != _paginationTaskId) {
+        return;
+      }
+      setState(() {
+        _isPaginatingPages = false;
+        _pagedPages = const [];
+        _resetCurlAnimationState();
+      });
+      return;
     }
 
     if (!mounted || taskId != _paginationTaskId) {
@@ -5859,6 +5888,10 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
     String content, {
     List<String> imageUrls = const [],
     Map<String, String> imageHeaders = const {},
+    List<String>? precomputedParagraphs,
+    List<List<_PagedSlice>>? precomputedPagedPages,
+    int? precomputedCurrentPageIndex,
+    String? precomputedPaginationSignature,
   }) {
     _stopAutoRead();
     _disposeMangaTransformControllers();
@@ -5879,10 +5912,20 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
     if (_mangaPageController.hasClients) {
       _mangaPageController.jumpToPage(0);
     }
-    _paragraphs = _splitParagraphs(content);
-    _pagedPages = const [];
-    _currentPageIndex = 0;
-    _paginationSignature = null;
+    _paragraphs = precomputedParagraphs ?? _splitParagraphs(content);
+    if (precomputedPagedPages != null && precomputedPagedPages.isNotEmpty) {
+      _pagedPages = List<List<_PagedSlice>>.unmodifiable(
+        precomputedPagedPages
+            .map((page) => List<_PagedSlice>.unmodifiable(page))
+            .toList(growable: false),
+      );
+      _currentPageIndex = precomputedCurrentPageIndex ?? 0;
+      _paginationSignature = precomputedPaginationSignature;
+    } else {
+      _pagedPages = const [];
+      _currentPageIndex = 0;
+      _paginationSignature = null;
+    }
     _isPaginatingPages = false;
     _resetCatalogSearchCache();
     _resetPagedTransitionState();
@@ -5893,6 +5936,45 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
   void _resetCatalogSearchCache() {
     _catalogSearchCacheFingerprint = null;
     _catalogSearchEntriesCache = const <String, List<_CatalogSearchEntry>>{};
+  }
+
+  String _chapterLayoutCacheKey({
+    required String sourceId,
+    required String chapterUrl,
+    required String signature,
+  }) {
+    return '${sourceId.trim()}|${chapterUrl.trim()}|$signature';
+  }
+
+  void _storePrecomputedChapterLayout({
+    required String sourceId,
+    required String chapterUrl,
+    required _PrecomputedChapterLayout layout,
+  }) {
+    final key = _chapterLayoutCacheKey(
+      sourceId: sourceId,
+      chapterUrl: chapterUrl,
+      signature: layout.paginationSignature,
+    );
+    _precomputedChapterLayouts[key] = layout;
+    if (_precomputedChapterLayouts.length <= 6) {
+      return;
+    }
+    final oldestKey = _precomputedChapterLayouts.keys.first;
+    _precomputedChapterLayouts.remove(oldestKey);
+  }
+
+  _PrecomputedChapterLayout? _consumePrecomputedChapterLayout({
+    required String sourceId,
+    required String chapterUrl,
+    required String signature,
+  }) {
+    final key = _chapterLayoutCacheKey(
+      sourceId: sourceId,
+      chapterUrl: chapterUrl,
+      signature: signature,
+    );
+    return _precomputedChapterLayouts.remove(key);
   }
 
   void _disposeMangaTransformControllers() {
@@ -6856,6 +6938,60 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
       return;
     }
 
+    List<String>? precomputedParagraphs;
+    List<List<_PagedSlice>>? precomputedPagedPages;
+    int? precomputedPageIndex;
+    String? precomputedPaginationSignature;
+
+    final canPrepaginate =
+        _isPagedTextReaderEnabled() &&
+        snapshot.result.imageUrls.isEmpty &&
+        snapshot.result.content.trim().isNotEmpty &&
+        _lastPaginationMaxWidth != null &&
+        _lastPaginationMaxHeight != null &&
+        _lastPaginationMaxWidth! >= 20 &&
+        _lastPaginationMaxHeight! >= 40;
+
+    if (canPrepaginate) {
+      final paragraphs = _splitParagraphs(snapshot.result.content);
+      final effectiveParagraphs =
+          paragraphs.isEmpty ? <String>[snapshot.result.content] : paragraphs;
+      final signature = _buildPaginationSignature(
+        maxWidth: _lastPaginationMaxWidth!,
+        maxHeight: _lastPaginationMaxHeight!,
+        chapterIdOverride: commitChapterIdentity ? chapterId : _chapterId,
+      );
+      final cachedLayout = _consumePrecomputedChapterLayout(
+        sourceId: _sourceId ?? '',
+        chapterUrl: chapterUrl,
+        signature: signature,
+      );
+      if (cachedLayout != null) {
+        precomputedParagraphs = cachedLayout.paragraphs;
+        precomputedPagedPages = cachedLayout.pagedPages;
+        precomputedPageIndex = (targetRatio.clamp(0.0, 1.0) *
+                (cachedLayout.pagedPages.length - 1))
+            .round()
+            .clamp(0, cachedLayout.pagedPages.length - 1);
+        precomputedPaginationSignature = cachedLayout.paginationSignature;
+      } else {
+        final pages = await _paginateParagraphSlices(
+          paragraphs: effectiveParagraphs,
+          maxWidth: _lastPaginationMaxWidth!,
+          maxHeight: _lastPaginationMaxHeight!,
+        );
+        if (pages != null && pages.isNotEmpty) {
+          precomputedParagraphs = effectiveParagraphs;
+          precomputedPagedPages = pages;
+          precomputedPageIndex = (targetRatio.clamp(0.0, 1.0) *
+                  (pages.length - 1))
+              .round()
+              .clamp(0, pages.length - 1);
+          precomputedPaginationSignature = signature;
+        }
+      }
+    }
+
     setState(() {
       if (commitChapterIdentity) {
         _currentIndex = chapterIndex;
@@ -6879,8 +7015,13 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
         snapshot.result.content,
         imageUrls: snapshot.result.imageUrls,
         imageHeaders: snapshot.result.imageHeaders,
+        precomputedParagraphs: precomputedParagraphs,
+        precomputedPagedPages: precomputedPagedPages,
+        precomputedCurrentPageIndex: precomputedPageIndex,
+        precomputedPaginationSignature: precomputedPaginationSignature,
       );
-      _pendingPageRestoreRatio = targetRatio;
+      _pendingPageRestoreRatio =
+          precomputedPaginationSignature == null ? targetRatio : null;
     });
 
     _restoreScrollPosition(targetRatio);
@@ -7539,7 +7680,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
           sourceId: normalizedSourceId,
           stage: ErrorStage.content,
         );
-        await preloadProvider.loadChapterContent(
+        final result = await preloadProvider.loadChapterContent(
           sourceId: normalizedSourceId,
           chapterUrl: chapterUrl,
           bookId: _currentBookId,
@@ -7549,6 +7690,46 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
           chapterTitle: chapter.title,
           nextChapterUrl: nextChapterUrl.isEmpty ? null : nextChapterUrl,
         );
+        if (_isPagedTextReaderEnabled() &&
+            result.imageUrls.isEmpty &&
+            result.content.trim().isNotEmpty &&
+            _lastPaginationMaxWidth != null &&
+            _lastPaginationMaxHeight != null &&
+            _lastPaginationMaxWidth! >= 20 &&
+            _lastPaginationMaxHeight! >= 40) {
+          final paragraphs = _splitParagraphs(result.content);
+          final effectiveParagraphs =
+              paragraphs.isEmpty ? <String>[result.content] : paragraphs;
+          final signature = _buildPaginationSignature(
+            maxWidth: _lastPaginationMaxWidth!,
+            maxHeight: _lastPaginationMaxHeight!,
+            chapterIdOverride: chapter.id,
+          );
+          if (_consumePrecomputedChapterLayout(
+                sourceId: normalizedSourceId,
+                chapterUrl: chapterUrl,
+                signature: signature,
+              ) ==
+              null) {
+            final pages = await _paginateParagraphSlices(
+              paragraphs: effectiveParagraphs,
+              maxWidth: _lastPaginationMaxWidth!,
+              maxHeight: _lastPaginationMaxHeight!,
+              shouldAbort: () => !mounted || taskToken != _preloadTaskToken,
+            );
+            if (pages != null && pages.isNotEmpty) {
+              _storePrecomputedChapterLayout(
+                sourceId: normalizedSourceId,
+                chapterUrl: chapterUrl,
+                layout: _PrecomputedChapterLayout(
+                  paragraphs: effectiveParagraphs,
+                  pagedPages: pages,
+                  paginationSignature: signature,
+                ),
+              );
+            }
+          }
+        }
       } catch (_) {
         // Preload failures should not interrupt active reading.
       }
@@ -13941,6 +14122,18 @@ class _DecodedReaderChapterCache {
   final String content;
   final List<String> imageUrls;
   final Map<String, String> imageHeaders;
+}
+
+class _PrecomputedChapterLayout {
+  const _PrecomputedChapterLayout({
+    required this.paragraphs,
+    required this.pagedPages,
+    required this.paginationSignature,
+  });
+
+  final List<String> paragraphs;
+  final List<List<_PagedSlice>> pagedPages;
+  final String paginationSignature;
 }
 
 class _ReaderThemeColors {
