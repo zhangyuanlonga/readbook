@@ -2596,6 +2596,18 @@ class $StoredLocalChaptersTable extends StoredLocalChapters
     type: DriftSqlType.string,
     requiredDuringInsert: true,
   );
+  static const VerificationMeta _imageUrlsJsonMeta = const VerificationMeta(
+    'imageUrlsJson',
+  );
+  @override
+  late final GeneratedColumn<String> imageUrlsJson = GeneratedColumn<String>(
+    'image_urls_json',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+    defaultValue: const Constant('[]'),
+  );
   static const VerificationMeta _startOffsetMeta = const VerificationMeta(
     'startOffset',
   );
@@ -2649,6 +2661,7 @@ class $StoredLocalChaptersTable extends StoredLocalChapters
     chapterIndex,
     title,
     content,
+    imageUrlsJson,
     startOffset,
     endOffset,
     createdAt,
@@ -2705,6 +2718,15 @@ class $StoredLocalChaptersTable extends StoredLocalChapters
       );
     } else if (isInserting) {
       context.missing(_contentMeta);
+    }
+    if (data.containsKey('image_urls_json')) {
+      context.handle(
+        _imageUrlsJsonMeta,
+        imageUrlsJson.isAcceptableOrUnknown(
+          data['image_urls_json']!,
+          _imageUrlsJsonMeta,
+        ),
+      );
     }
     if (data.containsKey('start_offset')) {
       context.handle(
@@ -2771,6 +2793,11 @@ class $StoredLocalChaptersTable extends StoredLocalChapters
             DriftSqlType.string,
             data['${effectivePrefix}content'],
           )!,
+      imageUrlsJson:
+          attachedDatabase.typeMapping.read(
+            DriftSqlType.string,
+            data['${effectivePrefix}image_urls_json'],
+          )!,
       startOffset: attachedDatabase.typeMapping.read(
         DriftSqlType.int,
         data['${effectivePrefix}start_offset'],
@@ -2805,6 +2832,7 @@ class StoredLocalChapter extends DataClass
   final int chapterIndex;
   final String title;
   final String content;
+  final String imageUrlsJson;
   final int? startOffset;
   final int? endOffset;
   final DateTime createdAt;
@@ -2815,6 +2843,7 @@ class StoredLocalChapter extends DataClass
     required this.chapterIndex,
     required this.title,
     required this.content,
+    required this.imageUrlsJson,
     this.startOffset,
     this.endOffset,
     required this.createdAt,
@@ -2828,6 +2857,7 @@ class StoredLocalChapter extends DataClass
     map['chapter_index'] = Variable<int>(chapterIndex);
     map['title'] = Variable<String>(title);
     map['content'] = Variable<String>(content);
+    map['image_urls_json'] = Variable<String>(imageUrlsJson);
     if (!nullToAbsent || startOffset != null) {
       map['start_offset'] = Variable<int>(startOffset);
     }
@@ -2846,6 +2876,7 @@ class StoredLocalChapter extends DataClass
       chapterIndex: Value(chapterIndex),
       title: Value(title),
       content: Value(content),
+      imageUrlsJson: Value(imageUrlsJson),
       startOffset:
           startOffset == null && nullToAbsent
               ? const Value.absent()
@@ -2870,6 +2901,7 @@ class StoredLocalChapter extends DataClass
       chapterIndex: serializer.fromJson<int>(json['chapterIndex']),
       title: serializer.fromJson<String>(json['title']),
       content: serializer.fromJson<String>(json['content']),
+      imageUrlsJson: serializer.fromJson<String>(json['imageUrlsJson']),
       startOffset: serializer.fromJson<int?>(json['startOffset']),
       endOffset: serializer.fromJson<int?>(json['endOffset']),
       createdAt: serializer.fromJson<DateTime>(json['createdAt']),
@@ -2885,6 +2917,7 @@ class StoredLocalChapter extends DataClass
       'chapterIndex': serializer.toJson<int>(chapterIndex),
       'title': serializer.toJson<String>(title),
       'content': serializer.toJson<String>(content),
+      'imageUrlsJson': serializer.toJson<String>(imageUrlsJson),
       'startOffset': serializer.toJson<int?>(startOffset),
       'endOffset': serializer.toJson<int?>(endOffset),
       'createdAt': serializer.toJson<DateTime>(createdAt),
@@ -2898,6 +2931,7 @@ class StoredLocalChapter extends DataClass
     int? chapterIndex,
     String? title,
     String? content,
+    String? imageUrlsJson,
     Value<int?> startOffset = const Value.absent(),
     Value<int?> endOffset = const Value.absent(),
     DateTime? createdAt,
@@ -2908,6 +2942,7 @@ class StoredLocalChapter extends DataClass
     chapterIndex: chapterIndex ?? this.chapterIndex,
     title: title ?? this.title,
     content: content ?? this.content,
+    imageUrlsJson: imageUrlsJson ?? this.imageUrlsJson,
     startOffset: startOffset.present ? startOffset.value : this.startOffset,
     endOffset: endOffset.present ? endOffset.value : this.endOffset,
     createdAt: createdAt ?? this.createdAt,
@@ -2923,6 +2958,10 @@ class StoredLocalChapter extends DataClass
               : this.chapterIndex,
       title: data.title.present ? data.title.value : this.title,
       content: data.content.present ? data.content.value : this.content,
+      imageUrlsJson:
+          data.imageUrlsJson.present
+              ? data.imageUrlsJson.value
+              : this.imageUrlsJson,
       startOffset:
           data.startOffset.present ? data.startOffset.value : this.startOffset,
       endOffset: data.endOffset.present ? data.endOffset.value : this.endOffset,
@@ -2939,6 +2978,7 @@ class StoredLocalChapter extends DataClass
           ..write('chapterIndex: $chapterIndex, ')
           ..write('title: $title, ')
           ..write('content: $content, ')
+          ..write('imageUrlsJson: $imageUrlsJson, ')
           ..write('startOffset: $startOffset, ')
           ..write('endOffset: $endOffset, ')
           ..write('createdAt: $createdAt, ')
@@ -2954,6 +2994,7 @@ class StoredLocalChapter extends DataClass
     chapterIndex,
     title,
     content,
+    imageUrlsJson,
     startOffset,
     endOffset,
     createdAt,
@@ -2968,6 +3009,7 @@ class StoredLocalChapter extends DataClass
           other.chapterIndex == this.chapterIndex &&
           other.title == this.title &&
           other.content == this.content &&
+          other.imageUrlsJson == this.imageUrlsJson &&
           other.startOffset == this.startOffset &&
           other.endOffset == this.endOffset &&
           other.createdAt == this.createdAt &&
@@ -2980,6 +3022,7 @@ class StoredLocalChaptersCompanion extends UpdateCompanion<StoredLocalChapter> {
   final Value<int> chapterIndex;
   final Value<String> title;
   final Value<String> content;
+  final Value<String> imageUrlsJson;
   final Value<int?> startOffset;
   final Value<int?> endOffset;
   final Value<DateTime> createdAt;
@@ -2991,6 +3034,7 @@ class StoredLocalChaptersCompanion extends UpdateCompanion<StoredLocalChapter> {
     this.chapterIndex = const Value.absent(),
     this.title = const Value.absent(),
     this.content = const Value.absent(),
+    this.imageUrlsJson = const Value.absent(),
     this.startOffset = const Value.absent(),
     this.endOffset = const Value.absent(),
     this.createdAt = const Value.absent(),
@@ -3003,6 +3047,7 @@ class StoredLocalChaptersCompanion extends UpdateCompanion<StoredLocalChapter> {
     required int chapterIndex,
     required String title,
     required String content,
+    this.imageUrlsJson = const Value.absent(),
     this.startOffset = const Value.absent(),
     this.endOffset = const Value.absent(),
     this.createdAt = const Value.absent(),
@@ -3019,6 +3064,7 @@ class StoredLocalChaptersCompanion extends UpdateCompanion<StoredLocalChapter> {
     Expression<int>? chapterIndex,
     Expression<String>? title,
     Expression<String>? content,
+    Expression<String>? imageUrlsJson,
     Expression<int>? startOffset,
     Expression<int>? endOffset,
     Expression<DateTime>? createdAt,
@@ -3031,6 +3077,7 @@ class StoredLocalChaptersCompanion extends UpdateCompanion<StoredLocalChapter> {
       if (chapterIndex != null) 'chapter_index': chapterIndex,
       if (title != null) 'title': title,
       if (content != null) 'content': content,
+      if (imageUrlsJson != null) 'image_urls_json': imageUrlsJson,
       if (startOffset != null) 'start_offset': startOffset,
       if (endOffset != null) 'end_offset': endOffset,
       if (createdAt != null) 'created_at': createdAt,
@@ -3045,6 +3092,7 @@ class StoredLocalChaptersCompanion extends UpdateCompanion<StoredLocalChapter> {
     Value<int>? chapterIndex,
     Value<String>? title,
     Value<String>? content,
+    Value<String>? imageUrlsJson,
     Value<int?>? startOffset,
     Value<int?>? endOffset,
     Value<DateTime>? createdAt,
@@ -3057,6 +3105,7 @@ class StoredLocalChaptersCompanion extends UpdateCompanion<StoredLocalChapter> {
       chapterIndex: chapterIndex ?? this.chapterIndex,
       title: title ?? this.title,
       content: content ?? this.content,
+      imageUrlsJson: imageUrlsJson ?? this.imageUrlsJson,
       startOffset: startOffset ?? this.startOffset,
       endOffset: endOffset ?? this.endOffset,
       createdAt: createdAt ?? this.createdAt,
@@ -3082,6 +3131,9 @@ class StoredLocalChaptersCompanion extends UpdateCompanion<StoredLocalChapter> {
     }
     if (content.present) {
       map['content'] = Variable<String>(content.value);
+    }
+    if (imageUrlsJson.present) {
+      map['image_urls_json'] = Variable<String>(imageUrlsJson.value);
     }
     if (startOffset.present) {
       map['start_offset'] = Variable<int>(startOffset.value);
@@ -3109,6 +3161,7 @@ class StoredLocalChaptersCompanion extends UpdateCompanion<StoredLocalChapter> {
           ..write('chapterIndex: $chapterIndex, ')
           ..write('title: $title, ')
           ..write('content: $content, ')
+          ..write('imageUrlsJson: $imageUrlsJson, ')
           ..write('startOffset: $startOffset, ')
           ..write('endOffset: $endOffset, ')
           ..write('createdAt: $createdAt, ')
@@ -8662,6 +8715,7 @@ typedef $$StoredLocalChaptersTableCreateCompanionBuilder =
       required int chapterIndex,
       required String title,
       required String content,
+      Value<String> imageUrlsJson,
       Value<int?> startOffset,
       Value<int?> endOffset,
       Value<DateTime> createdAt,
@@ -8675,6 +8729,7 @@ typedef $$StoredLocalChaptersTableUpdateCompanionBuilder =
       Value<int> chapterIndex,
       Value<String> title,
       Value<String> content,
+      Value<String> imageUrlsJson,
       Value<int?> startOffset,
       Value<int?> endOffset,
       Value<DateTime> createdAt,
@@ -8713,6 +8768,11 @@ class $$StoredLocalChaptersTableFilterComposer
 
   ColumnFilters<String> get content => $composableBuilder(
     column: $table.content,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get imageUrlsJson => $composableBuilder(
+    column: $table.imageUrlsJson,
     builder: (column) => ColumnFilters(column),
   );
 
@@ -8771,6 +8831,11 @@ class $$StoredLocalChaptersTableOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
+  ColumnOrderings<String> get imageUrlsJson => $composableBuilder(
+    column: $table.imageUrlsJson,
+    builder: (column) => ColumnOrderings(column),
+  );
+
   ColumnOrderings<int> get startOffset => $composableBuilder(
     column: $table.startOffset,
     builder: (column) => ColumnOrderings(column),
@@ -8817,6 +8882,11 @@ class $$StoredLocalChaptersTableAnnotationComposer
 
   GeneratedColumn<String> get content =>
       $composableBuilder(column: $table.content, builder: (column) => column);
+
+  GeneratedColumn<String> get imageUrlsJson => $composableBuilder(
+    column: $table.imageUrlsJson,
+    builder: (column) => column,
+  );
 
   GeneratedColumn<int> get startOffset => $composableBuilder(
     column: $table.startOffset,
@@ -8884,6 +8954,7 @@ class $$StoredLocalChaptersTableTableManager
                 Value<int> chapterIndex = const Value.absent(),
                 Value<String> title = const Value.absent(),
                 Value<String> content = const Value.absent(),
+                Value<String> imageUrlsJson = const Value.absent(),
                 Value<int?> startOffset = const Value.absent(),
                 Value<int?> endOffset = const Value.absent(),
                 Value<DateTime> createdAt = const Value.absent(),
@@ -8895,6 +8966,7 @@ class $$StoredLocalChaptersTableTableManager
                 chapterIndex: chapterIndex,
                 title: title,
                 content: content,
+                imageUrlsJson: imageUrlsJson,
                 startOffset: startOffset,
                 endOffset: endOffset,
                 createdAt: createdAt,
@@ -8908,6 +8980,7 @@ class $$StoredLocalChaptersTableTableManager
                 required int chapterIndex,
                 required String title,
                 required String content,
+                Value<String> imageUrlsJson = const Value.absent(),
                 Value<int?> startOffset = const Value.absent(),
                 Value<int?> endOffset = const Value.absent(),
                 Value<DateTime> createdAt = const Value.absent(),
@@ -8919,6 +8992,7 @@ class $$StoredLocalChaptersTableTableManager
                 chapterIndex: chapterIndex,
                 title: title,
                 content: content,
+                imageUrlsJson: imageUrlsJson,
                 startOffset: startOffset,
                 endOffset: endOffset,
                 createdAt: createdAt,

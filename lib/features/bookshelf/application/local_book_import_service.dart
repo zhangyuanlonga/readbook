@@ -14,6 +14,7 @@ import '../../../domain/entities/bookshelf_book.dart';
 import '../../../domain/entities/local_book.dart';
 import '../../../domain/repositories/local_book_repository.dart';
 import '../../reader/application/reader_system_settings_service.dart';
+import '../../reader/application/local/epub_local_book_parser.dart';
 import 'bookshelf_service.dart';
 
 class LocalBookImportResult {
@@ -202,6 +203,23 @@ class LocalBookImportService {
               'error': error.toString(),
             },
           );
+        }
+      }
+      if (localBook.format == LocalBookFormat.epub) {
+        final assetDir = EpubLocalBookParser.resolveAssetDirectory(localBook);
+        if (await assetDir.exists()) {
+          try {
+            await assetDir.delete(recursive: true);
+          } catch (error) {
+            _logger.warn(
+              'Delete local epub asset directory failed',
+              context: {
+                'bookId': normalizedBookId,
+                'path': assetDir.path,
+                'error': error.toString(),
+              },
+            );
+          }
         }
       }
     }

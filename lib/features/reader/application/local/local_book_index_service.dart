@@ -172,6 +172,7 @@ class LocalBookIndexService {
                           chapter.endOffset! > chapter.startOffset!
                       ? ''
                       : chapter.content,
+              imageUrls: chapter.imageUrls,
               createdAt: now,
               updatedAt: now,
               startOffset: chapter.startOffset,

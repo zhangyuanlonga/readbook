@@ -5,6 +5,7 @@ class LocalChapter {
     required this.chapterIndex,
     required this.title,
     required this.content,
+    this.imageUrls = const <String>[],
     required this.createdAt,
     required this.updatedAt,
     this.startOffset,
@@ -16,6 +17,7 @@ class LocalChapter {
   final int chapterIndex;
   final String title;
   final String content;
+  final List<String> imageUrls;
   final DateTime createdAt;
   final DateTime updatedAt;
   final int? startOffset;
@@ -27,6 +29,7 @@ class LocalChapter {
     int? chapterIndex,
     String? title,
     String? content,
+    List<String>? imageUrls,
     DateTime? createdAt,
     DateTime? updatedAt,
     int? startOffset,
@@ -40,6 +43,7 @@ class LocalChapter {
       chapterIndex: chapterIndex ?? this.chapterIndex,
       title: title ?? this.title,
       content: content ?? this.content,
+      imageUrls: imageUrls ?? this.imageUrls,
       createdAt: createdAt ?? this.createdAt,
       updatedAt: updatedAt ?? this.updatedAt,
       startOffset: clearStartOffset ? null : (startOffset ?? this.startOffset),
@@ -54,6 +58,7 @@ class LocalChapter {
       'chapterIndex': chapterIndex,
       'title': title,
       'content': content,
+      'imageUrls': imageUrls,
       'createdAt': createdAt.toIso8601String(),
       'updatedAt': updatedAt.toIso8601String(),
       'startOffset': startOffset,
@@ -67,7 +72,8 @@ class LocalChapter {
       bookId: _requiredString(json, 'bookId'),
       chapterIndex: _requiredInt(json, 'chapterIndex'),
       title: _requiredString(json, 'title'),
-      content: _requiredString(json, 'content'),
+      content: json['content']?.toString() ?? '',
+      imageUrls: _optionalStringList(json['imageUrls']),
       createdAt: _requiredDateTime(json, 'createdAt'),
       updatedAt: _requiredDateTime(json, 'updatedAt'),
       startOffset: _optionalInt(json['startOffset']),
@@ -115,5 +121,15 @@ class LocalChapter {
       throw FormatException('Invalid DateTime field: $key');
     }
     return parsed;
+  }
+
+  static List<String> _optionalStringList(Object? value) {
+    if (value is Iterable) {
+      return value
+          .map((item) => item?.toString().trim() ?? '')
+          .where((item) => item.isNotEmpty)
+          .toList(growable: false);
+    }
+    return const <String>[];
   }
 }

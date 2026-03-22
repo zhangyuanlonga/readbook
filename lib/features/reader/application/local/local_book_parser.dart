@@ -4,12 +4,14 @@ class LocalParsedChapter {
   const LocalParsedChapter({
     required this.title,
     required this.content,
+    this.imageUrls = const <String>[],
     this.startOffset,
     this.endOffset,
   });
 
   final String title;
   final String content;
+  final List<String> imageUrls;
   final int? startOffset;
   final int? endOffset;
 }

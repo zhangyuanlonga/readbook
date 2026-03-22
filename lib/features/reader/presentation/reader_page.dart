@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:io';
 import 'dart:math';
 import 'dart:ui';
 
@@ -180,6 +181,8 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
   final Map<int, TapDownDetails> _mangaDoubleTapDetails =
       <int, TapDownDetails>{};
   final Set<int> _mangaZoomedPageIndexes = <int>{};
+  static const String _inlineImageMarkerPrefix = '[[appread-image:';
+  static const String _inlineImageMarkerSuffix = ']]';
   int _mangaPageIndex = 0;
   ReadingProgress? _bootstrapProgress;
   Timer? _progressDebounceTimer;
@@ -611,6 +614,9 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
 
   bool _isPagedTextReaderEnabled() {
     if (_chapterImageUrls.isNotEmpty) {
+      return false;
+    }
+    if (_paragraphs.any(_isInlineImageParagraph)) {
       return false;
     }
     return !_pageTurnUsesScroll(_settings.pageTurnMode);
@@ -1547,6 +1553,15 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
     required bool isLast,
     required _ReaderThemeColors colors,
   }) {
+    final inlineImageUrl = _tryParseInlineImageParagraph(paragraph);
+    if (inlineImageUrl != null) {
+      return _buildInlineImageParagraphItem(
+        imageUrl: inlineImageUrl,
+        isLast: isLast,
+        colors: colors,
+      );
+    }
+
     final textStyle = _paragraphTextStyle(colors);
     final paddingBottom = isLast ? 0.0 : _settings.paragraphSpacing;
 
@@ -1568,6 +1583,15 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
     required bool isLast,
     required _ReaderThemeColors colors,
   }) {
+    final inlineImageUrl = _tryParseInlineImageParagraph(paragraph);
+    if (inlineImageUrl != null) {
+      return _buildInlineImageParagraphItem(
+        imageUrl: inlineImageUrl,
+        isLast: isLast,
+        colors: colors,
+      );
+    }
+
     final textStyle = _paragraphTextStyle(colors);
     final paddingBottom = isLast ? 0.0 : _settings.paragraphSpacing;
 
@@ -1754,6 +1778,58 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
     );
     painter.layout(maxWidth: maxWidth);
     return painter;
+  }
+
+  Widget _buildInlineImageParagraphItem({
+    required String imageUrl,
+    required bool isLast,
+    required _ReaderThemeColors colors,
+  }) {
+    final paddingBottom = isLast ? 0.0 : _settings.paragraphSpacing;
+    return RepaintBoundary(
+      child: Padding(
+        padding: EdgeInsets.only(bottom: paddingBottom),
+        child: _buildInlineReaderImageCard(imageUrl: imageUrl, colors: colors),
+      ),
+    );
+  }
+
+  Widget _buildInlineReaderImageCard({
+    required String imageUrl,
+    required _ReaderThemeColors colors,
+  }) {
+    final retryNonce = _mangaImageRetryNonce[imageUrl] ?? 0;
+    final requestUrl = _buildMangaImageUrl(imageUrl, retryNonce);
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(12),
+      child: ColoredBox(
+        color: colors.overlay,
+        child: _buildReaderImageWidget(
+          requestUrl: requestUrl,
+          sourceUrl: imageUrl,
+          colors: colors,
+          retryNonce: retryNonce,
+        ),
+      ),
+    );
+  }
+
+  String? _tryParseInlineImageParagraph(String paragraph) {
+    final normalized = paragraph.trim();
+    if (!normalized.startsWith(_inlineImageMarkerPrefix) ||
+        !normalized.endsWith(_inlineImageMarkerSuffix)) {
+      return null;
+    }
+    final raw = normalized.substring(
+      _inlineImageMarkerPrefix.length,
+      normalized.length - _inlineImageMarkerSuffix.length,
+    );
+    final imageUrl = raw.trim();
+    return imageUrl.isEmpty ? null : imageUrl;
+  }
+
+  bool _isInlineImageParagraph(String paragraph) {
+    return _tryParseInlineImageParagraph(paragraph) != null;
   }
 
   int _clampInt(int value, int min, int max) {
@@ -2815,7 +2891,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
     }
 
     final uri = Uri.tryParse(imageUrl);
-    if (uri == null) {
+    if (uri == null || uri.scheme == 'file') {
       return imageUrl;
     }
 
@@ -2951,49 +3027,116 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
             maxScale: 4,
             panEnabled: true,
             onInteractionEnd: (_) => _syncMangaZoomState(index),
-            child: Image.network(
-              requestUrl,
-              headers:
-                  _chapterImageHeaders.isEmpty ? null : _chapterImageHeaders,
-              fit: BoxFit.fitWidth,
-              filterQuality: _resolveMangaFilterQuality(),
-              frameBuilder: (context, child, frame, wasSynchronouslyLoaded) {
-                if (wasSynchronouslyLoaded || frame != null) {
-                  return child;
-                }
+            child: _buildReaderImageWidget(
+              requestUrl: requestUrl,
+              sourceUrl: imageUrl,
+              colors: colors,
+              retryNonce: retryNonce,
+            ),
+          ),
+        ),
+      ),
+    );
+  }
 
-                return AspectRatio(
-                  aspectRatio: 3 / 4,
-                  child: Center(
-                    child: CircularProgressIndicator(
-                      strokeWidth: 2,
-                      color: colors.meta,
-                    ),
-                  ),
-                );
-              },
-              errorBuilder: (context, error, stackTrace) {
-                return AspectRatio(
-                  aspectRatio: 3 / 4,
-                  child: InkWell(
-                    onTap: () {
-                      setState(() {
-                        _mangaImageRetryNonce[imageUrl] = retryNonce + 1;
-                      });
-                    },
-                    child: Center(
-                      child: Padding(
-                        padding: const EdgeInsets.symmetric(horizontal: 12),
-                        child: Text(
-                          '图片加载失败，点击重试',
-                          textAlign: TextAlign.center,
-                          style: TextStyle(color: colors.meta),
-                        ),
-                      ),
-                    ),
-                  ),
-                );
-              },
+  Widget _buildReaderImageWidget({
+    required String requestUrl,
+    required String sourceUrl,
+    required _ReaderThemeColors colors,
+    required int retryNonce,
+  }) {
+    final uri = Uri.tryParse(requestUrl);
+    if (requestUrl.startsWith('data:image/')) {
+      return _buildDataUriImage(
+        dataUri: requestUrl,
+        colors: colors,
+        sourceUrl: sourceUrl,
+        retryNonce: retryNonce,
+      );
+    }
+    if (uri != null && uri.scheme == 'file') {
+      return Image.file(
+        File.fromUri(uri),
+        fit: BoxFit.fitWidth,
+        filterQuality: _resolveMangaFilterQuality(),
+        errorBuilder: (context, error, stackTrace) {
+          return _buildMangaImageError(colors, sourceUrl, retryNonce);
+        },
+      );
+    }
+
+    return Image.network(
+      requestUrl,
+      headers: _chapterImageHeaders.isEmpty ? null : _chapterImageHeaders,
+      fit: BoxFit.fitWidth,
+      filterQuality: _resolveMangaFilterQuality(),
+      frameBuilder: (context, child, frame, wasSynchronouslyLoaded) {
+        if (wasSynchronouslyLoaded || frame != null) {
+          return child;
+        }
+
+        return AspectRatio(
+          aspectRatio: 3 / 4,
+          child: Center(
+            child: CircularProgressIndicator(
+              strokeWidth: 2,
+              color: colors.meta,
+            ),
+          ),
+        );
+      },
+      errorBuilder: (context, error, stackTrace) {
+        return _buildMangaImageError(colors, sourceUrl, retryNonce);
+      },
+    );
+  }
+
+  Widget _buildDataUriImage({
+    required String dataUri,
+    required _ReaderThemeColors colors,
+    required String sourceUrl,
+    required int retryNonce,
+  }) {
+    try {
+      final commaIndex = dataUri.indexOf(',');
+      if (commaIndex <= 0) {
+        throw const FormatException('Invalid data URI');
+      }
+      final encoded = dataUri.substring(commaIndex + 1);
+      final bytes = base64Decode(encoded);
+      return Image.memory(
+        bytes,
+        fit: BoxFit.fitWidth,
+        filterQuality: _resolveMangaFilterQuality(),
+        errorBuilder: (context, error, stackTrace) {
+          return _buildMangaImageError(colors, sourceUrl, retryNonce);
+        },
+      );
+    } catch (_) {
+      return _buildMangaImageError(colors, sourceUrl, retryNonce);
+    }
+  }
+
+  Widget _buildMangaImageError(
+    _ReaderThemeColors colors,
+    String imageUrl,
+    int retryNonce,
+  ) {
+    return AspectRatio(
+      aspectRatio: 3 / 4,
+      child: InkWell(
+        onTap: () {
+          setState(() {
+            _mangaImageRetryNonce[imageUrl] = retryNonce + 1;
+          });
+        },
+        child: Center(
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 12),
+            child: Text(
+              '图片加载失败，点击重试',
+              textAlign: TextAlign.center,
+              style: TextStyle(color: colors.meta),
             ),
           ),
         ),

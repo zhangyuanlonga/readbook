@@ -154,9 +154,13 @@ class LocalContentProvider extends ContentProvider {
       detailUrl: _buildLocalDetailUrl(bookId),
     );
 
+    final imageUrls =
+        replaced.content.trim().isEmpty ? chapter.imageUrls : const <String>[];
+
     return ChapterContentResult(
       content: replaced.content,
       fromCache: true,
+      imageUrls: imageUrls,
       displayChapterTitle: titleResult.content,
       effectiveReaderReplaceRules: <ReaderReplaceRule>[
         ...titleResult.effectiveRules,

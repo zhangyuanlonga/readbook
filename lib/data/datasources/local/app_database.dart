@@ -92,6 +92,7 @@ class StoredLocalChapters extends Table {
   IntColumn get chapterIndex => integer()();
   TextColumn get title => text()();
   TextColumn get content => text()();
+  TextColumn get imageUrlsJson => text().withDefault(const Constant('[]'))();
   IntColumn get startOffset => integer().nullable()();
   IntColumn get endOffset => integer().nullable()();
   DateTimeColumn get createdAt => dateTime().withDefault(currentDateAndTime)();
@@ -383,7 +384,7 @@ class AppDatabase extends _$AppDatabase {
   static final AppDatabase instance = AppDatabase();
 
   @override
-  int get schemaVersion => 13;
+  int get schemaVersion => 14;
 
   static const String _mangaSourceMatcherSql =
       '(raw_json LIKE \'%"sourceType":2,%\' OR '
@@ -556,6 +557,18 @@ class AppDatabase extends _$AppDatabase {
                 () => migrator.addColumn(
                   storedLocalBooks,
                   storedLocalBooks.storageFileLastModifiedMs,
+                ),
+          );
+        }
+        if (from < 14) {
+          await _addColumnIfMissing(
+            migrator: migrator,
+            tableName: storedLocalChapters.tableName,
+            columnName: 'image_urls_json',
+            addColumn:
+                () => migrator.addColumn(
+                  storedLocalChapters,
+                  storedLocalChapters.imageUrlsJson as GeneratedColumn<Object>,
                 ),
           );
         }
@@ -1468,13 +1481,14 @@ class AppDatabase extends _$AppDatabase {
             final normalizedId = chapter.id.trim();
             final normalizedTitle = chapter.title.trim();
             final normalizedContent = chapter.content.trim();
+            final hasImages = chapter.imageUrls.isNotEmpty;
             final hasExternalRange =
                 chapter.startOffset != null &&
                 chapter.endOffset != null &&
                 chapter.endOffset! > chapter.startOffset!;
             return normalizedId.isNotEmpty &&
                 normalizedTitle.isNotEmpty &&
-                (normalizedContent.isNotEmpty || hasExternalRange);
+                (normalizedContent.isNotEmpty || hasExternalRange || hasImages);
           })
           .toList(growable: false);
 
@@ -1492,6 +1506,7 @@ class AppDatabase extends _$AppDatabase {
                 chapterIndex: Value(chapter.chapterIndex),
                 title: Value(normalizedTitle),
                 content: Value(chapter.content),
+                imageUrlsJson: Value(jsonEncode(chapter.imageUrls)),
                 startOffset: Value(chapter.startOffset),
                 endOffset: Value(chapter.endOffset),
                 createdAt: Value(chapter.createdAt),
@@ -1541,6 +1556,7 @@ class AppDatabase extends _$AppDatabase {
             storedLocalChapters.bookId,
             storedLocalChapters.chapterIndex,
             storedLocalChapters.title,
+            storedLocalChapters.imageUrlsJson,
             storedLocalChapters.startOffset,
             storedLocalChapters.endOffset,
             storedLocalChapters.createdAt,
@@ -1559,6 +1575,9 @@ class AppDatabase extends _$AppDatabase {
             chapterIndex: row.read(storedLocalChapters.chapterIndex)!,
             title: row.read(storedLocalChapters.title)!,
             content: '',
+            imageUrls: _decodeStringList(
+              row.read(storedLocalChapters.imageUrlsJson),
+            ),
             createdAt: row.read(storedLocalChapters.createdAt)!,
             updatedAt: row.read(storedLocalChapters.updatedAt)!,
             startOffset: row.read(storedLocalChapters.startOffset),
@@ -2127,6 +2146,7 @@ class AppDatabase extends _$AppDatabase {
       chapterIndex: row.chapterIndex,
       title: row.title,
       content: row.content,
+      imageUrls: _decodeStringList(row.imageUrlsJson),
       createdAt: row.createdAt,
       updatedAt: row.updatedAt,
       startOffset: row.startOffset,
@@ -2502,6 +2522,25 @@ class AppDatabase extends _$AppDatabase {
       return const {};
     } on FormatException {
       return const {};
+    }
+  }
+
+  List<String> _decodeStringList(String? raw) {
+    final normalized = raw?.trim() ?? '';
+    if (normalized.isEmpty) {
+      return const <String>[];
+    }
+    try {
+      final decoded = jsonDecode(normalized);
+      if (decoded is! List) {
+        return const <String>[];
+      }
+      return decoded
+          .map((item) => item?.toString().trim() ?? '')
+          .where((item) => item.isNotEmpty)
+          .toList(growable: false);
+    } catch (_) {
+      return const <String>[];
     }
   }
 }

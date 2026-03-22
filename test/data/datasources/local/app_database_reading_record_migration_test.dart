@@ -315,6 +315,15 @@ void main() {
         ),
         isTrue,
       );
+
+      final localChapterColumns =
+          await database
+              .customSelect('PRAGMA table_info(local_chapters)')
+              .get();
+      expect(
+        localChapterColumns.any((row) => row.data['name'] == 'image_urls_json'),
+        isTrue,
+      );
     });
   });
 }

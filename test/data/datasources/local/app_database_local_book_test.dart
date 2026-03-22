@@ -110,6 +110,7 @@ void main() {
             chapterIndex: 1,
             title: '第二章',
             content: '第二章内容',
+            imageUrls: const ['file:///tmp/image_2.png'],
             createdAt: now,
             updatedAt: now,
             startOffset: 101,
@@ -125,6 +126,7 @@ void main() {
       final chapter = await database.getLocalChapterById('c_2');
       expect(chapter, isNotNull);
       expect(chapter!.chapterIndex, 1);
+      expect(chapter.imageUrls, contains('file:///tmp/image_2.png'));
 
       final book = await database.getLocalBookById('local_2');
       expect(book, isNotNull);
