@@ -1365,7 +1365,9 @@ class _ReadingRecordsPageState extends State<ReadingRecordsPage> {
             LayoutBuilder(
               builder: (context, constraints) {
                 final maxWidth = constraints.maxWidth;
-                final columns = maxWidth >= 620 ? 3 : 2;
+                final columns = AppLayout.readingRecordsMetricColumnsForWidth(
+                  maxWidth,
+                );
                 final spacing = 12.0;
                 final tileWidth = ((maxWidth - (spacing * (columns - 1))) /
                         columns)

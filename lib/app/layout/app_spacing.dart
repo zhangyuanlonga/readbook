@@ -7,30 +7,27 @@ class AppSpacing {
 
   static double pageHorizontal(BuildContext context) {
     final width = AppLayout.screenWidth(context);
-    final bucket = AppLayout.widthBucket(context);
-    if (bucket == AppWidthBucket.compact) {
+    if (AppLayout.isPhoneSmallWidthFor(width)) {
       return 12;
     }
-    if (bucket == AppWidthBucket.phoneXl ||
-        (bucket == AppWidthBucket.largePhone &&
-            width >= AppLayout.phoneLargeWidth)) {
-      return 20;
-    }
-    return 16;
+    final bucket = AppLayout.widthBucket(context);
+    return switch (bucket) {
+      AppWidthBucket.medium => 20,
+      AppWidthBucket.expanded => 24,
+      _ => 16,
+    };
   }
 
   static double cardHorizontal(BuildContext context) {
     final width = AppLayout.screenWidth(context);
-    final bucket = AppLayout.widthBucket(context);
-    if (bucket == AppWidthBucket.compact) {
+    if (AppLayout.isPhoneSmallWidthFor(width)) {
       return 12;
     }
-    if (bucket == AppWidthBucket.phoneXl ||
-        (bucket == AppWidthBucket.largePhone &&
-            width >= AppLayout.phoneLargeWidth)) {
-      return 16;
-    }
-    return 14;
+    final bucket = AppLayout.widthBucket(context);
+    return switch (bucket) {
+      AppWidthBucket.medium || AppWidthBucket.expanded => 16,
+      _ => 14,
+    };
   }
 
   static EdgeInsets pagePadding(BuildContext context) {
@@ -44,15 +41,14 @@ class AppSpacing {
 
   static EdgeInsets dialogInsetPadding(BuildContext context) {
     final width = AppLayout.screenWidth(context);
+    if (AppLayout.isPhoneSmallWidthFor(width)) {
+      return const EdgeInsets.symmetric(horizontal: 16, vertical: 24);
+    }
     final bucket = AppLayout.widthBucket(context);
-    final horizontal =
-        bucket == AppWidthBucket.compact
-            ? 16.0
-            : bucket == AppWidthBucket.phoneXl ||
-                (bucket == AppWidthBucket.largePhone &&
-                    width >= AppLayout.phoneLargeWidth)
-            ? 28.0
-            : 24.0;
+    final horizontal = switch (bucket) {
+      AppWidthBucket.medium || AppWidthBucket.expanded => 28.0,
+      _ => 24.0,
+    };
     return EdgeInsets.symmetric(horizontal: horizontal, vertical: 24);
   }
 

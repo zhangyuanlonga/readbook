@@ -82,7 +82,11 @@ class AppLayout {
   }
 
   static bool isPhoneSmall(BuildContext context) {
-    return screenWidth(context) < phoneSmallWidth;
+    return isPhoneSmallWidthFor(screenWidth(context));
+  }
+
+  static bool isPhoneSmallWidthFor(double width) {
+    return width <= phoneSmallWidth;
   }
 
   static bool isPhoneLarge(BuildContext context) {
@@ -192,6 +196,25 @@ class AppLayout {
     return 3;
   }
 
+  static int mineActionGridColumnsForWidth(double width) {
+    if (isPhoneSmallWidthFor(width)) {
+      return 2;
+    }
+    return 4;
+  }
+
+  static int readingRecordsMetricColumnsForWidth(double width) {
+    final bucket = widthBucketFor(width);
+    return switch (bucket) {
+      AppWidthBucket.medium || AppWidthBucket.expanded => 3,
+      _ => 2,
+    };
+  }
+
+  static bool useCondensedPhoneDensityForWidth(double width) {
+    return width >= phoneLargeWidth && width < mediumBreakpointWidth;
+  }
+
   static double shortestSide(BuildContext context) {
     final size = MediaQuery.sizeOf(context);
     return math.min(size.width, size.height);
@@ -240,7 +263,7 @@ class AppLayout {
     required double large,
   }) {
     final width = screenWidth(context);
-    if (width < phoneSmallWidth) {
+    if (isPhoneSmallWidthFor(width)) {
       return compact;
     }
     if (width >= phoneLargeWidth) {

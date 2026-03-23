@@ -827,13 +827,24 @@ class _DiscoverPageState extends State<DiscoverPage>
     Book book, {
     required int listIndex,
   }) {
+    final useCondensedPhoneDensity = AppLayout.useCondensedPhoneDensityForWidth(
+      AppLayout.screenWidth(context),
+    );
+    final cardVerticalPadding = useCondensedPhoneDensity ? 10.0 : 12.0;
+    final cardHorizontalPadding = useCondensedPhoneDensity ? 10.0 : 12.0;
+    final cardBottomMargin = useCondensedPhoneDensity ? 8.0 : 10.0;
+    final coverWidth = useCondensedPhoneDensity ? 46.0 : 52.0;
+    final coverHeight = useCondensedPhoneDensity ? 64.0 : 72.0;
+    final introMaxLines = useCondensedPhoneDensity ? 1 : 2;
+    final sectionGap = useCondensedPhoneDensity ? 5.0 : 6.0;
+    final compactPill = useCondensedPhoneDensity;
     final author = _normalizeSnippet(book.author);
     final latestChapter = _normalizeSnippet(book.latestChapter);
     final intro = _normalizeSnippet(book.intro);
     final heroTag = _buildBookCoverHeroTag(book: book, listIndex: listIndex);
 
     return Card(
-      margin: const EdgeInsets.only(bottom: 10),
+      margin: EdgeInsets.only(bottom: cardBottomMargin),
       clipBehavior: Clip.antiAlias,
       child: InkWell(
         onTap: () => _openBookDetail(book, heroTag: heroTag),
@@ -846,12 +857,20 @@ class _DiscoverPageState extends State<DiscoverPage>
           context,
         ).colorScheme.primary.withValues(alpha: 0.1),
         child: Padding(
-          padding: const EdgeInsets.all(12),
+          padding: EdgeInsets.symmetric(
+            horizontal: cardHorizontalPadding,
+            vertical: cardVerticalPadding,
+          ),
           child: Row(
             crossAxisAlignment: CrossAxisAlignment.center,
             children: <Widget>[
-              _buildCoverPreview(book.coverUrl, heroTag: heroTag),
-              const SizedBox(width: 12),
+              _buildCoverPreview(
+                book.coverUrl,
+                heroTag: heroTag,
+                width: coverWidth,
+                height: coverHeight,
+              ),
+              SizedBox(width: useCondensedPhoneDensity ? 10 : 12),
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -864,7 +883,7 @@ class _DiscoverPageState extends State<DiscoverPage>
                         fontWeight: FontWeight.w700,
                       ),
                     ),
-                    const SizedBox(height: 4),
+                    SizedBox(height: useCondensedPhoneDensity ? 3 : 4),
                     Wrap(
                       spacing: 6,
                       runSpacing: 6,
@@ -873,14 +892,20 @@ class _DiscoverPageState extends State<DiscoverPage>
                           context,
                           label: '来源',
                           value: _selectedSource?.name ?? book.sourceId,
+                          compact: compactPill,
                         ),
                         if (author != null && author.isNotEmpty)
-                          _buildInfoPill(context, label: '作者', value: author),
+                          _buildInfoPill(
+                            context,
+                            label: '作者',
+                            value: author,
+                            compact: compactPill,
+                          ),
                       ],
                     ),
                     if (latestChapter != null && latestChapter.isNotEmpty)
                       Padding(
-                        padding: const EdgeInsets.only(top: 6),
+                        padding: EdgeInsets.only(top: sectionGap),
                         child: Text(
                           '最新章节: $latestChapter',
                           maxLines: 1,
@@ -890,12 +915,12 @@ class _DiscoverPageState extends State<DiscoverPage>
                       ),
                     if (intro != null && intro.isNotEmpty)
                       Padding(
-                        padding: const EdgeInsets.only(top: 6),
+                        padding: EdgeInsets.only(top: sectionGap),
                         child: Container(
                           width: double.infinity,
-                          padding: const EdgeInsets.symmetric(
+                          padding: EdgeInsets.symmetric(
                             horizontal: 8,
-                            vertical: 6,
+                            vertical: useCondensedPhoneDensity ? 5 : 6,
                           ),
                           decoration: BoxDecoration(
                             color:
@@ -906,7 +931,7 @@ class _DiscoverPageState extends State<DiscoverPage>
                           ),
                           child: Text(
                             intro,
-                            maxLines: 2,
+                            maxLines: introMaxLines,
                             overflow: TextOverflow.ellipsis,
                             style: Theme.of(
                               context,
@@ -935,15 +960,26 @@ class _DiscoverPageState extends State<DiscoverPage>
     );
   }
 
-  Widget _buildCoverPreview(String? coverUrl, {required String heroTag}) {
+  Widget _buildCoverPreview(
+    String? coverUrl, {
+    required String heroTag,
+    required double width,
+    required double height,
+  }) {
     final trimmed = coverUrl?.trim();
     if (trimmed == null || trimmed.isEmpty) {
-      return Hero(tag: heroTag, child: _buildCoverFallback());
+      return Hero(
+        tag: heroTag,
+        child: _buildCoverFallback(width: width, height: height),
+      );
     }
 
     final uri = Uri.tryParse(trimmed);
     if (uri == null || !uri.hasScheme) {
-      return Hero(tag: heroTag, child: _buildCoverFallback());
+      return Hero(
+        tag: heroTag,
+        child: _buildCoverFallback(width: width, height: height),
+      );
     }
 
     return Hero(
@@ -952,19 +988,19 @@ class _DiscoverPageState extends State<DiscoverPage>
         borderRadius: BorderRadius.circular(8),
         child: DiskCachedCoverImage(
           imageUrl: trimmed,
-          width: 52,
-          height: 72,
+          width: width,
+          height: height,
           fit: BoxFit.cover,
-          fallback: _buildCoverFallback(),
+          fallback: _buildCoverFallback(width: width, height: height),
         ),
       ),
     );
   }
 
-  Widget _buildCoverFallback() {
+  Widget _buildCoverFallback({required double width, required double height}) {
     return Container(
-      width: 52,
-      height: 72,
+      width: width,
+      height: height,
       decoration: BoxDecoration(
         color: Theme.of(context).colorScheme.surfaceContainerHighest,
         borderRadius: BorderRadius.circular(8),
@@ -972,7 +1008,7 @@ class _DiscoverPageState extends State<DiscoverPage>
       alignment: Alignment.center,
       child: Icon(
         Icons.menu_book_rounded,
-        size: 22,
+        size: (width * 0.42).clamp(20.0, 22.0).toDouble(),
         color: Theme.of(context).colorScheme.onSurfaceVariant,
       ),
     );
@@ -982,6 +1018,7 @@ class _DiscoverPageState extends State<DiscoverPage>
     BuildContext context, {
     required String label,
     required String value,
+    bool compact = false,
   }) {
     final colorScheme = Theme.of(context).colorScheme;
     return DecoratedBox(
@@ -990,7 +1027,10 @@ class _DiscoverPageState extends State<DiscoverPage>
         color: colorScheme.secondaryContainer,
       ),
       child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+        padding: EdgeInsets.symmetric(
+          horizontal: compact ? 7 : 8,
+          vertical: compact ? 3 : 4,
+        ),
         child: Text(
           '$label: $value',
           style: Theme.of(context).textTheme.labelSmall?.copyWith(

@@ -321,7 +321,9 @@ class _ChapterCacheRangeSheetState extends State<_ChapterCacheRangeSheet> {
                         },
                       );
 
-                      if (constraints.maxWidth < AppLayout.phoneSmallWidth) {
+                      if (AppLayout.isPhoneSmallWidthFor(
+                        constraints.maxWidth,
+                      )) {
                         return Column(
                           children: [
                             startStepper,
@@ -370,7 +372,7 @@ class _ChapterCacheRangeSheetState extends State<_ChapterCacheRangeSheet> {
                 child: const Text('开始缓存'),
               );
 
-              if (constraints.maxWidth < AppLayout.phoneSmallWidth) {
+              if (AppLayout.isPhoneSmallWidthFor(constraints.maxWidth)) {
                 return Column(
                   children: [
                     SizedBox(width: double.infinity, child: cancelButton),
@@ -764,7 +766,7 @@ class _ChapterCacheProgressSheetState
                   child: Text(canClose ? '完成' : '缓存中...'),
                 );
 
-                if (constraints.maxWidth < AppLayout.phoneSmallWidth) {
+                if (AppLayout.isPhoneSmallWidthFor(constraints.maxWidth)) {
                   return Column(
                     children: [
                       SizedBox(width: double.infinity, child: stopButton),

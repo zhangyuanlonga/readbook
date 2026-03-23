@@ -24,7 +24,7 @@ void main() {
       );
 
       final expected =
-          width < AppLayout.phoneSmallWidth
+          AppLayout.isPhoneSmallWidthFor(width)
               ? 0.92
               : width >= AppLayout.phoneLargeWidth
               ? 0.85

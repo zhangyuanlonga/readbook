@@ -25,8 +25,6 @@ class MinePage extends ConsumerStatefulWidget {
 
 class _MinePageState extends ConsumerState<MinePage> {
   String? _highlightedTileId;
-  static const double _ultraNarrowGridWidth = 320;
-  static const double _narrowGridWidth = 330;
   static const EdgeInsets _profileCardPadding = EdgeInsets.fromLTRB(
     14,
     12,
@@ -355,8 +353,11 @@ class _MinePageState extends ConsumerState<MinePage> {
           ),
           const SizedBox(height: 10),
           LayoutBuilder(
-            builder: (context, constraints) {
-              final columns = _resolveGridColumns(width: constraints.maxWidth);
+            builder: (context, _) {
+              final screenWidth = AppLayout.screenWidth(context);
+              final columns = AppLayout.mineActionGridColumnsForWidth(
+                screenWidth,
+              );
               final denseGrid = columns >= 4;
               final crossSpacing = denseGrid ? 9.0 : 10.0;
               final mainSpacing = denseGrid ? 9.0 : 10.0;
@@ -400,12 +401,6 @@ class _MinePageState extends ConsumerState<MinePage> {
         ],
       ),
     );
-  }
-
-  int _resolveGridColumns({required double width}) {
-    if (width < _ultraNarrowGridWidth) return 2;
-    if (width < _narrowGridWidth) return 3;
-    return 4;
   }
 
   Widget _buildActionTile(

@@ -9,6 +9,7 @@ This project targets phones first and also supports tablet/large screens. Respon
 - Use `AppLayout` and `AppSpacing` as the only responsive entry points.
 - Keep breakpoint constants in `lib/app/layout/app_layout.dart`.
 - Do not define new page-level breakpoint magic numbers.
+- Mobile-first baseline: treat widths `<=360dp` as small phones.
 
 ## Required Rules
 

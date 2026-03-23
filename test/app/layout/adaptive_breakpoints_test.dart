@@ -27,9 +27,9 @@ void main() {
       read: AppSpacing.pageHorizontal,
     );
 
-    expect(spacing360, 16);
+    expect(spacing360, 12);
     expect(spacing390, 16);
-    expect(spacing430, 20);
+    expect(spacing430, 16);
   });
 
   testWidgets('AppLayout classifies common phone widths correctly', (
@@ -66,7 +66,7 @@ void main() {
           ),
     );
 
-    expect(flags360.isPhoneSmall, isFalse);
+    expect(flags360.isPhoneSmall, isTrue);
     expect(flags360.isPhoneLarge, isFalse);
     expect(flags360.isPhone, isTrue);
 
@@ -212,6 +212,109 @@ void main() {
     expect(columns600, 3);
   });
 
+  testWidgets('AppLayout mineActionGridColumnsForWidth follows rule', (
+    tester,
+  ) async {
+    final columns320 = await _readFromContext<int>(
+      tester,
+      width: 320,
+      read: (context) => AppLayout.mineActionGridColumnsForWidth(320),
+    );
+    final columns360 = await _readFromContext<int>(
+      tester,
+      width: 360,
+      read: (context) => AppLayout.mineActionGridColumnsForWidth(360),
+    );
+    final columns390 = await _readFromContext<int>(
+      tester,
+      width: 390,
+      read: (context) => AppLayout.mineActionGridColumnsForWidth(390),
+    );
+    final columns430 = await _readFromContext<int>(
+      tester,
+      width: 430,
+      read: (context) => AppLayout.mineActionGridColumnsForWidth(430),
+    );
+    final columns600 = await _readFromContext<int>(
+      tester,
+      width: 600,
+      read: (context) => AppLayout.mineActionGridColumnsForWidth(600),
+    );
+
+    expect(columns320, 2);
+    expect(columns360, 2);
+    expect(columns390, 4);
+    expect(columns430, 4);
+    expect(columns600, 4);
+  });
+
+  testWidgets('AppLayout treats widths up to 360dp as small phones', (
+    tester,
+  ) async {
+    final small360 = await _readFromContext<bool>(
+      tester,
+      width: 360,
+      read: (context) => AppLayout.isPhoneSmallWidthFor(360),
+    );
+    final small361 = await _readFromContext<bool>(
+      tester,
+      width: 361,
+      read: (context) => AppLayout.isPhoneSmallWidthFor(361),
+    );
+
+    expect(small360, isTrue);
+    expect(small361, isFalse);
+  });
+
+  testWidgets('AppLayout readingRecordsMetricColumnsForWidth follows buckets', (
+    tester,
+  ) async {
+    final columns390 = await _readFromContext<int>(
+      tester,
+      width: 390,
+      read: (context) => AppLayout.readingRecordsMetricColumnsForWidth(390),
+    );
+    final columns600 = await _readFromContext<int>(
+      tester,
+      width: 600,
+      read: (context) => AppLayout.readingRecordsMetricColumnsForWidth(600),
+    );
+
+    expect(columns390, 2);
+    expect(columns600, 3);
+  });
+
+  testWidgets(
+    'AppLayout useCondensedPhoneDensityForWidth only enables on large phones',
+    (tester) async {
+      final dense390 = await _readFromContext<bool>(
+        tester,
+        width: 390,
+        read: (context) => AppLayout.useCondensedPhoneDensityForWidth(390),
+      );
+      final dense430 = await _readFromContext<bool>(
+        tester,
+        width: 430,
+        read: (context) => AppLayout.useCondensedPhoneDensityForWidth(430),
+      );
+      final dense480 = await _readFromContext<bool>(
+        tester,
+        width: 480,
+        read: (context) => AppLayout.useCondensedPhoneDensityForWidth(480),
+      );
+      final dense600 = await _readFromContext<bool>(
+        tester,
+        width: 600,
+        read: (context) => AppLayout.useCondensedPhoneDensityForWidth(600),
+      );
+
+      expect(dense390, isFalse);
+      expect(dense430, isTrue);
+      expect(dense480, isTrue);
+      expect(dense600, isFalse);
+    },
+  );
+
   testWidgets('AppLayout bookshelfGridColumnsForWidth uses width thresholds', (
     tester,
   ) async {
@@ -290,8 +393,20 @@ void main() {
             large: 0.85,
           ),
     );
+    final compact360 = await _readFromContext<double>(
+      tester,
+      width: 360,
+      read:
+          (context) => AppLayout.sheetHeightFactor(
+            context,
+            compact: 0.92,
+            regular: 0.9,
+            large: 0.85,
+          ),
+    );
 
     expect(compact, 0.92);
+    expect(compact360, 0.92);
     expect(regular, 0.9);
     expect(large, 0.85);
   });

@@ -97,6 +97,71 @@ void main() {
     expect(find.text('发现测试书籍'), findsOneWidget);
   });
 
+  testWidgets('uses denser phone card style at width 430 compared with 390', (
+    tester,
+  ) async {
+    const introText = '这是一段用于测试发现页密度策略变化的简介文本内容';
+    final service = ExploreService(
+      sourceRepository: _FakeSourceRepository(<SourceDefinition>[
+        SourceDefinition(
+          id: 'discover_density',
+          name: '发现密度源',
+          baseUrl: 'https://example.com',
+          enabled: true,
+          exploreEnabled: true,
+          exploreUrl: '推荐::/discover?page={{page}}',
+          rules: const SourceRuleSet(
+            exploreListRule: '.item@html',
+            exploreTitleRule: '.name@text',
+            exploreDetailUrlRule: '.name@href',
+          ),
+        ),
+      ]),
+      searchService: _FakeSearchService(
+        handler: ({
+          required SourceDefinition source,
+          required String keyword,
+          required int page,
+          required int pageSize,
+        }) async {
+          return SingleSourceSearchResult(
+            sourceId: source.id,
+            sourceName: source.name,
+            keyword: keyword,
+            requestUrl: 'https://example.com/discover?page=$page',
+            method: HttpRequestMethod.get,
+            statusCode: 200,
+            books: const <Book>[
+              Book(
+                id: 'density-book',
+                sourceId: 'discover_density',
+                title: '密度测试书籍',
+                intro: introText,
+                detailUrl: 'https://example.com/book/density',
+              ),
+            ],
+          );
+        },
+      ),
+    );
+
+    await tester.pumpWidget(
+      _TestHarness(width: 390, child: DiscoverPage(exploreService: service)),
+    );
+    await tester.pumpAndSettle();
+
+    final intro390 = tester.widget<Text>(find.text(introText).first);
+    expect(intro390.maxLines, 2);
+
+    await tester.pumpWidget(
+      _TestHarness(width: 430, child: DiscoverPage(exploreService: service)),
+    );
+    await tester.pumpAndSettle();
+
+    final intro430 = tester.widget<Text>(find.text(introText).first);
+    expect(intro430.maxLines, 1);
+  });
+
   testWidgets('shows category style hint text in side panel', (tester) async {
     final service = ExploreService(
       sourceRepository: _FakeSourceRepository(<SourceDefinition>[
