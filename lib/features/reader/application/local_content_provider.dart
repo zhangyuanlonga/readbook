@@ -4,12 +4,12 @@ import '../../../core/errors/error_stage.dart';
 import '../../../domain/entities/book_detail.dart';
 import '../../../domain/entities/chapter.dart';
 import '../../../domain/entities/reader_replace_rule.dart';
-import '../../bookshelf/application/local_book_import_service.dart';
 import '../../book/application/book_detail_service.dart';
 import '../../book/application/local_book_detail_service.dart';
 import 'chapter_content_service.dart';
 import 'content_provider.dart';
 import 'local/local_chapter_content_service.dart';
+import 'local/local_reader_identity.dart';
 import 'reader_replace_rule_service.dart';
 
 class LocalContentProvider extends ContentProvider {
@@ -24,8 +24,6 @@ class LocalContentProvider extends ContentProvider {
            readerReplaceRuleService ?? ReaderReplaceRuleService();
 
   static const String sourceName = '本地导入';
-  static const String _kLocalDetailPrefix = 'local://book/';
-  static const String _kLocalChapterPrefix = 'local://chapter/';
 
   final LocalBookDetailService _detailService;
   final LocalChapterContentService _chapterContentService;
@@ -42,7 +40,7 @@ class LocalContentProvider extends ContentProvider {
 
   @override
   bool supportsSourceId(String sourceId) {
-    return sourceId.trim() == LocalBookImportService.localBookSourceId;
+    return LocalReaderIdentity.isLocalSourceId(sourceId);
   }
 
   @override
@@ -54,29 +52,33 @@ class LocalContentProvider extends ContentProvider {
     String? fallbackAuthor,
     bool forceRefresh = false,
   }) async {
-    if (!supportsSourceId(sourceId)) {
+    _ensureLocalSource(sourceId, stage: ErrorStage.detail);
+
+    final resolvedBookId = LocalReaderIdentity.resolveBookId(
+      bookId: bookId,
+      detailUrl: detailUrl,
+    );
+    if (resolvedBookId == null || resolvedBookId.isEmpty) {
       throw AppException(
-        code: ErrorCode.unknownSource,
+        code: ErrorCode.validation,
         stage: ErrorStage.detail,
-        briefMessage: '非本地书籍来源，无法加载本地详情。',
+        briefMessage: '本地图书标识缺失，无法加载详情。',
       );
     }
 
     final result = await _detailService.load(
-      bookId: bookId,
+      bookId: resolvedBookId,
       forceReindex: forceRefresh,
       withContent: false,
     );
 
-    final resolvedAuthor = _resolveAuthor(result.book.author);
-    final coverUrl = _resolveCoverUrl(result.book.coverPath);
     final detail = BookDetail(
       id: result.book.id,
-      sourceId: LocalBookImportService.localBookSourceId,
+      sourceId: LocalReaderIdentity.localSourceId,
       title: result.book.title,
-      detailUrl: _buildLocalDetailUrl(result.book.id),
-      author: resolvedAuthor,
-      coverUrl: coverUrl,
+      detailUrl: LocalReaderIdentity.buildBookDetailUrl(result.book.id),
+      author: _resolveAuthor(result.book.author),
+      coverUrl: _resolveCoverUrl(result.book.coverPath),
     );
 
     final chapters = result.chapters
@@ -85,7 +87,7 @@ class LocalContentProvider extends ContentProvider {
             id: chapter.id,
             bookId: chapter.bookId,
             title: chapter.title,
-            chapterUrl: _buildLocalChapterUrl(chapter.id),
+            chapterUrl: LocalReaderIdentity.buildChapterUrl(chapter.id),
             index: chapter.chapterIndex,
           ),
         )
@@ -111,19 +113,24 @@ class LocalContentProvider extends ContentProvider {
     String? chapterTitle,
     String? nextChapterUrl,
   }) async {
-    if (!supportsSourceId(sourceId)) {
+    _ensureLocalSource(sourceId, stage: ErrorStage.content);
+
+    final resolvedBookId = LocalReaderIdentity.resolveBookId(
+      bookId: bookId,
+      detailUrl: null,
+    );
+    if (resolvedBookId == null || resolvedBookId.isEmpty) {
       throw AppException(
-        code: ErrorCode.unknownSource,
+        code: ErrorCode.validation,
         stage: ErrorStage.content,
-        briefMessage: '非本地书籍来源，无法加载本地正文。',
+        briefMessage: '本地图书标识缺失，无法加载正文。',
       );
     }
 
-    final resolvedChapterId = _resolveChapterId(
+    final resolvedChapterId = LocalReaderIdentity.resolveChapterId(
       chapterId: chapterId,
       chapterUrl: chapterUrl,
     );
-
     if ((resolvedChapterId == null || resolvedChapterId.isEmpty) &&
         chapterIndex == null) {
       throw AppException(
@@ -134,24 +141,25 @@ class LocalContentProvider extends ContentProvider {
     }
 
     final chapter = await _chapterContentService.load(
-      bookId: bookId,
+      bookId: resolvedBookId,
       chapterId: resolvedChapterId,
       chapterIndex: chapterIndex,
     );
 
+    final detailUrl = LocalReaderIdentity.buildBookDetailUrl(resolvedBookId);
     final replaced = await _readerReplaceRuleService.applyContentRules(
       content: chapter.content,
       bookTitle: (bookTitle ?? '').trim(),
       sourceId: sourceId,
-      bookId: bookId,
-      detailUrl: _buildLocalDetailUrl(bookId),
+      bookId: resolvedBookId,
+      detailUrl: detailUrl,
     );
     final titleResult = await _readerReplaceRuleService.applyTitleRules(
       title: chapterTitle ?? chapter.title,
       bookTitle: (bookTitle ?? '').trim(),
       sourceId: sourceId,
-      bookId: bookId,
-      detailUrl: _buildLocalDetailUrl(bookId),
+      bookId: resolvedBookId,
+      detailUrl: detailUrl,
     );
 
     final imageUrls =
@@ -162,63 +170,40 @@ class LocalContentProvider extends ContentProvider {
       fromCache: true,
       imageUrls: imageUrls,
       displayChapterTitle: titleResult.content,
-      effectiveReaderReplaceRules: <ReaderReplaceRule>[
-        ...titleResult.effectiveRules,
-        ...replaced.effectiveRules.where(
-          (rule) =>
-              !titleResult.effectiveRules.any(
-                (titleRule) => titleRule.id == rule.id,
-              ),
-        ),
-      ],
+      effectiveReaderReplaceRules: _mergeRules(
+        titleRules: titleResult.effectiveRules,
+        contentRules: replaced.effectiveRules,
+      ),
     );
   }
 
-  String? _resolveChapterId({
-    required String? chapterId,
-    required String chapterUrl,
+  void _ensureLocalSource(String sourceId, {required ErrorStage stage}) {
+    if (supportsSourceId(sourceId)) {
+      return;
+    }
+    throw AppException(
+      code: ErrorCode.unknownSource,
+      stage: stage,
+      briefMessage: '非本地书籍来源，无法使用本地内容提供器。',
+    );
+  }
+
+  List<ReaderReplaceRule> _mergeRules({
+    required List<ReaderReplaceRule> titleRules,
+    required List<ReaderReplaceRule> contentRules,
   }) {
-    final normalizedChapterId = (chapterId ?? '').trim();
-    if (normalizedChapterId.isNotEmpty) {
-      return normalizedChapterId;
+    if (contentRules.isEmpty) {
+      return titleRules;
     }
-
-    final normalizedUrl = chapterUrl.trim();
-    if (normalizedUrl.isEmpty) {
-      return null;
+    if (titleRules.isEmpty) {
+      return contentRules;
     }
-
-    if (normalizedUrl.startsWith(_kLocalChapterPrefix)) {
-      final extracted = normalizedUrl.substring(_kLocalChapterPrefix.length);
-      return extracted.isEmpty ? null : extracted;
-    }
-
-    final uri = Uri.tryParse(normalizedUrl);
-    if (uri == null || uri.scheme != 'local') {
-      return null;
-    }
-
-    if (uri.host != 'chapter') {
-      return null;
-    }
-
-    final segments = uri.pathSegments;
-    if (segments.isEmpty) {
-      return null;
-    }
-
-    final last = segments.last.trim();
-    return last.isEmpty ? null : last;
-  }
-
-  String _buildLocalDetailUrl(String bookId) {
-    final normalized = bookId.trim();
-    return '$_kLocalDetailPrefix$normalized';
-  }
-
-  String _buildLocalChapterUrl(String chapterId) {
-    final normalized = chapterId.trim();
-    return '$_kLocalChapterPrefix$normalized';
+    return <ReaderReplaceRule>[
+      ...titleRules,
+      ...contentRules.where(
+        (rule) => !titleRules.any((titleRule) => titleRule.id == rule.id),
+      ),
+    ];
   }
 
   String? _resolveCoverUrl(String? coverPath) {

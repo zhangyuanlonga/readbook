@@ -8,20 +8,18 @@ import '../../../../core/errors/error_codes.dart';
 import '../../../../core/errors/error_stage.dart';
 import '../../../../domain/entities/local_book.dart';
 import 'local_book_parser.dart';
-import 'txt_toc_rule_settings_service.dart';
-import 'txt_toc_rules.dart';
+import 'txt_auto_chapter_patterns.dart';
 
 class TxtLocalBookParser implements LocalBookParser {
-  TxtLocalBookParser({TxtTocRuleSettingsService? ruleSettingsService})
-    : _ruleSettingsService = ruleSettingsService ?? TxtTocRuleSettingsService();
+  const TxtLocalBookParser();
 
-  static const int _chunkLengthWithoutToc = 10 * 1024;
-  static const int _tocDetectionSampleLength = 200000;
-  static const int _tocDetectionGapThreshold = 1000;
-  static const int _maxLengthWithToc = 102400;
+  static const int _chunkLengthWithoutPattern = 10 * 1024;
+  static const int _chapterPatternDetectionSampleLength = 200000;
+  static const int _chapterPatternDetectionGapThreshold = 1000;
+  static const int _maxLengthWithPattern = 102400;
   static const int _splitBreakMinDistance = 800;
-
-  final TxtTocRuleSettingsService _ruleSettingsService;
+  static final List<TxtAutoChapterPattern> _builtInChapterPatterns =
+      defaultEnabledTxtAutoChapterPatterns;
 
   @override
   bool supports(LocalBookFormat format) {
@@ -48,7 +46,7 @@ class TxtLocalBookParser implements LocalBookParser {
       );
     }
 
-    final decoded = await _decodeBookText(book, bytes);
+    final decoded = _decodeBookText(book, bytes);
     final text = decoded.text;
     if (text.trim().isEmpty) {
       throw AppException(
@@ -58,12 +56,12 @@ class TxtLocalBookParser implements LocalBookParser {
       );
     }
 
-    final selectedRule = await _resolveTocRule(book, text);
+    final selectedPattern = _detectChapterPattern(text);
     final chapters = _withByteOffsets(
       _splitChapters(
         text: text,
         charsetName: decoded.charsetName,
-        selectedRule: selectedRule,
+        selectedPattern: selectedPattern,
         splitLongChapter: book.splitLongChapter,
       ),
       text: text,
@@ -78,54 +76,21 @@ class TxtLocalBookParser implements LocalBookParser {
       );
     }
 
-    return LocalParsedBook(
-      chapters: chapters,
-      charset: decoded.charsetName,
-      txtTocRuleName: selectedRule?.ruleName,
-      txtTocRulePattern: selectedRule?.pattern,
-    );
+    return LocalParsedBook(chapters: chapters, charset: decoded.charsetName);
   }
 
-  Future<_ResolvedTxtTocRule?> _resolveTocRule(
-    LocalBook book,
-    String text,
-  ) async {
-    final configuredPattern = book.txtTocRulePattern?.trim() ?? '';
-    if (configuredPattern.isNotEmpty) {
-      try {
-        final pattern = RegExp(
-          configuredPattern,
-          multiLine: true,
-          caseSensitive: false,
-        );
-        return _ResolvedTxtTocRule(
-          ruleName: _normalizeRuleName(book.txtTocRuleName),
-          pattern: configuredPattern,
-          compiled: pattern,
-        );
-      } on FormatException {
-        return _detectTocRule(text);
-      } on ArgumentError {
-        return _detectTocRule(text);
-      }
-    }
-
-    return _detectTocRule(text);
-  }
-
-  Future<_ResolvedTxtTocRule?> _detectTocRule(String text) async {
+  _ResolvedTxtChapterPattern? _detectChapterPattern(String text) {
     final sample =
-        text.length > _tocDetectionSampleLength
-            ? text.substring(0, _tocDetectionSampleLength)
+        text.length > _chapterPatternDetectionSampleLength
+            ? text.substring(0, _chapterPatternDetectionSampleLength)
             : text;
-    _ResolvedTxtTocRule? selectedRule;
+    _ResolvedTxtChapterPattern? selectedPattern;
     var maxHits = 0;
     var maxRawMatches = 0;
     int? earliestStart;
 
-    final enabledRules = await _ruleSettingsService.loadEnabledRules();
-    for (final rule in enabledRules.reversed) {
-      final pattern = rule.compiled;
+    for (final chapterPattern in _builtInChapterPatterns.reversed) {
+      final pattern = chapterPattern.compiled;
       final matches = pattern.allMatches(sample).toList(growable: false);
       if (matches.isEmpty) {
         continue;
@@ -135,7 +100,8 @@ class TxtLocalBookParser implements LocalBookParser {
       int? lastAcceptedEnd;
       for (final match in matches) {
         if (lastAcceptedEnd == null ||
-            match.start - lastAcceptedEnd > _tocDetectionGapThreshold) {
+            match.start - lastAcceptedEnd >
+                _chapterPatternDetectionGapThreshold) {
           hits += 1;
           lastAcceptedEnd = match.end;
         }
@@ -155,31 +121,27 @@ class TxtLocalBookParser implements LocalBookParser {
       maxHits = hits;
       maxRawMatches = matches.length;
       earliestStart = firstMatchStart;
-      selectedRule = _ResolvedTxtTocRule(
-        ruleName: rule.name.trim(),
-        pattern: rule.pattern.trim(),
-        compiled: pattern,
-      );
+      selectedPattern = _ResolvedTxtChapterPattern(compiled: pattern);
     }
 
-    return selectedRule;
+    return selectedPattern;
   }
 
   List<LocalParsedChapter> _splitChapters({
     required String text,
     required String charsetName,
-    required _ResolvedTxtTocRule? selectedRule,
+    required _ResolvedTxtChapterPattern? selectedPattern,
     required bool splitLongChapter,
   }) {
     final chapters =
-        selectedRule == null
+        selectedPattern == null
             ? _splitByFixedLength(text, charsetName: charsetName)
-            : _splitByPattern(text, selectedRule.compiled);
+            : _splitByPattern(text, selectedPattern.compiled);
 
     if (chapters.isEmpty) {
       return _splitByFixedLength(text, charsetName: charsetName);
     }
-    if (!splitLongChapter || selectedRule == null) {
+    if (!splitLongChapter || selectedPattern == null) {
       return chapters;
     }
     return _splitLongChapters(chapters, charsetName: charsetName);
@@ -250,7 +212,7 @@ class TxtLocalBookParser implements LocalBookParser {
       var end = _findChunkEndByMaxBytes(
         text,
         start,
-        _chunkLengthWithoutToc,
+        _chunkLengthWithoutPattern,
         charsetName,
       );
       if (end <= start) {
@@ -288,7 +250,7 @@ class TxtLocalBookParser implements LocalBookParser {
         continue;
       }
       final contentBytes = _encodedLength(content, charsetName);
-      if (contentBytes <= _maxLengthWithToc) {
+      if (contentBytes <= _maxLengthWithPattern) {
         output.add(chapter);
         continue;
       }
@@ -299,7 +261,7 @@ class TxtLocalBookParser implements LocalBookParser {
         var relativeEnd = _findChunkEndByMaxBytes(
           content,
           relativeStart,
-          _maxLengthWithToc,
+          _maxLengthWithPattern,
           charsetName,
         );
         if (relativeEnd <= relativeStart) {
@@ -376,15 +338,11 @@ class TxtLocalBookParser implements LocalBookParser {
         .toList(growable: false);
   }
 
-  Future<_DecodedBookText> _decodeBookText(
-    LocalBook book,
-    List<int> bytes,
-  ) async {
+  _DecodedBookText _decodeBookText(LocalBook book, List<int> bytes) {
     final bomInfo = _detectBom(bytes);
     final bomLength = bomInfo.length;
     final contentBytes =
         bomLength > 0 ? bytes.sublist(bomLength) : List<int>.from(bytes);
-    final enabledRules = await _ruleSettingsService.loadEnabledRules();
 
     final preferredCharset = _normalizeCharsetName(book.charset);
     final hintedCharset =
@@ -416,7 +374,7 @@ class TxtLocalBookParser implements LocalBookParser {
 
       final score = _scoreDecodedText(
         text,
-        enabledRules: enabledRules,
+        enabledRules: _builtInChapterPatterns,
         charsetName: candidate,
         hintedCharset: hintedCharset,
       );
@@ -492,13 +450,13 @@ class TxtLocalBookParser implements LocalBookParser {
 
   int _scoreDecodedText(
     String text, {
-    required List<TxtTocRuleDefinition> enabledRules,
+    required List<TxtAutoChapterPattern> enabledRules,
     required String charsetName,
     required String? hintedCharset,
   }) {
     final sample =
-        text.length > _tocDetectionSampleLength
-            ? text.substring(0, _tocDetectionSampleLength)
+        text.length > _chapterPatternDetectionSampleLength
+            ? text.substring(0, _chapterPatternDetectionSampleLength)
             : text;
     if (sample.trim().isEmpty) {
       return -0x3fffffff;
@@ -527,10 +485,12 @@ class TxtLocalBookParser implements LocalBookParser {
       }
     }
 
-    var bestRuleHits = 0;
+    var bestPatternHits = 0;
     var bestRawMatches = 0;
-    for (final rule in enabledRules) {
-      final matches = rule.compiled.allMatches(sample).toList(growable: false);
+    for (final chapterPattern in enabledRules) {
+      final matches = chapterPattern.compiled
+          .allMatches(sample)
+          .toList(growable: false);
       if (matches.isEmpty) {
         continue;
       }
@@ -539,20 +499,21 @@ class TxtLocalBookParser implements LocalBookParser {
       int? lastAcceptedEnd;
       for (final match in matches) {
         if (lastAcceptedEnd == null ||
-            match.start - lastAcceptedEnd > _tocDetectionGapThreshold) {
+            match.start - lastAcceptedEnd >
+                _chapterPatternDetectionGapThreshold) {
           hits += 1;
           lastAcceptedEnd = match.end;
         }
       }
-      if (hits > bestRuleHits ||
-          (hits == bestRuleHits && matches.length > bestRawMatches)) {
-        bestRuleHits = hits;
+      if (hits > bestPatternHits ||
+          (hits == bestPatternHits && matches.length > bestRawMatches)) {
+        bestPatternHits = hits;
         bestRawMatches = matches.length;
       }
     }
 
     var score = 0;
-    score += bestRuleHits * 200;
+    score += bestPatternHits * 200;
     score += bestRawMatches * 12;
     score += hanCount * 2;
     if (hanCount > asciiCount) {
@@ -629,11 +590,6 @@ class TxtLocalBookParser implements LocalBookParser {
       }
     }
     return -1;
-  }
-
-  String? _normalizeRuleName(String? value) {
-    final normalized = value?.trim() ?? '';
-    return normalized.isEmpty ? null : normalized;
   }
 
   String? _normalizeCharsetName(String? value) {
@@ -719,14 +675,8 @@ class _BomInfo {
   final String? charsetName;
 }
 
-class _ResolvedTxtTocRule {
-  const _ResolvedTxtTocRule({
-    required this.ruleName,
-    required this.pattern,
-    required this.compiled,
-  });
+class _ResolvedTxtChapterPattern {
+  const _ResolvedTxtChapterPattern({required this.compiled});
 
-  final String? ruleName;
-  final String pattern;
   final RegExp compiled;
 }

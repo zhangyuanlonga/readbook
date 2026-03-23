@@ -215,6 +215,16 @@ void main() {
   testWidgets('AppLayout bookshelfGridColumnsForWidth uses width thresholds', (
     tester,
   ) async {
+    final columns389 = await _readFromContext<int>(
+      tester,
+      width: 389,
+      read: (context) => AppLayout.bookshelfGridColumnsForWidth(389),
+    );
+    final columns390 = await _readFromContext<int>(
+      tester,
+      width: 390,
+      read: (context) => AppLayout.bookshelfGridColumnsForWidth(390),
+    );
     final columns799 = await _readFromContext<int>(
       tester,
       width: 799,
@@ -236,6 +246,8 @@ void main() {
       read: (context) => AppLayout.bookshelfGridColumnsForWidth(1400),
     );
 
+    expect(columns389, 2);
+    expect(columns390, 3);
     expect(columns799, 3);
     expect(columns800, 4);
     expect(columns1100, 5);
@@ -283,6 +295,27 @@ void main() {
     expect(regular, 0.9);
     expect(large, 0.85);
   });
+
+  testWidgets(
+    'AppLayout clamps text scale with relaxed phone and tablet caps',
+    (tester) async {
+      final phoneScale = await _readFromContext<double>(
+        tester,
+        width: 390,
+        textScaleFactor: 1.5,
+        read: AppLayout.clampedTextScaleFactor,
+      );
+      final tabletScale = await _readFromContext<double>(
+        tester,
+        width: 840,
+        textScaleFactor: 1.5,
+        read: AppLayout.clampedTextScaleFactor,
+      );
+
+      expect(phoneScale, 1.24);
+      expect(tabletScale, 1.3);
+    },
+  );
 
   testWidgets('ShellScaffold keeps bottom bar on narrow phone widths', (
     tester,
@@ -372,6 +405,7 @@ Future<void> _pumpShellScaffold(
 Future<T> _readFromContext<T>(
   WidgetTester tester, {
   required double width,
+  double textScaleFactor = 1,
   required T Function(BuildContext context) read,
 }) async {
   T? result;
@@ -379,6 +413,7 @@ Future<T> _readFromContext<T>(
   await tester.pumpWidget(
     _TestHarness(
       width: width,
+      textScaleFactor: textScaleFactor,
       child: Builder(
         builder: (context) {
           result = read(context);
@@ -396,11 +431,13 @@ class _TestHarness extends StatelessWidget {
   const _TestHarness({
     required this.width,
     required this.child,
+    this.textScaleFactor = 1,
     this.overrides = const [],
   });
 
   final double width;
   final Widget child;
+  final double textScaleFactor;
   final List<Override> overrides;
 
   @override
@@ -408,7 +445,10 @@ class _TestHarness extends StatelessWidget {
     return ProviderScope(
       overrides: overrides,
       child: MediaQuery(
-        data: MediaQueryData(size: Size(width, 844)),
+        data: MediaQueryData(
+          size: Size(width, 844),
+          textScaler: TextScaler.linear(textScaleFactor),
+        ),
         child: MaterialApp(home: child),
       ),
     );

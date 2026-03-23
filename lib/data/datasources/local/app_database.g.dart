@@ -1518,29 +1518,6 @@ class $StoredLocalBooksTable extends StoredLocalBooks
     type: DriftSqlType.string,
     requiredDuringInsert: false,
   );
-  static const VerificationMeta _txtTocRuleNameMeta = const VerificationMeta(
-    'txtTocRuleName',
-  );
-  @override
-  late final GeneratedColumn<String> txtTocRuleName = GeneratedColumn<String>(
-    'txt_toc_rule_name',
-    aliasedName,
-    true,
-    type: DriftSqlType.string,
-    requiredDuringInsert: false,
-  );
-  static const VerificationMeta _txtTocRulePatternMeta = const VerificationMeta(
-    'txtTocRulePattern',
-  );
-  @override
-  late final GeneratedColumn<String> txtTocRulePattern =
-      GeneratedColumn<String>(
-        'txt_toc_rule_pattern',
-        aliasedName,
-        true,
-        type: DriftSqlType.string,
-        requiredDuringInsert: false,
-      );
   static const VerificationMeta _splitLongChapterMeta = const VerificationMeta(
     'splitLongChapter',
   );
@@ -1597,8 +1574,6 @@ class $StoredLocalBooksTable extends StoredLocalBooks
     indexStatus,
     chapterCount,
     lastError,
-    txtTocRuleName,
-    txtTocRulePattern,
     splitLongChapter,
     createdAt,
     updatedAt,
@@ -1730,24 +1705,6 @@ class $StoredLocalBooksTable extends StoredLocalBooks
         lastError.isAcceptableOrUnknown(data['last_error']!, _lastErrorMeta),
       );
     }
-    if (data.containsKey('txt_toc_rule_name')) {
-      context.handle(
-        _txtTocRuleNameMeta,
-        txtTocRuleName.isAcceptableOrUnknown(
-          data['txt_toc_rule_name']!,
-          _txtTocRuleNameMeta,
-        ),
-      );
-    }
-    if (data.containsKey('txt_toc_rule_pattern')) {
-      context.handle(
-        _txtTocRulePatternMeta,
-        txtTocRulePattern.isAcceptableOrUnknown(
-          data['txt_toc_rule_pattern']!,
-          _txtTocRulePatternMeta,
-        ),
-      );
-    }
     if (data.containsKey('split_long_chapter')) {
       context.handle(
         _splitLongChapterMeta,
@@ -1845,14 +1802,6 @@ class $StoredLocalBooksTable extends StoredLocalBooks
         DriftSqlType.string,
         data['${effectivePrefix}last_error'],
       ),
-      txtTocRuleName: attachedDatabase.typeMapping.read(
-        DriftSqlType.string,
-        data['${effectivePrefix}txt_toc_rule_name'],
-      ),
-      txtTocRulePattern: attachedDatabase.typeMapping.read(
-        DriftSqlType.string,
-        data['${effectivePrefix}txt_toc_rule_pattern'],
-      ),
       splitLongChapter:
           attachedDatabase.typeMapping.read(
             DriftSqlType.bool,
@@ -1893,8 +1842,6 @@ class StoredLocalBook extends DataClass implements Insertable<StoredLocalBook> {
   final String indexStatus;
   final int chapterCount;
   final String? lastError;
-  final String? txtTocRuleName;
-  final String? txtTocRulePattern;
   final bool splitLongChapter;
   final DateTime createdAt;
   final DateTime updatedAt;
@@ -1914,8 +1861,6 @@ class StoredLocalBook extends DataClass implements Insertable<StoredLocalBook> {
     required this.indexStatus,
     required this.chapterCount,
     this.lastError,
-    this.txtTocRuleName,
-    this.txtTocRulePattern,
     required this.splitLongChapter,
     required this.createdAt,
     required this.updatedAt,
@@ -1957,12 +1902,6 @@ class StoredLocalBook extends DataClass implements Insertable<StoredLocalBook> {
     map['chapter_count'] = Variable<int>(chapterCount);
     if (!nullToAbsent || lastError != null) {
       map['last_error'] = Variable<String>(lastError);
-    }
-    if (!nullToAbsent || txtTocRuleName != null) {
-      map['txt_toc_rule_name'] = Variable<String>(txtTocRuleName);
-    }
-    if (!nullToAbsent || txtTocRulePattern != null) {
-      map['txt_toc_rule_pattern'] = Variable<String>(txtTocRulePattern);
     }
     map['split_long_chapter'] = Variable<bool>(splitLongChapter);
     map['created_at'] = Variable<DateTime>(createdAt);
@@ -2009,14 +1948,6 @@ class StoredLocalBook extends DataClass implements Insertable<StoredLocalBook> {
           lastError == null && nullToAbsent
               ? const Value.absent()
               : Value(lastError),
-      txtTocRuleName:
-          txtTocRuleName == null && nullToAbsent
-              ? const Value.absent()
-              : Value(txtTocRuleName),
-      txtTocRulePattern:
-          txtTocRulePattern == null && nullToAbsent
-              ? const Value.absent()
-              : Value(txtTocRulePattern),
       splitLongChapter: Value(splitLongChapter),
       createdAt: Value(createdAt),
       updatedAt: Value(updatedAt),
@@ -2048,10 +1979,6 @@ class StoredLocalBook extends DataClass implements Insertable<StoredLocalBook> {
       indexStatus: serializer.fromJson<String>(json['indexStatus']),
       chapterCount: serializer.fromJson<int>(json['chapterCount']),
       lastError: serializer.fromJson<String?>(json['lastError']),
-      txtTocRuleName: serializer.fromJson<String?>(json['txtTocRuleName']),
-      txtTocRulePattern: serializer.fromJson<String?>(
-        json['txtTocRulePattern'],
-      ),
       splitLongChapter: serializer.fromJson<bool>(json['splitLongChapter']),
       createdAt: serializer.fromJson<DateTime>(json['createdAt']),
       updatedAt: serializer.fromJson<DateTime>(json['updatedAt']),
@@ -2080,8 +2007,6 @@ class StoredLocalBook extends DataClass implements Insertable<StoredLocalBook> {
       'indexStatus': serializer.toJson<String>(indexStatus),
       'chapterCount': serializer.toJson<int>(chapterCount),
       'lastError': serializer.toJson<String?>(lastError),
-      'txtTocRuleName': serializer.toJson<String?>(txtTocRuleName),
-      'txtTocRulePattern': serializer.toJson<String?>(txtTocRulePattern),
       'splitLongChapter': serializer.toJson<bool>(splitLongChapter),
       'createdAt': serializer.toJson<DateTime>(createdAt),
       'updatedAt': serializer.toJson<DateTime>(updatedAt),
@@ -2104,8 +2029,6 @@ class StoredLocalBook extends DataClass implements Insertable<StoredLocalBook> {
     String? indexStatus,
     int? chapterCount,
     Value<String?> lastError = const Value.absent(),
-    Value<String?> txtTocRuleName = const Value.absent(),
-    Value<String?> txtTocRulePattern = const Value.absent(),
     bool? splitLongChapter,
     DateTime? createdAt,
     DateTime? updatedAt,
@@ -2132,12 +2055,6 @@ class StoredLocalBook extends DataClass implements Insertable<StoredLocalBook> {
     indexStatus: indexStatus ?? this.indexStatus,
     chapterCount: chapterCount ?? this.chapterCount,
     lastError: lastError.present ? lastError.value : this.lastError,
-    txtTocRuleName:
-        txtTocRuleName.present ? txtTocRuleName.value : this.txtTocRuleName,
-    txtTocRulePattern:
-        txtTocRulePattern.present
-            ? txtTocRulePattern.value
-            : this.txtTocRulePattern,
     splitLongChapter: splitLongChapter ?? this.splitLongChapter,
     createdAt: createdAt ?? this.createdAt,
     updatedAt: updatedAt ?? this.updatedAt,
@@ -2174,14 +2091,6 @@ class StoredLocalBook extends DataClass implements Insertable<StoredLocalBook> {
               ? data.chapterCount.value
               : this.chapterCount,
       lastError: data.lastError.present ? data.lastError.value : this.lastError,
-      txtTocRuleName:
-          data.txtTocRuleName.present
-              ? data.txtTocRuleName.value
-              : this.txtTocRuleName,
-      txtTocRulePattern:
-          data.txtTocRulePattern.present
-              ? data.txtTocRulePattern.value
-              : this.txtTocRulePattern,
       splitLongChapter:
           data.splitLongChapter.present
               ? data.splitLongChapter.value
@@ -2209,8 +2118,6 @@ class StoredLocalBook extends DataClass implements Insertable<StoredLocalBook> {
           ..write('indexStatus: $indexStatus, ')
           ..write('chapterCount: $chapterCount, ')
           ..write('lastError: $lastError, ')
-          ..write('txtTocRuleName: $txtTocRuleName, ')
-          ..write('txtTocRulePattern: $txtTocRulePattern, ')
           ..write('splitLongChapter: $splitLongChapter, ')
           ..write('createdAt: $createdAt, ')
           ..write('updatedAt: $updatedAt')
@@ -2235,8 +2142,6 @@ class StoredLocalBook extends DataClass implements Insertable<StoredLocalBook> {
     indexStatus,
     chapterCount,
     lastError,
-    txtTocRuleName,
-    txtTocRulePattern,
     splitLongChapter,
     createdAt,
     updatedAt,
@@ -2260,8 +2165,6 @@ class StoredLocalBook extends DataClass implements Insertable<StoredLocalBook> {
           other.indexStatus == this.indexStatus &&
           other.chapterCount == this.chapterCount &&
           other.lastError == this.lastError &&
-          other.txtTocRuleName == this.txtTocRuleName &&
-          other.txtTocRulePattern == this.txtTocRulePattern &&
           other.splitLongChapter == this.splitLongChapter &&
           other.createdAt == this.createdAt &&
           other.updatedAt == this.updatedAt);
@@ -2283,8 +2186,6 @@ class StoredLocalBooksCompanion extends UpdateCompanion<StoredLocalBook> {
   final Value<String> indexStatus;
   final Value<int> chapterCount;
   final Value<String?> lastError;
-  final Value<String?> txtTocRuleName;
-  final Value<String?> txtTocRulePattern;
   final Value<bool> splitLongChapter;
   final Value<DateTime> createdAt;
   final Value<DateTime> updatedAt;
@@ -2305,8 +2206,6 @@ class StoredLocalBooksCompanion extends UpdateCompanion<StoredLocalBook> {
     this.indexStatus = const Value.absent(),
     this.chapterCount = const Value.absent(),
     this.lastError = const Value.absent(),
-    this.txtTocRuleName = const Value.absent(),
-    this.txtTocRulePattern = const Value.absent(),
     this.splitLongChapter = const Value.absent(),
     this.createdAt = const Value.absent(),
     this.updatedAt = const Value.absent(),
@@ -2328,8 +2227,6 @@ class StoredLocalBooksCompanion extends UpdateCompanion<StoredLocalBook> {
     this.indexStatus = const Value.absent(),
     this.chapterCount = const Value.absent(),
     this.lastError = const Value.absent(),
-    this.txtTocRuleName = const Value.absent(),
-    this.txtTocRulePattern = const Value.absent(),
     this.splitLongChapter = const Value.absent(),
     this.createdAt = const Value.absent(),
     this.updatedAt = const Value.absent(),
@@ -2355,8 +2252,6 @@ class StoredLocalBooksCompanion extends UpdateCompanion<StoredLocalBook> {
     Expression<String>? indexStatus,
     Expression<int>? chapterCount,
     Expression<String>? lastError,
-    Expression<String>? txtTocRuleName,
-    Expression<String>? txtTocRulePattern,
     Expression<bool>? splitLongChapter,
     Expression<DateTime>? createdAt,
     Expression<DateTime>? updatedAt,
@@ -2380,8 +2275,6 @@ class StoredLocalBooksCompanion extends UpdateCompanion<StoredLocalBook> {
       if (indexStatus != null) 'index_status': indexStatus,
       if (chapterCount != null) 'chapter_count': chapterCount,
       if (lastError != null) 'last_error': lastError,
-      if (txtTocRuleName != null) 'txt_toc_rule_name': txtTocRuleName,
-      if (txtTocRulePattern != null) 'txt_toc_rule_pattern': txtTocRulePattern,
       if (splitLongChapter != null) 'split_long_chapter': splitLongChapter,
       if (createdAt != null) 'created_at': createdAt,
       if (updatedAt != null) 'updated_at': updatedAt,
@@ -2405,8 +2298,6 @@ class StoredLocalBooksCompanion extends UpdateCompanion<StoredLocalBook> {
     Value<String>? indexStatus,
     Value<int>? chapterCount,
     Value<String?>? lastError,
-    Value<String?>? txtTocRuleName,
-    Value<String?>? txtTocRulePattern,
     Value<bool>? splitLongChapter,
     Value<DateTime>? createdAt,
     Value<DateTime>? updatedAt,
@@ -2430,8 +2321,6 @@ class StoredLocalBooksCompanion extends UpdateCompanion<StoredLocalBook> {
       indexStatus: indexStatus ?? this.indexStatus,
       chapterCount: chapterCount ?? this.chapterCount,
       lastError: lastError ?? this.lastError,
-      txtTocRuleName: txtTocRuleName ?? this.txtTocRuleName,
-      txtTocRulePattern: txtTocRulePattern ?? this.txtTocRulePattern,
       splitLongChapter: splitLongChapter ?? this.splitLongChapter,
       createdAt: createdAt ?? this.createdAt,
       updatedAt: updatedAt ?? this.updatedAt,
@@ -2491,12 +2380,6 @@ class StoredLocalBooksCompanion extends UpdateCompanion<StoredLocalBook> {
     if (lastError.present) {
       map['last_error'] = Variable<String>(lastError.value);
     }
-    if (txtTocRuleName.present) {
-      map['txt_toc_rule_name'] = Variable<String>(txtTocRuleName.value);
-    }
-    if (txtTocRulePattern.present) {
-      map['txt_toc_rule_pattern'] = Variable<String>(txtTocRulePattern.value);
-    }
     if (splitLongChapter.present) {
       map['split_long_chapter'] = Variable<bool>(splitLongChapter.value);
     }
@@ -2530,8 +2413,6 @@ class StoredLocalBooksCompanion extends UpdateCompanion<StoredLocalBook> {
           ..write('indexStatus: $indexStatus, ')
           ..write('chapterCount: $chapterCount, ')
           ..write('lastError: $lastError, ')
-          ..write('txtTocRuleName: $txtTocRuleName, ')
-          ..write('txtTocRulePattern: $txtTocRulePattern, ')
           ..write('splitLongChapter: $splitLongChapter, ')
           ..write('createdAt: $createdAt, ')
           ..write('updatedAt: $updatedAt, ')
@@ -8200,8 +8081,6 @@ typedef $$StoredLocalBooksTableCreateCompanionBuilder =
       Value<String> indexStatus,
       Value<int> chapterCount,
       Value<String?> lastError,
-      Value<String?> txtTocRuleName,
-      Value<String?> txtTocRulePattern,
       Value<bool> splitLongChapter,
       Value<DateTime> createdAt,
       Value<DateTime> updatedAt,
@@ -8224,8 +8103,6 @@ typedef $$StoredLocalBooksTableUpdateCompanionBuilder =
       Value<String> indexStatus,
       Value<int> chapterCount,
       Value<String?> lastError,
-      Value<String?> txtTocRuleName,
-      Value<String?> txtTocRulePattern,
       Value<bool> splitLongChapter,
       Value<DateTime> createdAt,
       Value<DateTime> updatedAt,
@@ -8313,16 +8190,6 @@ class $$StoredLocalBooksTableFilterComposer
 
   ColumnFilters<String> get lastError => $composableBuilder(
     column: $table.lastError,
-    builder: (column) => ColumnFilters(column),
-  );
-
-  ColumnFilters<String> get txtTocRuleName => $composableBuilder(
-    column: $table.txtTocRuleName,
-    builder: (column) => ColumnFilters(column),
-  );
-
-  ColumnFilters<String> get txtTocRulePattern => $composableBuilder(
-    column: $table.txtTocRulePattern,
     builder: (column) => ColumnFilters(column),
   );
 
@@ -8426,16 +8293,6 @@ class $$StoredLocalBooksTableOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
-  ColumnOrderings<String> get txtTocRuleName => $composableBuilder(
-    column: $table.txtTocRuleName,
-    builder: (column) => ColumnOrderings(column),
-  );
-
-  ColumnOrderings<String> get txtTocRulePattern => $composableBuilder(
-    column: $table.txtTocRulePattern,
-    builder: (column) => ColumnOrderings(column),
-  );
-
   ColumnOrderings<bool> get splitLongChapter => $composableBuilder(
     column: $table.splitLongChapter,
     builder: (column) => ColumnOrderings(column),
@@ -8520,16 +8377,6 @@ class $$StoredLocalBooksTableAnnotationComposer
   GeneratedColumn<String> get lastError =>
       $composableBuilder(column: $table.lastError, builder: (column) => column);
 
-  GeneratedColumn<String> get txtTocRuleName => $composableBuilder(
-    column: $table.txtTocRuleName,
-    builder: (column) => column,
-  );
-
-  GeneratedColumn<String> get txtTocRulePattern => $composableBuilder(
-    column: $table.txtTocRulePattern,
-    builder: (column) => column,
-  );
-
   GeneratedColumn<bool> get splitLongChapter => $composableBuilder(
     column: $table.splitLongChapter,
     builder: (column) => column,
@@ -8601,8 +8448,6 @@ class $$StoredLocalBooksTableTableManager
                 Value<String> indexStatus = const Value.absent(),
                 Value<int> chapterCount = const Value.absent(),
                 Value<String?> lastError = const Value.absent(),
-                Value<String?> txtTocRuleName = const Value.absent(),
-                Value<String?> txtTocRulePattern = const Value.absent(),
                 Value<bool> splitLongChapter = const Value.absent(),
                 Value<DateTime> createdAt = const Value.absent(),
                 Value<DateTime> updatedAt = const Value.absent(),
@@ -8623,8 +8468,6 @@ class $$StoredLocalBooksTableTableManager
                 indexStatus: indexStatus,
                 chapterCount: chapterCount,
                 lastError: lastError,
-                txtTocRuleName: txtTocRuleName,
-                txtTocRulePattern: txtTocRulePattern,
                 splitLongChapter: splitLongChapter,
                 createdAt: createdAt,
                 updatedAt: updatedAt,
@@ -8647,8 +8490,6 @@ class $$StoredLocalBooksTableTableManager
                 Value<String> indexStatus = const Value.absent(),
                 Value<int> chapterCount = const Value.absent(),
                 Value<String?> lastError = const Value.absent(),
-                Value<String?> txtTocRuleName = const Value.absent(),
-                Value<String?> txtTocRulePattern = const Value.absent(),
                 Value<bool> splitLongChapter = const Value.absent(),
                 Value<DateTime> createdAt = const Value.absent(),
                 Value<DateTime> updatedAt = const Value.absent(),
@@ -8669,8 +8510,6 @@ class $$StoredLocalBooksTableTableManager
                 indexStatus: indexStatus,
                 chapterCount: chapterCount,
                 lastError: lastError,
-                txtTocRuleName: txtTocRuleName,
-                txtTocRulePattern: txtTocRulePattern,
                 splitLongChapter: splitLongChapter,
                 createdAt: createdAt,
                 updatedAt: updatedAt,

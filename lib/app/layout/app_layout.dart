@@ -1,6 +1,7 @@
 import 'dart:math' as math;
 
 import 'package:flutter/widgets.dart';
+import 'package:responsive_framework/responsive_framework.dart';
 
 enum AppWidthBucket {
   compact,
@@ -14,6 +15,12 @@ enum AppWidthBucket {
 class AppLayout {
   const AppLayout._();
 
+  static const String breakpointCompactName = 'APP_COMPACT';
+  static const String breakpointRegularPhoneName = 'APP_REGULAR_PHONE';
+  static const String breakpointLargePhoneName = 'APP_LARGE_PHONE';
+  static const String breakpointPhoneXlName = 'APP_PHONE_XL';
+  static const String breakpointMediumName = 'APP_MEDIUM';
+  static const String breakpointExpandedName = 'APP_EXPANDED';
   static const double compactContentWidth = 340;
   static const double phoneSmallWidth = 360;
   static const double actionWrapWidth = 420;
@@ -33,9 +40,38 @@ class AppLayout {
   static const double discoverMediumSidePanelWidth = 250;
   static const double discoverExpandedContentMaxWidth = 980;
   static const double discoverMediumContentMaxWidth = 880;
+  static const double bookshelfGridThreeColumnsWidth = 390;
   static const double bookshelfGridFourColumnsWidth = 800;
   static const double bookshelfGridFiveColumnsWidth = 1100;
   static const double bookshelfGridSixColumnsWidth = 1400;
+  static const List<Breakpoint> responsiveBreakpoints = [
+    Breakpoint(start: 0, end: 359, name: breakpointCompactName),
+    Breakpoint(
+      start: regularPhoneBreakpointWidth,
+      end: 389,
+      name: breakpointRegularPhoneName,
+    ),
+    Breakpoint(
+      start: largePhoneBreakpointWidth,
+      end: 479,
+      name: breakpointLargePhoneName,
+    ),
+    Breakpoint(
+      start: phoneXlBreakpointWidth,
+      end: 599,
+      name: breakpointPhoneXlName,
+    ),
+    Breakpoint(
+      start: mediumBreakpointWidth,
+      end: 839,
+      name: breakpointMediumName,
+    ),
+    Breakpoint(
+      start: expandedBreakpointWidth,
+      end: double.infinity,
+      name: breakpointExpandedName,
+    ),
+  ];
 
   static double screenWidth(BuildContext context) {
     return MediaQuery.sizeOf(context).width;
@@ -55,7 +91,30 @@ class AppLayout {
   }
 
   static AppWidthBucket widthBucket(BuildContext context) {
+    final inherited =
+        context
+            .dependOnInheritedWidgetOfExactType<
+              InheritedResponsiveBreakpoints
+            >();
+    final bucket = widthBucketFromBreakpointName(
+      inherited?.data.breakpoint.name,
+    );
+    if (bucket != null) {
+      return bucket;
+    }
     return widthBucketFor(screenWidth(context));
+  }
+
+  static AppWidthBucket? widthBucketFromBreakpointName(String? breakpointName) {
+    return switch (breakpointName) {
+      breakpointCompactName => AppWidthBucket.compact,
+      breakpointRegularPhoneName => AppWidthBucket.regularPhone,
+      breakpointLargePhoneName => AppWidthBucket.largePhone,
+      breakpointPhoneXlName => AppWidthBucket.phoneXl,
+      breakpointMediumName => AppWidthBucket.medium,
+      breakpointExpandedName => AppWidthBucket.expanded,
+      _ => null,
+    };
   }
 
   static AppWidthBucket widthBucketFor(double width) {
@@ -97,6 +156,14 @@ class AppLayout {
     return width >= mediumBreakpointWidth;
   }
 
+  static bool isBelowPhoneLargeWidth(BuildContext context) {
+    return screenWidth(context) < phoneLargeWidth;
+  }
+
+  static bool isBelowPhoneLargeWidthFor(double width) {
+    return width < phoneLargeWidth;
+  }
+
   static int optionGridColumnsForWidth(double width) {
     final bucket = widthBucketFor(width);
     if (bucket == AppWidthBucket.medium || bucket == AppWidthBucket.expanded) {
@@ -110,6 +177,9 @@ class AppLayout {
 
   static int bookshelfGridColumnsForWidth(double width) {
     final available = width.clamp(220.0, 2400.0);
+    if (available < bookshelfGridThreeColumnsWidth) {
+      return 2;
+    }
     if (available >= bookshelfGridSixColumnsWidth) {
       return 6;
     }
@@ -133,8 +203,8 @@ class AppLayout {
 
   static double clampedTextScaleFactor(BuildContext context) {
     final raw = MediaQuery.textScalerOf(context).scale(1);
-    final minScale = isPhone(context) ? 0.92 : 0.94;
-    final maxScale = isPhone(context) ? 1.06 : 1.12;
+    final minScale = isPhone(context) ? 0.9 : 0.92;
+    final maxScale = isPhone(context) ? 1.24 : 1.3;
     return raw.clamp(minScale, maxScale).toDouble();
   }
 

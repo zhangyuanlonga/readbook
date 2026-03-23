@@ -4,6 +4,7 @@ import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:responsive_framework/responsive_framework.dart';
 import '../core/analytics/analytics_service.dart';
 import '../core/app_update/app_update_dialog.dart';
 import '../core/app_update/app_update_service.dart';
@@ -96,12 +97,17 @@ class App extends ConsumerWidget {
       builder: (context, child) {
         final mediaQuery = MediaQuery.of(context);
         final textScale = AppLayout.clampedTextScaleFactor(context);
+        final appChild = _SystemUiOverlayWrapper(
+          child: child ?? const SizedBox.shrink(),
+        );
+        final responsiveChild = ResponsiveBreakpoints.builder(
+          breakpoints: AppLayout.responsiveBreakpoints,
+          child: appChild,
+        );
 
         return MediaQuery(
           data: mediaQuery.copyWith(textScaler: TextScaler.linear(textScale)),
-          child: _SystemUiOverlayWrapper(
-            child: child ?? const SizedBox.shrink(),
-          ),
+          child: responsiveChild,
         );
       },
     );

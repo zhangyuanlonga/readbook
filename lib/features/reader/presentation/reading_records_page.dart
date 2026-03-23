@@ -386,7 +386,7 @@ class _ReadingRecordsPageState extends State<ReadingRecordsPage> {
             return AlertDialog(
               title: const Text('合并阅读记录'),
               content: SizedBox(
-                width: 420,
+                width: AppLayout.dialogMaxWidth(context, maxWidth: 420),
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -516,7 +516,7 @@ class _ReadingRecordsPageState extends State<ReadingRecordsPage> {
         return AlertDialog(
           title: const Text('合并前确认'),
           content: SizedBox(
-            width: 420,
+            width: AppLayout.dialogMaxWidth(dialogContext, maxWidth: 420),
             child: Column(
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.start,

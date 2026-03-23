@@ -55,7 +55,7 @@ void main() {
       expect(stored.sourceFileSize, await sourceFile.length());
       expect(stored.sourceFileLastModifiedMs, isNotNull);
       expect(stored.storageFileLastModifiedMs, isNotNull);
-      expect(stored.charset, isNull);
+      expect(stored.charset, 'utf-8');
 
       final bookshelf = await BookshelfService(preferences: prefs).getAll();
       expect(bookshelf, hasLength(1));

@@ -21,8 +21,6 @@ class LocalBook {
     this.indexStatus = LocalBookIndexStatus.pending,
     this.chapterCount = 0,
     this.lastError,
-    this.txtTocRuleName,
-    this.txtTocRulePattern,
     this.splitLongChapter = true,
   });
 
@@ -43,8 +41,6 @@ class LocalBook {
   final LocalBookIndexStatus indexStatus;
   final int chapterCount;
   final String? lastError;
-  final String? txtTocRuleName;
-  final String? txtTocRulePattern;
   final bool splitLongChapter;
 
   LocalBook copyWith({
@@ -73,10 +69,6 @@ class LocalBook {
     int? chapterCount,
     String? lastError,
     bool clearLastError = false,
-    String? txtTocRuleName,
-    bool clearTxtTocRuleName = false,
-    String? txtTocRulePattern,
-    bool clearTxtTocRulePattern = false,
     bool? splitLongChapter,
   }) {
     return LocalBook(
@@ -104,12 +96,6 @@ class LocalBook {
       indexStatus: indexStatus ?? this.indexStatus,
       chapterCount: chapterCount ?? this.chapterCount,
       lastError: clearLastError ? null : (lastError ?? this.lastError),
-      txtTocRuleName:
-          clearTxtTocRuleName ? null : (txtTocRuleName ?? this.txtTocRuleName),
-      txtTocRulePattern:
-          clearTxtTocRulePattern
-              ? null
-              : (txtTocRulePattern ?? this.txtTocRulePattern),
       splitLongChapter: splitLongChapter ?? this.splitLongChapter,
     );
   }
@@ -133,8 +119,6 @@ class LocalBook {
       'indexStatus': indexStatus.name,
       'chapterCount': chapterCount,
       'lastError': lastError,
-      'txtTocRuleName': txtTocRuleName,
-      'txtTocRulePattern': txtTocRulePattern,
       'splitLongChapter': splitLongChapter,
     };
   }
@@ -160,8 +144,6 @@ class LocalBook {
       indexStatus: _parseIndexStatus(json['indexStatus']),
       chapterCount: _requiredInt(json, 'chapterCount'),
       lastError: _optionalString(json['lastError']),
-      txtTocRuleName: _optionalString(json['txtTocRuleName']),
-      txtTocRulePattern: _optionalString(json['txtTocRulePattern']),
       splitLongChapter: _optionalBool(json['splitLongChapter']) ?? true,
     );
   }

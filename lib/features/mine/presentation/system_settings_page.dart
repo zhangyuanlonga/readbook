@@ -1072,7 +1072,7 @@ class _LocalTxtSplitLongChapterSettingPanelState
       context,
       icon: Icons.splitscreen_outlined,
       title: '本地 TXT 长章节拆分',
-      description: 'TXT 目录规则分章时，超长章节自动拆成多章。',
+      description: 'TXT 自动分章时，超长章节自动拆成多章。',
       stateDescription: _enabled ? '新导入或重新索引时默认开启。' : '保留原大章节，不自动拆分。',
       stateLabel: _enabled ? '默认开启' : '默认关闭',
       value: _enabled,

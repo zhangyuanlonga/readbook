@@ -130,8 +130,6 @@ class LocalBookImportService {
           charset: normalizedCharset,
           clearCharset: normalizedCharset == null,
           clearLastError: true,
-          clearTxtTocRuleName: true,
-          clearTxtTocRulePattern: true,
         ) ??
         LocalBook(
           id: bookId,

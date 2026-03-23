@@ -228,68 +228,75 @@ class _FeedbackPageState extends State<FeedbackPage>
   }
 
   Widget _buildSearchAndFilterRow(BuildContext context) {
-    return Row(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Expanded(
-          child: TextField(
-            controller: _keywordController,
-            textInputAction: TextInputAction.search,
-            decoration: InputDecoration(
-              hintText: '搜索标题或内容',
-              prefixIcon: const Icon(Icons.search_rounded, size: 20),
-              suffixIcon: IconButton(
-                tooltip: '搜索',
-                onPressed: () => _loadEntries(),
-                icon: const Icon(Icons.arrow_forward_rounded),
-              ),
-            ),
-            onSubmitted: (_) => _loadEntries(),
-          ),
+    final searchField = TextField(
+      controller: _keywordController,
+      textInputAction: TextInputAction.search,
+      decoration: InputDecoration(
+        hintText: '搜索标题或内容',
+        prefixIcon: const Icon(Icons.search_rounded, size: 20),
+        suffixIcon: IconButton(
+          tooltip: '搜索',
+          onPressed: () => _loadEntries(),
+          icon: const Icon(Icons.arrow_forward_rounded),
         ),
-        const SizedBox(width: 10),
-        SizedBox(
-          width: 126,
-          child: DropdownButtonFormField<_FeedbackStatusFilter>(
-            initialValue: _statusFilter,
-            isExpanded: true,
-            decoration: const InputDecoration(
-              isDense: true,
-              contentPadding: EdgeInsets.symmetric(
-                horizontal: 12,
-                vertical: 12,
-              ),
-            ),
-            items: const [
-              DropdownMenuItem(
-                value: _FeedbackStatusFilter.all,
-                child: Text('全部'),
-              ),
-              DropdownMenuItem(
-                value: _FeedbackStatusFilter.pending,
-                child: Text('未处理'),
-              ),
-              DropdownMenuItem(
-                value: _FeedbackStatusFilter.resolved,
-                child: Text('已解决'),
-              ),
-              DropdownMenuItem(
-                value: _FeedbackStatusFilter.rejected,
-                child: Text('不予处理'),
-              ),
-            ],
-            onChanged: (value) {
-              if (value == null || value == _statusFilter) {
-                return;
-              }
-              setState(() {
-                _statusFilter = value;
-              });
-              _loadEntries();
-            },
-          ),
+      ),
+      onSubmitted: (_) => _loadEntries(),
+    );
+    final statusDropdown = DropdownButtonFormField<_FeedbackStatusFilter>(
+      initialValue: _statusFilter,
+      isExpanded: true,
+      decoration: const InputDecoration(
+        isDense: true,
+        contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+      ),
+      items: const [
+        DropdownMenuItem(value: _FeedbackStatusFilter.all, child: Text('全部')),
+        DropdownMenuItem(
+          value: _FeedbackStatusFilter.pending,
+          child: Text('未处理'),
+        ),
+        DropdownMenuItem(
+          value: _FeedbackStatusFilter.resolved,
+          child: Text('已解决'),
+        ),
+        DropdownMenuItem(
+          value: _FeedbackStatusFilter.rejected,
+          child: Text('不予处理'),
         ),
       ],
+      onChanged: (value) {
+        if (value == null || value == _statusFilter) {
+          return;
+        }
+        setState(() {
+          _statusFilter = value;
+        });
+        _loadEntries();
+      },
+    );
+
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final width = constraints.maxWidth;
+        final compact =
+            AppLayout.widthBucketFor(width) == AppWidthBucket.compact;
+        if (compact) {
+          return Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [searchField, const SizedBox(height: 8), statusDropdown],
+          );
+        }
+
+        final filterWidth = (width * 0.32).clamp(108.0, 144.0).toDouble();
+        return Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Expanded(child: searchField),
+            const SizedBox(width: 10),
+            SizedBox(width: filterWidth, child: statusDropdown),
+          ],
+        );
+      },
     );
   }
 
@@ -714,7 +721,7 @@ class _FeedbackComposePageState extends State<FeedbackComposePage> {
         return AlertDialog(
           title: const Text('发现相似反馈'),
           content: SizedBox(
-            width: 420,
+            width: AppLayout.dialogMaxWidth(context, maxWidth: 420),
             child: Column(
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.start,

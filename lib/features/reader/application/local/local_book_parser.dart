@@ -23,16 +23,12 @@ class LocalParsedBook {
     this.author,
     this.coverPath,
     this.charset,
-    this.txtTocRuleName,
-    this.txtTocRulePattern,
   });
 
   final String? title;
   final String? author;
   final String? coverPath;
   final String? charset;
-  final String? txtTocRuleName;
-  final String? txtTocRulePattern;
   final List<LocalParsedChapter> chapters;
 }
 

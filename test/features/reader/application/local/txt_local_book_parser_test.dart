@@ -2,7 +2,6 @@ import 'dart:io';
 
 import 'package:charset/charset.dart';
 import 'package:flutter_appread/domain/entities/local_book.dart';
-import 'package:flutter_appread/features/reader/application/local/txt_toc_rule_settings_service.dart';
 import 'package:flutter_appread/features/reader/application/local/txt_local_book_parser.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -15,9 +14,7 @@ void main() {
     setUp(() async {
       SharedPreferences.setMockInitialValues({});
       tempDir = await Directory.systemTemp.createTemp('txt_local_parser_test');
-      parser = TxtLocalBookParser(
-        ruleSettingsService: TxtTocRuleSettingsService(),
-      );
+      parser = const TxtLocalBookParser();
     });
 
     tearDown(() async {
@@ -53,7 +50,6 @@ void main() {
       expect(result.chapters.first.title, '第1章 初始');
       expect(result.chapters.last.title, '第2章 继续');
       expect(result.charset, 'utf-8');
-      expect(result.txtTocRulePattern, isNotNull);
     });
 
     test('falls back to fixed chunks when title pattern missing', () async {
@@ -78,9 +74,11 @@ void main() {
       expect(result.chapters.first.title, startsWith('第 '));
     });
 
-    test('detects english chapter headings from built-in toc rules', () async {
-      final file = File('${tempDir.path}/chapter_en.txt');
-      await file.writeAsString('''
+    test(
+      'detects english chapter headings from built-in chapter patterns',
+      () async {
+        final file = File('${tempDir.path}/chapter_en.txt');
+        await file.writeAsString('''
 Chapter 1 Arrival
 First chapter content.
 
@@ -88,23 +86,24 @@ Chapter 2 Return
 Second chapter content.
 ''');
 
-      final now = DateTime.parse('2026-02-23T12:00:00.000Z');
-      final result = await parser.parse(
-        LocalBook(
-          id: 'local_txt_3',
-          title: 'English Book',
-          format: LocalBookFormat.txt,
-          storagePath: file.path,
-          fileSize: await file.length(),
-          createdAt: now,
-          updatedAt: now,
-        ),
-      );
+        final now = DateTime.parse('2026-02-23T12:00:00.000Z');
+        final result = await parser.parse(
+          LocalBook(
+            id: 'local_txt_3',
+            title: 'English Book',
+            format: LocalBookFormat.txt,
+            storagePath: file.path,
+            fileSize: await file.length(),
+            createdAt: now,
+            updatedAt: now,
+          ),
+        );
 
-      expect(result.chapters, hasLength(2));
-      expect(result.chapters.first.title, 'Chapter 1 Arrival');
-      expect(result.chapters.last.title, 'Chapter 2 Return');
-    });
+        expect(result.chapters, hasLength(2));
+        expect(result.chapters.first.title, 'Chapter 1 Arrival');
+        expect(result.chapters.last.title, 'Chapter 2 Return');
+      },
+    );
 
     test(
       'creates a preface chapter when content exists before first heading',

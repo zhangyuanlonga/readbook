@@ -75,7 +75,7 @@ void main() {
           Book(
             id: 'book_a',
             sourceId: 'source_a',
-            title: '凡人修仙传',
+            title: '凡人修仙传-A',
             detailUrl: 'https://a.example.com/detail',
             author: '忘语',
             latestChapter: '第2章',
@@ -83,7 +83,7 @@ void main() {
           Book(
             id: 'book_b',
             sourceId: 'source_b',
-            title: '凡人修仙传',
+            title: '凡人修仙传-A',
             detailUrl: 'https://b.example.com/detail',
             author: '忘语',
             latestChapter: '第3章',
@@ -117,7 +117,7 @@ void main() {
     await tester.pumpAndSettle(const Duration(milliseconds: 120));
 
     expect(find.text('凡人修仙传-A'), findsWidgets);
-    final switchButtonFinder = find.byIcon(Icons.swap_horiz_rounded);
+    final switchButtonFinder = find.text('去换源');
     expect(switchButtonFinder, findsOneWidget);
 
     await tester.tap(switchButtonFinder);

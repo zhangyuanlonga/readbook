@@ -9,7 +9,6 @@ import 'package:flutter_appread/features/reader/application/local/local_book_par
 import 'package:flutter_appread/features/reader/application/local/local_book_index_service.dart';
 import 'package:flutter_appread/features/reader/application/local/local_chapter_content_service.dart';
 import 'package:flutter_appread/features/reader/application/local/txt_local_book_parser.dart';
-import 'package:flutter_appread/features/reader/application/local/txt_toc_rule_settings_service.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -30,9 +29,7 @@ void main() {
       repository = LocalBookRepositoryImpl(database);
       indexService = LocalBookIndexService(
         localBookRepository: repository,
-        parsers: <LocalBookParser>[
-          TxtLocalBookParser(ruleSettingsService: TxtTocRuleSettingsService()),
-        ],
+        parsers: <LocalBookParser>[const TxtLocalBookParser()],
       );
       contentService = LocalChapterContentService(
         localBookRepository: repository,

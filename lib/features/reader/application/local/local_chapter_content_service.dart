@@ -11,7 +11,6 @@ import '../../../../data/repositories/local_book_repository_impl.dart';
 import '../../../../domain/entities/local_book.dart';
 import '../../../../domain/entities/local_chapter.dart';
 import '../../../../domain/repositories/local_book_repository.dart';
-
 import 'local_book_index_service.dart';
 
 class LocalChapterContentService {
@@ -54,8 +53,7 @@ class LocalChapterContentService {
       );
     }
 
-    if (book.indexStatus != LocalBookIndexStatus.ready ||
-        book.chapterCount <= 0) {
+    if (_needsReindex(book)) {
       await _indexService.ensureIndexed(bookId: normalizedBookId);
       final refreshed = await _localBookRepository.getBookById(
         normalizedBookId,
@@ -65,42 +63,11 @@ class LocalChapterContentService {
       }
     }
 
-    LocalChapter? chapter;
-    final normalizedChapterId = (chapterId ?? '').trim();
-    if (normalizedChapterId.isNotEmpty) {
-      chapter = await _localBookRepository.getChapterById(normalizedChapterId);
-    }
-
-    if (chapter == null && chapterIndex != null) {
-      final rawIndex = chapterIndex < 0 ? 0 : chapterIndex;
-      var safeIndex = rawIndex;
-      if (book.chapterCount > 0) {
-        safeIndex = rawIndex.clamp(0, book.chapterCount - 1).toInt();
-      }
-
-      chapter = await _localBookRepository.getChapterByIndex(
-        normalizedBookId,
-        safeIndex,
-      );
-
-      if (chapter == null && safeIndex != rawIndex) {
-        chapter = await _localBookRepository.getChapterByIndex(
-          normalizedBookId,
-          rawIndex,
-        );
-      }
-
-      if (chapter == null) {
-        final chapters = await _localBookRepository.getChapters(
-          normalizedBookId,
-        );
-        if (chapters.isNotEmpty) {
-          final fallbackIndex = rawIndex.clamp(0, chapters.length - 1).toInt();
-          chapter = chapters[fallbackIndex];
-        }
-      }
-    }
-
+    final chapter = await _resolveChapter(
+      book: book,
+      chapterId: chapterId,
+      chapterIndex: chapterIndex,
+    );
     if (chapter == null) {
       throw AppException(
         code: ErrorCode.ruleMatchEmpty,
@@ -109,11 +76,93 @@ class LocalChapterContentService {
       );
     }
 
-    if (chapter.content.trim().isNotEmpty ||
-        book.format != LocalBookFormat.txt) {
+    if (_canUseStoredChapterContent(book: book, chapter: chapter)) {
       return chapter;
     }
 
+    final hydratedContent = await _loadTxtChapterContentByOffsets(
+      chapter: chapter,
+      book: book,
+    );
+    return chapter.copyWith(content: hydratedContent);
+  }
+
+  bool _needsReindex(LocalBook book) {
+    return book.indexStatus != LocalBookIndexStatus.ready ||
+        book.chapterCount <= 0;
+  }
+
+  Future<LocalChapter?> _resolveChapter({
+    required LocalBook book,
+    required String? chapterId,
+    required int? chapterIndex,
+  }) async {
+    final normalizedChapterId = (chapterId ?? '').trim();
+    if (normalizedChapterId.isNotEmpty) {
+      final byId = await _localBookRepository.getChapterById(
+        normalizedChapterId,
+      );
+      if (byId != null) {
+        if (byId.bookId.trim() != book.id.trim()) {
+          throw AppException(
+            code: ErrorCode.validation,
+            stage: ErrorStage.content,
+            briefMessage: '章节与书籍不匹配，请重新进入阅读页。',
+          );
+        }
+        return byId;
+      }
+    }
+
+    if (chapterIndex != null) {
+      final safeIndex = _safeChapterIndex(
+        chapterIndex,
+        chapterCount: book.chapterCount,
+      );
+      final byIndex = await _localBookRepository.getChapterByIndex(
+        book.id,
+        safeIndex,
+      );
+      if (byIndex != null) {
+        return byIndex;
+      }
+    }
+
+    final chapters = await _localBookRepository.getChapters(book.id);
+    if (chapters.isEmpty) {
+      return null;
+    }
+    if (chapterIndex == null) {
+      return chapters.first;
+    }
+    final fallbackIndex = _safeChapterIndex(
+      chapterIndex,
+      chapterCount: chapters.length,
+    );
+    return chapters[fallbackIndex];
+  }
+
+  int _safeChapterIndex(int chapterIndex, {required int chapterCount}) {
+    if (chapterCount <= 0) {
+      return chapterIndex < 0 ? 0 : chapterIndex;
+    }
+    return chapterIndex.clamp(0, chapterCount - 1).toInt();
+  }
+
+  bool _canUseStoredChapterContent({
+    required LocalBook book,
+    required LocalChapter chapter,
+  }) {
+    if (chapter.content.trim().isNotEmpty) {
+      return true;
+    }
+    return book.format != LocalBookFormat.txt;
+  }
+
+  Future<String> _loadTxtChapterContentByOffsets({
+    required LocalChapter chapter,
+    required LocalBook book,
+  }) async {
     final startOffset = chapter.startOffset;
     final endOffset = chapter.endOffset;
     if (startOffset == null || endOffset == null || endOffset <= startOffset) {
@@ -124,35 +173,12 @@ class LocalChapterContentService {
       );
     }
 
-    final content = await _readTxtChapterContent(
-      storagePath: book.storagePath,
-      startOffset: startOffset,
-      endOffset: endOffset,
-      charsetName: book.charset,
-    );
-    if (content.trim().isEmpty) {
-      throw AppException(
-        code: ErrorCode.ruleMatchEmpty,
-        stage: ErrorStage.content,
-        briefMessage: '本地章节内容为空，请重新索引后重试。',
-      );
-    }
-
-    return chapter.copyWith(content: content);
-  }
-
-  Future<String> _readTxtChapterContent({
-    required String storagePath,
-    required int startOffset,
-    required int endOffset,
-    required String? charsetName,
-  }) async {
-    final file = File(storagePath);
+    final file = File(book.storagePath);
     if (!await file.exists()) {
       throw AppException(
         code: ErrorCode.validation,
         stage: ErrorStage.content,
-        briefMessage: '本地文件不存在：$storagePath',
+        briefMessage: '本地文件不存在：${book.storagePath}',
       );
     }
 
@@ -160,25 +186,37 @@ class LocalChapterContentService {
     final safeStart = startOffset.clamp(0, fileLength).toInt();
     final safeEnd = endOffset.clamp(0, fileLength).toInt();
     if (safeEnd <= safeStart) {
-      return '';
+      throw AppException(
+        code: ErrorCode.ruleMatchEmpty,
+        stage: ErrorStage.content,
+        briefMessage: '本地章节内容为空，请重新索引后重试。',
+      );
     }
 
-    final fileHandle = await file.open(mode: FileMode.read);
+    final handle = await file.open(mode: FileMode.read);
     try {
-      await fileHandle.setPosition(safeStart);
-      final bytes = await fileHandle.read(safeEnd - safeStart);
-      return _decodeText(bytes, charsetName).trim();
+      await handle.setPosition(safeStart);
+      final bytes = await handle.read(safeEnd - safeStart);
+      final text = _decodeBytes(bytes, preferredCharset: book.charset).trim();
+      if (text.isEmpty) {
+        throw AppException(
+          code: ErrorCode.ruleMatchEmpty,
+          stage: ErrorStage.content,
+          briefMessage: '本地章节内容为空，请重新索引后重试。',
+        );
+      }
+      return text;
     } finally {
-      await fileHandle.close();
+      await handle.close();
     }
   }
 
-  String _decodeText(List<int> bytes, String? charsetName) {
-    final preferredCharset = _normalizeCharsetName(charsetName);
-    if (preferredCharset != null) {
-      final preferredText = _tryDecodeByCharset(bytes, preferredCharset);
-      if (preferredText != null) {
-        return preferredText;
+  String _decodeBytes(List<int> bytes, {required String? preferredCharset}) {
+    final normalized = _normalizeCharsetName(preferredCharset);
+    if (normalized != null) {
+      final preferred = _tryDecodeByCharset(bytes, normalized);
+      if (preferred != null) {
+        return preferred;
       }
     }
 
@@ -188,13 +226,13 @@ class LocalChapterContentService {
       'utf-16le',
       'gbk',
       'gb18030',
+      'latin1',
     ]) {
       final decoded = _tryDecodeByCharset(bytes, candidate);
       if (decoded != null) {
         return decoded;
       }
     }
-
     return utf8.decode(bytes, allowMalformed: true);
   }
 

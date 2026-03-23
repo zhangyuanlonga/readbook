@@ -25,7 +25,8 @@ class MinePage extends ConsumerStatefulWidget {
 
 class _MinePageState extends ConsumerState<MinePage> {
   String? _highlightedTileId;
-  static const double _ultraNarrowGridWidth = 250;
+  static const double _ultraNarrowGridWidth = 320;
+  static const double _narrowGridWidth = 520;
   static const EdgeInsets _profileCardPadding = EdgeInsets.fromLTRB(
     14,
     12,
@@ -125,11 +126,6 @@ class _MinePageState extends ConsumerState<MinePage> {
                             icon: Icons.menu_book_rounded,
                             label: '书源',
                             onTap: () => context.push('/source'),
-                          ),
-                          _MineActionItem(
-                            icon: Icons.rule_outlined,
-                            label: 'TXT 目录规则',
-                            onTap: () => context.push('/rule-config'),
                           ),
                           _MineActionItem(
                             icon: Icons.cleaning_services_outlined,
@@ -408,6 +404,7 @@ class _MinePageState extends ConsumerState<MinePage> {
 
   int _resolveGridColumns({required double width}) {
     if (width < _ultraNarrowGridWidth) return 2;
+    if (width < _narrowGridWidth) return 3;
     return 4;
   }
 
@@ -645,10 +642,18 @@ class _MinePageState extends ConsumerState<MinePage> {
                       ),
                       child: Padding(
                         padding: const EdgeInsets.all(12),
-                        child: Image.asset(
-                          'assets/mov/vx.png',
-                          width: 260,
-                          fit: BoxFit.contain,
+                        child: LayoutBuilder(
+                          builder: (context, constraints) {
+                            final qrWidth =
+                                (constraints.maxWidth - 24)
+                                    .clamp(180.0, 260.0)
+                                    .toDouble();
+                            return Image.asset(
+                              'assets/mov/vx.png',
+                              width: qrWidth,
+                              fit: BoxFit.contain,
+                            );
+                          },
                         ),
                       ),
                     ),

@@ -19,12 +19,11 @@ import '../../../data/datasources/local/app_database.dart';
 import '../../../domain/entities/bookshelf_book.dart';
 import '../../../domain/entities/chapter.dart';
 import '../../../domain/entities/local_book.dart';
-import '../../bookshelf/application/local_book_import_service.dart';
 import '../../bookshelf/application/bookshelf_service.dart';
 import '../../reader/application/content_provider.dart';
+import '../../reader/application/local/local_reader_identity.dart';
 import '../../reader/application/local_content_provider.dart';
 import '../../reader/application/reader_system_settings_service.dart';
-import '../../reader/application/local/txt_toc_rule_settings_service.dart';
 import '../../reader/application/source_content_provider.dart';
 import '../../reader/application/source_switch_score_service.dart';
 import '../../reader/application/switch_source_shared.dart';
@@ -33,7 +32,6 @@ import '../../search/application/search_hit_cache_service.dart';
 import '../../search/application/search_service.dart';
 import '../application/book_detail_service.dart';
 import 'book_detail_switch_source_helper.dart';
-import 'book_detail_toc_helper.dart';
 import 'widgets/book_detail_primary_actions.dart';
 import 'widgets/book_detail_sections.dart';
 
@@ -73,7 +71,6 @@ class _BookDetailPageState extends State<BookDetailPage> {
   late final Stream<int> Function(String bookId)
   _cachedChapterCountStreamBuilder;
   late final BookDetailSwitchSourceHelper _switchSourceHelper;
-  late final BookDetailTocHelper _tocHelper;
 
   static const int _tocPreviewLimit = 80;
   bool _isLoading = false;
@@ -82,7 +79,6 @@ class _BookDetailPageState extends State<BookDetailPage> {
   bool _isShelfActionLoading = false;
   bool _isInBookshelf = false;
   bool _showLocalAdvancedOptions = false;
-  bool _isAttemptingLocalRepair = false;
   int _bookshelfStateSyncToken = 0;
   SearchCancellationToken? _activeSwitchSourceCancellationToken;
   String? _errorText;
@@ -93,7 +89,6 @@ class _BookDetailPageState extends State<BookDetailPage> {
   String? _displayTitle;
   BookDetailLoadResult? _result;
   LocalBook? _localBookMeta;
-  TxtBookTocRuleSelection? _selectedTxtTocRule;
   final SearchHitCacheService _searchHitCacheService = SearchHitCacheService();
   final SourceSwitchScoreService _switchSourceScoreService =
       SourceSwitchScoreService();
@@ -117,9 +112,6 @@ class _BookDetailPageState extends State<BookDetailPage> {
       switchSourceSearchService: _switchSourceSearchService,
       searchHitCacheService: _searchHitCacheService,
       switchSourceScoreService: _switchSourceScoreService,
-    );
-    _tocHelper = BookDetailTocHelper(
-      txtTocRuleSettingsService: TxtTocRuleSettingsService(),
     );
     _cachedChapterCountStreamBuilder =
         widget.cachedChapterCountStreamBuilder ??
@@ -267,7 +259,7 @@ class _BookDetailPageState extends State<BookDetailPage> {
         sourceId.isEmpty ||
         detailUrl == null ||
         detailUrl.isEmpty ||
-        sourceId == LocalBookImportService.localBookSourceId) {
+        LocalReaderIdentity.isLocalSourceId(sourceId)) {
       return false;
     }
 
@@ -766,7 +758,10 @@ class _BookDetailPageState extends State<BookDetailPage> {
   }
 
   List<Chapter> _buildDisplayedChapters(List<Chapter> chapters) {
-    return _tocHelper.buildDisplayedChapters(chapters, _manualTocReversed);
+    if (!_manualTocReversed) {
+      return chapters;
+    }
+    return chapters.reversed.toList(growable: false);
   }
 
   String? _normalizeRouteParam(String? value) {
@@ -781,35 +776,22 @@ class _BookDetailPageState extends State<BookDetailPage> {
     final sourceId = (_activeSourceId ?? '').trim();
     final detailUrl = (_activeDetailUrl ?? '').trim();
 
-    if (sourceId.isEmpty && _isLocalScheme(detailUrl)) {
-      _activeSourceId = LocalBookImportService.localBookSourceId;
+    if (sourceId.isEmpty && LocalReaderIdentity.isLocalSchemeUrl(detailUrl)) {
+      _activeSourceId = LocalReaderIdentity.localSourceId;
     }
 
-    if ((_activeSourceId ?? '').trim() !=
-        LocalBookImportService.localBookSourceId) {
+    if (!LocalReaderIdentity.isLocalSourceId(_activeSourceId)) {
       return;
     }
 
-    if (detailUrl.isEmpty || !_isLocalScheme(detailUrl)) {
+    if (detailUrl.isEmpty || !LocalReaderIdentity.isLocalSchemeUrl(detailUrl)) {
       final normalizedBookId = _activeBookId.trim();
       if (normalizedBookId.isNotEmpty) {
-        _activeDetailUrl = _buildLocalDetailUrl(normalizedBookId);
+        _activeDetailUrl = LocalReaderIdentity.buildBookDetailUrl(
+          normalizedBookId,
+        );
       }
     }
-  }
-
-  String _buildLocalDetailUrl(String bookId) {
-    final normalized = bookId.trim();
-    return 'local://book/$normalized';
-  }
-
-  bool _isLocalScheme(String url) {
-    final normalized = url.trim();
-    if (normalized.isEmpty) {
-      return false;
-    }
-    final uri = Uri.tryParse(normalized);
-    return uri != null && uri.scheme == 'local';
   }
 
   Future<void> _handleSwitchSource() async {
@@ -1166,7 +1148,7 @@ class _BookDetailPageState extends State<BookDetailPage> {
         _displayTitle = result.detail.title.trim();
       });
 
-      await _syncLocalTxtContext();
+      await _syncLocalBookMeta();
       _scheduleBookshelfStateRefresh(result);
       return true;
     } on AppException catch (error) {
@@ -1183,7 +1165,6 @@ class _BookDetailPageState extends State<BookDetailPage> {
         _errorText = _toUserReadableError(error);
         _tocWarningText = null;
         _localBookMeta = null;
-        _selectedTxtTocRule = null;
       });
       return false;
     } catch (_) {
@@ -1200,7 +1181,6 @@ class _BookDetailPageState extends State<BookDetailPage> {
         _errorText = '加载失败，请稍后重试。';
         _tocWarningText = null;
         _localBookMeta = null;
-        _selectedTxtTocRule = null;
       });
       return false;
     } finally {
@@ -1212,50 +1192,31 @@ class _BookDetailPageState extends State<BookDetailPage> {
     }
   }
 
-  Future<void> _syncLocalTxtContext() async {
-    final tocContext = await _tocHelper.loadContext(
-      isLocalContent: _isLocalContent,
-      activeBookId: _activeBookId,
-    );
-    if (!mounted) {
-      _localBookMeta = tocContext.localBookMeta;
-      _selectedTxtTocRule = tocContext.selectedTxtTocRule;
+  Future<void> _syncLocalBookMeta() async {
+    if (!_isLocalContent) {
+      if (!mounted) {
+        _localBookMeta = null;
+        return;
+      }
+      setState(() {
+        _localBookMeta = null;
+      });
       return;
     }
 
+    final localBook = await AppDatabase.instance.getLocalBookById(
+      _activeBookId,
+    );
+    if (!mounted) {
+      _localBookMeta = localBook;
+      return;
+    }
     setState(() {
-      _localBookMeta = tocContext.localBookMeta;
-      _selectedTxtTocRule = tocContext.selectedTxtTocRule;
-      if (tocContext.localBookMeta != null &&
-          !_hasLocalRepairIssue(tocContext.localBookMeta!)) {
+      _localBookMeta = localBook;
+      if (localBook != null && !_hasLocalRepairIssue(localBook)) {
         _showLocalAdvancedOptions = false;
       }
     });
-  }
-
-  Future<void> _showTxtTocRuleSheet() async {
-    if (!_isLocalTxtContent || !mounted) {
-      return;
-    }
-
-    final selected = await _tocHelper.showRuleSheet(
-      context: context,
-      activeBookId: _activeBookId,
-    );
-
-    if (!mounted || selected == null) {
-      return;
-    }
-
-    final message = await _tocHelper.applyRuleSheetResult(
-      activeBookId: _activeBookId,
-      selected: selected,
-    );
-    if (message != null) {
-      _showMessage(message);
-    }
-
-    await _load(forceRefresh: true);
   }
 
   Widget? _buildLocalRecoveryPanel() {
@@ -1295,15 +1256,6 @@ class _BookDetailPageState extends State<BookDetailPage> {
         final diagnostics = snapshot.data;
         final colorScheme = Theme.of(context).colorScheme;
         final hasIssue = _hasLocalRepairIssue(localBook);
-        final hasCurrentRule =
-            (_selectedTxtTocRule?.ruleName.trim().isNotEmpty ?? false) ||
-            (localBook.txtTocRuleName?.trim().isNotEmpty ?? false);
-        final ruleLabel =
-            _selectedTxtTocRule?.ruleName.trim().isNotEmpty ?? false
-                ? _selectedTxtTocRule!.ruleName.trim()
-                : (localBook.txtTocRuleName?.trim().isNotEmpty ?? false)
-                ? localBook.txtTocRuleName!.trim()
-                : '自动探测/未命中';
 
         return Container(
           width: double.infinity,
@@ -1339,7 +1291,7 @@ class _BookDetailPageState extends State<BookDetailPage> {
               const SizedBox(height: 8),
               Text(
                 hasIssue
-                    ? '系统已经优先按自动探测目录规则处理；如果目录仍然不对，可以先尝试自动修复。'
+                    ? '当前本地图书目录或索引状态异常，建议先重新索引。'
                     : '当前本地图书看起来正常。只有遇到识别问题时，才需要使用高级选项。',
                 style: Theme.of(context).textTheme.bodySmall?.copyWith(
                   color: colorScheme.onSurfaceVariant,
@@ -1351,25 +1303,6 @@ class _BookDetailPageState extends State<BookDetailPage> {
                 spacing: 8,
                 runSpacing: 8,
                 children: [
-                  if (hasIssue)
-                    FilledButton.tonalIcon(
-                      onPressed:
-                          _isAttemptingLocalRepair ? null : _attemptLocalRepair,
-                      icon:
-                          _isAttemptingLocalRepair
-                              ? const SizedBox(
-                                width: 16,
-                                height: 16,
-                                child: CircularProgressIndicator(
-                                  strokeWidth: 2,
-                                ),
-                              )
-                              : const Icon(
-                                Icons.auto_fix_high_rounded,
-                                size: 18,
-                              ),
-                      label: Text(_isAttemptingLocalRepair ? '修复中…' : '尝试修复'),
-                    ),
                   TextButton.icon(
                     onPressed: () {
                       setState(() {
@@ -1412,10 +1345,6 @@ class _BookDetailPageState extends State<BookDetailPage> {
                       label: '章节',
                       value: '${localBook.chapterCount}',
                     ),
-                    BookDetailMetaChip(
-                      label: hasCurrentRule ? '规则快照' : '规则状态',
-                      value: _normalizeSingleLineText(ruleLabel),
-                    ),
                   ],
                 ),
                 const SizedBox(height: 10),
@@ -1423,11 +1352,6 @@ class _BookDetailPageState extends State<BookDetailPage> {
                   spacing: 8,
                   runSpacing: 8,
                   children: [
-                    OutlinedButton.icon(
-                      onPressed: _isLoading ? null : _showTxtTocRuleSheet,
-                      icon: const Icon(Icons.rule_folder_outlined, size: 18),
-                      label: const Text('切换目录规则'),
-                    ),
                     OutlinedButton.icon(
                       onPressed:
                           _isLoading ? null : () => _load(forceRefresh: true),
@@ -1513,45 +1437,6 @@ class _BookDetailPageState extends State<BookDetailPage> {
         );
       },
     );
-  }
-
-  Future<void> _attemptLocalRepair() async {
-    if (_isAttemptingLocalRepair || !_isLocalTxtContent) {
-      return;
-    }
-
-    setState(() {
-      _isAttemptingLocalRepair = true;
-    });
-    try {
-      final message = await _tocHelper.tryAutoRepair(
-        activeBookId: _activeBookId,
-      );
-      if (mounted) {
-        _showMessage(message);
-      }
-      await _load(forceRefresh: true);
-      if (mounted) {
-        final localBook = _localBookMeta;
-        setState(() {
-          _showLocalAdvancedOptions =
-              localBook == null ? true : _hasLocalRepairIssue(localBook);
-        });
-      }
-    } catch (_) {
-      if (mounted) {
-        _showMessage('自动修复失败，请稍后重试。');
-        setState(() {
-          _showLocalAdvancedOptions = true;
-        });
-      }
-    } finally {
-      if (mounted) {
-        setState(() {
-          _isAttemptingLocalRepair = false;
-        });
-      }
-    }
   }
 
   Widget _buildLocalDiagnosticLine(
@@ -1651,12 +1536,6 @@ class _BookDetailPageState extends State<BookDetailPage> {
     LocalBook book,
     _LocalBookDiagnosticsSnapshot diagnostics,
   ) {
-    final ruleLabel =
-        (_selectedTxtTocRule?.ruleName.trim().isNotEmpty ?? false)
-            ? _selectedTxtTocRule!.ruleName.trim()
-            : (book.txtTocRuleName?.trim().isNotEmpty ?? false)
-            ? book.txtTocRuleName!.trim()
-            : '自动探测/未命中';
     return [
       '本地图书诊断',
       '书名: ${_displayTitle?.trim().isNotEmpty ?? false ? _displayTitle!.trim() : book.title}',
@@ -1664,7 +1543,6 @@ class _BookDetailPageState extends State<BookDetailPage> {
       '编码: ${book.charset?.trim().isNotEmpty ?? false ? book.charset!.trim() : '未探测'}',
       '索引状态: ${_localIndexStatusText(book.indexStatus)}',
       '章节数: ${book.chapterCount}',
-      '规则快照: $ruleLabel',
       '长章节拆分(系统): ${diagnostics.globalSplitLongChapterEnabled ? '默认开启' : '默认关闭'}${diagnostics.splitSettingNeedsReindex ? '，当前书需重新索引生效' : ''}',
       '原文件: ${_localFileName(book.sourcePath)} / ${diagnostics.sourceFileExists ? '已找到' : '缺失'}',
       '应用副本: ${_localFileName(book.storagePath)} / ${diagnostics.storageFileExists ? '已找到' : '缺失'}',

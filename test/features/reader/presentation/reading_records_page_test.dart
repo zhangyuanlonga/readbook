@@ -51,6 +51,36 @@ void main() {
       expect(card, findsOneWidget);
       expect(tester.getSize(card).width, greaterThan(300));
     });
+
+    testWidgets('renders without layout exceptions on phone and tablet sizes', (
+      tester,
+    ) async {
+      addTearDown(() => tester.binding.setSurfaceSize(null));
+      for (final size in const <Size>[
+        Size(320, 844),
+        Size(640, 360),
+        Size(840, 1180),
+        Size(1366, 1024),
+      ]) {
+        await tester.binding.setSurfaceSize(size);
+        await tester.pumpWidget(
+          MaterialApp(
+            home: ReadingRecordsPage(
+              readingRecordService: readingRecordService,
+              preferencesService: preferencesService,
+              readerSystemSettingsService: systemSettingsService,
+            ),
+          ),
+        );
+        await tester.pumpAndSettle();
+
+        expect(
+          tester.takeException(),
+          isNull,
+          reason: 'unexpected exception at ${size.width}x${size.height}',
+        );
+      }
+    });
   });
 }
 

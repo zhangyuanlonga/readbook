@@ -72,8 +72,6 @@ class StoredLocalBooks extends Table {
   TextColumn get indexStatus => text().withDefault(const Constant('pending'))();
   IntColumn get chapterCount => integer().withDefault(const Constant(0))();
   TextColumn get lastError => text().nullable()();
-  TextColumn get txtTocRuleName => text().nullable()();
-  TextColumn get txtTocRulePattern => text().nullable()();
   BoolColumn get splitLongChapter =>
       boolean().withDefault(const Constant(false))();
   DateTimeColumn get createdAt => dateTime().withDefault(currentDateAndTime)();
@@ -384,7 +382,7 @@ class AppDatabase extends _$AppDatabase {
   static final AppDatabase instance = AppDatabase();
 
   @override
-  int get schemaVersion => 14;
+  int get schemaVersion => 15;
 
   static const String _mangaSourceMatcherSql =
       '(raw_json LIKE \'%"sourceType":2,%\' OR '
@@ -444,26 +442,6 @@ class AppDatabase extends _$AppDatabase {
           );
         }
         if (from < 8) {
-          await _addColumnIfMissing(
-            migrator: migrator,
-            tableName: storedLocalBooks.tableName,
-            columnName: 'txt_toc_rule_name',
-            addColumn:
-                () => migrator.addColumn(
-                  storedLocalBooks,
-                  storedLocalBooks.txtTocRuleName,
-                ),
-          );
-          await _addColumnIfMissing(
-            migrator: migrator,
-            tableName: storedLocalBooks.tableName,
-            columnName: 'txt_toc_rule_pattern',
-            addColumn:
-                () => migrator.addColumn(
-                  storedLocalBooks,
-                  storedLocalBooks.txtTocRulePattern,
-                ),
-          );
           await _addColumnIfMissing(
             migrator: migrator,
             tableName: storedLocalBooks.tableName,
@@ -572,7 +550,69 @@ class AppDatabase extends _$AppDatabase {
                 ),
           );
         }
+        if (from < 15) {
+          await _removeDeprecatedLocalBookColumns(migrator);
+        }
       },
+    );
+  }
+
+  Future<void> _removeDeprecatedLocalBookColumns(Migrator migrator) async {
+    const tableName = 'local_books';
+    if (!await _tableHasColumn(tableName, 'txt_toc_rule_name') &&
+        !await _tableHasColumn(tableName, 'txt_toc_rule_pattern')) {
+      return;
+    }
+
+    await customStatement(
+      'ALTER TABLE ${_quoteIdentifier(tableName)} '
+      'RENAME TO ${_quoteIdentifier('${tableName}_legacy_v14')}',
+    );
+    await migrator.createTable(storedLocalBooks);
+    await customStatement('''
+      INSERT INTO ${_quoteIdentifier(tableName)} (
+        id,
+        title,
+        format,
+        storage_path,
+        source_path,
+        charset,
+        file_size,
+        author,
+        cover_path,
+        source_file_size,
+        source_file_last_modified_ms,
+        storage_file_last_modified_ms,
+        index_status,
+        chapter_count,
+        last_error,
+        split_long_chapter,
+        created_at,
+        updated_at
+      )
+      SELECT
+        id,
+        title,
+        format,
+        storage_path,
+        source_path,
+        charset,
+        file_size,
+        author,
+        cover_path,
+        source_file_size,
+        source_file_last_modified_ms,
+        storage_file_last_modified_ms,
+        index_status,
+        chapter_count,
+        last_error,
+        split_long_chapter,
+        created_at,
+        updated_at
+      FROM ${_quoteIdentifier('${tableName}_legacy_v14')}
+    ''');
+    await customStatement(
+      'DROP TABLE ${_quoteIdentifier('${tableName}_legacy_v14')}',
     );
   }
 
@@ -1490,8 +1530,6 @@ class AppDatabase extends _$AppDatabase {
         indexStatus: Value(book.indexStatus.name),
         chapterCount: Value(book.chapterCount < 0 ? 0 : book.chapterCount),
         lastError: Value(_nullableString(book.lastError)),
-        txtTocRuleName: Value(_nullableString(book.txtTocRuleName)),
-        txtTocRulePattern: Value(_nullableString(book.txtTocRulePattern)),
         splitLongChapter: Value(book.splitLongChapter),
         createdAt: Value(book.createdAt),
         updatedAt: Value(book.updatedAt),
@@ -2226,8 +2264,6 @@ class AppDatabase extends _$AppDatabase {
       ),
       chapterCount: row.chapterCount,
       lastError: row.lastError,
-      txtTocRuleName: row.txtTocRuleName,
-      txtTocRulePattern: row.txtTocRulePattern,
       splitLongChapter: row.splitLongChapter,
     );
   }

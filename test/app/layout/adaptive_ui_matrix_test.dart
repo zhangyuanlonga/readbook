@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'package:flutter_appread/app/layout/app_layout.dart';
+import 'package:flutter_appread/app/shell_scaffold.dart';
 import 'package:flutter_appread/features/book/presentation/widgets/book_detail_primary_actions.dart';
 
 void main() {
@@ -66,8 +68,8 @@ void main() {
 
   test('matrix: bookshelf columns on target widths', () {
     final expected = <double, int>{
-      320: 3,
-      360: 3,
+      320: 2,
+      360: 2,
       390: 3,
       430: 3,
       480: 3,
@@ -83,6 +85,46 @@ void main() {
         entry.value,
         reason: 'unexpected grid columns at width=${entry.key}',
       );
+    }
+  });
+
+  testWidgets('matrix: shell scaffold smoke test on phone and tablet sizes', (
+    tester,
+  ) async {
+    const sizes = <Size>[
+      Size(320, 844),
+      Size(360, 800),
+      Size(390, 844),
+      Size(430, 932),
+      Size(640, 360),
+      Size(840, 1180),
+      Size(1024, 1366),
+      Size(1366, 1024),
+    ];
+
+    for (final size in sizes) {
+      await tester.pumpWidget(
+        _TestHarness(
+          width: size.width,
+          height: size.height,
+          child: const ShellScaffold(
+            location: '/bookshelf',
+            child: ColoredBox(color: Colors.white),
+          ),
+        ),
+      );
+      await tester.pump();
+
+      expect(
+        tester.takeException(),
+        isNull,
+        reason: 'unexpected exception at ${size.width}x${size.height}',
+      );
+      if (size.width >= AppLayout.railBreakpointWidth) {
+        expect(find.byType(NavigationRail), findsOneWidget);
+      } else {
+        expect(find.byType(NavigationBar), findsOneWidget);
+      }
     }
   });
 }
@@ -138,16 +180,23 @@ Future<void> _pumpPrimaryActions(
 }
 
 class _TestHarness extends StatelessWidget {
-  const _TestHarness({required this.width, required this.child});
+  const _TestHarness({
+    required this.width,
+    required this.child,
+    this.height = 844,
+  });
 
   final double width;
+  final double height;
   final Widget child;
 
   @override
   Widget build(BuildContext context) {
-    return MediaQuery(
-      data: MediaQueryData(size: Size(width, 844)),
-      child: MaterialApp(home: child),
+    return ProviderScope(
+      child: MediaQuery(
+        data: MediaQueryData(size: Size(width, height)),
+        child: MaterialApp(home: child),
+      ),
     );
   }
 }

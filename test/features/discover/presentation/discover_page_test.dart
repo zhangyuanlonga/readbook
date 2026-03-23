@@ -366,18 +366,70 @@ void main() {
       findsNothing,
     );
   });
+
+  testWidgets('renders without layout exceptions on phone and tablet sizes', (
+    tester,
+  ) async {
+    final service = ExploreService(
+      sourceRepository: _FakeSourceRepository(<SourceDefinition>[
+        SourceDefinition(
+          id: 'discover_smoke',
+          name: '发现烟测源',
+          baseUrl: 'https://example.com',
+          enabled: true,
+          exploreEnabled: true,
+          exploreUrl: '推荐::/discover?page={{page}}',
+          rules: const SourceRuleSet(
+            exploreListRule: '.item@html',
+            exploreTitleRule: '.name@text',
+            exploreDetailUrlRule: '.name@href',
+          ),
+        ),
+      ]),
+      searchService: _FakeSearchService(),
+    );
+
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    for (final size in const <Size>[
+      Size(320, 844),
+      Size(640, 360),
+      Size(840, 1180),
+      Size(1366, 1024),
+    ]) {
+      await tester.binding.setSurfaceSize(size);
+      await tester.pumpWidget(
+        _TestHarness(
+          width: size.width,
+          height: size.height,
+          child: DiscoverPage(exploreService: service),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(
+        tester.takeException(),
+        isNull,
+        reason: 'unexpected exception at ${size.width}x${size.height}',
+      );
+    }
+  });
 }
 
 class _TestHarness extends StatelessWidget {
-  const _TestHarness({required this.width, required this.child});
+  const _TestHarness({
+    required this.width,
+    required this.child,
+    this.height = 844,
+  });
 
   final double width;
+  final double height;
   final Widget child;
 
   @override
   Widget build(BuildContext context) {
     return MediaQuery(
-      data: MediaQueryData(size: Size(width, 844)),
+      data: MediaQueryData(size: Size(width, height)),
       child: MaterialApp(home: child),
     );
   }

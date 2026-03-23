@@ -12,7 +12,6 @@ import '../features/announcement/presentation/announcement_list_page.dart';
 import '../features/mine/presentation/mine_page.dart';
 import '../features/mine/presentation/appearance_page.dart';
 import '../features/mine/presentation/cache_management_page.dart';
-import '../features/mine/presentation/rule_config_page.dart';
 import '../features/mine/presentation/reader_replace_rule_page.dart';
 import '../features/mine/presentation/reader_replace_rule_edit_page.dart';
 import '../features/mine/presentation/about_page.dart';
@@ -80,11 +79,6 @@ final GoRouter appRouter = GoRouter(
       path: '/cache',
       name: 'cache',
       builder: (context, state) => const CacheManagementPage(),
-    ),
-    GoRoute(
-      path: '/rule-config',
-      name: 'rule-config',
-      builder: (context, state) => const RuleConfigPage(),
     ),
     GoRoute(
       path: '/reader-replace-rules',

@@ -1,8 +1,10 @@
 import 'dart:convert';
 import 'dart:io';
-import 'dart:typed_data';
 
 import 'package:charset/charset.dart';
+import 'package:flutter/foundation.dart';
+import 'package:flutter/scheduler.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_appread/core/errors/app_exception.dart';
 import 'package:flutter_appread/core/errors/error_codes.dart';
 import 'package:flutter_appread/core/webview/webview_executor.dart';
@@ -11,8 +13,19 @@ import 'package:flutter_appread/domain/repositories/source_repository.dart';
 import 'package:flutter_appread/features/reader/application/chapter_content_service.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:pointycastle/export.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+
+class _UnitTestServicesBinding extends BindingBase
+    with SchedulerBinding, ServicesBinding {}
 
 void main() {
+  if (BindingBase.debugBindingType() == null) {
+    _UnitTestServicesBinding();
+  }
+  setUp(() {
+    SharedPreferences.setMockInitialValues({});
+  });
+
   group('ChapterContentService', () {
     test('loads and cleans chapter content', () async {
       final server = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);

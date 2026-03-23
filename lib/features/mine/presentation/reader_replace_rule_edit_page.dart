@@ -645,7 +645,8 @@ class _ReaderReplaceRuleEditPageState extends State<ReaderReplaceRuleEditPage> {
         const SizedBox(height: 12),
         LayoutBuilder(
           builder: (context, constraints) {
-            final wide = constraints.maxWidth >= 760;
+            final wide =
+                constraints.maxWidth >= AppLayout.settingsContentMaxWidth;
             final originalPanel = _buildResultPanel(
               context,
               title: '原文',

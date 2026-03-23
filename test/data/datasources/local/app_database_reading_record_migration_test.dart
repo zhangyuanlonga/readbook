@@ -283,13 +283,13 @@ void main() {
 
       expect(
         localBookColumns.any((row) => row.data['name'] == 'txt_toc_rule_name'),
-        isTrue,
+        isFalse,
       );
       expect(
         localBookColumns.any(
           (row) => row.data['name'] == 'txt_toc_rule_pattern',
         ),
-        isTrue,
+        isFalse,
       );
       expect(
         localBookColumns.any((row) => row.data['name'] == 'split_long_chapter'),
@@ -324,6 +324,91 @@ void main() {
         localChapterColumns.any((row) => row.data['name'] == 'image_urls_json'),
         isTrue,
       );
+    });
+
+    test('drops deprecated local txt toc columns from v14 to v15', () async {
+      await _seedCurrentSchema(dbFile);
+
+      final sqliteDb = sqlite.sqlite3.open(dbFile.path);
+      try {
+        sqliteDb.execute(
+          'ALTER TABLE local_books ADD COLUMN txt_toc_rule_name TEXT;',
+        );
+        sqliteDb.execute(
+          'ALTER TABLE local_books ADD COLUMN txt_toc_rule_pattern TEXT;',
+        );
+        sqliteDb.execute('''
+          INSERT INTO local_books (
+            id,
+            title,
+            format,
+            storage_path,
+            source_path,
+            charset,
+            file_size,
+            author,
+            cover_path,
+            source_file_size,
+            source_file_last_modified_ms,
+            storage_file_last_modified_ms,
+            index_status,
+            chapter_count,
+            last_error,
+            txt_toc_rule_name,
+            txt_toc_rule_pattern,
+            split_long_chapter,
+            created_at,
+            updated_at
+          ) VALUES (
+            'local_v14_1',
+            '旧版本地图书',
+            'txt',
+            '/tmp/local_v14_1.txt',
+            '/tmp/source_v14_1.txt',
+            'utf-8',
+            1024,
+            '作者甲',
+            null,
+            1024,
+            1711000000000,
+            1711000000000,
+            'ready',
+            12,
+            null,
+            'legacy',
+            'legacy-pattern',
+            1,
+            1711000000000,
+            1711000000000
+          );
+        ''');
+        sqliteDb.execute('PRAGMA user_version = 14;');
+      } finally {
+        sqliteDb.close();
+      }
+
+      final database = AppDatabase(executor: NativeDatabase(dbFile));
+      addTearDown(database.close);
+
+      final localBookColumns =
+          await database.customSelect('PRAGMA table_info(local_books)').get();
+      expect(
+        localBookColumns.any((row) => row.data['name'] == 'txt_toc_rule_name'),
+        isFalse,
+      );
+      expect(
+        localBookColumns.any(
+          (row) => row.data['name'] == 'txt_toc_rule_pattern',
+        ),
+        isFalse,
+      );
+
+      final migrated = await database.getLocalBookById('local_v14_1');
+      expect(migrated, isNotNull);
+      expect(migrated!.title, '旧版本地图书');
+      expect(migrated.chapterCount, 12);
+      expect(migrated.splitLongChapter, isTrue);
+      expect(migrated.charset, 'utf-8');
     });
   });
 }

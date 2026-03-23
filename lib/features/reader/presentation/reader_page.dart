@@ -37,13 +37,13 @@ import '../../../domain/entities/reader_toc_snapshot.dart';
 import '../../../domain/entities/source_definition.dart';
 import '../../../domain/repositories/bookmark_repository.dart';
 import '../../bookshelf/application/bookshelf_service.dart';
-import '../../bookshelf/application/local_book_import_service.dart';
 import '../../book/application/book_detail_service.dart';
 import '../../book/presentation/book_detail_route.dart';
 import '../../search/application/search_hit_cache_service.dart';
 import '../../search/application/search_service.dart';
 import '../application/content_provider.dart';
 import '../application/chapter_content_service.dart';
+import '../application/local/local_reader_identity.dart';
 import '../application/local_content_provider.dart';
 import '../application/reader_font_registry_service.dart';
 import '../application/reader_preferences_service.dart';
@@ -956,7 +956,13 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
                 child: Align(
                   alignment: Alignment.topCenter,
                   child: ConstrainedBox(
-                    constraints: const BoxConstraints(maxWidth: 220),
+                    constraints: BoxConstraints(
+                      maxWidth: AppLayout.dialogMaxWidth(
+                        context,
+                        maxWidth: 220,
+                        horizontalMargin: 40,
+                      ),
+                    ),
                     child: ClipRRect(
                       borderRadius: BorderRadius.circular(999),
                       child: LinearProgressIndicator(
@@ -3855,6 +3861,12 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
       animation: _overlayControlsController,
       builder: (context, _) {
         final overlayFade = _overlayControlsFadeProgress;
+        final infoMaxWidth = AppLayout.dialogMaxWidth(
+          context,
+          maxWidth: 520,
+          horizontalMargin: 28,
+        );
+        final infoMinWidth = min(160.0, infoMaxWidth);
 
         return Positioned(
           left: 0,
@@ -3873,9 +3885,9 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
                 child: Align(
                   alignment: Alignment.bottomCenter,
                   child: ConstrainedBox(
-                    constraints: const BoxConstraints(
-                      minWidth: 160,
-                      maxWidth: 520,
+                    constraints: BoxConstraints(
+                      minWidth: infoMinWidth,
+                      maxWidth: infoMaxWidth,
                     ),
                     child: SizedBox(
                       width: double.infinity,
@@ -10452,23 +10464,25 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
     final chapterUrl = (_chapterUrl ?? '').trim();
 
     if (sourceId.isEmpty &&
-        (_isLocalScheme(detailUrl) || _isLocalScheme(chapterUrl))) {
-      _sourceId = LocalBookImportService.localBookSourceId;
+        (LocalReaderIdentity.isLocalSchemeUrl(detailUrl) ||
+            LocalReaderIdentity.isLocalSchemeUrl(chapterUrl))) {
+      _sourceId = LocalReaderIdentity.localSourceId;
     }
 
-    if ((_sourceId ?? '').trim() != LocalBookImportService.localBookSourceId) {
+    if (!LocalReaderIdentity.isLocalSourceId(_sourceId)) {
       return;
     }
 
-    if (detailUrl.isEmpty || !_isLocalScheme(detailUrl)) {
-      _detailUrl = _buildLocalDetailUrl(_currentBookId);
+    if (detailUrl.isEmpty || !LocalReaderIdentity.isLocalSchemeUrl(detailUrl)) {
+      _detailUrl = LocalReaderIdentity.buildBookDetailUrl(_currentBookId);
     }
 
     final normalizedChapterId = _chapterId.trim();
-    if ((chapterUrl.isEmpty || !_isLocalScheme(chapterUrl)) &&
+    if ((chapterUrl.isEmpty ||
+            !LocalReaderIdentity.isLocalSchemeUrl(chapterUrl)) &&
         normalizedChapterId.isNotEmpty &&
         !_isPlaceholderChapterId(normalizedChapterId)) {
-      _chapterUrl = _buildLocalChapterUrl(normalizedChapterId);
+      _chapterUrl = LocalReaderIdentity.buildChapterUrl(normalizedChapterId);
     }
   }
 
@@ -10477,14 +10491,14 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
       return detailUrl;
     }
     final normalized = detailUrl.trim();
-    if (_isLocalScheme(normalized)) {
+    if (LocalReaderIdentity.isLocalSchemeUrl(normalized)) {
       return normalized;
     }
     final bookId = _currentBookId;
     if (bookId.isEmpty) {
       return normalized;
     }
-    return _buildLocalDetailUrl(bookId);
+    return LocalReaderIdentity.buildBookDetailUrl(bookId);
   }
 
   String _normalizeLocalChapterUrlForProgress(String chapterUrl) {
@@ -10492,33 +10506,14 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
       return chapterUrl;
     }
     final normalized = chapterUrl.trim();
-    if (_isLocalScheme(normalized)) {
+    if (LocalReaderIdentity.isLocalSchemeUrl(normalized)) {
       return normalized;
     }
     final chapterId = _chapterId.trim();
     if (chapterId.isEmpty || _isPlaceholderChapterId(chapterId)) {
       return normalized;
     }
-    return _buildLocalChapterUrl(chapterId);
-  }
-
-  String _buildLocalDetailUrl(String bookId) {
-    final normalized = bookId.trim();
-    return 'local://book/$normalized';
-  }
-
-  String _buildLocalChapterUrl(String chapterId) {
-    final normalized = chapterId.trim();
-    return 'local://chapter/$normalized';
-  }
-
-  bool _isLocalScheme(String url) {
-    final normalized = url.trim();
-    if (normalized.isEmpty) {
-      return false;
-    }
-    final uri = Uri.tryParse(normalized);
-    return uri != null && uri.scheme == 'local';
+    return LocalReaderIdentity.buildChapterUrl(chapterId);
   }
 
   bool _isPlaceholderChapterId(String chapterId) {
@@ -10549,8 +10544,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
     return widget.bookId.trim();
   }
 
-  bool get _isLocalSource =>
-      _sourceId?.trim() == LocalBookImportService.localBookSourceId;
+  bool get _isLocalSource => LocalReaderIdentity.isLocalSourceId(_sourceId);
   bool get _isLocalContent =>
       _isLocalSource || _contentCapabilities.canReindexLocal;
 
@@ -12090,8 +12084,10 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
                 large: 0.70,
               );
               final sheetHorizontal = AppSpacing.pageHorizontal(context);
-              final maxSheetWidth =
-                  showReadingSection && !isMangaChapter ? 700.0 : 640.0;
+              final maxSheetWidth = AppLayout.pageContentMaxWidth(
+                context,
+                maxWidth: showReadingSection && !isMangaChapter ? 700 : 640,
+              );
               final disablePageAnimationSelection =
                   !isMangaChapter && _pageTurnUsesScroll(draft.pageTurnMode);
               Widget buildPageAnimationSelector() {
@@ -13195,6 +13191,10 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
                           readingCards[3],
                         ];
                 final sheetTitle = showInterfaceSettings ? '界面设置' : '设置';
+                final textSheetMaxWidth = AppLayout.pageContentMaxWidth(
+                  context,
+                  maxWidth: 760,
+                );
 
                 return AnimatedPadding(
                   duration: const Duration(milliseconds: 180),
@@ -13210,7 +13210,9 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
                       ),
                       child: Center(
                         child: ConstrainedBox(
-                          constraints: const BoxConstraints(maxWidth: 760),
+                          constraints: BoxConstraints(
+                            maxWidth: textSheetMaxWidth,
+                          ),
                           child: Padding(
                             padding: EdgeInsets.fromLTRB(
                               sheetHorizontal,
@@ -14569,7 +14571,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
     bool stackOnCompact = false,
   }) {
     final useStackLayout =
-        stackOnCompact && MediaQuery.sizeOf(context).width < 430;
+        stackOnCompact && AppLayout.isBelowPhoneLargeWidth(context);
     final labelWidget = _buildSettingLineLabel(
       context: context,
       label: label,

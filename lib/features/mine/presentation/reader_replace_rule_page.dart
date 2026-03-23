@@ -551,7 +551,7 @@ class _ReaderReplaceRulePageState extends State<ReaderReplaceRulePage> {
         if (didPop || !context.mounted) {
           return;
         }
-        context.go('/rule-config');
+        context.go('/mine');
       },
       child: Scaffold(
         appBar: AppBar(

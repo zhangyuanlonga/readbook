@@ -22,7 +22,6 @@ void main() {
 
     expect(find.text('书架'), findsWidgets);
     expect(find.text('发现'), findsOneWidget);
-    expect(find.text('书源'), findsOneWidget);
     expect(find.text('我的'), findsOneWidget);
     expect(find.text('错误'), findsNothing);
   });
