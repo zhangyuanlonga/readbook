@@ -747,13 +747,21 @@ class _SystemUiOverlayWrapperState extends State<_SystemUiOverlayWrapper>
       }
       switch (payload.type) {
         case ExternalImportPayloadType.source:
-          appRouter.go('/source');
+          _safeGo('/source');
           break;
         case ExternalImportPayloadType.localBook:
-          appRouter.go('/bookshelf');
+          _safeGo('/bookshelf');
           break;
       }
     });
+  }
+
+  void _safeGo(String targetPath) {
+    final currentUri = appRouter.routeInformationProvider.value.uri;
+    if (currentUri.path == targetPath) {
+      return;
+    }
+    appRouter.go(targetPath);
   }
 
   @override

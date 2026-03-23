@@ -194,9 +194,7 @@ class _LocalLibraryPageState extends State<LocalLibraryPage> {
       } else {
         _showMessage('已导入 $successCount 本书。');
       }
-      if (mounted) {
-        context.go('/bookshelf');
-      }
+      _returnToBookshelf();
       return;
     }
 
@@ -426,6 +424,23 @@ class _LocalLibraryPageState extends State<LocalLibraryPage> {
     }
 
     ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(text)));
+  }
+
+  void _returnToBookshelf() {
+    if (!mounted) {
+      return;
+    }
+
+    final router = GoRouter.of(context);
+    if (router.canPop()) {
+      context.pop();
+      return;
+    }
+
+    final currentPath = GoRouterState.of(context).uri.path;
+    if (currentPath != '/bookshelf') {
+      context.go('/bookshelf');
+    }
   }
 
   @override
