@@ -1248,20 +1248,10 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
     if (_settings.infoShowBattery) {
       items.add(_readerBatteryLabel());
     }
-    if (_settings.infoShowChapter) {
-      items.add(_chapterInfoLabel());
-    }
     if (_settings.infoShowProgress) {
       items.add('进度 ${(_currentScrollRatio() * 100).round()}%');
     }
     return items;
-  }
-
-  String _chapterInfoLabel() {
-    if (_currentIndex == null || _chapters.isEmpty) {
-      return '章节 --';
-    }
-    return '第 ${_currentIndex! + 1}/${_chapters.length} 章';
   }
 
   String _readerBatteryLabel() {
@@ -6171,9 +6161,16 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
       var infoSettingsChanged = false;
       if (!normalizedSettings.infoShowTime &&
           !normalizedSettings.infoShowBattery &&
-          !normalizedSettings.infoShowChapter &&
           !normalizedSettings.infoShowProgress) {
-        normalizedSettings = normalizedSettings.copyWith(infoShowChapter: true);
+        normalizedSettings = normalizedSettings.copyWith(
+          infoShowProgress: true,
+        );
+        infoSettingsChanged = true;
+      }
+      if (normalizedSettings.infoShowChapter) {
+        normalizedSettings = normalizedSettings.copyWith(
+          infoShowChapter: false,
+        );
         infoSettingsChanged = true;
       }
       if (!normalizedSettings.infoHeaderEnabled &&
@@ -11781,7 +11778,6 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
                         bool hasAnyInfoItem(ReaderSettings settings) {
                           return settings.infoShowTime ||
                               settings.infoShowBattery ||
-                              settings.infoShowChapter ||
                               settings.infoShowProgress;
                         }
 
@@ -11806,11 +11802,12 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
                           if (ensureAtLeastOneInfoItem &&
                               !hasAnyInfoItem(normalized)) {
                             normalized = normalized.copyWith(
-                              infoShowChapter: true,
+                              infoShowProgress: true,
+                              infoShowChapter: false,
                             );
                             WidgetsBinding.instance.addPostFrameCallback((_) {
                               if (mounted) {
-                                _showMessage('至少保留一项信息位，已自动保留“章节”。');
+                                _showMessage('至少保留一项信息位，已自动保留“进度”。');
                               }
                             });
                           }
@@ -11829,9 +11826,6 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
                         }
                         if (draft.infoShowBattery) {
                           previewItems.add(_readerBatteryLabel());
-                        }
-                        if (draft.infoShowChapter) {
-                          previewItems.add(_chapterInfoLabel());
                         }
                         if (draft.infoShowProgress) {
                           previewItems.add(
@@ -11916,18 +11910,6 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
                                               updateInfoSettings(
                                                 draft.copyWith(
                                                   infoShowBattery: selected,
-                                                ),
-                                                ensureAtLeastOneInfoItem: true,
-                                              );
-                                            },
-                                          ),
-                                          FilterChip(
-                                            label: const Text('章节'),
-                                            selected: draft.infoShowChapter,
-                                            onSelected: (selected) {
-                                              updateInfoSettings(
-                                                draft.copyWith(
-                                                  infoShowChapter: selected,
                                                 ),
                                                 ensureAtLeastOneInfoItem: true,
                                               );
@@ -12404,9 +12386,6 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
                     count += 1;
                   }
                   if (draft.infoShowBattery) {
-                    count += 1;
-                  }
-                  if (draft.infoShowChapter) {
                     count += 1;
                   }
                   if (draft.infoShowProgress) {
