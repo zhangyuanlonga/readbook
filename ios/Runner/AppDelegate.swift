@@ -2,16 +2,20 @@ import Flutter
 import AVFoundation
 import MediaPlayer
 import UIKit
+import UniformTypeIdentifiers
 
 @main
 @objc class AppDelegate: FlutterAppDelegate {
   private let sourceImportChannelName = "com.jiangyan.shuxiangread/source_import_intent"
   private let methodGetInitialImportPayload = "getInitialImportPayload"
   private let methodOnImportPayload = "onImportPayload"
+  private let methodCacheExternalFileFromUri = "cacheExternalFileFromUri"
   private let readerVolumeKeyChannelName = "com.jiangyan.shuxiangread/reader_volume_keys"
   private let readerVolumeKeyEventChannelName = "com.jiangyan.shuxiangread/reader_volume_keys/events"
   private let methodSetInterceptVolumeKeys = "setInterceptVolumeKeys"
   private let defaultPayloadLabel = "外部书源"
+  private let payloadTypeSource = "source"
+  private let payloadTypeLocalBook = "localBook"
   private let readerVolumeBaseline: Float = 0.5
 
   private var sourceImportMethodChannel: FlutterMethodChannel?
@@ -72,6 +76,12 @@ import UIKit
       case self.methodGetInitialImportPayload:
         result(self.pendingInitialPayload)
         self.pendingInitialPayload = nil
+      case self.methodCacheExternalFileFromUri:
+        guard let arguments = call.arguments as? [String: Any] else {
+          result(nil as Any?)
+          return
+        }
+        result(self.cacheExternalFileFromUri(arguments))
       default:
         result(FlutterMethodNotImplemented)
       }
@@ -255,15 +265,218 @@ import UIKit
       }
     }
 
-    guard let data = try? Data(contentsOf: url), !data.isEmpty else {
+    let label = resolvePayloadLabel(from: url)
+    let mimeType = resolveMimeType(from: url)
+    let payloadType = classifyPayloadType(
+      url: url,
+      mimeType: mimeType
+    )
+
+    switch payloadType {
+    case payloadTypeLocalBook:
+      return [
+        "type": payloadTypeLocalBook,
+        "uri": url.absoluteString,
+        "label": label,
+        "mimeType": mimeType ?? "",
+      ]
+    case payloadTypeSource:
+      guard let data = try? Data(contentsOf: url), !data.isEmpty else {
+        return nil
+      }
+      return [
+        "type": payloadTypeSource,
+        "bytes": FlutterStandardTypedData(bytes: data),
+        "label": label,
+      ]
+    default:
+      return nil
+    }
+  }
+
+  private func classifyPayloadType(
+    url: URL,
+    mimeType: String?
+  ) -> String? {
+    let extensionName = url.pathExtension.lowercased()
+    let normalizedMimeType = mimeType?.lowercased()
+
+    if extensionName == "epub" || normalizedMimeType == "application/epub+zip" {
+      return payloadTypeLocalBook
+    }
+    if extensionName == "json" || normalizedMimeType == "application/json" {
+      return payloadTypeSource
+    }
+    if extensionName == "txt" ||
+      normalizedMimeType == "text/plain" ||
+      normalizedMimeType == "application/octet-stream" {
+      let preview = readPreviewText(url)
+      return looksLikeSourceText(preview) ? payloadTypeSource : payloadTypeLocalBook
+    }
+    return nil
+  }
+
+  private func readPreviewText(_ url: URL) -> String {
+    guard let handle = try? FileHandle(forReadingFrom: url) else {
+      return ""
+    }
+    defer {
+      try? handle.close()
+    }
+
+    let data: Data
+    if #available(iOS 13.4, *) {
+      data = (try? handle.read(upToCount: 4096)) ?? Data()
+    } else {
+      data = handle.readData(ofLength: 4096)
+    }
+
+    if data.isEmpty {
+      return ""
+    }
+    if let utf8 = String(data: data, encoding: .utf8) {
+      return utf8
+    }
+    if let utf16LE = String(data: data, encoding: .utf16LittleEndian) {
+      return utf16LE
+    }
+    if let utf16BE = String(data: data, encoding: .utf16BigEndian) {
+      return utf16BE
+    }
+    return ""
+  }
+
+  private func looksLikeSourceText(_ content: String) -> Bool {
+    let trimmed = content.trimmingCharacters(in: .whitespacesAndNewlines)
+    if trimmed.isEmpty {
+      return false
+    }
+    if !trimmed.hasPrefix("{") && !trimmed.hasPrefix("[") {
+      return false
+    }
+    return trimmed.contains("\"bookSourceName\"") ||
+      trimmed.contains("\"bookSourceUrl\"") ||
+      trimmed.contains("\"ruleSearch\"") ||
+      trimmed.contains("\"ruleBookInfo\"") ||
+      trimmed.contains("\"ruleToc\"") ||
+      trimmed.contains("\"sourceType\"")
+  }
+
+  private func resolveMimeType(from url: URL) -> String? {
+    let extensionName = url.pathExtension
+      .trimmingCharacters(in: .whitespacesAndNewlines)
+      .lowercased()
+    if extensionName.isEmpty {
+      return nil
+    }
+    if #available(iOS 14.0, *) {
+      return UTType(filenameExtension: extensionName)?.preferredMIMEType
+    }
+    return nil
+  }
+
+  private func cacheExternalFileFromUri(_ arguments: [String: Any]) -> [String: Any]? {
+    guard
+      let rawUri = (arguments["uri"] as? String)?
+        .trimmingCharacters(in: .whitespacesAndNewlines),
+      !rawUri.isEmpty,
+      let uri = URL(string: rawUri),
+      uri.isFileURL
+    else {
       return nil
     }
 
-    let label = resolvePayloadLabel(from: url)
+    let rawLabel = (arguments["label"] as? String)?
+      .trimmingCharacters(in: .whitespacesAndNewlines)
+    let label = (rawLabel?.isEmpty == false) ? rawLabel! : resolvePayloadLabel(from: uri)
+    let rawMimeType = (arguments["mimeType"] as? String)?
+      .trimmingCharacters(in: .whitespacesAndNewlines)
+    let mimeType = (rawMimeType?.isEmpty == false) ? rawMimeType! : (resolveMimeType(from: uri) ?? "")
+    guard let extensionName = resolveLocalBookExtension(label: label, mimeType: mimeType) else {
+      return nil
+    }
+
+    let startedSecurityScopedAccess = uri.startAccessingSecurityScopedResource()
+    defer {
+      if startedSecurityScopedAccess {
+        uri.stopAccessingSecurityScopedResource()
+      }
+    }
+
+    let fileManager = FileManager.default
+    guard fileManager.fileExists(atPath: uri.path) else {
+      return nil
+    }
+
+    let cacheRoot = fileManager.urls(for: .cachesDirectory, in: .userDomainMask).first
+    guard let baseDirectory = cacheRoot else {
+      return nil
+    }
+    let outputDirectory = baseDirectory.appendingPathComponent("external_imports", isDirectory: true)
+    do {
+      try fileManager.createDirectory(
+        at: outputDirectory,
+        withIntermediateDirectories: true,
+        attributes: nil
+      )
+    } catch {
+      return nil
+    }
+
+    let baseName = sanitizeFileToken((label as NSString).deletingPathExtension)
+    let timestamp = Int64(Date().timeIntervalSince1970 * 1000)
+    let outputUrl = outputDirectory.appendingPathComponent(
+      "\(timestamp)_\(baseName)\(extensionName)",
+      isDirectory: false
+    )
+
+    do {
+      if fileManager.fileExists(atPath: outputUrl.path) {
+        try fileManager.removeItem(at: outputUrl)
+      }
+      try fileManager.copyItem(at: uri, to: outputUrl)
+    } catch {
+      return nil
+    }
+
+    let normalizedLabel = label.lowercased().hasSuffix(extensionName) ? label : "\(label)\(extensionName)"
     return [
-      "bytes": FlutterStandardTypedData(bytes: data),
-      "label": label,
+      "path": outputUrl.path,
+      "label": normalizedLabel,
+      "mimeType": mimeType,
     ]
+  }
+
+  private func resolveLocalBookExtension(label: String, mimeType: String?) -> String? {
+    let lowerLabel = label.lowercased()
+    let normalizedMimeType = mimeType?.lowercased() ?? ""
+    if lowerLabel.hasSuffix(".txt") {
+      return ".txt"
+    }
+    if lowerLabel.hasSuffix(".epub") {
+      return ".epub"
+    }
+    if normalizedMimeType == "application/epub+zip" {
+      return ".epub"
+    }
+    if normalizedMimeType == "text/plain" || normalizedMimeType == "application/octet-stream" {
+      return ".txt"
+    }
+    return nil
+  }
+
+  private func sanitizeFileToken(_ value: String) -> String {
+    let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
+    let sanitized = trimmed.replacingOccurrences(
+      of: #"[\\/:*?"<>|]"#,
+      with: "_",
+      options: .regularExpression
+    ).replacingOccurrences(
+      of: #"\s+"#,
+      with: "_",
+      options: .regularExpression
+    )
+    return sanitized.isEmpty ? "external_book" : sanitized
   }
 
   private func resolvePayloadLabel(from url: URL) -> String {
