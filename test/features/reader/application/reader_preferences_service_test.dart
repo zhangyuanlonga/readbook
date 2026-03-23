@@ -68,7 +68,7 @@ void main() {
 
       expect(restored.fontSize, 22);
       expect(restored.lineHeight, 1.9);
-      expect(restored.horizontalPadding, 24);
+      expect(restored.horizontalPadding, 20);
       expect(restored.paragraphSpacing, 18);
       expect(restored.paragraphIndent, 4);
       expect(restored.letterSpacing, closeTo(0.12, 0.0001));

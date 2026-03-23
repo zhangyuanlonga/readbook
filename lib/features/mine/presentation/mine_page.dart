@@ -26,7 +26,7 @@ class MinePage extends ConsumerStatefulWidget {
 class _MinePageState extends ConsumerState<MinePage> {
   String? _highlightedTileId;
   static const double _ultraNarrowGridWidth = 320;
-  static const double _narrowGridWidth = 520;
+  static const double _narrowGridWidth = 330;
   static const EdgeInsets _profileCardPadding = EdgeInsets.fromLTRB(
     14,
     12,

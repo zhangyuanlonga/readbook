@@ -56,13 +56,17 @@ void main() {
       tester,
     ) async {
       addTearDown(() => tester.binding.setSurfaceSize(null));
-      for (final size in const <Size>[
-        Size(320, 844),
-        Size(640, 360),
-        Size(840, 1180),
-        Size(1366, 1024),
+      addTearDown(tester.view.resetDevicePixelRatio);
+      for (final item in const <_ViewportCase>[
+        _ViewportCase(name: 'phone_360', size: Size(360, 800), dpr: 3.0),
+        _ViewportCase(name: 'phone_412', size: Size(412, 915), dpr: 3.5),
+        _ViewportCase(name: 'phone_480', size: Size(480, 1066), dpr: 3.0),
+        _ViewportCase(name: 'phone_landscape', size: Size(640, 360), dpr: 3.0),
+        _ViewportCase(name: 'tablet_840', size: Size(840, 1180), dpr: 2.0),
+        _ViewportCase(name: 'large_1366', size: Size(1366, 1024), dpr: 2.0),
       ]) {
-        await tester.binding.setSurfaceSize(size);
+        tester.view.devicePixelRatio = item.dpr;
+        await tester.binding.setSurfaceSize(item.size);
         await tester.pumpWidget(
           MaterialApp(
             home: ReadingRecordsPage(
@@ -77,11 +81,24 @@ void main() {
         expect(
           tester.takeException(),
           isNull,
-          reason: 'unexpected exception at ${size.width}x${size.height}',
+          reason:
+              'unexpected exception at ${item.name} (${item.size.width}x${item.size.height}@${item.dpr})',
         );
       }
     });
   });
+}
+
+class _ViewportCase {
+  const _ViewportCase({
+    required this.name,
+    required this.size,
+    required this.dpr,
+  });
+
+  final String name;
+  final Size size;
+  final double dpr;
 }
 
 class _FakeReadingRecordService extends ReadingRecordService {
