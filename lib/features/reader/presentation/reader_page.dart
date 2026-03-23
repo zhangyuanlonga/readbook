@@ -191,6 +191,8 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
   Timer? _chapterLoadingIndicatorTimer;
   Timer? _blockingLoadingCardTimer;
   Timer? _readingRecordAutoCommitTimer;
+  DateTime? _lastReaderSnackAt;
+  String? _lastReaderSnackKey;
   StreamSubscription<ReaderVolumeKeyEvent>? _volumeKeyEventSubscription;
   final Battery _battery = Battery();
   DateTime _readerInfoNow = DateTime.now();
@@ -214,6 +216,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
   OverlayEntry? _bookmarkToolbarEntry;
   ReaderPageTurnMode _pageTurnModeBeforeAutoRead = ReaderPageTurnMode.tap;
   List<String> _customBackgroundImages = const [];
+  String? _lightModeBackgroundImageBackup;
   String? _cachedBackgroundImageKey;
   MemoryImage? _cachedBackgroundImage;
   List<List<_PagedSlice>> _pagedPages = const [];
@@ -286,6 +289,14 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
   static const Duration _kBlockingLoadingCardDelay = Duration(
     milliseconds: 180,
   );
+  static const Duration _kReaderSnackDuration = Duration(milliseconds: 1800);
+  static const Duration _kReaderBoundarySnackDuration = Duration(
+    milliseconds: 1200,
+  );
+  static const Duration _kReaderSnackActionDuration = Duration(
+    milliseconds: 2600,
+  );
+  static const Duration _kReaderSnackDedupWindow = Duration(milliseconds: 900);
   static const Duration _kReadingRecordAutoCommitInterval = Duration(
     minutes: 2,
   );
@@ -299,6 +310,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
   static const int _kBackwardPreloadChapterCount = 1;
   static const double _kScrollAdvanceOverscrollTrigger = 56;
   static const double _kScrollAdvanceEdgeTolerance = 2;
+  static const double _kScrollAdvanceNearEdgeThreshold = 24;
   static const String _kCachedImagePayloadPrefix = '__appread_image_payload__:';
   static const Set<PointerDeviceKind> _kScrollDragDevices = <PointerDeviceKind>{
     PointerDeviceKind.touch,
@@ -535,7 +547,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
 
     if (forward) {
       if (index >= _chapters.length - 1) {
-        _showMessage('已经是最后一章。');
+        _showChapterBoundaryHint(isFirst: false);
         return;
       }
       await _jumpTo(index + 1, initialScrollRatio: 0);
@@ -543,7 +555,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
     }
 
     if (index <= 0) {
-      _showMessage('已经是第一章。');
+      _showChapterBoundaryHint(isFirst: true);
       return;
     }
     await _jumpTo(index - 1, initialScrollRatio: 1);
@@ -556,7 +568,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
     if (_mangaPageIndex <= 0) {
       final index = _currentIndex;
       if (index == null || index <= 0) {
-        _showMessage('已经是第一章。');
+        _showChapterBoundaryHint(isFirst: true);
         return;
       }
       await _jumpTo(index - 1, initialScrollRatio: 1);
@@ -588,7 +600,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
     if (_mangaPageIndex >= total - 1) {
       final index = _currentIndex;
       if (index == null || index >= _chapters.length - 1) {
-        _showMessage('已经是最后一章。');
+        _showChapterBoundaryHint(isFirst: false);
         return;
       }
       await _jumpTo(index + 1, initialScrollRatio: 0);
@@ -620,11 +632,6 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
       return false;
     }
     return !_pageTurnUsesScroll(_settings.pageTurnMode);
-  }
-
-  bool _isTapPaginationEnabled() {
-    return _isPagedTextReaderEnabled() &&
-        _pageTurnIncludesTap(_settings.pageTurnMode);
   }
 
   bool _isSwipePaginationEnabled() {
@@ -1028,7 +1035,9 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
 
   Widget _buildReaderContent(_ReaderThemeColors colors) {
     final isPaged = _isPagedTextReaderEnabled();
-    final showInfoBar = !_isMangaChapter;
+    // Paged mode already renders progress/time overlays and a pinned header.
+    // Keep info bars for scroll text mode to avoid paged layout conflicts.
+    final showInfoBar = !_isMangaChapter && !isPaged;
 
     return Column(
       children: [
@@ -1059,10 +1068,12 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
               IconButton(
                 onPressed: _handleBackNavigation,
                 tooltip: '返回',
-                visualDensity: VisualDensity.compact,
+                visualDensity: VisualDensity.standard,
                 style: IconButton.styleFrom(
                   foregroundColor: colors.text,
                   backgroundColor: Colors.transparent,
+                  minimumSize: const Size(44, 44),
+                  padding: const EdgeInsets.all(8),
                   splashFactory: InkRipple.splashFactory,
                 ),
                 icon: const Icon(Icons.chevron_left_rounded, size: 22),
@@ -2747,14 +2758,19 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
         metrics.pixels <=
         metrics.minScrollExtent + _kScrollAdvanceEdgeTolerance;
     final atBottom =
-        metrics.maxScrollExtent > 0 &&
         metrics.pixels >=
-            metrics.maxScrollExtent - _kScrollAdvanceEdgeTolerance;
+        metrics.maxScrollExtent - _kScrollAdvanceEdgeTolerance;
+    final nearTop =
+        metrics.pixels <=
+        metrics.minScrollExtent + _kScrollAdvanceNearEdgeThreshold;
+    final nearBottom =
+        metrics.pixels >=
+        metrics.maxScrollExtent - _kScrollAdvanceNearEdgeThreshold;
     if (notification is UserScrollNotification) {
-      if (notification.direction == ScrollDirection.reverse && atBottom) {
+      if (notification.direction == ScrollDirection.reverse && nearBottom) {
         _scrollEdgeAdvanceArmed = true;
         _scrollEdgeActionDirection = 1;
-      } else if (notification.direction == ScrollDirection.forward && atTop) {
+      } else if (notification.direction == ScrollDirection.forward && nearTop) {
         _scrollEdgeAdvanceArmed = true;
         _scrollEdgeActionDirection = -1;
       } else if (notification.direction == ScrollDirection.forward) {
@@ -2781,10 +2797,10 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
         notification.dragDetails != null &&
         notification.scrollDelta != null) {
       final delta = notification.scrollDelta!;
-      if (atBottom && delta >= 0) {
+      if (nearBottom && delta >= 0) {
         _scrollEdgeAdvanceArmed = true;
         _scrollEdgeActionDirection = 1;
-      } else if (atTop && delta <= 0) {
+      } else if (nearTop && delta <= 0) {
         _scrollEdgeAdvanceArmed = true;
         _scrollEdgeActionDirection = -1;
       }
@@ -2817,8 +2833,29 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
     if (notification is ScrollEndNotification ||
         (notification is UserScrollNotification &&
             notification.direction == ScrollDirection.idle)) {
-      final shouldAdvance = _scrollEdgeAdvanceArmed;
-      final actionDirection = _scrollEdgeActionDirection;
+      var shouldAdvance = _scrollEdgeAdvanceArmed;
+      var actionDirection = _scrollEdgeActionDirection;
+      final isDragEnd =
+          notification is ScrollEndNotification &&
+          notification.dragDetails != null;
+      final endVelocityDy =
+          notification is ScrollEndNotification
+              ? (notification.dragDetails?.velocity.pixelsPerSecond.dy ?? 0)
+              : 0;
+      // When a drag lands exactly on the chapter edge, immediately continue
+      // to next/previous chapter instead of requiring another overscroll.
+      if (!shouldAdvance && isDragEnd) {
+        if (actionDirection == 0 && endVelocityDy.abs() >= 36) {
+          actionDirection = endVelocityDy < 0 ? 1 : -1;
+          shouldAdvance = true;
+        } else if (atBottom) {
+          shouldAdvance = true;
+          actionDirection = 1;
+        } else if (atTop) {
+          shouldAdvance = true;
+          actionDirection = -1;
+        }
+      }
       _scrollEdgeOverscrollDistance = 0;
       _scrollEdgeAdvanceArmed = false;
       _scrollEdgeActionDirection = 0;
@@ -3803,22 +3840,22 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
     return AnimatedBuilder(
       animation: _overlayControlsController,
       builder: (context, _) {
-        final overlayProgress = _overlayControlsShiftProgress;
         final overlayFade = _overlayControlsFadeProgress;
-        final bottomOffset =
-            lerpDouble(0.0, 78.0 + safeBottomInset, overlayProgress)!;
-        final barBottomPadding =
-            lerpDouble(collapsedTextBottomPadding, 6.0, overlayProgress)!;
 
         return Positioned(
           left: 0,
           right: 0,
-          bottom: bottomOffset,
+          bottom: 0,
           child: IgnorePointer(
             child: Opacity(
               opacity: lerpDouble(1.0, 0.84, overlayFade)!,
               child: Padding(
-                padding: EdgeInsets.fromLTRB(14, 0, 14, barBottomPadding),
+                padding: EdgeInsets.fromLTRB(
+                  14,
+                  0,
+                  14,
+                  collapsedTextBottomPadding,
+                ),
                 child: Align(
                   alignment: Alignment.bottomCenter,
                   child: ConstrainedBox(
@@ -4146,7 +4183,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
     if (direction < 0 && currentIndex <= 0) {
       final index = _currentIndex;
       if (index == null || index <= 0) {
-        _showMessage('已经是第一章。');
+        _showChapterBoundaryHint(isFirst: true);
         return;
       }
       await _jumpTo(index - 1, initialScrollRatio: 1);
@@ -4156,7 +4193,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
     if (direction > 0 && currentIndex >= pages.length - 1) {
       final index = _currentIndex;
       if (index == null || index >= _chapters.length - 1) {
-        _showMessage('已经是最后一章。');
+        _showChapterBoundaryHint(isFirst: false);
         return;
       }
       await _jumpTo(index + 1, initialScrollRatio: 0);
@@ -4644,6 +4681,23 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
       return;
     }
 
+    // Reserve system edge-swipe area for route back gestures, so returning to
+    // bookshelf does not accidentally trigger chapter/page turning.
+    if (context.canPop()) {
+      final gestureInsets = MediaQuery.systemGestureInsetsOf(context);
+      final leftGuard = max(
+        22.0,
+        gestureInsets.left + viewportSize.width * 0.02,
+      );
+      final rightGuard = max(
+        22.0,
+        gestureInsets.right + viewportSize.width * 0.02,
+      );
+      if (startDx <= leftGuard || startDx >= viewportSize.width - rightGuard) {
+        return;
+      }
+    }
+
     if (_isAutoReadSessionEnabled) {
       _stopAutoReadSession(showMessage: true);
       return;
@@ -4704,7 +4758,14 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
         .replaceAll('\r\n', '\n')
         .replaceAll('\r', '\n');
 
-    return normalized
+    // Treat any explicit line break as paragraph boundary so indentation is
+    // consistently applied even when upstream content uses single '\n'.
+    final canonicalParagraphBreaks = normalized.replaceAll(
+      RegExp(r'\n+'),
+      '\n\n',
+    );
+
+    return canonicalParagraphBreaks
         .split(RegExp(r'\n{2,}'))
         .map((paragraph) => paragraph.trim())
         .where((paragraph) => paragraph.isNotEmpty)
@@ -4717,9 +4778,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
       if (!mounted) {
         return;
       }
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(const SnackBar(content: Text('缺少目录信息，无法缓存。')));
+      _showMessage('缺少目录信息，无法缓存。');
       return;
     }
 
@@ -5694,6 +5753,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
                                   tooltip: '返回',
                                   onPressed: _handleBackNavigation,
                                   colors: colors,
+                                  emphasizeHitArea: true,
                                 ),
                                 const SizedBox(width: 10),
                                 Expanded(
@@ -5907,16 +5967,27 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
 
   Future<void> _toggleDayNightMode() async {
     final isDarkMode = _settings.themeMode == ReaderThemeMode.dark;
+    final currentBackgroundImage = _settings.backgroundImageBase64?.trim();
+    if (!isDarkMode &&
+        currentBackgroundImage != null &&
+        currentBackgroundImage.isNotEmpty) {
+      _lightModeBackgroundImageBackup = currentBackgroundImage;
+    }
     final nextSettings = switch (isDarkMode) {
       true => _settings.copyWith(
         themeMode: ReaderThemeMode.light,
         backgroundStyle: ReaderBackgroundStyle.plain,
         backgroundTone: ReaderBackgroundTone.surface,
+        backgroundImageBase64:
+            (_settings.backgroundImageBase64?.trim().isEmpty ?? true)
+                ? _lightModeBackgroundImageBackup
+                : _settings.backgroundImageBase64,
       ),
       false => _settings.copyWith(
         themeMode: ReaderThemeMode.dark,
         backgroundStyle: ReaderBackgroundStyle.plain,
         backgroundTone: ReaderBackgroundTone.containerHigh,
+        clearBackgroundImage: true,
       ),
     };
 
@@ -5937,6 +6008,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
     required IconData icon,
     required _ReaderThemeColors colors,
     bool loading = false,
+    bool emphasizeHitArea = false,
   }) {
     return IconButton(
       tooltip: tooltip,
@@ -5944,10 +6016,13 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
       style: IconButton.styleFrom(
         foregroundColor: colors.text,
         backgroundColor: Colors.transparent,
-        minimumSize: const Size(34, 34),
+        minimumSize: emphasizeHitArea ? const Size(44, 44) : const Size(34, 34),
         visualDensity: VisualDensity.compact,
-        padding: EdgeInsets.zero,
-        tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+        padding: emphasizeHitArea ? const EdgeInsets.all(4) : EdgeInsets.zero,
+        tapTargetSize:
+            emphasizeHitArea
+                ? MaterialTapTargetSize.padded
+                : MaterialTapTargetSize.shrinkWrap,
       ),
       icon:
           loading
@@ -7375,8 +7450,31 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
     }
 
     _syncActiveContinuousTextChapterFromScroll();
+    _maybePrefetchContinuousTextNeighbors();
     _syncActiveReadingRecordSessionProgress();
     _scheduleProgressSave();
+  }
+
+  void _maybePrefetchContinuousTextNeighbors() {
+    if (!_shouldUseContinuousTextFlow ||
+        !_scrollController.hasClients ||
+        _continuousTextChapters.isEmpty ||
+        _isScrollEdgeAdvancingChapter ||
+        _isAutoReadAdvancingChapter) {
+      return;
+    }
+
+    final position = _scrollController.position;
+    final prefetchBottomDistance = max(240.0, position.viewportDimension * 0.7);
+    final prefetchTopDistance = max(120.0, position.viewportDimension * 0.3);
+    final remainingBottom = position.maxScrollExtent - position.pixels;
+
+    if (remainingBottom <= prefetchBottomDistance) {
+      unawaited(_appendNextContinuousTextChapter());
+    }
+    if (position.pixels <= prefetchTopDistance) {
+      unawaited(_prependPreviousContinuousTextChapter());
+    }
   }
 
   void _scheduleProgressSave() {
@@ -7573,14 +7671,12 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
       return;
     }
 
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: const Text('切换章节失败，已回退到上一章。'),
-        action: SnackBarAction(
-          label: '重试',
-          onPressed: () => unawaited(_jumpTo(targetIndex)),
-        ),
-      ),
+    _showReaderSnackBar(
+      text: '切换章节失败，已回退到上一章。',
+      duration: _kReaderSnackActionDuration,
+      dedupeKey: 'chapter_switch_failed',
+      actionLabel: '重试',
+      onActionPressed: () => unawaited(_jumpTo(targetIndex)),
     );
   }
 
@@ -7654,16 +7750,10 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
       chapterTitle: chapterTitle,
     );
 
-    var isCached = contentResult.fromCache;
-    final cacheKey = '$sourceId|$chapterUrl';
-    try {
-      final persisted = await AppDatabase.instance.getChapterCache(cacheKey);
-      isCached = persisted != null;
-    } catch (_) {
-      // ignore
-    }
-
-    return _ChapterLoadSnapshot(result: contentResult, isCached: isCached);
+    return _ChapterLoadSnapshot(
+      result: contentResult,
+      isCached: contentResult.fromCache,
+    );
   }
 
   Future<void> _applyLoadedChapterSnapshot({
@@ -8638,7 +8728,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
 
     if (direction < 0) {
       if (currentChapterIndex <= 0) {
-        _showMessage('已经是第一章。');
+        _showChapterBoundaryHint(isFirst: true);
         return;
       }
       await _jumpTo(currentChapterIndex - 1, initialScrollRatio: 1);
@@ -8646,7 +8736,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
     }
 
     if (currentChapterIndex >= _chapters.length - 1) {
-      _showMessage('已经是最后一章。');
+      _showChapterBoundaryHint(isFirst: false);
       return;
     }
     await _jumpTo(currentChapterIndex + 1, initialScrollRatio: 0);
@@ -8765,7 +8855,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
       return;
     }
 
-    if (!_isTapPaginationEnabled()) {
+    if (!_pageTurnIncludesTap(_settings.pageTurnMode)) {
       return;
     }
 
@@ -8774,13 +8864,25 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
       return;
     }
 
+    final isPagedTextReader = _isPagedTextReaderEnabled();
+    final isScrollTextReader =
+        !_isMangaChapter && _pageTurnUsesScroll(_settings.pageTurnMode);
+
     if (localPosition.dx < centerLeft) {
-      unawaited(_goToPreviousPage(size.height));
+      if (isPagedTextReader) {
+        unawaited(_goToPreviousPage(size.height));
+      } else if (isScrollTextReader) {
+        unawaited(_advanceScrollReaderByStep(forward: false));
+      }
       return;
     }
 
     if (localPosition.dx > centerRight) {
-      unawaited(_goToNextPage(size.height));
+      if (isPagedTextReader) {
+        unawaited(_goToNextPage(size.height));
+      } else if (isScrollTextReader) {
+        unawaited(_advanceScrollReaderByStep(forward: true));
+      }
     }
   }
 
@@ -8835,6 +8937,14 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
 
     if (shouldShow) {
       SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
+      return;
+    }
+
+    final platform = Theme.of(context).platform;
+    if (platform == TargetPlatform.android) {
+      // HarmonyOS reports as Android platform; immersiveSticky is more reliable
+      // than manual overlay control on some vendor ROMs.
+      SystemChrome.setEnabledSystemUIMode(SystemUiMode.immersiveSticky);
       return;
     }
 
@@ -8953,7 +9063,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
     }
     _stopAutoReadSession();
 
-    const itemExtent = 64.0;
+    const itemExtent = 58.0;
     final currentIndex = _currentIndex;
     final anchorIndex =
         currentIndex == null
@@ -8976,6 +9086,8 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
     var hasBookmarkRequested = false;
     var bookmarkErrorText = '';
     var didTriggerBookmarkJump = false;
+    var activeTabIndex = 0;
+    var catalogDescending = false;
 
     Future<void> loadBookmarks(StateSetter setModalState) async {
       setModalState(() {
@@ -8992,6 +9104,24 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
           isBookmarkLoading = false;
         });
       }
+    }
+
+    Future<void> ensureBookmarksLoaded(StateSetter setModalState) async {
+      if (hasBookmarkRequested) {
+        return;
+      }
+      hasBookmarkRequested = true;
+      await loadBookmarks(setModalState);
+    }
+
+    List<int> orderedChapterIndexes() {
+      if (!catalogDescending) {
+        return List<int>.generate(_chapters.length, (index) => index);
+      }
+      return List<int>.generate(
+        _chapters.length,
+        (index) => _chapters.length - 1 - index,
+      );
     }
 
     void scheduleCatalogSearch(String rawKeyword) {
@@ -9052,23 +9182,17 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
           data: readerModalTheme,
           child: StatefulBuilder(
             builder: (context, setModalState) {
-              if (!hasBookmarkRequested) {
-                hasBookmarkRequested = true;
-                unawaited(loadBookmarks(setModalState));
-              }
-
               final colorScheme = Theme.of(context).colorScheme;
               final textTheme = Theme.of(context).textTheme;
               final keyboardInset = MediaQuery.viewInsetsOf(context).bottom;
               final safeBottom = _bottomSafeInset(context);
               final sheetHeightFactor = _adaptiveReaderSheetHeightFactor(
                 context,
-                compact: 0.9,
-                regular: 0.86,
-                large: 0.82,
+                compact: 0.70,
+                regular: 0.70,
+                large: 0.70,
               );
               final sheetHorizontal = AppSpacing.pageHorizontal(context);
-              final bookmarkGroups = _groupBookmarksForSheet(bookmarks);
 
               Widget buildCatalogTab() {
                 return ValueListenableBuilder<_ReaderCatalogSearchState>(
@@ -9076,8 +9200,21 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
                   builder: (context, searchState, _) {
                     final isSearching = searchState.keyword.isNotEmpty;
                     final searchEntries = searchState.entries;
-                    final tocSearchEntries = searchState.tocEntries;
-                    final contentSearchEntries = searchState.contentEntries;
+                    final orderedIndexes = orderedChapterIndexes();
+                    final tocSearchEntries =
+                        catalogDescending
+                            ? ([...searchState.tocEntries]..sort(
+                              (a, b) =>
+                                  b.chapterIndex.compareTo(a.chapterIndex),
+                            ))
+                            : searchState.tocEntries;
+                    final contentSearchEntries =
+                        catalogDescending
+                            ? ([...searchState.contentEntries]..sort(
+                              (a, b) =>
+                                  b.chapterIndex.compareTo(a.chapterIndex),
+                            ))
+                            : searchState.contentEntries;
 
                     return Column(
                       children: [
@@ -9100,15 +9237,20 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
                                           foregroundColor:
                                               colorScheme.onPrimaryContainer,
                                           padding: const EdgeInsets.symmetric(
-                                            horizontal: 14,
-                                            vertical: 10,
+                                            horizontal: 10,
+                                            vertical: 8,
                                           ),
-                                          minimumSize: const Size(0, 40),
+                                          minimumSize: const Size(0, 36),
+                                          visualDensity: VisualDensity.compact,
                                           shape: const StadiumBorder(),
                                         ),
                                         onPressed: () {
+                                          final currentDisplayIndex =
+                                              orderedIndexes.indexOf(
+                                                currentIndex,
+                                              );
                                           final target =
-                                              ((currentIndex - 2).clamp(
+                                              ((currentDisplayIndex - 2).clamp(
                                                         0,
                                                         _chapters.length - 1,
                                                       ) *
@@ -9124,7 +9266,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
                                         },
                                         icon: const Icon(
                                           Icons.my_location_outlined,
-                                          size: 18,
+                                          size: 17,
                                         ),
                                         label: Text('定位 ${currentIndex + 1}'),
                                       );
@@ -9144,43 +9286,74 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
                             sheetHorizontal,
                             10,
                           ),
-                          child: TextField(
-                            controller: searchController,
-                            decoration: InputDecoration(
-                              isDense: true,
-                              filled: true,
-                              fillColor: colorScheme.surface,
-                              hintText: '搜索目录标题或当前章节正文',
-                              prefixIcon: Icon(
-                                Icons.search_rounded,
-                                size: 18,
-                                color: colorScheme.onSurfaceVariant,
-                              ),
-                              contentPadding: const EdgeInsets.symmetric(
-                                horizontal: 14,
-                                vertical: 12,
-                              ),
-                              border: OutlineInputBorder(
-                                borderRadius: BorderRadius.circular(16),
-                              ),
-                              enabledBorder: OutlineInputBorder(
-                                borderRadius: BorderRadius.circular(16),
-                                borderSide: BorderSide(
-                                  color: colorScheme.outlineVariant.withValues(
-                                    alpha: 0.6,
+                          child: Row(
+                            children: [
+                              Expanded(
+                                child: TextField(
+                                  controller: searchController,
+                                  decoration: InputDecoration(
+                                    isDense: true,
+                                    filled: true,
+                                    fillColor: colorScheme.surface,
+                                    hintText: '搜索目录标题或当前章节正文',
+                                    prefixIcon: Icon(
+                                      Icons.search_rounded,
+                                      size: 17,
+                                      color: colorScheme.onSurfaceVariant,
+                                    ),
+                                    contentPadding: const EdgeInsets.symmetric(
+                                      horizontal: 12,
+                                      vertical: 10,
+                                    ),
+                                    border: OutlineInputBorder(
+                                      borderRadius: BorderRadius.circular(14),
+                                    ),
+                                    enabledBorder: OutlineInputBorder(
+                                      borderRadius: BorderRadius.circular(14),
+                                      borderSide: BorderSide(
+                                        color: colorScheme.outlineVariant
+                                            .withValues(alpha: 0.6),
+                                      ),
+                                    ),
+                                    focusedBorder: OutlineInputBorder(
+                                      borderRadius: BorderRadius.circular(14),
+                                      borderSide: BorderSide(
+                                        color: colorScheme.primary.withValues(
+                                          alpha: 0.9,
+                                        ),
+                                        width: 1.1,
+                                      ),
+                                    ),
                                   ),
                                 ),
                               ),
-                              focusedBorder: OutlineInputBorder(
-                                borderRadius: BorderRadius.circular(16),
-                                borderSide: BorderSide(
-                                  color: colorScheme.primary.withValues(
-                                    alpha: 0.9,
+                              const SizedBox(width: 8),
+                              Tooltip(
+                                message: catalogDescending ? '当前倒序' : '当前正序',
+                                child: FilledButton.tonalIcon(
+                                  onPressed: () {
+                                    setModalState(() {
+                                      catalogDescending = !catalogDescending;
+                                    });
+                                  },
+                                  icon: Icon(
+                                    catalogDescending
+                                        ? Icons.south_rounded
+                                        : Icons.north_rounded,
+                                    size: 17,
                                   ),
-                                  width: 1.2,
+                                  label: Text(catalogDescending ? '倒序' : '正序'),
+                                  style: FilledButton.styleFrom(
+                                    minimumSize: const Size(0, 40),
+                                    padding: const EdgeInsets.symmetric(
+                                      horizontal: 12,
+                                      vertical: 9,
+                                    ),
+                                    visualDensity: VisualDensity.compact,
+                                  ),
                                 ),
                               ),
-                            ),
+                            ],
                           ),
                         ),
                         Divider(
@@ -9266,28 +9439,30 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
                                     child: child!,
                                   );
                                 },
-                                child: ListView.separated(
+                                child: ListView.builder(
                                   controller: scrollController,
-                                  itemCount: _chapters.length,
+                                  itemCount: orderedIndexes.length,
+                                  itemExtent: itemExtent,
                                   padding: const EdgeInsets.fromLTRB(
                                     12,
+                                    8,
+                                    12,
                                     10,
-                                    12,
-                                    12,
                                   ),
-                                  separatorBuilder:
-                                      (_, __) => const SizedBox(height: 8),
                                   itemBuilder: (context, index) {
-                                    final chapter = _chapters[index];
-                                    final selected = index == currentIndex;
+                                    final chapterIndex = orderedIndexes[index];
+                                    final chapter = _chapters[chapterIndex];
+                                    final selected =
+                                        chapterIndex == currentIndex;
                                     return _buildReaderCatalogChapterTile(
                                       context,
                                       chapter: chapter,
-                                      index: index,
+                                      index: chapterIndex,
                                       selected: selected,
                                       onTap:
-                                          () =>
-                                              Navigator.of(context).pop(index),
+                                          () => Navigator.of(
+                                            context,
+                                          ).pop(chapterIndex),
                                     );
                                   },
                                 ),
@@ -9301,6 +9476,10 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
               }
 
               Widget buildBookmarkTab() {
+                if (!hasBookmarkRequested) {
+                  unawaited(ensureBookmarksLoaded(setModalState));
+                }
+                final bookmarkGroups = _groupBookmarksForSheet(bookmarks);
                 final title =
                     isBookmarkLoading ? '书签' : '书签（${bookmarks.length}）';
 
@@ -9399,8 +9578,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
                 );
               }
 
-              final bookmarkCountLabel =
-                  isBookmarkLoading ? '—' : bookmarks.length.toString();
+              final bookmarkCountLabel = bookmarks.length.toString();
 
               Tab buildCountTab({
                 required String label,
@@ -9474,6 +9652,19 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
                                   borderRadius: BorderRadius.circular(14),
                                 ),
                                 splashBorderRadius: BorderRadius.circular(14),
+                                onTap: (index) {
+                                  if (activeTabIndex == index) {
+                                    return;
+                                  }
+                                  setModalState(() {
+                                    activeTabIndex = index;
+                                  });
+                                  if (index == 1) {
+                                    unawaited(
+                                      ensureBookmarksLoaded(setModalState),
+                                    );
+                                  }
+                                },
                                 tabs: [
                                   buildCountTab(
                                     label: '目录',
@@ -9495,9 +9686,10 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
                           ),
                         ),
                         Expanded(
-                          child: TabBarView(
-                            children: [buildCatalogTab(), buildBookmarkTab()],
-                          ),
+                          child:
+                              activeTabIndex == 0
+                                  ? buildCatalogTab()
+                                  : buildBookmarkTab(),
                         ),
                       ],
                     ),
@@ -9720,7 +9912,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
             : '尚未定位到章节';
 
     return Container(
-      padding: const EdgeInsets.fromLTRB(14, 14, 14, 12),
+      padding: const EdgeInsets.fromLTRB(12, 11, 12, 10),
       decoration: BoxDecoration(
         gradient: LinearGradient(
           begin: Alignment.topLeft,
@@ -9730,7 +9922,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
             colorScheme.surfaceContainerLow,
           ],
         ),
-        borderRadius: BorderRadius.circular(20),
+        borderRadius: BorderRadius.circular(16),
         border: Border.all(
           color: colorScheme.outlineVariant.withValues(alpha: 0.25),
         ),
@@ -9747,19 +9939,19 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
                   children: [
                     Text(
                       '阅读导航',
-                      style: textTheme.labelLarge?.copyWith(
+                      style: textTheme.labelMedium?.copyWith(
                         color: colorScheme.primary,
                         fontWeight: FontWeight.w700,
                       ),
                     ),
-                    const SizedBox(height: 4),
+                    const SizedBox(height: 2),
                     Text(
                       '目录 $chapterCount 章',
-                      style: textTheme.titleMedium?.copyWith(
-                        fontWeight: FontWeight.w800,
+                      style: textTheme.titleSmall?.copyWith(
+                        fontWeight: FontWeight.w700,
                       ),
                     ),
-                    const SizedBox(height: 4),
+                    const SizedBox(height: 3),
                     Text(
                       currentIndex == null
                           ? '可从目录或书签中快速定位'
@@ -9774,30 +9966,30 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
               if (locateButton != null) locateButton,
             ],
           ),
-          const SizedBox(height: 12),
+          const SizedBox(height: 8),
           Container(
             width: double.infinity,
-            padding: const EdgeInsets.fromLTRB(12, 10, 12, 10),
+            padding: const EdgeInsets.fromLTRB(10, 8, 10, 8),
             decoration: BoxDecoration(
               color: colorScheme.surface.withValues(alpha: 0.92),
-              borderRadius: BorderRadius.circular(16),
+              borderRadius: BorderRadius.circular(12),
             ),
             child: Row(
               children: [
                 Container(
-                  width: 28,
-                  height: 28,
+                  width: 24,
+                  height: 24,
                   decoration: BoxDecoration(
                     color: colorScheme.primaryContainer,
-                    borderRadius: BorderRadius.circular(10),
+                    borderRadius: BorderRadius.circular(8),
                   ),
                   child: Icon(
                     Icons.menu_book_rounded,
-                    size: 16,
+                    size: 14,
                     color: colorScheme.onPrimaryContainer,
                   ),
                 ),
-                const SizedBox(width: 10),
+                const SizedBox(width: 8),
                 Expanded(
                   child: Text(
                     currentChapterTitle,
@@ -9809,11 +10001,11 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
                   ),
                 ),
                 if (currentIndex != null) ...[
-                  const SizedBox(width: 10),
+                  const SizedBox(width: 8),
                   Container(
                     padding: const EdgeInsets.symmetric(
-                      horizontal: 8,
-                      vertical: 4,
+                      horizontal: 7,
+                      vertical: 3,
                     ),
                     decoration: BoxDecoration(
                       color: colorScheme.primaryContainer,
@@ -9845,9 +10037,9 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
   }) {
     final colorScheme = Theme.of(context).colorScheme;
     final textTheme = Theme.of(context).textTheme;
-    final borderRadius = BorderRadius.circular(18);
+    final borderRadius = BorderRadius.circular(14);
     final selectedBackground = Color.alphaBlend(
-      colorScheme.primary.withValues(alpha: 0.18),
+      colorScheme.primary.withValues(alpha: 0.15),
       colorScheme.surfaceContainerLow,
     );
     final unselectedBackground = colorScheme.surface.withValues(alpha: 0.78);
@@ -9868,35 +10060,25 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
                       ? colorScheme.primary.withValues(alpha: 0.28)
                       : colorScheme.outlineVariant.withValues(alpha: 0.18),
             ),
-            boxShadow:
-                selected
-                    ? [
-                      BoxShadow(
-                        color: colorScheme.primary.withValues(alpha: 0.10),
-                        blurRadius: 18,
-                        offset: const Offset(0, 8),
-                      ),
-                    ]
-                    : const [],
           ),
           child: Padding(
-            padding: const EdgeInsets.fromLTRB(12, 11, 12, 11),
+            padding: const EdgeInsets.fromLTRB(10, 8, 10, 8),
             child: Row(
               children: [
                 Container(
-                  width: 36,
-                  height: 36,
+                  width: 28,
+                  height: 28,
                   alignment: Alignment.center,
                   decoration: BoxDecoration(
                     color:
                         selected
                             ? colorScheme.primary
                             : colorScheme.surfaceContainerHigh,
-                    borderRadius: BorderRadius.circular(12),
+                    borderRadius: BorderRadius.circular(9),
                   ),
                   child: Text(
                     '${index + 1}',
-                    style: textTheme.labelMedium?.copyWith(
+                    style: textTheme.labelSmall?.copyWith(
                       fontWeight: FontWeight.w800,
                       color:
                           selected
@@ -9905,44 +10087,28 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
                     ),
                   ),
                 ),
-                const SizedBox(width: 12),
+                const SizedBox(width: 8),
                 Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      if (selected)
-                        Padding(
-                          padding: const EdgeInsets.only(bottom: 3),
-                          child: Text(
-                            '当前阅读',
-                            style: textTheme.labelSmall?.copyWith(
-                              color: colorScheme.primary,
-                              fontWeight: FontWeight.w700,
-                            ),
-                          ),
-                        ),
-                      Text(
-                        chapter.title,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: textTheme.bodyLarge?.copyWith(
-                          fontWeight:
-                              selected ? FontWeight.w700 : FontWeight.w500,
-                          color:
-                              selected
-                                  ? colorScheme.primary
-                                  : colorScheme.onSurface,
-                        ),
-                      ),
-                    ],
+                  child: Text(
+                    chapter.title,
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    style: textTheme.bodyMedium?.copyWith(
+                      height: 1.2,
+                      fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
+                      color:
+                          selected
+                              ? colorScheme.primary
+                              : colorScheme.onSurface,
+                    ),
                   ),
                 ),
-                const SizedBox(width: 10),
+                const SizedBox(width: 6),
                 Icon(
                   selected
                       ? Icons.play_circle_fill_rounded
                       : Icons.chevron_right_rounded,
-                  size: selected ? 20 : 18,
+                  size: 18,
                   color:
                       selected
                           ? colorScheme.primary
@@ -10007,30 +10173,30 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
           entry.isContent
               ? colorScheme.tertiaryContainer.withValues(alpha: 0.32)
               : colorScheme.surfaceContainerLow,
-      borderRadius: BorderRadius.circular(16),
+      borderRadius: BorderRadius.circular(12),
       child: InkWell(
-        borderRadius: BorderRadius.circular(16),
+        borderRadius: BorderRadius.circular(12),
         onTap: onTap,
         child: Padding(
-          padding: const EdgeInsets.fromLTRB(12, 10, 12, 10),
+          padding: const EdgeInsets.fromLTRB(10, 8, 10, 8),
           child: Row(
             children: [
               Container(
-                width: 34,
-                height: 34,
+                width: 28,
+                height: 28,
                 decoration: BoxDecoration(
                   color: accentColor.withValues(alpha: 0.12),
-                  borderRadius: BorderRadius.circular(12),
+                  borderRadius: BorderRadius.circular(9),
                 ),
                 child: Icon(
                   entry.isContent
                       ? Icons.article_outlined
                       : Icons.list_alt_outlined,
-                  size: 18,
+                  size: 16,
                   color: accentColor,
                 ),
               ),
-              const SizedBox(width: 12),
+              const SizedBox(width: 8),
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -10039,11 +10205,11 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
                       entry.title,
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
-                      style: textTheme.bodyLarge?.copyWith(
+                      style: textTheme.bodyMedium?.copyWith(
                         fontWeight: FontWeight.w600,
                       ),
                     ),
-                    const SizedBox(height: 3),
+                    const SizedBox(height: 2),
                     Text(
                       entry.subtitle,
                       maxLines: 2,
@@ -10055,9 +10221,9 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
                   ],
                 ),
               ),
-              const SizedBox(width: 10),
+              const SizedBox(width: 8),
               Container(
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
                 decoration: BoxDecoration(
                   color: accentColor.withValues(alpha: 0.1),
                   borderRadius: BorderRadius.circular(999),
@@ -10364,12 +10530,90 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
         _detailUrl!.isEmpty;
   }
 
-  void _showMessage(String text) {
+  void _showMessage(
+    String text, {
+    Duration duration = _kReaderSnackDuration,
+    String? dedupeKey,
+  }) {
+    _showReaderSnackBar(text: text, duration: duration, dedupeKey: dedupeKey);
+  }
+
+  void _showChapterBoundaryHint({required bool isFirst}) {
+    _showMessage(
+      isFirst ? '已经是第一章。' : '已经是最后一章。',
+      duration: _kReaderBoundarySnackDuration,
+      dedupeKey: isFirst ? 'boundary_first_chapter' : 'boundary_last_chapter',
+    );
+  }
+
+  void _showReaderSnackBar({
+    required String text,
+    Duration duration = _kReaderSnackDuration,
+    String? dedupeKey,
+    String? actionLabel,
+    VoidCallback? onActionPressed,
+    bool replaceCurrent = true,
+  }) {
     if (!mounted) {
       return;
     }
 
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(text)));
+    final now = DateTime.now();
+    final resolvedKey = (dedupeKey ?? text).trim();
+    if (resolvedKey.isNotEmpty &&
+        _lastReaderSnackKey == resolvedKey &&
+        _lastReaderSnackAt != null &&
+        now.difference(_lastReaderSnackAt!) < _kReaderSnackDedupWindow) {
+      return;
+    }
+    if (resolvedKey.isNotEmpty) {
+      _lastReaderSnackKey = resolvedKey;
+      _lastReaderSnackAt = now;
+    }
+
+    final messenger = ScaffoldMessenger.of(context);
+    if (replaceCurrent) {
+      messenger.hideCurrentSnackBar();
+    }
+
+    final colorScheme = Theme.of(context).colorScheme;
+    final textTheme = Theme.of(context).textTheme;
+    final horizontal = AppSpacing.pageHorizontal(context);
+    final bottomSafe = MediaQuery.viewPaddingOf(context).bottom;
+    SnackBarAction? snackAction;
+    final normalizedActionLabel = actionLabel?.trim() ?? '';
+    if (normalizedActionLabel.isNotEmpty && onActionPressed != null) {
+      snackAction = SnackBarAction(
+        label: normalizedActionLabel,
+        textColor: colorScheme.primary,
+        onPressed: onActionPressed,
+      );
+    }
+
+    messenger.showSnackBar(
+      SnackBar(
+        behavior: SnackBarBehavior.floating,
+        margin: EdgeInsets.fromLTRB(horizontal, 0, horizontal, 12 + bottomSafe),
+        elevation: 0,
+        duration: duration,
+        dismissDirection: DismissDirection.down,
+        backgroundColor: colorScheme.surfaceContainerHigh,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(12),
+          side: BorderSide(
+            color: colorScheme.outlineVariant.withValues(alpha: 0.55),
+          ),
+        ),
+        content: Text(
+          text,
+          style: textTheme.bodyMedium?.copyWith(
+            color: colorScheme.onSurface,
+            fontWeight: FontWeight.w600,
+          ),
+        ),
+        action: snackAction,
+      ),
+    );
   }
 
   void _recordReaderFailure({required String message, ErrorCode? errorCode}) {
@@ -11805,18 +12049,9 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
               final safeBottom = _bottomSafeInset(context);
               final sheetHeightFactor = _adaptiveReaderSheetHeightFactor(
                 context,
-                compact:
-                    showInterfaceSection
-                        ? 0.58
-                        : (isMangaChapter ? 0.64 : 0.68),
-                regular:
-                    showInterfaceSection
-                        ? 0.54
-                        : (isMangaChapter ? 0.60 : 0.63),
-                large:
-                    showInterfaceSection
-                        ? 0.50
-                        : (isMangaChapter ? 0.56 : 0.58),
+                compact: 0.70,
+                regular: 0.70,
+                large: 0.70,
               );
               final sheetHorizontal = AppSpacing.pageHorizontal(context);
               final maxSheetWidth =
@@ -14211,6 +14446,12 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
       _settings = appliedResult;
       _customFonts = refreshedCustomFonts;
     });
+    final restoredBackground = appliedResult.backgroundImageBase64?.trim();
+    if (appliedResult.themeMode != ReaderThemeMode.dark &&
+        restoredBackground != null &&
+        restoredBackground.isNotEmpty) {
+      _lightModeBackgroundImageBackup = restoredBackground;
+    }
     _syncContinuousTextFlowAfterSettingsApplied();
     _clearSelectionState();
     await _preferencesService.saveSettings(appliedResult);
@@ -15645,20 +15886,20 @@ class _BookmarkGroupSection extends StatelessWidget {
       children: [
         Text(
           title,
-          style: textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w600),
+          style: textTheme.labelLarge?.copyWith(fontWeight: FontWeight.w700),
         ),
-        const SizedBox(height: 6),
+        const SizedBox(height: 4),
         ...items.map((bookmark) {
           return Padding(
-            padding: const EdgeInsets.only(bottom: 6),
+            padding: const EdgeInsets.only(bottom: 4),
             child: Material(
               color: colorScheme.surfaceContainerHighest,
-              borderRadius: BorderRadius.circular(14),
+              borderRadius: BorderRadius.circular(12),
               child: InkWell(
-                borderRadius: BorderRadius.circular(14),
+                borderRadius: BorderRadius.circular(12),
                 onTap: () => onTap(bookmark),
                 child: Padding(
-                  padding: const EdgeInsets.fromLTRB(12, 10, 8, 10),
+                  padding: const EdgeInsets.fromLTRB(10, 8, 6, 8),
                   child: Row(
                     children: [
                       Expanded(
@@ -15671,9 +15912,10 @@ class _BookmarkGroupSection extends StatelessWidget {
                               overflow: TextOverflow.ellipsis,
                               style: textTheme.bodyMedium?.copyWith(
                                 fontWeight: FontWeight.w500,
+                                height: 1.2,
                               ),
                             ),
-                            const SizedBox(height: 4),
+                            const SizedBox(height: 3),
                             Text(
                               timeLabel(bookmark.createdAt),
                               style: textTheme.bodySmall?.copyWith(
@@ -15685,7 +15927,8 @@ class _BookmarkGroupSection extends StatelessWidget {
                       ),
                       IconButton(
                         tooltip: '删除',
-                        icon: const Icon(Icons.delete_outline),
+                        visualDensity: VisualDensity.compact,
+                        icon: const Icon(Icons.delete_outline, size: 18),
                         onPressed: () => onDelete(bookmark),
                       ),
                     ],

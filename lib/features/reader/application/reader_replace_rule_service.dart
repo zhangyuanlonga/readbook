@@ -25,25 +25,40 @@ class ReaderReplaceRuleService {
 
   static const String _enabledByDefaultKey =
       'reader.replace_rules.enabledByDefault';
+  static List<ReaderReplaceRule>? _rulesCache;
 
-  Future<List<ReaderReplaceRule>> listAll() {
-    return _database.getAllReaderReplaceRules();
+  Future<List<ReaderReplaceRule>> listAll() async {
+    final cached = _rulesCache;
+    if (cached != null) {
+      return cached;
+    }
+
+    final rules = await _database.getAllReaderReplaceRules();
+    final frozen = List<ReaderReplaceRule>.unmodifiable(rules);
+    _rulesCache = frozen;
+    return frozen;
   }
 
   Stream<List<ReaderReplaceRule>> watchAll() {
-    return _database.watchAllReaderReplaceRules();
+    return _database.watchAllReaderReplaceRules().map((rules) {
+      final frozen = List<ReaderReplaceRule>.unmodifiable(rules);
+      _rulesCache = frozen;
+      return frozen;
+    });
   }
 
   Future<ReaderReplaceRule?> getById(int id) {
     return _database.getReaderReplaceRuleById(id);
   }
 
-  Future<void> saveRule(ReaderReplaceRule rule) {
-    return _database.upsertReaderReplaceRule(rule);
+  Future<void> saveRule(ReaderReplaceRule rule) async {
+    await _database.upsertReaderReplaceRule(rule);
+    _rulesCache = null;
   }
 
-  Future<void> deleteRule(int id) {
-    return _database.deleteReaderReplaceRuleById(id);
+  Future<void> deleteRule(int id) async {
+    await _database.deleteReaderReplaceRuleById(id);
+    _rulesCache = null;
   }
 
   Future<bool> loadEnabledByDefault() async {

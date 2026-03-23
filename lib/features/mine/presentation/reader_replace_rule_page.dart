@@ -1202,55 +1202,48 @@ class _ReaderReplaceRulePasteImportPageState
           const SizedBox(width: 8),
         ],
       ),
-      body: AnimatedPadding(
-        duration: const Duration(milliseconds: 180),
-        curve: Curves.easeOutCubic,
-        padding: EdgeInsets.only(bottom: keyboardInset),
-        child: SafeArea(
-          top: false,
-          child: Center(
-            child: ConstrainedBox(
-              constraints: BoxConstraints(maxWidth: maxWidth),
-              child: Padding(
-                padding: EdgeInsets.fromLTRB(
-                  horizontal,
-                  12,
-                  horizontal,
-                  12 + bottomSafe,
-                ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    Text(
-                      '粘贴净化规则 JSON（对象或数组）',
-                      style: Theme.of(context).textTheme.bodyMedium,
+      body: SafeArea(
+        top: false,
+        child: Center(
+          child: ConstrainedBox(
+            constraints: BoxConstraints(maxWidth: maxWidth),
+            child: SingleChildScrollView(
+              padding: EdgeInsets.fromLTRB(
+                horizontal,
+                12,
+                horizontal,
+                12 + bottomSafe + keyboardInset,
+              ),
+              keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Text(
+                    '粘贴净化规则 JSON（对象或数组）',
+                    style: Theme.of(context).textTheme.bodyMedium,
+                  ),
+                  const SizedBox(height: 8),
+                  TextField(
+                    controller: _controller,
+                    minLines: 10,
+                    maxLines: 18,
+                    keyboardType: TextInputType.multiline,
+                    textInputAction: TextInputAction.newline,
+                    autofocus: true,
+                    onChanged: (_) => setState(() {}),
+                    decoration: const InputDecoration(
+                      hintText: '{...} 或 [{...}]',
+                      border: OutlineInputBorder(),
+                      alignLabelWithHint: true,
                     ),
-                    const SizedBox(height: 8),
-                    Expanded(
-                      child: TextField(
-                        controller: _controller,
-                        expands: true,
-                        minLines: null,
-                        maxLines: null,
-                        keyboardType: TextInputType.multiline,
-                        textInputAction: TextInputAction.newline,
-                        autofocus: true,
-                        onChanged: (_) => setState(() {}),
-                        decoration: const InputDecoration(
-                          hintText: '{...} 或 [{...}]',
-                          border: OutlineInputBorder(),
-                          alignLabelWithHint: true,
-                        ),
-                      ),
-                    ),
-                    const SizedBox(height: 12),
-                    FilledButton.icon(
-                      onPressed: canSubmit ? _submit : null,
-                      icon: const Icon(Icons.file_download_rounded),
-                      label: const Text('导入'),
-                    ),
-                  ],
-                ),
+                  ),
+                  const SizedBox(height: 12),
+                  FilledButton.icon(
+                    onPressed: canSubmit ? _submit : null,
+                    icon: const Icon(Icons.file_download_rounded),
+                    label: const Text('导入'),
+                  ),
+                ],
               ),
             ),
           ),
@@ -1301,62 +1294,57 @@ class _ReaderReplaceRuleUrlImportPageState
           const SizedBox(width: 8),
         ],
       ),
-      body: AnimatedPadding(
-        duration: const Duration(milliseconds: 180),
-        curve: Curves.easeOutCubic,
-        padding: EdgeInsets.only(bottom: keyboardInset),
-        child: SafeArea(
-          top: false,
-          child: Center(
-            child: ConstrainedBox(
-              constraints: BoxConstraints(maxWidth: maxWidth),
-              child: Padding(
-                padding: EdgeInsets.fromLTRB(
-                  horizontal,
-                  12,
-                  horizontal,
-                  12 + bottomSafe,
-                ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    Text(
-                      '请输入净化规则 JSON 链接（http/https）',
-                      style: Theme.of(context).textTheme.bodyMedium,
+      body: SafeArea(
+        top: false,
+        child: Center(
+          child: ConstrainedBox(
+            constraints: BoxConstraints(maxWidth: maxWidth),
+            child: SingleChildScrollView(
+              padding: EdgeInsets.fromLTRB(
+                horizontal,
+                12,
+                horizontal,
+                12 + bottomSafe + keyboardInset,
+              ),
+              keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Text(
+                    '请输入净化规则 JSON 链接（http/https）',
+                    style: Theme.of(context).textTheme.bodyMedium,
+                  ),
+                  const SizedBox(height: 8),
+                  TextField(
+                    controller: _controller,
+                    autofocus: true,
+                    keyboardType: TextInputType.url,
+                    textInputAction: TextInputAction.done,
+                    onChanged: (_) => setState(() {}),
+                    onSubmitted: (_) {
+                      if (canSubmit) {
+                        _submit();
+                      }
+                    },
+                    decoration: const InputDecoration(
+                      hintText: 'https://example.com/reader_replace_rules.json',
+                      border: OutlineInputBorder(),
                     ),
-                    const SizedBox(height: 8),
-                    TextField(
-                      controller: _controller,
-                      autofocus: true,
-                      keyboardType: TextInputType.url,
-                      textInputAction: TextInputAction.done,
-                      onChanged: (_) => setState(() {}),
-                      onSubmitted: (_) {
-                        if (canSubmit) {
-                          _submit();
-                        }
-                      },
-                      decoration: const InputDecoration(
-                        hintText:
-                            'https://example.com/reader_replace_rules.json',
-                        border: OutlineInputBorder(),
-                      ),
+                  ),
+                  const SizedBox(height: 10),
+                  Text(
+                    '支持直接粘贴链接，返回后会自动校验并开始导入。',
+                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                      color: Theme.of(context).colorScheme.onSurfaceVariant,
                     ),
-                    const SizedBox(height: 10),
-                    Text(
-                      '支持直接粘贴链接，返回后会自动校验并开始导入。',
-                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                        color: Theme.of(context).colorScheme.onSurfaceVariant,
-                      ),
-                    ),
-                    const Spacer(),
-                    FilledButton.icon(
-                      onPressed: canSubmit ? _submit : null,
-                      icon: const Icon(Icons.file_download_rounded),
-                      label: const Text('导入'),
-                    ),
-                  ],
-                ),
+                  ),
+                  const SizedBox(height: 16),
+                  FilledButton.icon(
+                    onPressed: canSubmit ? _submit : null,
+                    icon: const Icon(Icons.file_download_rounded),
+                    label: const Text('导入'),
+                  ),
+                ],
               ),
             ),
           ),

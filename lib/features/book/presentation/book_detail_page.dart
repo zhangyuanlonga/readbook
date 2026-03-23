@@ -183,24 +183,15 @@ class _BookDetailPageState extends State<BookDetailPage> {
                 16 + bottomSafe,
               ),
               children: [
+                if (_isLoading)
+                  const Padding(
+                    padding: EdgeInsets.only(bottom: 12),
+                    child: LinearProgressIndicator(minHeight: 2),
+                  ),
                 if (_isMissingParams)
                   BookDetailStateCard(
                     child: Text(
                       '缺少 sourceId/detailUrl，无法加载详情。请从搜索结果进入。bookId=${widget.bookId}',
-                    ),
-                  )
-                else if (_isLoading && _result == null)
-                  const BookDetailStateCard(
-                    child: Row(
-                      children: [
-                        SizedBox(
-                          width: 18,
-                          height: 18,
-                          child: CircularProgressIndicator(strokeWidth: 2),
-                        ),
-                        SizedBox(width: 12),
-                        Expanded(child: Text('正在加载详情和目录...')),
-                      ],
                     ),
                   )
                 else if (_errorText != null && _result == null)
@@ -223,18 +214,13 @@ class _BookDetailPageState extends State<BookDetailPage> {
                         ),
                         const SizedBox(height: 10),
                         FilledButton.tonal(
-                          onPressed: _load,
+                          onPressed: () => _load(forceRefresh: true),
                           child: const Text('重试'),
                         ),
                       ],
                     ),
                   )
                 else if (_result != null) ...[
-                  if (_isLoading)
-                    const Padding(
-                      padding: EdgeInsets.only(bottom: 12),
-                      child: LinearProgressIndicator(minHeight: 2),
-                    ),
                   _buildDetailCard(_result!),
                   if (_canSwitchSource) ...[
                     const SizedBox(height: 12),
@@ -1010,7 +996,7 @@ class _BookDetailPageState extends State<BookDetailPage> {
       _displayTitle = candidate.book.title.trim();
     });
 
-    final switched = await _load(forceRefresh: true);
+    final switched = await _load(forceRefresh: true, clearResult: true);
     if (switched) {
       final bookshelfSyncFailed = await _migrateBookshelfAfterSwitch(
         previousSourceId: previousSourceId,
@@ -1125,7 +1111,10 @@ class _BookDetailPageState extends State<BookDetailPage> {
     context.push(route);
   }
 
-  Future<bool> _load({bool forceRefresh = false}) async {
+  Future<bool> _load({
+    bool forceRefresh = false,
+    bool clearResult = false,
+  }) async {
     if (!mounted || _isMissingParams) {
       return false;
     }
@@ -1134,7 +1123,7 @@ class _BookDetailPageState extends State<BookDetailPage> {
       _isLoading = true;
       _errorText = null;
       _tocWarningText = null;
-      if (forceRefresh) {
+      if (clearResult) {
         _result = null;
       }
     });

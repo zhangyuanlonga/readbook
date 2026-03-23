@@ -3,6 +3,7 @@ import 'package:go_router/go_router.dart';
 
 import '../../../app/layout/app_layout.dart';
 import '../../../app/layout/app_spacing.dart';
+import '../../bookshelf/application/bookshelf_system_settings_service.dart';
 import '../../reader/application/reader_system_settings_service.dart';
 import '../../search/application/search_system_settings_service.dart';
 
@@ -57,12 +58,11 @@ class SystemSettingsPage extends StatelessWidget {
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
                                   Expanded(
-                                    child: _ReaderAutoSwitchSettingPanel(),
+                                    child: _BookshelfAutoRefreshSettingPanel(),
                                   ),
                                   SizedBox(width: 12),
                                   Expanded(
-                                    child:
-                                        _LocalTxtSplitLongChapterSettingPanel(),
+                                    child: _ReaderAutoSwitchSettingPanel(),
                                   ),
                                 ],
                               ),
@@ -71,18 +71,25 @@ class SystemSettingsPage extends StatelessWidget {
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
                                   Expanded(
-                                    child: _SearchAggregationSettingPanel(),
+                                    child:
+                                        _LocalTxtSplitLongChapterSettingPanel(),
                                   ),
                                   SizedBox(width: 12),
-                                  Expanded(child: _ReadingRecordSettingPanel()),
+                                  Expanded(
+                                    child: _SearchAggregationSettingPanel(),
+                                  ),
                                 ],
                               ),
+                              SizedBox(height: 12),
+                              _ReadingRecordSettingPanel(),
                             ],
                           );
                         }
 
                         return const Column(
                           children: [
+                            _BookshelfAutoRefreshSettingPanel(),
+                            SizedBox(height: 12),
                             _ReaderAutoSwitchSettingPanel(),
                             SizedBox(height: 12),
                             _LocalTxtSplitLongChapterSettingPanel(),
@@ -157,7 +164,7 @@ class SystemSettingsPage extends StatelessWidget {
                       ),
                       const SizedBox(height: 3),
                       Text(
-                        '把阅读与搜索相关开关收在一起，减少层级和空白占用。',
+                        '把书架、阅读与搜索相关开关收在一起，减少层级和空白占用。',
                         style: textTheme.bodySmall?.copyWith(
                           color: colorScheme.onSurfaceVariant,
                           height: 1.35,
@@ -177,6 +184,11 @@ class SystemSettingsPage extends StatelessWidget {
                   context,
                   icon: Icons.auto_fix_high_rounded,
                   label: '阅读容错',
+                ),
+                _buildMetaChip(
+                  context,
+                  icon: Icons.sync_rounded,
+                  label: '书架刷新',
                 ),
                 _buildMetaChip(
                   context,
@@ -489,6 +501,106 @@ class _ReaderAutoSwitchSettingPanelState
       description: '正文加载失败时自动尝试候选来源。',
       stateDescription: _enabled ? '失败时自动补位。' : '仅支持手动切换来源。',
       stateLabel: _enabled ? '已开启' : '已关闭',
+      value: _enabled,
+      isLoading: _isLoading,
+      isSaving: _isSaving,
+      onChanged: _isLoading || _isSaving ? null : _toggle,
+      errorText: _errorText,
+    );
+  }
+}
+
+class _BookshelfAutoRefreshSettingPanel extends StatefulWidget {
+  const _BookshelfAutoRefreshSettingPanel();
+
+  @override
+  State<_BookshelfAutoRefreshSettingPanel> createState() =>
+      _BookshelfAutoRefreshSettingPanelState();
+}
+
+class _BookshelfAutoRefreshSettingPanelState
+    extends State<_BookshelfAutoRefreshSettingPanel> {
+  final BookshelfSystemSettingsService _settingsService =
+      BookshelfSystemSettingsService();
+
+  bool _isLoading = true;
+  bool _isSaving = false;
+  bool _enabled = true;
+  String? _errorText;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadSetting();
+  }
+
+  Future<void> _loadSetting() async {
+    try {
+      final enabled =
+          await _settingsService.loadAutoRefreshOnTabActiveEnabled();
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _enabled = enabled;
+        _errorText = null;
+      });
+    } catch (_) {
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _errorText = '读取书架自动刷新开关失败，请稍后重试。';
+      });
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+        });
+      }
+    }
+  }
+
+  Future<void> _toggle(bool enabled) async {
+    if (_isSaving) {
+      return;
+    }
+
+    final previous = _enabled;
+    setState(() {
+      _enabled = enabled;
+      _isSaving = true;
+      _errorText = null;
+    });
+
+    try {
+      await _settingsService.saveAutoRefreshOnTabActiveEnabled(enabled);
+    } catch (_) {
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _enabled = previous;
+        _errorText = '保存书架自动刷新开关失败，请稍后重试。';
+      });
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isSaving = false;
+        });
+      }
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return _buildCompactSettingCard(
+      context,
+      icon: Icons.sync_rounded,
+      title: '书架自动刷新',
+      description: '重新切回书架时自动刷新列表与阅读进度。',
+      stateDescription: _enabled ? '切回书架后会自动刷新。' : '仅手动下拉或操作后刷新。',
+      stateLabel: _enabled ? '默认开启' : '已关闭',
       value: _enabled,
       isLoading: _isLoading,
       isSaving: _isSaving,

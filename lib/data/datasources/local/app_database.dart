@@ -968,6 +968,80 @@ class AppDatabase extends _$AppDatabase {
     return latestByBookId;
   }
 
+  Future<Map<String, String>> getLatestCachedChapterTitlesByBookSource(
+    List<MapEntry<String, String>> bookSourcePairs,
+  ) async {
+    final normalizedPairs = <MapEntry<String, String>>[];
+    final requestPairKeys = <String>{};
+    final requestBookIds = <String>{};
+    final requestSourceIds = <String>{};
+
+    for (final pair in bookSourcePairs) {
+      final bookId = pair.key.trim();
+      final sourceId = pair.value.trim();
+      if (bookId.isEmpty || sourceId.isEmpty) {
+        continue;
+      }
+      final pairKey = _bookSourcePairKey(bookId: bookId, sourceId: sourceId);
+      if (!requestPairKeys.add(pairKey)) {
+        continue;
+      }
+      normalizedPairs.add(MapEntry(bookId, sourceId));
+      requestBookIds.add(bookId);
+      requestSourceIds.add(sourceId);
+    }
+
+    if (normalizedPairs.isEmpty) {
+      return <String, String>{};
+    }
+
+    final rows =
+        await (select(chapterCaches)
+              ..where(
+                (table) =>
+                    table.bookId.isIn(requestBookIds) &
+                    table.sourceId.isIn(requestSourceIds),
+              )
+              ..orderBy([
+                (table) => OrderingTerm.desc(table.chapterIndex),
+                (table) => OrderingTerm.desc(table.updatedAt),
+              ]))
+            .get();
+
+    final latestByPairKey = <String, String>{};
+    for (final row in rows) {
+      final pairKey = _bookSourcePairKey(
+        bookId: row.bookId,
+        sourceId: row.sourceId,
+      );
+      if (!requestPairKeys.contains(pairKey)) {
+        continue;
+      }
+      if (latestByPairKey.containsKey(pairKey)) {
+        continue;
+      }
+
+      final title = row.chapterTitle?.trim() ?? '';
+      if (title.isEmpty) {
+        continue;
+      }
+
+      latestByPairKey[pairKey] = title;
+      if (latestByPairKey.length >= normalizedPairs.length) {
+        break;
+      }
+    }
+
+    return latestByPairKey;
+  }
+
+  String _bookSourcePairKey({
+    required String bookId,
+    required String sourceId,
+  }) {
+    return '${sourceId.trim()}\u0000${bookId.trim()}';
+  }
+
   Future<Set<String>> getCachedChapterCacheKeysForBook(String bookId) async {
     final normalized = bookId.trim();
     if (normalized.isEmpty) {

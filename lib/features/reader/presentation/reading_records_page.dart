@@ -644,7 +644,6 @@ class _ReadingRecordsPageState extends State<ReadingRecordsPage> {
                               const <ReadingRecordSession>[];
                           final filteredLatest = _filterLatestRecords(
                             latestRecords,
-                            dailyRecords,
                           );
                           final filteredDays = _filterDailyRecords(
                             dailyRecords,
@@ -836,15 +835,26 @@ class _ReadingRecordsPageState extends State<ReadingRecordsPage> {
     final showEarlierDataIndicator = _heatmapRangeMode != _HeatmapRangeMode.all;
     final weeks = _buildHeatmapWeeks(startDate: startDate, endDate: today);
     final monthLabels = _buildHeatmapMonthLabels(weeks);
-    final maxValue = statsByDate.values.fold<int>(
-      0,
-      (current, item) => math.max(
-        current,
-        _heatmapMode == _HeatmapMetricMode.duration
-            ? item.readMillis
-            : item.bookCount,
-      ),
-    );
+    final visibleDateKeys = <String>{};
+    for (final week in weeks) {
+      for (final day in week) {
+        if (day.isBefore(startDate) || day.isAfter(today)) {
+          continue;
+        }
+        visibleDateKeys.add(_dateKeyFor(day));
+      }
+    }
+    final maxValue = visibleDateKeys.fold<int>(0, (current, key) {
+      final item = statsByDate[key];
+      if (item == null) {
+        return current;
+      }
+      final value =
+          _heatmapMode == _HeatmapMetricMode.duration
+              ? item.readMillis
+              : item.bookCount;
+      return math.max(current, value);
+    });
 
     final content = Padding(
       padding: const EdgeInsets.all(16),
@@ -2156,21 +2166,13 @@ class _ReadingRecordsPageState extends State<ReadingRecordsPage> {
     );
   }
 
-  List<ReadingRecord> _filterLatestRecords(
-    List<ReadingRecord> latestRecords,
-    List<ReadingRecordDay> allDays,
-  ) {
+  List<ReadingRecord> _filterLatestRecords(List<ReadingRecord> latestRecords) {
     final selectedDateKey = _selectedDateKey;
     if (selectedDateKey == null) {
       return latestRecords;
     }
-    final bookIds =
-        allDays
-            .where((item) => item.dateKey == selectedDateKey)
-            .map((item) => item.bookId)
-            .toSet();
     return latestRecords
-        .where((item) => bookIds.contains(item.bookId))
+        .where((item) => _dateKeyFor(item.lastReadAt) == selectedDateKey)
         .toList(growable: false);
   }
 
@@ -2304,7 +2306,14 @@ class _ReadingRecordsPageState extends State<ReadingRecordsPage> {
     final labels = <String>[];
     DateTime? previousMonth;
     for (final week in weeks) {
-      final weekMonth = DateTime(week.first.year, week.first.month);
+      DateTime? weekMonth;
+      for (final day in week) {
+        if (day.day == 1) {
+          weekMonth = DateTime(day.year, day.month);
+          break;
+        }
+      }
+      weekMonth ??= DateTime(week.first.year, week.first.month);
       if (previousMonth == null ||
           previousMonth.year != weekMonth.year ||
           previousMonth.month != weekMonth.month) {

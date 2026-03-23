@@ -23,7 +23,7 @@ const List<AppShellDestination> appShellDestinations = [
     tab: AppShellTab.bookshelf,
     location: '/bookshelf',
     label: '书架',
-    icon: Icons.bookmarks_outlined,
+    icon: Icons.local_library_outlined,
   ),
   AppShellDestination(
     tab: AppShellTab.discover,

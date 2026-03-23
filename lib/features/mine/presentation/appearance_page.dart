@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -41,27 +43,12 @@ class _AppearancePageState extends ConsumerState<AppearancePage> {
     ),
   ];
 
-  late ThemeMode _selectedThemeMode;
-  late Color _selectedSeedColor;
-  bool _isSaving = false;
-
-  @override
-  void initState() {
-    super.initState();
-    _selectedThemeMode = ref.read(appThemeModeProvider);
-    _selectedSeedColor = ref.read(appSeedColorProvider);
-  }
-
   @override
   Widget build(BuildContext context) {
     final horizontal = AppSpacing.pageHorizontal(context);
-    final colorScheme = Theme.of(context).colorScheme;
-    final initialThemeMode = ref.watch(appThemeModeProvider);
-    final initialSeedColor = ref.watch(appSeedColorProvider);
+    final selectedThemeMode = ref.watch(appThemeModeProvider);
+    final selectedSeedColor = ref.watch(appSeedColorProvider);
     final navigationState = ref.watch(appShellNavigationProvider);
-    final hasChanges =
-        _selectedThemeMode != initialThemeMode ||
-        _selectedSeedColor.toARGB32() != initialSeedColor.toARGB32();
 
     return PopScope<void>(
       canPop: context.canPop(),
@@ -73,55 +60,6 @@ class _AppearancePageState extends ConsumerState<AppearancePage> {
       },
       child: Scaffold(
         appBar: AppBar(title: const Text('外观')),
-        bottomNavigationBar: SafeArea(
-          top: false,
-          child: Container(
-            decoration: BoxDecoration(
-              color: colorScheme.surface,
-              border: Border(
-                top: BorderSide(
-                  color: colorScheme.outlineVariant.withValues(alpha: 0.5),
-                ),
-              ),
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.black.withValues(alpha: 0.04),
-                  blurRadius: 14,
-                  offset: const Offset(0, -2),
-                ),
-              ],
-            ),
-            child: Padding(
-              padding: EdgeInsets.fromLTRB(horizontal, 10, horizontal, 12),
-              child: Row(
-                children: [
-                  Expanded(
-                    child: OutlinedButton(
-                      onPressed: _isSaving ? null : _handleBack,
-                      child: const Text('取消'),
-                    ),
-                  ),
-                  const SizedBox(width: 10),
-                  Expanded(
-                    child: FilledButton(
-                      onPressed: _isSaving || !hasChanges ? null : _saveChanges,
-                      child:
-                          _isSaving
-                              ? const SizedBox(
-                                width: 18,
-                                height: 18,
-                                child: CircularProgressIndicator(
-                                  strokeWidth: 2,
-                                ),
-                              )
-                              : const Text('保存'),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ),
-        ),
         body: LayoutBuilder(
           builder: (context, _) {
             final maxWidth = AppLayout.pageContentMaxWidth(
@@ -134,9 +72,14 @@ class _AppearancePageState extends ConsumerState<AppearancePage> {
               child: ConstrainedBox(
                 constraints: BoxConstraints(maxWidth: maxWidth),
                 child: ListView(
-                  padding: EdgeInsets.fromLTRB(horizontal, 12, horizontal, 108),
+                  padding: EdgeInsets.fromLTRB(horizontal, 12, horizontal, 12),
                   children: [
-                    _buildPreviewCard(context, navigationState),
+                    _buildPreviewCard(
+                      context,
+                      navigationState,
+                      selectedThemeMode: selectedThemeMode,
+                      selectedSeedColor: selectedSeedColor,
+                    ),
                     const SizedBox(height: 12),
                     _buildSectionCard(
                       context,
@@ -164,10 +107,18 @@ class _AppearancePageState extends ConsumerState<AppearancePage> {
                                     child: _buildThemeModeTile(
                                       context,
                                       option: option,
+                                      selectedThemeMode: selectedThemeMode,
                                       onTap: () {
-                                        setState(() {
-                                          _selectedThemeMode = option.mode;
-                                        });
+                                        if (selectedThemeMode == option.mode) {
+                                          return;
+                                        }
+                                        unawaited(
+                                          ref
+                                              .read(
+                                                appThemeModeProvider.notifier,
+                                              )
+                                              .setThemeMode(option.mode),
+                                        );
                                       },
                                     ),
                                   ),
@@ -204,10 +155,19 @@ class _AppearancePageState extends ConsumerState<AppearancePage> {
                                     child: _buildThemeColorTile(
                                       context,
                                       option: option,
+                                      selectedSeedColor: selectedSeedColor,
                                       onTap: () {
-                                        setState(() {
-                                          _selectedSeedColor = option.color;
-                                        });
+                                        if (selectedSeedColor.toARGB32() ==
+                                            option.color.toARGB32()) {
+                                          return;
+                                        }
+                                        unawaited(
+                                          ref
+                                              .read(
+                                                appSeedColorProvider.notifier,
+                                              )
+                                              .setSeedColor(option.color),
+                                        );
                                       },
                                     ),
                                   ),
@@ -237,17 +197,19 @@ class _AppearancePageState extends ConsumerState<AppearancePage> {
 
   Widget _buildPreviewCard(
     BuildContext context,
-    AppShellNavigationState navigationState,
-  ) {
+    AppShellNavigationState navigationState, {
+    required ThemeMode selectedThemeMode,
+    required Color selectedSeedColor,
+  }) {
     final colorScheme = Theme.of(context).colorScheme;
     final selectedMode = _themeModeOptions.firstWhere(
-      (option) => option.mode == _selectedThemeMode,
+      (option) => option.mode == selectedThemeMode,
     );
     final visibleDestinations = visibleAppShellDestinations(navigationState);
     final previewTint =
-        _selectedSeedColor.computeLuminance() > 0.96
+        selectedSeedColor.computeLuminance() > 0.96
             ? colorScheme.primary
-            : _selectedSeedColor;
+            : selectedSeedColor;
 
     return Container(
       decoration: BoxDecoration(
@@ -304,41 +266,6 @@ class _AppearancePageState extends ConsumerState<AppearancePage> {
                     ],
                   ),
                 ),
-                if (_isSaving)
-                  Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 10,
-                      vertical: 6,
-                    ),
-                    decoration: BoxDecoration(
-                      color: colorScheme.surface.withValues(alpha: 0.86),
-                      borderRadius: BorderRadius.circular(999),
-                      border: Border.all(
-                        color: colorScheme.outlineVariant.withValues(
-                          alpha: 0.5,
-                        ),
-                      ),
-                    ),
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        SizedBox(
-                          width: 12,
-                          height: 12,
-                          child: CircularProgressIndicator(
-                            strokeWidth: 2,
-                            color: colorScheme.primary,
-                          ),
-                        ),
-                        const SizedBox(width: 6),
-                        Text(
-                          '保存中',
-                          style: Theme.of(context).textTheme.labelMedium
-                              ?.copyWith(fontWeight: FontWeight.w700),
-                        ),
-                      ],
-                    ),
-                  ),
               ],
             ),
             const SizedBox(height: 14),
@@ -354,7 +281,7 @@ class _AppearancePageState extends ConsumerState<AppearancePage> {
                 _buildPreviewMetaChip(
                   context,
                   icon: Icons.color_lens_outlined,
-                  label: _selectedSeedColorLabel,
+                  label: _selectedSeedColorLabel(selectedSeedColor),
                   accentColor: previewTint,
                 ),
                 _buildPreviewMetaChip(
@@ -558,10 +485,11 @@ class _AppearancePageState extends ConsumerState<AppearancePage> {
   Widget _buildThemeModeTile(
     BuildContext context, {
     required _ThemeModeOption option,
+    required ThemeMode selectedThemeMode,
     required VoidCallback onTap,
   }) {
     final colorScheme = Theme.of(context).colorScheme;
-    final selected = option.mode == _selectedThemeMode;
+    final selected = option.mode == selectedThemeMode;
 
     return InkWell(
       borderRadius: BorderRadius.circular(12),
@@ -615,10 +543,11 @@ class _AppearancePageState extends ConsumerState<AppearancePage> {
   Widget _buildThemeColorTile(
     BuildContext context, {
     required _SeedColorOption option,
+    required Color selectedSeedColor,
     required VoidCallback onTap,
   }) {
     final colorScheme = Theme.of(context).colorScheme;
-    final selected = option.color.toARGB32() == _selectedSeedColor.toARGB32();
+    final selected = option.color.toARGB32() == selectedSeedColor.toARGB32();
 
     return InkWell(
       borderRadius: BorderRadius.circular(12),
@@ -672,53 +601,13 @@ class _AppearancePageState extends ConsumerState<AppearancePage> {
     );
   }
 
-  String get _selectedSeedColorLabel {
+  String _selectedSeedColorLabel(Color selectedSeedColor) {
     for (final option in _seedColorOptions) {
-      if (option.color.toARGB32() == _selectedSeedColor.toARGB32()) {
+      if (option.color.toARGB32() == selectedSeedColor.toARGB32()) {
         return option.label;
       }
     }
     return '自定义颜色';
-  }
-
-  Future<void> _saveChanges() async {
-    final initialThemeMode = ref.read(appThemeModeProvider);
-    final initialSeedColor = ref.read(appSeedColorProvider);
-
-    setState(() {
-      _isSaving = true;
-    });
-
-    try {
-      if (_selectedThemeMode != initialThemeMode) {
-        await ref
-            .read(appThemeModeProvider.notifier)
-            .setThemeMode(_selectedThemeMode);
-      }
-      if (_selectedSeedColor.toARGB32() != initialSeedColor.toARGB32()) {
-        await ref
-            .read(appSeedColorProvider.notifier)
-            .setSeedColor(_selectedSeedColor);
-      }
-      if (!mounted) {
-        return;
-      }
-      _handleBack();
-    } finally {
-      if (mounted) {
-        setState(() {
-          _isSaving = false;
-        });
-      }
-    }
-  }
-
-  void _handleBack() {
-    if (context.canPop()) {
-      context.pop();
-      return;
-    }
-    context.go('/mine');
   }
 }
 
