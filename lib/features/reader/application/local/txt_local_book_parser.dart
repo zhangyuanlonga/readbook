@@ -9,6 +9,7 @@ import '../../../../core/errors/error_stage.dart';
 import '../../../../domain/entities/local_book.dart';
 import 'local_book_parser.dart';
 import 'txt_auto_chapter_patterns.dart';
+import 'local_text_encoding_detector.dart';
 
 class TxtLocalBookParser implements LocalBookParser {
   const TxtLocalBookParser();
@@ -357,6 +358,12 @@ class TxtLocalBookParser implements LocalBookParser {
       'utf-16le',
       'gbk',
       'gb18030',
+      'big5',
+      'shift_jis',
+      'euc-jp',
+      'euc-kr',
+      'windows-1252',
+      'latin1',
     ];
 
     _DecodedBookText? best;
@@ -467,6 +474,7 @@ class TxtLocalBookParser implements LocalBookParser {
     var controlCount = 0;
     var hanCount = 0;
     var asciiCount = 0;
+    var suspiciousMojibakeCount = 0;
     for (final rune in sample.runes) {
       if (rune == 0xFFFD) {
         replacementCount += 1;
@@ -482,6 +490,15 @@ class TxtLocalBookParser implements LocalBookParser {
       }
       if (rune >= 0x20 && rune <= 0x7E) {
         asciiCount += 1;
+      }
+      if (rune == 0x00C3 ||
+          rune == 0x00C2 ||
+          rune == 0x00E2 ||
+          rune == 0x00D0 ||
+          rune == 0x00D1 ||
+          rune == 0x00FE ||
+          rune == 0x00FF) {
+        suspiciousMojibakeCount += 1;
       }
     }
 
@@ -522,10 +539,20 @@ class TxtLocalBookParser implements LocalBookParser {
     score -= replacementCount * 120;
     score -= nulCount * 240;
     score -= controlCount * 80;
+    score -= suspiciousMojibakeCount * 55;
+    score -= _countSuspiciousMojibakeTokens(sample) * 180;
     if (hintedCharset != null && hintedCharset == charsetName) {
       score += 160;
     }
     return score;
+  }
+
+  int _countSuspiciousMojibakeTokens(String text) {
+    var count = 0;
+    for (final pattern in const <String>['锟斤拷', '鈥', 'Ã', 'Â', 'â€', 'ï¿½']) {
+      count += RegExp(RegExp.escape(pattern)).allMatches(text).length;
+    }
+    return count;
   }
 
   int _findChunkEndByMaxBytes(
@@ -593,47 +620,11 @@ class TxtLocalBookParser implements LocalBookParser {
   }
 
   String? _normalizeCharsetName(String? value) {
-    final normalized = value?.trim().toLowerCase() ?? '';
-    if (normalized.isEmpty) {
-      return null;
-    }
-    return switch (normalized) {
-      'utf8' => 'utf-8',
-      'utf-8' => 'utf-8',
-      'utf16' => 'utf-16',
-      'utf-16' => 'utf-16',
-      'utf16be' => 'utf-16be',
-      'utf-16be' => 'utf-16be',
-      'utf16le' => 'utf-16le',
-      'utf-16le' => 'utf-16le',
-      'gb2312' => 'gbk',
-      'gbk' => 'gbk',
-      'gb18030' => 'gb18030',
-      'latin1' => 'latin1',
-      'iso-8859-1' => 'latin1',
-      _ => normalized,
-    };
+    return LocalTextEncodingDetector.normalizeCharsetName(value);
   }
 
   String? _tryDecodeByCharset(List<int> bytes, String charsetName) {
-    try {
-      switch (charsetName) {
-        case 'utf-8':
-          return utf8.decode(bytes, allowMalformed: false);
-        case 'latin1':
-          return latin1.decode(bytes, allowInvalid: true);
-        default:
-          final encoding = Charset.getByName(charsetName);
-          if (encoding == null) {
-            return null;
-          }
-          return encoding.decode(bytes);
-      }
-    } on FormatException {
-      return null;
-    } on ArgumentError {
-      return null;
-    }
+    return LocalTextEncodingDetector.tryDecodeByCharset(bytes, charsetName);
   }
 
   int _encodedLength(String text, String charsetName) {

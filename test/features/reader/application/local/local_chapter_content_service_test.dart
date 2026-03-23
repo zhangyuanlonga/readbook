@@ -124,11 +124,11 @@ void main() {
 
     test('loads utf-16be txt chapter content with detected charset', () async {
       final file = File('${tempDir.path}/offset_book_utf16be.txt');
-      final utf16be = Charset.getByName('utf-16be');
-      expect(utf16be, isNotNull);
-
       const content = '第1章 开始\n第一章内容。\n\n第2章 继续\n第二章内容。';
-      await file.writeAsBytes(utf16be!.encode(content), flush: true);
+      await file.writeAsBytes(
+        _encodeUtf16(content, littleEndian: false),
+        flush: true,
+      );
 
       final now = DateTime.parse('2026-03-21T12:00:00.000Z');
       await repository.upsertBook(
@@ -158,5 +158,70 @@ void main() {
       expect(chapter.title, '第2章 继续');
       expect(chapter.content, contains('第二章内容'));
     });
+
+    test(
+      'loads utf-16le bom txt chapter content with detected charset',
+      () async {
+        final file = File('${tempDir.path}/offset_book_utf16le_bom.txt');
+        const content = '第1章 开始\n第一章内容。\n\n第2章 继续\n第二章内容。';
+        await file.writeAsBytes(
+          _encodeUtf16(content, littleEndian: true, withBom: true),
+          flush: true,
+        );
+
+        final now = DateTime.parse('2026-03-21T12:00:00.000Z');
+        await repository.upsertBook(
+          LocalBook(
+            id: 'local_offset_utf16le_1',
+            title: '偏移读取 UTF16LE 测试',
+            format: LocalBookFormat.txt,
+            storagePath: file.path,
+            fileSize: await file.length(),
+            createdAt: now,
+            updatedAt: now,
+          ),
+        );
+
+        await indexService.ensureIndexed(bookId: 'local_offset_utf16le_1');
+
+        final indexedBook = await repository.getBookById(
+          'local_offset_utf16le_1',
+        );
+        expect(indexedBook, isNotNull);
+        expect(indexedBook!.charset, 'utf-16le');
+
+        final chapter = await contentService.load(
+          bookId: 'local_offset_utf16le_1',
+          chapterIndex: 1,
+        );
+        expect(chapter.title, '第2章 继续');
+        expect(chapter.content, contains('第二章内容'));
+      },
+    );
   });
+}
+
+List<int> _encodeUtf16(
+  String value, {
+  required bool littleEndian,
+  bool withBom = false,
+}) {
+  final bytes = <int>[];
+  if (withBom) {
+    if (littleEndian) {
+      bytes.addAll(const <int>[0xFF, 0xFE]);
+    } else {
+      bytes.addAll(const <int>[0xFE, 0xFF]);
+    }
+  }
+  for (final unit in value.codeUnits) {
+    if (littleEndian) {
+      bytes.add(unit & 0xFF);
+      bytes.add((unit >> 8) & 0xFF);
+    } else {
+      bytes.add((unit >> 8) & 0xFF);
+      bytes.add(unit & 0xFF);
+    }
+  }
+  return bytes;
 }

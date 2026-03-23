@@ -67,6 +67,33 @@ void main() {
       expect(bookshelf.first.detailUrl, 'local://book/${result.localBook.id}');
     });
 
+    test('imports utf-16le txt and normalizes content to utf-8', () async {
+      final sourceFile = File('${tempDir.path}/utf16le_bom.txt');
+      const sourceText = '第1章 开始\n第一章内容。\n\n第2章 继续\n第二章内容。';
+      await sourceFile.writeAsBytes(
+        _encodeUtf16(sourceText, littleEndian: true, withBom: true),
+        flush: true,
+      );
+
+      final prefs = await SharedPreferences.getInstance();
+      final service = LocalBookImportService(
+        localBookRepository: LocalBookRepositoryImpl(database),
+        bookshelfService: BookshelfService(preferences: prefs),
+        supportDirectoryProvider: () async => tempDir,
+      );
+
+      final result = await service.importFromFile(
+        filePath: sourceFile.path,
+        displayName: 'utf16le_bom.txt',
+      );
+
+      final storageText =
+          await File(result.localBook.storagePath).readAsString();
+      expect(storageText, contains('第1章 开始'));
+      expect(storageText, contains('第二章内容'));
+      expect(result.localBook.charset, 'utf-8');
+    });
+
     test('re-import by same source path keeps same local book id', () async {
       final sourceFile = File('${tempDir.path}/same.txt');
       await sourceFile.writeAsString('初始内容');
@@ -167,4 +194,29 @@ void main() {
       },
     );
   });
+}
+
+List<int> _encodeUtf16(
+  String value, {
+  required bool littleEndian,
+  bool withBom = false,
+}) {
+  final bytes = <int>[];
+  if (withBom) {
+    if (littleEndian) {
+      bytes.addAll(const <int>[0xFF, 0xFE]);
+    } else {
+      bytes.addAll(const <int>[0xFE, 0xFF]);
+    }
+  }
+  for (final unit in value.codeUnits) {
+    if (littleEndian) {
+      bytes.add(unit & 0xFF);
+      bytes.add((unit >> 8) & 0xFF);
+    } else {
+      bytes.add((unit >> 8) & 0xFF);
+      bytes.add(unit & 0xFF);
+    }
+  }
+  return bytes;
 }

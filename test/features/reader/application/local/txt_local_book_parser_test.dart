@@ -192,11 +192,8 @@ $longContent
 
     test('detects utf-16be text without rewriting original bytes', () async {
       final file = File('${tempDir.path}/utf16be_book.txt');
-      final utf16be = Charset.getByName('utf-16be');
-      expect(utf16be, isNotNull);
-
       const content = '第1章 开始\n第一章内容。\n\n第2章 继续\n第二章内容。';
-      final rawBytes = utf16be!.encode(content);
+      final rawBytes = _encodeUtf16(content, littleEndian: false);
       await file.writeAsBytes(rawBytes, flush: true);
 
       final now = DateTime.parse('2026-02-23T12:00:00.000Z');
@@ -217,5 +214,93 @@ $longContent
       expect(result.chapters.first.title, '第1章 开始');
       expect(await file.readAsBytes(), rawBytes);
     });
+
+    test(
+      'detects utf-16le with bom without rewriting original bytes',
+      () async {
+        final file = File('${tempDir.path}/utf16le_bom_book.txt');
+        const content = '第1章 开始\n第一章内容。\n\n第2章 继续\n第二章内容。';
+        final rawBytes = _encodeUtf16(
+          content,
+          littleEndian: true,
+          withBom: true,
+        );
+        await file.writeAsBytes(rawBytes, flush: true);
+
+        final now = DateTime.parse('2026-02-23T12:00:00.000Z');
+        final result = await parser.parse(
+          LocalBook(
+            id: 'local_txt_utf16le_bom',
+            title: 'UTF16LE BOM 测试书',
+            format: LocalBookFormat.txt,
+            storagePath: file.path,
+            fileSize: await file.length(),
+            createdAt: now,
+            updatedAt: now,
+          ),
+        );
+
+        expect(result.charset, 'utf-16le');
+        expect(result.chapters, hasLength(2));
+        expect(result.chapters.first.title, '第1章 开始');
+        expect(result.chapters.first.content, contains('第一章内容'));
+        expect(await file.readAsBytes(), rawBytes);
+      },
+    );
+
+    test('detects big5 text without rewriting original bytes', () async {
+      final file = File('${tempDir.path}/big5_book.txt');
+      final big5 = Charset.getByName('big5');
+      if (big5 == null) {
+        return;
+      }
+
+      const content = '第1章 開始\n第一章內容。\n\n第2章 繼續\n第二章內容。';
+      final rawBytes = big5.encode(content);
+      await file.writeAsBytes(rawBytes, flush: true);
+
+      final now = DateTime.parse('2026-02-23T12:00:00.000Z');
+      final result = await parser.parse(
+        LocalBook(
+          id: 'local_txt_big5',
+          title: 'Big5 測試書',
+          format: LocalBookFormat.txt,
+          storagePath: file.path,
+          fileSize: await file.length(),
+          createdAt: now,
+          updatedAt: now,
+        ),
+      );
+
+      expect(result.charset, 'big5');
+      expect(result.chapters, hasLength(2));
+      expect(result.chapters.first.title, '第1章 開始');
+      expect(await file.readAsBytes(), rawBytes);
+    });
   });
+}
+
+List<int> _encodeUtf16(
+  String value, {
+  required bool littleEndian,
+  bool withBom = false,
+}) {
+  final bytes = <int>[];
+  if (withBom) {
+    if (littleEndian) {
+      bytes.addAll(const <int>[0xFF, 0xFE]);
+    } else {
+      bytes.addAll(const <int>[0xFE, 0xFF]);
+    }
+  }
+  for (final unit in value.codeUnits) {
+    if (littleEndian) {
+      bytes.add(unit & 0xFF);
+      bytes.add((unit >> 8) & 0xFF);
+    } else {
+      bytes.add((unit >> 8) & 0xFF);
+      bytes.add(unit & 0xFF);
+    }
+  }
+  return bytes;
 }

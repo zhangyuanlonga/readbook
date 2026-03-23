@@ -146,7 +146,7 @@ class LocalTextEncodingDetector {
       if (candidate == null || !seen.add(candidate)) {
         continue;
       }
-      final decoded = _tryDecodeByCharset(contentBytes, candidate);
+      final decoded = tryDecodeByCharset(contentBytes, candidate);
       if (decoded == null) {
         continue;
       }
@@ -227,11 +227,17 @@ class LocalTextEncodingDetector {
     return null;
   }
 
-  String? _tryDecodeByCharset(List<int> bytes, String charsetName) {
+  static String? tryDecodeByCharset(List<int> bytes, String charsetName) {
     try {
       switch (charsetName) {
         case 'utf-8':
           return utf8.decode(bytes, allowMalformed: false);
+        case 'utf-16':
+          return _decodeUtf16(bytes);
+        case 'utf-16le':
+          return _decodeUtf16ByEndian(bytes, littleEndian: true);
+        case 'utf-16be':
+          return _decodeUtf16ByEndian(bytes, littleEndian: false);
         case 'latin1':
         case 'windows-1252':
           final encoding = Charset.getByName(charsetName);
@@ -251,6 +257,40 @@ class LocalTextEncodingDetector {
     } on ArgumentError {
       return null;
     }
+  }
+
+  static String _decodeUtf16(List<int> bytes) {
+    if (bytes.length >= 2 && bytes[0] == 0xFE && bytes[1] == 0xFF) {
+      return _decodeUtf16ByEndian(bytes.sublist(2), littleEndian: false);
+    }
+    if (bytes.length >= 2 && bytes[0] == 0xFF && bytes[1] == 0xFE) {
+      return _decodeUtf16ByEndian(bytes.sublist(2), littleEndian: true);
+    }
+    return _decodeUtf16ByEndian(bytes, littleEndian: true);
+  }
+
+  static String _decodeUtf16ByEndian(
+    List<int> bytes, {
+    required bool littleEndian,
+  }) {
+    if (bytes.isEmpty) {
+      return '';
+    }
+
+    final codeUnits = <int>[];
+    final evenLength = bytes.length - (bytes.length % 2);
+    for (var index = 0; index < evenLength; index += 2) {
+      final first = bytes[index];
+      final second = bytes[index + 1];
+      codeUnits.add(
+        littleEndian ? (first | (second << 8)) : ((first << 8) | second),
+      );
+    }
+    if (bytes.length.isOdd) {
+      final last = bytes.last;
+      codeUnits.add(littleEndian ? last : (last << 8));
+    }
+    return String.fromCharCodes(codeUnits);
   }
 
   int _scoreDecodedText(

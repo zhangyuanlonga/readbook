@@ -151,22 +151,16 @@ class _LocalLibraryPageState extends State<LocalLibraryPage> {
     final succeededKeys = <String>{};
     var successCount = 0;
     var failureCount = 0;
-    LocalBookImportResult? singleImportedResult;
-
     for (final item in selected) {
       try {
         item.errorText = null;
-        LocalBookImportResult result;
         if (item.type == _PendingImportType.file) {
-          result = await _importFromFileItem(item);
+          await _importFromFileItem(item);
         } else {
-          result = await _importFromUrlItem(item);
+          await _importFromUrlItem(item);
         }
         succeededKeys.add(item.key);
         successCount += 1;
-        if (selected.length == 1) {
-          singleImportedResult = result;
-        }
       } on AppException catch (error) {
         item.errorText = error.briefMessage;
         failureCount += 1;
@@ -194,20 +188,19 @@ class _LocalLibraryPageState extends State<LocalLibraryPage> {
 
     _setImporting(false);
 
-    if (successCount == 1 &&
-        failureCount == 0 &&
-        singleImportedResult != null &&
-        mounted) {
-      _showMessage('已导入 1 本书。');
-      context.go('/local/book/${singleImportedResult.localBook.id}');
+    if (successCount > 0) {
+      if (failureCount > 0) {
+        _showMessage('已导入 $successCount 本书，失败 $failureCount 本。');
+      } else {
+        _showMessage('已导入 $successCount 本书。');
+      }
+      if (mounted) {
+        context.go('/bookshelf');
+      }
       return;
     }
 
-    if (successCount > 0 && failureCount > 0) {
-      _showMessage('已导入 $successCount 本书，失败 $failureCount 本。');
-    } else if (successCount > 0) {
-      _showMessage('已导入 $successCount 本书。');
-    } else if (failureCount > 0) {
+    if (failureCount > 0) {
       _showMessage('导入失败，请检查待导入列表的错误提示。');
     }
   }
@@ -556,7 +549,7 @@ class _LocalLibraryPageState extends State<LocalLibraryPage> {
           ),
           const SizedBox(height: 6),
           Text(
-            '先选择本地图书，确认后再导入；单本成功会直接打开详情页。',
+            '先选择本地图书，确认后再导入；导入成功后返回书架列表。',
             style: Theme.of(context).textTheme.bodySmall?.copyWith(
               color: colorScheme.onSurfaceVariant,
             ),

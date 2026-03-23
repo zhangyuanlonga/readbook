@@ -174,6 +174,19 @@ class MainActivity : FlutterActivity() {
             return null
         }
 
+        val maybeUri = runCatching { Uri.parse(text) }.getOrNull()
+        val uriScheme = maybeUri?.scheme?.lowercase(Locale.ROOT)
+        if (maybeUri != null && (uriScheme == "content" || uriScheme == "file")) {
+            val fromTextUri = buildPayloadFromUri(maybeUri, intent.type)
+            if (fromTextUri != null) {
+                return fromTextUri
+            }
+        }
+
+        if (!looksLikeSourceText(text)) {
+            return null
+        }
+
         return mapOf(
             "bytes" to text.toByteArray(Charsets.UTF_8),
             "label" to (intent.getStringExtra(Intent.EXTRA_SUBJECT)?.trim().takeUnless { it.isNullOrEmpty() }
