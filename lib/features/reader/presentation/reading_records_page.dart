@@ -10,6 +10,7 @@ import '../../../app/widgets/disk_cached_cover_image.dart';
 import '../../../domain/entities/reading_record.dart';
 import '../../../domain/entities/reading_record_day.dart';
 import '../../../domain/entities/reading_record_session.dart';
+import '../../book/presentation/book_detail_route.dart';
 import '../application/reader_preferences_service.dart';
 import '../application/reading_record_service.dart';
 import '../application/reader_system_settings_service.dart';
@@ -145,14 +146,12 @@ class _ReadingRecordsPageState extends State<ReadingRecordsPage> {
     }
 
     context.push(
-      Uri(
-        path: '/book/${record.bookId}',
-        queryParameters: <String, String>{
-          'sourceId': record.sourceId,
-          'detailUrl': record.detailUrl,
-          'title': record.bookTitle,
-        },
-      ).toString(),
+      buildBookDetailRoute(
+        bookId: record.bookId,
+        sourceId: record.sourceId,
+        detailUrl: record.detailUrl,
+        title: record.bookTitle,
+      ),
     );
   }
 
@@ -182,14 +181,12 @@ class _ReadingRecordsPageState extends State<ReadingRecordsPage> {
     }
 
     context.push(
-      Uri(
-        path: '/book/${session.bookId}',
-        queryParameters: <String, String>{
-          'sourceId': session.sourceId,
-          'detailUrl': session.detailUrl,
-          'title': session.bookTitle,
-        },
-      ).toString(),
+      buildBookDetailRoute(
+        bookId: session.bookId,
+        sourceId: session.sourceId,
+        detailUrl: session.detailUrl,
+        title: session.bookTitle,
+      ),
     );
   }
 
@@ -1763,7 +1760,9 @@ class _ReadingRecordsPageState extends State<ReadingRecordsPage> {
                                 unawaited(_openRecord(latest));
                                 return;
                               }
-                              context.push('/book/${item.bookId}');
+                              context.push(
+                                buildBookDetailRoute(bookId: item.bookId),
+                              );
                             },
                             child: Padding(
                               padding: const EdgeInsets.symmetric(

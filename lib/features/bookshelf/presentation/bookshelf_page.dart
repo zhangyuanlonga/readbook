@@ -18,6 +18,7 @@ import '../application/bookshelf_system_settings_service.dart';
 import '../application/local_book_import_service.dart';
 import '../../reader/application/reader_preferences_service.dart';
 import '../../book/application/book_detail_service.dart';
+import '../../book/presentation/book_detail_route.dart';
 import '../../announcement/application/announcement_service.dart';
 import '../../announcement/application/announcement_read_state_service.dart';
 import '../../source/application/external_source_import_bridge.dart';
@@ -112,6 +113,7 @@ class _BookshelfPageState extends State<BookshelfPage>
     milliseconds: 320,
   );
   static const int _kProgressBatchSize = 24;
+  static const int _kProgressUiUpdateBatchInterval = 3;
   static const int _kBooksModeSwitchStaggerGroup = 8;
   static const int _kBooksModeSwitchAnimatedItemLimit = 24;
   static const int _kBooksModeSwitchDisableThreshold = 72;
@@ -3048,22 +3050,6 @@ class _BookshelfPageState extends State<BookshelfPage>
       final books = await _bookshelfService.getAll().timeout(
         _kBookshelfLoadTimeout,
       );
-      final sourceTypeMap = await _loadSourceTypeMap();
-      final rawTagMap = await _bookshelfService.getTagMap();
-      final tagOrder = await _bookshelfService.getTagOrder();
-      final baseFilterOrderNames = await _bookshelfService.getBaseFilterOrder();
-      final validBookKeys = books.map(_bookKey).toSet();
-      final tagMap = <String, List<String>>{};
-      for (final entry in rawTagMap.entries) {
-        if (!validBookKeys.contains(entry.key)) {
-          continue;
-        }
-        final tags = _normalizeTags(entry.value);
-        if (tags.isEmpty) {
-          continue;
-        }
-        tagMap[entry.key] = tags;
-      }
       final retainedProgress = _retainProgressForBooks(
         source: _progressByBookKey,
         books: books,
@@ -3079,26 +3065,14 @@ class _BookshelfPageState extends State<BookshelfPage>
 
       setState(() {
         _books = books;
-        _sourceTypeBySourceId = sourceTypeMap;
-        _bookTagsByKey = tagMap;
-        _tagOrder = _normalizeTags(tagOrder);
-        _baseFilterOrder = baseFilterOrderNames
-            .map((name) {
-              for (final filter in _kDefaultBaseFilters) {
-                if (filter.name == name) {
-                  return filter;
-                }
-              }
-              return null;
-            })
-            .whereType<_BookshelfFilter>()
-            .toList(growable: false);
         _progressByBookKey = retainedProgress;
         _latestCachedChapterByBookKey = retainedCachedChapterTitles;
         _isLoading = false;
         _ensureFilterStillValid();
       });
       _syncSelectionWithBooks();
+
+      await _loadBookshelfMetadata(books, ticket: ticket);
 
       if (books.isEmpty) {
         return;
@@ -3123,6 +3097,72 @@ class _BookshelfPageState extends State<BookshelfPage>
         _loadErrorText = '加载书架失败：$error';
       });
     }
+  }
+
+  Future<void> _loadBookshelfMetadata(
+    List<BookshelfBook> books, {
+    required int ticket,
+  }) async {
+    final sourceTypeFuture = _loadSourceTypeMap();
+    final rawTagMapFuture = _bookshelfService.getTagMap();
+    final tagOrderFuture = _bookshelfService.getTagOrder();
+    final baseFilterOrderNamesFuture = _bookshelfService.getBaseFilterOrder();
+
+    try {
+      await Future.wait<dynamic>([
+        sourceTypeFuture,
+        rawTagMapFuture,
+        tagOrderFuture,
+        baseFilterOrderNamesFuture,
+      ]);
+    } catch (_) {
+      return;
+    }
+
+    if (!mounted || ticket != _loadTicket) {
+      return;
+    }
+
+    final sourceTypeMap = await sourceTypeFuture;
+    final rawTagMap = await rawTagMapFuture;
+    final tagOrder = await tagOrderFuture;
+    final baseFilterOrderNames = await baseFilterOrderNamesFuture;
+
+    final validBookKeys = books.map(_bookKey).toSet();
+    final tagMap = <String, List<String>>{};
+    for (final entry in rawTagMap.entries) {
+      if (!validBookKeys.contains(entry.key)) {
+        continue;
+      }
+      final tags = _normalizeTags(entry.value);
+      if (tags.isEmpty) {
+        continue;
+      }
+      tagMap[entry.key] = tags;
+    }
+
+    if (!mounted || ticket != _loadTicket) {
+      return;
+    }
+
+    setState(() {
+      _sourceTypeBySourceId = sourceTypeMap;
+      _bookTagsByKey = tagMap;
+      _tagOrder = _normalizeTags(tagOrder);
+      _baseFilterOrder = baseFilterOrderNames
+          .map((name) {
+            for (final filter in _kDefaultBaseFilters) {
+              if (filter.name == name) {
+                return filter;
+              }
+            }
+            return null;
+          })
+          .whereType<_BookshelfFilter>()
+          .toList(growable: false);
+      _ensureFilterStillValid();
+    });
+    _syncSelectionWithBooks();
   }
 
   Future<void> _loadLatestCachedChapterMap(
@@ -3187,18 +3227,9 @@ class _BookshelfPageState extends State<BookshelfPage>
 
   Future<Map<String, int>> _loadSourceTypeMap() async {
     try {
-      final sources = await AppDatabase.instance.getAllSources().timeout(
+      return await AppDatabase.instance.querySourceTypeMap().timeout(
         _kSourceMapLoadTimeout,
       );
-      final map = <String, int>{};
-      for (final source in sources) {
-        final sourceId = source.id.trim();
-        if (sourceId.isEmpty) {
-          continue;
-        }
-        map[sourceId] = source.sourceType;
-      }
-      return map;
     } catch (_) {
       return const <String, int>{};
     }
@@ -3214,6 +3245,8 @@ class _BookshelfPageState extends State<BookshelfPage>
       for (final entry in _progressByBookKey.entries)
         if (validBookKeys.contains(entry.key)) entry.key: entry.value,
     };
+    var batchesSinceUiUpdate = 0;
+    var hasPendingUiUpdate = false;
 
     for (var start = 0; start < books.length; start += _kProgressBatchSize) {
       if (!mounted || ticket != _loadTicket) {
@@ -3256,15 +3289,30 @@ class _BookshelfPageState extends State<BookshelfPage>
         }
         final value = entry.progress;
         if (value != null && _isProgressMatchingBook(value, entry.book)) {
-          progressMap[entry.bookKey] = value;
+          if (progressMap[entry.bookKey] != value) {
+            progressMap[entry.bookKey] = value;
+            hasPendingUiUpdate = true;
+          }
         } else {
-          progressMap.remove(entry.bookKey);
+          if (progressMap.remove(entry.bookKey) != null) {
+            hasPendingUiUpdate = true;
+          }
         }
       }
 
-      setState(() {
-        _progressByBookKey = Map<String, ReadingProgress>.from(progressMap);
-      });
+      batchesSinceUiUpdate += 1;
+      final isLastBatch = end >= books.length;
+      final shouldUpdateUi =
+          hasPendingUiUpdate &&
+          (batchesSinceUiUpdate >= _kProgressUiUpdateBatchInterval ||
+              isLastBatch);
+      if (shouldUpdateUi) {
+        setState(() {
+          _progressByBookKey = Map<String, ReadingProgress>.from(progressMap);
+        });
+        hasPendingUiUpdate = false;
+        batchesSinceUiUpdate = 0;
+      }
 
       if (end < books.length) {
         await Future<void>.delayed(Duration.zero);
@@ -3457,15 +3505,12 @@ class _BookshelfPageState extends State<BookshelfPage>
       return;
     }
 
-    final route =
-        Uri(
-          path: '/book/${book.bookId}',
-          queryParameters: {
-            'sourceId': book.sourceId,
-            'detailUrl': book.detailUrl,
-            'title': book.title,
-          },
-        ).toString();
+    final route = buildBookDetailRoute(
+      bookId: book.bookId,
+      sourceId: book.sourceId,
+      detailUrl: book.detailUrl,
+      title: book.title,
+    );
     context.push(route);
   }
 

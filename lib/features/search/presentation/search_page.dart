@@ -12,6 +12,7 @@ import '../../../data/datasources/local/app_database.dart';
 import '../../../data/repositories/source_repository_impl.dart';
 import '../../../domain/entities/book.dart';
 import '../../../domain/repositories/source_repository.dart';
+import '../../book/presentation/book_detail_route.dart';
 import '../../source/presentation/source_filter_sheet.dart';
 import '../application/search_history_service.dart';
 import '../application/search_service.dart';
@@ -659,16 +660,13 @@ class _SearchPageState extends State<SearchPage> {
   }
 
   Future<void> _openBookDetail(Book book, {required String heroTag}) async {
-    final route =
-        Uri(
-          path: '/book/${book.id}',
-          queryParameters: {
-            'sourceId': book.sourceId,
-            'detailUrl': book.detailUrl,
-            'title': book.title,
-            'heroTag': heroTag,
-          },
-        ).toString();
+    final route = buildBookDetailRoute(
+      bookId: book.id,
+      sourceId: book.sourceId,
+      detailUrl: book.detailUrl,
+      title: book.title,
+      heroTag: heroTag,
+    );
     _pauseActiveSearchIfNeeded();
     try {
       await context.push(route);

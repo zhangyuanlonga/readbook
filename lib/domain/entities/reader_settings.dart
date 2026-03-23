@@ -34,7 +34,7 @@ class ReaderSettings {
     this.letterSpacing = defaultLetterSpacing,
     this.brightness = 1,
     this.themeMode = ReaderThemeMode.light,
-    this.pageTurnMode = ReaderPageTurnMode.tap,
+    this.pageTurnMode = ReaderPageTurnMode.tapAndSwipe,
     this.volumeKeyPageEnabled = false,
     this.autoReadEnabled = false,
     this.autoReadSpeed = defaultAutoReadSpeed,
@@ -56,12 +56,12 @@ class ReaderSettings {
     this.infoFooterEnabled = false,
     this.infoShowTime = true,
     this.infoShowBattery = false,
-    this.infoShowChapter = true,
+    this.infoShowChapter = false,
     this.infoShowProgress = true,
     this.infoHeaderPadding = 8,
     this.infoFooterPadding = 8,
-    this.infoHeaderDividerEnabled = true,
-    this.infoFooterDividerEnabled = true,
+    this.infoHeaderDividerEnabled = false,
+    this.infoFooterDividerEnabled = false,
     this.infoHeaderMarginTop = 0,
     this.infoHeaderMarginBottom = 0,
     this.infoHeaderMarginLeft = 18,
@@ -376,7 +376,7 @@ class ReaderSettings {
     final pageTurnModeName = json['pageTurnMode']?.toString();
     final pageTurnMode = ReaderPageTurnMode.values.firstWhere(
       (item) => item.name == pageTurnModeName,
-      orElse: () => ReaderPageTurnMode.tap,
+      orElse: () => ReaderPageTurnMode.tapAndSwipe,
     );
 
     final backgroundName = json['backgroundStyle']?.toString();
@@ -484,7 +484,7 @@ class ReaderSettings {
       infoFooterEnabled: _asBool(json['infoFooterEnabled']) ?? false,
       infoShowTime: _asBool(json['infoShowTime']) ?? true,
       infoShowBattery: _asBool(json['infoShowBattery']) ?? false,
-      infoShowChapter: _asBool(json['infoShowChapter']) ?? true,
+      infoShowChapter: _asBool(json['infoShowChapter']) ?? false,
       infoShowProgress: _asBool(json['infoShowProgress']) ?? true,
       infoHeaderPadding:
           (_asDouble(json['infoHeaderPadding']) ?? 8)
@@ -495,9 +495,9 @@ class ReaderSettings {
               .clamp(minInfoBarPadding, maxInfoBarPadding)
               .toDouble(),
       infoHeaderDividerEnabled:
-          _asBool(json['infoHeaderDividerEnabled']) ?? true,
+          _asBool(json['infoHeaderDividerEnabled']) ?? false,
       infoFooterDividerEnabled:
-          _asBool(json['infoFooterDividerEnabled']) ?? true,
+          _asBool(json['infoFooterDividerEnabled']) ?? false,
       infoHeaderMarginTop:
           (_asDouble(json['infoHeaderMarginTop']) ?? 0)
               .clamp(minLayoutMargin, maxLayoutMargin)

@@ -83,6 +83,7 @@ class _BookDetailPageState extends State<BookDetailPage> {
   bool _isInBookshelf = false;
   bool _showLocalAdvancedOptions = false;
   bool _isAttemptingLocalRepair = false;
+  int _bookshelfStateSyncToken = 0;
   SearchCancellationToken? _activeSwitchSourceCancellationToken;
   String? _errorText;
   String? _tocWarningText;
@@ -128,8 +129,12 @@ class _BookDetailPageState extends State<BookDetailPage> {
     _activeBookId = widget.bookId.trim();
     _applyLocalSchemeFallback();
     _displayTitle = _normalizeRouteParam(widget.title);
-    _hydrateCachedDetailIfAvailable();
-    _load();
+    final hydratedFromCache = _hydrateCachedDetailIfAvailable();
+    if (hydratedFromCache) {
+      unawaited(_load(forceRefresh: true, backgroundRefresh: true));
+    } else {
+      unawaited(_load());
+    }
   }
 
   @override
@@ -255,7 +260,7 @@ class _BookDetailPageState extends State<BookDetailPage> {
     context.go('/bookshelf');
   }
 
-  void _hydrateCachedDetailIfAvailable() {
+  bool _hydrateCachedDetailIfAvailable() {
     final sourceId = _activeSourceId?.trim();
     final detailUrl = _activeDetailUrl?.trim();
     if (sourceId == null ||
@@ -263,7 +268,7 @@ class _BookDetailPageState extends State<BookDetailPage> {
         detailUrl == null ||
         detailUrl.isEmpty ||
         sourceId == LocalBookImportService.localBookSourceId) {
-      return;
+      return false;
     }
 
     final cached = _sourceContentProvider.peekCachedDetail(
@@ -271,7 +276,7 @@ class _BookDetailPageState extends State<BookDetailPage> {
       detailUrl: detailUrl,
     );
     if (cached == null) {
-      return;
+      return false;
     }
 
     _result = cached;
@@ -280,6 +285,7 @@ class _BookDetailPageState extends State<BookDetailPage> {
     _activeDetailUrl = cached.detail.detailUrl.trim();
     _displayTitle = cached.detail.title.trim();
     _tocWarningText = null;
+    return true;
   }
 
   bool get _isMissingParams {
@@ -1081,7 +1087,7 @@ class _BookDetailPageState extends State<BookDetailPage> {
       }
       return false;
     } catch (_) {
-      await _refreshBookshelfState(result);
+      _scheduleBookshelfStateRefresh(result);
       return true;
     }
   }
@@ -1114,15 +1120,21 @@ class _BookDetailPageState extends State<BookDetailPage> {
   Future<bool> _load({
     bool forceRefresh = false,
     bool clearResult = false,
+    bool backgroundRefresh = false,
   }) async {
     if (!mounted || _isMissingParams) {
       return false;
     }
 
+    final shouldShowLoading = !backgroundRefresh || _result == null;
     setState(() {
-      _isLoading = true;
-      _errorText = null;
-      _tocWarningText = null;
+      if (shouldShowLoading) {
+        _isLoading = true;
+      }
+      if (!backgroundRefresh) {
+        _errorText = null;
+        _tocWarningText = null;
+      }
       if (clearResult) {
         _result = null;
       }
@@ -1155,14 +1167,16 @@ class _BookDetailPageState extends State<BookDetailPage> {
       });
 
       await _syncLocalTxtContext();
-      await _refreshBookshelfState(result);
+      _scheduleBookshelfStateRefresh(result);
       return true;
     } on AppException catch (error) {
       if (!mounted) {
         return false;
       }
       if (_result != null) {
-        _showMessage(_toUserReadableError(error));
+        if (!backgroundRefresh) {
+          _showMessage(_toUserReadableError(error));
+        }
         return false;
       }
       setState(() {
@@ -1177,7 +1191,9 @@ class _BookDetailPageState extends State<BookDetailPage> {
         return false;
       }
       if (_result != null) {
-        _showMessage('加载失败，请稍后重试。');
+        if (!backgroundRefresh) {
+          _showMessage('加载失败，请稍后重试。');
+        }
         return false;
       }
       setState(() {
@@ -1188,7 +1204,7 @@ class _BookDetailPageState extends State<BookDetailPage> {
       });
       return false;
     } finally {
-      if (mounted) {
+      if (mounted && shouldShowLoading) {
         setState(() {
           _isLoading = false;
         });
@@ -1767,19 +1783,38 @@ class _BookDetailPageState extends State<BookDetailPage> {
     );
   }
 
-  Future<void> _refreshBookshelfState(BookDetailLoadResult result) async {
-    final isInBookshelf = await _bookshelfService.contains(
-      sourceId: result.detail.sourceId,
-      detailUrl: result.detail.detailUrl,
-    );
-
-    if (!mounted) {
+  void _scheduleBookshelfStateRefresh(BookDetailLoadResult result) {
+    final sourceId = result.detail.sourceId.trim();
+    final detailUrl = result.detail.detailUrl.trim();
+    if (sourceId.isEmpty || detailUrl.isEmpty) {
       return;
     }
 
-    setState(() {
-      _isInBookshelf = isInBookshelf;
-    });
+    final syncToken = ++_bookshelfStateSyncToken;
+    unawaited(() async {
+      bool isInBookshelf;
+      try {
+        isInBookshelf = await _bookshelfService.contains(
+          sourceId: sourceId,
+          detailUrl: detailUrl,
+        );
+      } catch (_) {
+        return;
+      }
+
+      if (!mounted || syncToken != _bookshelfStateSyncToken) {
+        return;
+      }
+      final activeSourceId = (_activeSourceId ?? '').trim();
+      final activeDetailUrl = (_activeDetailUrl ?? '').trim();
+      if (activeSourceId != sourceId || activeDetailUrl != detailUrl) {
+        return;
+      }
+
+      setState(() {
+        _isInBookshelf = isInBookshelf;
+      });
+    }());
   }
 
   Future<void> _toggleBookshelf() async {
@@ -1791,6 +1826,7 @@ class _BookDetailPageState extends State<BookDetailPage> {
     setState(() {
       _isShelfActionLoading = true;
     });
+    _bookshelfStateSyncToken++;
 
     try {
       final detail = result.detail;

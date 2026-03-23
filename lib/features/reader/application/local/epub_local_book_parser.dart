@@ -10,10 +10,14 @@ import '../../../../core/errors/app_exception.dart';
 import '../../../../core/errors/error_codes.dart';
 import '../../../../core/errors/error_stage.dart';
 import '../../../../domain/entities/local_book.dart';
+import 'local_text_encoding_detector.dart';
 import 'local_book_parser.dart';
 
 class EpubLocalBookParser implements LocalBookParser {
-  const EpubLocalBookParser();
+  const EpubLocalBookParser({
+    LocalTextEncodingDetector textEncodingDetector =
+        const LocalTextEncodingDetector(),
+  }) : _textEncodingDetector = textEncodingDetector;
 
   static const List<String> _supportedExtensions = <String>[
     '.xhtml',
@@ -32,6 +36,21 @@ class EpubLocalBookParser implements LocalBookParser {
 
   static const String _inlineImageMarkerPrefix = '[[appread-image:';
   static const String _inlineImageMarkerSuffix = ']]';
+  static const List<String> _htmlCharsetCandidates = <String>[
+    'utf-8',
+    'utf-16be',
+    'utf-16le',
+    'gb18030',
+    'gbk',
+    'big5',
+    'shift_jis',
+    'euc-jp',
+    'euc-kr',
+    'windows-1252',
+    'latin1',
+  ];
+
+  final LocalTextEncodingDetector _textEncodingDetector;
 
   @override
   bool supports(LocalBookFormat format) {
@@ -88,6 +107,12 @@ class EpubLocalBookParser implements LocalBookParser {
       for (final entry in archive.files.where((item) => item.isFile))
         _normalizeArchivePath(entry.name): entry,
     };
+    final metadata = _extractMetadata(archiveFileIndex);
+    final coverPath = await _materializeCoverPath(
+      metadata: metadata,
+      archiveFileIndex: archiveFileIndex,
+      assetRootDir: assetDir,
+    );
 
     final chapters = <LocalParsedChapter>[];
     var offset = 0;
@@ -138,7 +163,14 @@ class EpubLocalBookParser implements LocalBookParser {
       );
     }
 
-    return LocalParsedBook(chapters: chapters);
+    final fallbackCoverPath = _resolveCoverPathFromChapterImages(chapters);
+
+    return LocalParsedBook(
+      chapters: chapters,
+      title: metadata.title,
+      author: metadata.author,
+      coverPath: coverPath ?? fallbackCoverPath,
+    );
   }
 
   static Directory resolveAssetDirectory(LocalBook book) {
@@ -154,6 +186,411 @@ class EpubLocalBookParser implements LocalBookParser {
     }
     await directory.create(recursive: true);
     return directory;
+  }
+
+  _EpubMetadata _extractMetadata(Map<String, ArchiveFile> archiveFileIndex) {
+    final packagePath = _resolvePackageDocumentPath(archiveFileIndex);
+    if (packagePath == null) {
+      return const _EpubMetadata();
+    }
+
+    final packageEntry = _findArchiveFile(archiveFileIndex, packagePath);
+    if (packageEntry == null) {
+      return const _EpubMetadata();
+    }
+
+    final packageText = _readArchiveEntryAsText(packageEntry);
+    if (packageText.trim().isEmpty) {
+      return const _EpubMetadata();
+    }
+
+    final packageDocument = html_parser.parse(packageText);
+    final title = _extractFirstElementText(
+      packageDocument,
+      localNames: <String>{'dc:title', 'title'},
+    );
+    final author = _extractFirstElementText(
+      packageDocument,
+      localNames: <String>{'dc:creator', 'creator', 'dc:author', 'author'},
+    );
+    final coverArchivePath = _extractCoverArchivePath(
+      document: packageDocument,
+      packagePath: packagePath,
+      archiveFileIndex: archiveFileIndex,
+    );
+
+    return _EpubMetadata(
+      title: title,
+      author: author,
+      coverArchivePath: coverArchivePath,
+    );
+  }
+
+  String? _resolvePackageDocumentPath(
+    Map<String, ArchiveFile> archiveFileIndex,
+  ) {
+    final containerPath = archiveFileIndex.keys.firstWhere(
+      (key) => key.toLowerCase() == 'meta-inf/container.xml',
+      orElse: () => '',
+    );
+    if (containerPath.isEmpty) {
+      return null;
+    }
+
+    final containerEntry = archiveFileIndex[containerPath];
+    if (containerEntry == null) {
+      return null;
+    }
+
+    final containerText = _readArchiveEntryAsText(containerEntry);
+    if (containerText.trim().isEmpty) {
+      return null;
+    }
+
+    final containerDocument = html_parser.parse(containerText);
+    for (final element in containerDocument.querySelectorAll('*')) {
+      final localName = (element.localName ?? '').toLowerCase();
+      if (localName != 'rootfile') {
+        continue;
+      }
+
+      final fullPath = _readAttribute(
+        element,
+        keys: <String>{'full-path', 'fullpath'},
+      );
+      if (fullPath == null || fullPath.isEmpty) {
+        continue;
+      }
+
+      final normalized = _normalizeArchivePath(fullPath);
+      if (normalized.isNotEmpty) {
+        return normalized;
+      }
+    }
+
+    for (final key in archiveFileIndex.keys) {
+      if (key.toLowerCase().endsWith('.opf')) {
+        return key;
+      }
+    }
+
+    return null;
+  }
+
+  String? _extractFirstElementText(
+    dom.Document document, {
+    required Set<String> localNames,
+  }) {
+    final normalizedNames =
+        localNames.map((name) => name.toLowerCase()).toSet();
+    for (final element in document.querySelectorAll('*')) {
+      final localName = (element.localName ?? '').toLowerCase();
+      if (!normalizedNames.contains(localName)) {
+        continue;
+      }
+      final text = _normalizeInlineText(element.text);
+      if (text.isNotEmpty) {
+        return text;
+      }
+    }
+    return null;
+  }
+
+  String? _extractCoverArchivePath({
+    required dom.Document document,
+    required String packagePath,
+    required Map<String, ArchiveFile> archiveFileIndex,
+  }) {
+    final manifestItems = document
+        .querySelectorAll('*')
+        .where((element) => (element.localName ?? '').toLowerCase() == 'item')
+        .toList(growable: false);
+
+    final metaCoverId = _extractMetaCoverId(document);
+    if (metaCoverId != null) {
+      final byId = _findManifestItemById(manifestItems, metaCoverId);
+      final resolved = _resolveCoverPathFromManifestItem(
+        item: byId,
+        packagePath: packagePath,
+        archiveFileIndex: archiveFileIndex,
+      );
+      if (resolved != null) {
+        return resolved;
+      }
+    }
+
+    for (final item in manifestItems) {
+      final properties =
+          _readAttribute(item, keys: <String>{'properties'})?.toLowerCase();
+      if (properties != null && properties.contains('cover-image')) {
+        final resolved = _resolveCoverPathFromManifestItem(
+          item: item,
+          packagePath: packagePath,
+          archiveFileIndex: archiveFileIndex,
+        );
+        if (resolved != null) {
+          return resolved;
+        }
+      }
+    }
+
+    for (final item in manifestItems) {
+      final id =
+          _readAttribute(item, keys: <String>{'id'})?.toLowerCase() ?? '';
+      final mediaType =
+          _readAttribute(item, keys: <String>{'media-type'})?.toLowerCase() ??
+          '';
+      if (!id.contains('cover') && !mediaType.startsWith('image/')) {
+        continue;
+      }
+
+      final resolved = _resolveCoverPathFromManifestItem(
+        item: item,
+        packagePath: packagePath,
+        archiveFileIndex: archiveFileIndex,
+      );
+      if (resolved != null) {
+        return resolved;
+      }
+    }
+
+    for (final reference in document.querySelectorAll('*')) {
+      final localName = (reference.localName ?? '').toLowerCase();
+      if (localName != 'reference') {
+        continue;
+      }
+      final type =
+          _readAttribute(reference, keys: <String>{'type'})?.toLowerCase() ??
+          '';
+      if (!type.contains('cover')) {
+        continue;
+      }
+      final href = _readAttribute(
+        reference,
+        keys: <String>{'href', 'xlink:href'},
+      );
+      final resolved = _resolveArchivePathRelativeTo(
+        baseEntryPath: packagePath,
+        rawSource: href,
+      );
+      if (resolved != null && _archiveImageExists(archiveFileIndex, resolved)) {
+        return resolved;
+      }
+    }
+
+    for (final item in manifestItems) {
+      final href =
+          _readAttribute(
+            item,
+            keys: <String>{'href', 'xlink:href'},
+          )?.toLowerCase();
+      final mediaType =
+          _readAttribute(item, keys: <String>{'media-type'})?.toLowerCase() ??
+          '';
+      if (href == null ||
+          href.isEmpty ||
+          (!href.contains('cover') && !mediaType.startsWith('image/'))) {
+        continue;
+      }
+      final resolved = _resolveCoverPathFromManifestItem(
+        item: item,
+        packagePath: packagePath,
+        archiveFileIndex: archiveFileIndex,
+      );
+      if (resolved != null) {
+        return resolved;
+      }
+    }
+
+    return null;
+  }
+
+  String? _extractMetaCoverId(dom.Document document) {
+    for (final element in document.querySelectorAll('*')) {
+      final localName = (element.localName ?? '').toLowerCase();
+      if (localName != 'meta') {
+        continue;
+      }
+
+      final name =
+          _readAttribute(element, keys: <String>{'name'})?.toLowerCase();
+      if (name != 'cover') {
+        continue;
+      }
+
+      final content = _readAttribute(element, keys: <String>{'content'});
+      if (content != null && content.trim().isNotEmpty) {
+        return content.trim();
+      }
+    }
+    return null;
+  }
+
+  dom.Element? _findManifestItemById(
+    List<dom.Element> manifestItems,
+    String id,
+  ) {
+    final target = id.trim().toLowerCase();
+    if (target.isEmpty) {
+      return null;
+    }
+
+    for (final item in manifestItems) {
+      final itemId = _readAttribute(item, keys: <String>{'id'})?.toLowerCase();
+      if (itemId == target) {
+        return item;
+      }
+    }
+    return null;
+  }
+
+  String? _resolveCoverPathFromManifestItem({
+    required dom.Element? item,
+    required String packagePath,
+    required Map<String, ArchiveFile> archiveFileIndex,
+  }) {
+    if (item == null) {
+      return null;
+    }
+
+    final href = _readAttribute(item, keys: <String>{'href', 'xlink:href'});
+    final resolved = _resolveArchivePathRelativeTo(
+      baseEntryPath: packagePath,
+      rawSource: href,
+    );
+    if (resolved == null) {
+      return null;
+    }
+    if (_archiveImageExists(archiveFileIndex, resolved)) {
+      return resolved;
+    }
+    return null;
+  }
+
+  String? _resolveArchivePathRelativeTo({
+    required String baseEntryPath,
+    required String? rawSource,
+  }) {
+    final source = rawSource?.trim() ?? '';
+    if (source.isEmpty) {
+      return null;
+    }
+    final normalized = _resolveArchiveImagePath(
+      chapterEntryName: baseEntryPath,
+      rawSource: source,
+    );
+    if (normalized == null ||
+        normalized.startsWith('http://') ||
+        normalized.startsWith('https://')) {
+      return null;
+    }
+    return normalized;
+  }
+
+  bool _archiveImageExists(
+    Map<String, ArchiveFile> archiveFileIndex,
+    String archivePath,
+  ) {
+    final normalized = _normalizeArchivePath(archivePath);
+    final entry = _findArchiveFile(archiveFileIndex, normalized);
+    if (entry == null) {
+      return false;
+    }
+    final lowerName = normalized.toLowerCase();
+    final extension = p.posix.extension(lowerName);
+    return _supportedImageExtensions.contains(extension);
+  }
+
+  ArchiveFile? _findArchiveFile(
+    Map<String, ArchiveFile> archiveFileIndex,
+    String archivePath,
+  ) {
+    final normalized = _normalizeArchivePath(archivePath);
+    final direct = archiveFileIndex[normalized];
+    if (direct != null) {
+      return direct;
+    }
+
+    final lookup = normalized.toLowerCase();
+    for (final entry in archiveFileIndex.entries) {
+      if (entry.key.toLowerCase() == lookup) {
+        return entry.value;
+      }
+    }
+    return null;
+  }
+
+  String? _readAttribute(dom.Element element, {required Set<String> keys}) {
+    if (keys.isEmpty || element.attributes.isEmpty) {
+      return null;
+    }
+    final normalizedKeys = keys.map((key) => key.toLowerCase()).toSet();
+    for (final entry in element.attributes.entries) {
+      final key = entry.key.toString().toLowerCase();
+      if (!normalizedKeys.contains(key)) {
+        continue;
+      }
+      final value = entry.value.toString().trim();
+      if (value.isNotEmpty) {
+        return value;
+      }
+    }
+    return null;
+  }
+
+  Future<String?> _materializeCoverPath({
+    required _EpubMetadata metadata,
+    required Map<String, ArchiveFile> archiveFileIndex,
+    required Directory assetRootDir,
+  }) async {
+    final archivePath = metadata.coverArchivePath?.trim() ?? '';
+    if (archivePath.isEmpty) {
+      return null;
+    }
+
+    final archiveEntry = _findArchiveFile(archiveFileIndex, archivePath);
+    if (archiveEntry == null) {
+      return null;
+    }
+    final lowerName = archivePath.toLowerCase();
+    final extension = p.posix.extension(lowerName);
+    if (!_supportedImageExtensions.contains(extension)) {
+      return null;
+    }
+
+    final targetFile = File(
+      p.join(assetRootDir.path, _safeAssetRelativePath(archivePath)),
+    );
+    if (!await targetFile.parent.exists()) {
+      await targetFile.parent.create(recursive: true);
+    }
+    await targetFile.writeAsBytes(
+      _readArchiveEntryBytes(archiveEntry),
+      flush: true,
+    );
+    return targetFile.path;
+  }
+
+  String? _resolveCoverPathFromChapterImages(
+    List<LocalParsedChapter> chapters,
+  ) {
+    for (final chapter in chapters) {
+      for (final imageUrl in chapter.imageUrls) {
+        final normalized = imageUrl.trim();
+        if (normalized.isEmpty) {
+          continue;
+        }
+        final uri = Uri.tryParse(normalized);
+        if (uri == null || uri.scheme != 'file') {
+          continue;
+        }
+        final path = uri.toFilePath(windows: Platform.isWindows).trim();
+        if (path.isNotEmpty) {
+          return path;
+        }
+      }
+    }
+    return null;
   }
 
   Future<_EpubChapterExtraction> _extractChapterContent({
@@ -392,11 +829,15 @@ class EpubLocalBookParser implements LocalBookParser {
       return '';
     }
 
-    try {
-      return utf8.decode(bytes, allowMalformed: false);
-    } on FormatException {
-      return latin1.decode(bytes, allowInvalid: true);
-    }
+    final declaredCharset =
+        LocalTextEncodingDetector.extractDeclaredCharsetFromHtml(bytes);
+    final decoded = _textEncodingDetector.decodeBestEffort(
+      bytes,
+      hintedCharset: declaredCharset,
+      candidateCharsets: _htmlCharsetCandidates,
+      htmlAware: true,
+    );
+    return decoded.text;
   }
 
   List<int> _readArchiveEntryBytes(ArchiveFile entry) {
@@ -470,4 +911,12 @@ class _EpubChapterExtraction {
 
   final String content;
   final List<String> imageUrls;
+}
+
+class _EpubMetadata {
+  const _EpubMetadata({this.title, this.author, this.coverArchivePath});
+
+  final String? title;
+  final String? author;
+  final String? coverArchivePath;
 }

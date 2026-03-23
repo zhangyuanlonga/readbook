@@ -610,6 +610,25 @@ class AppDatabase extends _$AppDatabase {
     return rows.map(_mapRowToSource).toList();
   }
 
+  Future<Map<String, int>> querySourceTypeMap() async {
+    final rows =
+        await customSelect(
+          'SELECT id, CASE WHEN $_mangaSourceMatcherSql THEN 2 ELSE 0 END AS sourceType '
+          'FROM sources',
+          readsFrom: {sources},
+        ).get();
+
+    final result = <String, int>{};
+    for (final row in rows) {
+      final sourceId = (row.data['id'] ?? '').toString().trim();
+      if (sourceId.isEmpty) {
+        continue;
+      }
+      result[sourceId] = _decodeInt(row.data['sourceType']) ?? 0;
+    }
+    return result;
+  }
+
   Stream<List<SourceDefinition>> watchAllSources() {
     final query = select(sources)..orderBy([
       (table) => OrderingTerm.asc(table.group),

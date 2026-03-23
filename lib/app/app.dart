@@ -27,22 +27,63 @@ import 'theme/app_theme_seed_provider.dart';
 class App extends ConsumerWidget {
   const App({super.key});
 
+  static const Color _pureWhiteSeed = Color(0xFFFFFFFF);
+  static const Color _neutralSeed = Color(0xFF9E9E9E);
+
+  ColorScheme _buildLightScheme(Color seedColor) {
+    if (seedColor.toARGB32() == _pureWhiteSeed.toARGB32()) {
+      final neutralBase = ColorScheme.fromSeed(
+        seedColor: _neutralSeed,
+        dynamicSchemeVariant: DynamicSchemeVariant.neutral,
+        brightness: Brightness.light,
+      );
+
+      const pureWhite = Color(0xFFFFFFFF);
+      const subtleOutline = Color(0xFFE6E6E6);
+      return neutralBase.copyWith(
+        surface: pureWhite,
+        surfaceDim: pureWhite,
+        surfaceBright: pureWhite,
+        surfaceContainerLowest: pureWhite,
+        surfaceContainerLow: pureWhite,
+        surfaceContainer: pureWhite,
+        surfaceContainerHigh: pureWhite,
+        surfaceContainerHighest: pureWhite,
+        surfaceTint: Colors.transparent,
+        outlineVariant: subtleOutline,
+      );
+    }
+
+    final base = ColorScheme.fromSeed(
+      seedColor: seedColor,
+      dynamicSchemeVariant: DynamicSchemeVariant.tonalSpot,
+      brightness: Brightness.light,
+    );
+    return base;
+  }
+
+  ColorScheme _buildDarkScheme(Color seedColor) {
+    if (seedColor.toARGB32() == _pureWhiteSeed.toARGB32()) {
+      return ColorScheme.fromSeed(
+        seedColor: _neutralSeed,
+        dynamicSchemeVariant: DynamicSchemeVariant.neutral,
+        brightness: Brightness.dark,
+      );
+    }
+    return ColorScheme.fromSeed(
+      seedColor: seedColor,
+      dynamicSchemeVariant: DynamicSchemeVariant.tonalSpot,
+      brightness: Brightness.dark,
+    );
+  }
+
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final seedColor = ref.watch(appSeedColorProvider);
     final themeMode = ref.watch(appThemeModeProvider);
 
-    final lightScheme = ColorScheme.fromSeed(
-      seedColor: seedColor,
-      dynamicSchemeVariant: DynamicSchemeVariant.tonalSpot,
-      brightness: Brightness.light,
-    );
-
-    final darkScheme = ColorScheme.fromSeed(
-      seedColor: seedColor,
-      dynamicSchemeVariant: DynamicSchemeVariant.tonalSpot,
-      brightness: Brightness.dark,
-    );
+    final lightScheme = _buildLightScheme(seedColor);
+    final darkScheme = _buildDarkScheme(seedColor);
 
     return MaterialApp.router(
       title: '书享阅读',
@@ -87,6 +128,8 @@ class _SystemUiOverlayWrapperState extends State<_SystemUiOverlayWrapper>
   int _startupAnnouncementRetryCount = 0;
   bool _isStartupReady = false;
   Timer? _startupDelayTimer;
+  Timer? _startupDeferredTasksTimer;
+  bool _startupDeferredTasksScheduled = false;
   final AnnouncementService _announcementService = AnnouncementService();
   final AnnouncementReadStateService _announcementReadStateService =
       AnnouncementReadStateService();
@@ -113,7 +156,10 @@ class _SystemUiOverlayWrapperState extends State<_SystemUiOverlayWrapper>
     'serif',
   ];
 
-  static const Duration _kStartupMinDuration = Duration(milliseconds: 180);
+  static const Duration _kStartupMinDuration = Duration(milliseconds: 480);
+  static const Duration _kStartupDeferredTasksDelay = Duration(
+    milliseconds: 1200,
+  );
   static const Duration _kHeartbeatThrottle = Duration(minutes: 2);
 
   @override
@@ -127,14 +173,10 @@ class _SystemUiOverlayWrapperState extends State<_SystemUiOverlayWrapper>
     _authEventSub = AuthEventBus.instance.stream.listen(_handleAuthEvent);
     unawaited(ExternalImportBridge.instance.initialize());
     unawaited(_prepareStartup());
-    unawaited(_sendHeartbeat());
-    unawaited(_sendVisitEvent());
   }
 
   Future<void> _prepareStartup() async {
-    final startedAt = DateTime.now();
-    final elapsed = DateTime.now().difference(startedAt);
-    final remaining = _kStartupMinDuration - elapsed;
+    final remaining = _kStartupMinDuration;
     if (remaining > Duration.zero) {
       await _waitStartupDelay(remaining);
     }
@@ -148,12 +190,8 @@ class _SystemUiOverlayWrapperState extends State<_SystemUiOverlayWrapper>
     });
     WidgetsBinding.instance.addPostFrameCallback((_) {
       unawaited(_warmupLocalDatabase());
+      _scheduleStartupDeferredTasks();
     });
-    await _checkStartupUpdateIfNeeded();
-    if (!mounted) {
-      return;
-    }
-    _showStartupAnnouncementIfNeeded();
   }
 
   Future<void> _warmupLocalDatabase() async {
@@ -215,6 +253,30 @@ class _SystemUiOverlayWrapperState extends State<_SystemUiOverlayWrapper>
     return completer.future;
   }
 
+  void _scheduleStartupDeferredTasks() {
+    if (_startupDeferredTasksScheduled) {
+      return;
+    }
+    _startupDeferredTasksScheduled = true;
+    _startupDeferredTasksTimer?.cancel();
+    _startupDeferredTasksTimer = Timer(_kStartupDeferredTasksDelay, () {
+      unawaited(_runStartupDeferredTasks());
+    });
+  }
+
+  Future<void> _runStartupDeferredTasks() async {
+    if (!mounted) {
+      return;
+    }
+    await _sendHeartbeat();
+    await _sendVisitEvent();
+    await _checkStartupUpdateIfNeeded();
+    if (!mounted) {
+      return;
+    }
+    _showStartupAnnouncementIfNeeded();
+  }
+
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state == AppLifecycleState.resumed) {
@@ -263,6 +325,7 @@ class _SystemUiOverlayWrapperState extends State<_SystemUiOverlayWrapper>
     _incomingImportSub?.cancel();
     _authEventSub?.cancel();
     _startupDelayTimer?.cancel();
+    _startupDeferredTasksTimer?.cancel();
     super.dispose();
   }
 

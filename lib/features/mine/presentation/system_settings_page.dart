@@ -3,7 +3,9 @@ import 'package:go_router/go_router.dart';
 
 import '../../../app/layout/app_layout.dart';
 import '../../../app/layout/app_spacing.dart';
+import '../../../domain/entities/reader_settings.dart';
 import '../../bookshelf/application/bookshelf_system_settings_service.dart';
+import '../../reader/application/reader_preferences_service.dart';
 import '../../reader/application/reader_system_settings_service.dart';
 import '../../search/application/search_system_settings_service.dart';
 
@@ -82,6 +84,8 @@ class SystemSettingsPage extends StatelessWidget {
                               ),
                               SizedBox(height: 12),
                               _ReadingRecordSettingPanel(),
+                              SizedBox(height: 12),
+                              _ReaderSettingsResetPanel(),
                             ],
                           );
                         }
@@ -97,6 +101,8 @@ class SystemSettingsPage extends StatelessWidget {
                             _SearchAggregationSettingPanel(),
                             SizedBox(height: 12),
                             _ReadingRecordSettingPanel(),
+                            SizedBox(height: 12),
+                            _ReaderSettingsResetPanel(),
                           ],
                         );
                       },
@@ -199,6 +205,11 @@ class SystemSettingsPage extends StatelessWidget {
                   context,
                   icon: Icons.history_rounded,
                   label: '阅读记录',
+                ),
+                _buildMetaChip(
+                  context,
+                  icon: Icons.restart_alt_rounded,
+                  label: '阅读重置',
                 ),
               ],
             ),
@@ -406,6 +417,269 @@ Widget _buildErrorBanner(BuildContext context, {required String message}) {
       ],
     ),
   );
+}
+
+enum _ReaderSettingsResetScope { interfaceSettings, readingSettings }
+
+class _ReaderSettingsResetPanel extends StatefulWidget {
+  const _ReaderSettingsResetPanel();
+
+  @override
+  State<_ReaderSettingsResetPanel> createState() =>
+      _ReaderSettingsResetPanelState();
+}
+
+class _ReaderSettingsResetPanelState extends State<_ReaderSettingsResetPanel> {
+  final ReaderPreferencesService _preferencesService =
+      ReaderPreferencesService();
+
+  bool _isSaving = false;
+  String? _statusText;
+  String? _errorText;
+
+  ReaderSettings _resetInterfaceSettings(ReaderSettings current) {
+    const defaults = ReaderSettings();
+    return current.copyWith(
+      brightness: defaults.brightness,
+      themeMode: defaults.themeMode,
+      pageTurnMode: defaults.pageTurnMode,
+      backgroundStyle: defaults.backgroundStyle,
+      backgroundTone: defaults.backgroundTone,
+      pageAnimationStyle: defaults.pageAnimationStyle,
+      infoHeaderEnabled: defaults.infoHeaderEnabled,
+      infoFooterEnabled: defaults.infoFooterEnabled,
+      infoShowTime: defaults.infoShowTime,
+      infoShowBattery: defaults.infoShowBattery,
+      infoShowChapter: defaults.infoShowChapter,
+      infoShowProgress: defaults.infoShowProgress,
+      infoHeaderPadding: defaults.infoHeaderPadding,
+      infoFooterPadding: defaults.infoFooterPadding,
+      infoHeaderDividerEnabled: defaults.infoHeaderDividerEnabled,
+      infoFooterDividerEnabled: defaults.infoFooterDividerEnabled,
+      infoHeaderMarginTop: defaults.infoHeaderMarginTop,
+      infoHeaderMarginBottom: defaults.infoHeaderMarginBottom,
+      infoHeaderMarginLeft: defaults.infoHeaderMarginLeft,
+      infoHeaderMarginRight: defaults.infoHeaderMarginRight,
+      infoFooterMarginTop: defaults.infoFooterMarginTop,
+      infoFooterMarginBottom: defaults.infoFooterMarginBottom,
+      infoFooterMarginLeft: defaults.infoFooterMarginLeft,
+      infoFooterMarginRight: defaults.infoFooterMarginRight,
+      clearBackgroundImage: true,
+    );
+  }
+
+  ReaderSettings _resetReadingSettings(ReaderSettings current) {
+    const defaults = ReaderSettings();
+    return current.copyWith(
+      fontSize: defaults.fontSize,
+      lineHeight: defaults.lineHeight,
+      paragraphSpacing: defaults.paragraphSpacing,
+      paragraphIndent: defaults.paragraphIndent,
+      textFullJustifyEnabled: defaults.textFullJustifyEnabled,
+      letterSpacing: defaults.letterSpacing,
+      fontWeightLevel: defaults.fontWeightLevel,
+      fontSource: defaults.fontSource,
+      clearFontFamilyKey: true,
+      clearCustomFontPath: true,
+      volumeKeyPageEnabled: defaults.volumeKeyPageEnabled,
+      autoReadEnabled: defaults.autoReadEnabled,
+      autoReadSpeed: defaults.autoReadSpeed,
+      pageTurnStepRatio: defaults.pageTurnStepRatio,
+      bodyMarginTop: defaults.bodyMarginTop,
+      bodyMarginBottom: defaults.bodyMarginBottom,
+      bodyMarginLeft: defaults.bodyMarginLeft,
+      bodyMarginRight: defaults.bodyMarginRight,
+      mangaReadMode: defaults.mangaReadMode,
+      mangaImageSpacing: defaults.mangaImageSpacing,
+      mangaImagePadding: defaults.mangaImagePadding,
+      mangaLoadStrategy: defaults.mangaLoadStrategy,
+      switchSourceScoreRankingEnabled: defaults.switchSourceScoreRankingEnabled,
+    );
+  }
+
+  Future<void> _reset(_ReaderSettingsResetScope scope) async {
+    if (_isSaving) {
+      return;
+    }
+
+    final isInterface = scope == _ReaderSettingsResetScope.interfaceSettings;
+    final title = isInterface ? '恢复界面设置默认' : '恢复阅读设置默认';
+    final content =
+        isInterface
+            ? '将重置阅读器的界面相关设置（主题、触发、信息栏等）。'
+            : '将重置阅读器的阅读相关设置（字号、排版、边距、字体等）。';
+
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder:
+          (dialogContext) => AlertDialog(
+            title: Text(title),
+            content: Text('$content\n\n该操作不会影响书架和阅读记录。'),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.of(dialogContext).pop(false),
+                child: const Text('取消'),
+              ),
+              FilledButton(
+                onPressed: () => Navigator.of(dialogContext).pop(true),
+                child: const Text('确认恢复'),
+              ),
+            ],
+          ),
+    );
+
+    if (confirmed != true) {
+      return;
+    }
+
+    setState(() {
+      _isSaving = true;
+      _statusText = null;
+      _errorText = null;
+    });
+
+    try {
+      final current = await _preferencesService.loadSettings();
+      final next =
+          isInterface
+              ? _resetInterfaceSettings(current)
+              : _resetReadingSettings(current);
+      await _preferencesService.saveSettings(next);
+      if (!mounted) {
+        return;
+      }
+      final message = isInterface ? '界面设置已恢复默认。' : '阅读设置已恢复默认。';
+      setState(() {
+        _statusText = message;
+      });
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(message)));
+    } catch (_) {
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _errorText = '恢复默认失败，请稍后重试。';
+      });
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isSaving = false;
+        });
+      }
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+    final textTheme = Theme.of(context).textTheme;
+
+    return Container(
+      padding: const EdgeInsets.fromLTRB(14, 14, 14, 14),
+      decoration: BoxDecoration(
+        color: colorScheme.surfaceContainerLow,
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(
+          color: colorScheme.outlineVariant.withValues(alpha: 0.46),
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Container(
+                width: 38,
+                height: 38,
+                decoration: BoxDecoration(
+                  color: colorScheme.primaryContainer.withValues(alpha: 0.92),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Icon(
+                  Icons.restart_alt_rounded,
+                  size: 20,
+                  color: colorScheme.onPrimaryContainer,
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      '阅读设置恢复默认',
+                      style: textTheme.titleSmall?.copyWith(
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                    const SizedBox(height: 3),
+                    Text(
+                      '把阅读页“界面设置”和“设置”里的恢复入口集中到这里。',
+                      style: textTheme.bodySmall?.copyWith(
+                        color: colorScheme.onSurfaceVariant,
+                        height: 1.35,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              if (_isSaving)
+                SizedBox(
+                  width: 20,
+                  height: 20,
+                  child: CircularProgressIndicator(
+                    strokeWidth: 2,
+                    color: colorScheme.primary,
+                  ),
+                ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: [
+              OutlinedButton.icon(
+                onPressed:
+                    _isSaving
+                        ? null
+                        : () =>
+                            _reset(_ReaderSettingsResetScope.interfaceSettings),
+                icon: const Icon(Icons.palette_outlined),
+                label: const Text('恢复界面默认'),
+              ),
+              OutlinedButton.icon(
+                onPressed:
+                    _isSaving
+                        ? null
+                        : () =>
+                            _reset(_ReaderSettingsResetScope.readingSettings),
+                icon: const Icon(Icons.menu_book_outlined),
+                label: const Text('恢复阅读默认'),
+              ),
+            ],
+          ),
+          if (_statusText case final String text) ...[
+            const SizedBox(height: 10),
+            Text(
+              text,
+              style: textTheme.bodySmall?.copyWith(
+                color: colorScheme.primary,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ],
+          if (_errorText case final message?) ...[
+            const SizedBox(height: 10),
+            _buildErrorBanner(context, message: message),
+          ],
+        ],
+      ),
+    );
+  }
 }
 
 class _ReaderAutoSwitchSettingPanel extends StatefulWidget {

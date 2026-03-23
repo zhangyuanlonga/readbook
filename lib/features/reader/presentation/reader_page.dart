@@ -39,6 +39,7 @@ import '../../../domain/repositories/bookmark_repository.dart';
 import '../../bookshelf/application/bookshelf_service.dart';
 import '../../bookshelf/application/local_book_import_service.dart';
 import '../../book/application/book_detail_service.dart';
+import '../../book/presentation/book_detail_route.dart';
 import '../../search/application/search_hit_cache_service.dart';
 import '../../search/application/search_service.dart';
 import '../application/content_provider.dart';
@@ -213,8 +214,10 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
   DateTime? _tapPointerDownTime;
   bool _tapPointerMoved = false;
   bool _suppressNextReaderTap = false;
+  DateTime? _lastBackNavigationAt;
   OverlayEntry? _bookmarkToolbarEntry;
-  ReaderPageTurnMode _pageTurnModeBeforeAutoRead = ReaderPageTurnMode.tap;
+  ReaderPageTurnMode _pageTurnModeBeforeAutoRead =
+      ReaderPageTurnMode.tapAndSwipe;
   List<String> _customBackgroundImages = const [];
   String? _lightModeBackgroundImageBackup;
   String? _cachedBackgroundImageKey;
@@ -267,6 +270,11 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
   static const int _kMaxCustomBackgrounds = 5;
   static const double _kSwipeTurnDistanceThreshold = 42;
   static const double _kSwipeTurnVelocityThreshold = 120;
+  static const double _kSystemBackGestureGuardMin = 44;
+  static const double _kSystemBackGestureGuardRatio = 0.06;
+  static const Duration _kBackNavigationInteractionCooldown = Duration(
+    milliseconds: 520,
+  );
   static const double _kCurlPreviewStartThreshold = 8;
   static const double _kCoverEdgeShadowWidth = 20;
   static const double _kCoverEdgeShadowMaxAlpha = 0.22;
@@ -856,11 +864,27 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
   }
 
   void _handleBackNavigation() {
+    _markBackNavigationTriggered();
     if (context.canPop()) {
       context.pop();
       return;
     }
     context.go('/bookshelf');
+  }
+
+  void _markBackNavigationTriggered() {
+    _lastBackNavigationAt = DateTime.now();
+    // Prevent this tap sequence from leaking into reader page-turn gestures.
+    _suppressNextReaderTap = true;
+  }
+
+  bool get _isBackNavigationInteractionCoolingDown {
+    final lastAt = _lastBackNavigationAt;
+    if (lastAt == null) {
+      return false;
+    }
+    return DateTime.now().difference(lastAt) <
+        _kBackNavigationInteractionCooldown;
   }
 
   Widget _buildOverlayScrim() {
@@ -1210,6 +1234,12 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
     );
   }
 
+  String _formatReaderInfoTime(DateTime time) {
+    final hour = time.hour.toString().padLeft(2, '0');
+    final minute = time.minute.toString().padLeft(2, '0');
+    return '$hour:$minute';
+  }
+
   List<String> _buildReaderInfoItems() {
     final items = <String>[];
     if (_settings.infoShowTime) {
@@ -1225,12 +1255,6 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
       items.add('进度 ${(_currentScrollRatio() * 100).round()}%');
     }
     return items;
-  }
-
-  String _formatReaderInfoTime(DateTime time) {
-    final hour = time.hour.toString().padLeft(2, '0');
-    final minute = time.minute.toString().padLeft(2, '0');
-    return '$hour:$minute';
   }
 
   String _chapterInfoLabel() {
@@ -4569,6 +4593,9 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
         return Listener(
           behavior: HitTestBehavior.translucent,
           onPointerDown: (event) {
+            if (!_isPrimaryReaderPointerDown(event)) {
+              return;
+            }
             if (_tapPointerId != null) {
               return;
             }
@@ -4680,18 +4707,22 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
     if (!_isSwipePaginationEnabled() || startDx == null || currentDx == null) {
       return;
     }
+    if (_isBackNavigationInteractionCoolingDown) {
+      return;
+    }
 
     // Reserve system edge-swipe area for route back gestures, so returning to
     // bookshelf does not accidentally trigger chapter/page turning.
     if (context.canPop()) {
       final gestureInsets = MediaQuery.systemGestureInsetsOf(context);
       final leftGuard = max(
-        22.0,
-        gestureInsets.left + viewportSize.width * 0.02,
+        _kSystemBackGestureGuardMin,
+        gestureInsets.left + viewportSize.width * _kSystemBackGestureGuardRatio,
       );
       final rightGuard = max(
-        22.0,
-        gestureInsets.right + viewportSize.width * 0.02,
+        _kSystemBackGestureGuardMin,
+        gestureInsets.right +
+            viewportSize.width * _kSystemBackGestureGuardRatio,
       );
       if (startDx <= leftGuard || startDx >= viewportSize.width - rightGuard) {
         return;
@@ -4733,6 +4764,13 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
     _tapPointerMoved = false;
     _swipeDragStartDx = null;
     _swipeDragCurrentDx = null;
+  }
+
+  bool _isPrimaryReaderPointerDown(PointerDownEvent event) {
+    if (event.kind == PointerDeviceKind.touch) {
+      return true;
+    }
+    return event.buttons == kPrimaryButton;
   }
 
   TextStyle _paragraphTextStyle(_ReaderThemeColors colors) {
@@ -6130,11 +6168,34 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
         );
       }
 
+      var infoSettingsChanged = false;
+      if (!normalizedSettings.infoShowTime &&
+          !normalizedSettings.infoShowBattery &&
+          !normalizedSettings.infoShowChapter &&
+          !normalizedSettings.infoShowProgress) {
+        normalizedSettings = normalizedSettings.copyWith(infoShowChapter: true);
+        infoSettingsChanged = true;
+      }
+      if (!normalizedSettings.infoHeaderEnabled &&
+          normalizedSettings.infoHeaderDividerEnabled) {
+        normalizedSettings = normalizedSettings.copyWith(
+          infoHeaderDividerEnabled: false,
+        );
+        infoSettingsChanged = true;
+      }
+      if (!normalizedSettings.infoFooterEnabled &&
+          normalizedSettings.infoFooterDividerEnabled) {
+        normalizedSettings = normalizedSettings.copyWith(
+          infoFooterDividerEnabled: false,
+        );
+        infoSettingsChanged = true;
+      }
+
       final fontSettingsChanged =
           normalizedSettings.fontSource != loadedSettings.fontSource ||
           normalizedSettings.fontFamilyKey != loadedSettings.fontFamilyKey ||
           normalizedSettings.customFontPath != loadedSettings.customFontPath;
-      if (fontSettingsChanged) {
+      if (fontSettingsChanged || infoSettingsChanged) {
         await _preferencesService.saveSettings(normalizedSettings);
       }
 
@@ -8321,18 +8382,13 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
       return;
     }
 
-    final route =
-        Uri(
-          path: '/book/$_currentBookId',
-          queryParameters: {
-            'sourceId': sourceId,
-            'detailUrl': detailUrl,
-            'title':
-                _bookTitle.isNotEmpty
-                    ? _bookTitle
-                    : (widget.chapterTitle ?? '书籍详情'),
-          },
-        ).toString();
+    final route = buildBookDetailRoute(
+      bookId: _currentBookId,
+      sourceId: sourceId,
+      detailUrl: detailUrl,
+      title:
+          _bookTitle.isNotEmpty ? _bookTitle : (widget.chapterTitle ?? '书籍详情'),
+    );
 
     context.push(route);
   }
@@ -8817,6 +8873,9 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
 
   void _onReaderTap(Offset localPosition, Size size, EdgeInsets gestureInsets) {
     if (_isTextSelectionActive) {
+      return;
+    }
+    if (_isBackNavigationInteractionCoolingDown) {
       return;
     }
 
@@ -10539,6 +10598,9 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
   }
 
   void _showChapterBoundaryHint({required bool isFirst}) {
+    if (_isBackNavigationInteractionCoolingDown) {
+      return;
+    }
     _showMessage(
       isFirst ? '已经是第一章。' : '已经是最后一章。',
       duration: _kReaderBoundarySnackDuration,
@@ -11277,64 +11339,6 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
                 );
               }
 
-              Future<void> openParagraphIndentTabSheet() async {
-                if (!context.mounted) {
-                  return;
-                }
-
-                const options = <int>[0, 1, 2, 3, 4];
-                await showModalBottomSheet<void>(
-                  context: context,
-                  showDragHandle: true,
-                  useSafeArea: true,
-                  backgroundColor: readerModalTheme.colorScheme.surface,
-                  builder: (sheetContext) {
-                    return Padding(
-                      padding: const EdgeInsets.fromLTRB(16, 6, 16, 16),
-                      child: Column(
-                        mainAxisSize: MainAxisSize.min,
-                        crossAxisAlignment: CrossAxisAlignment.stretch,
-                        children: [
-                          Text(
-                            '缩进',
-                            textAlign: TextAlign.center,
-                            style: Theme.of(sheetContext).textTheme.titleMedium
-                                ?.copyWith(fontWeight: FontWeight.w700),
-                          ),
-                          const SizedBox(height: 10),
-                          Wrap(
-                            spacing: 8,
-                            runSpacing: 8,
-                            alignment: WrapAlignment.center,
-                            children: options
-                                .map(
-                                  (value) => ChoiceChip(
-                                    label: Text(
-                                      _paragraphIndentVisualLabel(value),
-                                    ),
-                                    selected:
-                                        draft.paragraphIndent.round() == value,
-                                    onSelected: (_) {
-                                      setModalState(() {
-                                        draft = draft.copyWith(
-                                          paragraphIndent: value.toDouble(),
-                                        );
-                                      });
-                                      if (sheetContext.mounted) {
-                                        Navigator.of(sheetContext).pop();
-                                      }
-                                    },
-                                  ),
-                                )
-                                .toList(growable: false),
-                          ),
-                        ],
-                      ),
-                    );
-                  },
-                );
-              }
-
               Future<void> openHorizontalPaddingTabSheet() async {
                 if (!context.mounted) {
                   return;
@@ -11546,6 +11550,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
                           required String title,
                           bool? dividerEnabled,
                           ValueChanged<bool>? onDividerChanged,
+                          bool dividerInteractive = true,
                         }) {
                           return Padding(
                             padding: const EdgeInsets.only(top: 6, bottom: 4),
@@ -11563,8 +11568,13 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
                                     onDividerChanged != null)
                                   FilterChip(
                                     label: const Text('显示分隔线'),
-                                    selected: dividerEnabled,
-                                    onSelected: onDividerChanged,
+                                    selected:
+                                        dividerInteractive && dividerEnabled,
+                                    showCheckmark: false,
+                                    onSelected:
+                                        dividerInteractive
+                                            ? onDividerChanged
+                                            : null,
                                   ),
                               ],
                             ),
@@ -11593,6 +11603,8 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
                                         title: '页眉',
                                         dividerEnabled:
                                             draft.infoHeaderDividerEnabled,
+                                        dividerInteractive:
+                                            draft.infoHeaderEnabled,
                                         onDividerChanged: (selected) {
                                           updatePaddingSettings(
                                             draft.copyWith(
@@ -11682,6 +11694,8 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
                                         title: '页脚',
                                         dividerEnabled:
                                             draft.infoFooterDividerEnabled,
+                                        dividerInteractive:
+                                            draft.infoFooterEnabled,
                                         onDividerChanged: (selected) {
                                           updatePaddingSettings(
                                             draft.copyWith(
@@ -11764,9 +11778,45 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
                         final colorScheme = Theme.of(sheetContext).colorScheme;
                         final textTheme = Theme.of(sheetContext).textTheme;
 
-                        void updateInfoSettings(ReaderSettings next) {
+                        bool hasAnyInfoItem(ReaderSettings settings) {
+                          return settings.infoShowTime ||
+                              settings.infoShowBattery ||
+                              settings.infoShowChapter ||
+                              settings.infoShowProgress;
+                        }
+
+                        void updateInfoSettings(
+                          ReaderSettings next, {
+                          bool ensureAtLeastOneInfoItem = false,
+                        }) {
+                          var normalized = next;
+                          if (!normalized.infoHeaderEnabled &&
+                              normalized.infoHeaderDividerEnabled) {
+                            normalized = normalized.copyWith(
+                              infoHeaderDividerEnabled: false,
+                            );
+                          }
+                          if (!normalized.infoFooterEnabled &&
+                              normalized.infoFooterDividerEnabled) {
+                            normalized = normalized.copyWith(
+                              infoFooterDividerEnabled: false,
+                            );
+                          }
+
+                          if (ensureAtLeastOneInfoItem &&
+                              !hasAnyInfoItem(normalized)) {
+                            normalized = normalized.copyWith(
+                              infoShowChapter: true,
+                            );
+                            WidgetsBinding.instance.addPostFrameCallback((_) {
+                              if (mounted) {
+                                _showMessage('至少保留一项信息位，已自动保留“章节”。');
+                              }
+                            });
+                          }
+
                           setModalState(() {
-                            draft = next;
+                            draft = normalized;
                           });
                           setInfoState(() {});
                         }
@@ -11855,6 +11905,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
                                                 draft.copyWith(
                                                   infoShowTime: selected,
                                                 ),
+                                                ensureAtLeastOneInfoItem: true,
                                               );
                                             },
                                           ),
@@ -11866,6 +11917,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
                                                 draft.copyWith(
                                                   infoShowBattery: selected,
                                                 ),
+                                                ensureAtLeastOneInfoItem: true,
                                               );
                                             },
                                           ),
@@ -11877,6 +11929,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
                                                 draft.copyWith(
                                                   infoShowChapter: selected,
                                                 ),
+                                                ensureAtLeastOneInfoItem: true,
                                               );
                                             },
                                           ),
@@ -11888,6 +11941,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
                                                 draft.copyWith(
                                                   infoShowProgress: selected,
                                                 ),
+                                                ensureAtLeastOneInfoItem: true,
                                               );
                                             },
                                           ),
@@ -12084,6 +12138,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
                                 child: ChoiceChip(
                                   label: Text(_pageAnimationLabel(style)),
                                   selected: draft.pageAnimationStyle == style,
+                                  showCheckmark: false,
                                   onSelected:
                                       disablePageAnimationSelection
                                           ? null
@@ -12113,6 +12168,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
                 required String valueLabel,
                 required ValueChanged<double> onChanged,
                 double step = 1,
+                bool showValueLabel = true,
               }) {
                 final safeValue = value.clamp(min, max).toDouble();
 
@@ -12151,10 +12207,11 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
                         onPressed: () => nudge(step),
                         icon: const Icon(Icons.add_rounded),
                       ),
-                      SizedBox(
-                        width: 70,
-                        child: Text(valueLabel, textAlign: TextAlign.right),
-                      ),
+                      if (showValueLabel)
+                        SizedBox(
+                          width: 70,
+                          child: Text(valueLabel, textAlign: TextAlign.right),
+                        ),
                     ],
                   ),
                 );
@@ -12569,6 +12626,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
                                 selected: _pageTurnIncludesTap(
                                   draft.pageTurnMode,
                                 ),
+                                showCheckmark: false,
                                 onSelected: (selected) {
                                   setModalState(() {
                                     draft = draft.copyWith(
@@ -12586,6 +12644,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
                                 selected: _pageTurnIncludesSwipe(
                                   draft.pageTurnMode,
                                 ),
+                                showCheckmark: false,
                                 onSelected: (selected) {
                                   setModalState(() {
                                     draft = draft.copyWith(
@@ -12603,6 +12662,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
                                 selected: _pageTurnUsesScroll(
                                   draft.pageTurnMode,
                                 ),
+                                showCheckmark: false,
                                 onSelected: (selected) {
                                   setModalState(() {
                                     draft = draft.copyWith(
@@ -12722,14 +12782,6 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
                               },
                               icon: const Icon(Icons.add),
                             ),
-                            const SizedBox(width: 8),
-                            Expanded(
-                              child: Text(
-                                _fontSizeValueLabel(draft),
-                                textAlign: TextAlign.right,
-                                style: Theme.of(context).textTheme.labelLarge,
-                              ),
-                            ),
                           ],
                         ),
                       ),
@@ -12766,26 +12818,22 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
                     title: '排版',
                     subtitle: '行距、段距、字距与缩进',
                     children: [
-                      _buildSettingLine(
-                        context: context,
-                        label: '快捷',
-                        labelWidth: 46,
-                        child: Wrap(
-                          spacing: 8,
-                          runSpacing: 8,
-                          children: [
-                            buildSummaryAction(
-                              icon: Icons.format_indent_increase_rounded,
-                              label: '缩进',
-                              value: _paragraphIndentValueLabel(draft),
-                              onTap:
-                                  () =>
-                                      unawaited(openParagraphIndentTabSheet()),
-                            ),
-                          ],
-                        ),
+                      buildTypographySliderRow(
+                        label: '缩进',
+                        min: 0,
+                        max: 8,
+                        divisions: 8,
+                        value: draft.paragraphIndent.clamp(0, 8).toDouble(),
+                        step: 1,
+                        valueLabel: _paragraphIndentValueLabel(draft),
+                        onChanged: (value) {
+                          setModalState(() {
+                            draft = draft.copyWith(
+                              paragraphIndent: value.round().toDouble(),
+                            );
+                          });
+                        },
                       ),
-                      buildSectionDivider(),
                       buildTypographySliderRow(
                         label: '字距',
                         min: 0,
@@ -13210,24 +13258,6 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
                                     children: selectedCards,
                                   ),
                                 ),
-                                const SizedBox(height: 6),
-                                OverflowBar(
-                                  alignment: MainAxisAlignment.spaceBetween,
-                                  overflowAlignment: OverflowBarAlignment.end,
-                                  spacing: 8,
-                                  overflowSpacing: 8,
-                                  children: [
-                                    OutlinedButton(
-                                      onPressed: () {
-                                        setModalState(() {
-                                          draft = const ReaderSettings();
-                                          startAutoReadAfterApply = false;
-                                        });
-                                      },
-                                      child: const Text('恢复默认'),
-                                    ),
-                                  ],
-                                ),
                               ],
                             ),
                           ),
@@ -13602,17 +13632,6 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
                                                       ),
                                                 ),
                                                 buildReadingActionTab(
-                                                  label: '缩进',
-                                                  value:
-                                                      _paragraphIndentValueLabel(
-                                                        draft,
-                                                      ),
-                                                  onTap:
-                                                      () => unawaited(
-                                                        openParagraphIndentTabSheet(),
-                                                      ),
-                                                ),
-                                                buildReadingActionTab(
                                                   label: '边距',
                                                   value:
                                                       '${draft.bodyMarginLeft.round()}/${draft.bodyMarginRight.round()}',
@@ -13675,6 +13694,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
                                                 valueLabel: _fontSizeValueLabel(
                                                   draft,
                                                 ),
+                                                showValueLabel: false,
                                                 onChanged: (value) {
                                                   setModalState(() {
                                                     draft = draft.copyWith(
@@ -13752,6 +13772,31 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
                                                   });
                                                 },
                                               ),
+                                              buildTypographySliderRow(
+                                                label: '缩进',
+                                                min: 0,
+                                                max: 8,
+                                                divisions: 8,
+                                                value:
+                                                    draft.paragraphIndent
+                                                        .clamp(0, 8)
+                                                        .toDouble(),
+                                                step: 1,
+                                                valueLabel:
+                                                    _paragraphIndentValueLabel(
+                                                      draft,
+                                                    ),
+                                                onChanged: (value) {
+                                                  setModalState(() {
+                                                    draft = draft.copyWith(
+                                                      paragraphIndent:
+                                                          value
+                                                              .round()
+                                                              .toDouble(),
+                                                    );
+                                                  });
+                                                },
+                                              ),
                                             ],
                                           ),
                                         ),
@@ -13771,6 +13816,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
                                                       _pageTurnIncludesTap(
                                                         draft.pageTurnMode,
                                                       ),
+                                                  showCheckmark: false,
                                                   onSelected: (selected) {
                                                     setModalState(() {
                                                       draft = draft.copyWith(
@@ -13792,6 +13838,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
                                                       _pageTurnIncludesSwipe(
                                                         draft.pageTurnMode,
                                                       ),
+                                                  showCheckmark: false,
                                                   onSelected: (selected) {
                                                     setModalState(() {
                                                       draft = draft.copyWith(
@@ -13812,6 +13859,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
                                                   selected: _pageTurnUsesScroll(
                                                     draft.pageTurnMode,
                                                   ),
+                                                  showCheckmark: false,
                                                   onSelected: (selected) {
                                                     setModalState(() {
                                                       draft = draft.copyWith(
@@ -14371,24 +14419,6 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
                                   ],
                                 ),
                               ),
-                              const SizedBox(height: 6),
-                              OverflowBar(
-                                alignment: MainAxisAlignment.spaceBetween,
-                                overflowAlignment: OverflowBarAlignment.end,
-                                spacing: 8,
-                                overflowSpacing: 8,
-                                children: [
-                                  OutlinedButton(
-                                    onPressed: () {
-                                      setModalState(() {
-                                        draft = const ReaderSettings();
-                                        startAutoReadAfterApply = false;
-                                      });
-                                    },
-                                    child: const Text('恢复默认'),
-                                  ),
-                                ],
-                              ),
                             ],
                           ),
                         ),
@@ -14902,8 +14932,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
     if (safeCount <= 0) {
       return '无缩进';
     }
-    final spaces = '　' * safeCount;
-    return '$spaces($safeCount格)';
+    return '$safeCount格';
   }
 
   String _paragraphIndentValueLabel(ReaderSettings settings) {

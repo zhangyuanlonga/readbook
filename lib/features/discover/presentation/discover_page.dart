@@ -11,6 +11,7 @@ import '../../../app/widgets/disk_cached_cover_image.dart';
 import '../../../core/errors/app_exception.dart';
 import '../../../domain/entities/book.dart';
 import '../../../domain/entities/source_definition.dart';
+import '../../book/presentation/book_detail_route.dart';
 import '../application/discover_preferences_service.dart';
 import '../application/explore_service.dart';
 
@@ -1892,16 +1893,13 @@ class _DiscoverPageState extends State<DiscoverPage>
   }
 
   void _openBookDetail(Book book, {required String heroTag}) {
-    final route =
-        Uri(
-          path: '/book/${book.id}',
-          queryParameters: <String, String>{
-            'sourceId': book.sourceId,
-            'detailUrl': book.detailUrl,
-            'title': book.title,
-            'heroTag': heroTag,
-          },
-        ).toString();
+    final route = buildBookDetailRoute(
+      bookId: book.id,
+      sourceId: book.sourceId,
+      detailUrl: book.detailUrl,
+      title: book.title,
+      heroTag: heroTag,
+    );
     context.push(route);
   }
 

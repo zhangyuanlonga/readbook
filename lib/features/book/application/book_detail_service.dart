@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:collection';
 import 'dart:convert';
 
 import '../../../core/errors/app_exception.dart';
@@ -77,19 +78,38 @@ class BookDetailService {
   final UrlTemplateResolver _urlTemplateResolver;
   final SourceResponseProcessor _responseProcessor;
 
-  static final Map<String, BookDetailLoadResult> _detailCache =
-      <String, BookDetailLoadResult>{};
-  static final Map<String, List<Chapter>> _tocCache = <String, List<Chapter>>{};
+  static const int _maxDetailCacheEntries = 120;
+  static const int _maxTocCacheEntries = 120;
+  static const Duration _detailCacheTtl = Duration(minutes: 20);
+  static const Duration _tocCacheTtl = Duration(minutes: 25);
+
+  static final LinkedHashMap<String, _TimedCacheEntry<BookDetailLoadResult>>
+  _detailCache =
+      LinkedHashMap<String, _TimedCacheEntry<BookDetailLoadResult>>();
+  static final LinkedHashMap<String, _TimedCacheEntry<List<Chapter>>>
+  _tocCache = LinkedHashMap<String, _TimedCacheEntry<List<Chapter>>>();
+  static final Map<String, Future<BookDetailLoadResult>> _inFlightLoads =
+      <String, Future<BookDetailLoadResult>>{};
 
   BookDetailLoadResult? peekCached({
     required String sourceId,
     required String detailUrl,
   }) {
     final key = '${sourceId.trim()}|${detailUrl.trim()}';
-    final cached = _detailCache[key];
-    if (cached == null) {
+    return _readDetailCache(key);
+  }
+
+  BookDetailLoadResult? _readDetailCache(String key) {
+    final entry = _detailCache[key];
+    if (entry == null) {
       return null;
     }
+    if (entry.isExpired(_detailCacheTtl)) {
+      _detailCache.remove(key);
+      return null;
+    }
+    _touchCacheEntry(_detailCache, key, entry);
+    final cached = entry.value;
     return BookDetailLoadResult(
       detail: cached.detail,
       chapters: List<Chapter>.unmodifiable(cached.chapters),
@@ -97,6 +117,59 @@ class BookDetailService {
       tocFromCache: true,
       tocError: null,
     );
+  }
+
+  void _writeDetailCache(String key, BookDetailLoadResult result) {
+    final snapshot = BookDetailLoadResult(
+      detail: result.detail,
+      chapters: List<Chapter>.unmodifiable(result.chapters),
+      sourceName: result.sourceName,
+      tocFromCache: false,
+      tocError: null,
+    );
+    _detailCache.remove(key);
+    _detailCache[key] = _TimedCacheEntry<BookDetailLoadResult>(snapshot);
+    _trimCache(_detailCache, _maxDetailCacheEntries);
+  }
+
+  List<Chapter>? _readTocCache(String key) {
+    final entry = _tocCache[key];
+    if (entry == null) {
+      return null;
+    }
+    if (entry.isExpired(_tocCacheTtl)) {
+      _tocCache.remove(key);
+      return null;
+    }
+    _touchCacheEntry(_tocCache, key, entry);
+    return List<Chapter>.unmodifiable(entry.value);
+  }
+
+  void _writeTocCache(String key, List<Chapter> chapters) {
+    _tocCache.remove(key);
+    _tocCache[key] = _TimedCacheEntry<List<Chapter>>(
+      List<Chapter>.unmodifiable(chapters),
+    );
+    _trimCache(_tocCache, _maxTocCacheEntries);
+  }
+
+  void _touchCacheEntry<T>(
+    LinkedHashMap<String, _TimedCacheEntry<T>> cache,
+    String key,
+    _TimedCacheEntry<T> entry,
+  ) {
+    cache.remove(key);
+    cache[key] = entry;
+  }
+
+  void _trimCache<T>(
+    LinkedHashMap<String, _TimedCacheEntry<T>> cache,
+    int maxEntries,
+  ) {
+    while (cache.length > maxEntries) {
+      final firstKey = cache.keys.first;
+      cache.remove(firstKey);
+    }
   }
 
   Future<BookDetailLoadResult> load({
@@ -123,349 +196,340 @@ class BookDetailService {
       );
     }
 
-    final source = await _getSource(normalizedSourceId);
-    final bookVariableUpdates = <String, String>{};
-    final runtimeJsVariables = <String, String>{
-      ...SourceJsVariableStore.load(source),
-      ...SourceJsVariableStore.loadBook(source, bookId: normalizedBookId),
-    };
-
-    void collectPutVariables(Map<String, String> variables) {
-      if (variables.isEmpty) {
-        return;
+    final cacheKey = '$normalizedSourceId|$normalizedDetailUrl';
+    if (!forceRefresh) {
+      final cached = _readDetailCache(cacheKey);
+      if (cached != null) {
+        return cached;
       }
-      bookVariableUpdates.addAll(variables);
-      runtimeJsVariables.addAll(
-        SourceJsVariableStore.toRuntimeVariables(variables),
-      );
     }
 
-    final detailUri = Uri.tryParse(normalizedDetailUrl);
-    if (detailUri == null || !detailUri.hasScheme) {
-      throw AppException(
-        code: ErrorCode.validation,
-        stage: ErrorStage.detail,
+    final existingInFlight = _inFlightLoads[cacheKey];
+    if (existingInFlight != null) {
+      return existingInFlight;
+    }
+
+    final completer = Completer<BookDetailLoadResult>();
+    _inFlightLoads[cacheKey] = completer.future;
+    try {
+      final source = await _getSource(normalizedSourceId);
+      final bookVariableUpdates = <String, String>{};
+      final runtimeJsVariables = <String, String>{
+        ...SourceJsVariableStore.load(source),
+        ...SourceJsVariableStore.loadBook(source, bookId: normalizedBookId),
+      };
+
+      void collectPutVariables(Map<String, String> variables) {
+        if (variables.isEmpty) {
+          return;
+        }
+        bookVariableUpdates.addAll(variables);
+        runtimeJsVariables.addAll(
+          SourceJsVariableStore.toRuntimeVariables(variables),
+        );
+      }
+
+      final detailUri = Uri.tryParse(normalizedDetailUrl);
+      if (detailUri == null || !detailUri.hasScheme) {
+        throw AppException(
+          code: ErrorCode.validation,
+          stage: ErrorStage.detail,
+          sourceId: normalizedSourceId,
+          briefMessage: '详情地址非法：$normalizedDetailUrl',
+        );
+      }
+
+      final baseKeyword = normalizedFallbackTitle ?? 'detail';
+      final templateContext = SearchRequestContext(
+        keyword: baseKeyword,
         sourceId: normalizedSourceId,
-        briefMessage: '详情地址非法：$normalizedDetailUrl',
+        extraParams: {'detailUrl': normalizedDetailUrl},
       );
-    }
-
-    final baseKeyword = normalizedFallbackTitle ?? 'detail';
-    final templateContext = SearchRequestContext(
-      keyword: baseKeyword,
-      sourceId: normalizedSourceId,
-      extraParams: {'detailUrl': normalizedDetailUrl},
-    );
-    var bookJsJson = _buildBookJsJson(
-      sourceId: normalizedSourceId,
-      bookId: normalizedBookId,
-      detailUrl: normalizedDetailUrl,
-      title: normalizedFallbackTitle,
-    );
-
-    final detailInitVariables = await _loadInitVariables(
-      source: source,
-      stage: ErrorStage.detail,
-      initRule: source.rules.detailInitRule,
-      context: templateContext,
-      jsContext: _buildDetailJsContext(
-        source: source,
-        runtimeContext: templateContext,
-        bookJson: bookJsJson,
-        seedVariables: runtimeJsVariables,
-        onBridgePutVariables: collectPutVariables,
-      ),
-    );
-
-    final detailContext =
-        detailInitVariables.isEmpty
-            ? templateContext
-            : templateContext.copyWith(
-              extraParams: {
-                ...templateContext.extraParams,
-                ...detailInitVariables,
-              },
-            );
-
-    final tocInitVariables = await _loadInitVariables(
-      source: source,
-      stage: ErrorStage.toc,
-      initRule: source.rules.tocInitRule,
-      context: detailContext,
-      jsContext: _buildDetailJsContext(
-        source: source,
-        runtimeContext: detailContext,
-        bookJson: bookJsJson,
-        seedVariables: runtimeJsVariables,
-        onBridgePutVariables: collectPutVariables,
-      ),
-    );
-
-    final runtimeContext =
-        tocInitVariables.isEmpty
-            ? detailContext
-            : detailContext.copyWith(
-              extraParams: {...detailContext.extraParams, ...tocInitVariables},
-            );
-
-    final detailHtml = await _fetchHtml(
-      source: source,
-      stage: ErrorStage.detail,
-      url: normalizedDetailUrl,
-      context: runtimeContext,
-    );
-
-    final normalizedDetailHtml =
-        _responseProcessor
-            .process(body: detailHtml, requestUrl: normalizedDetailUrl)
-            .body;
-
-    final detailRules = _buildDetailRules(source);
-    final detailVariables = <String, String>{...runtimeContext.extraParams};
-    var ruleJsContext = _buildDetailJsContext(
-      source: source,
-      runtimeContext: runtimeContext,
-      bookJson: bookJsJson,
-      seedVariables: runtimeJsVariables,
-      onBridgePutVariables: collectPutVariables,
-    );
-
-    final titleRule = _resolveRuntimeRuleTemplate(
-      _resolveDetailRule(detailRules.initRule, detailRules.titleRule),
-      normalizedDetailUrl,
-      context: runtimeContext,
-    );
-    final authorRule = _resolveRuntimeRuleTemplate(
-      _resolveDetailRule(detailRules.initRule, detailRules.authorRule),
-      normalizedDetailUrl,
-      context: runtimeContext,
-    );
-    final introRule = _resolveRuntimeRuleTemplate(
-      _resolveDetailRule(detailRules.initRule, detailRules.introRule),
-      normalizedDetailUrl,
-      context: runtimeContext,
-    );
-    final coverRule = _resolveRuntimeRuleTemplate(
-      _resolveDetailRule(detailRules.initRule, detailRules.coverUrlRule),
-      normalizedDetailUrl,
-      context: runtimeContext,
-    );
-    final tocUrlRule = _resolveRuntimeRuleTemplate(
-      _resolveDetailRule(detailRules.initRule, detailRules.tocUrlRule),
-      normalizedDetailUrl,
-      context: runtimeContext,
-    );
-
-    await _extractOptionalValue(
-      content: normalizedDetailHtml,
-      expression: detailRules.initRule,
-      rawRule: detailRules.rawInitRule,
-      stage: ErrorStage.detail,
-      variables: detailVariables,
-      fallbackExtractor: 'html',
-      jsContext: ruleJsContext,
-    );
-
-    final canRename = await _evaluateCanRename(
-      content: normalizedDetailHtml,
-      stage: ErrorStage.detail,
-      expression: detailRules.canRenameRule,
-      rawRule: detailRules.rawCanRenameRule,
-      variables: detailVariables,
-      jsContext: _mergeJsContextVariables(ruleJsContext, detailVariables),
-    );
-    final extractedTitle = _normalizeOptionalText(
-      await _extractOptionalValue(
-        content: normalizedDetailHtml,
-        expression: titleRule,
-        rawRule: detailRules.rawTitleRule,
-        stage: ErrorStage.detail,
-        variables: detailVariables,
-        fallbackExtractor: 'text',
-        jsContext: _mergeJsContextVariables(ruleJsContext, detailVariables),
-      ),
-    );
-    final title =
-        _selectPreferredText(
-          preferPrimary: canRename,
-          primary: extractedTitle,
-          fallback: normalizedFallbackTitle,
-        ) ??
-        '未命名书籍';
-    bookJsJson = _buildBookJsJson(
-      sourceId: normalizedSourceId,
-      bookId: normalizedBookId,
-      detailUrl: normalizedDetailUrl,
-      title: title,
-    );
-    ruleJsContext = _buildDetailJsContext(
-      source: source,
-      runtimeContext: runtimeContext,
-      bookJson: bookJsJson,
-      seedVariables: runtimeJsVariables,
-      onBridgePutVariables: collectPutVariables,
-    );
-
-    final cover = _resolveMaybeUrl(
-      pageUrl: normalizedDetailUrl,
-      rawUrl: await _extractOptionalValue(
-        content: normalizedDetailHtml,
-        expression: coverRule,
-        rawRule: detailRules.rawCoverUrlRule,
-        stage: ErrorStage.detail,
-        variables: detailVariables,
-        fallbackExtractor: 'attr(src)',
-        preferredAttribute: 'src',
-        jsContext: _mergeJsContextVariables(ruleJsContext, detailVariables),
-      ),
-    );
-
-    final extractedTocUrl = await _extractOptionalValue(
-      content: normalizedDetailHtml,
-      expression: tocUrlRule,
-      rawRule: detailRules.rawTocUrlRule,
-      stage: ErrorStage.detail,
-      variables: detailVariables,
-      fallbackExtractor: 'attr(href)',
-      preferredAttribute: 'href',
-      jsContext: _mergeJsContextVariables(ruleJsContext, detailVariables),
-    );
-
-    final resolvedTocRuleLiteral =
-        tocUrlRule == null
-            ? null
-            : LegacyRuleVariableProcessor.replaceGetTokens(
-              tocUrlRule,
-              detailVariables,
-            );
-
-    final tocCandidate =
-        extractedTocUrl ??
-        (_looksLikeRequestRule(resolvedTocRuleLiteral)
-            ? resolvedTocRuleLiteral
-            : null);
-
-    var tocUrl = _resolveMaybeUrl(
-      pageUrl: normalizedDetailUrl,
-      rawUrl: tocCandidate,
-    );
-
-    if (tocUrl == null || tocUrl.isEmpty) {
-      tocUrl = normalizedDetailUrl;
-    }
-
-    final extractedAuthor = _normalizeOptionalText(
-      await _extractOptionalValue(
-        content: normalizedDetailHtml,
-        expression: authorRule,
-        rawRule: detailRules.rawAuthorRule,
-        stage: ErrorStage.detail,
-        variables: detailVariables,
-        fallbackExtractor: 'text',
-        jsContext: _mergeJsContextVariables(ruleJsContext, detailVariables),
-      ),
-    );
-    final detail = BookDetail(
-      id: normalizedBookId,
-      sourceId: normalizedSourceId,
-      title: title,
-      detailUrl: normalizedDetailUrl,
-      author: _selectPreferredText(
-        preferPrimary: canRename,
-        primary: extractedAuthor,
-        fallback: normalizedFallbackAuthor,
-      ),
-      intro: await _extractOptionalValue(
-        content: normalizedDetailHtml,
-        expression: introRule,
-        rawRule: detailRules.rawIntroRule,
-        stage: ErrorStage.detail,
-        variables: detailVariables,
-        fallbackExtractor: 'text',
-        jsContext: _mergeJsContextVariables(ruleJsContext, detailVariables),
-      ),
-      coverUrl: cover,
-      tocUrl: tocUrl,
-    );
-    final tocJsContext = _buildDetailJsContext(
-      source: source,
-      runtimeContext: runtimeContext,
-      bookJson: _buildBookJsJson(
+      var bookJsJson = _buildBookJsJson(
         sourceId: normalizedSourceId,
         bookId: normalizedBookId,
         detailUrl: normalizedDetailUrl,
-        title: detail.title,
-        author: detail.author,
-        intro: detail.intro,
-        coverUrl: detail.coverUrl,
-        tocUrl: detail.tocUrl,
-      ),
-      seedVariables: runtimeJsVariables,
-      onBridgePutVariables: collectPutVariables,
-    );
+        title: normalizedFallbackTitle,
+      );
 
-    final tocCacheKey = '$normalizedSourceId|$normalizedDetailUrl';
-    if (!forceRefresh && _tocCache.containsKey(tocCacheKey)) {
-      final cached = _tocCache[tocCacheKey]!;
-      await _persistBookJsVariables(
+      final detailInitVariables = await _loadInitVariables(
         source: source,
-        bookId: normalizedBookId,
-        variables: bookVariableUpdates,
         stage: ErrorStage.detail,
+        initRule: source.rules.detailInitRule,
+        context: templateContext,
+        jsContext: _buildDetailJsContext(
+          source: source,
+          runtimeContext: templateContext,
+          bookJson: bookJsJson,
+          seedVariables: runtimeJsVariables,
+          onBridgePutVariables: collectPutVariables,
+        ),
       );
-      _detailCache[tocCacheKey] = BookDetailLoadResult(
-        detail: detail,
-        chapters: List<Chapter>.unmodifiable(cached),
-        sourceName: source.name,
-        tocFromCache: false,
-      );
-      return BookDetailLoadResult(
-        detail: detail,
-        chapters: List.unmodifiable(cached),
-        sourceName: source.name,
-        tocFromCache: true,
-      );
-    }
 
-    var chapters = const <Chapter>[];
-    AppException? tocError;
+      final detailContext =
+          detailInitVariables.isEmpty
+              ? templateContext
+              : templateContext.copyWith(
+                extraParams: {
+                  ...templateContext.extraParams,
+                  ...detailInitVariables,
+                },
+              );
 
-    final tocRules = _buildTocRules(source);
-    if (tocRules == null) {
-      tocError = AppException(
-        code: ErrorCode.validation,
+      final tocInitVariables = await _loadInitVariables(
+        source: source,
         stage: ErrorStage.toc,
-        sourceId: normalizedSourceId,
-        briefMessage: '书源缺少目录规则（chapterList/chapterName/chapterUrl）。',
+        initRule: source.rules.tocInitRule,
+        context: detailContext,
+        jsContext: _buildDetailJsContext(
+          source: source,
+          runtimeContext: detailContext,
+          bookJson: bookJsJson,
+          seedVariables: runtimeJsVariables,
+          onBridgePutVariables: collectPutVariables,
+        ),
       );
-    } else {
-      try {
-        var tocPageHtml = normalizedDetailHtml;
-        var tocPageUrl = normalizedDetailUrl;
-        chapters = await _parseChapters(
-          html: tocPageHtml,
-          pageUrl: tocPageUrl,
-          rules: tocRules,
+
+      final runtimeContext =
+          tocInitVariables.isEmpty
+              ? detailContext
+              : detailContext.copyWith(
+                extraParams: {
+                  ...detailContext.extraParams,
+                  ...tocInitVariables,
+                },
+              );
+
+      final detailHtml = await _fetchHtml(
+        source: source,
+        stage: ErrorStage.detail,
+        url: normalizedDetailUrl,
+        context: runtimeContext,
+      );
+
+      final normalizedDetailHtml =
+          _responseProcessor
+              .process(body: detailHtml, requestUrl: normalizedDetailUrl)
+              .body;
+
+      final detailRules = _buildDetailRules(source);
+      final detailVariables = <String, String>{...runtimeContext.extraParams};
+      var ruleJsContext = _buildDetailJsContext(
+        source: source,
+        runtimeContext: runtimeContext,
+        bookJson: bookJsJson,
+        seedVariables: runtimeJsVariables,
+        onBridgePutVariables: collectPutVariables,
+      );
+
+      final titleRule = _resolveRuntimeRuleTemplate(
+        _resolveDetailRule(detailRules.initRule, detailRules.titleRule),
+        normalizedDetailUrl,
+        context: runtimeContext,
+      );
+      final authorRule = _resolveRuntimeRuleTemplate(
+        _resolveDetailRule(detailRules.initRule, detailRules.authorRule),
+        normalizedDetailUrl,
+        context: runtimeContext,
+      );
+      final introRule = _resolveRuntimeRuleTemplate(
+        _resolveDetailRule(detailRules.initRule, detailRules.introRule),
+        normalizedDetailUrl,
+        context: runtimeContext,
+      );
+      final coverRule = _resolveRuntimeRuleTemplate(
+        _resolveDetailRule(detailRules.initRule, detailRules.coverUrlRule),
+        normalizedDetailUrl,
+        context: runtimeContext,
+      );
+      final tocUrlRule = _resolveRuntimeRuleTemplate(
+        _resolveDetailRule(detailRules.initRule, detailRules.tocUrlRule),
+        normalizedDetailUrl,
+        context: runtimeContext,
+      );
+
+      await _extractOptionalValue(
+        content: normalizedDetailHtml,
+        expression: detailRules.initRule,
+        rawRule: detailRules.rawInitRule,
+        stage: ErrorStage.detail,
+        variables: detailVariables,
+        fallbackExtractor: 'html',
+        jsContext: ruleJsContext,
+      );
+
+      final canRename = await _evaluateCanRename(
+        content: normalizedDetailHtml,
+        stage: ErrorStage.detail,
+        expression: detailRules.canRenameRule,
+        rawRule: detailRules.rawCanRenameRule,
+        variables: detailVariables,
+        jsContext: _mergeJsContextVariables(ruleJsContext, detailVariables),
+      );
+      final extractedTitle = _normalizeOptionalText(
+        await _extractOptionalValue(
+          content: normalizedDetailHtml,
+          expression: titleRule,
+          rawRule: detailRules.rawTitleRule,
+          stage: ErrorStage.detail,
+          variables: detailVariables,
+          fallbackExtractor: 'text',
+          jsContext: _mergeJsContextVariables(ruleJsContext, detailVariables),
+        ),
+      );
+      final title =
+          _selectPreferredText(
+            preferPrimary: canRename,
+            primary: extractedTitle,
+            fallback: normalizedFallbackTitle,
+          ) ??
+          '未命名书籍';
+      bookJsJson = _buildBookJsJson(
+        sourceId: normalizedSourceId,
+        bookId: normalizedBookId,
+        detailUrl: normalizedDetailUrl,
+        title: title,
+      );
+      ruleJsContext = _buildDetailJsContext(
+        source: source,
+        runtimeContext: runtimeContext,
+        bookJson: bookJsJson,
+        seedVariables: runtimeJsVariables,
+        onBridgePutVariables: collectPutVariables,
+      );
+
+      final cover = _resolveMaybeUrl(
+        pageUrl: normalizedDetailUrl,
+        rawUrl: await _extractOptionalValue(
+          content: normalizedDetailHtml,
+          expression: coverRule,
+          rawRule: detailRules.rawCoverUrlRule,
+          stage: ErrorStage.detail,
+          variables: detailVariables,
+          fallbackExtractor: 'attr(src)',
+          preferredAttribute: 'src',
+          jsContext: _mergeJsContextVariables(ruleJsContext, detailVariables),
+        ),
+      );
+
+      final extractedTocUrl = await _extractOptionalValue(
+        content: normalizedDetailHtml,
+        expression: tocUrlRule,
+        rawRule: detailRules.rawTocUrlRule,
+        stage: ErrorStage.detail,
+        variables: detailVariables,
+        fallbackExtractor: 'attr(href)',
+        preferredAttribute: 'href',
+        jsContext: _mergeJsContextVariables(ruleJsContext, detailVariables),
+      );
+
+      final resolvedTocRuleLiteral =
+          tocUrlRule == null
+              ? null
+              : LegacyRuleVariableProcessor.replaceGetTokens(
+                tocUrlRule,
+                detailVariables,
+              );
+
+      final tocCandidate =
+          extractedTocUrl ??
+          (_looksLikeRequestRule(resolvedTocRuleLiteral)
+              ? resolvedTocRuleLiteral
+              : null);
+
+      var tocUrl = _resolveMaybeUrl(
+        pageUrl: normalizedDetailUrl,
+        rawUrl: tocCandidate,
+      );
+
+      if (tocUrl == null || tocUrl.isEmpty) {
+        tocUrl = normalizedDetailUrl;
+      }
+
+      final extractedAuthor = _normalizeOptionalText(
+        await _extractOptionalValue(
+          content: normalizedDetailHtml,
+          expression: authorRule,
+          rawRule: detailRules.rawAuthorRule,
+          stage: ErrorStage.detail,
+          variables: detailVariables,
+          fallbackExtractor: 'text',
+          jsContext: _mergeJsContextVariables(ruleJsContext, detailVariables),
+        ),
+      );
+      final detail = BookDetail(
+        id: normalizedBookId,
+        sourceId: normalizedSourceId,
+        title: title,
+        detailUrl: normalizedDetailUrl,
+        author: _selectPreferredText(
+          preferPrimary: canRename,
+          primary: extractedAuthor,
+          fallback: normalizedFallbackAuthor,
+        ),
+        intro: await _extractOptionalValue(
+          content: normalizedDetailHtml,
+          expression: introRule,
+          rawRule: detailRules.rawIntroRule,
+          stage: ErrorStage.detail,
+          variables: detailVariables,
+          fallbackExtractor: 'text',
+          jsContext: _mergeJsContextVariables(ruleJsContext, detailVariables),
+        ),
+        coverUrl: cover,
+        tocUrl: tocUrl,
+      );
+      final tocJsContext = _buildDetailJsContext(
+        source: source,
+        runtimeContext: runtimeContext,
+        bookJson: _buildBookJsJson(
           sourceId: normalizedSourceId,
           bookId: normalizedBookId,
-          context: runtimeContext,
-          seedVariables: detailVariables,
-          jsContext: tocJsContext,
-        );
+          detailUrl: normalizedDetailUrl,
+          title: detail.title,
+          author: detail.author,
+          intro: detail.intro,
+          coverUrl: detail.coverUrl,
+          tocUrl: detail.tocUrl,
+        ),
+        seedVariables: runtimeJsVariables,
+        onBridgePutVariables: collectPutVariables,
+      );
 
-        if (chapters.isEmpty && tocUrl != normalizedDetailUrl) {
-          final tocHtml = await _fetchHtml(
-            source: source,
-            stage: ErrorStage.toc,
-            url: tocUrl,
-            context: runtimeContext,
-          );
-          final normalizedTocHtml =
-              _responseProcessor
-                  .process(body: tocHtml, requestUrl: tocUrl)
-                  .body;
-          tocPageHtml = normalizedTocHtml;
-          tocPageUrl = tocUrl;
+      final cachedToc = forceRefresh ? null : _readTocCache(cacheKey);
+      if (cachedToc != null) {
+        await _persistBookJsVariables(
+          source: source,
+          bookId: normalizedBookId,
+          variables: bookVariableUpdates,
+          stage: ErrorStage.detail,
+        );
+        final cachedResult = BookDetailLoadResult(
+          detail: detail,
+          chapters: List<Chapter>.unmodifiable(cachedToc),
+          sourceName: source.name,
+          tocFromCache: true,
+        );
+        _writeDetailCache(cacheKey, cachedResult);
+        completer.complete(cachedResult);
+        return cachedResult;
+      }
+
+      var chapters = const <Chapter>[];
+      AppException? tocError;
+
+      final tocRules = _buildTocRules(source);
+      if (tocRules == null) {
+        tocError = AppException(
+          code: ErrorCode.validation,
+          stage: ErrorStage.toc,
+          sourceId: normalizedSourceId,
+          briefMessage: '书源缺少目录规则（chapterList/chapterName/chapterUrl）。',
+        );
+      } else {
+        try {
+          var tocPageHtml = normalizedDetailHtml;
+          var tocPageUrl = normalizedDetailUrl;
           chapters = await _parseChapters(
             html: tocPageHtml,
             pageUrl: tocPageUrl,
@@ -476,87 +540,117 @@ class BookDetailService {
             seedVariables: detailVariables,
             jsContext: tocJsContext,
           );
-        }
 
-        chapters = await _appendNextTocChapters(
-          source: source,
-          rules: tocRules,
-          sourceId: normalizedSourceId,
-          bookId: normalizedBookId,
-          context: runtimeContext,
-          seedVariables: detailVariables,
-          jsContext: tocJsContext,
-          initialPageHtml: tocPageHtml,
-          initialPageUrl: tocPageUrl,
-          initialChapters: chapters,
-        );
+          if (chapters.isEmpty && tocUrl != normalizedDetailUrl) {
+            final tocHtml = await _fetchHtml(
+              source: source,
+              stage: ErrorStage.toc,
+              url: tocUrl,
+              context: runtimeContext,
+            );
+            final normalizedTocHtml =
+                _responseProcessor
+                    .process(body: tocHtml, requestUrl: tocUrl)
+                    .body;
+            tocPageHtml = normalizedTocHtml;
+            tocPageUrl = tocUrl;
+            chapters = await _parseChapters(
+              html: tocPageHtml,
+              pageUrl: tocPageUrl,
+              rules: tocRules,
+              sourceId: normalizedSourceId,
+              bookId: normalizedBookId,
+              context: runtimeContext,
+              seedVariables: detailVariables,
+              jsContext: tocJsContext,
+            );
+          }
 
-        if (chapters.isEmpty) {
-          throw RuleMatchEmptyException(
-            briefMessage: '目录解析为空，请检查书源规则。',
+          chapters = await _appendNextTocChapters(
+            source: source,
+            rules: tocRules,
             sourceId: normalizedSourceId,
+            bookId: normalizedBookId,
+            context: runtimeContext,
+            seedVariables: detailVariables,
+            jsContext: tocJsContext,
+            initialPageHtml: tocPageHtml,
+            initialPageUrl: tocPageUrl,
+            initialChapters: chapters,
+          );
+
+          if (chapters.isEmpty) {
+            throw RuleMatchEmptyException(
+              briefMessage: '目录解析为空，请检查书源规则。',
+              sourceId: normalizedSourceId,
+              stage: ErrorStage.toc,
+              requestUrl: tocUrl,
+            );
+          }
+
+          _writeTocCache(cacheKey, chapters);
+        } on AppException catch (error) {
+          tocError = error;
+          _logger.warn(
+            'Book toc load failed',
+            context: {
+              'sourceId': normalizedSourceId,
+              'bookId': normalizedBookId,
+              'detailUrl': normalizedDetailUrl,
+              'tocUrl': tocUrl,
+              'code': error.code.name,
+              'stage': error.stage.name,
+            },
+          );
+        } catch (error, stackTrace) {
+          tocError = AppException(
+            code: ErrorCode.unknown,
             stage: ErrorStage.toc,
+            sourceId: normalizedSourceId,
             requestUrl: tocUrl,
+            briefMessage: '目录加载失败，请稍后重试。',
+            cause: error,
+            stackTrace: stackTrace,
+          );
+          _logger.warn(
+            'Book toc load failed',
+            context: {
+              'sourceId': normalizedSourceId,
+              'bookId': normalizedBookId,
+              'detailUrl': normalizedDetailUrl,
+              'tocUrl': tocUrl,
+              'error': error.toString(),
+            },
           );
         }
+      }
 
-        _tocCache[tocCacheKey] = chapters;
-      } on AppException catch (error) {
-        tocError = error;
-        _logger.warn(
-          'Book toc load failed',
-          context: {
-            'sourceId': normalizedSourceId,
-            'bookId': normalizedBookId,
-            'detailUrl': normalizedDetailUrl,
-            'tocUrl': tocUrl,
-            'code': error.code.name,
-            'stage': error.stage.name,
-          },
-        );
-      } catch (error, stackTrace) {
-        tocError = AppException(
-          code: ErrorCode.unknown,
-          stage: ErrorStage.toc,
-          sourceId: normalizedSourceId,
-          requestUrl: tocUrl,
-          briefMessage: '目录加载失败，请稍后重试。',
-          cause: error,
-          stackTrace: stackTrace,
-        );
-        _logger.warn(
-          'Book toc load failed',
-          context: {
-            'sourceId': normalizedSourceId,
-            'bookId': normalizedBookId,
-            'detailUrl': normalizedDetailUrl,
-            'tocUrl': tocUrl,
-            'error': error.toString(),
-          },
-        );
+      await _persistBookJsVariables(
+        source: source,
+        bookId: normalizedBookId,
+        variables: bookVariableUpdates,
+        stage: ErrorStage.detail,
+      );
+      final result = BookDetailLoadResult(
+        detail: detail,
+        chapters: chapters,
+        sourceName: source.name,
+        tocFromCache: false,
+        tocError: tocError,
+      );
+      _writeDetailCache(cacheKey, result);
+      completer.complete(result);
+      return result;
+    } catch (error, stackTrace) {
+      if (!completer.isCompleted) {
+        completer.completeError(error, stackTrace);
+      }
+      rethrow;
+    } finally {
+      if (identical(_inFlightLoads[cacheKey], completer.future)) {
+        _inFlightLoads.remove(cacheKey);
       }
     }
-
-    await _persistBookJsVariables(
-      source: source,
-      bookId: normalizedBookId,
-      variables: bookVariableUpdates,
-      stage: ErrorStage.detail,
-    );
-    final result = BookDetailLoadResult(
-      detail: detail,
-      chapters: chapters,
-      sourceName: source.name,
-      tocFromCache: false,
-      tocError: tocError,
-    );
-    _detailCache[tocCacheKey] = BookDetailLoadResult(
-      detail: detail,
-      chapters: List<Chapter>.unmodifiable(chapters),
-      sourceName: source.name,
-      tocFromCache: false,
-    );
-    return result;
   }
 
   Future<SourceDefinition> _getSource(String sourceId) async {
@@ -2966,6 +3060,15 @@ class _ProtectedTemplate {
 
   final String template;
   final Map<String, String> placeholders;
+}
+
+class _TimedCacheEntry<T> {
+  _TimedCacheEntry(this.value) : updatedAt = DateTime.now();
+
+  final T value;
+  final DateTime updatedAt;
+
+  bool isExpired(Duration ttl) => DateTime.now().difference(updatedAt) > ttl;
 }
 
 class _NetworkLoadResult {

@@ -129,9 +129,15 @@ class LocalBookIndexService {
         parsed.txtTocRuleName,
         fallback: null,
       );
+      final parsedCoverPath = _nonEmptyOrNull(
+        parsed.coverPath,
+        fallback: book.coverPath,
+      );
       final updatedBook = book.copyWith(
         title: _nonEmptyOrFallback(parsed.title, fallback: book.title),
         author: _nonEmptyOrNull(parsed.author, fallback: book.author),
+        coverPath: parsedCoverPath,
+        clearCoverPath: parsedCoverPath == null,
         charset: parsedCharset,
         clearCharset: parsedCharset == null,
         indexStatus: LocalBookIndexStatus.ready,

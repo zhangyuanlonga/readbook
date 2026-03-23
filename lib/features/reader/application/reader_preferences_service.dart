@@ -107,7 +107,7 @@ class ReaderPreferencesService {
     final pageTurnModeName = prefs.getString(_pageTurnModeKey);
     final pageTurnMode = ReaderPageTurnMode.values.firstWhere(
       (item) => item.name == pageTurnModeName,
-      orElse: () => ReaderPageTurnMode.tap,
+      orElse: () => ReaderPageTurnMode.tapAndSwipe,
     );
 
     final backgroundName = prefs.getString(_backgroundStyleKey);
@@ -226,7 +226,7 @@ class ReaderPreferencesService {
       infoFooterEnabled: prefs.getBool(_infoFooterEnabledKey) ?? false,
       infoShowTime: prefs.getBool(_infoShowTimeKey) ?? true,
       infoShowBattery: prefs.getBool(_infoShowBatteryKey) ?? false,
-      infoShowChapter: prefs.getBool(_infoShowChapterKey) ?? true,
+      infoShowChapter: prefs.getBool(_infoShowChapterKey) ?? false,
       infoShowProgress: prefs.getBool(_infoShowProgressKey) ?? true,
       infoHeaderPadding:
           (prefs.getDouble(_infoHeaderPaddingKey) ?? 8)
@@ -243,9 +243,9 @@ class ReaderPreferencesService {
               )
               .toDouble(),
       infoHeaderDividerEnabled:
-          prefs.getBool(_infoHeaderDividerEnabledKey) ?? true,
+          prefs.getBool(_infoHeaderDividerEnabledKey) ?? false,
       infoFooterDividerEnabled:
-          prefs.getBool(_infoFooterDividerEnabledKey) ?? true,
+          prefs.getBool(_infoFooterDividerEnabledKey) ?? false,
       infoHeaderMarginTop:
           (prefs.getDouble(_infoHeaderMarginTopKey) ?? 0)
               .clamp(

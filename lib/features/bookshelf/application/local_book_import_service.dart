@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'dart:io';
 
 import 'package:path/path.dart' as p;
@@ -15,6 +16,7 @@ import '../../../domain/entities/local_book.dart';
 import '../../../domain/repositories/local_book_repository.dart';
 import '../../reader/application/reader_system_settings_service.dart';
 import '../../reader/application/local/epub_local_book_parser.dart';
+import '../../reader/application/local/local_text_encoding_detector.dart';
 import 'bookshelf_service.dart';
 
 class LocalBookImportResult {
@@ -32,6 +34,7 @@ class LocalBookImportService {
     LocalBookRepository? localBookRepository,
     BookshelfService? bookshelfService,
     ReaderSystemSettingsService? readerSystemSettingsService,
+    LocalTextEncodingDetector? textEncodingDetector,
     AppLogger? logger,
     Future<Directory> Function()? supportDirectoryProvider,
   }) : _localBookRepository =
@@ -39,6 +42,8 @@ class LocalBookImportService {
        _bookshelfService = bookshelfService ?? BookshelfService(),
        _readerSystemSettingsService =
            readerSystemSettingsService ?? ReaderSystemSettingsService(),
+       _textEncodingDetector =
+           textEncodingDetector ?? const LocalTextEncodingDetector(),
        _logger = logger ?? AppLogger.instance,
        _supportDirectoryProvider =
            supportDirectoryProvider ?? getApplicationSupportDirectory;
@@ -48,6 +53,7 @@ class LocalBookImportService {
   final LocalBookRepository _localBookRepository;
   final BookshelfService _bookshelfService;
   final ReaderSystemSettingsService _readerSystemSettingsService;
+  final LocalTextEncodingDetector _textEncodingDetector;
   final AppLogger _logger;
   final Future<Directory> Function() _supportDirectoryProvider;
   final Uuid _uuid = const Uuid();
@@ -96,11 +102,15 @@ class LocalBookImportService {
       p.join(storageDir.path, '$bookId${_extensionForFormat(format)}'),
     );
 
-    if (await targetFile.exists()) {
-      await targetFile.delete();
-    }
-    await sourceFile.copy(targetFile.path);
-    final targetStat = await targetFile.stat();
+    final storageResult = await _copyIntoStorage(
+      sourceFile: sourceFile,
+      targetFile: targetFile,
+      format: format,
+      sourcePath: normalizedPath,
+      bookId: bookId,
+    );
+    final targetStat = storageResult.storageStat;
+    final normalizedCharset = storageResult.normalizedCharset;
 
     final title = _resolveTitle(displayName ?? p.basename(normalizedPath));
     final localBook =
@@ -117,7 +127,8 @@ class LocalBookImportService {
           chapterCount: 0,
           splitLongChapter: splitLongChapterDefault,
           updatedAt: now,
-          clearCharset: true,
+          charset: normalizedCharset,
+          clearCharset: normalizedCharset == null,
           clearLastError: true,
           clearTxtTocRuleName: true,
           clearTxtTocRulePattern: true,
@@ -137,6 +148,7 @@ class LocalBookImportService {
           splitLongChapter: splitLongChapterDefault,
           createdAt: now,
           updatedAt: now,
+          charset: normalizedCharset,
           author: existingBook?.author,
           coverPath: existingBook?.coverPath,
         );
@@ -169,6 +181,10 @@ class LocalBookImportService {
         'bookId': bookId,
         'format': format.name,
         'sourcePath': normalizedPath,
+        if (storageResult.originalCharset != null)
+          'sourceCharset': storageResult.originalCharset,
+        if (normalizedCharset != null) 'normalizedCharset': normalizedCharset,
+        'charsetConverted': storageResult.convertedToUtf8,
       },
     );
 
@@ -256,6 +272,65 @@ class LocalBookImportService {
     return storageDir;
   }
 
+  Future<_LocalStorageWriteResult> _copyIntoStorage({
+    required File sourceFile,
+    required File targetFile,
+    required LocalBookFormat format,
+    required String sourcePath,
+    required String bookId,
+  }) async {
+    if (await targetFile.exists()) {
+      await targetFile.delete();
+    }
+
+    if (format != LocalBookFormat.txt) {
+      await sourceFile.copy(targetFile.path);
+      final copiedStat = await targetFile.stat();
+      return _LocalStorageWriteResult(storageStat: copiedStat);
+    }
+
+    final bytes = await sourceFile.readAsBytes();
+    if (bytes.isEmpty) {
+      await targetFile.writeAsBytes(const <int>[], flush: true);
+      final emptyStat = await targetFile.stat();
+      return _LocalStorageWriteResult(
+        storageStat: emptyStat,
+        normalizedCharset: 'utf-8',
+        originalCharset: 'utf-8',
+      );
+    }
+
+    try {
+      final decoded = _textEncodingDetector.decodeBestEffort(bytes);
+      final normalizedText = decoded.text.replaceFirst('\uFEFF', '');
+      final normalizedBytes = utf8.encode(normalizedText);
+      await targetFile.writeAsBytes(normalizedBytes, flush: true);
+      final normalizedStat = await targetFile.stat();
+      return _LocalStorageWriteResult(
+        storageStat: normalizedStat,
+        normalizedCharset: 'utf-8',
+        originalCharset: decoded.charsetName,
+        convertedToUtf8:
+            decoded.charsetName != 'utf-8' ||
+            decoded.bomLength > 0 ||
+            decoded.fallbackUsed,
+      );
+    } catch (error) {
+      _logger.warn(
+        'Normalize local txt encoding failed, fallback to raw copy',
+        context: <String, Object?>{
+          'bookId': bookId,
+          'sourcePath': sourcePath,
+          'targetPath': targetFile.path,
+          'error': error.toString(),
+        },
+      );
+      await sourceFile.copy(targetFile.path);
+      final copiedStat = await targetFile.stat();
+      return _LocalStorageWriteResult(storageStat: copiedStat);
+    }
+  }
+
   String _buildBookId() {
     final raw = _uuid.v4().replaceAll('-', '');
     return 'local_$raw';
@@ -290,4 +365,18 @@ class LocalBookImportService {
 
     return trimmed.substring(0, dotIndex).trim();
   }
+}
+
+class _LocalStorageWriteResult {
+  const _LocalStorageWriteResult({
+    required this.storageStat,
+    this.normalizedCharset,
+    this.originalCharset,
+    this.convertedToUtf8 = false,
+  });
+
+  final FileStat storageStat;
+  final String? normalizedCharset;
+  final String? originalCharset;
+  final bool convertedToUtf8;
 }

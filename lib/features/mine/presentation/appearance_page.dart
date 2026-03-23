@@ -19,11 +19,14 @@ class AppearancePage extends ConsumerStatefulWidget {
 
 class _AppearancePageState extends ConsumerState<AppearancePage> {
   static const List<_SeedColorOption> _seedColorOptions = [
-    _SeedColorOption('番茄橙', Color(0xFFE7573B)),
-    _SeedColorOption('青绿', Color(0xFF2E7D32)),
-    _SeedColorOption('海蓝', Color(0xFF1565C0)),
-    _SeedColorOption('经典紫', Color(0xFF6750A4)),
-    _SeedColorOption('纯白', Color(0xFFFFFFFF)),
+    _SeedColorOption('焰阳橙', Color(0xFFE7573B)),
+    _SeedColorOption('松烟绿', Color(0xFF2E7D32)),
+    _SeedColorOption('澄海蓝', Color(0xFF1565C0)),
+    _SeedColorOption('星夜紫', Color(0xFF6750A4)),
+    _SeedColorOption('雾岚青', Color(0xFF0F8B8D)),
+    _SeedColorOption('莓霞红', Color(0xFFB83280)),
+    _SeedColorOption('琥珀金', Color(0xFFB7791F)),
+    _SeedColorOption('霁雪白', Color(0xFFFFFFFF)),
   ];
   static const List<_ThemeModeOption> _themeModeOptions = [
     _ThemeModeOption(
