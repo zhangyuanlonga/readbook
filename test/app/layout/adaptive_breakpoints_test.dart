@@ -323,10 +323,10 @@ void main() {
       width: 389,
       read: (context) => AppLayout.bookshelfGridColumnsForWidth(389),
     );
-    final columns390 = await _readFromContext<int>(
+    final columns320 = await _readFromContext<int>(
       tester,
-      width: 390,
-      read: (context) => AppLayout.bookshelfGridColumnsForWidth(390),
+      width: 320,
+      read: (context) => AppLayout.bookshelfGridColumnsForWidth(320),
     );
     final columns799 = await _readFromContext<int>(
       tester,
@@ -349,8 +349,8 @@ void main() {
       read: (context) => AppLayout.bookshelfGridColumnsForWidth(1400),
     );
 
-    expect(columns389, 2);
-    expect(columns390, 3);
+    expect(columns389, 3);
+    expect(columns320, 3);
     expect(columns799, 3);
     expect(columns800, 4);
     expect(columns1100, 5);

@@ -40,7 +40,7 @@ class AppLayout {
   static const double discoverMediumSidePanelWidth = 250;
   static const double discoverExpandedContentMaxWidth = 980;
   static const double discoverMediumContentMaxWidth = 880;
-  static const double bookshelfGridThreeColumnsWidth = 390;
+  static const double bookshelfGridThreeColumnsWidth = 320;
   static const double bookshelfGridFourColumnsWidth = 800;
   static const double bookshelfGridFiveColumnsWidth = 1100;
   static const double bookshelfGridSixColumnsWidth = 1400;

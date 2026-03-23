@@ -200,6 +200,7 @@ class _ShellScaffoldState extends ConsumerState<ShellScaffold>
     return Scaffold(
       body: body,
       bottomNavigationBar: NavigationBar(
+        height: 64,
         selectedIndex: effectiveSelectedIndex,
         onDestinationSelected: (index) {
           _goToDestination(context, visibleDestinations[index]);

@@ -12,7 +12,7 @@ class BookshelfGridSliver extends StatelessWidget {
     required this.itemBuilder,
     this.crossSpacing = 8,
     this.mainSpacing = 12,
-    this.itemHeightExtra = 52,
+    this.itemHeightExtra = 42,
   });
 
   final int itemCount;

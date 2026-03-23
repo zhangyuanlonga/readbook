@@ -1277,6 +1277,15 @@ class _BookshelfPageState extends State<BookshelfPage>
                   color: colorScheme.onSurfaceVariant,
                 ),
               ),
+              const SizedBox(height: 4),
+              ClipRRect(
+                borderRadius: BorderRadius.circular(2),
+                child: LinearProgressIndicator(
+                  value: progress?.chapterPositionRatio.clamp(0.0, 1.0) ?? 0.0,
+                  minHeight: 3,
+                  backgroundColor: colorScheme.surfaceContainerHighest,
+                ),
+              ),
             ],
           ),
         ),
@@ -1301,7 +1310,7 @@ class _BookshelfPageState extends State<BookshelfPage>
     final isEditingSelected = _isSelectionMode && isSelected;
 
     return Card(
-      margin: const EdgeInsets.only(bottom: 8),
+      margin: const EdgeInsets.only(bottom: 10),
       color:
           isEditingSelected
               ? colorScheme.primaryContainer.withValues(alpha: 0.34)
@@ -1328,7 +1337,7 @@ class _BookshelfPageState extends State<BookshelfPage>
                 },
         borderRadius: BorderRadius.circular(14),
         child: Padding(
-          padding: const EdgeInsets.fromLTRB(12, 10, 12, 10),
+          padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
           child: Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
@@ -1354,15 +1363,15 @@ class _BookshelfPageState extends State<BookshelfPage>
                 containedInkWell: true,
                 borderRadius: BorderRadius.circular(12),
                 child: SizedBox(
-                  width: 60,
-                  height: 88,
+                  width: 56,
+                  height: 80,
                   child: Stack(
                     children: [
                       Positioned.fill(
                         child: _buildCover(
                           book.coverUrl,
-                          width: 60,
-                          height: 88,
+                          width: 56,
+                          height: 80,
                         ),
                       ),
                       Positioned(
@@ -1432,6 +1441,18 @@ class _BookshelfPageState extends State<BookshelfPage>
                       ),
                       const SizedBox(height: 6),
                       Text(
+                        latestChapterText.isNotEmpty
+                            ? latestChapterText
+                            : '暂无缓存章节',
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                          color: colorScheme.onSurfaceVariant,
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
                         authorText.isNotEmpty ? '作者: $authorText' : '作者: 未知',
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
@@ -1454,6 +1475,17 @@ class _BookshelfPageState extends State<BookshelfPage>
                               progress == null
                                   ? FontWeight.w500
                                   : FontWeight.w600,
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+                      ClipRRect(
+                        borderRadius: BorderRadius.circular(2),
+                        child: LinearProgressIndicator(
+                          value:
+                              progress?.chapterPositionRatio.clamp(0.0, 1.0) ??
+                              0.0,
+                          minHeight: 3,
+                          backgroundColor: colorScheme.surfaceContainerHighest,
                         ),
                       ),
                     ],
@@ -1943,6 +1975,36 @@ class _BookshelfPageState extends State<BookshelfPage>
                                   color: colorScheme.onSurfaceVariant,
                                 ),
                               ),
+                              if (progress != null) ...[
+                                const SizedBox(height: 6),
+                                Row(
+                                  children: [
+                                    Expanded(
+                                      child: ClipRRect(
+                                        borderRadius: BorderRadius.circular(2),
+                                        child: LinearProgressIndicator(
+                                          value: progress.chapterPositionRatio
+                                              .clamp(0.0, 1.0),
+                                          minHeight: 4,
+                                          backgroundColor:
+                                              colorScheme
+                                                  .surfaceContainerHighest,
+                                        ),
+                                      ),
+                                    ),
+                                    const SizedBox(width: 8),
+                                    Text(
+                                      '${(progress.chapterPositionRatio * 100).round()}%',
+                                      style: Theme.of(
+                                        sheetContext,
+                                      ).textTheme.labelSmall?.copyWith(
+                                        color: colorScheme.primary,
+                                        fontWeight: FontWeight.w600,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ],
                             ],
                           ),
                         ),
