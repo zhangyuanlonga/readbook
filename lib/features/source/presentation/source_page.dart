@@ -339,11 +339,6 @@ class _SourcePageState extends State<SourcePage> {
           ),
           actions: [
             if (!_isSelectionMode) ...[
-              IconButton(
-                onPressed: _openBatchDiagnostics,
-                tooltip: '批量诊断',
-                icon: const Icon(Icons.fact_check_outlined),
-              ),
               if (_isImporting)
                 const Padding(
                   padding: EdgeInsets.only(right: 16),
@@ -1300,10 +1295,6 @@ class _SourcePageState extends State<SourcePage> {
       nextList[index] = updated;
       _visibleSources = nextList;
     });
-  }
-
-  void _openBatchDiagnostics() {
-    context.push('/source-diagnostics');
   }
 
   Future<void> _showImportActionSheet() async {

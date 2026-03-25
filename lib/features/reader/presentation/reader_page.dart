@@ -29,8 +29,6 @@ import '../../../domain/entities/bookmark.dart';
 import '../../../domain/entities/book.dart';
 import '../../../domain/entities/bookshelf_book.dart';
 import '../../../domain/entities/chapter.dart';
-import '../../../domain/entities/reader_replace_preference.dart';
-import '../../../domain/entities/reader_replace_rule.dart';
 import '../../../domain/entities/reader_settings.dart';
 import '../../../domain/entities/reading_progress.dart';
 import '../../../domain/entities/reader_toc_snapshot.dart';
@@ -47,7 +45,6 @@ import '../application/local/local_reader_identity.dart';
 import '../application/local_content_provider.dart';
 import '../application/reader_font_registry_service.dart';
 import '../application/reader_preferences_service.dart';
-import '../application/reader_replace_rule_service.dart';
 import '../application/reading_record_metrics.dart';
 import '../application/reading_record_service.dart';
 import '../application/reader_error_center_service.dart';
@@ -100,8 +97,6 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
       ReaderFontRegistryService();
   final ReaderTypographyResolver _typographyResolver =
       const ReaderTypographyResolver();
-  final ReaderReplaceRuleService _readerReplaceRuleService =
-      ReaderReplaceRuleService();
   final ReaderSystemSettingsService _systemSettingsService =
       ReaderSystemSettingsService();
   final ReaderErrorCenterService _readerErrorCenterService =
@@ -168,8 +163,6 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
   int _selectionEndOffset = 0;
   String _selectedSnippet = '';
   List<Bookmark> _chapterBookmarks = const [];
-  List<ReaderReplaceRule> _effectiveReaderReplaceRules =
-      const <ReaderReplaceRule>[];
   Map<int, List<_BookmarkRange>> _bookmarkRangesByParagraph =
       const <int, List<_BookmarkRange>>{};
   bool _selectionBold = false;
@@ -6486,9 +6479,6 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
       content: snapshot.result.content,
       paragraphs: List<String>.unmodifiable(effectiveParagraphs),
       isCached: snapshot.isCached,
-      effectiveReaderReplaceRules: List<ReaderReplaceRule>.unmodifiable(
-        snapshot.result.effectiveReaderReplaceRules,
-      ),
     );
   }
 
@@ -6533,9 +6523,6 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
         content: _content,
         paragraphs: List<String>.unmodifiable(currentParagraphs),
         isCached: _isCurrentChapterCached,
-        effectiveReaderReplaceRules: List<ReaderReplaceRule>.unmodifiable(
-          _effectiveReaderReplaceRules,
-        ),
       );
     }
 
@@ -6743,9 +6730,6 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
       _chapterUrl = chapter.chapterUrl;
       _chapterTitle = chapter.displayTitle;
       _isCurrentChapterCached = chapter.isCached;
-      _effectiveReaderReplaceRules = List<ReaderReplaceRule>.unmodifiable(
-        chapter.effectiveReaderReplaceRules,
-      );
       _setContent(chapter.content, precomputedParagraphs: chapter.paragraphs);
     });
 
@@ -6801,9 +6785,6 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
           content: _content,
           paragraphs: List<String>.unmodifiable(effectiveParagraphs),
           isCached: _isCurrentChapterCached,
-          effectiveReaderReplaceRules: List<ReaderReplaceRule>.unmodifiable(
-            _effectiveReaderReplaceRules,
-          ),
         ),
       ];
     });
@@ -7922,9 +7903,6 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
       }
       _isCurrentChapterCached = snapshot.isCached;
       _errorText = null;
-      _effectiveReaderReplaceRules = List<ReaderReplaceRule>.unmodifiable(
-        snapshot.result.effectiveReaderReplaceRules,
-      );
       _setContent(
         snapshot.result.content,
         imageUrls: snapshot.result.imageUrls,
@@ -7973,25 +7951,6 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
 
       final decoded = _decodePersistedChapterCache(payload);
       final previewRatio = _previewBootstrapScrollRatio();
-      final titleResult = await _readerReplaceRuleService.applyTitleRules(
-        title: (_chapterTitle ?? '').trim(),
-        bookTitle: _bookTitle,
-        sourceId: sourceId,
-      );
-      final contentResult = await _readerReplaceRuleService.applyContentRules(
-        content: decoded.content,
-        bookTitle: _bookTitle,
-        sourceId: sourceId,
-      );
-      final effectiveRules = <ReaderReplaceRule>[
-        ...titleResult.effectiveRules,
-        ...contentResult.effectiveRules.where(
-          (rule) =>
-              !titleResult.effectiveRules.any(
-                (titleRule) => titleRule.id == rule.id,
-              ),
-        ),
-      ];
       if (!mounted) {
         return false;
       }
@@ -8006,21 +7965,15 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
       setState(() {
         _isCurrentChapterCached = true;
         _errorText = null;
-        if (titleResult.content.trim().isNotEmpty) {
-          _chapterTitle = titleResult.content.trim();
-        }
-        _effectiveReaderReplaceRules = List<ReaderReplaceRule>.unmodifiable(
-          effectiveRules,
-        );
         _setContent(
-          contentResult.content,
+          decoded.content,
           imageUrls: decoded.imageUrls,
           imageHeaders: decoded.imageHeaders,
         );
         if (resolvedCurrentChapter != null &&
             _shouldUseContinuousTextFlow &&
             decoded.imageUrls.isEmpty &&
-            contentResult.content.trim().isNotEmpty) {
+            decoded.content.trim().isNotEmpty) {
           _continuousTextChapters = <_ContinuousTextChapter>[
             _ContinuousTextChapter(
               chapterId: _chapterId,
@@ -8029,17 +7982,14 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
               displayTitle:
                   (_chapterTitle ?? resolvedCurrentChapter.title).trim(),
               chapterIndex: _currentIndex!,
-              content: contentResult.content,
+              content: decoded.content,
               paragraphs:
                   _paragraphs.isEmpty
                       ? List<String>.unmodifiable(<String>[
-                        contentResult.content,
+                        decoded.content,
                       ])
                       : List<String>.unmodifiable(_paragraphs),
               isCached: true,
-              effectiveReaderReplaceRules: List<ReaderReplaceRule>.unmodifiable(
-                effectiveRules,
-              ),
             ),
           ];
         } else {
@@ -8400,188 +8350,6 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
     );
 
     context.push(route);
-  }
-
-  Future<void> _showEffectiveReaderReplaceRulesSheet() async {
-    if (!mounted) {
-      return;
-    }
-
-    final rules = _effectiveReaderReplaceRules;
-    await showModalBottomSheet<void>(
-      context: context,
-      showDragHandle: true,
-      useSafeArea: true,
-      backgroundColor: _readerModalTheme().colorScheme.surface,
-      builder: (sheetContext) {
-        final colorScheme = Theme.of(sheetContext).colorScheme;
-        final textTheme = Theme.of(sheetContext).textTheme;
-        return Padding(
-          padding: const EdgeInsets.fromLTRB(16, 6, 16, 16),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                '本章净化',
-                style: textTheme.titleMedium?.copyWith(
-                  fontWeight: FontWeight.w700,
-                ),
-              ),
-              const SizedBox(height: 6),
-              Text(
-                rules.isEmpty
-                    ? '本章没有命中用户净化规则。'
-                    : '本章共命中 ${rules.length} 条净化规则。',
-                style: textTheme.bodySmall?.copyWith(
-                  color: colorScheme.onSurfaceVariant,
-                  height: 1.35,
-                ),
-              ),
-              const SizedBox(height: 12),
-              if (rules.isEmpty)
-                Container(
-                  width: double.infinity,
-                  padding: const EdgeInsets.all(14),
-                  decoration: BoxDecoration(
-                    color: colorScheme.surfaceContainerLow,
-                    borderRadius: BorderRadius.circular(14),
-                    border: Border.all(
-                      color: colorScheme.outlineVariant.withValues(alpha: 0.42),
-                    ),
-                  ),
-                  child: Text(
-                    '你可以去“净化”里新增去广告、去水印、文本替换等规则。',
-                    style: textTheme.bodySmall?.copyWith(height: 1.35),
-                  ),
-                )
-              else
-                Flexible(
-                  child: ListView.separated(
-                    shrinkWrap: true,
-                    itemCount: rules.length,
-                    separatorBuilder: (_, __) => const SizedBox(height: 8),
-                    itemBuilder: (context, index) {
-                      final rule = rules[index];
-                      return Material(
-                        color: colorScheme.surfaceContainerLow,
-                        borderRadius: BorderRadius.circular(14),
-                        child: InkWell(
-                          borderRadius: BorderRadius.circular(14),
-                          onTap: () async {
-                            Navigator.of(sheetContext).pop();
-                            await context.push(
-                              '/reader-replace-rules/edit?id=${rule.id}',
-                            );
-                          },
-                          child: Padding(
-                            padding: const EdgeInsets.fromLTRB(12, 12, 12, 12),
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Row(
-                                  children: [
-                                    Expanded(
-                                      child: Text(
-                                        rule.name,
-                                        style: textTheme.titleSmall?.copyWith(
-                                          fontWeight: FontWeight.w700,
-                                        ),
-                                      ),
-                                    ),
-                                    Container(
-                                      padding: const EdgeInsets.symmetric(
-                                        horizontal: 8,
-                                        vertical: 4,
-                                      ),
-                                      decoration: BoxDecoration(
-                                        color: colorScheme.secondaryContainer
-                                            .withValues(alpha: 0.82),
-                                        borderRadius: BorderRadius.circular(
-                                          999,
-                                        ),
-                                      ),
-                                      child: Text(
-                                        rule.isRegex ? '正则' : '普通',
-                                        style: textTheme.labelSmall?.copyWith(
-                                          color:
-                                              colorScheme.onSecondaryContainer,
-                                          fontWeight: FontWeight.w700,
-                                        ),
-                                      ),
-                                    ),
-                                    const SizedBox(width: 6),
-                                    Container(
-                                      padding: const EdgeInsets.symmetric(
-                                        horizontal: 8,
-                                        vertical: 4,
-                                      ),
-                                      decoration: BoxDecoration(
-                                        color: colorScheme.surface,
-                                        borderRadius: BorderRadius.circular(
-                                          999,
-                                        ),
-                                        border: Border.all(
-                                          color: colorScheme.outlineVariant
-                                              .withValues(alpha: 0.4),
-                                        ),
-                                      ),
-                                      child: Text(
-                                        rule.scopeTitle && rule.scopeContent
-                                            ? '标题+正文'
-                                            : rule.scopeTitle
-                                            ? '标题'
-                                            : '正文',
-                                        style: textTheme.labelSmall?.copyWith(
-                                          color: colorScheme.onSurfaceVariant,
-                                          fontWeight: FontWeight.w700,
-                                        ),
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                                const SizedBox(height: 6),
-                                Text(
-                                  '匹配：${rule.pattern}',
-                                  style: textTheme.bodySmall?.copyWith(
-                                    color: colorScheme.onSurfaceVariant,
-                                    height: 1.35,
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                        ),
-                      );
-                    },
-                  ),
-                ),
-              const SizedBox(height: 12),
-              Row(
-                children: [
-                  Expanded(
-                    child: OutlinedButton(
-                      onPressed: () => Navigator.of(sheetContext).pop(),
-                      child: const Text('关闭'),
-                    ),
-                  ),
-                  const SizedBox(width: 10),
-                  Expanded(
-                    child: FilledButton(
-                      onPressed: () async {
-                        Navigator.of(sheetContext).pop();
-                        await context.push('/reader-replace-rules');
-                      },
-                      child: const Text('管理规则'),
-                    ),
-                  ),
-                ],
-              ),
-            ],
-          ),
-        );
-      },
-    );
   }
 
   Future<void> _preloadNeighbors({required int taskToken}) async {
@@ -10739,25 +10507,9 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
     var startAutoReadAfterApply = false;
     var draftAutoSwitchSourceOnFailureEnabled =
         _autoSwitchSourceOnFailureEnabled;
-    var draftReaderReplaceRuleMode = ReaderReplaceRuleMode.inherit;
     var isSavingAutoSwitchSourceOnFailure = false;
-    var isSavingReaderReplaceRuleMode = false;
     var isPersistingDraft = false;
     Timer? persistDraftTimer;
-
-    final normalizedSourceId = (_sourceId ?? '').trim();
-    final normalizedDetailUrl = (_detailUrl ?? '').trim();
-    if (_currentBookId.trim().isNotEmpty &&
-        normalizedSourceId.isNotEmpty &&
-        normalizedDetailUrl.isNotEmpty) {
-      final preference = await _readerReplaceRuleService.getBookPreference(
-        bookId: _currentBookId,
-        sourceId: normalizedSourceId,
-        detailUrl: normalizedDetailUrl,
-      );
-      draftReaderReplaceRuleMode =
-          preference?.mode ?? ReaderReplaceRuleMode.inherit;
-    }
 
     String fingerprint(ReaderSettings settings) {
       return jsonEncode(settings.copyWith(autoReadEnabled: false).toJson());
@@ -13004,58 +12756,6 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
                   }
                 }
 
-                String replaceRuleModeLabel(ReaderReplaceRuleMode mode) {
-                  return switch (mode) {
-                    ReaderReplaceRuleMode.inherit => '跟随全局',
-                    ReaderReplaceRuleMode.enabled => '本书开启',
-                    ReaderReplaceRuleMode.disabled => '本书关闭',
-                  };
-                }
-
-                Future<void> updateReaderReplaceRuleMode(
-                  ReaderReplaceRuleMode mode,
-                ) async {
-                  if (isSavingReaderReplaceRuleMode ||
-                      _currentBookId.trim().isEmpty ||
-                      normalizedSourceId.isEmpty ||
-                      normalizedDetailUrl.isEmpty) {
-                    return;
-                  }
-
-                  setModalState(() {
-                    draftReaderReplaceRuleMode = mode;
-                    isSavingReaderReplaceRuleMode = true;
-                  });
-
-                  try {
-                    await _readerReplaceRuleService.saveBookPreference(
-                      ReaderReplacePreference(
-                        bookId: _currentBookId,
-                        sourceId: normalizedSourceId,
-                        detailUrl: normalizedDetailUrl,
-                        mode: mode,
-                        updatedAt: DateTime.now(),
-                      ),
-                    );
-                    await _loadCurrentChapter(
-                      initialScrollRatio: _currentScrollRatio(),
-                    );
-                  } catch (error) {
-                    if (!mounted) {
-                      return;
-                    }
-                    _showMessage('保存净化策略失败：$error');
-                  } finally {
-                    if (mounted) {
-                      setModalState(() {
-                        isSavingReaderReplaceRuleMode = false;
-                      });
-                    } else {
-                      isSavingReaderReplaceRuleMode = false;
-                    }
-                  }
-                }
-
                 final quickToggleCard = buildSettingsSectionCard(
                   icon: Icons.toggle_on_rounded,
                   title: '快捷开关',
@@ -13122,70 +12822,6 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
                           readingCards[2],
                         ]
                         : <Widget>[
-                          buildSettingsSectionCard(
-                            icon: Icons.cleaning_services_outlined,
-                            title: '本章净化',
-                            subtitle: '查看当前章节命中的用户净化规则',
-                            children: [
-                              Wrap(
-                                spacing: 8,
-                                runSpacing: 8,
-                                children: ReaderReplaceRuleMode.values
-                                    .map(
-                                      (mode) => ChoiceChip(
-                                        label: Text(replaceRuleModeLabel(mode)),
-                                        selected:
-                                            draftReaderReplaceRuleMode == mode,
-                                        onSelected:
-                                            isSavingReaderReplaceRuleMode
-                                                ? null
-                                                : (_) => unawaited(
-                                                  updateReaderReplaceRuleMode(
-                                                    mode,
-                                                  ),
-                                                ),
-                                      ),
-                                    )
-                                    .toList(growable: false),
-                              ),
-                              if (isSavingReaderReplaceRuleMode) ...[
-                                const SizedBox(height: 8),
-                                const LinearProgressIndicator(minHeight: 2),
-                              ],
-                              Wrap(
-                                spacing: 8,
-                                runSpacing: 8,
-                                children: [
-                                  buildSummaryAction(
-                                    icon: Icons.rule_folder_outlined,
-                                    label: '命中',
-                                    value:
-                                        _effectiveReaderReplaceRules.isEmpty
-                                            ? '无'
-                                            : '${_effectiveReaderReplaceRules.length} 条',
-                                    onTap:
-                                        () => unawaited(
-                                          _showEffectiveReaderReplaceRulesSheet(),
-                                        ),
-                                  ),
-                                ],
-                              ),
-                              const SizedBox(height: 10),
-                              Text(
-                                '当前策略：${replaceRuleModeLabel(draftReaderReplaceRuleMode)}。\n'
-                                '${_effectiveReaderReplaceRules.isEmpty ? '当前章节没有命中用户净化规则。' : '已命中：${_effectiveReaderReplaceRules.map((item) => item.name).join('、')}'}',
-                                style: Theme.of(
-                                  context,
-                                ).textTheme.bodySmall?.copyWith(
-                                  color:
-                                      Theme.of(
-                                        context,
-                                      ).colorScheme.onSurfaceVariant,
-                                  height: 1.35,
-                                ),
-                              ),
-                            ],
-                          ),
                           quickToggleCard,
                           interfaceCards[2],
                           readingCards[3],
@@ -15179,7 +14815,6 @@ class _ContinuousTextChapter {
     required this.content,
     required this.paragraphs,
     required this.isCached,
-    required this.effectiveReaderReplaceRules,
   });
 
   final String chapterId;
@@ -15190,7 +14825,6 @@ class _ContinuousTextChapter {
   final String content;
   final List<String> paragraphs;
   final bool isCached;
-  final List<ReaderReplaceRule> effectiveReaderReplaceRules;
 }
 
 class _ContinuousTextChapterLayout {

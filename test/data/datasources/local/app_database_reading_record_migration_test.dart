@@ -268,8 +268,6 @@ void main() {
         sqliteDb.execute('DROP TABLE reading_records;');
         sqliteDb.execute('DROP TABLE reading_record_days;');
         sqliteDb.execute('DROP TABLE reading_record_sessions;');
-        sqliteDb.execute('DROP TABLE reader_replace_rules;');
-        sqliteDb.execute('DROP TABLE reader_replace_preferences;');
         sqliteDb.execute('PRAGMA user_version = 2;');
       } finally {
         sqliteDb.close();

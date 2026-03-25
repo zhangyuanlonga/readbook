@@ -9,8 +9,11 @@ import '../../../app/layout/app_layout.dart';
 import '../../../app/layout/app_spacing.dart';
 import '../../../app/widgets/disk_cached_cover_image.dart';
 import '../../../core/errors/app_exception.dart';
+import '../../../data/datasources/local/app_database.dart';
+import '../../../data/repositories/source_repository_impl.dart';
 import '../../../domain/entities/book.dart';
 import '../../../domain/entities/source_definition.dart';
+import '../../../domain/repositories/source_repository.dart';
 import '../../book/presentation/book_detail_route.dart';
 import '../application/discover_preferences_service.dart';
 import '../application/explore_service.dart';
@@ -56,7 +59,12 @@ class _DiscoverPageState extends State<DiscoverPage>
 
   late final ExploreService _exploreService;
   late final DiscoverPreferencesService _discoverPreferencesService;
+  final SourceRepository _sourceRepository = SourceRepositoryImpl(
+    AppDatabase.instance,
+  );
   final ScrollController _booksScrollController = ScrollController();
+  StreamSubscription<List<SourceDefinition>>? _sourceChangesSubscription;
+  Timer? _sourceRefreshDebounce;
 
   bool _isLoadingSources = false;
   bool _isLoadingCategories = false;
@@ -111,6 +119,9 @@ class _DiscoverPageState extends State<DiscoverPage>
     _discoverPreferencesService =
         widget._discoverPreferencesService ?? DiscoverPreferencesService();
     _booksScrollController.addListener(_onBookListScroll);
+    _sourceChangesSubscription = _sourceRepository.watchAll().listen((_) {
+      _scheduleSourceRefresh();
+    });
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) {
         return;
@@ -121,6 +132,8 @@ class _DiscoverPageState extends State<DiscoverPage>
 
   @override
   void dispose() {
+    _sourceRefreshDebounce?.cancel();
+    _sourceChangesSubscription?.cancel();
     _booksScrollController.removeListener(_onBookListScroll);
     _booksScrollController.dispose();
     super.dispose();
@@ -188,6 +201,19 @@ class _DiscoverPageState extends State<DiscoverPage>
     if (position.pixels + 280 >= position.maxScrollExtent) {
       unawaited(_loadBooks(reset: false));
     }
+  }
+
+  void _scheduleSourceRefresh() {
+    if (!mounted) {
+      return;
+    }
+    _sourceRefreshDebounce?.cancel();
+    _sourceRefreshDebounce = Timer(const Duration(milliseconds: 220), () {
+      if (!mounted) {
+        return;
+      }
+      unawaited(_loadSources());
+    });
   }
 
   Future<void> _bootstrapDiscoverState() async {

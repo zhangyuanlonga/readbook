@@ -9,8 +9,6 @@ import 'package:path_provider/path_provider.dart';
 import '../../../domain/entities/bookmark.dart';
 import '../../../domain/entities/local_book.dart';
 import '../../../domain/entities/local_chapter.dart';
-import '../../../domain/entities/reader_replace_preference.dart';
-import '../../../domain/entities/reader_replace_rule.dart';
 import '../../../domain/entities/reading_record.dart';
 import '../../../domain/entities/reading_record_day.dart';
 import '../../../domain/entities/reading_record_session.dart';
@@ -215,75 +213,6 @@ class SearchSourceHits extends Table {
   Set<Column<Object>> get primaryKey => {titleNorm, authorNorm, sourceId};
 }
 
-class StoredReaderReplaceRules extends Table {
-  IntColumn get id => integer().autoIncrement()();
-  TextColumn get name => text().withDefault(const Constant(''))();
-  TextColumn get group => text().nullable()();
-  TextColumn get pattern => text().withDefault(const Constant(''))();
-  TextColumn get replacement => text().withDefault(const Constant(''))();
-  TextColumn get scopeMode => text().withDefault(const Constant('all'))();
-  TextColumn get scope => text().nullable()();
-  TextColumn get excludeScope => text().nullable()();
-  BoolColumn get scopeTitle => boolean().withDefault(const Constant(false))();
-  BoolColumn get scopeContent => boolean().withDefault(const Constant(true))();
-  BoolColumn get isEnabled => boolean().withDefault(const Constant(true))();
-  BoolColumn get isRegex => boolean().withDefault(const Constant(true))();
-  IntColumn get timeoutMs => integer().withDefault(const Constant(3000))();
-  IntColumn get sortOrder => integer().withDefault(const Constant(0))();
-  DateTimeColumn get createdAt => dateTime().withDefault(currentDateAndTime)();
-  DateTimeColumn get updatedAt => dateTime().withDefault(currentDateAndTime)();
-
-  @override
-  String get tableName => 'reader_replace_rules';
-}
-
-class StoredReaderReplacePreferences extends Table {
-  TextColumn get bookId => text()();
-  TextColumn get sourceId => text()();
-  TextColumn get detailUrl => text()();
-  TextColumn get mode => text().withDefault(const Constant('inherit'))();
-  DateTimeColumn get updatedAt => dateTime().withDefault(currentDateAndTime)();
-
-  @override
-  String get tableName => 'reader_replace_preferences';
-
-  @override
-  Set<Column<Object>> get primaryKey => {bookId, sourceId, detailUrl};
-}
-
-const String _readerReplaceRulesTableName = 'reader_replace_rules';
-const String _readerReplaceRulesCreateSql = '''
-CREATE TABLE IF NOT EXISTS reader_replace_rules (
-  id INTEGER PRIMARY KEY AUTOINCREMENT,
-  name TEXT NOT NULL DEFAULT '',
-  "group" TEXT,
-  pattern TEXT NOT NULL DEFAULT '',
-  replacement TEXT NOT NULL DEFAULT '',
-  scope_mode TEXT NOT NULL DEFAULT 'all',
-  scope TEXT,
-  exclude_scope TEXT,
-  scope_title INTEGER NOT NULL DEFAULT 0,
-  scope_content INTEGER NOT NULL DEFAULT 1,
-  is_enabled INTEGER NOT NULL DEFAULT 1,
-  is_regex INTEGER NOT NULL DEFAULT 1,
-  timeout_ms INTEGER NOT NULL DEFAULT 3000,
-  sort_order INTEGER NOT NULL DEFAULT 0,
-  created_at TEXT NOT NULL,
-  updated_at TEXT NOT NULL
-)
-''';
-const String _readerReplacePreferencesTableName = 'reader_replace_preferences';
-const String _readerReplacePreferencesCreateSql = '''
-CREATE TABLE IF NOT EXISTS reader_replace_preferences (
-  book_id TEXT NOT NULL,
-  source_id TEXT NOT NULL,
-  detail_url TEXT NOT NULL,
-  mode TEXT NOT NULL DEFAULT 'inherit',
-  updated_at TEXT NOT NULL,
-  PRIMARY KEY (book_id, source_id, detail_url)
-)
-''';
-
 class SourceListCountSummary {
   const SourceListCountSummary({
     required this.totalCount,
@@ -373,7 +302,6 @@ class SearchSourceHitUpsert {
     StoredReadingRecordDays,
     StoredReadingRecordSessions,
     SearchSourceHits,
-    StoredReaderReplacePreferences,
   ],
 )
 class AppDatabase extends _$AppDatabase {
@@ -393,8 +321,6 @@ class AppDatabase extends _$AppDatabase {
     return MigrationStrategy(
       onCreate: (migrator) async {
         await migrator.createAll();
-        await customStatement(_readerReplaceRulesCreateSql);
-        await customStatement(_readerReplacePreferencesCreateSql);
       },
       onUpgrade: (migrator, from, to) async {
         if (from < 2) {
@@ -457,12 +383,6 @@ class AppDatabase extends _$AppDatabase {
           await migrator.createTable(storedReadingRecords);
           await migrator.createTable(storedReadingRecordDays);
           await migrator.createTable(storedReadingRecordSessions);
-        }
-        if (from < 10) {
-          await customStatement(_readerReplaceRulesCreateSql);
-        }
-        if (from < 11) {
-          await customStatement(_readerReplacePreferencesCreateSql);
         }
         if (from < 12) {
           await _addColumnIfMissing(
@@ -1332,168 +1252,6 @@ class AppDatabase extends _$AppDatabase {
 
   Future<void> clearChapterCaches() => delete(chapterCaches).go();
 
-  Future<List<ReaderReplaceRule>> getAllReaderReplaceRules() async {
-    final rows =
-        await customSelect(
-          'SELECT * FROM $_readerReplaceRulesTableName '
-          'ORDER BY sort_order ASC, id ASC',
-        ).get();
-    return rows.map(_mapQueryRowToReaderReplaceRule).toList(growable: false);
-  }
-
-  Stream<List<ReaderReplaceRule>> watchAllReaderReplaceRules() {
-    return Stream.fromFuture(getAllReaderReplaceRules());
-  }
-
-  Future<ReaderReplaceRule?> getReaderReplaceRuleById(int id) async {
-    if (id <= 0) {
-      return null;
-    }
-    final row =
-        await customSelect(
-          'SELECT * FROM $_readerReplaceRulesTableName WHERE id = ? LIMIT 1',
-          variables: [Variable<int>(id)],
-        ).getSingleOrNull();
-    if (row == null) {
-      return null;
-    }
-    return _mapQueryRowToReaderReplaceRule(row);
-  }
-
-  Future<void> upsertReaderReplaceRule(ReaderReplaceRule rule) async {
-    final normalizedName = rule.name.trim();
-    final normalizedPattern = rule.pattern.trim();
-    if (normalizedName.isEmpty || normalizedPattern.isEmpty) {
-      return;
-    }
-
-    final now = DateTime.now();
-    final sortOrder =
-        rule.sortOrder > 0
-            ? rule.sortOrder
-            : await _nextReaderReplaceRuleOrder();
-
-    if (rule.id > 0) {
-      await customStatement(
-        'UPDATE $_readerReplaceRulesTableName '
-        'SET name = ?, "group" = ?, pattern = ?, replacement = ?, '
-        'scope_mode = ?, scope = ?, exclude_scope = ?, scope_title = ?, '
-        'scope_content = ?, is_enabled = ?, is_regex = ?, timeout_ms = ?, '
-        'sort_order = ?, created_at = ?, updated_at = ? '
-        'WHERE id = ?',
-        [
-          normalizedName,
-          _nullableString(rule.group),
-          normalizedPattern,
-          rule.replacement,
-          rule.scopeMode.name,
-          _nullableString(rule.scope),
-          _nullableString(rule.excludeScope),
-          rule.scopeTitle ? 1 : 0,
-          rule.scopeContent ? 1 : 0,
-          rule.isEnabled ? 1 : 0,
-          rule.isRegex ? 1 : 0,
-          rule.safeTimeoutMs,
-          sortOrder,
-          rule.createdAt.toIso8601String(),
-          now.toIso8601String(),
-          rule.id,
-        ],
-      );
-      return;
-    }
-
-    await customStatement(
-      'INSERT INTO $_readerReplaceRulesTableName '
-      '(name, "group", pattern, replacement, scope_mode, scope, exclude_scope, '
-      'scope_title, scope_content, is_enabled, is_regex, timeout_ms, sort_order, created_at, updated_at) '
-      'VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
-      [
-        normalizedName,
-        _nullableString(rule.group),
-        normalizedPattern,
-        rule.replacement,
-        rule.scopeMode.name,
-        _nullableString(rule.scope),
-        _nullableString(rule.excludeScope),
-        rule.scopeTitle ? 1 : 0,
-        rule.scopeContent ? 1 : 0,
-        rule.isEnabled ? 1 : 0,
-        rule.isRegex ? 1 : 0,
-        rule.safeTimeoutMs,
-        sortOrder,
-        now.toIso8601String(),
-        now.toIso8601String(),
-      ],
-    );
-  }
-
-  Future<void> deleteReaderReplaceRuleById(int id) async {
-    if (id <= 0) {
-      return;
-    }
-    await customStatement(
-      'DELETE FROM $_readerReplaceRulesTableName WHERE id = ?',
-      [id],
-    );
-  }
-
-  Future<ReaderReplacePreference?> getReaderReplacePreference({
-    required String bookId,
-    required String sourceId,
-    required String detailUrl,
-  }) async {
-    final normalizedBookId = bookId.trim();
-    final normalizedSourceId = sourceId.trim();
-    final normalizedDetailUrl = detailUrl.trim();
-    if (normalizedBookId.isEmpty ||
-        normalizedSourceId.isEmpty ||
-        normalizedDetailUrl.isEmpty) {
-      return null;
-    }
-
-    final row =
-        await customSelect(
-          'SELECT * FROM $_readerReplacePreferencesTableName '
-          'WHERE book_id = ? AND source_id = ? AND detail_url = ? LIMIT 1',
-          variables: [
-            Variable<String>(normalizedBookId),
-            Variable<String>(normalizedSourceId),
-            Variable<String>(normalizedDetailUrl),
-          ],
-        ).getSingleOrNull();
-
-    if (row == null) {
-      return null;
-    }
-    return _mapQueryRowToReaderReplacePreference(row);
-  }
-
-  Future<void> upsertReaderReplacePreference(
-    ReaderReplacePreference preference,
-  ) async {
-    final normalizedBookId = preference.bookId.trim();
-    final normalizedSourceId = preference.sourceId.trim();
-    final normalizedDetailUrl = preference.detailUrl.trim();
-    if (normalizedBookId.isEmpty ||
-        normalizedSourceId.isEmpty ||
-        normalizedDetailUrl.isEmpty) {
-      return;
-    }
-
-    await customStatement(
-      'INSERT OR REPLACE INTO $_readerReplacePreferencesTableName '
-      '(book_id, source_id, detail_url, mode, updated_at) VALUES (?, ?, ?, ?, ?)',
-      [
-        normalizedBookId,
-        normalizedSourceId,
-        normalizedDetailUrl,
-        preference.mode.name,
-        preference.updatedAt.toIso8601String(),
-      ],
-    );
-  }
-
   Future<int> getTotalCachedChapterCount() async {
     final countExpression = chapterCaches.cacheKey.count();
     final query = selectOnly(chapterCaches)..addColumns([countExpression]);
@@ -1811,21 +1569,6 @@ class AppDatabase extends _$AppDatabase {
       ),
       mode: InsertMode.insertOrReplace,
     );
-  }
-
-  Future<int> _nextReaderReplaceRuleOrder() async {
-    final row =
-        await customSelect(
-          'SELECT MAX(sort_order) AS currentMax FROM $_readerReplaceRulesTableName',
-        ).getSingle();
-    final currentMax = row.data['currentMax'];
-    if (currentMax is int) {
-      return currentMax + 1;
-    }
-    if (currentMax is num) {
-      return currentMax.toInt() + 1;
-    }
-    return 1;
   }
 
   Future<List<Bookmark>> getBookmarksByBookId(String bookId) async {
@@ -2355,49 +2098,6 @@ class AppDatabase extends _$AppDatabase {
       readChars: row.readChars,
       startPositionRatio: row.startPositionRatio,
       endPositionRatio: row.endPositionRatio,
-    );
-  }
-
-  ReaderReplaceRule _mapQueryRowToReaderReplaceRule(QueryRow row) {
-    final data = row.data;
-    final scopeMode = ReaderReplaceRuleScopeMode.values.firstWhere(
-      (item) => item.name == (data['scope_mode'] ?? '').toString(),
-      orElse: () => ReaderReplaceRuleScopeMode.all,
-    );
-
-    return ReaderReplaceRule(
-      id: _decodeInt(data['id']) ?? 0,
-      name: (data['name'] ?? '').toString(),
-      group: _nullableString(data['group']),
-      pattern: (data['pattern'] ?? '').toString(),
-      replacement: (data['replacement'] ?? '').toString(),
-      scopeMode: scopeMode,
-      scope: _nullableString(data['scope']),
-      excludeScope: _nullableString(data['exclude_scope']),
-      scopeTitle: _decodeBool(data['scope_title']),
-      scopeContent: _decodeBool(data['scope_content']),
-      isEnabled: _decodeBool(data['is_enabled']),
-      isRegex: _decodeBool(data['is_regex']),
-      timeoutMs: _decodeInt(data['timeout_ms']) ?? 3000,
-      sortOrder: _decodeInt(data['sort_order']) ?? 0,
-      createdAt: _decodeDateTime(data['created_at']),
-      updatedAt: _decodeDateTime(data['updated_at']),
-    );
-  }
-
-  ReaderReplacePreference _mapQueryRowToReaderReplacePreference(QueryRow row) {
-    final data = row.data;
-    final mode = ReaderReplaceRuleMode.values.firstWhere(
-      (item) => item.name == (data['mode'] ?? '').toString(),
-      orElse: () => ReaderReplaceRuleMode.inherit,
-    );
-
-    return ReaderReplacePreference(
-      bookId: (data['book_id'] ?? '').toString(),
-      sourceId: (data['source_id'] ?? '').toString(),
-      detailUrl: (data['detail_url'] ?? '').toString(),
-      mode: mode,
-      updatedAt: _decodeDateTime(data['updated_at']),
     );
   }
 

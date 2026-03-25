@@ -12,8 +12,6 @@ import '../features/announcement/presentation/announcement_list_page.dart';
 import '../features/mine/presentation/mine_page.dart';
 import '../features/mine/presentation/appearance_page.dart';
 import '../features/mine/presentation/cache_management_page.dart';
-import '../features/mine/presentation/reader_replace_rule_page.dart';
-import '../features/mine/presentation/reader_replace_rule_edit_page.dart';
 import '../features/mine/presentation/about_page.dart';
 import '../features/mine/presentation/bookmarks_page.dart';
 import '../features/mine/presentation/feedback_page.dart';
@@ -23,7 +21,6 @@ import '../features/auth/presentation/user_profile_page.dart';
 import '../features/reader/presentation/reader_page.dart';
 import '../features/search/presentation/search_page.dart';
 import '../features/source/presentation/source_page.dart';
-import '../features/source/presentation/source_diagnostics_page.dart';
 import '../features/reader/presentation/reading_records_page.dart';
 import 'shell_scaffold.dart';
 
@@ -79,20 +76,6 @@ final GoRouter appRouter = GoRouter(
       path: '/cache',
       name: 'cache',
       builder: (context, state) => const CacheManagementPage(),
-    ),
-    GoRoute(
-      path: '/reader-replace-rules',
-      name: 'reader-replace-rules',
-      builder: (context, state) => const ReaderReplaceRulePage(),
-    ),
-    GoRoute(
-      path: '/reader-replace-rules/edit',
-      name: 'reader-replace-rules-edit',
-      builder: (context, state) {
-        final rawId = state.uri.queryParameters['id'];
-        final ruleId = int.tryParse(rawId ?? '');
-        return ReaderReplaceRuleEditPage(ruleId: ruleId);
-      },
     ),
     GoRoute(
       path: '/about',
@@ -162,12 +145,6 @@ final GoRouter appRouter = GoRouter(
       name: 'local-library',
       builder: (context, state) => const LocalLibraryPage(),
     ),
-    GoRoute(
-      path: '/source-diagnostics',
-      name: 'source-diagnostics',
-      builder: (context, state) => const SourceDiagnosticsPage(),
-    ),
-
     GoRoute(
       path: '/local/book/:bookId',
       name: 'local-book',

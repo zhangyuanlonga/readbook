@@ -3,31 +3,25 @@ import '../../../core/errors/error_codes.dart';
 import '../../../core/errors/error_stage.dart';
 import '../../../domain/entities/book_detail.dart';
 import '../../../domain/entities/chapter.dart';
-import '../../../domain/entities/reader_replace_rule.dart';
 import '../../book/application/book_detail_service.dart';
 import '../../book/application/local_book_detail_service.dart';
 import 'chapter_content_service.dart';
 import 'content_provider.dart';
 import 'local/local_chapter_content_service.dart';
 import 'local/local_reader_identity.dart';
-import 'reader_replace_rule_service.dart';
 
 class LocalContentProvider extends ContentProvider {
   LocalContentProvider({
     LocalBookDetailService? detailService,
     LocalChapterContentService? chapterContentService,
-    ReaderReplaceRuleService? readerReplaceRuleService,
   }) : _detailService = detailService ?? LocalBookDetailService(),
        _chapterContentService =
-           chapterContentService ?? LocalChapterContentService(),
-       _readerReplaceRuleService =
-           readerReplaceRuleService ?? ReaderReplaceRuleService();
+           chapterContentService ?? LocalChapterContentService();
 
   static const String sourceName = '本地导入';
 
   final LocalBookDetailService _detailService;
   final LocalChapterContentService _chapterContentService;
-  final ReaderReplaceRuleService _readerReplaceRuleService;
 
   @override
   ContentCapabilities get capabilities => const ContentCapabilities(
@@ -145,35 +139,13 @@ class LocalContentProvider extends ContentProvider {
       chapterId: resolvedChapterId,
       chapterIndex: chapterIndex,
     );
-
-    final detailUrl = LocalReaderIdentity.buildBookDetailUrl(resolvedBookId);
-    final replaced = await _readerReplaceRuleService.applyContentRules(
-      content: chapter.content,
-      bookTitle: (bookTitle ?? '').trim(),
-      sourceId: sourceId,
-      bookId: resolvedBookId,
-      detailUrl: detailUrl,
-    );
-    final titleResult = await _readerReplaceRuleService.applyTitleRules(
-      title: chapterTitle ?? chapter.title,
-      bookTitle: (bookTitle ?? '').trim(),
-      sourceId: sourceId,
-      bookId: resolvedBookId,
-      detailUrl: detailUrl,
-    );
-
     final imageUrls =
-        replaced.content.trim().isEmpty ? chapter.imageUrls : const <String>[];
+        chapter.content.trim().isEmpty ? chapter.imageUrls : const <String>[];
 
     return ChapterContentResult(
-      content: replaced.content,
+      content: chapter.content,
       fromCache: true,
       imageUrls: imageUrls,
-      displayChapterTitle: titleResult.content,
-      effectiveReaderReplaceRules: _mergeRules(
-        titleRules: titleResult.effectiveRules,
-        contentRules: replaced.effectiveRules,
-      ),
     );
   }
 
@@ -186,24 +158,6 @@ class LocalContentProvider extends ContentProvider {
       stage: stage,
       briefMessage: '非本地书籍来源，无法使用本地内容提供器。',
     );
-  }
-
-  List<ReaderReplaceRule> _mergeRules({
-    required List<ReaderReplaceRule> titleRules,
-    required List<ReaderReplaceRule> contentRules,
-  }) {
-    if (contentRules.isEmpty) {
-      return titleRules;
-    }
-    if (titleRules.isEmpty) {
-      return contentRules;
-    }
-    return <ReaderReplaceRule>[
-      ...titleRules,
-      ...contentRules.where(
-        (rule) => !titleRules.any((titleRule) => titleRule.id == rule.id),
-      ),
-    ];
   }
 
   String? _resolveCoverUrl(String? coverPath) {
