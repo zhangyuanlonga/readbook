@@ -26,6 +26,8 @@ import '../../../data/repositories/source_repository_impl.dart';
 import '../../../domain/entities/search_request_context.dart';
 import '../../../domain/entities/source_definition.dart';
 import '../../../domain/repositories/source_repository.dart';
+import '../../../runtime/sources/source_result_models.dart' as runtime_models;
+import '../../source/application/source_runtime_facade.dart';
 import 'content_text_cleaner.dart';
 
 class ChapterContentResult {
@@ -50,6 +52,7 @@ class ChapterContentService {
   ChapterContentService({
     AppDatabase? database,
     SourceRepository? sourceRepository,
+    SourceRuntimeFacade? sourceRuntimeFacade,
     AppHttpClient? httpClient,
     WebViewExecutor? webViewExecutor,
     InteractiveVerificationBrowserExecutor? interactiveVerificationExecutor,
@@ -63,6 +66,8 @@ class ChapterContentService {
        _sourceRepository =
            sourceRepository ??
            SourceRepositoryImpl(database ?? AppDatabase.instance),
+       _sourceRuntimeFacade =
+           sourceRuntimeFacade ?? SourceRuntimeFacade.instance,
        _httpClient = httpClient ?? AppHttpClient(),
        _webViewExecutor = webViewExecutor ?? WebViewExecutor(),
        _interactiveVerificationExecutor =
@@ -74,10 +79,12 @@ class ChapterContentService {
        _logger = logger ?? AppLogger.instance,
        _urlTemplateResolver =
            urlTemplateResolver ?? const UrlTemplateResolver(),
-       _responseProcessor = responseProcessor ?? const SourceResponseProcessor();
+       _responseProcessor =
+           responseProcessor ?? const SourceResponseProcessor();
 
   final AppDatabase _database;
   final SourceRepository _sourceRepository;
+  final SourceRuntimeFacade? _sourceRuntimeFacade;
   final AppHttpClient _httpClient;
   final WebViewExecutor _webViewExecutor;
   final InteractiveVerificationBrowserExecutor _interactiveVerificationExecutor;
@@ -148,7 +155,17 @@ class ChapterContentService {
       );
     }
 
-    final source = await _findSource(normalizedSourceId);
+    final source = await _findSourceOrNull(normalizedSourceId);
+    if (source == null) {
+      return _loadFromScriptRuntime(
+        sourceId: normalizedSourceId,
+        chapterUrl: normalizedChapterUrl,
+        bookId: normalizedBookId,
+        chapterIndex: chapterIndex,
+        chapterTitle: chapterTitle,
+        cacheKey: cacheKey,
+      );
+    }
     final sourceVariableUpdates = <String, String>{};
     final bookVariableUpdates = <String, String>{};
     final runtimeJsVariables = <String, String>{
@@ -469,10 +486,7 @@ class ChapterContentService {
       sourceVariables: sourceVariableUpdates,
       bookVariables: bookVariableUpdates,
     );
-    return ChapterContentResult(
-      content: cleaned,
-      fromCache: false,
-    );
+    return ChapterContentResult(content: cleaned, fromCache: false);
   }
 
   Future<void> preload({
@@ -513,19 +527,168 @@ class ChapterContentService {
     }
   }
 
-  Future<SourceDefinition> _findSource(String sourceId) async {
+  Future<SourceDefinition?> _findSourceOrNull(String sourceId) async {
     final sources = await _sourceRepository.getAll();
     for (final source in sources) {
       if (source.id == sourceId) {
         return source;
       }
     }
+    return null;
+  }
 
-    throw UnknownSourceException(
-      briefMessage: '未找到书源：$sourceId',
+  Future<ChapterContentResult> _loadFromScriptRuntime({
+    required String sourceId,
+    required String chapterUrl,
+    required String bookId,
+    required int? chapterIndex,
+    required String? chapterTitle,
+    required String cacheKey,
+  }) async {
+    final facade = _sourceRuntimeFacade;
+    final registered =
+        facade == null
+            ? null
+            : await facade.ensureRegisteredScriptSourceById(sourceId);
+    if (facade == null || registered == null) {
+      throw UnknownSourceException(
+        briefMessage: '未找到书源：$sourceId',
+        sourceId: sourceId,
+        stage: ErrorStage.content,
+      );
+    }
+
+    final runtimeBook = runtime_models.Book(
+      id: bookId.trim().isNotEmpty ? bookId.trim() : 'script-book',
+      title: '',
+      author: '',
+      detailUrl: '',
       sourceId: sourceId,
-      stage: ErrorStage.content,
     );
+    final runtimeChapter = runtime_models.Chapter(
+      id: _buildScriptChapterId(
+        bookId: runtimeBook.id,
+        chapterUrl: chapterUrl,
+        index: chapterIndex ?? 0,
+      ),
+      title:
+          chapterTitle?.trim().isNotEmpty == true
+              ? chapterTitle!.trim()
+              : '未命名章节',
+      url: chapterUrl,
+      index: chapterIndex ?? 0,
+      sourceId: sourceId,
+    );
+
+    final content = await facade.content(
+      sourceId: sourceId,
+      book: runtimeBook,
+      chapter: runtimeChapter,
+    );
+
+    final normalizedImages = content.images
+        .map((item) => item.trim())
+        .where((item) => item.isNotEmpty)
+        .toList(growable: false);
+
+    if (normalizedImages.isNotEmpty) {
+      final payload = _encodeImageCachePayload(
+        normalizedImages,
+        imageHeaders: const <String, String>{},
+      );
+      _chapterCache[cacheKey] = payload;
+
+      if (bookId.isNotEmpty && chapterIndex != null) {
+        try {
+          await _database.upsertChapterCache(
+            cacheKey: cacheKey,
+            bookId: bookId,
+            sourceId: sourceId,
+            chapterIndex: chapterIndex,
+            chapterTitle: chapterTitle,
+            chapterUrl: chapterUrl,
+            content: payload,
+          );
+        } catch (error) {
+          _logger.warn(
+            'Chapter cache persist failed',
+            context: {
+              'sourceId': sourceId,
+              'chapterUrl': chapterUrl,
+              'bookId': bookId,
+              'error': error.toString(),
+            },
+          );
+        }
+      }
+
+      return ChapterContentResult(
+        content: '',
+        fromCache: false,
+        imageUrls: normalizedImages,
+        displayChapterTitle: _normalizeOptionalText(content.title),
+      );
+    }
+
+    final normalizedContent = _cleaner.clean(content.content.trim());
+    if (normalizedContent.isEmpty) {
+      throw RuleMatchEmptyException(
+        briefMessage: '正文解析为空，请检查书源规则。',
+        stage: ErrorStage.content,
+        sourceId: sourceId,
+      );
+    }
+
+    _chapterCache[cacheKey] = normalizedContent;
+    if (bookId.isNotEmpty && chapterIndex != null) {
+      try {
+        await _database.upsertChapterCache(
+          cacheKey: cacheKey,
+          bookId: bookId,
+          sourceId: sourceId,
+          chapterIndex: chapterIndex,
+          chapterTitle: chapterTitle,
+          chapterUrl: chapterUrl,
+          content: normalizedContent,
+        );
+      } catch (error) {
+        _logger.warn(
+          'Chapter cache persist failed',
+          context: {
+            'sourceId': sourceId,
+            'chapterUrl': chapterUrl,
+            'bookId': bookId,
+            'error': error.toString(),
+          },
+        );
+      }
+    }
+
+    return ChapterContentResult(
+      content: normalizedContent,
+      fromCache: false,
+      displayChapterTitle: _normalizeOptionalText(content.title),
+    );
+  }
+
+  String _buildScriptChapterId({
+    required String bookId,
+    required String chapterUrl,
+    required int index,
+  }) {
+    final normalizedChapterUrl = chapterUrl.trim();
+    if (normalizedChapterUrl.isNotEmpty) {
+      return '$bookId:${Uri.encodeComponent(normalizedChapterUrl)}';
+    }
+    return '${bookId}_$index';
+  }
+
+  String? _normalizeOptionalText(String? value) {
+    final normalized = value?.trim();
+    if (normalized == null || normalized.isEmpty) {
+      return null;
+    }
+    return normalized;
   }
 
   Future<void> _persistJsVariables({

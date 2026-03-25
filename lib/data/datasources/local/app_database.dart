@@ -12,6 +12,7 @@ import '../../../domain/entities/local_chapter.dart';
 import '../../../domain/entities/reading_record.dart';
 import '../../../domain/entities/reading_record_day.dart';
 import '../../../domain/entities/reading_record_session.dart';
+import '../../../domain/entities/script_source.dart';
 import '../../../domain/entities/source_definition.dart';
 
 part 'app_database.g.dart';
@@ -213,6 +214,24 @@ class SearchSourceHits extends Table {
   Set<Column<Object>> get primaryKey => {titleNorm, authorNorm, sourceId};
 }
 
+class StoredScriptSources extends Table {
+  TextColumn get id => text()();
+  TextColumn get name => text()();
+  TextColumn get group => text().nullable()();
+  TextColumn get author => text().nullable()();
+  TextColumn get description => text().nullable()();
+  TextColumn get sourceCode => text()();
+  BoolColumn get enabled => boolean().withDefault(const Constant(true))();
+  DateTimeColumn get createdAt => dateTime().withDefault(currentDateAndTime)();
+  DateTimeColumn get updatedAt => dateTime().withDefault(currentDateAndTime)();
+
+  @override
+  String get tableName => 'script_sources';
+
+  @override
+  Set<Column<Object>> get primaryKey => {id};
+}
+
 class SourceListCountSummary {
   const SourceListCountSummary({
     required this.totalCount,
@@ -302,6 +321,7 @@ class SearchSourceHitUpsert {
     StoredReadingRecordDays,
     StoredReadingRecordSessions,
     SearchSourceHits,
+    StoredScriptSources,
   ],
 )
 class AppDatabase extends _$AppDatabase {
@@ -310,7 +330,7 @@ class AppDatabase extends _$AppDatabase {
   static final AppDatabase instance = AppDatabase();
 
   @override
-  int get schemaVersion => 15;
+  int get schemaVersion => 16;
 
   static const String _mangaSourceMatcherSql =
       '(raw_json LIKE \'%"sourceType":2,%\' OR '
@@ -473,6 +493,9 @@ class AppDatabase extends _$AppDatabase {
         if (from < 15) {
           await _removeDeprecatedLocalBookColumns(migrator);
         }
+        if (from < 16) {
+          await migrator.createTable(storedScriptSources);
+        }
       },
     );
   }
@@ -598,6 +621,84 @@ class AppDatabase extends _$AppDatabase {
       (rows) => rows.map(_mapRowToSource).toList(growable: false),
     );
   }
+
+  Future<List<ScriptSource>> getAllScriptSources() async {
+    final rows =
+        await (select(storedScriptSources)..orderBy([
+          (table) => OrderingTerm.asc(table.group),
+          (table) => OrderingTerm.asc(table.name),
+        ])).get();
+    return rows.map(_mapRowToScriptSource).toList(growable: false);
+  }
+
+  Stream<List<ScriptSource>> watchAllScriptSources() {
+    final query = select(storedScriptSources)..orderBy([
+      (table) => OrderingTerm.asc(table.group),
+      (table) => OrderingTerm.asc(table.name),
+    ]);
+    return query.watch().map(
+      (rows) => rows.map(_mapRowToScriptSource).toList(growable: false),
+    );
+  }
+
+  Future<ScriptSource?> getScriptSourceById(String id) async {
+    final normalized = id.trim();
+    if (normalized.isEmpty) {
+      return null;
+    }
+
+    final row =
+        await (select(storedScriptSources)
+          ..where((table) => table.id.equals(normalized))).getSingleOrNull();
+    if (row == null) {
+      return null;
+    }
+    return _mapRowToScriptSource(row);
+  }
+
+  Future<void> upsertScriptSource(ScriptSource source) {
+    return into(storedScriptSources).insertOnConflictUpdate(
+      StoredScriptSourcesCompanion(
+        id: Value(source.id),
+        name: Value(source.name),
+        group: Value(source.group),
+        author: Value(source.author),
+        description: Value(source.description),
+        sourceCode: Value(source.sourceCode),
+        enabled: Value(source.enabled),
+        createdAt: Value(source.createdAt),
+        updatedAt: Value(source.updatedAt),
+      ),
+    );
+  }
+
+  Future<void> setScriptSourceEnabled({
+    required String id,
+    required bool enabled,
+  }) {
+    final normalized = id.trim();
+    if (normalized.isEmpty) {
+      return Future<void>.value();
+    }
+    return (update(storedScriptSources)
+      ..where((table) => table.id.equals(normalized))).write(
+      StoredScriptSourcesCompanion(
+        enabled: Value(enabled),
+        updatedAt: Value(DateTime.now()),
+      ),
+    );
+  }
+
+  Future<void> deleteScriptSource(String id) {
+    final normalized = id.trim();
+    if (normalized.isEmpty) {
+      return Future<void>.value();
+    }
+    return (delete(storedScriptSources)
+      ..where((table) => table.id.equals(normalized))).go();
+  }
+
+  Future<void> clearScriptSources() => delete(storedScriptSources).go();
 
   Stream<List<SourceListItem>> watchSourceListItems() {
     final sql =
@@ -2151,6 +2252,20 @@ class AppDatabase extends _$AppDatabase {
       exploreUrl: exploreUrl,
       jsCapability: jsCapability,
       originalSource: originalSource,
+    );
+  }
+
+  ScriptSource _mapRowToScriptSource(StoredScriptSource row) {
+    return ScriptSource(
+      id: row.id,
+      name: row.name,
+      group: _nullableString(row.group),
+      author: _nullableString(row.author),
+      description: _nullableString(row.description),
+      sourceCode: row.sourceCode,
+      enabled: row.enabled,
+      createdAt: row.createdAt,
+      updatedAt: row.updatedAt,
     );
   }
 

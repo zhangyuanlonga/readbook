@@ -12,7 +12,7 @@ TARGET="${1:-${TARGET:-apk}}"            # apk | appbundle | both
 BUILD_MODE="${2:-${BUILD_MODE:-release}}" # debug | profile | release
 SPLIT_PER_ABI="${SPLIT_PER_ABI:-}"       # legacy alias for APK_PROFILE=split
 APK_PROFILE="${APK_PROFILE:-}"           # arm64 | split | universal
-OUTPUT_DIR="${OUTPUT_DIR:-${PROJECT_ROOT}/build/android/artifacts}"
+OUTPUT_DIR="${OUTPUT_DIR:-${PROJECT_ROOT}/artifacts/android}"
 ARTIFACT_NAME="${ARTIFACT_NAME:-书享阅读}"
 BUILD_NAME="${BUILD_NAME:-}"
 BUILD_NUMBER="${BUILD_NUMBER:-}"
@@ -32,7 +32,7 @@ Environment variables:
   FLUTTER_CMD   Flutter command path (default: flutter)
   APK_PROFILE   APK output profile: arm64 | split | universal (default: arm64)
   SPLIT_PER_ABI Legacy alias. Set to 1 for APK_PROFILE=split
-  OUTPUT_DIR    Output artifacts folder (default: build/android/artifacts)
+  OUTPUT_DIR    Output artifacts folder (default: artifacts/android)
   ARTIFACT_NAME Final artifact display name prefix (default: 书享阅读)
   BUILD_NAME    Override Flutter --build-name
   BUILD_NUMBER  Override Flutter --build-number

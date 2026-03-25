@@ -28,6 +28,9 @@ import '../../../domain/entities/book.dart';
 import '../../../domain/entities/search_request_context.dart';
 import '../../../domain/entities/source_definition.dart';
 import '../../../domain/repositories/source_repository.dart';
+import '../../../runtime/sources/source_registry.dart';
+import '../../../runtime/sources/source_result_models.dart' as runtime_models;
+import '../../source/application/source_runtime_facade.dart';
 import 'search_hit_cache_service.dart';
 import 'search_result_parser.dart';
 import 'search_system_settings_service.dart';
@@ -183,6 +186,7 @@ class SingleSourceSearchResult {
 class SearchService {
   SearchService({
     SourceRepository? sourceRepository,
+    SourceRuntimeFacade? sourceRuntimeFacade,
     AppHttpClient? httpClient,
     WebViewExecutor? webViewExecutor,
     InteractiveVerificationBrowserExecutor? interactiveVerificationExecutor,
@@ -193,9 +197,12 @@ class SearchService {
     SourceResponseProcessor? responseProcessor,
     SearchHitCacheService? searchHitCacheService,
     SearchSystemSettingsService? searchSystemSettingsService,
-    int maxConcurrentSources = SearchSystemSettingsService.defaultMaxConcurrentSources,
+    int maxConcurrentSources =
+        SearchSystemSettingsService.defaultMaxConcurrentSources,
   }) : _sourceRepository =
            sourceRepository ?? SourceRepositoryImpl(AppDatabase.instance),
+       _sourceRuntimeFacade =
+           sourceRuntimeFacade ?? SourceRuntimeFacade.instance,
        _httpClient = httpClient ?? AppHttpClient(),
        _webViewExecutor = webViewExecutor ?? WebViewExecutor(),
        _interactiveVerificationExecutor =
@@ -220,6 +227,7 @@ class SearchService {
   int _maxConcurrentSources;
 
   final SourceRepository _sourceRepository;
+  final SourceRuntimeFacade? _sourceRuntimeFacade;
   final AppHttpClient _httpClient;
   final WebViewExecutor _webViewExecutor;
   final InteractiveVerificationBrowserExecutor _interactiveVerificationExecutor;
@@ -293,6 +301,9 @@ class SearchService {
               source.enabled && _matchesContentMode(source, contentMode),
         )
         .toList(growable: false);
+    var enabledScriptSources = await _loadAvailableScriptSources(
+      contentMode: contentMode,
+    );
 
     final sourceIdSet =
         sourceIds
@@ -303,9 +314,12 @@ class SearchService {
       enabledSources = enabledSources
           .where((source) => sourceIdSet.contains(source.id))
           .toList(growable: false);
+      enabledScriptSources = enabledScriptSources
+          .where((source) => sourceIdSet.contains(source.runtime.id))
+          .toList(growable: false);
     }
 
-    if (enabledSources.isEmpty) {
+    if (enabledSources.isEmpty && enabledScriptSources.isEmpty) {
       if (sourceIdSet != null && sourceIdSet.isNotEmpty) {
         throw UnknownSourceException(
           briefMessage: '没有可用已选书源，请调整筛选条件或启用书源。',
@@ -319,13 +333,17 @@ class SearchService {
       );
     }
 
-    final concurrency = min(_maxConcurrentSources, enabledSources.length);
+    final allTargets = <_SearchTarget>[
+      ...enabledSources.map(_SearchTarget.legacy),
+      ...enabledScriptSources.map(_SearchTarget.script),
+    ];
+    final concurrency = min(_maxConcurrentSources, allTargets.length);
 
     _searchDebugInfo(
       'Search started',
       context: {
         'keyword': normalizedKeyword,
-        'sourceCount': enabledSources.length,
+        'sourceCount': allTargets.length,
         'page': page,
         'pageSize': pageSize,
         'concurrency': concurrency,
@@ -336,10 +354,12 @@ class SearchService {
 
     final sourceNames = <String, String>{
       for (final source in enabledSources) source.id: source.name,
+      for (final source in enabledScriptSources)
+        source.runtime.id: source.runtime.name,
     };
     final sourceOrderById = <String, int>{
-      for (var index = 0; index < enabledSources.length; index++)
-        enabledSources[index].id: index,
+      for (var index = 0; index < allTargets.length; index++)
+        allTargets[index].sourceId: index,
     };
 
     final booksById = <String, Book>{};
@@ -347,7 +367,7 @@ class SearchService {
     var successSourceCount = 0;
     var progressAggregationState = const _ProgressAggregationState();
 
-    final pendingSources = Queue<SourceDefinition>.from(enabledSources);
+    final pendingSources = Queue<_SearchTarget>.from(allTargets);
     final workerCount = min(concurrency, pendingSources.length);
 
     Future<void> worker() async {
@@ -371,15 +391,21 @@ class SearchService {
         final startAt = DateTime.now();
 
         try {
-          final report = await _searchSingleSource(
-            source: source,
-            context: SearchRequestContext(
-              keyword: normalizedKeyword,
-              page: page,
-              pageSize: pageSize,
-              sourceId: source.id,
-            ),
-          );
+          final report =
+              source.legacySource != null
+                  ? await _searchSingleSource(
+                    source: source.legacySource!,
+                    context: SearchRequestContext(
+                      keyword: normalizedKeyword,
+                      page: page,
+                      pageSize: pageSize,
+                      sourceId: source.sourceId,
+                    ),
+                  )
+                  : await _searchSingleScriptSource(
+                    source: source.scriptSource!,
+                    keyword: normalizedKeyword,
+                  );
 
           successSourceCount++;
           for (final book in report.books) {
@@ -389,8 +415,8 @@ class SearchService {
           _searchDebugInfo(
             'Search source success',
             context: {
-              'sourceId': source.id,
-              'sourceName': source.name,
+              'sourceId': source.sourceId,
+              'sourceName': source.sourceName,
               'bookCount': report.books.length,
               'requestUrl': report.requestUrl,
               'method': report.method.name,
@@ -400,8 +426,8 @@ class SearchService {
           );
         } on AppException catch (error) {
           final failure = SourceSearchFailure(
-            sourceId: source.id,
-            sourceName: source.name,
+            sourceId: source.sourceId,
+            sourceName: source.sourceName,
             message: _toUserReadableMessage(error),
             code: error.code,
             stage: error.stage,
@@ -413,8 +439,8 @@ class SearchService {
           _logger.warn(
             'Search source failed',
             context: {
-              'sourceId': source.id,
-              'sourceName': source.name,
+              'sourceId': source.sourceId,
+              'sourceName': source.sourceName,
               'code': error.code.name,
               'stage': error.stage.name,
               'message': error.briefMessage,
@@ -427,15 +453,16 @@ class SearchService {
           final exception = AppException(
             code: ErrorCode.unknown,
             stage: ErrorStage.search,
-            sourceId: source.id,
-            briefMessage: rawDetail.isEmpty ? '搜索失败：${source.name}' : rawDetail,
+            sourceId: source.sourceId,
+            briefMessage:
+                rawDetail.isEmpty ? '搜索失败：${source.sourceName}' : rawDetail,
             cause: error,
             stackTrace: stackTrace,
           );
           failures.add(
             SourceSearchFailure(
-              sourceId: source.id,
-              sourceName: source.name,
+              sourceId: source.sourceId,
+              sourceName: source.sourceName,
               message: _toUserReadableMessage(exception),
               code: exception.code,
               stage: exception.stage,
@@ -447,13 +474,16 @@ class SearchService {
           _logger.error(
             'Search source crashed',
             exception: exception,
-            context: {'sourceId': source.id, 'sourceName': source.name},
+            context: {
+              'sourceId': source.sourceId,
+              'sourceName': source.sourceName,
+            },
           );
         }
 
         progressAggregationState = await _emitProgress(
           keyword: normalizedKeyword,
-          sourceCount: enabledSources.length,
+          sourceCount: allTargets.length,
           successSourceCount: successSourceCount,
           booksById: booksById,
           failures: failures,
@@ -470,7 +500,7 @@ class SearchService {
 
     final finalReport = await _buildExecutionReport(
       keyword: normalizedKeyword,
-      sourceCount: enabledSources.length,
+      sourceCount: allTargets.length,
       successSourceCount: successSourceCount,
       booksById: booksById,
       failures: failures,
@@ -509,9 +539,101 @@ class SearchService {
     return finalReport;
   }
 
+  Future<List<RegisteredSource>> _loadAvailableScriptSources({
+    required SearchContentMode contentMode,
+  }) async {
+    final facade = _sourceRuntimeFacade;
+    if (facade == null) {
+      return const <RegisteredSource>[];
+    }
+    if (contentMode == SearchContentMode.manga) {
+      return const <RegisteredSource>[];
+    }
+
+    var sources = facade.registeredScriptSources(enabledOnly: true);
+    if (sources.isNotEmpty) {
+      return sources;
+    }
+
+    final report = await facade.reloadScriptSources();
+    return report.loaded;
+  }
+
+  Future<_SourceSearchOutput> _searchSingleScriptSource({
+    required RegisteredSource source,
+    required String keyword,
+  }) async {
+    final facade = _sourceRuntimeFacade;
+    if (facade == null) {
+      throw StateError('SourceRuntimeFacade is unavailable.');
+    }
+
+    final books = await facade.search(
+      sourceId: source.runtime.id,
+      keyword: keyword,
+    );
+    return _SourceSearchOutput(
+      requestUrl: '',
+      method: HttpRequestMethod.get,
+      statusCode: 200,
+      books: books
+          .map(
+            (book) =>
+                _mapRuntimeBookToDomain(book, sourceId: source.runtime.id),
+          )
+          .toList(growable: false),
+    );
+  }
+
+  Book _mapRuntimeBookToDomain(
+    runtime_models.Book book, {
+    required String sourceId,
+  }) {
+    final normalizedDetailUrl = book.detailUrl.trim();
+    final resolvedId =
+        book.id.trim().isNotEmpty
+            ? book.id.trim()
+            : _buildRuntimeBookId(
+              sourceId: sourceId,
+              detailUrl: normalizedDetailUrl,
+              title: book.title,
+            );
+    return Book(
+      id: resolvedId,
+      sourceId: sourceId,
+      title: book.title.trim().isEmpty ? '未命名书籍' : book.title.trim(),
+      detailUrl: normalizedDetailUrl,
+      author: _normalizeOptionalText(book.author),
+      intro: _normalizeOptionalText(book.intro),
+      coverUrl: _normalizeOptionalText(book.cover),
+      latestChapter: _normalizeOptionalText(book.latestChapter),
+    );
+  }
+
+  String _buildRuntimeBookId({
+    required String sourceId,
+    required String detailUrl,
+    required String title,
+  }) {
+    final normalizedDetailUrl = detailUrl.trim();
+    if (normalizedDetailUrl.isNotEmpty) {
+      return '$sourceId:${Uri.encodeComponent(normalizedDetailUrl)}';
+    }
+    return '$sourceId:${Uri.encodeComponent(title.trim())}';
+  }
+
+  String? _normalizeOptionalText(String? value) {
+    final normalized = value?.trim();
+    if (normalized == null || normalized.isEmpty) {
+      return null;
+    }
+    return normalized;
+  }
+
   Future<void> _syncMaxConcurrentSourcesSetting() async {
     try {
-      final value = await _searchSystemSettingsService.loadMaxConcurrentSources();
+      final value =
+          await _searchSystemSettingsService.loadMaxConcurrentSources();
       setMaxConcurrentSources(value);
     } catch (_) {
       // Keep current in-memory default when loading fails.
@@ -4127,6 +4249,19 @@ class SearchService {
 
     return '\$.$unescaped';
   }
+}
+
+class _SearchTarget {
+  const _SearchTarget.legacy(this.legacySource) : scriptSource = null;
+
+  const _SearchTarget.script(this.scriptSource) : legacySource = null;
+
+  final SourceDefinition? legacySource;
+  final RegisteredSource? scriptSource;
+
+  String get sourceId => legacySource?.id ?? scriptSource!.runtime.id;
+
+  String get sourceName => legacySource?.name ?? scriptSource!.runtime.name;
 }
 
 class _BookAggregateGroup {

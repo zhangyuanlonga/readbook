@@ -6,9 +6,18 @@ import 'package:flutter_appread/core/errors/app_exception.dart';
 import 'package:flutter_appread/core/errors/error_codes.dart';
 import 'package:flutter_appread/core/network/http_client.dart';
 import 'package:flutter_appread/core/webview/webview_executor.dart';
+import 'package:flutter_appread/domain/entities/script_source.dart';
 import 'package:flutter_appread/domain/entities/source_definition.dart';
 import 'package:flutter_appread/domain/repositories/source_repository.dart';
+import 'package:flutter_appread/domain/repositories/script_source_repository.dart';
 import 'package:flutter_appread/features/search/application/search_service.dart';
+import 'package:flutter_appread/features/source/application/script_source_runtime_service.dart';
+import 'package:flutter_appread/features/source/application/source_runtime_facade.dart';
+import 'package:flutter_appread/runtime/sources/source_contract.dart';
+import 'package:flutter_appread/runtime/sources/source_manifest.dart';
+import 'package:flutter_appread/runtime/sources/source_registry.dart';
+import 'package:flutter_appread/runtime/sources/source_result_models.dart'
+    as runtime_models;
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -202,6 +211,143 @@ url+so+"?searchkey={{key}}"
       expect(report.books.first.title, 'B书');
 
       await server.close(force: true);
+    });
+
+    test('includes enabled script runtime sources in search results', () async {
+      final facade = SourceRuntimeFacade(
+        scriptSourceRepository: _NoopScriptSourceRepository(),
+        scriptRuntimeService: _FakeScriptSourceRuntimeService(
+          runtimeBooksBySourceId: <String, List<runtime_models.Book>>{
+            'script_source_1': const <runtime_models.Book>[
+              runtime_models.Book(
+                id: 'script_book_1',
+                title: '脚本书源结果',
+                author: '脚本作者',
+                detailUrl: 'https://script.example.com/book/1',
+              ),
+            ],
+          },
+          registeredSources: <RegisteredSource>[
+            RegisteredSource(
+              runtime: const SourceRuntimeInfo(
+                id: 'script_source_1',
+                name: '脚本源一',
+                group: '默认分组',
+                revision: 'script-1',
+              ),
+              definition: RuntimeSourceDefinition(
+                manifest: const SourceManifest(
+                  name: '脚本源一',
+                  group: '默认分组',
+                  author: 'tester',
+                  description: 'desc',
+                ),
+                search: _noopRuntimeSearch,
+                detail: _noopRuntimeDetail,
+                chapters: _noopRuntimeChapters,
+                content: _noopRuntimeContent,
+              ),
+            ),
+          ],
+        ),
+      );
+
+      final service = SearchService(
+        sourceRepository: _FakeSourceRepository(const <SourceDefinition>[]),
+        sourceRuntimeFacade: facade,
+      );
+
+      final report = await service.search(keyword: '凡人');
+
+      expect(report.sourceCount, 1);
+      expect(report.successSourceCount, 1);
+      expect(report.books, hasLength(1));
+      expect(report.books.first.sourceId, 'script_source_1');
+      expect(report.books.first.title, '脚本书源结果');
+      expect(report.sourceNames['script_source_1'], '脚本源一');
+    });
+
+    test('filters script runtime sources by selected source ids', () async {
+      final facade = SourceRuntimeFacade(
+        scriptSourceRepository: _NoopScriptSourceRepository(),
+        scriptRuntimeService: _FakeScriptSourceRuntimeService(
+          runtimeBooksBySourceId: <String, List<runtime_models.Book>>{
+            'script_source_1': const <runtime_models.Book>[
+              runtime_models.Book(
+                id: 'script_book_1',
+                title: '命中结果',
+                author: '',
+                detailUrl: 'https://script.example.com/book/1',
+              ),
+            ],
+            'script_source_2': const <runtime_models.Book>[
+              runtime_models.Book(
+                id: 'script_book_2',
+                title: '未命中结果',
+                author: '',
+                detailUrl: 'https://script.example.com/book/2',
+              ),
+            ],
+          },
+          registeredSources: <RegisteredSource>[
+            RegisteredSource(
+              runtime: const SourceRuntimeInfo(
+                id: 'script_source_1',
+                name: '脚本源一',
+                group: '默认分组',
+                revision: 'script-1',
+              ),
+              definition: RuntimeSourceDefinition(
+                manifest: const SourceManifest(
+                  name: '脚本源一',
+                  group: '默认分组',
+                  author: 'tester',
+                  description: 'desc',
+                ),
+                search: _noopRuntimeSearch,
+                detail: _noopRuntimeDetail,
+                chapters: _noopRuntimeChapters,
+                content: _noopRuntimeContent,
+              ),
+            ),
+            RegisteredSource(
+              runtime: const SourceRuntimeInfo(
+                id: 'script_source_2',
+                name: '脚本源二',
+                group: '默认分组',
+                revision: 'script-2',
+              ),
+              definition: RuntimeSourceDefinition(
+                manifest: const SourceManifest(
+                  name: '脚本源二',
+                  group: '默认分组',
+                  author: 'tester',
+                  description: 'desc',
+                ),
+                search: _noopRuntimeSearch,
+                detail: _noopRuntimeDetail,
+                chapters: _noopRuntimeChapters,
+                content: _noopRuntimeContent,
+              ),
+            ),
+          ],
+        ),
+      );
+
+      final service = SearchService(
+        sourceRepository: _FakeSourceRepository(const <SourceDefinition>[]),
+        sourceRuntimeFacade: facade,
+      );
+
+      final report = await service.search(
+        keyword: '凡人',
+        sourceIds: const ['script_source_1'],
+      );
+
+      expect(report.sourceCount, 1);
+      expect(report.books, hasLength(1));
+      expect(report.books.first.sourceId, 'script_source_1');
+      expect(report.books.first.title, '命中结果');
     });
 
     test('supports "-" prefixed search list rule reverse order', () async {
@@ -2626,6 +2772,77 @@ class _FakeSourceRepository implements SourceRepository {
     return Stream.value(List.unmodifiable(sources));
   }
 }
+
+class _NoopScriptSourceRepository implements ScriptSourceRepository {
+  @override
+  Future<void> clear() async {}
+
+  @override
+  Future<void> deleteById(String id) async {}
+
+  @override
+  Future<List<ScriptSource>> getAll() async => const <ScriptSource>[];
+
+  @override
+  Future<ScriptSource?> getById(String id) async => null;
+
+  @override
+  Future<void> setEnabled({required String id, required bool enabled}) async {}
+
+  @override
+  Future<void> upsert(ScriptSource source) async {}
+
+  @override
+  Stream<List<ScriptSource>> watchAll() {
+    return const Stream<List<ScriptSource>>.empty();
+  }
+}
+
+class _FakeScriptSourceRuntimeService extends ScriptSourceRuntimeService {
+  _FakeScriptSourceRuntimeService({
+    required Map<String, List<runtime_models.Book>> runtimeBooksBySourceId,
+    required List<RegisteredSource> registeredSources,
+  }) : _runtimeBooksBySourceId = runtimeBooksBySourceId,
+       _registeredSources = registeredSources,
+       super();
+
+  final Map<String, List<runtime_models.Book>> _runtimeBooksBySourceId;
+  final List<RegisteredSource> _registeredSources;
+
+  @override
+  List<RegisteredSource> allSources({bool enabledOnly = true}) {
+    return List<RegisteredSource>.unmodifiable(_registeredSources);
+  }
+
+  @override
+  Future<List<runtime_models.Book>> search({
+    required String sourceId,
+    required String keyword,
+  }) async {
+    return _runtimeBooksBySourceId[sourceId] ?? const <runtime_models.Book>[];
+  }
+}
+
+Future<List<runtime_models.Book>> _noopRuntimeSearch(
+  SourceRuntimeContext _,
+  String __,
+) async => const <runtime_models.Book>[];
+
+Future<runtime_models.Book> _noopRuntimeDetail(
+  SourceRuntimeContext _,
+  runtime_models.Book book,
+) async => book;
+
+Future<List<runtime_models.Chapter>> _noopRuntimeChapters(
+  SourceRuntimeContext _,
+  runtime_models.Book __,
+) async => const <runtime_models.Chapter>[];
+
+Future<runtime_models.Content> _noopRuntimeContent(
+  SourceRuntimeContext _,
+  runtime_models.Book __,
+  runtime_models.Chapter chapter,
+) async => runtime_models.Content(title: chapter.title, content: '');
 
 class _FakeWebViewExecutor extends WebViewExecutor {
   _FakeWebViewExecutor({

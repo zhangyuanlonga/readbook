@@ -17,38 +17,62 @@ import '../../../core/network/request_context.dart';
 import '../../../core/result/result.dart';
 import '../../../data/datasources/local/app_database.dart';
 import '../../../data/repositories/source_repository_impl.dart';
+import '../../../domain/entities/script_source.dart';
 import '../../../domain/entities/source_definition.dart';
 import '../../../domain/repositories/source_repository.dart';
+import '../../../runtime/sources/source_script_template.dart';
 import '../../search/application/search_service.dart';
 import '../application/source_capability_analyzer.dart';
 import '../application/external_source_import_bridge.dart';
+import '../application/source_runtime_facade.dart';
 import '../application/source_import_service.dart';
+
+enum _SourceTab { legacy, script }
 
 enum _SourceSort { smart, nameAsc, enabledFirst }
 
 class SourcePage extends StatefulWidget {
-  const SourcePage({super.key});
+  const SourcePage({
+    super.key,
+    this.sourceRepository,
+    this.sourceRuntimeFacade,
+    this.sourceImportService,
+    this.searchService,
+    this.bootstrapOnInit = true,
+    this.enableRouterNavigation = true,
+  });
+
+  final SourceRepository? sourceRepository;
+  final SourceRuntimeFacade? sourceRuntimeFacade;
+  final SourceImportService? sourceImportService;
+  final SearchService? searchService;
+  final bool bootstrapOnInit;
+  final bool enableRouterNavigation;
 
   @override
   State<SourcePage> createState() => _SourcePageState();
 }
 
 class _SourcePageState extends State<SourcePage> {
-  final SourceImportService _importService = SourceImportService();
-  final SourceRepository _repository = SourceRepositoryImpl(
-    AppDatabase.instance,
-  );
+  late final SourceImportService _importService;
+  late final SourceRepository _repository;
+  late final SourceRuntimeFacade _sourceRuntimeFacade;
 
   SearchService? _searchService;
 
+  _SourceTab _activeTab = _SourceTab.legacy;
   bool _isImporting = false;
   bool _isSelectionMode = false;
   bool _isBatchDeleting = false;
+  bool _isReloadingScriptSources = false;
   final Set<String> _testingSourceIds = <String>{};
   final Set<String> _changingEnabledSourceIds = <String>{};
   final Set<String> _changingGroupSourceIds = <String>{};
   final Set<String> _deletingSourceIds = <String>{};
   final Set<String> _exportingSourceIds = <String>{};
+  final Set<String> _savingScriptSourceIds = <String>{};
+  final Set<String> _changingEnabledScriptSourceIds = <String>{};
+  final Set<String> _deletingScriptSourceIds = <String>{};
   final Set<String> _selectedSourceIds = <String>{};
   List<SourceListItem> _visibleSources = const <SourceListItem>[];
   final TextEditingController _searchController = TextEditingController();
@@ -85,13 +109,22 @@ class _SourcePageState extends State<SourcePage> {
   static const double _kSourceCardEntryCurveSpan = 0.4;
 
   SearchService get _searchServiceClient =>
-      _searchService ??= SearchService(sourceRepository: _repository);
+      _searchService ??=
+          widget.searchService ?? SearchService(sourceRepository: _repository);
 
   @override
   void initState() {
     super.initState();
+    _importService = widget.sourceImportService ?? SourceImportService();
+    _repository =
+        widget.sourceRepository ?? SourceRepositoryImpl(AppDatabase.instance);
+    _sourceRuntimeFacade =
+        widget.sourceRuntimeFacade ?? SourceRuntimeFacade.instance;
     _searchController.addListener(_onSearchInputChanged);
     _scrollController.addListener(_onSourceListScroll);
+    if (!widget.bootstrapOnInit) {
+      return;
+    }
     _incomingImportSubscription = ExternalImportBridge.instance.payloadStream
         .listen((payload) {
           if (payload.type != ExternalImportPayloadType.source) {
@@ -105,6 +138,7 @@ class _SourcePageState extends State<SourcePage> {
         return;
       }
       unawaited(_consumePendingExternalImportPayloads());
+      unawaited(_reloadScriptSourcesSilently());
       unawaited(_reloadSourceList(reset: true));
     });
   }
@@ -305,14 +339,20 @@ class _SourcePageState extends State<SourcePage> {
   Widget build(BuildContext context) {
     final horizontal = AppSpacing.pageHorizontal(context);
     final bottomSafe = MediaQuery.viewPaddingOf(context).bottom;
+    final canPopRoute =
+        widget.enableRouterNavigation
+            ? context.canPop()
+            : Navigator.of(context).canPop();
 
     return PopScope<void>(
-      canPop: context.canPop(),
+      canPop: canPopRoute,
       onPopInvokedWithResult: (didPop, _) {
         if (didPop || !mounted || _isSelectionMode) {
           return;
         }
-        context.go('/mine');
+        if (widget.enableRouterNavigation) {
+          context.go('/mine');
+        }
       },
       child: Scaffold(
         appBar: AppBar(
@@ -325,72 +365,106 @@ class _SourcePageState extends State<SourcePage> {
                   )
                   : IconButton(
                     onPressed: () {
-                      if (context.canPop()) {
+                      if (widget.enableRouterNavigation && context.canPop()) {
                         context.pop();
                         return;
                       }
-                      context.go('/mine');
+                      if (widget.enableRouterNavigation) {
+                        context.go('/mine');
+                        return;
+                      }
+                      Navigator.of(context).maybePop();
                     },
                     tooltip: '返回',
                     icon: const Icon(Icons.arrow_back),
                   ),
           title: Text(
-            _isSelectionMode ? '已选择 ${_selectedSourceIds.length} 项' : '书源',
+            _isSelectionMode && _activeTab == _SourceTab.legacy
+                ? '已选择 ${_selectedSourceIds.length} 项'
+                : '书源',
           ),
           actions: [
-            if (!_isSelectionMode) ...[
-              if (_isImporting)
-                const Padding(
-                  padding: EdgeInsets.only(right: 16),
-                  child: Center(
-                    child: SizedBox(
-                      width: 18,
-                      height: 18,
-                      child: CircularProgressIndicator(strokeWidth: 2),
-                    ),
-                  ),
-                )
-              else
-                PopupMenuButton<_ImportAction>(
-                  tooltip: '导入书源',
-                  icon: const Icon(Icons.add),
-                  onSelected: (action) {
-                    switch (action) {
-                      case _ImportAction.paste:
-                        _importFromPaste();
-                      case _ImportAction.url:
-                        _importFromUrl();
-                      case _ImportAction.file:
-                        _importFromFile();
-                      case _ImportAction.batchSample:
-                        _importFromBuiltInBatch();
-                    }
-                  },
-                  itemBuilder:
-                      (context) => const [
-                        PopupMenuItem(
-                          value: _ImportAction.paste,
-                          child: Text('粘贴导入 JSON'),
-                        ),
-                        PopupMenuItem(
-                          value: _ImportAction.url,
-                          child: Text('链接导入'),
-                        ),
-                        PopupMenuItem(
-                          value: _ImportAction.file,
-                          child: Text('文件导入'),
-                        ),
-                        PopupMenuItem(
-                          value: _ImportAction.batchSample,
-                          child: Text('批量导入 read/test'),
-                        ),
-                      ],
+            if (!_isSelectionMode || _activeTab == _SourceTab.script) ...[
+              if (_activeTab == _SourceTab.script) ...[
+                IconButton(
+                  tooltip: '重载脚本源',
+                  onPressed:
+                      _isReloadingScriptSources
+                          ? null
+                          : () => unawaited(_reloadScriptSources()),
+                  icon:
+                      _isReloadingScriptSources
+                          ? const SizedBox(
+                            width: 18,
+                            height: 18,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          )
+                          : const Icon(Icons.sync_rounded),
                 ),
+                IconButton(
+                  tooltip: '新增脚本源',
+                  onPressed:
+                      _savingScriptSourceIds.isNotEmpty
+                          ? null
+                          : () => unawaited(_showScriptSourceEditor()),
+                  icon: const Icon(Icons.add),
+                ),
+              ] else ...[
+                if (_isImporting)
+                  const Padding(
+                    padding: EdgeInsets.only(right: 16),
+                    child: Center(
+                      child: SizedBox(
+                        width: 18,
+                        height: 18,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      ),
+                    ),
+                  )
+                else
+                  PopupMenuButton<_ImportAction>(
+                    tooltip: '导入书源',
+                    icon: const Icon(Icons.add),
+                    onSelected: (action) {
+                      switch (action) {
+                        case _ImportAction.paste:
+                          _importFromPaste();
+                        case _ImportAction.url:
+                          _importFromUrl();
+                        case _ImportAction.file:
+                          _importFromFile();
+                        case _ImportAction.batchSample:
+                          _importFromBuiltInBatch();
+                      }
+                    },
+                    itemBuilder:
+                        (context) => const [
+                          PopupMenuItem(
+                            value: _ImportAction.paste,
+                            child: Text('粘贴导入 JSON'),
+                          ),
+                          PopupMenuItem(
+                            value: _ImportAction.url,
+                            child: Text('链接导入'),
+                          ),
+                          PopupMenuItem(
+                            value: _ImportAction.file,
+                            child: Text('文件导入'),
+                          ),
+                          PopupMenuItem(
+                            value: _ImportAction.batchSample,
+                            child: Text('批量导入 read/test'),
+                          ),
+                        ],
+                  ),
+              ],
             ],
           ],
         ),
         bottomNavigationBar:
-            _isSelectionMode ? _buildSelectionActionBar() : null,
+            _isSelectionMode && _activeTab == _SourceTab.legacy
+                ? _buildSelectionActionBar()
+                : null,
         body: DecoratedBox(
           decoration: BoxDecoration(
             gradient: LinearGradient(
@@ -415,6 +489,13 @@ class _SourcePageState extends State<SourcePage> {
     required double horizontal,
     required double bottomSafe,
   }) {
+    if (_activeTab == _SourceTab.script) {
+      return _buildScriptSourceContent(
+        horizontal: horizontal,
+        bottomSafe: bottomSafe,
+      );
+    }
+
     final showEmpty = !_isInitialLoading && _visibleSources.isEmpty;
     final showErrorCard = _listErrorText != null && _visibleSources.isEmpty;
     final showLoadingCard = _isInitialLoading;
@@ -638,78 +719,570 @@ class _SourcePageState extends State<SourcePage> {
       margin: EdgeInsets.zero,
       child: Padding(
         padding: const EdgeInsets.fromLTRB(8, 8, 8, 8),
-        child: Row(
+        child: Column(
           children: [
-            Expanded(
-              child: Container(
-                decoration: BoxDecoration(
-                  borderRadius: BorderRadius.circular(14),
-                  border: Border.all(color: colorScheme.outlineVariant),
-                ),
-                child: TextField(
-                  controller: _searchController,
-                  textInputAction: TextInputAction.search,
-                  textAlignVertical: TextAlignVertical.center,
-                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                    fontSize: 13.5,
-                    height: 1.25,
+            _buildSourceTypeTabs(),
+            const SizedBox(height: 8),
+            Row(
+              children: [
+                Expanded(
+                  child: Container(
+                    decoration: BoxDecoration(
+                      borderRadius: BorderRadius.circular(14),
+                      border: Border.all(color: colorScheme.outlineVariant),
+                    ),
+                    child: TextField(
+                      controller: _searchController,
+                      textInputAction: TextInputAction.search,
+                      textAlignVertical: TextAlignVertical.center,
+                      style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                        fontSize: 13.5,
+                        height: 1.25,
+                      ),
+                      decoration: InputDecoration(
+                        hintText: '搜索书源名称或域名',
+                        hintStyle: Theme.of(
+                          context,
+                        ).textTheme.bodyMedium?.copyWith(
+                          fontSize: 13.5,
+                          height: 1.25,
+                          color: colorScheme.onSurfaceVariant,
+                        ),
+                        border: InputBorder.none,
+                        filled: false,
+                        isDense: true,
+                        prefixIcon: const Padding(
+                          padding: EdgeInsetsDirectional.only(
+                            start: 12,
+                            end: 6,
+                          ),
+                          child: Icon(Icons.search_rounded, size: 18),
+                        ),
+                        prefixIconConstraints: const BoxConstraints(
+                          minWidth: 0,
+                          minHeight: 0,
+                        ),
+                        contentPadding: const EdgeInsets.symmetric(
+                          horizontal: 10,
+                          vertical: 12,
+                        ),
+                        suffixIconConstraints: const BoxConstraints(
+                          minWidth: 36,
+                          minHeight: 36,
+                        ),
+                        suffixIcon:
+                            _searchKeyword.isEmpty
+                                ? null
+                                : IconButton(
+                                  tooltip: '清空关键词',
+                                  onPressed: _clearSourceSearchFilter,
+                                  icon: const Icon(
+                                    Icons.close_rounded,
+                                    size: 18,
+                                  ),
+                                ),
+                      ),
+                    ),
                   ),
-                  decoration: InputDecoration(
-                    hintText: '搜索书源名称或域名',
-                    hintStyle: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                      fontSize: 13.5,
-                      height: 1.25,
-                      color: colorScheme.onSurfaceVariant,
-                    ),
-                    border: InputBorder.none,
-                    filled: false,
-                    isDense: true,
-                    prefixIcon: const Padding(
-                      padding: EdgeInsetsDirectional.only(start: 12, end: 6),
-                      child: Icon(Icons.search_rounded, size: 18),
-                    ),
-                    prefixIconConstraints: const BoxConstraints(
-                      minWidth: 0,
-                      minHeight: 0,
-                    ),
-                    contentPadding: const EdgeInsets.symmetric(
-                      horizontal: 10,
-                      vertical: 12,
-                    ),
-                    suffixIconConstraints: const BoxConstraints(
-                      minWidth: 36,
-                      minHeight: 36,
-                    ),
-                    suffixIcon:
-                        _searchKeyword.isEmpty
-                            ? null
-                            : IconButton(
-                              tooltip: '清空关键词',
-                              onPressed: _clearSourceSearchFilter,
-                              icon: const Icon(Icons.close_rounded, size: 18),
-                            ),
-                  ),
                 ),
-              ),
-            ),
-            const SizedBox(width: 8),
-            _buildSortButton(),
-            IconButton(
-              tooltip: '分组筛选',
-              onPressed: _isGroupFilterLoading ? null : _showGroupFilterSheet,
-              icon:
-                  _isGroupFilterLoading
-                      ? const SizedBox(
-                        width: 18,
-                        height: 18,
-                        child: CircularProgressIndicator(strokeWidth: 2),
-                      )
-                      : const Icon(Icons.filter_alt_rounded),
+                const SizedBox(width: 8),
+                _buildSortButton(),
+                IconButton(
+                  tooltip: '分组筛选',
+                  onPressed:
+                      _isGroupFilterLoading ? null : _showGroupFilterSheet,
+                  icon:
+                      _isGroupFilterLoading
+                          ? const SizedBox(
+                            width: 18,
+                            height: 18,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          )
+                          : const Icon(Icons.filter_alt_rounded),
+                ),
+              ],
             ),
           ],
         ),
       ),
     );
+  }
+
+  Widget _buildSourceTypeTabs() {
+    return SizedBox(
+      width: double.infinity,
+      child: SegmentedButton<_SourceTab>(
+        segments: const [
+          ButtonSegment<_SourceTab>(
+            value: _SourceTab.legacy,
+            label: Text('规则源'),
+            icon: Icon(Icons.dataset_linked_rounded),
+          ),
+          ButtonSegment<_SourceTab>(
+            value: _SourceTab.script,
+            label: Text('脚本源'),
+            icon: Icon(Icons.javascript_rounded),
+          ),
+        ],
+        selected: <_SourceTab>{_activeTab},
+        onSelectionChanged: (selection) {
+          final next = selection.first;
+          if (next == _activeTab) {
+            return;
+          }
+          _switchSourceTab(next);
+        },
+      ),
+    );
+  }
+
+  void _switchSourceTab(_SourceTab nextTab) {
+    setState(() {
+      _activeTab = nextTab;
+      if (_isSelectionMode) {
+        _isSelectionMode = false;
+        _selectedSourceIds.clear();
+      }
+    });
+  }
+
+  Widget _buildScriptSourceContent({
+    required double horizontal,
+    required double bottomSafe,
+  }) {
+    return StreamBuilder<List<ScriptSource>>(
+      stream: _sourceRuntimeFacade.watchScriptSources(),
+      builder: (context, snapshot) {
+        final sources = [...(snapshot.data ?? const <ScriptSource>[])]
+          ..sort((a, b) => b.updatedAt.compareTo(a.updatedAt));
+
+        return ListView(
+          padding: EdgeInsets.fromLTRB(
+            horizontal,
+            16,
+            horizontal,
+            16 + bottomSafe,
+          ),
+          children: [
+            Padding(
+              padding: const EdgeInsets.only(bottom: 12),
+              child: Card(
+                shape: _buildOutlinedCardShape(context),
+                child: Padding(
+                  padding: const EdgeInsets.all(8),
+                  child: Column(
+                    children: [
+                      _buildSourceTypeTabs(),
+                      const SizedBox(height: 10),
+                      Row(
+                        children: [
+                          Expanded(
+                            child: Text(
+                              '脚本源直接维护 JS 源码，保存时会立即编译校验。',
+                              style: Theme.of(context).textTheme.bodySmall,
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          OutlinedButton.icon(
+                            onPressed:
+                                _isReloadingScriptSources
+                                    ? null
+                                    : () => unawaited(_reloadScriptSources()),
+                            icon: const Icon(Icons.sync_rounded),
+                            label: const Text('重载'),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+            if (sources.isEmpty)
+              _buildScriptSourceEmptyCard()
+            else
+              ...sources.map(_buildScriptSourceCard),
+          ],
+        );
+      },
+    );
+  }
+
+  Widget _buildScriptSourceEmptyCard() {
+    return Card(
+      shape: _buildOutlinedCardShape(context),
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          children: [
+            const Icon(Icons.javascript_rounded, size: 28),
+            const SizedBox(height: 10),
+            Text(
+              '当前没有脚本源',
+              style: Theme.of(
+                context,
+              ).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w700),
+            ),
+            const SizedBox(height: 6),
+            Text(
+              '可以新建一个脚本源，或把现成脚本粘贴进来。',
+              style: Theme.of(context).textTheme.bodySmall,
+            ),
+            const SizedBox(height: 12),
+            FilledButton.icon(
+              onPressed: () => unawaited(_showScriptSourceEditor()),
+              icon: const Icon(Icons.add),
+              label: const Text('新增脚本源'),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildScriptSourceCard(ScriptSource source) {
+    final isSaving = _savingScriptSourceIds.contains(source.id);
+    final isChangingEnabled = _changingEnabledScriptSourceIds.contains(
+      source.id,
+    );
+    final isDeleting = _deletingScriptSourceIds.contains(source.id);
+    final busy = isSaving || isChangingEnabled || isDeleting;
+
+    return Card(
+      margin: const EdgeInsets.only(bottom: 8),
+      shape: _buildOutlinedCardShape(context),
+      child: Padding(
+        padding: const EdgeInsets.all(12),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    source.name,
+                    style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                ),
+                Switch.adaptive(
+                  value: source.enabled,
+                  onChanged:
+                      busy
+                          ? null
+                          : (value) =>
+                              unawaited(_setScriptSourceEnabled(source, value)),
+                ),
+              ],
+            ),
+            const SizedBox(height: 4),
+            Wrap(
+              spacing: 8,
+              runSpacing: 6,
+              children: [
+                if (source.group != null && source.group!.trim().isNotEmpty)
+                  _buildCompactScriptChip(source.group!),
+                if (source.author != null && source.author!.trim().isNotEmpty)
+                  _buildCompactScriptChip('作者：${source.author!}'),
+                _buildCompactScriptChip(source.enabled ? '已启用' : '未启用'),
+              ],
+            ),
+            if (source.description != null &&
+                source.description!.trim().isNotEmpty) ...[
+              const SizedBox(height: 8),
+              Text(
+                source.description!,
+                style: Theme.of(context).textTheme.bodySmall,
+              ),
+            ],
+            const SizedBox(height: 10),
+            Text(
+              '更新时间：${source.updatedAt.toLocal()}',
+              style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                color: Theme.of(context).colorScheme.onSurfaceVariant,
+              ),
+            ),
+            const SizedBox(height: 10),
+            Row(
+              children: [
+                OutlinedButton.icon(
+                  onPressed:
+                      busy
+                          ? null
+                          : () => unawaited(
+                            _showScriptSourceEditor(source: source),
+                          ),
+                  icon:
+                      isSaving
+                          ? const SizedBox(
+                            width: 14,
+                            height: 14,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          )
+                          : const Icon(Icons.edit_rounded),
+                  label: const Text('编辑'),
+                ),
+                const SizedBox(width: 8),
+                OutlinedButton.icon(
+                  onPressed:
+                      busy
+                          ? null
+                          : () => unawaited(_deleteScriptSource(source)),
+                  icon:
+                      isDeleting
+                          ? const SizedBox(
+                            width: 14,
+                            height: 14,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          )
+                          : const Icon(Icons.delete_outline_rounded),
+                  label: const Text('删除'),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildCompactScriptChip(String label) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(999),
+        color: Theme.of(context).colorScheme.surfaceContainerHighest,
+      ),
+      child: Text(label, style: Theme.of(context).textTheme.labelMedium),
+    );
+  }
+
+  Future<void> _reloadScriptSourcesSilently() async {
+    try {
+      await _sourceRuntimeFacade.reloadScriptSources();
+    } catch (_) {
+      // Ignore bootstrap failures here and surface them on manual actions.
+    }
+  }
+
+  Future<void> _reloadScriptSources() async {
+    if (_isReloadingScriptSources) {
+      return;
+    }
+    setState(() {
+      _isReloadingScriptSources = true;
+    });
+    try {
+      final report = await _sourceRuntimeFacade.reloadScriptSources();
+      if (!mounted) {
+        return;
+      }
+      if (report.failures.isEmpty) {
+        _showMessage('脚本源已重载。');
+      } else {
+        _showMessage(
+          '已重载 ${report.loaded.length} 个脚本源，${report.failures.length} 个失败。',
+        );
+      }
+    } catch (error) {
+      if (!mounted) {
+        return;
+      }
+      _showMessage('重载脚本源失败：$error');
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isReloadingScriptSources = false;
+        });
+      }
+    }
+  }
+
+  Future<void> _showScriptSourceEditor({ScriptSource? source}) async {
+    final controller = TextEditingController(
+      text: source?.sourceCode ?? sourceScriptTemplateV1,
+    );
+    var isSaving = false;
+    var errorText = '';
+
+    final saved = await showDialog<bool>(
+      context: context,
+      barrierDismissible: !isSaving,
+      builder: (dialogContext) {
+        return StatefulBuilder(
+          builder: (context, setModalState) {
+            Future<void> submit() async {
+              final scriptId = source?.id ?? '__new_script_source__';
+              setModalState(() {
+                isSaving = true;
+                errorText = '';
+              });
+              setState(() {
+                _savingScriptSourceIds.add(scriptId);
+              });
+              try {
+                await _sourceRuntimeFacade.saveScriptSource(
+                  sourceCode: controller.text,
+                  id: source?.id,
+                  enabled: source?.enabled ?? true,
+                );
+                if (!dialogContext.mounted) {
+                  return;
+                }
+                Navigator.of(dialogContext).pop(true);
+              } catch (error) {
+                setModalState(() {
+                  errorText = error.toString();
+                  isSaving = false;
+                });
+              } finally {
+                if (mounted) {
+                  setState(() {
+                    _savingScriptSourceIds.remove(scriptId);
+                  });
+                }
+              }
+            }
+
+            return AlertDialog(
+              title: Text(source == null ? '新增脚本源' : '编辑脚本源'),
+              content: SizedBox(
+                width: 760,
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      '保存时会立即编译并从 meta 中提取名称、分组和作者。',
+                      style: Theme.of(context).textTheme.bodySmall,
+                    ),
+                    const SizedBox(height: 10),
+                    Flexible(
+                      child: TextField(
+                        controller: controller,
+                        maxLines: 22,
+                        minLines: 18,
+                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                          fontFamily: 'monospace',
+                        ),
+                        decoration: const InputDecoration(
+                          border: OutlineInputBorder(),
+                          alignLabelWithHint: true,
+                          hintText: '粘贴书源脚本',
+                        ),
+                      ),
+                    ),
+                    if (errorText.isNotEmpty) ...[
+                      const SizedBox(height: 8),
+                      Text(
+                        errorText,
+                        style: TextStyle(
+                          color: Theme.of(context).colorScheme.error,
+                        ),
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+              actions: [
+                TextButton(
+                  onPressed:
+                      isSaving ? null : () => Navigator.of(dialogContext).pop(),
+                  child: const Text('取消'),
+                ),
+                FilledButton(
+                  onPressed: isSaving ? null : submit,
+                  child:
+                      isSaving
+                          ? const SizedBox(
+                            width: 16,
+                            height: 16,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          )
+                          : const Text('保存'),
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
+    controller.dispose();
+
+    if (saved == true && mounted) {
+      _showMessage(source == null ? '脚本源已新增。' : '脚本源已保存。');
+    }
+  }
+
+  Future<void> _setScriptSourceEnabled(
+    ScriptSource source,
+    bool enabled,
+  ) async {
+    setState(() {
+      _changingEnabledScriptSourceIds.add(source.id);
+    });
+    try {
+      await _sourceRuntimeFacade.setScriptSourceEnabled(
+        id: source.id,
+        enabled: enabled,
+      );
+    } catch (error) {
+      if (mounted) {
+        _showMessage('更新脚本源状态失败：$error');
+      }
+    } finally {
+      if (mounted) {
+        setState(() {
+          _changingEnabledScriptSourceIds.remove(source.id);
+        });
+      }
+    }
+  }
+
+  Future<void> _deleteScriptSource(ScriptSource source) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) {
+        return AlertDialog(
+          title: const Text('删除脚本源'),
+          content: Text('确认删除「${source.name}」吗？'),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(false),
+              child: const Text('取消'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.of(context).pop(true),
+              child: const Text('删除'),
+            ),
+          ],
+        );
+      },
+    );
+    if (confirmed != true) {
+      return;
+    }
+
+    setState(() {
+      _deletingScriptSourceIds.add(source.id);
+    });
+    try {
+      await _sourceRuntimeFacade.deleteScriptSource(source.id);
+      if (mounted) {
+        _showMessage('脚本源已删除。');
+      }
+    } catch (error) {
+      if (mounted) {
+        _showMessage('删除脚本源失败：$error');
+      }
+    } finally {
+      if (mounted) {
+        setState(() {
+          _deletingScriptSourceIds.remove(source.id);
+        });
+      }
+    }
   }
 
   Widget _buildSortButton() {

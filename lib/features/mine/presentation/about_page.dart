@@ -14,14 +14,14 @@ class AboutPage extends StatefulWidget {
 
   static const String _appVersion = '1.06';
   static const List<String> _projectFocus = [
-    '构建书源兼容层（导入、校验、适配）',
-    '打通阅读闭环（搜索 -> 详情 -> 目录 -> 正文）',
-    '保持稳定、可维护、可扩展的工程架构',
+    '聚焦个人阅读场景的稳定体验',
+    '强化本地文档导入、整理与阅读闭环',
+    '保持可维护、可扩展的工程架构与数据安全',
   ];
   static const List<String> _mvpScope = [
-    '文本小说主链路',
-    '本地书源 JSON 导入',
-    'HTML / Regex / JSONPath 解析能力',
+    'TXT / EPUB 文档阅读',
+    '书架、书签、阅读记录',
+    '用户自备配置导入与基础校验',
     '错误可定位与可观测',
   ];
   static const List<String> _techStack = [
@@ -95,15 +95,15 @@ class _AboutPageState extends State<AboutPage> {
                       _buildSectionCard(
                         context,
                         title: '项目当前重点',
-                        subtitle: '来自项目总览与 README 的阶段目标。',
+                        subtitle: '当前版本以个人阅读和稳定体验为主。',
                         icon: Icons.track_changes_outlined,
                         items: AboutPage._projectFocus,
                       ),
                       const SizedBox(height: 10),
                       _buildSectionCard(
                         context,
-                        title: 'MVP 范围',
-                        subtitle: '当前版本聚焦“导源即读”的可用闭环。',
+                        title: '当前能力',
+                        subtitle: '优先覆盖本地文档与个人阅读管理。',
                         icon: Icons.checklist_rounded,
                         items: AboutPage._mvpScope,
                       ),
@@ -222,7 +222,7 @@ class _AboutPageState extends State<AboutPage> {
               ),
               const SizedBox(height: 10),
               Text(
-                '一个基于 Flutter 的阅读应用，目标是兼容开源阅读生态常见书源规则（以 Legado 规则体系为主），并逐步构建稳定、可维护、可扩展的阅读体验。',
+                '一个基于 Flutter 的个人阅读应用，面向本地文档整理与日常阅读场景，支持 TXT / EPUB 导入、书架管理、阅读记录与基础内容配置扩展。当前版本不内置书库内容，也不提供内容分发服务。',
                 style: theme.textTheme.bodySmall?.copyWith(
                   height: 1.4,
                   color: colorScheme.onSurfaceVariant,
@@ -233,9 +233,9 @@ class _AboutPageState extends State<AboutPage> {
                 builder: (context, constraints) {
                   final useRow = AppLayout.isMediumWidth(constraints.maxWidth);
                   final items = <Widget>[
-                    _buildMetricPill(context, '架构', '分层设计'),
-                    _buildMetricPill(context, '书源', 'Legado 兼容'),
-                    _buildMetricPill(context, '目标', '导源即读'),
+                    _buildMetricPill(context, '定位', '个人阅读'),
+                    _buildMetricPill(context, '文档', 'TXT / EPUB'),
+                    _buildMetricPill(context, '原则', '不内置内容'),
                   ];
 
                   if (useRow) {
@@ -285,7 +285,7 @@ class _AboutPageState extends State<AboutPage> {
             ),
             const SizedBox(height: 6),
             Text(
-              '访问官网获取产品介绍与最新动态。',
+              '访问官网获取产品介绍、版本动态与使用说明。',
               style: theme.textTheme.bodySmall?.copyWith(
                 color: colorScheme.onSurfaceVariant,
               ),
@@ -334,9 +334,9 @@ class _AboutPageState extends State<AboutPage> {
     if (!mounted) {
       return;
     }
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(message)),
-    );
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: Text(message)));
   }
 
   Widget _buildMetricPill(BuildContext context, String label, String value) {
@@ -521,7 +521,7 @@ class _AboutPageState extends State<AboutPage> {
             ),
             const SizedBox(height: 6),
             Text(
-              '本项目提供书源规则兼容能力，书源由用户自行导入。抓取与访问行为请遵守目标站点条款及当地法律法规。',
+              '本应用定位为个人阅读工具，默认用于阅读用户合法获取、拥有授权或自行整理的 TXT / EPUB 等内容。应用不内置书库，不提供内容分发或聚合服务；如需导入扩展配置，请确保内容来源、访问方式与使用目的符合目标站点规则及当地法律法规。',
               style: theme.textTheme.bodySmall?.copyWith(
                 height: 1.4,
                 color: colorScheme.onSurfaceVariant,

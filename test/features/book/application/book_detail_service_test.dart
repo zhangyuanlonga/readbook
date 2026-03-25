@@ -5,9 +5,18 @@ import 'package:flutter_appread/core/errors/app_exception.dart';
 import 'package:flutter_appread/core/errors/error_codes.dart';
 import 'package:flutter_appread/core/errors/error_stage.dart';
 import 'package:flutter_appread/core/webview/webview_executor.dart';
+import 'package:flutter_appread/domain/entities/script_source.dart';
 import 'package:flutter_appread/domain/entities/source_definition.dart';
 import 'package:flutter_appread/domain/repositories/source_repository.dart';
 import 'package:flutter_appread/features/book/application/book_detail_service.dart';
+import 'package:flutter_appread/domain/repositories/script_source_repository.dart';
+import 'package:flutter_appread/features/source/application/script_source_runtime_service.dart';
+import 'package:flutter_appread/features/source/application/source_runtime_facade.dart';
+import 'package:flutter_appread/runtime/sources/source_contract.dart';
+import 'package:flutter_appread/runtime/sources/source_manifest.dart';
+import 'package:flutter_appread/runtime/sources/source_registry.dart';
+import 'package:flutter_appread/runtime/sources/source_result_models.dart'
+    as runtime_models;
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
@@ -192,6 +201,94 @@ void main() {
 
       await server.close(force: true);
     });
+
+    test(
+      'loads detail and chapters from script runtime facade fallback',
+      () async {
+        final facade = SourceRuntimeFacade(
+          scriptSourceRepository: _NoopScriptSourceRepository(),
+          scriptRuntimeService: _FakeScriptSourceRuntimeService(
+            registeredSources: <RegisteredSource>[
+              RegisteredSource(
+                runtime: const SourceRuntimeInfo(
+                  id: 'script_detail_1',
+                  name: '脚本详情源',
+                  group: '默认分组',
+                  revision: 'script-1',
+                ),
+                definition: RuntimeSourceDefinition(
+                  manifest: const SourceManifest(
+                    name: '脚本详情源',
+                    group: '默认分组',
+                    author: 'tester',
+                    description: 'desc',
+                  ),
+                  search: _noopRuntimeSearch,
+                  detail: _noopRuntimeDetail,
+                  chapters: _noopRuntimeChapters,
+                  content: _noopRuntimeContent,
+                ),
+              ),
+            ],
+            detailBySourceId: <String, runtime_models.Book>{
+              'script_detail_1': const runtime_models.Book(
+                id: 'script_book_1',
+                title: '脚本详情书籍',
+                author: '脚本作者',
+                cover: 'https://script.example.com/cover.jpg',
+                intro: '脚本简介',
+                detailUrl: 'https://script.example.com/book/1',
+                sourceId: 'script_detail_1',
+                extra: <String, dynamic>{
+                  'catalogUrl': 'https://script.example.com/book/1/toc',
+                },
+              ),
+            },
+            chaptersBySourceId: <String, List<runtime_models.Chapter>>{
+              'script_detail_1': const <runtime_models.Chapter>[
+                runtime_models.Chapter(
+                  id: 'script_ch_1',
+                  title: '第一章',
+                  url: 'https://script.example.com/ch/1',
+                  index: 0,
+                  sourceId: 'script_detail_1',
+                ),
+                runtime_models.Chapter(
+                  id: 'script_ch_2',
+                  title: '第二章',
+                  url: 'https://script.example.com/ch/2',
+                  index: 1,
+                  sourceId: 'script_detail_1',
+                ),
+              ],
+            },
+          ),
+        );
+
+        final service = BookDetailService(
+          sourceRepository: _FakeSourceRepository(const <SourceDefinition>[]),
+          sourceRuntimeFacade: facade,
+        );
+
+        final result = await service.load(
+          sourceId: 'script_detail_1',
+          bookId: 'script_book_1',
+          detailUrl: 'https://script.example.com/book/1',
+        );
+
+        expect(result.detail.title, '脚本详情书籍');
+        expect(result.detail.author, '脚本作者');
+        expect(result.detail.coverUrl, 'https://script.example.com/cover.jpg');
+        expect(result.detail.tocUrl, 'https://script.example.com/book/1/toc');
+        expect(result.sourceName, '脚本详情源');
+        expect(result.chapters, hasLength(2));
+        expect(result.chapters.first.title, '第一章');
+        expect(
+          result.chapters.first.chapterUrl,
+          'https://script.example.com/ch/1',
+        );
+      },
+    );
 
     test('passes source/book js context into detail rules', () async {
       final server = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
@@ -1489,6 +1586,90 @@ class _FakeSourceRepository implements SourceRepository {
     return Stream.value(List.unmodifiable(sources));
   }
 }
+
+class _NoopScriptSourceRepository implements ScriptSourceRepository {
+  @override
+  Future<void> clear() async {}
+
+  @override
+  Future<void> deleteById(String id) async {}
+
+  @override
+  Future<List<ScriptSource>> getAll() async => const <ScriptSource>[];
+
+  @override
+  Future<ScriptSource?> getById(String id) async => null;
+
+  @override
+  Future<void> setEnabled({required String id, required bool enabled}) async {}
+
+  @override
+  Future<void> upsert(ScriptSource source) async {}
+
+  @override
+  Stream<List<ScriptSource>> watchAll() =>
+      const Stream<List<ScriptSource>>.empty();
+}
+
+class _FakeScriptSourceRuntimeService extends ScriptSourceRuntimeService {
+  _FakeScriptSourceRuntimeService({
+    required List<RegisteredSource> registeredSources,
+    required this.detailBySourceId,
+    required this.chaptersBySourceId,
+  }) : _registeredSources = registeredSources,
+       super();
+
+  final List<RegisteredSource> _registeredSources;
+  final Map<String, runtime_models.Book> detailBySourceId;
+  final Map<String, List<runtime_models.Chapter>> chaptersBySourceId;
+
+  @override
+  RegisteredSource? sourceById(String sourceId) {
+    for (final source in _registeredSources) {
+      if (source.runtime.id == sourceId) {
+        return source;
+      }
+    }
+    return null;
+  }
+
+  @override
+  Future<runtime_models.Book> detail({
+    required String sourceId,
+    required runtime_models.Book book,
+  }) async {
+    return detailBySourceId[sourceId] ?? book;
+  }
+
+  @override
+  Future<List<runtime_models.Chapter>> chapters({
+    required String sourceId,
+    required runtime_models.Book book,
+  }) async {
+    return chaptersBySourceId[sourceId] ?? const <runtime_models.Chapter>[];
+  }
+}
+
+Future<List<runtime_models.Book>> _noopRuntimeSearch(
+  SourceRuntimeContext _,
+  String __,
+) async => const <runtime_models.Book>[];
+
+Future<runtime_models.Book> _noopRuntimeDetail(
+  SourceRuntimeContext _,
+  runtime_models.Book book,
+) async => book;
+
+Future<List<runtime_models.Chapter>> _noopRuntimeChapters(
+  SourceRuntimeContext _,
+  runtime_models.Book __,
+) async => const <runtime_models.Chapter>[];
+
+Future<runtime_models.Content> _noopRuntimeContent(
+  SourceRuntimeContext _,
+  runtime_models.Book __,
+  runtime_models.Chapter chapter,
+) async => runtime_models.Content(title: chapter.title, content: '');
 
 class _FakeWebViewExecutor extends WebViewExecutor {
   _FakeWebViewExecutor({

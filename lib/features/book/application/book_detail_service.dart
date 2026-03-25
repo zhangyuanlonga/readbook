@@ -28,6 +28,8 @@ import '../../../domain/entities/chapter.dart';
 import '../../../domain/entities/search_request_context.dart';
 import '../../../domain/entities/source_definition.dart';
 import '../../../domain/repositories/source_repository.dart';
+import '../../../runtime/sources/source_result_models.dart' as runtime_models;
+import '../../source/application/source_runtime_facade.dart';
 
 class BookDetailLoadResult {
   const BookDetailLoadResult({
@@ -48,6 +50,7 @@ class BookDetailLoadResult {
 class BookDetailService {
   BookDetailService({
     SourceRepository? sourceRepository,
+    SourceRuntimeFacade? sourceRuntimeFacade,
     AppHttpClient? httpClient,
     WebViewExecutor? webViewExecutor,
     InteractiveVerificationBrowserExecutor? interactiveVerificationExecutor,
@@ -57,6 +60,8 @@ class BookDetailService {
     SourceResponseProcessor? responseProcessor,
   }) : _sourceRepository =
            sourceRepository ?? SourceRepositoryImpl(AppDatabase.instance),
+       _sourceRuntimeFacade =
+           sourceRuntimeFacade ?? SourceRuntimeFacade.instance,
        _httpClient = httpClient ?? AppHttpClient(),
        _webViewExecutor = webViewExecutor ?? WebViewExecutor(),
        _interactiveVerificationExecutor =
@@ -70,6 +75,7 @@ class BookDetailService {
            responseProcessor ?? const SourceResponseProcessor();
 
   final SourceRepository _sourceRepository;
+  final SourceRuntimeFacade? _sourceRuntimeFacade;
   final AppHttpClient _httpClient;
   final WebViewExecutor _webViewExecutor;
   final InteractiveVerificationBrowserExecutor _interactiveVerificationExecutor;
@@ -212,7 +218,19 @@ class BookDetailService {
     final completer = Completer<BookDetailLoadResult>();
     _inFlightLoads[cacheKey] = completer.future;
     try {
-      final source = await _getSource(normalizedSourceId);
+      final source = await _findSourceOrNull(normalizedSourceId);
+      if (source == null) {
+        final scriptResult = await _loadFromScriptRuntime(
+          sourceId: normalizedSourceId,
+          bookId: normalizedBookId,
+          detailUrl: normalizedDetailUrl,
+          fallbackTitle: normalizedFallbackTitle,
+          fallbackAuthor: normalizedFallbackAuthor,
+          cacheKey: cacheKey,
+        );
+        completer.complete(scriptResult);
+        return scriptResult;
+      }
       final bookVariableUpdates = <String, String>{};
       final runtimeJsVariables = <String, String>{
         ...SourceJsVariableStore.load(source),
@@ -653,19 +671,114 @@ class BookDetailService {
     }
   }
 
-  Future<SourceDefinition> _getSource(String sourceId) async {
+  Future<SourceDefinition?> _findSourceOrNull(String sourceId) async {
     final sources = await _sourceRepository.getAll();
     for (final source in sources) {
       if (source.id == sourceId) {
         return source;
       }
     }
+    return null;
+  }
 
-    throw UnknownSourceException(
-      briefMessage: '未找到书源：$sourceId',
+  Future<BookDetailLoadResult> _loadFromScriptRuntime({
+    required String sourceId,
+    required String bookId,
+    required String detailUrl,
+    required String? fallbackTitle,
+    required String? fallbackAuthor,
+    required String cacheKey,
+  }) async {
+    final facade = _sourceRuntimeFacade;
+    final registered =
+        facade == null
+            ? null
+            : await facade.ensureRegisteredScriptSourceById(sourceId);
+    if (facade == null || registered == null) {
+      throw UnknownSourceException(
+        briefMessage: '未找到书源：$sourceId',
+        sourceId: sourceId,
+        stage: ErrorStage.detail,
+      );
+    }
+
+    final runtimeBook = runtime_models.Book(
+      id: bookId,
+      title: fallbackTitle ?? bookId,
+      author: fallbackAuthor ?? '',
+      detailUrl: detailUrl,
       sourceId: sourceId,
-      stage: ErrorStage.detail,
     );
+    final detailed = await facade.detail(sourceId: sourceId, book: runtimeBook);
+    final runtimeChapters = await facade.chapters(
+      sourceId: sourceId,
+      book: detailed,
+    );
+
+    final chapters = runtimeChapters
+        .map(
+          (chapter) => Chapter(
+            id:
+                chapter.id.trim().isNotEmpty
+                    ? chapter.id.trim()
+                    : _buildScriptChapterId(
+                      bookId: bookId,
+                      chapterUrl: chapter.url,
+                      index: chapter.index,
+                    ),
+            bookId: bookId,
+            title:
+                chapter.title.trim().isNotEmpty
+                    ? chapter.title.trim()
+                    : '第 ${chapter.index + 1} 章',
+            chapterUrl: chapter.url.trim(),
+            index: chapter.index,
+          ),
+        )
+        .toList(growable: false);
+
+    if (chapters.isNotEmpty) {
+      _writeTocCache(cacheKey, chapters);
+    }
+
+    final result = BookDetailLoadResult(
+      detail: BookDetail(
+        id: bookId,
+        sourceId: sourceId,
+        title:
+            detailed.title.trim().isNotEmpty
+                ? detailed.title.trim()
+                : (fallbackTitle ?? '未命名书籍'),
+        detailUrl:
+            detailed.detailUrl.trim().isNotEmpty
+                ? detailed.detailUrl.trim()
+                : detailUrl,
+        author: _normalizeOptionalText(detailed.author),
+        intro: _normalizeOptionalText(detailed.intro),
+        coverUrl: _normalizeOptionalText(detailed.cover),
+        tocUrl: _normalizeOptionalText(
+          detailed.extra['catalogUrl']?.toString(),
+        ),
+      ),
+      chapters: chapters,
+      sourceName: registered.runtime.name,
+      tocFromCache: false,
+      tocError: null,
+    );
+    _writeDetailCache(cacheKey, result);
+    return result;
+  }
+
+  String _buildScriptChapterId({
+    required String bookId,
+    required String chapterUrl,
+    required int index,
+  }) {
+    final normalizedChapterUrl = chapterUrl.trim();
+    if (normalizedChapterUrl.isNotEmpty) {
+      return '$bookId:${Uri.encodeComponent(normalizedChapterUrl)}';
+    }
+    return '${bookId}_$index';
   }
 
   Future<void> _persistBookJsVariables({

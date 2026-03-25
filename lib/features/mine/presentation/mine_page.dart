@@ -13,8 +13,6 @@ import '../../../core/app_update/app_update_dialog.dart';
 import '../../../core/app_update/app_update_service.dart';
 import '../../../core/auth/auth_event_bus.dart';
 import '../../../core/auth/auth_session_store.dart';
-import '../../../core/user/user_profile.dart';
-import '../../../core/user/user_profile_service.dart';
 
 class MinePage extends ConsumerStatefulWidget {
   const MinePage({super.key});
@@ -44,11 +42,9 @@ class _MinePageState extends ConsumerState<MinePage> {
 
   final AuthSessionStore _authSessionStore = AuthSessionStore();
   final AppUpdateService _updateService = AppUpdateService();
-  final UserProfileService _userProfileService = UserProfileService();
   StreamSubscription<AuthEvent>? _authEventSub;
   String? _userId;
   String? _username;
-  String? _vipStatusText;
   bool _isLoadingSession = true;
   bool _isCheckingUpdate = false;
 
@@ -151,11 +147,6 @@ class _MinePageState extends ConsumerState<MinePage> {
                         title: '其他',
                         actions: [
                           _MineActionItem(
-                            icon: Icons.volunteer_activism_outlined,
-                            label: '捐赠支持',
-                            onTap: _showDonationSheet,
-                          ),
-                          _MineActionItem(
                             icon: Icons.rate_review_outlined,
                             label: '问题反馈',
                             onTap: () => context.push('/feedback'),
@@ -257,7 +248,7 @@ class _MinePageState extends ConsumerState<MinePage> {
     if (_userId == null) {
       return '未登录，点击登录/注册以同步阅读数据。';
     }
-    return '会员状态：${_vipStatusText ?? '未同步'}';
+    return '已登录，点击查看账号信息。';
   }
 
   Future<void> _loadSession() async {
@@ -275,39 +266,14 @@ class _MinePageState extends ConsumerState<MinePage> {
       });
     }
     final session = await _authSessionStore.getSession();
-    UserProfile? profile;
-    if (session != null) {
-      try {
-        profile = await _userProfileService.fetchMe();
-      } catch (_) {
-        profile = null;
-      }
-    }
     if (!mounted) {
       return;
     }
     setState(() {
       _userId = session?.userId;
-      _username = profile?.username ?? session?.username;
-      _vipStatusText = _resolveVipStatusText(profile);
+      _username = session?.username;
       _isLoadingSession = false;
     });
-  }
-
-  String? _resolveVipStatusText(UserProfile? profile) {
-    if (profile == null) {
-      return null;
-    }
-    final level = (profile.vipLevel ?? '').trim().toLowerCase();
-    final status = (profile.vipStatus ?? '').trim().toLowerCase();
-    final isVip = level.isNotEmpty && level != 'none' && status == 'active';
-    if (!isVip) {
-      return '非 VIP';
-    }
-    if (level == 'svip') {
-      return 'SVIP';
-    }
-    return 'VIP';
   }
 
   void _handleAuthEvent(AuthEvent event) {
@@ -576,80 +542,6 @@ class _MinePageState extends ConsumerState<MinePage> {
               scale: scale,
               alignment: Alignment.center,
               child: child,
-            ),
-          ),
-        );
-      },
-    );
-  }
-
-  Future<void> _showDonationSheet() async {
-    if (!mounted) {
-      return;
-    }
-
-    await showModalBottomSheet<void>(
-      context: context,
-      showDragHandle: true,
-      useSafeArea: true,
-      builder: (context) {
-        final colorScheme = Theme.of(context).colorScheme;
-        final textTheme = Theme.of(context).textTheme;
-
-        return SafeArea(
-          child: Padding(
-            padding: const EdgeInsets.fromLTRB(20, 8, 20, 24),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  '捐赠支持',
-                  style: textTheme.titleMedium?.copyWith(
-                    fontWeight: FontWeight.w700,
-                  ),
-                ),
-                const SizedBox(height: 6),
-                Text(
-                  '感谢支持，扫码即可赞赏。',
-                  style: textTheme.bodySmall?.copyWith(
-                    color: colorScheme.onSurfaceVariant,
-                  ),
-                ),
-                const SizedBox(height: 16),
-                Center(
-                  child: ClipRRect(
-                    borderRadius: BorderRadius.circular(20),
-                    child: DecoratedBox(
-                      decoration: BoxDecoration(
-                        color: colorScheme.surfaceContainerLowest,
-                        borderRadius: BorderRadius.circular(20),
-                        border: Border.all(
-                          color: colorScheme.outlineVariant.withValues(
-                            alpha: 0.48,
-                          ),
-                        ),
-                      ),
-                      child: Padding(
-                        padding: const EdgeInsets.all(12),
-                        child: LayoutBuilder(
-                          builder: (context, constraints) {
-                            final qrWidth =
-                                (constraints.maxWidth - 24)
-                                    .clamp(180.0, 260.0)
-                                    .toDouble();
-                            return Image.asset(
-                              'assets/mov/vx.png',
-                              width: qrWidth,
-                              fit: BoxFit.contain,
-                            );
-                          },
-                        ),
-                      ),
-                    ),
-                  ),
-                ),
-              ],
             ),
           ),
         );
