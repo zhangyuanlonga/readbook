@@ -72,7 +72,7 @@ class _BookDetailPageState extends State<BookDetailPage> {
   _cachedChapterCountStreamBuilder;
   late final BookDetailSwitchSourceHelper _switchSourceHelper;
 
-  static const int _tocPreviewLimit = 80;
+  static const int _tocPreviewLimit = 10;
   bool _isLoading = false;
   bool _isSwitchingSource = false;
   bool _manualTocReversed = false;
@@ -1715,6 +1715,7 @@ class _BookDetailPageState extends State<BookDetailPage> {
           detailUrl: detail.detailUrl,
         );
       } else {
+        final latestChapter = _resolveLatestChapter(result)?.title;
         await _bookshelfService.upsert(
           BookshelfBook(
             bookId: detail.id,
@@ -1723,6 +1724,7 @@ class _BookDetailPageState extends State<BookDetailPage> {
             detailUrl: detail.detailUrl,
             author: detail.author,
             coverUrl: detail.coverUrl,
+            latestChapter: latestChapter,
             addedAt: DateTime.now(),
           ),
         );

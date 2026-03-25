@@ -7,6 +7,7 @@ class BookshelfBook {
     required this.addedAt,
     this.author,
     this.coverUrl,
+    this.latestChapter,
   });
 
   final String bookId;
@@ -16,6 +17,7 @@ class BookshelfBook {
   final DateTime addedAt;
   final String? author;
   final String? coverUrl;
+  final String? latestChapter;
 
   BookshelfBook copyWith({
     String? bookId,
@@ -27,6 +29,8 @@ class BookshelfBook {
     bool clearAuthor = false,
     String? coverUrl,
     bool clearCoverUrl = false,
+    String? latestChapter,
+    bool clearLatestChapter = false,
   }) {
     return BookshelfBook(
       bookId: bookId ?? this.bookId,
@@ -36,6 +40,8 @@ class BookshelfBook {
       addedAt: addedAt ?? this.addedAt,
       author: clearAuthor ? null : (author ?? this.author),
       coverUrl: clearCoverUrl ? null : (coverUrl ?? this.coverUrl),
+      latestChapter:
+          clearLatestChapter ? null : (latestChapter ?? this.latestChapter),
     );
   }
 
@@ -48,6 +54,7 @@ class BookshelfBook {
       'addedAt': addedAt.toIso8601String(),
       'author': author,
       'coverUrl': coverUrl,
+      'latestChapter': latestChapter,
     };
   }
 
@@ -60,6 +67,7 @@ class BookshelfBook {
       addedAt: _requiredDateTime(json, 'addedAt'),
       author: _optionalString(json['author']),
       coverUrl: _optionalString(json['coverUrl']),
+      latestChapter: _optionalString(json['latestChapter']),
     );
   }
 

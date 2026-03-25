@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
@@ -83,6 +85,8 @@ class SystemSettingsPage extends StatelessWidget {
                                 ],
                               ),
                               SizedBox(height: 12),
+                              _SearchConcurrencySettingPanel(),
+                              SizedBox(height: 12),
                               _ReadingRecordSettingPanel(),
                               SizedBox(height: 12),
                               _ReaderSettingsResetPanel(),
@@ -99,6 +103,8 @@ class SystemSettingsPage extends StatelessWidget {
                             _LocalTxtSplitLongChapterSettingPanel(),
                             SizedBox(height: 12),
                             _SearchAggregationSettingPanel(),
+                            SizedBox(height: 12),
+                            _SearchConcurrencySettingPanel(),
                             SizedBox(height: 12),
                             _ReadingRecordSettingPanel(),
                             SizedBox(height: 12),
@@ -980,6 +986,229 @@ class _SearchAggregationSettingPanelState
       isSaving: _isSaving,
       onChanged: _isLoading || _isSaving ? null : _toggle,
       errorText: _errorText,
+    );
+  }
+}
+
+class _SearchConcurrencySettingPanel extends StatefulWidget {
+  const _SearchConcurrencySettingPanel();
+
+  @override
+  State<_SearchConcurrencySettingPanel> createState() =>
+      _SearchConcurrencySettingPanelState();
+}
+
+class _SearchConcurrencySettingPanelState
+    extends State<_SearchConcurrencySettingPanel> {
+  final SearchSystemSettingsService _settingsService =
+      SearchSystemSettingsService();
+
+  bool _isLoading = true;
+  bool _isSaving = false;
+  int _value = SearchSystemSettingsService.defaultMaxConcurrentSources;
+  String? _errorText;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadSetting();
+  }
+
+  Future<void> _loadSetting() async {
+    try {
+      final value = await _settingsService.loadMaxConcurrentSources();
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _value = value;
+        _errorText = null;
+      });
+    } catch (_) {
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _errorText = '读取搜索并发失败，请稍后重试。';
+      });
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+        });
+      }
+    }
+  }
+
+  Future<void> _updateValue(int next) async {
+    if (_isSaving) {
+      return;
+    }
+    final normalized = next.clamp(
+      SearchSystemSettingsService.minMaxConcurrentSources,
+      SearchSystemSettingsService.maxMaxConcurrentSources,
+    );
+    final previous = _value;
+    setState(() {
+      _value = normalized;
+      _isSaving = true;
+      _errorText = null;
+    });
+
+    try {
+      await _settingsService.saveMaxConcurrentSources(normalized);
+    } catch (_) {
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _value = previous;
+        _errorText = '保存搜索并发失败，请稍后重试。';
+      });
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isSaving = false;
+        });
+      }
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+    final textTheme = Theme.of(context).textTheme;
+
+    return Container(
+      padding: const EdgeInsets.fromLTRB(14, 14, 14, 14),
+      decoration: BoxDecoration(
+        color: colorScheme.surfaceContainerLow,
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(
+          color: colorScheme.outlineVariant.withValues(alpha: 0.46),
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Container(
+                width: 38,
+                height: 38,
+                decoration: BoxDecoration(
+                  color: colorScheme.primaryContainer.withValues(alpha: 0.92),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Icon(
+                  Icons.hub_outlined,
+                  size: 20,
+                  color: colorScheme.onPrimaryContainer,
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      '搜索并发',
+                      style: textTheme.titleSmall?.copyWith(
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                    const SizedBox(height: 3),
+                    Text(
+                      '控制搜索和换源时同时请求的书源数量，默认 15。',
+                      style: textTheme.bodySmall?.copyWith(
+                        color: colorScheme.onSurfaceVariant,
+                        height: 1.35,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              if (_isLoading || _isSaving)
+                SizedBox(
+                  width: 22,
+                  height: 22,
+                  child: CircularProgressIndicator(
+                    strokeWidth: 2,
+                    color: colorScheme.primary,
+                  ),
+                ),
+            ],
+          ),
+          const SizedBox(height: 14),
+          Row(
+            children: [
+              IconButton.filledTonal(
+                onPressed:
+                    _isLoading || _isSaving
+                        ? null
+                        : () => unawaited(_updateValue(_value - 1)),
+                icon: const Icon(Icons.remove),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 12,
+                    vertical: 10,
+                  ),
+                  decoration: BoxDecoration(
+                    color: colorScheme.surface,
+                    borderRadius: BorderRadius.circular(14),
+                    border: Border.all(color: colorScheme.outlineVariant),
+                  ),
+                  child: Column(
+                    children: [
+                      Text(
+                        '$_value',
+                        style: textTheme.titleLarge?.copyWith(
+                          fontWeight: FontWeight.w800,
+                        ),
+                      ),
+                      Text(
+                        '当前最大并发书源数',
+                        style: textTheme.bodySmall?.copyWith(
+                          color: colorScheme.onSurfaceVariant,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+              const SizedBox(width: 10),
+              IconButton.filledTonal(
+                onPressed:
+                    _isLoading || _isSaving
+                        ? null
+                        : () => unawaited(_updateValue(_value + 1)),
+                icon: const Icon(Icons.add),
+              ),
+            ],
+          ),
+          const SizedBox(height: 10),
+          Text(
+            '范围：${SearchSystemSettingsService.minMaxConcurrentSources} - ${SearchSystemSettingsService.maxMaxConcurrentSources}',
+            style: textTheme.bodySmall?.copyWith(
+              color: colorScheme.onSurfaceVariant,
+            ),
+          ),
+          if (_errorText != null) ...[
+            const SizedBox(height: 8),
+            Text(
+              _errorText!,
+              style: textTheme.bodySmall?.copyWith(
+                color: colorScheme.error,
+                height: 1.35,
+              ),
+            ),
+          ],
+        ],
+      ),
     );
   }
 }

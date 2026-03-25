@@ -193,7 +193,7 @@ class SearchService {
     SourceResponseProcessor? responseProcessor,
     SearchHitCacheService? searchHitCacheService,
     SearchSystemSettingsService? searchSystemSettingsService,
-    int maxConcurrentSources = 8,
+    int maxConcurrentSources = SearchSystemSettingsService.defaultMaxConcurrentSources,
   }) : _sourceRepository =
            sourceRepository ?? SourceRepositoryImpl(AppDatabase.instance),
        _httpClient = httpClient ?? AppHttpClient(),
@@ -212,9 +212,12 @@ class SearchService {
            searchHitCacheService ?? SearchHitCacheService(),
        _searchSystemSettingsService =
            searchSystemSettingsService ?? SearchSystemSettingsService(),
-       _maxConcurrentSources = max(1, maxConcurrentSources);
+       _maxConcurrentSources = max(
+         SearchSystemSettingsService.minMaxConcurrentSources,
+         maxConcurrentSources,
+       );
 
-  final int _maxConcurrentSources;
+  int _maxConcurrentSources;
 
   final SourceRepository _sourceRepository;
   final AppHttpClient _httpClient;
@@ -255,6 +258,13 @@ class SearchService {
     _searchDebugLoggingSettingLoaded = true;
   }
 
+  void setMaxConcurrentSources(int value) {
+    _maxConcurrentSources = value.clamp(
+      SearchSystemSettingsService.minMaxConcurrentSources,
+      SearchSystemSettingsService.maxMaxConcurrentSources,
+    );
+  }
+
   Future<SearchExecutionReport> search({
     required String keyword,
     int page = 1,
@@ -266,6 +276,7 @@ class SearchService {
     bool aggregateByTitleAuthor = false,
   }) async {
     await _syncSearchDebugLoggingSetting();
+    await _syncMaxConcurrentSourcesSetting();
     final normalizedKeyword = keyword.trim();
     if (normalizedKeyword.isEmpty) {
       throw AppException(
@@ -496,6 +507,15 @@ class SearchService {
     );
 
     return finalReport;
+  }
+
+  Future<void> _syncMaxConcurrentSourcesSetting() async {
+    try {
+      final value = await _searchSystemSettingsService.loadMaxConcurrentSources();
+      setMaxConcurrentSources(value);
+    } catch (_) {
+      // Keep current in-memory default when loading fails.
+    }
   }
 
   Future<void> _persistSearchHitCache({

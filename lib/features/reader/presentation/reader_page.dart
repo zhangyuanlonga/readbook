@@ -5607,6 +5607,10 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
               detailUrl: candidate.book.detailUrl,
               author: _bookAuthor,
               coverUrl: _bookCoverUrl,
+              latestChapter:
+                  _chapters.isNotEmpty
+                      ? _chapters.last.title
+                      : candidate.book.latestChapter,
               addedAt: DateTime.now(),
             ),
           );
@@ -8306,6 +8310,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
             detailUrl: detailUrl,
             author: _bookAuthor,
             coverUrl: _bookCoverUrl,
+            latestChapter: _chapters.isNotEmpty ? _chapters.last.title : null,
             addedAt: DateTime.now(),
           ),
         );

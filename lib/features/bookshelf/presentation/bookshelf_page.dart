@@ -1108,7 +1108,7 @@ class _BookshelfPageState extends State<BookshelfPage>
     final titleText = _toSingleLineText(book.title);
     final authorText = _toSingleLineText(book.author ?? '');
     final latestChapterText = _toSingleLineText(
-      _latestCachedChapterByBookKey[bookKey] ?? '',
+      _latestCachedChapterByBookKey[bookKey] ?? book.latestChapter ?? '',
     );
     final authorLine = authorText.isNotEmpty ? '作者: $authorText' : '作者: 未知';
     final latestLine =
@@ -1302,11 +1302,15 @@ class _BookshelfPageState extends State<BookshelfPage>
     final titleText = _toSingleLineText(book.title);
     final authorText = _toSingleLineText(book.author ?? '');
     final latestChapterText = _toSingleLineText(
-      _latestCachedChapterByBookKey[bookKey] ?? '',
+      _latestCachedChapterByBookKey[bookKey] ?? book.latestChapter ?? '',
     );
+    final authorLine = authorText.isNotEmpty ? '作者: $authorText' : '作者: 未知';
     final latestLine =
-        latestChapterText.isNotEmpty ? '最新: $latestChapterText' : '最新: 暂无缓存章节';
-    final readingHint = _buildReadingHint(progress, fallback: latestLine);
+        latestChapterText.isNotEmpty ? '最新: $latestChapterText' : '最新: 暂无章节';
+    final progressLine =
+        progress == null
+            ? '阅读进度: 未开始'
+            : '阅读进度: ${(progress.chapterPositionRatio.clamp(0.0, 1.0) * 100).round()}%';
     final isEditingSelected = _isSelectionMode && isSelected;
 
     return Card(
@@ -1363,15 +1367,15 @@ class _BookshelfPageState extends State<BookshelfPage>
                 containedInkWell: true,
                 borderRadius: BorderRadius.circular(12),
                 child: SizedBox(
-                  width: 56,
-                  height: 80,
+                  width: 68,
+                  height: 96,
                   child: Stack(
                     children: [
                       Positioned.fill(
                         child: _buildCover(
                           book.coverUrl,
-                          width: 56,
-                          height: 80,
+                          width: 68,
+                          height: 96,
                         ),
                       ),
                       Positioned(
@@ -1383,7 +1387,7 @@ class _BookshelfPageState extends State<BookshelfPage>
                   ),
                 ),
               ),
-              const SizedBox(width: 10),
+              const SizedBox(width: 12),
               Expanded(
                 child: GestureDetector(
                   behavior: HitTestBehavior.opaque,
@@ -1441,9 +1445,7 @@ class _BookshelfPageState extends State<BookshelfPage>
                       ),
                       const SizedBox(height: 6),
                       Text(
-                        latestChapterText.isNotEmpty
-                            ? latestChapterText
-                            : '暂无缓存章节',
+                        authorLine,
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                         style: Theme.of(context).textTheme.bodySmall?.copyWith(
@@ -1453,7 +1455,7 @@ class _BookshelfPageState extends State<BookshelfPage>
                       ),
                       const SizedBox(height: 4),
                       Text(
-                        authorText.isNotEmpty ? '作者: $authorText' : '作者: 未知',
+                        latestLine,
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                         style: Theme.of(context).textTheme.bodySmall?.copyWith(
@@ -1461,9 +1463,9 @@ class _BookshelfPageState extends State<BookshelfPage>
                           fontWeight: FontWeight.w500,
                         ),
                       ),
-                      const SizedBox(height: 5),
+                      const SizedBox(height: 4),
                       Text(
-                        readingHint,
+                        progressLine,
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                         style: Theme.of(context).textTheme.bodySmall?.copyWith(
@@ -1477,7 +1479,7 @@ class _BookshelfPageState extends State<BookshelfPage>
                                   : FontWeight.w600,
                         ),
                       ),
-                      const SizedBox(height: 4),
+                      const SizedBox(height: 8),
                       ClipRRect(
                         borderRadius: BorderRadius.circular(2),
                         child: LinearProgressIndicator(
@@ -1540,25 +1542,6 @@ class _BookshelfPageState extends State<BookshelfPage>
         ),
       ),
     );
-  }
-
-  String _buildReadingHint(
-    ReadingProgress? progress, {
-    required String fallback,
-  }) {
-    if (progress == null) {
-      return fallback;
-    }
-    final chapter = _toSingleLineText(progress.chapterTitle);
-    if (chapter.isEmpty) {
-      return fallback;
-    }
-    final ratio = progress.chapterPositionRatio.clamp(0.0, 1.0);
-    if (ratio <= 0.03) {
-      return '读到: $chapter';
-    }
-    final percent = (ratio * 100).round().clamp(1, 99);
-    return '读到: $chapter · 章内$percent%';
   }
 
   String _bookKey(BookshelfBook book) {
@@ -1904,7 +1887,7 @@ class _BookshelfPageState extends State<BookshelfPage>
     final bookKey = _bookKey(book);
     final progress = _progressByBookKey[bookKey];
     final latestChapter = _toSingleLineText(
-      _latestCachedChapterByBookKey[bookKey] ?? '',
+      _latestCachedChapterByBookKey[bookKey] ?? book.latestChapter ?? '',
     );
     final author = _toSingleLineText(book.author ?? '');
     final authorLine = author.isNotEmpty ? '作者: $author' : '作者: 未知';

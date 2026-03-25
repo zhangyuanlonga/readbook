@@ -402,7 +402,10 @@ class _SearchPageState extends State<SearchPage> {
               .loadAggregateByTitleAuthorEnabled();
       final debugLogEnabled =
           await _searchSystemSettingsService.loadSearchDebugLogEnabled();
+      final maxConcurrentSources =
+          await _searchSystemSettingsService.loadMaxConcurrentSources();
       _searchService.setSearchDebugLoggingEnabled(debugLogEnabled);
+      _searchService.setMaxConcurrentSources(maxConcurrentSources);
       if (!mounted) {
         return;
       }
