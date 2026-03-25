@@ -88,26 +88,21 @@ class EpubLocalBookParser implements LocalBookParser {
       );
     }
 
-    final chapterCandidates = archive.files
-        .where((entry) {
-          if (!entry.isFile) {
-            return false;
-          }
-          final lowerName = entry.name.toLowerCase();
-          if (lowerName.contains('meta-inf/')) {
-            return false;
-          }
-          return _supportedExtensions.any(lowerName.endsWith);
-        })
-        .toList(growable: false)
-      ..sort((left, right) => left.name.compareTo(right.name));
-
-    final assetDir = await _prepareAssetDirectory(book);
     final archiveFileIndex = <String, ArchiveFile>{
       for (final entry in archive.files.where((item) => item.isFile))
         _normalizeArchivePath(entry.name): entry,
     };
-    final metadata = _extractMetadata(archiveFileIndex);
+    final packageDocument = _loadPackageDocument(archiveFileIndex);
+    final chapterCandidates = _resolveChapterCandidates(
+      archive: archive,
+      archiveFileIndex: archiveFileIndex,
+      packageDocument: packageDocument,
+    );
+    final assetDir = await _prepareAssetDirectory(book);
+    final metadata = _extractMetadata(
+      archiveFileIndex,
+      packageDocument: packageDocument,
+    );
     final coverPath = await _materializeCoverPath(
       metadata: metadata,
       archiveFileIndex: archiveFileIndex,
@@ -188,34 +183,25 @@ class EpubLocalBookParser implements LocalBookParser {
     return directory;
   }
 
-  _EpubMetadata _extractMetadata(Map<String, ArchiveFile> archiveFileIndex) {
-    final packagePath = _resolvePackageDocumentPath(archiveFileIndex);
-    if (packagePath == null) {
+  _EpubMetadata _extractMetadata(
+    Map<String, ArchiveFile> archiveFileIndex, {
+    required _EpubPackageDocument? packageDocument,
+  }) {
+    if (packageDocument == null) {
       return const _EpubMetadata();
     }
 
-    final packageEntry = _findArchiveFile(archiveFileIndex, packagePath);
-    if (packageEntry == null) {
-      return const _EpubMetadata();
-    }
-
-    final packageText = _readArchiveEntryAsText(packageEntry);
-    if (packageText.trim().isEmpty) {
-      return const _EpubMetadata();
-    }
-
-    final packageDocument = html_parser.parse(packageText);
     final title = _extractFirstElementText(
-      packageDocument,
+      packageDocument.document,
       localNames: <String>{'dc:title', 'title'},
     );
     final author = _extractFirstElementText(
-      packageDocument,
+      packageDocument.document,
       localNames: <String>{'dc:creator', 'creator', 'dc:author', 'author'},
     );
     final coverArchivePath = _extractCoverArchivePath(
-      document: packageDocument,
-      packagePath: packagePath,
+      document: packageDocument.document,
+      packagePath: packageDocument.packagePath,
       archiveFileIndex: archiveFileIndex,
     );
 
@@ -224,6 +210,154 @@ class EpubLocalBookParser implements LocalBookParser {
       author: author,
       coverArchivePath: coverArchivePath,
     );
+  }
+
+  _EpubPackageDocument? _loadPackageDocument(
+    Map<String, ArchiveFile> archiveFileIndex,
+  ) {
+    final packagePath = _resolvePackageDocumentPath(archiveFileIndex);
+    if (packagePath == null) {
+      return null;
+    }
+
+    final packageEntry = _findArchiveFile(archiveFileIndex, packagePath);
+    if (packageEntry == null) {
+      return null;
+    }
+
+    final packageText = _readArchiveEntryAsText(packageEntry);
+    if (packageText.trim().isEmpty) {
+      return null;
+    }
+
+    return _EpubPackageDocument(
+      packagePath: packagePath,
+      document: html_parser.parse(packageText),
+    );
+  }
+
+  List<ArchiveFile> _resolveChapterCandidates({
+    required Archive archive,
+    required Map<String, ArchiveFile> archiveFileIndex,
+    required _EpubPackageDocument? packageDocument,
+  }) {
+    final spineCandidates = _resolveSpineChapterCandidates(
+      archiveFileIndex: archiveFileIndex,
+      packageDocument: packageDocument,
+    );
+    if (spineCandidates.isNotEmpty) {
+      return spineCandidates;
+    }
+    return _resolveFallbackChapterCandidates(archive);
+  }
+
+  List<ArchiveFile> _resolveSpineChapterCandidates({
+    required Map<String, ArchiveFile> archiveFileIndex,
+    required _EpubPackageDocument? packageDocument,
+  }) {
+    if (packageDocument == null) {
+      return const <ArchiveFile>[];
+    }
+
+    final manifestItems = packageDocument.document
+        .querySelectorAll('*')
+        .where((element) => (element.localName ?? '').toLowerCase() == 'item')
+        .toList(growable: false);
+    if (manifestItems.isEmpty) {
+      return const <ArchiveFile>[];
+    }
+
+    final chapters = <ArchiveFile>[];
+    final seenPaths = <String>{};
+
+    for (final itemRef in packageDocument.document.querySelectorAll('*')) {
+      final localName = (itemRef.localName ?? '').toLowerCase();
+      if (localName != 'itemref') {
+        continue;
+      }
+
+      final linear =
+          _readAttribute(
+            itemRef,
+            keys: const <String>{'linear'},
+          )?.toLowerCase();
+      if (linear == 'no') {
+        continue;
+      }
+
+      final idRef = _readAttribute(itemRef, keys: const <String>{'idref'});
+      if (idRef == null || idRef.isEmpty) {
+        continue;
+      }
+
+      final manifestItem = _findManifestItemById(manifestItems, idRef);
+      if (manifestItem == null) {
+        continue;
+      }
+
+      final href = _readAttribute(
+        manifestItem,
+        keys: const <String>{'href', 'xlink:href'},
+      );
+      final resolvedPath = _resolveArchivePathRelativeTo(
+        baseEntryPath: packageDocument.packagePath,
+        rawSource: href,
+      );
+      if (resolvedPath == null) {
+        continue;
+      }
+
+      final archiveEntry = _findArchiveFile(archiveFileIndex, resolvedPath);
+      if (archiveEntry == null) {
+        continue;
+      }
+
+      final properties =
+          _readAttribute(
+            manifestItem,
+            keys: const <String>{'properties'},
+          )?.toLowerCase() ??
+          '';
+      final mediaType =
+          _readAttribute(
+            manifestItem,
+            keys: const <String>{'media-type'},
+          )?.toLowerCase() ??
+          '';
+      final normalizedEntryPath = _normalizeArchivePath(archiveEntry.name);
+      if (!_isSupportedChapterEntry(
+            entryPath: normalizedEntryPath,
+            mediaType: mediaType,
+          ) ||
+          _isNavigationDocument(
+            entryPath: normalizedEntryPath,
+            properties: properties,
+          ) ||
+          !seenPaths.add(normalizedEntryPath)) {
+        continue;
+      }
+
+      chapters.add(archiveEntry);
+    }
+
+    return chapters;
+  }
+
+  List<ArchiveFile> _resolveFallbackChapterCandidates(Archive archive) {
+    final chapterCandidates = archive.files
+        .where((entry) {
+          if (!entry.isFile) {
+            return false;
+          }
+          final lowerName = entry.name.toLowerCase();
+          if (lowerName.contains('meta-inf/')) {
+            return false;
+          }
+          return _supportedExtensions.any(lowerName.endsWith);
+        })
+        .toList(growable: false)
+      ..sort((left, right) => left.name.compareTo(right.name));
+    return chapterCandidates;
   }
 
   String? _resolvePackageDocumentPath(
@@ -518,6 +652,35 @@ class EpubLocalBookParser implements LocalBookParser {
       }
     }
     return null;
+  }
+
+  bool _isSupportedChapterEntry({
+    required String entryPath,
+    required String mediaType,
+  }) {
+    final lowerPath = entryPath.toLowerCase();
+    if (_supportedExtensions.any(lowerPath.endsWith)) {
+      return true;
+    }
+    return mediaType == 'application/xhtml+xml' || mediaType == 'text/html';
+  }
+
+  bool _isNavigationDocument({
+    required String entryPath,
+    required String properties,
+  }) {
+    if (properties
+        .split(RegExp(r'\s+'))
+        .where((item) => item.isNotEmpty)
+        .contains('nav')) {
+      return true;
+    }
+
+    final fileName = p.posix.basename(entryPath).toLowerCase();
+    return fileName == 'nav.xhtml' ||
+        fileName == 'nav.html' ||
+        fileName == 'toc.xhtml' ||
+        fileName == 'toc.html';
   }
 
   String? _readAttribute(dom.Element element, {required Set<String> keys}) {
@@ -919,4 +1082,14 @@ class _EpubMetadata {
   final String? title;
   final String? author;
   final String? coverArchivePath;
+}
+
+class _EpubPackageDocument {
+  const _EpubPackageDocument({
+    required this.packagePath,
+    required this.document,
+  });
+
+  final String packagePath;
+  final dom.Document document;
 }
