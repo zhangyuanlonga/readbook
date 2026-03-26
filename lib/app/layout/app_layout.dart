@@ -32,8 +32,11 @@ class AppLayout {
   static const double mediumBreakpointWidth = 600;
   static const double expandedBreakpointWidth = 840;
   static const double mineContentMaxWidth = 700;
+  static const double bookDetailContentMaxWidth = 920;
+  static const double searchContentMaxWidth = 920;
   static const double settingsContentMaxWidth = 760;
   static const double systemSettingsContentMaxWidth = 560;
+  static const double errorCenterContentMaxWidth = 920;
   static const double aboutContentMaxWidth = 920;
   static const double aboutExpandedContentMaxWidth = 1080;
   static const double discoverExpandedSidePanelWidth = 300;
@@ -95,6 +98,10 @@ class AppLayout {
   }
 
   static AppWidthBucket widthBucket(BuildContext context) {
+    final width = screenWidth(context);
+    if (isPhoneSmallWidthFor(width)) {
+      return AppWidthBucket.compact;
+    }
     final inherited =
         context
             .dependOnInheritedWidgetOfExactType<
@@ -106,7 +113,7 @@ class AppLayout {
     if (bucket != null) {
       return bucket;
     }
-    return widthBucketFor(screenWidth(context));
+    return widthBucketFor(width);
   }
 
   static AppWidthBucket? widthBucketFromBreakpointName(String? breakpointName) {
@@ -122,7 +129,7 @@ class AppLayout {
   }
 
   static AppWidthBucket widthBucketFor(double width) {
-    if (width < regularPhoneBreakpointWidth) {
+    if (isPhoneSmallWidthFor(width)) {
       return AppWidthBucket.compact;
     }
     if (width < largePhoneBreakpointWidth) {
@@ -169,12 +176,12 @@ class AppLayout {
   }
 
   static int optionGridColumnsForWidth(double width) {
+    if (isPhoneSmallWidthFor(width)) {
+      return 1;
+    }
     final bucket = widthBucketFor(width);
     if (bucket == AppWidthBucket.medium || bucket == AppWidthBucket.expanded) {
       return 3;
-    }
-    if (bucket == AppWidthBucket.compact) {
-      return 1;
     }
     return 2;
   }

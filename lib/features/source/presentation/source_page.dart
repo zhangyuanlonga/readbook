@@ -234,7 +234,7 @@ class _SourcePageState extends State<SourcePage> {
       setState(() {
         _isInitialLoading = false;
         _isPageLoading = false;
-        _listErrorText = '加载书源超时，请稍后重试。';
+        _listErrorText = '加载配置超时，请稍后重试。';
       });
     } catch (error) {
       if (!mounted || ticket != _queryTicket) {
@@ -243,7 +243,7 @@ class _SourcePageState extends State<SourcePage> {
       setState(() {
         _isInitialLoading = false;
         _isPageLoading = false;
-        _listErrorText = '加载书源失败：$error';
+        _listErrorText = '加载配置失败：$error';
       });
     }
   }
@@ -381,13 +381,13 @@ class _SourcePageState extends State<SourcePage> {
           title: Text(
             _isSelectionMode && _activeTab == _SourceTab.legacy
                 ? '已选择 ${_selectedSourceIds.length} 项'
-                : '书源',
+                : '配置',
           ),
           actions: [
             if (!_isSelectionMode || _activeTab == _SourceTab.script) ...[
               if (_activeTab == _SourceTab.script) ...[
                 IconButton(
-                  tooltip: '重载脚本源',
+                  tooltip: '重载脚本配置',
                   onPressed:
                       _isReloadingScriptSources
                           ? null
@@ -402,7 +402,7 @@ class _SourcePageState extends State<SourcePage> {
                           : const Icon(Icons.sync_rounded),
                 ),
                 IconButton(
-                  tooltip: '新增脚本源',
+                  tooltip: '新增脚本配置',
                   onPressed:
                       _savingScriptSourceIds.isNotEmpty
                           ? null
@@ -423,7 +423,7 @@ class _SourcePageState extends State<SourcePage> {
                   )
                 else
                   PopupMenuButton<_ImportAction>(
-                    tooltip: '导入书源',
+                    tooltip: '导入规则',
                     icon: const Icon(Icons.add),
                     onSelected: (action) {
                       switch (action) {
@@ -649,7 +649,7 @@ class _SourcePageState extends State<SourcePage> {
       );
     }
 
-    final text = _hasMorePages ? '继续下滑加载更多书源' : '已显示全部书源';
+    final text = _hasMorePages ? '继续下滑加载更多配置' : '已显示全部配置';
     return Padding(
       padding: const EdgeInsets.only(top: 10, bottom: 2),
       child: Center(
@@ -676,7 +676,7 @@ class _SourcePageState extends State<SourcePage> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(
-              '书源列表加载失败',
+              '书配置列表加载失败',
               style: TextStyle(
                 color: colorScheme.onErrorContainer,
                 fontWeight: FontWeight.w700,
@@ -701,7 +701,7 @@ class _SourcePageState extends State<SourcePage> {
                       hasFilters
                           ? _clearSourceSearchFilter
                           : _showImportActionSheet,
-                  child: Text(hasFilters ? '清空筛选' : '导入书源'),
+                  child: Text(hasFilters ? '清空筛选' : '导入书配置'),
                 ),
               ],
             ),
@@ -740,7 +740,7 @@ class _SourcePageState extends State<SourcePage> {
                         height: 1.25,
                       ),
                       decoration: InputDecoration(
-                        hintText: '搜索书源名称或域名',
+                        hintText: '搜索规则名称或域名',
                         hintStyle: Theme.of(
                           context,
                         ).textTheme.bodyMedium?.copyWith(
@@ -815,12 +815,12 @@ class _SourcePageState extends State<SourcePage> {
         segments: const [
           ButtonSegment<_SourceTab>(
             value: _SourceTab.legacy,
-            label: Text('规则源'),
+            label: Text('规则配置'),
             icon: Icon(Icons.dataset_linked_rounded),
           ),
           ButtonSegment<_SourceTab>(
             value: _SourceTab.script,
-            label: Text('脚本源'),
+            label: Text('脚本配置'),
             icon: Icon(Icons.javascript_rounded),
           ),
         ],
@@ -878,7 +878,7 @@ class _SourcePageState extends State<SourcePage> {
                         children: [
                           Expanded(
                             child: Text(
-                              '脚本源直接维护 JS 源码，保存时会立即编译校验。',
+                              '脚本配置直接维护 JS 配置码，保存时会立即编译校验。',
                               style: Theme.of(context).textTheme.bodySmall,
                             ),
                           ),
@@ -918,21 +918,21 @@ class _SourcePageState extends State<SourcePage> {
             const Icon(Icons.javascript_rounded, size: 28),
             const SizedBox(height: 10),
             Text(
-              '当前没有脚本源',
+              '当前没有脚本配置',
               style: Theme.of(
                 context,
               ).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w700),
             ),
             const SizedBox(height: 6),
             Text(
-              '可以新建一个脚本源，或把现成脚本粘贴进来。',
+              '可以新建一个脚本配置，或把现成配置粘贴进来。',
               style: Theme.of(context).textTheme.bodySmall,
             ),
             const SizedBox(height: 12),
             FilledButton.icon(
               onPressed: () => unawaited(_showScriptSourceEditor()),
               icon: const Icon(Icons.add),
-              label: const Text('新增脚本源'),
+              label: const Text('新增脚本配置'),
             ),
           ],
         ),
@@ -1079,17 +1079,17 @@ class _SourcePageState extends State<SourcePage> {
         return;
       }
       if (report.failures.isEmpty) {
-        _showMessage('脚本源已重载。');
+        _showMessage('脚本配置已重载。');
       } else {
         _showMessage(
-          '已重载 ${report.loaded.length} 个脚本源，${report.failures.length} 个失败。',
+          '已重载 ${report.loaded.length} 个脚本配置，${report.failures.length} 个失败。',
         );
       }
     } catch (error) {
       if (!mounted) {
         return;
       }
-      _showMessage('重载脚本源失败：$error');
+      _showMessage('重载脚本配置失败：$error');
     } finally {
       if (mounted) {
         setState(() {
@@ -1146,7 +1146,7 @@ class _SourcePageState extends State<SourcePage> {
             }
 
             return AlertDialog(
-              title: Text(source == null ? '新增脚本源' : '编辑脚本源'),
+              title: Text(source == null ? '新增脚本配置' : '编辑脚本配置'),
               content: SizedBox(
                 width: 760,
                 child: Column(
@@ -1169,7 +1169,7 @@ class _SourcePageState extends State<SourcePage> {
                         decoration: const InputDecoration(
                           border: OutlineInputBorder(),
                           alignLabelWithHint: true,
-                          hintText: '粘贴书源脚本',
+                          hintText: '粘贴书配置脚本',
                         ),
                       ),
                     ),
@@ -1211,7 +1211,7 @@ class _SourcePageState extends State<SourcePage> {
     controller.dispose();
 
     if (saved == true && mounted) {
-      _showMessage(source == null ? '脚本源已新增。' : '脚本源已保存。');
+      _showMessage(source == null ? '脚本配置已新增。' : '脚本配置已保存。');
     }
   }
 
@@ -1229,7 +1229,7 @@ class _SourcePageState extends State<SourcePage> {
       );
     } catch (error) {
       if (mounted) {
-        _showMessage('更新脚本源状态失败：$error');
+        _showMessage('更新脚本配置状态失败：$error');
       }
     } finally {
       if (mounted) {
@@ -1245,7 +1245,7 @@ class _SourcePageState extends State<SourcePage> {
       context: context,
       builder: (context) {
         return AlertDialog(
-          title: const Text('删除脚本源'),
+          title: const Text('删除脚本配置'),
           content: Text('确认删除「${source.name}」吗？'),
           actions: [
             TextButton(
@@ -1270,11 +1270,11 @@ class _SourcePageState extends State<SourcePage> {
     try {
       await _sourceRuntimeFacade.deleteScriptSource(source.id);
       if (mounted) {
-        _showMessage('脚本源已删除。');
+        _showMessage('脚本配置已删除。');
       }
     } catch (error) {
       if (mounted) {
-        _showMessage('删除脚本源失败：$error');
+        _showMessage('删除脚本配置失败：$error');
       }
     } finally {
       if (mounted) {
@@ -1403,14 +1403,14 @@ class _SourcePageState extends State<SourcePage> {
             ),
             const SizedBox(height: 10),
             Text(
-              hasFilters ? '未匹配到书源' : '当前没有书源',
+              hasFilters ? '未匹配到书配置' : '当前没有书配置',
               style: Theme.of(
                 context,
               ).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w700),
             ),
             const SizedBox(height: 6),
             Text(
-              hasFilters ? '可以清空筛选后再查看。' : '点击下方按钮开始导入书源。',
+              hasFilters ? '可以清空筛选后再查看。' : '点击下方按钮开始导入书配置。',
               style: Theme.of(context).textTheme.bodySmall?.copyWith(
                 color: colorScheme.onSurfaceVariant,
               ),
@@ -1430,7 +1430,7 @@ class _SourcePageState extends State<SourcePage> {
                         ? Icons.filter_alt_off_rounded
                         : Icons.upload_file_rounded,
                   ),
-                  label: Text(hasFilters ? '清空筛选' : '导入书源'),
+                  label: Text(hasFilters ? '清空筛选' : '导入书配置'),
                 ),
                 if (hasFilters)
                   OutlinedButton(
@@ -1581,7 +1581,7 @@ class _SourcePageState extends State<SourcePage> {
                 PopupMenuItem(
                   value: _SourceAction.export,
                   enabled: !isActionLocked,
-                  child: const Text('导出书源'),
+                  child: const Text('导出书配置'),
                 ),
                 PopupMenuItem(
                   value: _SourceAction.test,
@@ -1591,7 +1591,7 @@ class _SourcePageState extends State<SourcePage> {
                 PopupMenuItem(
                   value: _SourceAction.delete,
                   enabled: !isActionLocked,
-                  child: const Text('删除书源'),
+                  child: const Text('删除书配置'),
                 ),
               ],
         ),
@@ -2022,7 +2022,7 @@ class _SourcePageState extends State<SourcePage> {
             uniformTypeIdentifiers: ['public.json', 'public.plain-text'],
           ),
         ],
-        confirmButtonText: '导入书源',
+        confirmButtonText: '导入书配置',
       );
     } on PlatformException catch (error) {
       _showMessage('打开文件选择器失败：${error.message ?? error.code}');
@@ -2071,7 +2071,7 @@ class _SourcePageState extends State<SourcePage> {
   ) async {
     final bytes = payload.bytes;
     final sourceLabel =
-        payload.label.trim().isEmpty ? '外部书源' : payload.label.trim();
+        payload.label.trim().isEmpty ? '外部书配置' : payload.label.trim();
 
     try {
       if (bytes == null || bytes.isEmpty) {
@@ -2129,7 +2129,7 @@ class _SourcePageState extends State<SourcePage> {
               issues: [
                 SourceImportIssue(
                   sourceLabel: assetFile,
-                  message: '读取内置文件失败，请确认已在 pubspec.yaml 注册资源。',
+                  message: '读取内置文件失败，请确认已在 pubspec.yaml 注册资配置。',
                 ),
               ],
               compatibilityHints: const [],
@@ -2177,12 +2177,12 @@ class _SourcePageState extends State<SourcePage> {
     if (report.totalCount == 0 &&
         !report.hasIssues &&
         !report.hasCompatibilityHints) {
-      _showMessage('$actionLabel未发现可处理书源。');
+      _showMessage('$actionLabel未发现可处理书配置。');
       return;
     }
 
     if (report.validSources.isEmpty) {
-      _showMessage('$actionLabel失败：没有可导入书源。');
+      _showMessage('$actionLabel失败：没有可导入书配置。');
       return;
     }
 
@@ -2272,8 +2272,8 @@ class _SourcePageState extends State<SourcePage> {
     }
 
     final confirmed = await _showConfirmDialog(
-      title: '清空全部书源',
-      content: '确认清空全部书源吗？此操作不可恢复。',
+      title: '清空全部书配置',
+      content: '确认清空全部书配置吗？此操作不可恢复。',
       confirmText: '清空',
     );
 
@@ -2297,9 +2297,9 @@ class _SourcePageState extends State<SourcePage> {
       });
 
       await _reloadSourceList(reset: true);
-      _showMessage('已清空全部书源。');
+      _showMessage('已清空全部书配置。');
     } catch (_) {
-      _showMessage('清空书源失败，请稍后重试。');
+      _showMessage('清空书配置失败，请稍后重试。');
     } finally {
       if (mounted) {
         setState(() {
@@ -2373,8 +2373,8 @@ class _SourcePageState extends State<SourcePage> {
     }
 
     final confirmed = await _showConfirmDialog(
-      title: '删除书源',
-      content: '确定删除选中的 $total 个书源吗？',
+      title: '删除书配置',
+      content: '确定删除选中的 $total 个书配置吗？',
       confirmText: '删除',
     );
 
@@ -2400,7 +2400,7 @@ class _SourcePageState extends State<SourcePage> {
       });
 
       await _reloadSourceList(reset: true);
-      _showMessage('已删除 $total 条书源。');
+      _showMessage('已删除 $total 条书配置。');
     } catch (_) {
       _showMessage('批量删除失败，请稍后重试。');
     } finally {
@@ -2425,7 +2425,7 @@ class _SourcePageState extends State<SourcePage> {
       await _repository.setEnabled(sourceId: sourceId, enabled: enabled);
       await _reloadSourceList(reset: false);
     } catch (_) {
-      _showMessage('更新书源状态失败，请重试。');
+      _showMessage('更新书配置状态失败，请重试。');
     } finally {
       if (mounted) {
         setState(() {
@@ -2441,8 +2441,8 @@ class _SourcePageState extends State<SourcePage> {
     }
 
     final confirmed = await _showConfirmDialog(
-      title: '删除书源',
-      content: '确认删除该书源吗？',
+      title: '删除书配置',
+      content: '确认删除该书配置吗？',
       confirmText: '删除',
     );
 
@@ -2457,9 +2457,9 @@ class _SourcePageState extends State<SourcePage> {
     try {
       await _repository.deleteById(sourceId);
       await _reloadSourceList(reset: true);
-      _showMessage('已删除书源。');
+      _showMessage('已删除书配置。');
     } catch (_) {
-      _showMessage('删除书源失败，请重试。');
+      _showMessage('删除书配置失败，请重试。');
     } finally {
       if (mounted) {
         setState(() {
@@ -2479,7 +2479,7 @@ class _SourcePageState extends State<SourcePage> {
     try {
       final latestSource = await _getSourceById(source.id);
       if (latestSource == null) {
-        _showMessage('书源不存在，无法测试。');
+        _showMessage('书配置不存在，无法测试。');
         return;
       }
 
@@ -2505,7 +2505,7 @@ class _SourcePageState extends State<SourcePage> {
                   error: const AppException(
                     code: ErrorCode.network,
                     stage: ErrorStage.search,
-                    briefMessage: '连通性测试超时，请检查网络或切换书源后重试。',
+                    briefMessage: '连通性测试超时，请检查网络或切换书配置后重试。',
                   ),
                   probeOnly: true,
                 ),
@@ -2542,7 +2542,7 @@ class _SourcePageState extends State<SourcePage> {
     try {
       final latestSource = await _getSourceById(source.id);
       if (latestSource == null) {
-        _showMessage('书源不存在或已被删除。');
+        _showMessage('书配置不存在或已被删除。');
         return;
       }
 
@@ -2710,7 +2710,7 @@ class _SourcePageState extends State<SourcePage> {
     try {
       final saveLocation = await getSaveLocation(
         suggestedName: suggestedName,
-        confirmButtonText: '保存书源',
+        confirmButtonText: '保存书配置',
         acceptedTypeGroups: const [
           XTypeGroup(
             label: 'JSON',
@@ -2999,7 +2999,7 @@ class _PasteImportPageState extends State<_PasteImportPage> {
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
                   Text(
-                    '粘贴书源 JSON 内容（对象或数组）',
+                    '粘贴书配置 JSON 内容（对象或数组）',
                     style: Theme.of(context).textTheme.bodyMedium,
                   ),
                   const SizedBox(height: 8),
@@ -3063,7 +3063,7 @@ class _UrlImportPageState extends State<_UrlImportPage> {
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('链接导入书源'),
+        title: const Text('链接导入书配置'),
         actions: [
           TextButton(
             onPressed: canSubmit ? _submit : null,
@@ -3089,7 +3089,7 @@ class _UrlImportPageState extends State<_UrlImportPage> {
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
                   Text(
-                    '请输入书源 JSON 链接（http/https）',
+                    '请输入书配置 JSON 链接（http/https）',
                     style: Theme.of(context).textTheme.bodyMedium,
                   ),
                   const SizedBox(height: 8),
@@ -3150,7 +3150,7 @@ class _SourceLoadingCard extends StatelessWidget {
             const SizedBox(width: 12),
             Expanded(
               child: Text(
-                '正在加载书源列表...',
+                '正在加载书配置列表...',
                 style: Theme.of(context).textTheme.bodyMedium,
               ),
             ),
@@ -3554,7 +3554,7 @@ class _SourceGroupFilterSheet extends StatelessWidget {
           leading: const Icon(Icons.info_outline_rounded),
           title: Text('暂无已命名分组', style: theme.textTheme.bodyMedium),
           subtitle: Text(
-            '可以先在书源卡片上设置分组。',
+            '可以先在书配置卡片上设置分组。',
             style: theme.textTheme.bodySmall?.copyWith(
               color: theme.colorScheme.onSurfaceVariant,
             ),
@@ -3582,7 +3582,7 @@ class _SourceGroupFilterSheet extends StatelessWidget {
             ),
             const SizedBox(height: 6),
             Text(
-              '筛选特定分组或仅查看未分组书源。',
+              '筛选特定分组或仅查看未分组书配置。',
               style: theme.textTheme.bodySmall?.copyWith(
                 color: theme.colorScheme.onSurfaceVariant,
               ),

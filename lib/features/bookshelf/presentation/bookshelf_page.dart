@@ -42,7 +42,9 @@ enum _TagManageSheetAction { rename, delete }
 enum _BookshelfMoreAction { importLocal }
 
 class BookshelfPage extends StatefulWidget {
-  const BookshelfPage({super.key});
+  const BookshelfPage({super.key, this.prefetchAnnouncementOnInit = true});
+
+  final bool prefetchAnnouncementOnInit;
 
   @override
   State<BookshelfPage> createState() => _BookshelfPageState();
@@ -140,7 +142,9 @@ class _BookshelfPageState extends State<BookshelfPage>
       unawaited(_consumePendingExternalImportPayloads());
       unawaited(_restoreViewModePreference());
       unawaited(_loadBookshelf());
-      unawaited(_prefetchLatestAnnouncement());
+      if (widget.prefetchAnnouncementOnInit) {
+        unawaited(_prefetchLatestAnnouncement());
+      }
     });
   }
 

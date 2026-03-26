@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../../app/layout/app_layout.dart';
 import '../../../app/layout/app_spacing.dart';
 import '../../../app/widgets/disk_cached_cover_image.dart';
 import '../../../core/cache/cover_image_disk_cache.dart';
@@ -64,59 +65,74 @@ class _CacheManagementPageState extends State<CacheManagementPage> {
             ),
           ],
         ),
-        body: Padding(
-          padding: EdgeInsets.fromLTRB(
-            horizontal,
-            12,
-            horizontal,
-            12 + bottomSafe,
-          ),
-          child: FutureBuilder<Map<String, BookshelfBook>>(
-            future: _bookshelfIndexFuture,
-            builder: (context, snapshot) {
-              final bookshelfIndex =
-                  snapshot.data ?? const <String, BookshelfBook>{};
+        body: LayoutBuilder(
+          builder: (context, _) {
+            final maxWidth = AppLayout.pageContentMaxWidth(
+              context,
+              maxWidth: AppLayout.settingsContentMaxWidth,
+            );
 
-              return StreamBuilder<List<ChapterCacheBookSummary>>(
-                stream: AppDatabase.instance.watchCachedBooks(),
-                builder: (context, summarySnapshot) {
-                  final summaries =
-                      summarySnapshot.data ?? const <ChapterCacheBookSummary>[];
-                  final totalCachedChapters = summaries.fold<int>(
-                    0,
-                    (sum, item) => sum + item.cachedCount,
-                  );
+            return Align(
+              alignment: Alignment.topCenter,
+              child: ConstrainedBox(
+                constraints: BoxConstraints(maxWidth: maxWidth),
+                child: Padding(
+                  padding: EdgeInsets.fromLTRB(
+                    horizontal,
+                    12,
+                    horizontal,
+                    12 + bottomSafe,
+                  ),
+                  child: FutureBuilder<Map<String, BookshelfBook>>(
+                    future: _bookshelfIndexFuture,
+                    builder: (context, snapshot) {
+                      final bookshelfIndex =
+                          snapshot.data ?? const <String, BookshelfBook>{};
 
-                  return Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      _buildHeaderCard(
-                        context,
-                        cachedBookCount: summaries.length,
-                        cachedChapterCount: totalCachedChapters,
-                        onClearAll: _confirmClearAll,
-                      ),
-                      const SizedBox(height: 12),
-                      Text(
-                        '小说缓存',
-                        style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                          fontWeight: FontWeight.w700,
-                        ),
-                      ),
-                      const SizedBox(height: 8),
-                      Expanded(
-                        child: _buildCacheList(
-                          context,
-                          summaries: summaries,
-                          bookshelfIndex: bookshelfIndex,
-                        ),
-                      ),
-                    ],
-                  );
-                },
-              );
-            },
-          ),
+                      return StreamBuilder<List<ChapterCacheBookSummary>>(
+                        stream: AppDatabase.instance.watchCachedBooks(),
+                        builder: (context, summarySnapshot) {
+                          final summaries =
+                              summarySnapshot.data ??
+                              const <ChapterCacheBookSummary>[];
+                          final totalCachedChapters = summaries.fold<int>(
+                            0,
+                            (sum, item) => sum + item.cachedCount,
+                          );
+
+                          return Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              _buildHeaderCard(
+                                context,
+                                cachedBookCount: summaries.length,
+                                cachedChapterCount: totalCachedChapters,
+                                onClearAll: _confirmClearAll,
+                              ),
+                              const SizedBox(height: 12),
+                              Text(
+                                '小说缓存',
+                                style: Theme.of(context).textTheme.titleSmall
+                                    ?.copyWith(fontWeight: FontWeight.w700),
+                              ),
+                              const SizedBox(height: 8),
+                              Expanded(
+                                child: _buildCacheList(
+                                  context,
+                                  summaries: summaries,
+                                  bookshelfIndex: bookshelfIndex,
+                                ),
+                              ),
+                            ],
+                          );
+                        },
+                      );
+                    },
+                  ),
+                ),
+              ),
+            );
+          },
         ),
       ),
     );

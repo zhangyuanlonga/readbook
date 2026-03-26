@@ -572,9 +572,9 @@ class _LocalLibraryPageState extends State<LocalLibraryPage> {
           const SizedBox(height: 12),
           LayoutBuilder(
             builder: (context, constraints) {
-              final isNarrow =
-                  AppLayout.widthBucketFor(constraints.maxWidth) ==
-                  AppWidthBucket.compact;
+              final isNarrow = AppLayout.isPhoneSmallWidthFor(
+                constraints.maxWidth,
+              );
               final fileButton = FilledButton.icon(
                 onPressed: _isImporting ? null : _pickFilesToPending,
                 icon: const Icon(Icons.upload_file_outlined),

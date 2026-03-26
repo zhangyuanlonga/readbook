@@ -114,7 +114,7 @@ void main() {
     );
 
     expect(bucket320, AppWidthBucket.compact);
-    expect(bucket360, AppWidthBucket.regularPhone);
+    expect(bucket360, AppWidthBucket.compact);
     expect(bucket390, AppWidthBucket.largePhone);
     expect(bucket480, AppWidthBucket.phoneXl);
     expect(bucket600, AppWidthBucket.medium);
@@ -464,8 +464,13 @@ void main() {
     tester,
   ) async {
     await tester.pumpWidget(
-      const _TestHarness(
+      _TestHarness(
         width: 390,
+        overrides: [
+          appShellNavigationProvider.overrideWith(
+            _AllTabsNavigationNotifier.new,
+          ),
+        ],
         child: ShellScaffold(location: '/discover', child: SizedBox()),
       ),
     );
@@ -576,6 +581,16 @@ class _BookshelfMineNavigationNotifier extends AppShellNavigationNotifier {
     return const AppShellNavigationState(
       showBookshelf: true,
       showDiscover: false,
+    );
+  }
+}
+
+class _AllTabsNavigationNotifier extends AppShellNavigationNotifier {
+  @override
+  AppShellNavigationState build() {
+    return const AppShellNavigationState(
+      showBookshelf: true,
+      showDiscover: true,
     );
   }
 }

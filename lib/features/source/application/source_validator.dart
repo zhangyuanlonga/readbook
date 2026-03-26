@@ -19,7 +19,7 @@ class SourceValidator {
       throw AppException(
         code: ErrorCode.validation,
         stage: ErrorStage.source,
-        briefMessage: '$prefix书源名称不能为空。',
+        briefMessage: '$prefix规则名称不能为空。',
       );
     }
 

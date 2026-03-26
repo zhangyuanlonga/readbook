@@ -278,8 +278,7 @@ class _FeedbackPageState extends State<FeedbackPage>
     return LayoutBuilder(
       builder: (context, constraints) {
         final width = constraints.maxWidth;
-        final compact =
-            AppLayout.widthBucketFor(width) == AppWidthBucket.compact;
+        final compact = AppLayout.isPhoneSmallWidthFor(width);
         if (compact) {
           return Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,

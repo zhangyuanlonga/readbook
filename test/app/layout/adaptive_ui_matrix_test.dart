@@ -68,8 +68,8 @@ void main() {
 
   test('matrix: bookshelf columns on target widths', () {
     final expected = <double, int>{
-      320: 2,
-      360: 2,
+      320: 3,
+      360: 3,
       390: 3,
       430: 3,
       480: 3,

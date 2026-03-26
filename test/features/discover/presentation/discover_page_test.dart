@@ -20,21 +20,29 @@ void main() {
   testWidgets('shows discover source summary when no discover-capable source', (
     tester,
   ) async {
+    _registerDiscoverPageTearDown(tester);
+    final repository = _FakeSourceRepository(<SourceDefinition>[
+      SourceDefinition(
+        id: 's1',
+        name: '普通源',
+        baseUrl: 'https://example.com',
+        enabled: true,
+        exploreEnabled: false,
+      ),
+    ]);
     final service = ExploreService(
-      sourceRepository: _FakeSourceRepository(<SourceDefinition>[
-        SourceDefinition(
-          id: 's1',
-          name: '普通源',
-          baseUrl: 'https://example.com',
-          enabled: true,
-          exploreEnabled: false,
-        ),
-      ]),
+      sourceRepository: repository,
       searchService: _FakeSearchService(),
     );
 
     await tester.pumpWidget(
-      _TestHarness(width: 900, child: DiscoverPage(exploreService: service)),
+      _TestHarness(
+        width: 900,
+        child: DiscoverPage(
+          exploreService: service,
+          sourceRepository: repository,
+        ),
+      ),
     );
     await tester.pumpAndSettle();
 
@@ -45,22 +53,24 @@ void main() {
   testWidgets('loads first discover category and renders books', (
     tester,
   ) async {
-    final service = ExploreService(
-      sourceRepository: _FakeSourceRepository(<SourceDefinition>[
-        SourceDefinition(
-          id: 'discover_s1',
-          name: '发现源A',
-          baseUrl: 'https://example.com',
-          enabled: true,
-          exploreEnabled: true,
-          exploreUrl: '推荐::/discover?page={{page}}',
-          rules: const SourceRuleSet(
-            exploreListRule: '.item@html',
-            exploreTitleRule: '.name@text',
-            exploreDetailUrlRule: '.name@href',
-          ),
+    _registerDiscoverPageTearDown(tester);
+    final repository = _FakeSourceRepository(<SourceDefinition>[
+      SourceDefinition(
+        id: 'discover_s1',
+        name: '发现源A',
+        baseUrl: 'https://example.com',
+        enabled: true,
+        exploreEnabled: true,
+        exploreUrl: '推荐::/discover?page={{page}}',
+        rules: const SourceRuleSet(
+          exploreListRule: '.item@html',
+          exploreTitleRule: '.name@text',
+          exploreDetailUrlRule: '.name@href',
         ),
-      ]),
+      ),
+    ]);
+    final service = ExploreService(
+      sourceRepository: repository,
       searchService: _FakeSearchService(
         handler: ({
           required SourceDefinition source,
@@ -89,7 +99,13 @@ void main() {
     );
 
     await tester.pumpWidget(
-      _TestHarness(width: 900, child: DiscoverPage(exploreService: service)),
+      _TestHarness(
+        width: 900,
+        child: DiscoverPage(
+          exploreService: service,
+          sourceRepository: repository,
+        ),
+      ),
     );
     await tester.pumpAndSettle();
 
@@ -97,26 +113,29 @@ void main() {
     expect(find.text('发现测试书籍'), findsOneWidget);
   });
 
-  testWidgets('uses denser phone card style at width 430 compared with 390', (
+  testWidgets('uses denser phone card style at width 480 compared with 390', (
     tester,
   ) async {
+    _registerDiscoverPageTearDown(tester);
+    addTearDown(() => tester.binding.setSurfaceSize(null));
     const introText = '这是一段用于测试发现页密度策略变化的简介文本内容';
-    final service = ExploreService(
-      sourceRepository: _FakeSourceRepository(<SourceDefinition>[
-        SourceDefinition(
-          id: 'discover_density',
-          name: '发现密度源',
-          baseUrl: 'https://example.com',
-          enabled: true,
-          exploreEnabled: true,
-          exploreUrl: '推荐::/discover?page={{page}}',
-          rules: const SourceRuleSet(
-            exploreListRule: '.item@html',
-            exploreTitleRule: '.name@text',
-            exploreDetailUrlRule: '.name@href',
-          ),
+    final repository = _FakeSourceRepository(<SourceDefinition>[
+      SourceDefinition(
+        id: 'discover_density',
+        name: '发现密度源',
+        baseUrl: 'https://example.com',
+        enabled: true,
+        exploreEnabled: true,
+        exploreUrl: '推荐::/discover?page={{page}}',
+        rules: const SourceRuleSet(
+          exploreListRule: '.item@html',
+          exploreTitleRule: '.name@text',
+          exploreDetailUrlRule: '.name@href',
         ),
-      ]),
+      ),
+    ]);
+    final service = ExploreService(
+      sourceRepository: repository,
       searchService: _FakeSearchService(
         handler: ({
           required SourceDefinition source,
@@ -145,46 +164,68 @@ void main() {
       ),
     );
 
+    await tester.binding.setSurfaceSize(const Size(390, 844));
     await tester.pumpWidget(
-      _TestHarness(width: 390, child: DiscoverPage(exploreService: service)),
+      _TestHarness(
+        width: 390,
+        child: DiscoverPage(
+          exploreService: service,
+          sourceRepository: repository,
+        ),
+      ),
     );
     await tester.pumpAndSettle();
 
     final intro390 = tester.widget<Text>(find.text(introText).first);
     expect(intro390.maxLines, 2);
 
+    await tester.binding.setSurfaceSize(const Size(480, 844));
     await tester.pumpWidget(
-      _TestHarness(width: 430, child: DiscoverPage(exploreService: service)),
+      _TestHarness(
+        width: 480,
+        child: DiscoverPage(
+          exploreService: service,
+          sourceRepository: repository,
+        ),
+      ),
     );
     await tester.pumpAndSettle();
 
-    final intro430 = tester.widget<Text>(find.text(introText).first);
-    expect(intro430.maxLines, 1);
+    final intro480 = tester.widget<Text>(find.text(introText).first);
+    expect(intro480.maxLines, 1);
   });
 
   testWidgets('shows category style hint text in side panel', (tester) async {
-    final service = ExploreService(
-      sourceRepository: _FakeSourceRepository(<SourceDefinition>[
-        SourceDefinition(
-          id: 'discover_s2',
-          name: '发现源B',
-          baseUrl: 'https://example.com',
-          enabled: true,
-          exploreEnabled: true,
-          exploreUrl:
-              '[{"title":"推荐","url":"/discover?page={{page}}","style":{"layout_flexBasisPercent":0.25}}]',
-          rules: const SourceRuleSet(
-            exploreListRule: '.item@html',
-            exploreTitleRule: '.name@text',
-            exploreDetailUrlRule: '.name@href',
-          ),
+    _registerDiscoverPageTearDown(tester);
+    final repository = _FakeSourceRepository(<SourceDefinition>[
+      SourceDefinition(
+        id: 'discover_s2',
+        name: '发现源B',
+        baseUrl: 'https://example.com',
+        enabled: true,
+        exploreEnabled: true,
+        exploreUrl:
+            '[{"title":"推荐","url":"/discover?page={{page}}","style":{"layout_flexBasisPercent":0.25}}]',
+        rules: const SourceRuleSet(
+          exploreListRule: '.item@html',
+          exploreTitleRule: '.name@text',
+          exploreDetailUrlRule: '.name@href',
         ),
-      ]),
+      ),
+    ]);
+    final service = ExploreService(
+      sourceRepository: repository,
       searchService: _FakeSearchService(),
     );
 
     await tester.pumpWidget(
-      _TestHarness(width: 900, child: DiscoverPage(exploreService: service)),
+      _TestHarness(
+        width: 900,
+        child: DiscoverPage(
+          exploreService: service,
+          sourceRepository: repository,
+        ),
+      ),
     );
     await tester.pumpAndSettle();
 
@@ -194,40 +235,48 @@ void main() {
   testWidgets('marks broken source and allows quick switch to next source', (
     tester,
   ) async {
+    _registerDiscoverPageTearDown(tester);
+    final repository = _FakeSourceRepository(<SourceDefinition>[
+      SourceDefinition(
+        id: 'broken_s1',
+        name: 'A异常源',
+        baseUrl: 'https://broken.example.com',
+        enabled: true,
+        exploreEnabled: true,
+        exploreUrl: '{{id|bad}}',
+        rules: const SourceRuleSet(
+          exploreListRule: '.item@html',
+          exploreTitleRule: '.name@text',
+          exploreDetailUrlRule: '.name@href',
+        ),
+      ),
+      SourceDefinition(
+        id: 'ok_s2',
+        name: 'B可用源',
+        baseUrl: 'https://ok.example.com',
+        enabled: true,
+        exploreEnabled: true,
+        exploreUrl: '推荐::/discover?page={{page}}',
+        rules: const SourceRuleSet(
+          exploreListRule: '.item@html',
+          exploreTitleRule: '.name@text',
+          exploreDetailUrlRule: '.name@href',
+        ),
+      ),
+    ]);
     final service = ExploreService(
-      sourceRepository: _FakeSourceRepository(<SourceDefinition>[
-        SourceDefinition(
-          id: 'broken_s1',
-          name: 'A异常源',
-          baseUrl: 'https://broken.example.com',
-          enabled: true,
-          exploreEnabled: true,
-          exploreUrl: '{{id|bad}}',
-          rules: const SourceRuleSet(
-            exploreListRule: '.item@html',
-            exploreTitleRule: '.name@text',
-            exploreDetailUrlRule: '.name@href',
-          ),
-        ),
-        SourceDefinition(
-          id: 'ok_s2',
-          name: 'B可用源',
-          baseUrl: 'https://ok.example.com',
-          enabled: true,
-          exploreEnabled: true,
-          exploreUrl: '推荐::/discover?page={{page}}',
-          rules: const SourceRuleSet(
-            exploreListRule: '.item@html',
-            exploreTitleRule: '.name@text',
-            exploreDetailUrlRule: '.name@href',
-          ),
-        ),
-      ]),
+      sourceRepository: repository,
       searchService: _FakeSearchService(),
     );
 
     await tester.pumpWidget(
-      _TestHarness(width: 900, child: DiscoverPage(exploreService: service)),
+      _TestHarness(
+        width: 900,
+        child: DiscoverPage(
+          exploreService: service,
+          sourceRepository: repository,
+        ),
+      ),
     );
     await tester.pumpAndSettle();
 
@@ -243,40 +292,48 @@ void main() {
   testWidgets('source switch buttons remain usable in narrow rail layout', (
     tester,
   ) async {
+    _registerDiscoverPageTearDown(tester);
+    final repository = _FakeSourceRepository(<SourceDefinition>[
+      SourceDefinition(
+        id: 'broken_s1',
+        name: 'A异常源',
+        baseUrl: 'https://broken.example.com',
+        enabled: true,
+        exploreEnabled: true,
+        exploreUrl: '{{id|bad}}',
+        rules: const SourceRuleSet(
+          exploreListRule: '.item@html',
+          exploreTitleRule: '.name@text',
+          exploreDetailUrlRule: '.name@href',
+        ),
+      ),
+      SourceDefinition(
+        id: 'ok_s2',
+        name: 'B可用源',
+        baseUrl: 'https://ok.example.com',
+        enabled: true,
+        exploreEnabled: true,
+        exploreUrl: '推荐::/discover?page={{page}}',
+        rules: const SourceRuleSet(
+          exploreListRule: '.item@html',
+          exploreTitleRule: '.name@text',
+          exploreDetailUrlRule: '.name@href',
+        ),
+      ),
+    ]);
     final service = ExploreService(
-      sourceRepository: _FakeSourceRepository(<SourceDefinition>[
-        SourceDefinition(
-          id: 'broken_s1',
-          name: 'A异常源',
-          baseUrl: 'https://broken.example.com',
-          enabled: true,
-          exploreEnabled: true,
-          exploreUrl: '{{id|bad}}',
-          rules: const SourceRuleSet(
-            exploreListRule: '.item@html',
-            exploreTitleRule: '.name@text',
-            exploreDetailUrlRule: '.name@href',
-          ),
-        ),
-        SourceDefinition(
-          id: 'ok_s2',
-          name: 'B可用源',
-          baseUrl: 'https://ok.example.com',
-          enabled: true,
-          exploreEnabled: true,
-          exploreUrl: '推荐::/discover?page={{page}}',
-          rules: const SourceRuleSet(
-            exploreListRule: '.item@html',
-            exploreTitleRule: '.name@text',
-            exploreDetailUrlRule: '.name@href',
-          ),
-        ),
-      ]),
+      sourceRepository: repository,
       searchService: _FakeSearchService(),
     );
 
     await tester.pumpWidget(
-      _TestHarness(width: 700, child: DiscoverPage(exploreService: service)),
+      _TestHarness(
+        width: 700,
+        child: DiscoverPage(
+          exploreService: service,
+          sourceRepository: repository,
+        ),
+      ),
     );
     await tester.pumpAndSettle();
 
@@ -287,41 +344,43 @@ void main() {
   });
 
   testWidgets('restores remembered source after page rebuild', (tester) async {
+    _registerDiscoverPageTearDown(tester);
     SharedPreferences.setMockInitialValues(<String, Object>{
       'discover.selectedSourceId': 'remember_s2',
     });
     final prefs = await SharedPreferences.getInstance();
     final preferencesService = DiscoverPreferencesService(preferences: prefs);
 
+    final repository = _FakeSourceRepository(<SourceDefinition>[
+      SourceDefinition(
+        id: 'default_s1',
+        name: 'A默认源',
+        baseUrl: 'https://a.example.com',
+        enabled: true,
+        exploreEnabled: true,
+        exploreUrl: '推荐::/discover?page={{page}}',
+        rules: const SourceRuleSet(
+          exploreListRule: '.item@html',
+          exploreTitleRule: '.name@text',
+          exploreDetailUrlRule: '.name@href',
+        ),
+      ),
+      SourceDefinition(
+        id: 'remember_s2',
+        name: 'B记忆源',
+        baseUrl: 'https://b.example.com',
+        enabled: true,
+        exploreEnabled: true,
+        exploreUrl: '推荐::/discover?page={{page}}',
+        rules: const SourceRuleSet(
+          exploreListRule: '.item@html',
+          exploreTitleRule: '.name@text',
+          exploreDetailUrlRule: '.name@href',
+        ),
+      ),
+    ]);
     final service = ExploreService(
-      sourceRepository: _FakeSourceRepository(<SourceDefinition>[
-        SourceDefinition(
-          id: 'default_s1',
-          name: 'A默认源',
-          baseUrl: 'https://a.example.com',
-          enabled: true,
-          exploreEnabled: true,
-          exploreUrl: '推荐::/discover?page={{page}}',
-          rules: const SourceRuleSet(
-            exploreListRule: '.item@html',
-            exploreTitleRule: '.name@text',
-            exploreDetailUrlRule: '.name@href',
-          ),
-        ),
-        SourceDefinition(
-          id: 'remember_s2',
-          name: 'B记忆源',
-          baseUrl: 'https://b.example.com',
-          enabled: true,
-          exploreEnabled: true,
-          exploreUrl: '推荐::/discover?page={{page}}',
-          rules: const SourceRuleSet(
-            exploreListRule: '.item@html',
-            exploreTitleRule: '.name@text',
-            exploreDetailUrlRule: '.name@href',
-          ),
-        ),
-      ]),
+      sourceRepository: repository,
       searchService: _FakeSearchService(),
     );
 
@@ -331,6 +390,7 @@ void main() {
         child: DiscoverPage(
           exploreService: service,
           discoverPreferencesService: preferencesService,
+          sourceRepository: repository,
         ),
       ),
     );
@@ -342,42 +402,50 @@ void main() {
   testWidgets('source picker can filter novel and manga sources', (
     tester,
   ) async {
+    _registerDiscoverPageTearDown(tester);
+    final repository = _FakeSourceRepository(<SourceDefinition>[
+      SourceDefinition(
+        id: 'novel_source',
+        name: '小说源A',
+        baseUrl: 'https://novel.example.com',
+        enabled: true,
+        sourceType: 0,
+        exploreEnabled: true,
+        exploreUrl: '推荐::/discover?page={{page}}',
+        rules: const SourceRuleSet(
+          exploreListRule: '.item@html',
+          exploreTitleRule: '.name@text',
+          exploreDetailUrlRule: '.name@href',
+        ),
+      ),
+      SourceDefinition(
+        id: 'manga_source',
+        name: '漫画源B',
+        baseUrl: 'https://manga.example.com',
+        enabled: true,
+        sourceType: 2,
+        exploreEnabled: true,
+        exploreUrl: '推荐::/discover?page={{page}}',
+        rules: const SourceRuleSet(
+          exploreListRule: '.item@html',
+          exploreTitleRule: '.name@text',
+          exploreDetailUrlRule: '.name@href',
+        ),
+      ),
+    ]);
     final service = ExploreService(
-      sourceRepository: _FakeSourceRepository(<SourceDefinition>[
-        SourceDefinition(
-          id: 'novel_source',
-          name: '小说源A',
-          baseUrl: 'https://novel.example.com',
-          enabled: true,
-          sourceType: 0,
-          exploreEnabled: true,
-          exploreUrl: '推荐::/discover?page={{page}}',
-          rules: const SourceRuleSet(
-            exploreListRule: '.item@html',
-            exploreTitleRule: '.name@text',
-            exploreDetailUrlRule: '.name@href',
-          ),
-        ),
-        SourceDefinition(
-          id: 'manga_source',
-          name: '漫画源B',
-          baseUrl: 'https://manga.example.com',
-          enabled: true,
-          sourceType: 2,
-          exploreEnabled: true,
-          exploreUrl: '推荐::/discover?page={{page}}',
-          rules: const SourceRuleSet(
-            exploreListRule: '.item@html',
-            exploreTitleRule: '.name@text',
-            exploreDetailUrlRule: '.name@href',
-          ),
-        ),
-      ]),
+      sourceRepository: repository,
       searchService: _FakeSearchService(),
     );
 
     await tester.pumpWidget(
-      _TestHarness(width: 900, child: DiscoverPage(exploreService: service)),
+      _TestHarness(
+        width: 900,
+        child: DiscoverPage(
+          exploreService: service,
+          sourceRepository: repository,
+        ),
+      ),
     );
     await tester.pumpAndSettle();
 
@@ -397,28 +465,36 @@ void main() {
   testWidgets('category preview hides non-actionable group titles', (
     tester,
   ) async {
-    final service = ExploreService(
-      sourceRepository: _FakeSourceRepository(<SourceDefinition>[
-        SourceDefinition(
-          id: 'discover_s4',
-          name: '发现源D',
-          baseUrl: 'https://example.com',
-          enabled: true,
-          exploreEnabled: true,
-          exploreUrl:
-              '男频分类::\n古代言情::/discover/ancient?page={{page}}\n现代言情::/discover/modern?page={{page}}',
-          rules: const SourceRuleSet(
-            exploreListRule: '.item@html',
-            exploreTitleRule: '.name@text',
-            exploreDetailUrlRule: '.name@href',
-          ),
+    _registerDiscoverPageTearDown(tester);
+    final repository = _FakeSourceRepository(<SourceDefinition>[
+      SourceDefinition(
+        id: 'discover_s4',
+        name: '发现源D',
+        baseUrl: 'https://example.com',
+        enabled: true,
+        exploreEnabled: true,
+        exploreUrl:
+            '男频分类::\n古代言情::/discover/ancient?page={{page}}\n现代言情::/discover/modern?page={{page}}',
+        rules: const SourceRuleSet(
+          exploreListRule: '.item@html',
+          exploreTitleRule: '.name@text',
+          exploreDetailUrlRule: '.name@href',
         ),
-      ]),
+      ),
+    ]);
+    final service = ExploreService(
+      sourceRepository: repository,
       searchService: _FakeSearchService(),
     );
 
     await tester.pumpWidget(
-      _TestHarness(width: 320, child: DiscoverPage(exploreService: service)),
+      _TestHarness(
+        width: 320,
+        child: DiscoverPage(
+          exploreService: service,
+          sourceRepository: repository,
+        ),
+      ),
     );
     await tester.pumpAndSettle();
 
@@ -435,22 +511,24 @@ void main() {
   testWidgets('renders without layout exceptions on phone and tablet sizes', (
     tester,
   ) async {
-    final service = ExploreService(
-      sourceRepository: _FakeSourceRepository(<SourceDefinition>[
-        SourceDefinition(
-          id: 'discover_smoke',
-          name: '发现烟测源',
-          baseUrl: 'https://example.com',
-          enabled: true,
-          exploreEnabled: true,
-          exploreUrl: '推荐::/discover?page={{page}}',
-          rules: const SourceRuleSet(
-            exploreListRule: '.item@html',
-            exploreTitleRule: '.name@text',
-            exploreDetailUrlRule: '.name@href',
-          ),
+    _registerDiscoverPageTearDown(tester);
+    final repository = _FakeSourceRepository(<SourceDefinition>[
+      SourceDefinition(
+        id: 'discover_smoke',
+        name: '发现烟测源',
+        baseUrl: 'https://example.com',
+        enabled: true,
+        exploreEnabled: true,
+        exploreUrl: '推荐::/discover?page={{page}}',
+        rules: const SourceRuleSet(
+          exploreListRule: '.item@html',
+          exploreTitleRule: '.name@text',
+          exploreDetailUrlRule: '.name@href',
         ),
-      ]),
+      ),
+    ]);
+    final service = ExploreService(
+      sourceRepository: repository,
       searchService: _FakeSearchService(),
     );
 
@@ -469,7 +547,10 @@ void main() {
           width: item.size.width,
           height: item.size.height,
           dpr: item.dpr,
-          child: DiscoverPage(exploreService: service),
+          child: DiscoverPage(
+            exploreService: service,
+            sourceRepository: repository,
+          ),
         ),
       );
       await tester.pumpAndSettle();
@@ -480,7 +561,19 @@ void main() {
         reason:
             'unexpected exception at ${item.name} (${item.size.width}x${item.size.height}@${item.dpr})',
       );
+
+      await tester.pumpWidget(const SizedBox.shrink());
+      await tester.pump();
     }
+  });
+}
+
+void _registerDiscoverPageTearDown(WidgetTester tester) {
+  addTearDown(() async {
+    await tester.pumpWidget(const SizedBox.shrink());
+    await tester.pump();
+    await tester.pump();
+    await tester.binding.setSurfaceSize(null);
   });
 }
 

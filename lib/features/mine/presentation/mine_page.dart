@@ -118,7 +118,7 @@ class _MinePageState extends ConsumerState<MinePage> {
                           ),
                           _MineActionItem(
                             icon: Icons.menu_book_rounded,
-                            label: '书源',
+                            label: '配置',
                             onTap: () => context.push('/source'),
                           ),
                           _MineActionItem(
@@ -314,10 +314,9 @@ class _MinePageState extends ConsumerState<MinePage> {
           ),
           const SizedBox(height: 10),
           LayoutBuilder(
-            builder: (context, _) {
-              final screenWidth = AppLayout.screenWidth(context);
+            builder: (context, constraints) {
               final columns = AppLayout.mineActionGridColumnsForWidth(
-                screenWidth,
+                constraints.maxWidth,
               );
               final denseGrid = columns >= 4;
               final crossSpacing = denseGrid ? 9.0 : 10.0;

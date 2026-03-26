@@ -169,75 +169,94 @@ class _BookDetailPageState extends State<BookDetailPage> {
               colors: [colorScheme.surface, colorScheme.surfaceContainerLow],
             ),
           ),
-          child: RefreshIndicator(
-            onRefresh: () => _load(forceRefresh: true),
-            child: ListView(
-              physics: const AlwaysScrollableScrollPhysics(),
-              padding: EdgeInsets.fromLTRB(
-                horizontal,
-                16,
-                horizontal,
-                16 + bottomSafe,
-              ),
-              children: [
-                if (_isLoading)
-                  const Padding(
-                    padding: EdgeInsets.only(bottom: 12),
-                    child: LinearProgressIndicator(minHeight: 2),
-                  ),
-                if (_isMissingParams)
-                  BookDetailStateCard(
-                    child: Text(
-                      '缺少 sourceId/detailUrl，无法加载详情。请从搜索结果进入。bookId=${widget.bookId}',
-                    ),
-                  )
-                else if (_errorText != null && _result == null)
-                  BookDetailStateCard(
-                    color: colorScheme.errorContainer,
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
+          child: LayoutBuilder(
+            builder: (context, _) {
+              final maxWidth = AppLayout.pageContentMaxWidth(
+                context,
+                maxWidth: AppLayout.bookDetailContentMaxWidth,
+              );
+
+              return Align(
+                alignment: Alignment.topCenter,
+                child: ConstrainedBox(
+                  constraints: BoxConstraints(maxWidth: maxWidth),
+                  child: RefreshIndicator(
+                    onRefresh: () => _load(forceRefresh: true),
+                    child: ListView(
+                      physics: const AlwaysScrollableScrollPhysics(),
+                      padding: EdgeInsets.fromLTRB(
+                        horizontal,
+                        16,
+                        horizontal,
+                        16 + bottomSafe,
+                      ),
                       children: [
-                        Text(
-                          '加载失败',
-                          style: TextStyle(
-                            color: colorScheme.onErrorContainer,
-                            fontWeight: FontWeight.w600,
+                        if (_isLoading)
+                          const Padding(
+                            padding: EdgeInsets.only(bottom: 12),
+                            child: LinearProgressIndicator(minHeight: 2),
                           ),
-                        ),
-                        const SizedBox(height: 8),
-                        Text(
-                          _errorText!,
-                          style: TextStyle(color: colorScheme.onErrorContainer),
-                        ),
-                        const SizedBox(height: 10),
-                        FilledButton.tonal(
-                          onPressed: () => _load(forceRefresh: true),
-                          child: const Text('重试'),
-                        ),
+                        if (_isMissingParams)
+                          BookDetailStateCard(
+                            child: Text(
+                              '缺少 sourceId/detailUrl，无法加载详情。请从搜索结果进入。bookId=${widget.bookId}',
+                            ),
+                          )
+                        else if (_errorText != null && _result == null)
+                          BookDetailStateCard(
+                            color: colorScheme.errorContainer,
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  '加载失败',
+                                  style: TextStyle(
+                                    color: colorScheme.onErrorContainer,
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                ),
+                                const SizedBox(height: 8),
+                                Text(
+                                  _errorText!,
+                                  style: TextStyle(
+                                    color: colorScheme.onErrorContainer,
+                                  ),
+                                ),
+                                const SizedBox(height: 10),
+                                FilledButton.tonal(
+                                  onPressed: () => _load(forceRefresh: true),
+                                  child: const Text('重试'),
+                                ),
+                              ],
+                            ),
+                          )
+                        else if (_result != null) ...[
+                          _buildDetailCard(_result!),
+                          if (_canSwitchSource) ...[
+                            const SizedBox(height: 12),
+                            _buildSwitchSourceEntryCard(),
+                          ],
+                          if (_resolveLatestChapter(_result!) != null) ...[
+                            const SizedBox(height: 12),
+                            _buildLatestChapterCard(
+                              _resolveLatestChapter(_result!)!,
+                            ),
+                          ],
+                          const SizedBox(height: 12),
+                          _buildCacheCard(_result!),
+                          if (_tocWarningText != null) ...[
+                            const SizedBox(height: 12),
+                            _buildTocWarningCard(_tocWarningText!),
+                          ],
+                          const SizedBox(height: 12),
+                          _buildChapterSection(_result!),
+                        ],
                       ],
                     ),
-                  )
-                else if (_result != null) ...[
-                  _buildDetailCard(_result!),
-                  if (_canSwitchSource) ...[
-                    const SizedBox(height: 12),
-                    _buildSwitchSourceEntryCard(),
-                  ],
-                  if (_resolveLatestChapter(_result!) != null) ...[
-                    const SizedBox(height: 12),
-                    _buildLatestChapterCard(_resolveLatestChapter(_result!)!),
-                  ],
-                  const SizedBox(height: 12),
-                  _buildCacheCard(_result!),
-                  if (_tocWarningText != null) ...[
-                    const SizedBox(height: 12),
-                    _buildTocWarningCard(_tocWarningText!),
-                  ],
-                  const SizedBox(height: 12),
-                  _buildChapterSection(_result!),
-                ],
-              ],
-            ),
+                  ),
+                ),
+              );
+            },
           ),
         ),
       ),

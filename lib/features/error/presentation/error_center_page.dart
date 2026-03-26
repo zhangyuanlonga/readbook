@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
+import '../../../app/layout/app_layout.dart';
 import '../../../app/layout/app_spacing.dart';
 import '../../../core/logging/source_log_store.dart';
 
@@ -36,63 +37,79 @@ class _ErrorCenterPageState extends State<ErrorCenterPage> {
           ),
         ],
       ),
-      body: StreamBuilder<List<AppLogEntry>>(
-        stream: _store.watch(),
-        initialData: _store.entries,
-        builder: (context, snapshot) {
-          final allEntries = snapshot.data ?? const <AppLogEntry>[];
-          final entries = allEntries
-              .where(
-                (entry) => _includeInfoLogs || entry.level != AppLogLevel.info,
-              )
-              .toList(growable: false);
+      body: LayoutBuilder(
+        builder: (context, _) {
+          final maxWidth = AppLayout.pageContentMaxWidth(
+            context,
+            maxWidth: AppLayout.errorCenterContentMaxWidth,
+          );
 
-          return ListView(
-            padding: EdgeInsets.fromLTRB(
-              horizontal,
-              16,
-              horizontal,
-              16 + bottomSafe,
-            ),
-            children: [
-              Card(
-                child: Padding(
-                  padding: const EdgeInsets.all(16),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
+          return Align(
+            alignment: Alignment.topCenter,
+            child: ConstrainedBox(
+              constraints: BoxConstraints(maxWidth: maxWidth),
+              child: StreamBuilder<List<AppLogEntry>>(
+                stream: _store.watch(),
+                initialData: _store.entries,
+                builder: (context, snapshot) {
+                  final allEntries = snapshot.data ?? const <AppLogEntry>[];
+                  final entries = allEntries
+                      .where(
+                        (entry) =>
+                            _includeInfoLogs || entry.level != AppLogLevel.info,
+                      )
+                      .toList(growable: false);
+
+                  return ListView(
+                    padding: EdgeInsets.fromLTRB(
+                      horizontal,
+                      16,
+                      horizontal,
+                      16 + bottomSafe,
+                    ),
                     children: [
-                      Text(
-                        '已记录 ${allEntries.length} 条日志（当前展示 ${entries.length} 条）',
-                        style: Theme.of(context).textTheme.titleMedium,
+                      Card(
+                        child: Padding(
+                          padding: const EdgeInsets.all(16),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                '已记录 ${allEntries.length} 条日志（当前展示 ${entries.length} 条）',
+                                style: Theme.of(context).textTheme.titleMedium,
+                              ),
+                              const SizedBox(height: 10),
+                              SwitchListTile(
+                                contentPadding: EdgeInsets.zero,
+                                title: const Text('包含 INFO 日志'),
+                                value: _includeInfoLogs,
+                                onChanged: (value) {
+                                  setState(() {
+                                    _includeInfoLogs = value;
+                                  });
+                                },
+                              ),
+                              const SizedBox(height: 8),
+                              const Text('日志包含时间、阶段、书源、请求地址，可用于问题排查。'),
+                            ],
+                          ),
+                        ),
                       ),
-                      const SizedBox(height: 10),
-                      SwitchListTile(
-                        contentPadding: EdgeInsets.zero,
-                        title: const Text('包含 INFO 日志'),
-                        value: _includeInfoLogs,
-                        onChanged: (value) {
-                          setState(() {
-                            _includeInfoLogs = value;
-                          });
-                        },
-                      ),
-                      const SizedBox(height: 8),
-                      const Text('日志包含时间、阶段、书源、请求地址，可用于问题排查。'),
+                      const SizedBox(height: 12),
+                      if (entries.isEmpty)
+                        const Card(
+                          child: Padding(
+                            padding: EdgeInsets.all(16),
+                            child: Text('暂无错误日志。'),
+                          ),
+                        )
+                      else
+                        ...entries.map(_buildLogCard),
                     ],
-                  ),
-                ),
+                  );
+                },
               ),
-              const SizedBox(height: 12),
-              if (entries.isEmpty)
-                const Card(
-                  child: Padding(
-                    padding: EdgeInsets.all(16),
-                    child: Text('暂无错误日志。'),
-                  ),
-                )
-              else
-                ...entries.map(_buildLogCard),
-            ],
+            ),
           );
         },
       ),

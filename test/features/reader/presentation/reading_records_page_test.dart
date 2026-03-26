@@ -1,3 +1,4 @@
+import 'package:drift/drift.dart' show driftRuntimeOptions;
 import 'package:drift/native.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_appread/data/datasources/local/app_database.dart';
@@ -16,6 +17,14 @@ void main() {
     late ReadingRecordService readingRecordService;
     late ReaderPreferencesService preferencesService;
     late ReaderSystemSettingsService systemSettingsService;
+
+    setUpAll(() {
+      driftRuntimeOptions.dontWarnAboutMultipleDatabases = true;
+    });
+
+    tearDownAll(() {
+      driftRuntimeOptions.dontWarnAboutMultipleDatabases = false;
+    });
 
     setUp(() {
       SharedPreferences.setMockInitialValues({});

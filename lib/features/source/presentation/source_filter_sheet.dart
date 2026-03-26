@@ -12,7 +12,7 @@ class SourceFilterSheetConfig {
     this.enabledOnly = true,
     this.isMangaSource,
     this.title = '指定书源',
-    this.searchHintText = '搜索书源名称或域名',
+    this.searchHintText = '搜索规则名称或域名',
     this.allSelectionLabel = '全部书源',
     this.allSummaryLabel = '全部',
     this.cancelButtonText = '取消',

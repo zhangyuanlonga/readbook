@@ -18,7 +18,7 @@ void main() {
   ) async {
     await _runAdaptiveSmokeMatrix(
       tester,
-      pageBuilder: () => const BookshelfPage(),
+      pageBuilder: () => const BookshelfPage(prefetchAnnouncementOnInit: false),
       useProviderScope: false,
       pageName: 'BookshelfPage',
     );

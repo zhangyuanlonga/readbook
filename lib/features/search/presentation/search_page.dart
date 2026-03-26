@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../../app/layout/app_layout.dart';
 import '../../../app/layout/app_spacing.dart';
 
 import '../../../core/errors/app_exception.dart';
@@ -148,192 +149,230 @@ class _SearchPageState extends State<SearchPage> {
               colors: [colorScheme.surface, colorScheme.surfaceContainerLow],
             ),
           ),
-          child: ScrollConfiguration(
-            behavior: const MaterialScrollBehavior().copyWith(
-              dragDevices: _dragDevices,
-            ),
-            child: NotificationListener<ScrollNotification>(
-              onNotification: _onScrollNotification,
-              child: CustomScrollView(
-                controller: _pageScrollController,
-                keyboardDismissBehavior:
-                    ScrollViewKeyboardDismissBehavior.onDrag,
-                slivers: [
-                  SliverPadding(
-                    padding: EdgeInsets.fromLTRB(horizontal, 12, horizontal, 0),
-                    sliver: SliverToBoxAdapter(
-                      child: SearchInputCard(
-                        keywordController: _keywordController,
-                        focusNode: _searchFocusNode,
-                        isSearching: _isSearching,
-                        searchContentMode: _searchContentMode,
-                        isPreciseBookMatch: _isPreciseBookMatch,
-                        selectedSourceCount: _selectedSourceIds.length,
-                        availableSourceCount: _availableSourceCount,
-                        isLoadingSourceCount: _isLoadingSourceCount,
-                        onSearch: _runSearch,
-                        onClearResults: _clearResults,
-                        onContentModeChanged: _onContentModeChanged,
-                        onPreciseMatchChanged: _onPreciseMatchChanged,
-                        onOpenSourceFilter:
-                            () => unawaited(_showSourceFilterSheet()),
-                        onClearSourceFilter: _clearSourceFilter,
-                      ),
+          child: LayoutBuilder(
+            builder: (context, _) {
+              final maxWidth = AppLayout.pageContentMaxWidth(
+                context,
+                maxWidth: AppLayout.searchContentMaxWidth,
+              );
+
+              return Align(
+                alignment: Alignment.topCenter,
+                child: ConstrainedBox(
+                  constraints: BoxConstraints(maxWidth: maxWidth),
+                  child: ScrollConfiguration(
+                    behavior: const MaterialScrollBehavior().copyWith(
+                      dragDevices: _dragDevices,
                     ),
-                  ),
-                  SliverPadding(
-                    padding: EdgeInsets.fromLTRB(horizontal, 0, horizontal, 0),
-                    sliver: SliverToBoxAdapter(
-                      child: ValueListenableBuilder<SearchExecutionReport?>(
-                        valueListenable: _progressReportNotifier,
-                        builder: (context, report, _) {
-                          if (!_isSearching) {
-                            return const SizedBox.shrink();
-                          }
-                          return SearchProgressCard(
-                            report: report,
-                            isSearching: _isSearching,
-                          );
-                        },
-                      ),
-                    ),
-                  ),
-                  ValueListenableBuilder<SearchRenderState?>(
-                    valueListenable: _renderStateController.renderStateNotifier,
-                    builder: (context, renderState, _) {
-                      if (renderState == null) {
-                        if (_isSearching) {
-                          return SliverPadding(
-                            padding: EdgeInsets.only(bottom: 16 + bottomSafe),
-                            sliver: const SliverToBoxAdapter(
-                              child: SizedBox.shrink(),
+                    child: NotificationListener<ScrollNotification>(
+                      onNotification: _onScrollNotification,
+                      child: CustomScrollView(
+                        controller: _pageScrollController,
+                        keyboardDismissBehavior:
+                            ScrollViewKeyboardDismissBehavior.onDrag,
+                        slivers: [
+                          SliverPadding(
+                            padding: EdgeInsets.fromLTRB(
+                              horizontal,
+                              12,
+                              horizontal,
+                              0,
                             ),
-                          );
-                        }
-                        return SliverPadding(
-                          padding: EdgeInsets.fromLTRB(
-                            horizontal,
-                            8,
-                            horizontal,
-                            16 + bottomSafe,
-                          ),
-                          sliver: SliverToBoxAdapter(
-                            child: SearchEmptyState(
-                              history: _searchHistory,
-                              onHistoryTap: _onHistoryTap,
-                              onClearHistory: _onClearHistory,
-                              onRemoveHistoryItem: _onRemoveHistoryItem,
+                            sliver: SliverToBoxAdapter(
+                              child: SearchInputCard(
+                                keywordController: _keywordController,
+                                focusNode: _searchFocusNode,
+                                isSearching: _isSearching,
+                                searchContentMode: _searchContentMode,
+                                isPreciseBookMatch: _isPreciseBookMatch,
+                                selectedSourceCount: _selectedSourceIds.length,
+                                availableSourceCount: _availableSourceCount,
+                                isLoadingSourceCount: _isLoadingSourceCount,
+                                onSearch: _runSearch,
+                                onClearResults: _clearResults,
+                                onContentModeChanged: _onContentModeChanged,
+                                onPreciseMatchChanged: _onPreciseMatchChanged,
+                                onOpenSourceFilter:
+                                    () => unawaited(_showSourceFilterSheet()),
+                                onClearSourceFilter: _clearSourceFilter,
+                              ),
                             ),
                           ),
-                        );
-                      }
-
-                      final report = renderState.report;
-                      final books = renderState.visibleBooks;
-                      final visibleCount = renderState.renderedResultCount
-                          .clamp(0, books.length);
-
-                      if (books.isEmpty) {
-                        return SliverPadding(
-                          padding: EdgeInsets.fromLTRB(
-                            horizontal,
-                            8,
-                            horizontal,
-                            16 + bottomSafe,
-                          ),
-                          sliver: SliverToBoxAdapter(
-                            child: SearchGroupedEmptyFallbackCard(
-                              canDisablePrecise:
-                                  _isPreciseBookMatch &&
-                                  report.books.isNotEmpty,
-                              canSwitchAllSources:
-                                  _selectedSourceIds.isNotEmpty,
-                              onDisablePreciseMatch:
-                                  _disablePreciseMatchFallback,
-                              onSwitchAllSources:
-                                  () =>
-                                      unawaited(_switchToAllSourcesFallback()),
+                          SliverPadding(
+                            padding: EdgeInsets.fromLTRB(
+                              horizontal,
+                              0,
+                              horizontal,
+                              0,
                             ),
-                          ),
-                        );
-                      }
-
-                      return SliverPadding(
-                        padding: EdgeInsets.fromLTRB(
-                          horizontal,
-                          8,
-                          horizontal,
-                          16 + bottomSafe,
-                        ),
-                        sliver: SliverList(
-                          delegate: SliverChildBuilderDelegate((
-                            context,
-                            index,
-                          ) {
-                            if (index == 0) {
-                              return Column(
-                                children: [
-                                  SearchReportSummary(
+                            sliver: SliverToBoxAdapter(
+                              child: ValueListenableBuilder<
+                                SearchExecutionReport?
+                              >(
+                                valueListenable: _progressReportNotifier,
+                                builder: (context, report, _) {
+                                  if (!_isSearching) {
+                                    return const SizedBox.shrink();
+                                  }
+                                  return SearchProgressCard(
                                     report: report,
-                                    visibleBookCount: books.length,
-                                    isPreciseBookMatch: _isPreciseBookMatch,
-                                  ),
-                                  if (report.failures.isNotEmpty) ...[
-                                    const SizedBox(height: 8),
-                                    SearchFailureBanner(report: report),
-                                  ],
-                                  const SizedBox(height: 10),
-                                ],
-                              );
-                            }
-
-                            final book = books[index - 1];
-                            final sourceName =
-                                report.sourceNames[book.sourceId] ??
-                                book.sourceId;
-                            final heroTag = _buildBookCoverHeroTag(
-                              book: book,
-                              listIndex: index - 1,
-                            );
-
-                            return SearchBookCard(
-                              book: book,
-                              sourceName: sourceName,
-                              sourceHitCount: report.sourceHitCountOf(book),
-                              heroTag: heroTag,
-                              normalizedIntro:
-                                  renderState.normalizedIntros[book.id],
-                              normalizedLatestChapter:
-                                  renderState.normalizedLatestChapters[book.id],
-                              onTap: () async {
-                                final selected = await _pickSearchResultSource(
-                                  report: report,
-                                  primaryBook: book,
-                                );
-                                if (selected == null || !mounted) {
-                                  return;
+                                    isSearching: _isSearching,
+                                  );
+                                },
+                              ),
+                            ),
+                          ),
+                          ValueListenableBuilder<SearchRenderState?>(
+                            valueListenable:
+                                _renderStateController.renderStateNotifier,
+                            builder: (context, renderState, _) {
+                              if (renderState == null) {
+                                if (_isSearching) {
+                                  return SliverPadding(
+                                    padding: EdgeInsets.only(
+                                      bottom: 16 + bottomSafe,
+                                    ),
+                                    sliver: const SliverToBoxAdapter(
+                                      child: SizedBox.shrink(),
+                                    ),
+                                  );
                                 }
-                                final selectedHeroTag =
-                                    selected.id == book.id
-                                        ? heroTag
-                                        : _buildBookCoverHeroTag(
-                                          book: selected,
-                                          listIndex: index - 1,
-                                        );
-                                await _openBookDetail(
-                                  selected,
-                                  heroTag: selectedHeroTag,
+                                return SliverPadding(
+                                  padding: EdgeInsets.fromLTRB(
+                                    horizontal,
+                                    8,
+                                    horizontal,
+                                    16 + bottomSafe,
+                                  ),
+                                  sliver: SliverToBoxAdapter(
+                                    child: SearchEmptyState(
+                                      history: _searchHistory,
+                                      onHistoryTap: _onHistoryTap,
+                                      onClearHistory: _onClearHistory,
+                                      onRemoveHistoryItem: _onRemoveHistoryItem,
+                                    ),
+                                  ),
                                 );
-                              },
-                            );
-                          }, childCount: visibleCount + 1),
-                        ),
-                      );
-                    },
+                              }
+
+                              final report = renderState.report;
+                              final books = renderState.visibleBooks;
+                              final visibleCount = renderState
+                                  .renderedResultCount
+                                  .clamp(0, books.length);
+
+                              if (books.isEmpty) {
+                                return SliverPadding(
+                                  padding: EdgeInsets.fromLTRB(
+                                    horizontal,
+                                    8,
+                                    horizontal,
+                                    16 + bottomSafe,
+                                  ),
+                                  sliver: SliverToBoxAdapter(
+                                    child: SearchGroupedEmptyFallbackCard(
+                                      canDisablePrecise:
+                                          _isPreciseBookMatch &&
+                                          report.books.isNotEmpty,
+                                      canSwitchAllSources:
+                                          _selectedSourceIds.isNotEmpty,
+                                      onDisablePreciseMatch:
+                                          _disablePreciseMatchFallback,
+                                      onSwitchAllSources:
+                                          () => unawaited(
+                                            _switchToAllSourcesFallback(),
+                                          ),
+                                    ),
+                                  ),
+                                );
+                              }
+
+                              return SliverPadding(
+                                padding: EdgeInsets.fromLTRB(
+                                  horizontal,
+                                  8,
+                                  horizontal,
+                                  16 + bottomSafe,
+                                ),
+                                sliver: SliverList(
+                                  delegate: SliverChildBuilderDelegate((
+                                    context,
+                                    index,
+                                  ) {
+                                    if (index == 0) {
+                                      return Column(
+                                        children: [
+                                          SearchReportSummary(
+                                            report: report,
+                                            visibleBookCount: books.length,
+                                            isPreciseBookMatch:
+                                                _isPreciseBookMatch,
+                                          ),
+                                          if (report.failures.isNotEmpty) ...[
+                                            const SizedBox(height: 8),
+                                            SearchFailureBanner(report: report),
+                                          ],
+                                          const SizedBox(height: 10),
+                                        ],
+                                      );
+                                    }
+
+                                    final book = books[index - 1];
+                                    final sourceName =
+                                        report.sourceNames[book.sourceId] ??
+                                        book.sourceId;
+                                    final heroTag = _buildBookCoverHeroTag(
+                                      book: book,
+                                      listIndex: index - 1,
+                                    );
+
+                                    return SearchBookCard(
+                                      book: book,
+                                      sourceName: sourceName,
+                                      sourceHitCount: report.sourceHitCountOf(
+                                        book,
+                                      ),
+                                      heroTag: heroTag,
+                                      normalizedIntro:
+                                          renderState.normalizedIntros[book.id],
+                                      normalizedLatestChapter:
+                                          renderState
+                                              .normalizedLatestChapters[book
+                                              .id],
+                                      onTap: () async {
+                                        final selected =
+                                            await _pickSearchResultSource(
+                                              report: report,
+                                              primaryBook: book,
+                                            );
+                                        if (selected == null || !mounted) {
+                                          return;
+                                        }
+                                        final selectedHeroTag =
+                                            selected.id == book.id
+                                                ? heroTag
+                                                : _buildBookCoverHeroTag(
+                                                  book: selected,
+                                                  listIndex: index - 1,
+                                                );
+                                        await _openBookDetail(
+                                          selected,
+                                          heroTag: selectedHeroTag,
+                                        );
+                                      },
+                                    );
+                                  }, childCount: visibleCount + 1),
+                                ),
+                              );
+                            },
+                          ),
+                        ],
+                      ),
+                    ),
                   ),
-                ],
-              ),
-            ),
+                ),
+              );
+            },
           ),
         ),
       ),

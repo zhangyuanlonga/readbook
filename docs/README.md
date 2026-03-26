@@ -1,6 +1,6 @@
 # 项目文档入口
 
-更新时间：2026-03-25
+更新时间：2026-03-26
 用途：当前项目文档总入口。
 
 当前文档按“主项目文档 + 脚本源运行时文档”两组维护。
@@ -15,7 +15,7 @@
 ## 专题文档
 
 - `docs/product_experience_guide.md`
-  UI、自适应、阅读体验、字体和主题。
+  UI、自适应、阅读体验、字体和主题，包含当前断点和布局规则。
 - `docs/product_features_guide.md`
   阅读记录、书签、缓存、自定义规则和本地阅读。
 - `docs/engineering_delivery_guide.md`

@@ -33,11 +33,14 @@ class DiscoverPage extends StatefulWidget {
     super.key,
     ExploreService? exploreService,
     DiscoverPreferencesService? discoverPreferencesService,
+    SourceRepository? sourceRepository,
   }) : _exploreService = exploreService,
-       _discoverPreferencesService = discoverPreferencesService;
+       _discoverPreferencesService = discoverPreferencesService,
+       _sourceRepository = sourceRepository;
 
   final ExploreService? _exploreService;
   final DiscoverPreferencesService? _discoverPreferencesService;
+  final SourceRepository? _sourceRepository;
 
   @override
   State<DiscoverPage> createState() => _DiscoverPageState();
@@ -59,9 +62,7 @@ class _DiscoverPageState extends State<DiscoverPage>
 
   late final ExploreService _exploreService;
   late final DiscoverPreferencesService _discoverPreferencesService;
-  final SourceRepository _sourceRepository = SourceRepositoryImpl(
-    AppDatabase.instance,
-  );
+  late final SourceRepository _sourceRepository;
   final ScrollController _booksScrollController = ScrollController();
   StreamSubscription<List<SourceDefinition>>? _sourceChangesSubscription;
   Timer? _sourceRefreshDebounce;
@@ -118,6 +119,8 @@ class _DiscoverPageState extends State<DiscoverPage>
     _exploreService = widget._exploreService ?? ExploreService();
     _discoverPreferencesService =
         widget._discoverPreferencesService ?? DiscoverPreferencesService();
+    _sourceRepository =
+        widget._sourceRepository ?? SourceRepositoryImpl(AppDatabase.instance);
     _booksScrollController.addListener(_onBookListScroll);
     _sourceChangesSubscription = _sourceRepository.watchAll().listen((_) {
       _scheduleSourceRefresh();
@@ -853,136 +856,139 @@ class _DiscoverPageState extends State<DiscoverPage>
     Book book, {
     required int listIndex,
   }) {
-    final useCondensedPhoneDensity = AppLayout.useCondensedPhoneDensityForWidth(
-      AppLayout.screenWidth(context),
-    );
-    final cardVerticalPadding = useCondensedPhoneDensity ? 10.0 : 12.0;
-    final cardHorizontalPadding = useCondensedPhoneDensity ? 10.0 : 12.0;
-    final cardBottomMargin = useCondensedPhoneDensity ? 8.0 : 10.0;
-    final coverWidth = useCondensedPhoneDensity ? 46.0 : 52.0;
-    final coverHeight = useCondensedPhoneDensity ? 64.0 : 72.0;
-    final introMaxLines = useCondensedPhoneDensity ? 1 : 2;
-    final sectionGap = useCondensedPhoneDensity ? 5.0 : 6.0;
-    final compactPill = useCondensedPhoneDensity;
     final author = _normalizeSnippet(book.author);
     final latestChapter = _normalizeSnippet(book.latestChapter);
     final intro = _normalizeSnippet(book.intro);
     final heroTag = _buildBookCoverHeroTag(book: book, listIndex: listIndex);
 
-    return Card(
-      margin: EdgeInsets.only(bottom: cardBottomMargin),
-      clipBehavior: Clip.antiAlias,
-      child: InkWell(
-        onTap: () => _openBookDetail(book, heroTag: heroTag),
-        borderRadius: BorderRadius.circular(12),
-        mouseCursor: SystemMouseCursors.click,
-        hoverColor: Theme.of(
-          context,
-        ).colorScheme.primary.withValues(alpha: 0.06),
-        focusColor: Theme.of(
-          context,
-        ).colorScheme.primary.withValues(alpha: 0.1),
-        child: Padding(
-          padding: EdgeInsets.symmetric(
-            horizontal: cardHorizontalPadding,
-            vertical: cardVerticalPadding,
-          ),
-          child: Row(
-            crossAxisAlignment: CrossAxisAlignment.center,
-            children: <Widget>[
-              _buildCoverPreview(
-                book.coverUrl,
-                heroTag: heroTag,
-                width: coverWidth,
-                height: coverHeight,
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final useCondensedPhoneDensity =
+            AppLayout.useCondensedPhoneDensityForWidth(constraints.maxWidth);
+        final cardVerticalPadding = useCondensedPhoneDensity ? 10.0 : 12.0;
+        final cardHorizontalPadding = useCondensedPhoneDensity ? 10.0 : 12.0;
+        final cardBottomMargin = useCondensedPhoneDensity ? 8.0 : 10.0;
+        final coverWidth = useCondensedPhoneDensity ? 46.0 : 52.0;
+        final coverHeight = useCondensedPhoneDensity ? 64.0 : 72.0;
+        final introMaxLines = useCondensedPhoneDensity ? 1 : 2;
+        final sectionGap = useCondensedPhoneDensity ? 5.0 : 6.0;
+        final compactPill = useCondensedPhoneDensity;
+
+        return Card(
+          margin: EdgeInsets.only(bottom: cardBottomMargin),
+          clipBehavior: Clip.antiAlias,
+          child: InkWell(
+            onTap: () => _openBookDetail(book, heroTag: heroTag),
+            borderRadius: BorderRadius.circular(12),
+            mouseCursor: SystemMouseCursors.click,
+            hoverColor: Theme.of(
+              context,
+            ).colorScheme.primary.withValues(alpha: 0.06),
+            focusColor: Theme.of(
+              context,
+            ).colorScheme.primary.withValues(alpha: 0.1),
+            child: Padding(
+              padding: EdgeInsets.symmetric(
+                horizontal: cardHorizontalPadding,
+                vertical: cardVerticalPadding,
               ),
-              SizedBox(width: useCondensedPhoneDensity ? 10 : 12),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: <Widget>[
-                    Text(
-                      book.title,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                        fontWeight: FontWeight.w700,
-                      ),
-                    ),
-                    SizedBox(height: useCondensedPhoneDensity ? 3 : 4),
-                    Wrap(
-                      spacing: 6,
-                      runSpacing: 6,
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.center,
+                children: <Widget>[
+                  _buildCoverPreview(
+                    book.coverUrl,
+                    heroTag: heroTag,
+                    width: coverWidth,
+                    height: coverHeight,
+                  ),
+                  SizedBox(width: useCondensedPhoneDensity ? 10 : 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
                       children: <Widget>[
-                        _buildInfoPill(
-                          context,
-                          label: '来源',
-                          value: _selectedSource?.name ?? book.sourceId,
-                          compact: compactPill,
+                        Text(
+                          book.title,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: Theme.of(context).textTheme.titleSmall
+                              ?.copyWith(fontWeight: FontWeight.w700),
                         ),
-                        if (author != null && author.isNotEmpty)
-                          _buildInfoPill(
-                            context,
-                            label: '作者',
-                            value: author,
-                            compact: compactPill,
+                        SizedBox(height: useCondensedPhoneDensity ? 3 : 4),
+                        Wrap(
+                          spacing: 6,
+                          runSpacing: 6,
+                          children: <Widget>[
+                            _buildInfoPill(
+                              context,
+                              label: '来源',
+                              value: _selectedSource?.name ?? book.sourceId,
+                              compact: compactPill,
+                            ),
+                            if (author != null && author.isNotEmpty)
+                              _buildInfoPill(
+                                context,
+                                label: '作者',
+                                value: author,
+                                compact: compactPill,
+                              ),
+                          ],
+                        ),
+                        if (latestChapter != null && latestChapter.isNotEmpty)
+                          Padding(
+                            padding: EdgeInsets.only(top: sectionGap),
+                            child: Text(
+                              '最新章节: $latestChapter',
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: Theme.of(context).textTheme.bodySmall,
+                            ),
+                          ),
+                        if (intro != null && intro.isNotEmpty)
+                          Padding(
+                            padding: EdgeInsets.only(top: sectionGap),
+                            child: Container(
+                              width: double.infinity,
+                              padding: EdgeInsets.symmetric(
+                                horizontal: 8,
+                                vertical: useCondensedPhoneDensity ? 5 : 6,
+                              ),
+                              decoration: BoxDecoration(
+                                color:
+                                    Theme.of(
+                                      context,
+                                    ).colorScheme.surfaceContainerHigh,
+                                borderRadius: BorderRadius.circular(8),
+                              ),
+                              child: Text(
+                                intro,
+                                maxLines: introMaxLines,
+                                overflow: TextOverflow.ellipsis,
+                                style: Theme.of(
+                                  context,
+                                ).textTheme.bodySmall?.copyWith(
+                                  color:
+                                      Theme.of(
+                                        context,
+                                      ).colorScheme.onSurfaceVariant,
+                                  height: 1.35,
+                                ),
+                              ),
+                            ),
                           ),
                       ],
                     ),
-                    if (latestChapter != null && latestChapter.isNotEmpty)
-                      Padding(
-                        padding: EdgeInsets.only(top: sectionGap),
-                        child: Text(
-                          '最新章节: $latestChapter',
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: Theme.of(context).textTheme.bodySmall,
-                        ),
-                      ),
-                    if (intro != null && intro.isNotEmpty)
-                      Padding(
-                        padding: EdgeInsets.only(top: sectionGap),
-                        child: Container(
-                          width: double.infinity,
-                          padding: EdgeInsets.symmetric(
-                            horizontal: 8,
-                            vertical: useCondensedPhoneDensity ? 5 : 6,
-                          ),
-                          decoration: BoxDecoration(
-                            color:
-                                Theme.of(
-                                  context,
-                                ).colorScheme.surfaceContainerHigh,
-                            borderRadius: BorderRadius.circular(8),
-                          ),
-                          child: Text(
-                            intro,
-                            maxLines: introMaxLines,
-                            overflow: TextOverflow.ellipsis,
-                            style: Theme.of(
-                              context,
-                            ).textTheme.bodySmall?.copyWith(
-                              color:
-                                  Theme.of(
-                                    context,
-                                  ).colorScheme.onSurfaceVariant,
-                              height: 1.35,
-                            ),
-                          ),
-                        ),
-                      ),
-                  ],
-                ),
+                  ),
+                  const SizedBox(width: 8),
+                  Icon(
+                    Icons.chevron_right_rounded,
+                    color: Theme.of(context).colorScheme.onSurfaceVariant,
+                  ),
+                ],
               ),
-              const SizedBox(width: 8),
-              Icon(
-                Icons.chevron_right_rounded,
-                color: Theme.of(context).colorScheme.onSurfaceVariant,
-              ),
-            ],
+            ),
           ),
-        ),
-      ),
+        );
+      },
     );
   }
 
@@ -2138,7 +2144,7 @@ class _SourcePickerSheetState extends State<_SourcePickerSheet> {
               onChanged: (_) => setState(() {}),
               decoration: InputDecoration(
                 isDense: true,
-                hintText: '搜索书源名称或域名',
+                hintText: '搜索规则名称或域名',
                 prefixIcon: const Icon(Icons.search_rounded, size: 18),
                 border: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(12),
