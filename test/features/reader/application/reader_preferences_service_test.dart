@@ -34,6 +34,8 @@ void main() {
         customFontPath: '/tmp/reader_custom_foo.ttf',
         pageAnimationStyle: ReaderPageAnimationStyle.cover,
         backgroundImageBase64: 'dGVzdF9iZw==',
+        bodyTextDecorationStyle: ReaderBodyTextDecorationStyle.dashed,
+        bodyTextDecorationColorValue: 0xFF3366CC,
         mangaReadMode: ReaderMangaReadMode.horizontal,
         mangaImageSpacing: 14,
         mangaImagePadding: 12,
@@ -85,6 +87,11 @@ void main() {
       expect(restored.customFontPath, '/tmp/reader_custom_foo.ttf');
       expect(restored.pageAnimationStyle, ReaderPageAnimationStyle.cover);
       expect(restored.backgroundImageBase64, 'dGVzdF9iZw==');
+      expect(
+        restored.bodyTextDecorationStyle,
+        ReaderBodyTextDecorationStyle.dashed,
+      );
+      expect(restored.bodyTextDecorationColorValue, 0xFF3366CC);
       expect(restored.mangaReadMode, ReaderMangaReadMode.horizontal);
       expect(restored.mangaImageSpacing, 14);
       expect(restored.mangaImagePadding, 12);

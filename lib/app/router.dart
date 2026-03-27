@@ -21,6 +21,7 @@ import '../features/auth/presentation/user_profile_page.dart';
 import '../features/reader/presentation/reader_page.dart';
 import '../features/search/presentation/search_page.dart';
 import '../features/source/presentation/source_page.dart';
+import '../features/source/presentation/script_source_editor_page.dart';
 import '../features/reader/presentation/reading_records_page.dart';
 import 'shell_scaffold.dart';
 
@@ -124,6 +125,14 @@ final GoRouter appRouter = GoRouter(
       path: '/source',
       name: 'source',
       builder: (context, state) => const SourcePage(),
+    ),
+    GoRoute(
+      path: '/source/script-editor',
+      name: 'script-source-editor',
+      builder:
+          (context, state) => ScriptSourceEditorPage(
+            scriptSourceId: state.uri.queryParameters['id'],
+          ),
     ),
     GoRoute(
       path: '/feedback',

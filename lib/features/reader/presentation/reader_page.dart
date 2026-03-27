@@ -6,12 +6,16 @@ import 'dart:ui';
 
 import 'package:battery_plus/battery_plus.dart';
 import 'package:flutter/foundation.dart';
+import 'package:flutter_colorpicker/flutter_colorpicker.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:image/image.dart' as img;
+import 'package:path/path.dart' as p;
+import 'package:path_provider/path_provider.dart';
 import 'package:uuid/uuid.dart';
 
 import '../../../app/layout/app_layout.dart';
@@ -212,6 +216,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
   ReaderPageTurnMode _pageTurnModeBeforeAutoRead =
       ReaderPageTurnMode.tapAndSwipe;
   List<String> _customBackgroundImages = const [];
+  List<int> _recentBodyTextColors = const [];
   String? _lightModeBackgroundImageBackup;
   String? _cachedBackgroundImageKey;
   MemoryImage? _cachedBackgroundImage;
@@ -236,6 +241,8 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
   _ActiveReadingRecordSession? _activeReadingRecordSession;
   final Map<String, Uint8List> _backgroundPresetBytes = <String, Uint8List>{};
   final Map<String, String> _backgroundPresetBase64 = <String, String>{};
+  final Map<String, Uint8List> _customBackgroundPreviewBytes =
+      <String, Uint8List>{};
   final List<_ReaderBackgroundPreset> _backgroundPresets =
       <_ReaderBackgroundPreset>[];
   String? _catalogSearchCacheFingerprint;
@@ -256,6 +263,9 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
   ];
 
   static const double _kPinnedHeaderTopPadding = 6;
+  static const int _kCustomBackgroundPreviewMaxDimension = 480;
+  static const int _kCustomBackgroundStoreMaxDimension = 1800;
+  static const int _kCustomBackgroundStoreQuality = 82;
   static const double _kPinnedHeaderHeight = 40;
   static const double _kBottomProgressReserve = 24;
   static const double _kBackgroundTileWidth = 84;
@@ -1016,6 +1026,43 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
       return null;
     }
 
+    if (_backgroundPresetBytes.containsKey(raw)) {
+      _cachedBackgroundImageKey = null;
+      _cachedBackgroundImage = null;
+      return DecorationImage(
+        image: AssetImage(raw),
+        fit: BoxFit.cover,
+        colorFilter: ColorFilter.mode(
+          Colors.black.withValues(
+            alpha: _settings.themeMode == ReaderThemeMode.dark ? 0.12 : 0.08,
+          ),
+          BlendMode.darken,
+        ),
+      );
+    }
+
+    if (_isManagedBackgroundPath(raw)) {
+      final file =
+          raw.startsWith('file://')
+              ? File(Uri.parse(raw).toFilePath())
+              : File(raw);
+      if (!file.existsSync()) {
+        _cachedBackgroundImageKey = null;
+        _cachedBackgroundImage = null;
+        return null;
+      }
+      return DecorationImage(
+        image: FileImage(file),
+        fit: BoxFit.cover,
+        colorFilter: ColorFilter.mode(
+          Colors.black.withValues(
+            alpha: _settings.themeMode == ReaderThemeMode.dark ? 0.12 : 0.08,
+          ),
+          BlendMode.darken,
+        ),
+      );
+    }
+
     if (_cachedBackgroundImageKey != raw || _cachedBackgroundImage == null) {
       final bytes = _tryDecodeBase64(raw);
       if (bytes == null) {
@@ -1053,6 +1100,154 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
       return bytes;
     } catch (_) {
       return null;
+    }
+  }
+
+  bool _isManagedBackgroundPath(String? value) {
+    final normalized = value?.trim() ?? '';
+    if (normalized.isEmpty) {
+      return false;
+    }
+    return normalized.startsWith('/') || normalized.startsWith('file://');
+  }
+
+  bool _isPresetBackgroundValue(String? value) {
+    final normalized = value?.trim() ?? '';
+    if (normalized.isEmpty) {
+      return false;
+    }
+    return _backgroundPresetBytes.containsKey(normalized) ||
+        _backgroundPresetBase64.values.contains(normalized);
+  }
+
+  Future<void> _preloadCustomBackgroundPreviews(List<String> sources) async {
+    final normalizedSources =
+        sources
+            .map((entry) => entry.trim())
+            .where((entry) => entry.isNotEmpty)
+            .toSet();
+    _customBackgroundPreviewBytes.removeWhere(
+      (key, _) => !normalizedSources.contains(key),
+    );
+
+    for (final source in normalizedSources) {
+      if (_customBackgroundPreviewBytes.containsKey(source)) {
+        continue;
+      }
+      final preview = await _loadBackgroundPreviewBytes(source);
+      if (preview != null) {
+        _customBackgroundPreviewBytes[source] = preview;
+      }
+    }
+  }
+
+  Future<Uint8List?> _loadBackgroundPreviewBytes(String source) async {
+    final normalized = source.trim();
+    if (normalized.isEmpty) {
+      return null;
+    }
+    if (_isManagedBackgroundPath(normalized)) {
+      try {
+        final file =
+            normalized.startsWith('file://')
+                ? File(Uri.parse(normalized).toFilePath())
+                : File(normalized);
+        if (!await file.exists()) {
+          return null;
+        }
+        final bytes = await file.readAsBytes();
+        return _resizeImageBytes(
+          bytes,
+          maxDimension: _kCustomBackgroundPreviewMaxDimension,
+          quality: 72,
+        );
+      } catch (_) {
+        return null;
+      }
+    }
+    return _tryDecodeBase64(normalized);
+  }
+
+  Uint8List? _resizeImageBytes(
+    Uint8List bytes, {
+    required int maxDimension,
+    required int quality,
+  }) {
+    try {
+      final decoded = img.decodeImage(bytes);
+      if (decoded == null) {
+        return bytes;
+      }
+      img.Image processed = decoded;
+      final width = decoded.width;
+      final height = decoded.height;
+      final longestSide = width > height ? width : height;
+      if (longestSide > maxDimension) {
+        if (width >= height) {
+          processed = img.copyResize(decoded, width: maxDimension);
+        } else {
+          processed = img.copyResize(decoded, height: maxDimension);
+        }
+      }
+      return Uint8List.fromList(
+        img.encodeJpg(processed, quality: quality.clamp(1, 100)),
+      );
+    } catch (_) {
+      return bytes;
+    }
+  }
+
+  Future<String?> _storeCustomBackgroundImage(Uint8List bytes) async {
+    final storedBytes = _resizeImageBytes(
+      bytes,
+      maxDimension: _kCustomBackgroundStoreMaxDimension,
+      quality: _kCustomBackgroundStoreQuality,
+    );
+    if (storedBytes == null || storedBytes.isEmpty) {
+      return null;
+    }
+
+    final supportDir = await getApplicationSupportDirectory();
+    final backgroundDir = Directory(
+      p.join(supportDir.path, 'reader_backgrounds'),
+    );
+    if (!await backgroundDir.exists()) {
+      await backgroundDir.create(recursive: true);
+    }
+
+    final filePath = p.join(
+      backgroundDir.path,
+      'bg_${DateTime.now().millisecondsSinceEpoch}_${_uuid.v4()}.jpg',
+    );
+    final file = File(filePath);
+    await file.writeAsBytes(storedBytes, flush: true);
+    _customBackgroundPreviewBytes[filePath] =
+        _resizeImageBytes(
+          storedBytes,
+          maxDimension: _kCustomBackgroundPreviewMaxDimension,
+          quality: 72,
+        ) ??
+        storedBytes;
+    return filePath;
+  }
+
+  Future<void> _deleteManagedBackgroundFileIfNeeded(String source) async {
+    final normalized = source.trim();
+    if (!_isManagedBackgroundPath(normalized)) {
+      return;
+    }
+    try {
+      final file =
+          normalized.startsWith('file://')
+              ? File(Uri.parse(normalized).toFilePath())
+              : File(normalized);
+      if (await file.exists()) {
+        await file.delete();
+      }
+    } catch (_) {
+      // ignore cleanup failure
+    } finally {
+      _customBackgroundPreviewBytes.remove(normalized);
     }
   }
 
@@ -1968,14 +2163,34 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
     required _BookmarkRange range,
   }) {
     final decorationEnabled = range.isUnderline && !range.isWavy;
+    final preserveBaseDecoration = !decorationEnabled && !range.isWavy;
     return baseStyle.copyWith(
       backgroundColor: colors.text.withValues(alpha: 0.12),
       fontWeight: range.isBold ? FontWeight.w800 : baseStyle.fontWeight,
       decoration:
-          decorationEnabled ? TextDecoration.underline : TextDecoration.none,
-      decorationStyle: TextDecorationStyle.solid,
-      decorationColor: colors.text.withValues(alpha: 0.55),
-      decorationThickness: _decorationThickness(baseStyle, wavy: false),
+          decorationEnabled
+              ? TextDecoration.underline
+              : preserveBaseDecoration
+              ? baseStyle.decoration
+              : TextDecoration.none,
+      decorationStyle:
+          decorationEnabled
+              ? TextDecorationStyle.solid
+              : preserveBaseDecoration
+              ? baseStyle.decorationStyle
+              : TextDecorationStyle.solid,
+      decorationColor:
+          decorationEnabled
+              ? colors.text.withValues(alpha: 0.55)
+              : preserveBaseDecoration
+              ? baseStyle.decorationColor
+              : null,
+      decorationThickness:
+          decorationEnabled
+              ? _decorationThickness(baseStyle, wavy: false)
+              : preserveBaseDecoration
+              ? baseStyle.decorationThickness
+              : null,
     );
   }
 
@@ -4769,9 +4984,225 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
   }
 
   TextStyle _paragraphTextStyle(_ReaderThemeColors colors) {
+    final customColorValue = _settings.bodyTextColorValue;
     return _typographyResolver.resolveBodyStyle(
       settings: _settings,
-      color: colors.text,
+      color: customColorValue == null ? colors.text : Color(customColorValue),
+    );
+  }
+
+  Future<int?> _showBodyTextDecorationColorPickerDialog(
+    BuildContext context, {
+    int? initialColorValue,
+  }) async {
+    Color draftColor = Color(
+      initialColorValue ??
+          _resolveThemeColors(_settings.themeMode, _settings).text.toARGB32(),
+    );
+
+    return showDialog<int>(
+      context: context,
+      builder: (dialogContext) {
+        return StatefulBuilder(
+          builder: (context, setDialogState) {
+            final preview = draftColor;
+
+            return AlertDialog(
+              title: const Text('自定义字线颜色'),
+              content: SizedBox(
+                width: 420,
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color:
+                            Theme.of(context).colorScheme.surfaceContainerLow,
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: Text(
+                        '正文预览：山高月小，水落石出。',
+                        style: Theme.of(context).textTheme.bodyLarge?.copyWith(
+                          color: _paragraphTextStyle(
+                            _resolveThemeColors(_settings.themeMode, _settings),
+                          ).color,
+                          decoration: TextDecoration.underline,
+                          decorationStyle: TextDecorationStyle.dashed,
+                          decorationColor: preview,
+                          decorationThickness: 2.2,
+                          height: 1.6,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    ColorPicker(
+                      pickerColor: draftColor,
+                      onColorChanged: (color) {
+                        setDialogState(() {
+                          draftColor = color;
+                        });
+                      },
+                      enableAlpha: false,
+                      displayThumbColor: true,
+                      portraitOnly: true,
+                      paletteType: PaletteType.hueWheel,
+                      pickerAreaHeightPercent: 0.72,
+                      labelTypes: const [],
+                      hexInputBar: true,
+                    ),
+                  ],
+                ),
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.of(dialogContext).pop(),
+                  child: const Text('取消'),
+                ),
+                FilledButton(
+                  onPressed:
+                      () => Navigator.of(dialogContext).pop(
+                        draftColor.toARGB32(),
+                      ),
+                  child: const Text('应用'),
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
+  }
+
+  String _bodyTextDecorationStyleLabel(ReaderSettings settings) {
+    return switch (settings.bodyTextDecorationStyle) {
+      ReaderBodyTextDecorationStyle.none => '无',
+      ReaderBodyTextDecorationStyle.solid => '实线',
+      ReaderBodyTextDecorationStyle.dashed => '虚线',
+    };
+  }
+
+  Future<int?> _showBodyTextColorPickerDialog(
+    BuildContext context, {
+    int? initialColorValue,
+  }) async {
+    Color draftColor = Color(
+      initialColorValue ??
+          _resolveThemeColors(_settings.themeMode, _settings).text.toARGB32(),
+    );
+
+    return showDialog<int>(
+      context: context,
+      builder: (dialogContext) {
+        return StatefulBuilder(
+          builder: (context, setDialogState) {
+            final preview = draftColor;
+
+            return AlertDialog(
+              title: const Text('自定义正文字色'),
+              content: SizedBox(
+                width: 420,
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color:
+                            Theme.of(context).colorScheme.surfaceContainerLow,
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: Text(
+                        '正文预览：山高月小，水落石出。',
+                        style: Theme.of(context).textTheme.bodyLarge?.copyWith(
+                          color: preview,
+                          height: 1.6,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    ColorPicker(
+                      pickerColor: draftColor,
+                      onColorChanged: (color) {
+                        setDialogState(() {
+                          draftColor = color;
+                        });
+                      },
+                      enableAlpha: false,
+                      displayThumbColor: true,
+                      portraitOnly: true,
+                      paletteType: PaletteType.hueWheel,
+                      pickerAreaHeightPercent: 0.72,
+                      labelTypes: const [],
+                      hexInputBar: true,
+                    ),
+                    if (_recentBodyTextColors.isNotEmpty) ...[
+                      const SizedBox(height: 10),
+                      Text(
+                        '最近使用',
+                        style: Theme.of(context).textTheme.labelMedium
+                            ?.copyWith(fontWeight: FontWeight.w700),
+                      ),
+                      const SizedBox(height: 8),
+                      Wrap(
+                        spacing: 8,
+                        runSpacing: 8,
+                        children: _recentBodyTextColors
+                            .map((value) {
+                              final color = Color(value);
+                              final selected = draftColor.toARGB32() == value;
+                              return GestureDetector(
+                                onTap: () {
+                                  setDialogState(() {
+                                    draftColor = color;
+                                  });
+                                },
+                                child: Container(
+                                  width: 28,
+                                  height: 28,
+                                  decoration: BoxDecoration(
+                                    color: color,
+                                    shape: BoxShape.circle,
+                                    border: Border.all(
+                                      color:
+                                          selected
+                                              ? Theme.of(
+                                                context,
+                                              ).colorScheme.primary
+                                              : Theme.of(
+                                                context,
+                                              ).colorScheme.outlineVariant,
+                                      width: selected ? 2 : 1,
+                                    ),
+                                  ),
+                                ),
+                              );
+                            })
+                            .toList(growable: false),
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.of(dialogContext).pop(),
+                  child: const Text('取消'),
+                ),
+                FilledButton(
+                  onPressed:
+                      () => Navigator.of(dialogContext).pop(preview.toARGB32()),
+                  child: const Text('使用颜色'),
+                ),
+              ],
+            );
+          },
+        );
+      },
     );
   }
 
@@ -6212,11 +6643,26 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
           _customFonts = availableCustomFonts;
           _customBackgroundImages = storedCustomBackgrounds;
         });
+        unawaited(_preloadCustomBackgroundPreviews(storedCustomBackgrounds));
         unawaited(_syncVolumeKeyPageInterception());
       } else {
         _settings = bootSettings;
         _customFonts = availableCustomFonts;
         _customBackgroundImages = storedCustomBackgrounds;
+        unawaited(_preloadCustomBackgroundPreviews(storedCustomBackgrounds));
+      }
+      try {
+        final recentColors =
+            await _preferencesService.loadRecentBodyTextColors();
+        if (mounted) {
+          setState(() {
+            _recentBodyTextColors = recentColors;
+          });
+        } else {
+          _recentBodyTextColors = recentColors;
+        }
+      } catch (_) {
+        _recentBodyTextColors = const <int>[];
       }
       try {
         _autoSwitchSourceOnFailureEnabled =
@@ -7989,9 +8435,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
               content: decoded.content,
               paragraphs:
                   _paragraphs.isEmpty
-                      ? List<String>.unmodifiable(<String>[
-                        decoded.content,
-                      ])
+                      ? List<String>.unmodifiable(<String>[decoded.content])
                       : List<String>.unmodifiable(_paragraphs),
               isCached: true,
             ),
@@ -10558,8 +11002,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
     final hasActiveBackground =
         activeBackgroundBase64 != null && activeBackgroundBase64.isNotEmpty;
     final isActivePreset =
-        hasActiveBackground &&
-        _backgroundPresetBase64.values.contains(activeBackgroundBase64);
+        hasActiveBackground && _isPresetBackgroundValue(activeBackgroundBase64);
     if (hasActiveBackground && !isActivePreset) {
       final nextCustoms = List<String>.from(_customBackgroundImages);
       if (!nextCustoms.contains(activeBackgroundBase64)) {
@@ -10606,6 +11049,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
                 } else {
                   _customBackgroundImages = nextCustoms;
                 }
+                unawaited(_preloadCustomBackgroundPreviews(nextCustoms));
                 unawaited(
                   _preferencesService.saveCustomBackgroundImages(nextCustoms),
                 );
@@ -10616,6 +11060,23 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
                   _customBackgroundImages = nextCustoms;
                 });
                 updateCustomBackgrounds(nextCustoms);
+              }
+
+              Future<void> rememberBodyTextColor(int value) async {
+                final nextColors = <int>[value, ..._recentBodyTextColors];
+                nextColors.removeWhere((entry) => entry == value);
+                nextColors.insert(0, value);
+                if (nextColors.length > 8) {
+                  nextColors.removeRange(8, nextColors.length);
+                }
+                if (mounted) {
+                  setState(() {
+                    _recentBodyTextColors = nextColors;
+                  });
+                } else {
+                  _recentBodyTextColors = nextColors;
+                }
+                await _preferencesService.saveRecentBodyTextColors(nextColors);
               }
 
               void previewDraftSettings() {
@@ -10639,31 +11100,37 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
               }
 
               Future<void> applyCustomBackgroundImage() async {
-                final encoded = await _pickBackgroundImageBase64();
-                if (encoded == null || !context.mounted) {
+                final storedPath = await _pickBackgroundImagePath();
+                if (storedPath == null || !context.mounted) {
                   return;
                 }
 
                 final nextCustoms =
                     List<String>.from(_customBackgroundImages)
-                      ..removeWhere((entry) => entry == encoded)
-                      ..add(encoded);
+                      ..removeWhere((entry) => entry == storedPath)
+                      ..add(storedPath);
+                List<String> removedSources = const <String>[];
                 if (nextCustoms.length > _kMaxCustomBackgrounds) {
-                  nextCustoms.removeRange(
-                    0,
-                    nextCustoms.length - _kMaxCustomBackgrounds,
-                  );
+                  final removeCount =
+                      nextCustoms.length - _kMaxCustomBackgrounds;
+                  removedSources = nextCustoms.take(removeCount).toList();
+                  nextCustoms.removeRange(0, removeCount);
                 }
 
                 setModalState(() {
-                  draft = draft.copyWith(backgroundImageBase64: encoded);
+                  draft = draft.copyWith(backgroundImageBase64: storedPath);
                   _customBackgroundImages = nextCustoms;
                 });
                 updateCustomBackgrounds(nextCustoms);
+                for (final removedSource in removedSources) {
+                  unawaited(
+                    _deleteManagedBackgroundFileIfNeeded(removedSource),
+                  );
+                }
               }
 
-              void applyStoredCustomBackground(String base64) {
-                final normalized = base64.trim();
+              void applyStoredCustomBackground(String source) {
+                final normalized = source.trim();
                 if (normalized.isEmpty) {
                   return;
                 }
@@ -10677,7 +11144,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
                 final isActivePreset =
                     active != null &&
                     active.isNotEmpty &&
-                    _backgroundPresetBase64.values.contains(active);
+                    _isPresetBackgroundValue(active);
 
                 setModalState(() {
                   draft = draft.copyWith(clearBackgroundImage: true);
@@ -10690,6 +11157,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
                   final nextCustoms = List<String>.from(_customBackgroundImages)
                     ..removeWhere((entry) => entry == active);
                   updateCustomBackgroundsInSheet(nextCustoms);
+                  unawaited(_deleteManagedBackgroundFileIfNeeded(active));
                 }
               }
 
@@ -11781,7 +12249,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
               for (final preset in _backgroundPresets) {
                 final previewBytes = _backgroundPresetBytes[preset.assetPath];
                 final presetBase64 = _backgroundPresetBase64[preset.assetPath];
-                if (previewBytes == null || presetBase64 == null) {
+                if (previewBytes == null) {
                   continue;
                 }
                 presetBackgroundTiles.add(
@@ -11789,15 +12257,23 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
                     padding: const EdgeInsets.only(right: 8),
                     child: _buildBackgroundTile(
                       label: preset.label,
-                      selected: activeBackgroundBase64 == presetBase64,
+                      selected:
+                          activeBackgroundBase64 == preset.assetPath ||
+                          (presetBase64 != null &&
+                              activeBackgroundBase64 == presetBase64),
                       previewBytes: previewBytes,
                       showLabel: false,
                       onTap: () {
                         setModalState(() {
                           draft = draft.copyWith(
-                            backgroundImageBase64: presetBase64,
+                            backgroundImageBase64: preset.assetPath,
                           );
                         });
+                        if (mounted) {
+                          setState(() {
+                            _settings = draft;
+                          });
+                        }
                       },
                     ),
                   ),
@@ -11809,12 +12285,12 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
                 index < customBackgrounds.length;
                 index += 1
               ) {
-                final base64 = customBackgrounds[index];
-                final previewBytes = _tryDecodeBase64(base64);
+                final source = customBackgrounds[index];
+                final previewBytes = _customBackgroundPreviewBytes[source];
                 final isSelected =
                     hasBackgroundImage &&
                     !isPresetBackground &&
-                    activeBackgroundBase64 == base64;
+                    activeBackgroundBase64 == source;
                 customBackgroundTiles.add(
                   Padding(
                     padding: const EdgeInsets.only(right: 8),
@@ -11827,7 +12303,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
                           previewBytes == null
                               ? Icons.broken_image_outlined
                               : null,
-                      onTap: () => applyStoredCustomBackground(base64),
+                      onTap: () => applyStoredCustomBackground(source),
                     ),
                   ),
                 );
@@ -12296,6 +12772,104 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
                       buildSectionDivider(),
                       _buildSettingLine(
                         context: context,
+                        label: '字色',
+                        labelWidth: 54,
+                        child: Row(
+                          children: [
+                            Tooltip(
+                              message: '跟随主题',
+                              child: GestureDetector(
+                                onTap: () {
+                                  setModalState(() {
+                                    draft = draft.copyWith(
+                                      clearBodyTextColor: true,
+                                    );
+                                  });
+                                },
+                                child: Container(
+                                  width: 30,
+                                  height: 30,
+                                  margin: const EdgeInsets.only(right: 8),
+                                  decoration: BoxDecoration(
+                                    color:
+                                        Theme.of(
+                                          context,
+                                        ).colorScheme.surfaceContainerHighest,
+                                    shape: BoxShape.circle,
+                                    border: Border.all(
+                                      color:
+                                          draft.bodyTextColorValue == null
+                                              ? Theme.of(
+                                                context,
+                                              ).colorScheme.primary
+                                              : Theme.of(
+                                                context,
+                                              ).colorScheme.outlineVariant,
+                                      width:
+                                          draft.bodyTextColorValue == null
+                                              ? 2
+                                              : 1,
+                                    ),
+                                  ),
+                                  child: Icon(
+                                    Icons.restart_alt_rounded,
+                                    size: 14,
+                                    color:
+                                        Theme.of(
+                                          context,
+                                        ).colorScheme.onSurfaceVariant,
+                                  ),
+                                ),
+                              ),
+                            ),
+                            OutlinedButton.icon(
+                              onPressed: () async {
+                                final selectedColor =
+                                    await _showBodyTextColorPickerDialog(
+                                      context,
+                                      initialColorValue:
+                                          draft.bodyTextColorValue,
+                                    );
+                                if (selectedColor == null || !context.mounted) {
+                                  return;
+                                }
+                                setModalState(() {
+                                  draft = draft.copyWith(
+                                    bodyTextColorValue: selectedColor,
+                                  );
+                                });
+                                unawaited(rememberBodyTextColor(selectedColor));
+                              },
+                              icon: const Icon(Icons.colorize_rounded),
+                              label: Text(
+                                draft.bodyTextColorValue == null
+                                    ? '自定义取色'
+                                    : '修改颜色',
+                              ),
+                            ),
+                            if (draft.bodyTextColorValue != null) ...[
+                              const SizedBox(width: 10),
+                              Container(
+                                width: 28,
+                                height: 28,
+                                decoration: BoxDecoration(
+                                  color: Color(draft.bodyTextColorValue!),
+                                  shape: BoxShape.circle,
+                                  border: Border.all(
+                                    color:
+                                        Theme.of(
+                                          context,
+                                        ).colorScheme.outlineVariant,
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ],
+                        ),
+                      ),
+                      buildSectionDivider(),
+                      _buildSettingLine(
+                        context: context,
                         label: '背景',
                         child: ScrollConfiguration(
                           behavior: ScrollConfiguration.of(
@@ -12550,6 +13124,167 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
                     title: '排版',
                     subtitle: '行距、段距、字距与缩进',
                     children: [
+                      _buildSettingLine(
+                        context: context,
+                        label: '字线',
+                        labelWidth: 46,
+                        child: Wrap(
+                          spacing: 8,
+                          runSpacing: 8,
+                          children: [
+                            buildSummaryAction(
+                              icon: Icons.format_underlined_rounded,
+                              label: '样式',
+                              value: _bodyTextDecorationStyleLabel(draft),
+                              onTap: () async {
+                                if (!context.mounted) {
+                                  return;
+                                }
+                                await showModalBottomSheet<void>(
+                                  context: context,
+                                  showDragHandle: true,
+                                  useSafeArea: true,
+                                  backgroundColor:
+                                      readerModalTheme.colorScheme.surface,
+                                  builder: (sheetContext) {
+                                    return Padding(
+                                      padding: const EdgeInsets.fromLTRB(
+                                        16,
+                                        6,
+                                        16,
+                                        16,
+                                      ),
+                                      child: Column(
+                                        mainAxisSize: MainAxisSize.min,
+                                        crossAxisAlignment:
+                                            CrossAxisAlignment.stretch,
+                                        children: [
+                                          Text(
+                                            '字线样式',
+                                            textAlign: TextAlign.center,
+                                            style: Theme.of(sheetContext)
+                                                .textTheme
+                                                .titleMedium
+                                                ?.copyWith(
+                                                  fontWeight: FontWeight.w700,
+                                                ),
+                                          ),
+                                          const SizedBox(height: 10),
+                                          Wrap(
+                                            spacing: 8,
+                                            runSpacing: 8,
+                                            alignment: WrapAlignment.center,
+                                            children:
+                                                ReaderBodyTextDecorationStyle
+                                                    .values
+                                                    .map(
+                                                      (style) => ChoiceChip(
+                                                        label: Text(
+                                                          switch (style) {
+                                                            ReaderBodyTextDecorationStyle.none =>
+                                                              '无',
+                                                            ReaderBodyTextDecorationStyle.solid =>
+                                                              '实线',
+                                                            ReaderBodyTextDecorationStyle.dashed =>
+                                                              '虚线',
+                                                          },
+                                                        ),
+                                                        selected:
+                                                            draft.bodyTextDecorationStyle ==
+                                                            style,
+                                                        onSelected: (_) {
+                                                          setModalState(() {
+                                                            draft = draft.copyWith(
+                                                              bodyTextDecorationStyle:
+                                                                  style,
+                                                            );
+                                                          });
+                                                          if (sheetContext
+                                                              .mounted) {
+                                                            Navigator.of(
+                                                              sheetContext,
+                                                            ).pop();
+                                                          }
+                                                        },
+                                                      ),
+                                                    )
+                                                    .toList(growable: false),
+                                          ),
+                                        ],
+                                      ),
+                                    );
+                                  },
+                                );
+                              },
+                            ),
+                            buildSummaryAction(
+                              icon: Icons.colorize_rounded,
+                              label: '颜色',
+                              value:
+                                  draft.bodyTextDecorationColorValue == null
+                                      ? '跟随字色'
+                                      : '自定义',
+                              onTap: () async {
+                                if (draft.bodyTextDecorationStyle ==
+                                    ReaderBodyTextDecorationStyle.none) {
+                                  _showMessage('请先启用字线样式。');
+                                  return;
+                                }
+                                final selectedColor =
+                                    await _showBodyTextDecorationColorPickerDialog(
+                                      context,
+                                      initialColorValue:
+                                          draft.bodyTextDecorationColorValue,
+                                    );
+                                if (selectedColor == null || !context.mounted) {
+                                  return;
+                                }
+                                setModalState(() {
+                                  draft = draft.copyWith(
+                                    bodyTextDecorationColorValue:
+                                        selectedColor,
+                                  );
+                                });
+                              },
+                            ),
+                            if (draft.bodyTextDecorationColorValue != null)
+                              Tooltip(
+                                message: '跟随字色',
+                                child: GestureDetector(
+                                  onTap: () {
+                                    setModalState(() {
+                                      draft = draft.copyWith(
+                                        clearBodyTextDecorationColor: true,
+                                      );
+                                    });
+                                  },
+                                  child: Container(
+                                    width: 30,
+                                    height: 30,
+                                    decoration: BoxDecoration(
+                                      color: Theme.of(context)
+                                          .colorScheme
+                                          .surfaceContainerHighest,
+                                      shape: BoxShape.circle,
+                                      border: Border.all(
+                                        color: Theme.of(context)
+                                            .colorScheme
+                                            .outlineVariant,
+                                      ),
+                                    ),
+                                    child: Icon(
+                                      Icons.restart_alt_rounded,
+                                      size: 14,
+                                      color: Theme.of(context)
+                                          .colorScheme
+                                          .onSurfaceVariant,
+                                    ),
+                                  ),
+                                ),
+                              ),
+                          ],
+                        ),
+                      ),
                       buildTypographySliderRow(
                         label: '缩进',
                         min: 0,
@@ -14440,9 +15175,8 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
     return GestureDetector(onTap: onTap, child: tile);
   }
 
-  Future<String?> _pickBackgroundImageBase64() async {
+  Future<String?> _pickBackgroundImagePath() async {
     try {
-      const maxBytes = 900 * 1024;
       final picked = await _imageSelectionService.pickImage(
         confirmButtonText: '选择背景',
       );
@@ -14455,13 +15189,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
         _showMessage('背景图片读取失败。');
         return null;
       }
-
-      if (bytes.length > maxBytes) {
-        _showMessage('图片过大，请选择 900KB 以内图片。');
-        return null;
-      }
-
-      return base64Encode(bytes);
+      return _storeCustomBackgroundImage(bytes);
     } on ImageSelectionException catch (error) {
       _showMessage(error.message);
       return null;

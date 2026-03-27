@@ -23,6 +23,8 @@ enum ReaderMangaReadMode { continuous, paged, horizontal }
 
 enum ReaderMangaLoadStrategy { balanced, smooth, saveData }
 
+enum ReaderBodyTextDecorationStyle { none, solid, dashed }
+
 class ReaderSettings {
   const ReaderSettings({
     this.fontSize = 18,
@@ -47,6 +49,9 @@ class ReaderSettings {
     this.customFontPath,
     this.pageAnimationStyle = ReaderPageAnimationStyle.curl,
     this.backgroundImageBase64,
+    this.bodyTextColorValue,
+    this.bodyTextDecorationStyle = ReaderBodyTextDecorationStyle.none,
+    this.bodyTextDecorationColorValue,
     this.mangaReadMode = ReaderMangaReadMode.continuous,
     this.mangaImageSpacing = 10,
     this.mangaImagePadding = 8,
@@ -109,6 +114,9 @@ class ReaderSettings {
   final String? customFontPath;
   final ReaderPageAnimationStyle pageAnimationStyle;
   final String? backgroundImageBase64;
+  final int? bodyTextColorValue;
+  final ReaderBodyTextDecorationStyle bodyTextDecorationStyle;
+  final int? bodyTextDecorationColorValue;
   final ReaderMangaReadMode mangaReadMode;
   final double mangaImageSpacing;
   final double mangaImagePadding;
@@ -160,6 +168,9 @@ class ReaderSettings {
     String? customFontPath,
     ReaderPageAnimationStyle? pageAnimationStyle,
     String? backgroundImageBase64,
+    int? bodyTextColorValue,
+    ReaderBodyTextDecorationStyle? bodyTextDecorationStyle,
+    int? bodyTextDecorationColorValue,
     ReaderMangaReadMode? mangaReadMode,
     double? mangaImageSpacing,
     double? mangaImagePadding,
@@ -188,6 +199,8 @@ class ReaderSettings {
     double? infoFooterMarginLeft,
     double? infoFooterMarginRight,
     bool clearBackgroundImage = false,
+    bool clearBodyTextColor = false,
+    bool clearBodyTextDecorationColor = false,
     bool clearFontFamilyKey = false,
     bool clearCustomFontPath = false,
   }) {
@@ -248,6 +261,17 @@ class ReaderSettings {
           clearBackgroundImage
               ? null
               : backgroundImageBase64 ?? this.backgroundImageBase64,
+      bodyTextColorValue:
+          clearBodyTextColor
+              ? null
+              : bodyTextColorValue ?? this.bodyTextColorValue,
+      bodyTextDecorationStyle:
+          bodyTextDecorationStyle ?? this.bodyTextDecorationStyle,
+      bodyTextDecorationColorValue:
+          clearBodyTextDecorationColor
+              ? null
+              : bodyTextDecorationColorValue ??
+                  this.bodyTextDecorationColorValue,
       mangaReadMode: mangaReadMode ?? this.mangaReadMode,
       mangaImageSpacing: mangaImageSpacing ?? this.mangaImageSpacing,
       mangaImagePadding: mangaImagePadding ?? this.mangaImagePadding,
@@ -336,6 +360,9 @@ class ReaderSettings {
       'customFontPath': customFontPath,
       'pageAnimationStyle': pageAnimationStyle.name,
       'backgroundImageBase64': backgroundImageBase64,
+      'bodyTextColorValue': bodyTextColorValue,
+      'bodyTextDecorationStyle': bodyTextDecorationStyle.name,
+      'bodyTextDecorationColorValue': bodyTextDecorationColorValue,
       'mangaReadMode': mangaReadMode.name,
       'mangaImageSpacing': mangaImageSpacing,
       'mangaImagePadding': mangaImagePadding,
@@ -423,6 +450,16 @@ class ReaderSettings {
 
     final backgroundImageBase64 =
         json['backgroundImageBase64']?.toString().trim();
+    final bodyTextColorValue = _asInt(json['bodyTextColorValue']);
+    final bodyTextDecorationStyleName =
+        json['bodyTextDecorationStyle']?.toString();
+    final bodyTextDecorationStyle =
+        ReaderBodyTextDecorationStyle.values.firstWhere(
+          (item) => item.name == bodyTextDecorationStyleName,
+          orElse: () => ReaderBodyTextDecorationStyle.none,
+        );
+    final bodyTextDecorationColorValue =
+        _asInt(json['bodyTextDecorationColorValue']);
     final fontFamilyKey = json['fontFamilyKey']?.toString().trim();
     final customFontPath = json['customFontPath']?.toString().trim();
     final legacyHorizontalPadding = _asDouble(json['horizontalPadding']) ?? 18;
@@ -472,6 +509,9 @@ class ReaderSettings {
           backgroundImageBase64 == null || backgroundImageBase64.isEmpty
               ? null
               : backgroundImageBase64,
+      bodyTextColorValue: bodyTextColorValue,
+      bodyTextDecorationStyle: bodyTextDecorationStyle,
+      bodyTextDecorationColorValue: bodyTextDecorationColorValue,
       mangaReadMode: mangaReadMode,
       mangaImageSpacing:
           _asDouble(json['mangaImageSpacing'])?.clamp(0.0, 24.0) ?? 10,
@@ -574,6 +614,19 @@ class ReaderSettings {
       if (normalized == 'false' || normalized == '0') {
         return false;
       }
+    }
+    return null;
+  }
+
+  static int? _asInt(Object? value) {
+    if (value is int) {
+      return value;
+    }
+    if (value is num) {
+      return value.toInt();
+    }
+    if (value is String) {
+      return int.tryParse(value.trim());
     }
     return null;
   }

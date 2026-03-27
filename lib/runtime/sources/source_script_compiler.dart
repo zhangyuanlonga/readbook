@@ -3,8 +3,13 @@ import 'dart:convert';
 import 'package:html/dom.dart' as dom;
 
 import '../../src/js_runtime.dart';
+import '../crypto/source_crypto.dart';
+import '../cache/cache_manager.dart';
 import '../browser/browser_runtime.dart';
+import '../html/html_runtime.dart';
 import '../http/http_models.dart';
+import '../http/request_engine.dart';
+import '../session/source_session.dart';
 import 'source_contract.dart';
 import 'source_manifest.dart';
 import 'source_result_models.dart';
@@ -126,6 +131,185 @@ return {
     } finally {
       runtime.dispose();
     }
+  }
+}
+
+enum SourceScriptDebugLogLevel { info, warn, error }
+
+class SourceScriptDebugLogEntry {
+  const SourceScriptDebugLogEntry({
+    required this.timestamp,
+    required this.level,
+    required this.message,
+  });
+
+  final DateTime timestamp;
+  final SourceScriptDebugLogLevel level;
+  final String message;
+}
+
+class SourceScriptDebugRunResult {
+  const SourceScriptDebugRunResult({
+    required this.logs,
+    required this.result,
+    required this.debugTraces,
+    this.errorText,
+  });
+
+  final List<SourceScriptDebugLogEntry> logs;
+  final Object? result;
+  final List<Map<String, Object?>> debugTraces;
+  final String? errorText;
+
+  bool get isError => errorText != null;
+}
+
+class SourceScriptDebugService {
+  SourceScriptDebugService({
+    RequestEngine? requestEngine,
+    CacheManager? cacheManager,
+    BrowserRuntime? browserRuntime,
+    HtmlRuntime? htmlRuntime,
+  }) : _requestEngine = requestEngine ?? HttpPackageRequestEngine(),
+       _cacheManager = cacheManager ?? InMemoryCacheManager(),
+       _browserRuntime = browserRuntime ?? const UnsupportedBrowserRuntime(),
+       _htmlRuntime = htmlRuntime ?? const DefaultHtmlRuntime();
+
+  final RequestEngine _requestEngine;
+  final CacheManager _cacheManager;
+  final BrowserRuntime _browserRuntime;
+  final HtmlRuntime _htmlRuntime;
+
+  Future<SourceScriptDebugRunResult> evaluate({
+    required String sourceCode,
+    required String command,
+    required SourceSession session,
+    String runtimeId = '__script_debug__',
+  }) async {
+    final logs = <SourceScriptDebugLogEntry>[];
+    final trimmedCommand = command.trim();
+    if (trimmedCommand.isEmpty) {
+      return SourceScriptDebugRunResult(
+        logs: const <SourceScriptDebugLogEntry>[],
+        result: null,
+        debugTraces: _readDebugTraces(session),
+        errorText: '调试命令不能为空。',
+      );
+    }
+
+    final runner = _SourceScriptRunner(
+      _buildDebugWrappedSource(sourceCode, trimmedCommand),
+    );
+    final context = SourceRuntimeContext(
+      source: const SourceRuntimeInfo(
+        id: '__script_debug__',
+        name: '脚本调试',
+        group: '调试',
+        revision: 'debug',
+      ),
+      http: SourceHttpContext(
+        requestEngine: _requestEngine,
+        session: session,
+        manifest: const SourceManifest(
+          name: '脚本调试',
+          group: '调试',
+          author: 'debugger',
+          description: '',
+        ),
+        browserRuntime: _browserRuntime,
+      ),
+      browser: SourceBrowserContext(
+        browserRuntime: _browserRuntime,
+        session: session,
+      ),
+      cookie: SourceCookieContext(session: session),
+      cache: SourceCacheContext(
+        cacheStore: CacheStoreContext(cacheManager: _cacheManager),
+        sourceId: runtimeId,
+      ),
+      html: _htmlRuntime,
+      session: session,
+      utils: const SourceUtilsContext(),
+      crypto: SourceCryptoContext(),
+      log: (String message) {
+        logs.add(
+          SourceScriptDebugLogEntry(
+            timestamp: DateTime.now(),
+            level: SourceScriptDebugLogLevel.info,
+            message: message,
+          ),
+        );
+      },
+    );
+
+    try {
+      final result = await runner.run(
+        methodName: '__debug',
+        ctx: context,
+        args: const <Object?>[],
+      );
+      return SourceScriptDebugRunResult(
+        logs: List<SourceScriptDebugLogEntry>.unmodifiable(logs),
+        result: result,
+        debugTraces: _readDebugTraces(session),
+      );
+    } catch (error) {
+      return SourceScriptDebugRunResult(
+        logs: List<SourceScriptDebugLogEntry>.unmodifiable(logs),
+        result: null,
+        debugTraces: _readDebugTraces(session),
+        errorText: error.toString(),
+      );
+    }
+  }
+
+  String _buildDebugWrappedSource(String sourceCode, String command) {
+    final normalizedSource = _normalizeSourceCode(sourceCode);
+    return '''
+$normalizedSource
+;(() => {
+  const __formatDebugValue = (value) => {
+    if (typeof value === 'string') {
+      return value;
+    }
+    try {
+      return JSON.stringify(value, null, 2);
+    } catch (_) {
+      return String(value);
+    }
+  };
+
+  const __source = globalThis.__sourceDefinition || {};
+  __source.__debug = async function(ctx) {
+    const source = __source;
+    const __previousConsole = globalThis.console;
+    const __send = (level, args) => {
+      const prefix = level === 'info' ? '' : '[' + level + '] ';
+      return ctx.log(prefix + Array.from(args).map(__formatDebugValue).join(' '));
+    };
+    globalThis.console = {
+      log: function() { return __send('info', arguments); },
+      info: function() { return __send('info', arguments); },
+      warn: function() { return __send('warn', arguments); },
+      error: function() { return __send('error', arguments); },
+    };
+    try {
+$command
+    } finally {
+      globalThis.console = __previousConsole;
+    }
+  };
+  globalThis.__sourceDefinition = __source;
+})();
+''';
+  }
+
+  List<Map<String, Object?>> _readDebugTraces(SourceSession session) {
+    return session
+            .get<List<Object?>>('__debug_traces')
+            ?.whereType<Map<String, Object?>>()
+            .toList(growable: false) ??
+        const <Map<String, Object?>>[];
   }
 }
 

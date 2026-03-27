@@ -20,7 +20,6 @@ import '../../../data/repositories/source_repository_impl.dart';
 import '../../../domain/entities/script_source.dart';
 import '../../../domain/entities/source_definition.dart';
 import '../../../domain/repositories/source_repository.dart';
-import '../../../runtime/sources/source_script_template.dart';
 import '../../search/application/search_service.dart';
 import '../application/source_capability_analyzer.dart';
 import '../application/external_source_import_bridge.dart';
@@ -406,7 +405,7 @@ class _SourcePageState extends State<SourcePage> {
                   onPressed:
                       _savingScriptSourceIds.isNotEmpty
                           ? null
-                          : () => unawaited(_showScriptSourceEditor()),
+                          : () => unawaited(_openScriptSourceEditorPage()),
                   icon: const Icon(Icons.add),
                 ),
               ] else ...[
@@ -930,7 +929,7 @@ class _SourcePageState extends State<SourcePage> {
             ),
             const SizedBox(height: 12),
             FilledButton.icon(
-              onPressed: () => unawaited(_showScriptSourceEditor()),
+              onPressed: () => unawaited(_openScriptSourceEditorPage()),
               icon: const Icon(Icons.add),
               label: const Text('新增脚本配置'),
             ),
@@ -1011,7 +1010,7 @@ class _SourcePageState extends State<SourcePage> {
                       busy
                           ? null
                           : () => unawaited(
-                            _showScriptSourceEditor(source: source),
+                            _openScriptSourceEditorPage(source: source),
                           ),
                   icon:
                       isSaving
@@ -1099,120 +1098,20 @@ class _SourcePageState extends State<SourcePage> {
     }
   }
 
-  Future<void> _showScriptSourceEditor({ScriptSource? source}) async {
-    final controller = TextEditingController(
-      text: source?.sourceCode ?? sourceScriptTemplateV1,
+  Future<void> _openScriptSourceEditorPage({ScriptSource? source}) async {
+    final queryParameters = <String, String>{
+      if (source != null) 'id': source.id,
+    };
+    final result = await context.push<String>(
+      Uri(
+        path: '/source/script-editor',
+        queryParameters: queryParameters.isEmpty ? null : queryParameters,
+      ).toString(),
     );
-    var isSaving = false;
-    var errorText = '';
-
-    final saved = await showDialog<bool>(
-      context: context,
-      barrierDismissible: !isSaving,
-      builder: (dialogContext) {
-        return StatefulBuilder(
-          builder: (context, setModalState) {
-            Future<void> submit() async {
-              final scriptId = source?.id ?? '__new_script_source__';
-              setModalState(() {
-                isSaving = true;
-                errorText = '';
-              });
-              setState(() {
-                _savingScriptSourceIds.add(scriptId);
-              });
-              try {
-                await _sourceRuntimeFacade.saveScriptSource(
-                  sourceCode: controller.text,
-                  id: source?.id,
-                  enabled: source?.enabled ?? true,
-                );
-                if (!dialogContext.mounted) {
-                  return;
-                }
-                Navigator.of(dialogContext).pop(true);
-              } catch (error) {
-                setModalState(() {
-                  errorText = error.toString();
-                  isSaving = false;
-                });
-              } finally {
-                if (mounted) {
-                  setState(() {
-                    _savingScriptSourceIds.remove(scriptId);
-                  });
-                }
-              }
-            }
-
-            return AlertDialog(
-              title: Text(source == null ? '新增脚本配置' : '编辑脚本配置'),
-              content: SizedBox(
-                width: 760,
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      '保存时会立即编译并从 meta 中提取名称、分组和作者。',
-                      style: Theme.of(context).textTheme.bodySmall,
-                    ),
-                    const SizedBox(height: 10),
-                    Flexible(
-                      child: TextField(
-                        controller: controller,
-                        maxLines: 22,
-                        minLines: 18,
-                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                          fontFamily: 'monospace',
-                        ),
-                        decoration: const InputDecoration(
-                          border: OutlineInputBorder(),
-                          alignLabelWithHint: true,
-                          hintText: '粘贴书配置脚本',
-                        ),
-                      ),
-                    ),
-                    if (errorText.isNotEmpty) ...[
-                      const SizedBox(height: 8),
-                      Text(
-                        errorText,
-                        style: TextStyle(
-                          color: Theme.of(context).colorScheme.error,
-                        ),
-                      ),
-                    ],
-                  ],
-                ),
-              ),
-              actions: [
-                TextButton(
-                  onPressed:
-                      isSaving ? null : () => Navigator.of(dialogContext).pop(),
-                  child: const Text('取消'),
-                ),
-                FilledButton(
-                  onPressed: isSaving ? null : submit,
-                  child:
-                      isSaving
-                          ? const SizedBox(
-                            width: 16,
-                            height: 16,
-                            child: CircularProgressIndicator(strokeWidth: 2),
-                          )
-                          : const Text('保存'),
-                ),
-              ],
-            );
-          },
-        );
-      },
-    );
-    controller.dispose();
-
-    if (saved == true && mounted) {
-      _showMessage(source == null ? '脚本配置已新增。' : '脚本配置已保存。');
+    if (!mounted || result == null || result.trim().isEmpty) {
+      return;
     }
+    _showMessage(result);
   }
 
   Future<void> _setScriptSourceEnabled(

@@ -3,9 +3,15 @@ import 'dart:math' as math;
 import 'package:flutter/widgets.dart';
 import 'package:responsive_framework/responsive_framework.dart';
 
+/// 应用统一使用逻辑宽度做自适应，而不是物理分辨率。
+/// 断点语义约定如下：
+/// - compact: 390dp 以下的小屏手机，例如 iPhone 6s/7/8/SE。
+/// - largePhone: 390dp 到 479dp 的大号手机，例如 iPhone 16e。
+/// - phoneXl: 480dp 到 599dp 的超大手机或横屏手机。
+/// - medium: 600dp 到 839dp 的中等宽度设备。
+/// - expanded: 840dp 及以上的大屏设备。
 enum AppWidthBucket {
   compact,
-  regularPhone,
   largePhone,
   phoneXl,
   medium,
@@ -16,21 +22,21 @@ class AppLayout {
   const AppLayout._();
 
   static const String breakpointCompactName = 'APP_COMPACT';
-  static const String breakpointRegularPhoneName = 'APP_REGULAR_PHONE';
   static const String breakpointLargePhoneName = 'APP_LARGE_PHONE';
   static const String breakpointPhoneXlName = 'APP_PHONE_XL';
   static const String breakpointMediumName = 'APP_MEDIUM';
   static const String breakpointExpandedName = 'APP_EXPANDED';
   static const double compactContentWidth = 340;
-  static const double phoneSmallWidth = 360;
-  static const double actionWrapWidth = 420;
-  static const double phoneLargeWidth = 430;
-  static const double railBreakpointWidth = 600;
-  static const double regularPhoneBreakpointWidth = 360;
+  /// 390dp 以下视为小屏手机。
+  static const double phoneSmallWidth = largePhoneBreakpointWidth;
+  /// 390dp 起视为大号手机布局。
   static const double largePhoneBreakpointWidth = 390;
   static const double phoneXlBreakpointWidth = 480;
   static const double mediumBreakpointWidth = 600;
   static const double expandedBreakpointWidth = 840;
+  static const double actionWrapWidth = 420;
+  static const double phoneLargeWidth = largePhoneBreakpointWidth;
+  static const double railBreakpointWidth = mediumBreakpointWidth;
   static const double mineContentMaxWidth = 700;
   static const double bookDetailContentMaxWidth = 920;
   static const double searchContentMaxWidth = 920;
@@ -48,12 +54,7 @@ class AppLayout {
   static const double bookshelfGridFiveColumnsWidth = 1100;
   static const double bookshelfGridSixColumnsWidth = 1400;
   static const List<Breakpoint> responsiveBreakpoints = [
-    Breakpoint(start: 0, end: 359, name: breakpointCompactName),
-    Breakpoint(
-      start: regularPhoneBreakpointWidth,
-      end: 389,
-      name: breakpointRegularPhoneName,
-    ),
+    Breakpoint(start: 0, end: 389, name: breakpointCompactName),
     Breakpoint(
       start: largePhoneBreakpointWidth,
       end: 479,
@@ -76,20 +77,37 @@ class AppLayout {
     ),
   ];
 
+  static Size viewportSize(BuildContext context) {
+    final mediaQuerySize = MediaQuery.maybeSizeOf(context);
+    if (mediaQuerySize != null &&
+        mediaQuerySize.width > 0 &&
+        mediaQuerySize.height > 0) {
+      return mediaQuerySize;
+    }
+
+    final view = View.maybeOf(context);
+    if (view != null && view.devicePixelRatio > 0) {
+      return view.physicalSize / view.devicePixelRatio;
+    }
+
+    return Size.zero;
+  }
+
   static double screenWidth(BuildContext context) {
-    return MediaQuery.sizeOf(context).width;
+    return viewportSize(context).width;
   }
 
   static double screenHeight(BuildContext context) {
-    return MediaQuery.sizeOf(context).height;
+    return viewportSize(context).height;
   }
 
   static bool isPhoneSmall(BuildContext context) {
     return isPhoneSmallWidthFor(screenWidth(context));
   }
 
+  /// 390dp 以下按小屏手机处理。
   static bool isPhoneSmallWidthFor(double width) {
-    return width <= phoneSmallWidth;
+    return width < phoneSmallWidth;
   }
 
   static bool isPhoneLarge(BuildContext context) {
@@ -98,28 +116,12 @@ class AppLayout {
   }
 
   static AppWidthBucket widthBucket(BuildContext context) {
-    final width = screenWidth(context);
-    if (isPhoneSmallWidthFor(width)) {
-      return AppWidthBucket.compact;
-    }
-    final inherited =
-        context
-            .dependOnInheritedWidgetOfExactType<
-              InheritedResponsiveBreakpoints
-            >();
-    final bucket = widthBucketFromBreakpointName(
-      inherited?.data.breakpoint.name,
-    );
-    if (bucket != null) {
-      return bucket;
-    }
-    return widthBucketFor(width);
+    return widthBucketFor(screenWidth(context));
   }
 
   static AppWidthBucket? widthBucketFromBreakpointName(String? breakpointName) {
     return switch (breakpointName) {
       breakpointCompactName => AppWidthBucket.compact,
-      breakpointRegularPhoneName => AppWidthBucket.regularPhone,
       breakpointLargePhoneName => AppWidthBucket.largePhone,
       breakpointPhoneXlName => AppWidthBucket.phoneXl,
       breakpointMediumName => AppWidthBucket.medium,
@@ -128,12 +130,10 @@ class AppLayout {
     };
   }
 
+  /// 根据当前逻辑宽度返回布局分档。
   static AppWidthBucket widthBucketFor(double width) {
-    if (isPhoneSmallWidthFor(width)) {
-      return AppWidthBucket.compact;
-    }
     if (width < largePhoneBreakpointWidth) {
-      return AppWidthBucket.regularPhone;
+      return AppWidthBucket.compact;
     }
     if (width < phoneXlBreakpointWidth) {
       return AppWidthBucket.largePhone;
@@ -204,9 +204,6 @@ class AppLayout {
   }
 
   static int mineActionGridColumnsForWidth(double width) {
-    if (isPhoneSmallWidthFor(width)) {
-      return 2;
-    }
     return 4;
   }
 
@@ -223,7 +220,7 @@ class AppLayout {
   }
 
   static double shortestSide(BuildContext context) {
-    final size = MediaQuery.sizeOf(context);
+    final size = viewportSize(context);
     return math.min(size.width, size.height);
   }
 
@@ -263,6 +260,10 @@ class AppLayout {
     return math.min(maxWidth, available);
   }
 
+  /// 按当前逻辑宽度选择弹窗或底部面板高度。
+  /// - compact: 小屏手机使用的高度系数。
+  /// - regular: 常规手机使用的高度系数。
+  /// - large: 大号手机及以上使用的高度系数。
   static double sheetHeightFactor(
     BuildContext context, {
     required double compact,

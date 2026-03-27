@@ -1,14 +1,14 @@
 import 'package:flutter/material.dart';
-import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import 'package:flutter_appread/app/layout/app_layout.dart';
 import 'package:flutter_appread/app/layout/app_spacing.dart';
 import 'package:flutter_appread/app/shell_navigation_provider.dart';
 import 'package:flutter_appread/app/shell_scaffold.dart';
+import '../../test_utils/adaptive_test_harness.dart';
 
 void main() {
-  testWidgets('AppSpacing uses expected width buckets at 360/390/430', (
+  testWidgets('AppSpacing 在 360、390、430 宽度下使用正确的间距', (
     tester,
   ) async {
     final spacing360 = await _readFromContext<double>(
@@ -32,7 +32,7 @@ void main() {
     expect(spacing430, 16);
   });
 
-  testWidgets('AppLayout classifies common phone widths correctly', (
+  testWidgets('AppLayout 能正确识别常见手机宽度', (
     tester,
   ) async {
     final flags360 = await _readFromContext<_LayoutFlags>(
@@ -71,7 +71,7 @@ void main() {
     expect(flags360.isPhone, isTrue);
 
     expect(flags390.isPhoneSmall, isFalse);
-    expect(flags390.isPhoneLarge, isFalse);
+    expect(flags390.isPhoneLarge, isTrue);
     expect(flags390.isPhone, isTrue);
 
     expect(flags430.isPhoneSmall, isFalse);
@@ -79,7 +79,7 @@ void main() {
     expect(flags430.isPhone, isTrue);
   });
 
-  testWidgets('AppLayout width bucket uses semantic breakpoints', (
+  testWidgets('AppLayout 按语义化断点划分宽度分档', (
     tester,
   ) async {
     final bucket320 = await _readFromContext<AppWidthBucket>(
@@ -122,7 +122,7 @@ void main() {
   });
 
   testWidgets(
-    'AppLayout pageContentMaxWidth keeps phone width and caps medium+',
+    'AppLayout pageContentMaxWidth 在手机上保持原宽，在中大屏上限宽',
     (tester) async {
       final width390 = await _readFromContext<double>(
         tester,
@@ -158,7 +158,7 @@ void main() {
     },
   );
 
-  testWidgets('AppLayout aboutPageContentMaxWidth follows two-stage caps', (
+  testWidgets('AppLayout aboutPageContentMaxWidth 遵循两段式限宽', (
     tester,
   ) async {
     final width500 = await _readFromContext<double>(
@@ -188,7 +188,7 @@ void main() {
     expect(width1300, AppLayout.aboutExpandedContentMaxWidth);
   });
 
-  testWidgets('AppLayout optionGridColumnsForWidth matches width buckets', (
+  testWidgets('AppLayout optionGridColumnsForWidth 与宽度分档一致', (
     tester,
   ) async {
     final columns320 = await _readFromContext<int>(
@@ -212,7 +212,7 @@ void main() {
     expect(columns600, 3);
   });
 
-  testWidgets('AppLayout mineActionGridColumnsForWidth follows rule', (
+  testWidgets('AppLayout mineActionGridColumnsForWidth 遵循固定列数规则', (
     tester,
   ) async {
     final columns320 = await _readFromContext<int>(
@@ -241,32 +241,32 @@ void main() {
       read: (context) => AppLayout.mineActionGridColumnsForWidth(600),
     );
 
-    expect(columns320, 2);
-    expect(columns360, 2);
+    expect(columns320, 4);
+    expect(columns360, 4);
     expect(columns390, 4);
     expect(columns430, 4);
     expect(columns600, 4);
   });
 
-  testWidgets('AppLayout treats widths up to 360dp as small phones', (
+  testWidgets('AppLayout 将 390dp 以下视为小屏手机', (
     tester,
   ) async {
-    final small360 = await _readFromContext<bool>(
+    final small375 = await _readFromContext<bool>(
       tester,
-      width: 360,
-      read: (context) => AppLayout.isPhoneSmallWidthFor(360),
+      width: 375,
+      read: (context) => AppLayout.isPhoneSmallWidthFor(375),
     );
-    final small361 = await _readFromContext<bool>(
+    final small390 = await _readFromContext<bool>(
       tester,
-      width: 361,
-      read: (context) => AppLayout.isPhoneSmallWidthFor(361),
+      width: 390,
+      read: (context) => AppLayout.isPhoneSmallWidthFor(390),
     );
 
-    expect(small360, isTrue);
-    expect(small361, isFalse);
+    expect(small375, isTrue);
+    expect(small390, isFalse);
   });
 
-  testWidgets('AppLayout readingRecordsMetricColumnsForWidth follows buckets', (
+  testWidgets('AppLayout readingRecordsMetricColumnsForWidth 随宽度分档变化', (
     tester,
   ) async {
     final columns390 = await _readFromContext<int>(
@@ -285,7 +285,7 @@ void main() {
   });
 
   testWidgets(
-    'AppLayout useCondensedPhoneDensityForWidth only enables on large phones',
+    'AppLayout useCondensedPhoneDensityForWidth 只在大号手机区间启用',
     (tester) async {
       final dense390 = await _readFromContext<bool>(
         tester,
@@ -308,14 +308,14 @@ void main() {
         read: (context) => AppLayout.useCondensedPhoneDensityForWidth(600),
       );
 
-      expect(dense390, isFalse);
+      expect(dense390, isTrue);
       expect(dense430, isTrue);
       expect(dense480, isTrue);
       expect(dense600, isFalse);
     },
   );
 
-  testWidgets('AppLayout bookshelfGridColumnsForWidth uses width thresholds', (
+  testWidgets('AppLayout bookshelfGridColumnsForWidth 按宽度阈值切换列数', (
     tester,
   ) async {
     final columns389 = await _readFromContext<int>(
@@ -357,7 +357,7 @@ void main() {
     expect(columns1400, 6);
   });
 
-  testWidgets('AppLayout sheetHeightFactor follows compact/regular/large', (
+  testWidgets('AppLayout sheetHeightFactor 按小屏、常规和大号手机切换', (
     tester,
   ) async {
     final compact = await _readFromContext<double>(
@@ -407,12 +407,12 @@ void main() {
 
     expect(compact, 0.92);
     expect(compact360, 0.92);
-    expect(regular, 0.9);
+    expect(regular, 0.85);
     expect(large, 0.85);
   });
 
   testWidgets(
-    'AppLayout clamps text scale with relaxed phone and tablet caps',
+    'AppLayout clamps text scale 在手机和平板使用不同上限',
     (tester) async {
       final phoneScale = await _readFromContext<double>(
         tester,
@@ -432,7 +432,7 @@ void main() {
     },
   );
 
-  testWidgets('ShellScaffold keeps bottom bar on narrow phone widths', (
+  testWidgets('ShellScaffold 在手机宽度下保留底部导航栏', (
     tester,
   ) async {
     for (final width in <double>[360, 390, 430]) {
@@ -451,7 +451,7 @@ void main() {
     }
   });
 
-  testWidgets('ShellScaffold switches to rail at and above breakpoint', (
+  testWidgets('ShellScaffold 到达平板断点后切换为侧边栏', (
     tester,
   ) async {
     await _pumpShellScaffold(tester, width: AppLayout.railBreakpointWidth);
@@ -460,12 +460,13 @@ void main() {
     expect(find.byType(NavigationRail), findsOneWidget);
   });
 
-  testWidgets('ShellScaffold bottom navigation keeps discover between tabs', (
+  testWidgets('ShellScaffold 底部导航保持发现页位于中间', (
     tester,
   ) async {
     await tester.pumpWidget(
-      _TestHarness(
+      AdaptiveTestHarness(
         width: 390,
+        wrapWithMaterialApp: true,
         overrides: [
           appShellNavigationProvider.overrideWith(
             _AllTabsNavigationNotifier.new,
@@ -485,10 +486,11 @@ void main() {
     expect(bar.selectedIndex, 1);
   });
 
-  testWidgets('ShellScaffold hides disabled destinations', (tester) async {
+  testWidgets('ShellScaffold 会隐藏被禁用的导航项', (tester) async {
     await tester.pumpWidget(
-      _TestHarness(
+      AdaptiveTestHarness(
         width: 390,
+        wrapWithMaterialApp: true,
         overrides: [
           appShellNavigationProvider.overrideWith(
             _BookshelfMineNavigationNotifier.new,
@@ -514,8 +516,9 @@ Future<void> _pumpShellScaffold(
   required double width,
 }) async {
   await tester.pumpWidget(
-    _TestHarness(
+    AdaptiveTestHarness(
       width: width,
+      wrapWithMaterialApp: true,
       child: const ShellScaffold(location: '/bookshelf', child: SizedBox()),
     ),
   );
@@ -531,9 +534,10 @@ Future<T> _readFromContext<T>(
   T? result;
 
   await tester.pumpWidget(
-    _TestHarness(
+    AdaptiveTestHarness(
       width: width,
       textScaleFactor: textScaleFactor,
+      wrapWithMaterialApp: true,
       child: Builder(
         builder: (context) {
           result = read(context);
@@ -545,34 +549,6 @@ Future<T> _readFromContext<T>(
   await tester.pump();
 
   return result as T;
-}
-
-class _TestHarness extends StatelessWidget {
-  const _TestHarness({
-    required this.width,
-    required this.child,
-    this.textScaleFactor = 1,
-    this.overrides = const [],
-  });
-
-  final double width;
-  final Widget child;
-  final double textScaleFactor;
-  final List<Override> overrides;
-
-  @override
-  Widget build(BuildContext context) {
-    return ProviderScope(
-      overrides: overrides,
-      child: MediaQuery(
-        data: MediaQueryData(
-          size: Size(width, 844),
-          textScaler: TextScaler.linear(textScaleFactor),
-        ),
-        child: MaterialApp(home: child),
-      ),
-    );
-  }
 }
 
 class _BookshelfMineNavigationNotifier extends AppShellNavigationNotifier {

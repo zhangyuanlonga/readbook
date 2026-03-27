@@ -43,10 +43,18 @@ class ReaderPreferencesService {
       'reader.settings.pageAnimationStyle';
   static const String _backgroundImageBase64Key =
       'reader.settings.backgroundImageBase64';
+  static const String _bodyTextColorValueKey =
+      'reader.settings.bodyTextColorValue';
+  static const String _bodyTextDecorationStyleKey =
+      'reader.settings.bodyTextDecorationStyle';
+  static const String _bodyTextDecorationColorValueKey =
+      'reader.settings.bodyTextDecorationColorValue';
   static const String _customBackgroundImagesKey =
       'reader.settings.customBackgroundImages';
   static const String _customBackgroundImageBase64Key =
       'reader.settings.customBackgroundImageBase64';
+  static const String _recentBodyTextColorsKey =
+      'reader.settings.recentBodyTextColors';
   static const String _mangaReadModeKey = 'reader.settings.mangaReadMode';
   static const String _mangaImageSpacingKey =
       'reader.settings.mangaImageSpacing';
@@ -139,6 +147,14 @@ class ReaderPreferencesService {
       (item) => item.name == animationName,
       orElse: () => ReaderPageAnimationStyle.curl,
     );
+    final bodyTextDecorationStyleName = prefs.getString(
+      _bodyTextDecorationStyleKey,
+    );
+    final bodyTextDecorationStyle =
+        ReaderBodyTextDecorationStyle.values.firstWhere(
+          (item) => item.name == bodyTextDecorationStyleName,
+          orElse: () => ReaderBodyTextDecorationStyle.none,
+        );
 
     final mangaReadModeName = prefs.getString(_mangaReadModeKey);
     final mangaReadMode = ReaderMangaReadMode.values.firstWhere(
@@ -210,6 +226,11 @@ class ReaderPreferencesService {
       customFontPath: prefs.getString(_customFontPathKey),
       pageAnimationStyle: pageAnimationStyle,
       backgroundImageBase64: prefs.getString(_backgroundImageBase64Key),
+      bodyTextColorValue: prefs.getInt(_bodyTextColorValueKey),
+      bodyTextDecorationStyle: bodyTextDecorationStyle,
+      bodyTextDecorationColorValue: prefs.getInt(
+        _bodyTextDecorationColorValueKey,
+      ),
       mangaReadMode: mangaReadMode,
       mangaImageSpacing: (prefs.getDouble(_mangaImageSpacingKey) ?? 10).clamp(
         0,
@@ -438,6 +459,25 @@ class ReaderPreferencesService {
     } else {
       await prefs.setString(_backgroundImageBase64Key, backgroundImageBase64);
     }
+    final bodyTextColorValue = settings.bodyTextColorValue;
+    if (bodyTextColorValue == null) {
+      await prefs.remove(_bodyTextColorValueKey);
+    } else {
+      await prefs.setInt(_bodyTextColorValueKey, bodyTextColorValue);
+    }
+    await prefs.setString(
+      _bodyTextDecorationStyleKey,
+      settings.bodyTextDecorationStyle.name,
+    );
+    final bodyTextDecorationColorValue = settings.bodyTextDecorationColorValue;
+    if (bodyTextDecorationColorValue == null) {
+      await prefs.remove(_bodyTextDecorationColorValueKey);
+    } else {
+      await prefs.setInt(
+        _bodyTextDecorationColorValueKey,
+        bodyTextDecorationColorValue,
+      );
+    }
   }
 
   Future<List<String>> loadCustomBackgroundImages() async {
@@ -497,6 +537,54 @@ class ReaderPreferencesService {
 
     await prefs.setString(_customBackgroundImagesKey, jsonEncode(normalized));
     await prefs.setString(_customBackgroundImageBase64Key, normalized.first);
+  }
+
+  Future<List<int>> loadRecentBodyTextColors() async {
+    final prefs = await _preferencesFuture;
+    final raw = prefs.getString(_recentBodyTextColorsKey);
+    if (raw == null || raw.trim().isEmpty) {
+      return const <int>[];
+    }
+
+    try {
+      final decoded = jsonDecode(raw);
+      if (decoded is! List) {
+        return const <int>[];
+      }
+      final results = <int>[];
+      for (final entry in decoded) {
+        int? value;
+        if (entry is int) {
+          value = entry;
+        } else if (entry is num) {
+          value = entry.toInt();
+        } else if (entry is String) {
+          value = int.tryParse(entry.trim());
+        }
+        if (value == null || results.contains(value)) {
+          continue;
+        }
+        results.add(value);
+      }
+      return results;
+    } catch (_) {
+      return const <int>[];
+    }
+  }
+
+  Future<void> saveRecentBodyTextColors(List<int> colors) async {
+    final prefs = await _preferencesFuture;
+    final normalized = <int>[];
+    for (final color in colors) {
+      if (!normalized.contains(color)) {
+        normalized.add(color);
+      }
+    }
+    if (normalized.isEmpty) {
+      await prefs.remove(_recentBodyTextColorsKey);
+      return;
+    }
+    await prefs.setString(_recentBodyTextColorsKey, jsonEncode(normalized));
   }
 
   Future<ReadingProgress?> loadProgress(String bookId) async {

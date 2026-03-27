@@ -1,3 +1,5 @@
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 
 import '../../../domain/entities/reader_settings.dart';
@@ -9,6 +11,11 @@ class ReaderTypographyResolver {
     required ReaderSettings settings,
     required Color color,
   }) {
+    final decorationStyle = settings.bodyTextDecorationStyle;
+    final decorationColorValue = settings.bodyTextDecorationColorValue;
+    final decorationEnabled =
+        decorationStyle != ReaderBodyTextDecorationStyle.none;
+
     return TextStyle(
       color: color,
       fontSize: settings.fontSize,
@@ -16,6 +23,17 @@ class ReaderTypographyResolver {
       letterSpacing: settings.letterSpacing,
       fontWeight: _resolveFontWeight(settings.fontWeightLevel),
       fontFamily: _resolveFontFamily(settings),
+      decoration:
+          decorationEnabled ? TextDecoration.underline : TextDecoration.none,
+      decorationStyle: _resolveDecorationStyle(decorationStyle),
+      decorationColor:
+          decorationEnabled
+              ? Color(decorationColorValue ?? color.toARGB32())
+              : null,
+      decorationThickness:
+          decorationEnabled
+              ? _resolveDecorationThickness(settings.fontSize)
+              : null,
     );
   }
 
@@ -36,5 +54,19 @@ class ReaderTypographyResolver {
       return null;
     }
     return family;
+  }
+
+  TextDecorationStyle _resolveDecorationStyle(
+    ReaderBodyTextDecorationStyle style,
+  ) {
+    return switch (style) {
+      ReaderBodyTextDecorationStyle.dashed => TextDecorationStyle.dashed,
+      ReaderBodyTextDecorationStyle.solid ||
+      ReaderBodyTextDecorationStyle.none => TextDecorationStyle.solid,
+    };
+  }
+
+  double _resolveDecorationThickness(double fontSize) {
+    return math.max(2.2, fontSize * 0.14);
   }
 }

@@ -33,7 +33,7 @@ void main() {
       systemSettingsService = ReaderSystemSettingsService();
     });
 
-    testWidgets('keeps empty heatmap sheet wide on compact screens', (
+    testWidgets('在小屏设备上保持空热力图面板足够宽', (
       tester,
     ) async {
       await tester.binding.setSurfaceSize(const Size(390, 844));
@@ -61,7 +61,7 @@ void main() {
       expect(tester.getSize(card).width, greaterThan(300));
     });
 
-    testWidgets('renders without layout exceptions on phone and tablet sizes', (
+    testWidgets('在手机和平板尺寸下渲染时不出现布局异常', (
       tester,
     ) async {
       addTearDown(() => tester.binding.setSurfaceSize(null));

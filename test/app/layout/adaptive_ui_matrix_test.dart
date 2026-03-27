@@ -1,15 +1,15 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'package:flutter_appread/app/layout/app_layout.dart';
 import 'package:flutter_appread/app/shell_scaffold.dart';
 import 'package:flutter_appread/features/book/presentation/widgets/book_detail_primary_actions.dart';
+import '../../test_utils/adaptive_test_harness.dart';
 
 void main() {
   const widths = <double>[320, 360, 390, 430, 480, 600, 840, 1024];
 
-  testWidgets('matrix: sheetHeightFactor on target widths', (tester) async {
+  testWidgets('矩阵测试：sheetHeightFactor 在目标宽度下返回正确结果', (tester) async {
     for (final width in widths) {
       final factor = await _readFromContext<double>(
         tester,
@@ -37,7 +37,7 @@ void main() {
     }
   });
 
-  testWidgets('matrix: detail actions use full copy and icons from 320+', (
+  testWidgets('矩阵测试：书籍详情主操作在 320dp 起保持完整文案和图标', (
     tester,
   ) async {
     for (final width in widths) {
@@ -66,7 +66,7 @@ void main() {
     }
   });
 
-  test('matrix: bookshelf columns on target widths', () {
+  test('矩阵测试：书架列数在目标宽度下符合预期', () {
     final expected = <double, int>{
       320: 3,
       360: 3,
@@ -88,7 +88,7 @@ void main() {
     }
   });
 
-  testWidgets('matrix: shell scaffold smoke test on phone and tablet sizes', (
+  testWidgets('矩阵测试：ShellScaffold 在手机和平板尺寸下可正常渲染', (
     tester,
   ) async {
     const cases = <_ViewportCase>[
@@ -106,10 +106,11 @@ void main() {
 
     for (final item in cases) {
       await tester.pumpWidget(
-        _TestHarness(
+        AdaptiveTestHarness(
           width: item.size.width,
           height: item.size.height,
           dpr: item.dpr,
+          wrapWithMaterialApp: true,
           child: const ShellScaffold(
             location: '/bookshelf',
             child: ColoredBox(color: Colors.white),
@@ -140,8 +141,9 @@ Future<T> _readFromContext<T>(
 }) async {
   T? result;
   await tester.pumpWidget(
-    _TestHarness(
+    AdaptiveTestHarness(
       width: width,
+      wrapWithMaterialApp: true,
       child: Builder(
         builder: (context) {
           result = read(context);
@@ -183,38 +185,4 @@ Future<void> _pumpPrimaryActions(
   await tester.pump();
 }
 
-class _TestHarness extends StatelessWidget {
-  const _TestHarness({
-    required this.width,
-    required this.child,
-    this.height = 844,
-    this.dpr = 3,
-  });
-
-  final double width;
-  final double height;
-  final double dpr;
-  final Widget child;
-
-  @override
-  Widget build(BuildContext context) {
-    return ProviderScope(
-      child: MediaQuery(
-        data: MediaQueryData(size: Size(width, height), devicePixelRatio: dpr),
-        child: MaterialApp(home: child),
-      ),
-    );
-  }
-}
-
-class _ViewportCase {
-  const _ViewportCase({
-    required this.name,
-    required this.size,
-    required this.dpr,
-  });
-
-  final String name;
-  final Size size;
-  final double dpr;
-}
+typedef _ViewportCase = AdaptiveViewportCase;
