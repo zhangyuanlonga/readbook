@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../../../app/widgets/disk_cached_cover_image.dart';
+import '../../../../app/widgets/text_cover_placeholder.dart';
 import '../../../../domain/entities/book.dart';
 
 class SearchBookCard extends StatelessWidget {
@@ -40,7 +41,12 @@ class SearchBookCard extends StatelessWidget {
           child: Row(
             crossAxisAlignment: CrossAxisAlignment.center,
             children: [
-              _CoverPreview(coverUrl: book.coverUrl, heroTag: heroTag),
+              _CoverPreview(
+                coverUrl: book.coverUrl,
+                title: book.title,
+                author: book.author,
+                heroTag: heroTag,
+              ),
               const SizedBox(width: 12),
               Expanded(
                 child: Column(
@@ -125,16 +131,26 @@ class SearchBookCard extends StatelessWidget {
 }
 
 class _CoverPreview extends StatelessWidget {
-  const _CoverPreview({required this.coverUrl, required this.heroTag});
+  const _CoverPreview({
+    required this.coverUrl,
+    required this.title,
+    required this.heroTag,
+    this.author,
+  });
 
   final String? coverUrl;
+  final String title;
+  final String? author;
   final String heroTag;
 
   @override
   Widget build(BuildContext context) {
     final uri = Uri.tryParse(coverUrl ?? '');
     if (uri == null || !uri.hasScheme) {
-      return Hero(tag: heroTag, child: const _CoverFallback());
+      return Hero(
+        tag: heroTag,
+        child: _CoverFallback(title: title, author: author),
+      );
     }
 
     return Hero(
@@ -148,7 +164,7 @@ class _CoverPreview extends StatelessWidget {
           fit: BoxFit.cover,
           cacheWidth: 112,
           cacheHeight: 160,
-          fallback: const _CoverFallback(),
+          fallback: _CoverFallback(title: title, author: author),
         ),
       ),
     );
@@ -156,21 +172,19 @@ class _CoverPreview extends StatelessWidget {
 }
 
 class _CoverFallback extends StatelessWidget {
-  const _CoverFallback();
+  const _CoverFallback({required this.title, this.author});
+
+  final String title;
+  final String? author;
 
   @override
   Widget build(BuildContext context) {
-    final colorScheme = Theme.of(context).colorScheme;
-
-    return Container(
+    return TextCoverPlaceholder(
+      title: title,
+      author: author,
       width: 56,
       height: 80,
-      alignment: Alignment.center,
-      decoration: BoxDecoration(
-        color: colorScheme.surfaceContainerHighest,
-        borderRadius: BorderRadius.circular(8),
-      ),
-      child: Text('封面', style: Theme.of(context).textTheme.labelSmall),
+      borderRadius: BorderRadius.circular(8),
     );
   }
 }

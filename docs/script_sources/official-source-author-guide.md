@@ -12,6 +12,7 @@
 
 相关文档：
 
+- 速查入口：[js-rules-quick-reference.md](./js-rules-quick-reference.md)
 - 规范定义：[source-spec-v1.md](./source-spec-v1.md)
 - 运行时边界：[runtime-ctx-api.md](./runtime-ctx-api.md)
 - 官方模板：[source_template_v1.js](../templates/source_template_v1.js)
@@ -20,8 +21,7 @@
 
 ## 1. 先理解一件事
 
-一个书源，本质上是一个导出默认对象的 JavaScript 文件。  
-这个对象描述了两类内容：
+一个书源，本质上是一个导出默认对象的 JavaScript 文件。这个对象描述了两类内容：
 
 - `meta`：这个书源是谁、来自哪里、支持什么能力
 - 方法：搜索、详情、目录、正文这几个步骤具体怎么跑
@@ -153,6 +153,7 @@ function requestJsonLite(url, options = {}) {
 - 官方主推荐仍然是显式传 `ctx`
 - 简化版依赖运行时注入的全局 `ctx`
 - 两种都支持，但建议在正式模板和长期维护的书源里优先使用显式写法
+
 ### 2.3 一个书源最少要做什么
 
 最少需要保证下面四件事：
@@ -163,6 +164,13 @@ function requestJsonLite(url, options = {}) {
 4. `content` 能返回 `Content`
 
 如果某一步暂时不支持，也建议显式返回空数组、原对象，或直接抛出明确错误，而不是静默失败。
+
+补充说明：
+
+- `ctx.source.id` 是源被用户添加到 App 后，由宿主自动生成并注入的源 ID
+- `Book.id` / `Chapter.id` 是结果对象自己的字段，不是源 ID
+- 如果站点有稳定书籍 / 章节主键，可以显式填写
+- 如果没有稳定主键，可以留空，把后续真正要用的参数放进 `extra`
 
 ### 2.4 推荐开发顺序
 
@@ -244,7 +252,6 @@ export default {
     const items = doc.querySelectorAll('.book-item');
 
     return ctx.html.collect(items, (item, index) => ({
-      id: item.getAttribute('data-id') || String(index),
       title: ctx.html.text(item.querySelector('.title')),
       author: ctx.html.text(item.querySelector('.author')),
       detailUrl: ctx.utils.absoluteUrl(
@@ -295,7 +302,6 @@ export default {
     const nodes = doc.querySelectorAll('.chapter-list a');
 
     return ctx.html.collect(nodes, (node, index) => ({
-      id: node.getAttribute('data-id') || String(index),
       title: ctx.html.text(node),
       url: ctx.utils.absoluteUrl(book.detailUrl, node.getAttribute('href') || ''),
       index,
@@ -410,7 +416,6 @@ rateLimits: {
 
 ```js
 {
-  id: 'book-id',
   title: '书名',
   author: '作者',
   cover: 'https://...',
@@ -431,7 +436,7 @@ rateLimits: {
 
 字段建议：
 
-- `id`：源内唯一 ID，尽量稳定
+- `id`：可选的源内唯一 ID；站点有稳定主键时填写，没有可留空
 - `title`：书名
 - `author`：作者
 - `cover`：封面 URL
@@ -464,6 +469,12 @@ rateLimits: {
 }
 ```
 
+字段建议：
+
+- `id`：可选的章节唯一 ID；站点有稳定主键时填写，没有可留空
+- `url`：章节页 URL 或正文接口地址
+- `extra`：继续透传章节请求真正需要的参数，例如 `chapterId`
+
 ### 5.3 Content
 
 ```js
@@ -480,7 +491,7 @@ rateLimits: {
 
 ### 5.4 `extra` 应该放什么
 
-`extra` 用于跨步骤传递站点内部上下文。  
+`extra` 用于跨步骤传递站点内部上下文。
 它的原则是：只放后续步骤确实需要的关键参数。
 
 适合放：
@@ -516,7 +527,7 @@ rateLimits: {
 
 ## 6. 每个方法该负责什么
 
-这一节是整份手册最重要的部分。  
+这一节是整份手册最重要的部分。
 你可以把它理解成“书源作者的职责边界”。
 
 ### 6.1 `init(ctx, task)`：初始化，可选
@@ -2292,14 +2303,15 @@ const cookies = ctx.session.cookies();
 推荐理解：
 
 - `ctx.session`
+
   - 偏“当前源的运行时会话状态”
   - 更适合放：
     - 初始化标记
     - 登录态
     - token
     - 浏览器 challenge 后继承的状态
-
 - `ctx.cache`
+
   - 偏“可重复利用的业务结果”
   - 更适合放：
     - 搜索结果
@@ -3265,8 +3277,7 @@ if (ctx.http.isChallenge(response)) {
 }
 ```
 
-不推荐一上来就把所有请求都放到浏览器里跑。  
-原因是：
+不推荐一上来就把所有请求都放到浏览器里跑。原因是：
 
 - 调试更慢
 - 失败定位更难
@@ -3340,27 +3351,27 @@ if (!response.ok) {
 
 ### 12.1 把 `meta` 当成业务配置中心
 
-不建议。  
+不建议。
 `meta` 主要是展示信息，不应塞入一堆流程控制字段。
 
 ### 12.2 把站点私有字段直接挂在顶层
 
-不建议。  
+不建议。
 站点私有字段统一放 `extra`，这样标准对象更稳定。
 
 ### 12.3 在 `init` 里做所有事情
 
-不建议。  
+不建议。
 `init` 是初始化，不是把整个业务链路提前执行一遍。
 
 ### 12.4 所有站点都默认需要浏览器
 
-不建议。  
+不建议。
 优先尝试 `ctx.http`，只有确实需要时再升级到 `ctx.browser`。
 
 ### 12.5 在 `extra` 里存整页 HTML
 
-不建议。  
+不建议。
 这会让对象过重，也会增加调试和维护成本。
 
 ---

@@ -4,9 +4,9 @@ import 'package:go_router/go_router.dart';
 import '../../../app/layout/app_layout.dart';
 import '../../../app/layout/app_spacing.dart';
 import '../../../app/widgets/disk_cached_cover_image.dart';
+import '../../../app/widgets/text_cover_placeholder.dart';
 import '../../../core/cache/cover_image_disk_cache.dart';
 import '../../../data/datasources/local/app_database.dart';
-import '../../../domain/entities/bookshelf_book.dart';
 import '../../bookshelf/application/bookshelf_service.dart';
 
 class CacheManagementPage extends StatefulWidget {
@@ -18,17 +18,64 @@ class CacheManagementPage extends StatefulWidget {
 
 class _CacheManagementPageState extends State<CacheManagementPage> {
   final BookshelfService _bookshelfService = BookshelfService();
-  late final Future<Map<String, BookshelfBook>> _bookshelfIndexFuture;
+  late Future<Map<String, _CachedBookPresentation>>
+  _bookPresentationIndexFuture;
 
   @override
   void initState() {
     super.initState();
-    _bookshelfIndexFuture = _buildBookshelfIndex();
+    _bookPresentationIndexFuture = _buildBookPresentationIndex();
   }
 
-  Future<Map<String, BookshelfBook>> _buildBookshelfIndex() async {
+  Future<Map<String, _CachedBookPresentation>>
+  _buildBookPresentationIndex() async {
     final items = await _bookshelfService.getAll();
-    return <String, BookshelfBook>{for (final item in items) item.bookId: item};
+    final records = await AppDatabase.instance.listLatestReadingRecords();
+    final result = <String, _CachedBookPresentation>{};
+
+    for (final record in records) {
+      final bookId = record.bookId.trim();
+      if (bookId.isEmpty) {
+        continue;
+      }
+      final title = record.bookTitle.trim();
+      result[bookId] = _CachedBookPresentation(
+        title: title.isEmpty ? null : title,
+        author: record.bookAuthor?.trim(),
+        coverUrl: record.coverUrl?.trim(),
+        inBookshelf: false,
+      );
+    }
+
+    for (final item in items) {
+      final bookId = item.bookId.trim();
+      if (bookId.isEmpty) {
+        continue;
+      }
+      result[bookId] = _CachedBookPresentation(
+        title:
+            item.title.trim().isEmpty
+                ? result[bookId]?.title
+                : item.title.trim(),
+        author:
+            item.author?.trim().isNotEmpty == true
+                ? item.author!.trim()
+                : result[bookId]?.author,
+        coverUrl:
+            item.coverUrl?.trim().isNotEmpty == true
+                ? item.coverUrl!.trim()
+                : result[bookId]?.coverUrl,
+        inBookshelf: true,
+      );
+    }
+
+    return result;
+  }
+
+  void _reloadBookPresentationIndex() {
+    setState(() {
+      _bookPresentationIndexFuture = _buildBookPresentationIndex();
+    });
   }
 
   @override
@@ -56,9 +103,7 @@ class _CacheManagementPageState extends State<CacheManagementPage> {
           actions: [
             IconButton(
               onPressed: () {
-                setState(() {
-                  // force rebuild; stream will re-emit if DB changed.
-                });
+                _reloadBookPresentationIndex();
               },
               tooltip: '刷新',
               icon: const Icon(Icons.refresh_rounded),
@@ -83,11 +128,12 @@ class _CacheManagementPageState extends State<CacheManagementPage> {
                     horizontal,
                     12 + bottomSafe,
                   ),
-                  child: FutureBuilder<Map<String, BookshelfBook>>(
-                    future: _bookshelfIndexFuture,
+                  child: FutureBuilder<Map<String, _CachedBookPresentation>>(
+                    future: _bookPresentationIndexFuture,
                     builder: (context, snapshot) {
-                      final bookshelfIndex =
-                          snapshot.data ?? const <String, BookshelfBook>{};
+                      final presentationIndex =
+                          snapshot.data ??
+                          const <String, _CachedBookPresentation>{};
 
                       return StreamBuilder<List<ChapterCacheBookSummary>>(
                         stream: AppDatabase.instance.watchCachedBooks(),
@@ -120,7 +166,7 @@ class _CacheManagementPageState extends State<CacheManagementPage> {
                                 child: _buildCacheList(
                                   context,
                                   summaries: summaries,
-                                  bookshelfIndex: bookshelfIndex,
+                                  presentationIndex: presentationIndex,
                                 ),
                               ),
                             ],
@@ -222,7 +268,7 @@ class _CacheManagementPageState extends State<CacheManagementPage> {
   Widget _buildCacheList(
     BuildContext context, {
     required List<ChapterCacheBookSummary> summaries,
-    required Map<String, BookshelfBook> bookshelfIndex,
+    required Map<String, _CachedBookPresentation> presentationIndex,
   }) {
     if (summaries.isEmpty) {
       return Card(
@@ -249,17 +295,24 @@ class _CacheManagementPageState extends State<CacheManagementPage> {
       separatorBuilder: (_, __) => const SizedBox(height: 10),
       itemBuilder: (context, index) {
         final summary = summaries[index];
-        final bookshelfBook = bookshelfIndex[summary.bookId];
+        final presentation = presentationIndex[summary.bookId];
 
-        final title = bookshelfBook?.title ?? summary.bookId;
+        final rawTitle = presentation?.title?.trim() ?? '';
+        final title = rawTitle.isNotEmpty ? rawTitle : '未知书籍';
         final subtitle =
-            bookshelfBook == null
-                ? '已缓存 ${summary.cachedCount} 章 · 书籍未加入书架'
-                : '已缓存 ${summary.cachedCount} 章';
+            presentation == null
+                ? '已缓存 ${summary.cachedCount} 章 · 缺少书籍信息'
+                : presentation.inBookshelf
+                ? '已缓存 ${summary.cachedCount} 章'
+                : '已缓存 ${summary.cachedCount} 章 · 书籍已从书架移除';
 
         return Card(
           child: ListTile(
-            leading: _buildCover(bookshelfBook?.coverUrl, title),
+            leading: _buildCover(
+              presentation?.coverUrl,
+              title,
+              author: presentation?.author,
+            ),
             title: Text(title, maxLines: 1, overflow: TextOverflow.ellipsis),
             subtitle: Text(
               subtitle,
@@ -268,17 +321,17 @@ class _CacheManagementPageState extends State<CacheManagementPage> {
             ),
             trailing: IconButton(
               tooltip: '清理本书缓存',
-              onPressed: () => _confirmClearBook(summary, bookshelfBook),
+              onPressed: () => _confirmClearBook(summary, presentation),
               icon: const Icon(Icons.delete_outline_rounded),
             ),
-            onTap: () => _confirmClearBook(summary, bookshelfBook),
+            onTap: () => _confirmClearBook(summary, presentation),
           ),
         );
       },
     );
   }
 
-  Widget _buildCover(String? coverUrl, String title) {
+  Widget _buildCover(String? coverUrl, String title, {String? author}) {
     final uri = Uri.tryParse(coverUrl ?? '');
     if (uri != null && uri.hasScheme) {
       return ClipRRect(
@@ -288,32 +341,21 @@ class _CacheManagementPageState extends State<CacheManagementPage> {
           width: 42,
           height: 56,
           fit: BoxFit.cover,
-          fallback: _buildCoverFallback(title),
+          fallback: _buildCoverFallback(title, author: author),
         ),
       );
     }
 
-    return _buildCoverFallback(title);
+    return _buildCoverFallback(title, author: author);
   }
 
-  Widget _buildCoverFallback(String title) {
-    final colorScheme = Theme.of(context).colorScheme;
-
-    return Container(
+  Widget _buildCoverFallback(String title, {String? author}) {
+    return TextCoverPlaceholder(
+      title: title,
+      author: author,
       width: 42,
       height: 56,
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(12),
-        color: colorScheme.surfaceContainerHighest,
-      ),
-      alignment: Alignment.center,
-      child: Text(
-        title.isNotEmpty ? title.characters.first : '书',
-        style: TextStyle(
-          fontWeight: FontWeight.w700,
-          color: colorScheme.onSurfaceVariant,
-        ),
-      ),
+      borderRadius: BorderRadius.circular(12),
     );
   }
 
@@ -356,9 +398,12 @@ class _CacheManagementPageState extends State<CacheManagementPage> {
 
   Future<void> _confirmClearBook(
     ChapterCacheBookSummary summary,
-    BookshelfBook? bookshelfBook,
+    _CachedBookPresentation? presentation,
   ) async {
-    final title = bookshelfBook?.title ?? summary.bookId;
+    final title =
+        presentation?.title?.trim().isNotEmpty == true
+            ? presentation!.title!.trim()
+            : '未知书籍';
 
     final confirmed = await showDialog<bool>(
       context: context,
@@ -388,7 +433,7 @@ class _CacheManagementPageState extends State<CacheManagementPage> {
 
     await AppDatabase.instance.deleteChapterCachesByBookId(summary.bookId);
     final clearedCover = await CoverImageDiskCache.instance.clearByUrl(
-      bookshelfBook?.coverUrl ?? '',
+      presentation?.coverUrl ?? '',
     );
 
     if (!mounted) {
@@ -401,4 +446,18 @@ class _CacheManagementPageState extends State<CacheManagementPage> {
       ),
     );
   }
+}
+
+class _CachedBookPresentation {
+  const _CachedBookPresentation({
+    this.title,
+    this.author,
+    this.coverUrl,
+    required this.inBookshelf,
+  });
+
+  final String? title;
+  final String? author;
+  final String? coverUrl;
+  final bool inBookshelf;
 }

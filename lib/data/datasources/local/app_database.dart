@@ -90,6 +90,7 @@ class StoredLocalChapters extends Table {
   TextColumn get title => text()();
   TextColumn get content => text()();
   TextColumn get imageUrlsJson => text().withDefault(const Constant('[]'))();
+  TextColumn get sourceRef => text().nullable()();
   IntColumn get startOffset => integer().nullable()();
   IntColumn get endOffset => integer().nullable()();
   DateTimeColumn get createdAt => dateTime().withDefault(currentDateAndTime)();
@@ -330,7 +331,7 @@ class AppDatabase extends _$AppDatabase {
   static final AppDatabase instance = AppDatabase();
 
   @override
-  int get schemaVersion => 16;
+  int get schemaVersion => 17;
 
   static const String _mangaSourceMatcherSql =
       '(raw_json LIKE \'%"sourceType":2,%\' OR '
@@ -495,6 +496,18 @@ class AppDatabase extends _$AppDatabase {
         }
         if (from < 16) {
           await migrator.createTable(storedScriptSources);
+        }
+        if (from < 17) {
+          await _addColumnIfMissing(
+            migrator: migrator,
+            tableName: storedLocalChapters.tableName,
+            columnName: 'source_ref',
+            addColumn:
+                () => migrator.addColumn(
+                  storedLocalChapters,
+                  storedLocalChapters.sourceRef,
+                ),
+          );
         }
       },
     );
@@ -1472,13 +1485,17 @@ class AppDatabase extends _$AppDatabase {
             final normalizedTitle = chapter.title.trim();
             final normalizedContent = chapter.content.trim();
             final hasImages = chapter.imageUrls.isNotEmpty;
+            final hasSourceRef = (chapter.sourceRef?.trim().isNotEmpty ?? false);
             final hasExternalRange =
                 chapter.startOffset != null &&
                 chapter.endOffset != null &&
                 chapter.endOffset! > chapter.startOffset!;
             return normalizedId.isNotEmpty &&
                 normalizedTitle.isNotEmpty &&
-                (normalizedContent.isNotEmpty || hasExternalRange || hasImages);
+                (normalizedContent.isNotEmpty ||
+                    hasExternalRange ||
+                    hasImages ||
+                    hasSourceRef);
           })
           .toList(growable: false);
 
@@ -1497,6 +1514,7 @@ class AppDatabase extends _$AppDatabase {
                 title: Value(normalizedTitle),
                 content: Value(chapter.content),
                 imageUrlsJson: Value(jsonEncode(chapter.imageUrls)),
+                sourceRef: Value(chapter.sourceRef),
                 startOffset: Value(chapter.startOffset),
                 endOffset: Value(chapter.endOffset),
                 createdAt: Value(chapter.createdAt),
@@ -1547,6 +1565,7 @@ class AppDatabase extends _$AppDatabase {
             storedLocalChapters.chapterIndex,
             storedLocalChapters.title,
             storedLocalChapters.imageUrlsJson,
+            storedLocalChapters.sourceRef,
             storedLocalChapters.startOffset,
             storedLocalChapters.endOffset,
             storedLocalChapters.createdAt,
@@ -1568,6 +1587,7 @@ class AppDatabase extends _$AppDatabase {
             imageUrls: _decodeStringList(
               row.read(storedLocalChapters.imageUrlsJson),
             ),
+            sourceRef: row.read(storedLocalChapters.sourceRef),
             createdAt: row.read(storedLocalChapters.createdAt)!,
             updatedAt: row.read(storedLocalChapters.updatedAt)!,
             startOffset: row.read(storedLocalChapters.startOffset),
@@ -1615,6 +1635,25 @@ class AppDatabase extends _$AppDatabase {
     }
 
     return _mapRowToLocalChapter(row);
+  }
+
+  Future<void> updateLocalChapterContent({
+    required String chapterId,
+    required String content,
+    List<String> imageUrls = const <String>[],
+  }) async {
+    final normalizedChapterId = chapterId.trim();
+    if (normalizedChapterId.isEmpty) {
+      return;
+    }
+    await (update(storedLocalChapters)
+      ..where((table) => table.id.equals(normalizedChapterId))).write(
+      StoredLocalChaptersCompanion(
+        content: Value(content),
+        imageUrlsJson: Value(jsonEncode(imageUrls)),
+        updatedAt: Value(DateTime.now()),
+      ),
+    );
   }
 
   Future<void> deleteLocalBook(String bookId) async {
@@ -2120,6 +2159,7 @@ class AppDatabase extends _$AppDatabase {
       title: row.title,
       content: row.content,
       imageUrls: _decodeStringList(row.imageUrlsJson),
+      sourceRef: row.sourceRef,
       createdAt: row.createdAt,
       updatedAt: row.updatedAt,
       startOffset: row.startOffset,

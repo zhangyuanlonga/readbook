@@ -294,6 +294,7 @@ import UniformTypeIdentifiers
     }
   }
 
+
   private func classifyPayloadType(
     url: URL,
     mimeType: String?

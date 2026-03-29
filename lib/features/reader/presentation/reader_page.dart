@@ -21,6 +21,7 @@ import 'package:uuid/uuid.dart';
 import '../../../app/layout/app_layout.dart';
 import '../../../app/layout/app_spacing.dart';
 import '../../../app/theme/app_theme.dart';
+import '../../../app/theme/app_theme_palette.dart';
 import '../../../app/widgets/switch_source_candidate_sheet.dart';
 
 import '../../../core/errors/app_exception.dart';
@@ -59,6 +60,7 @@ import '../application/source_content_provider.dart';
 import '../application/source_switch_score_service.dart';
 import '../application/switch_source_shared.dart';
 import '../application/switch_source_position_resolver.dart';
+import '../application/local/local_book_storage_service.dart';
 import 'chapter_cache_sheets.dart';
 
 enum _ReaderSettingsTab { interface, reading }
@@ -103,6 +105,8 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
       const ReaderTypographyResolver();
   final ReaderSystemSettingsService _systemSettingsService =
       ReaderSystemSettingsService();
+  final LocalBookStorageService _localBookStorageService =
+      LocalBookStorageService();
   final ReaderErrorCenterService _readerErrorCenterService =
       ReaderErrorCenterService.instance;
   final ReadingRecordService _readingRecordService = ReadingRecordService();
@@ -281,7 +285,6 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
   static const double _kCurlPreviewStartThreshold = 8;
   static const double _kCoverEdgeShadowWidth = 20;
   static const double _kCoverEdgeShadowMaxAlpha = 0.22;
-  static const double _kDarkBackgroundOverlayAlpha = 0.45;
   static const double _kOverlayScrimMaxAlpha = 0.14;
   static const Duration _kOverlayControlsShowDuration = Duration(
     milliseconds: 280,
@@ -827,12 +830,12 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
               children: [
                 Positioned.fill(child: _buildBackgroundLayer(colors)),
                 Positioned.fill(child: _buildReaderContent(colors)),
-                if (_settings.brightness < 0.99)
+                if (_readerBrightnessOverlayAlpha() > 0.001)
                   Positioned.fill(
                     child: IgnorePointer(
                       child: ColoredBox(
                         color: Colors.black.withValues(
-                          alpha: (1 - _settings.brightness) * 0.6,
+                          alpha: _readerBrightnessOverlayAlpha(),
                         ),
                       ),
                     ),
@@ -846,6 +849,40 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
           ),
         ),
       ),
+    );
+  }
+
+  double _readerBrightnessOverlayAlpha() {
+    final alpha = (1 - _settings.brightness) * 0.6;
+    final hasBackgroundImage =
+        _settings.backgroundImageBase64?.trim().isNotEmpty ?? false;
+    if (!hasBackgroundImage) {
+      return alpha;
+    }
+    // Keep dimming available, but don't let it flatten background images.
+    return alpha * 0.18;
+  }
+
+  void _debugLogReaderBackground(String tag, ReaderSettings settings) {
+    final raw = settings.backgroundImageBase64?.trim();
+    final hasBackgroundImage = raw != null && raw.isNotEmpty;
+    final isManaged = _isManagedBackgroundPath(raw);
+    final fileExists =
+        isManaged
+            ? (raw!.startsWith('file://')
+                ? File(Uri.parse(raw).toFilePath()).existsSync()
+                : File(raw).existsSync())
+            : null;
+    debugPrint(
+      '[reader-bg][$tag] image=$raw '
+      'hasImage=$hasBackgroundImage '
+      'isManaged=$isManaged '
+      'fileExists=$fileExists '
+      'style=${settings.backgroundStyle.name} '
+      'tone=${settings.backgroundTone.name} '
+      'mode=${settings.themeMode.name} '
+      'brightness=${settings.brightness.toStringAsFixed(3)} '
+      'overlayAlpha=${_readerBrightnessOverlayAlpha().toStringAsFixed(3)}',
     );
   }
 
@@ -910,27 +947,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
   }
 
   Widget _buildBackgroundLayer(_ReaderThemeColors colors) {
-    final hasBackgroundImage =
-        _settings.backgroundImageBase64?.trim().isNotEmpty ?? false;
-    final decoration = _buildReaderBackgroundDecoration(colors);
-    if (_settings.themeMode != ReaderThemeMode.dark || !hasBackgroundImage) {
-      return DecoratedBox(decoration: decoration);
-    }
-
-    return Stack(
-      children: [
-        Positioned.fill(child: DecoratedBox(decoration: decoration)),
-        Positioned.fill(
-          child: IgnorePointer(
-            child: ColoredBox(
-              color: Colors.black.withValues(
-                alpha: _kDarkBackgroundOverlayAlpha,
-              ),
-            ),
-          ),
-        ),
-      ],
-    );
+    return DecoratedBox(decoration: _buildReaderBackgroundDecoration(colors));
   }
 
   Widget _buildChapterLoadingIndicator(_ReaderThemeColors colors) {
@@ -1026,19 +1043,10 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
       return null;
     }
 
-    if (_backgroundPresetBytes.containsKey(raw)) {
+    if (_isPresetBackgroundAssetPath(raw)) {
       _cachedBackgroundImageKey = null;
       _cachedBackgroundImage = null;
-      return DecorationImage(
-        image: AssetImage(raw),
-        fit: BoxFit.cover,
-        colorFilter: ColorFilter.mode(
-          Colors.black.withValues(
-            alpha: _settings.themeMode == ReaderThemeMode.dark ? 0.12 : 0.08,
-          ),
-          BlendMode.darken,
-        ),
-      );
+      return DecorationImage(image: AssetImage(raw), fit: BoxFit.cover);
     }
 
     if (_isManagedBackgroundPath(raw)) {
@@ -1051,16 +1059,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
         _cachedBackgroundImage = null;
         return null;
       }
-      return DecorationImage(
-        image: FileImage(file),
-        fit: BoxFit.cover,
-        colorFilter: ColorFilter.mode(
-          Colors.black.withValues(
-            alpha: _settings.themeMode == ReaderThemeMode.dark ? 0.12 : 0.08,
-          ),
-          BlendMode.darken,
-        ),
-      );
+      return DecorationImage(image: FileImage(file), fit: BoxFit.cover);
     }
 
     if (_cachedBackgroundImageKey != raw || _cachedBackgroundImage == null) {
@@ -1074,16 +1073,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
       _cachedBackgroundImage = MemoryImage(bytes);
     }
 
-    return DecorationImage(
-      image: _cachedBackgroundImage!,
-      fit: BoxFit.cover,
-      colorFilter: ColorFilter.mode(
-        Colors.black.withValues(
-          alpha: _settings.themeMode == ReaderThemeMode.dark ? 0.12 : 0.08,
-        ),
-        BlendMode.darken,
-      ),
-    );
+    return DecorationImage(image: _cachedBackgroundImage!, fit: BoxFit.cover);
   }
 
   Uint8List? _tryDecodeBase64(String? value) {
@@ -1116,8 +1106,25 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
     if (normalized.isEmpty) {
       return false;
     }
-    return _backgroundPresetBytes.containsKey(normalized) ||
+    return _isPresetBackgroundAssetPath(normalized) ||
+        _backgroundPresetBytes.containsKey(normalized) ||
         _backgroundPresetBase64.values.contains(normalized);
+  }
+
+  bool _isPresetBackgroundAssetPath(String? value) {
+    final normalized = value?.trim() ?? '';
+    if (normalized.isEmpty) {
+      return false;
+    }
+    if (_kFallbackBackgroundPresetPaths.contains(normalized)) {
+      return true;
+    }
+    for (final preset in _backgroundPresets) {
+      if (preset.assetPath == normalized) {
+        return true;
+      }
+    }
+    return normalized.startsWith('assets/reader/backgrounds/');
   }
 
   Future<void> _preloadCustomBackgroundPreviews(List<String> sources) async {
@@ -1459,6 +1466,56 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
     return '电量 --';
   }
 
+  Future<void> _copyLocalReaderDiagnostics() async {
+    final localBook = await AppDatabase.instance.getLocalBookById(
+      _currentBookId,
+    );
+    final sourcePath = localBook?.sourcePath?.trim() ?? '';
+    final storagePath = localBook?.storagePath.trim() ?? '';
+    final resolvedStoragePath =
+        localBook == null
+            ? storagePath
+            : await _localBookStorageService.resolveStoragePath(
+              localBook.storagePath,
+            );
+    final sourceExists =
+        sourcePath.isNotEmpty ? await File(sourcePath).exists() : false;
+    final storageExists =
+        resolvedStoragePath.isNotEmpty
+            ? await File(resolvedStoragePath).exists()
+            : false;
+    final content = [
+      '本地图书正文诊断',
+      'bookId: $_currentBookId',
+      'chapterId: $_chapterId',
+      'chapterTitle: ${_chapterTitle ?? ''}',
+      'sourceId: ${_sourceId ?? ''}',
+      'detailUrl: ${_detailUrl ?? ''}',
+      'title: $_bookTitle',
+      'error: ${_errorText ?? ''}',
+      if (localBook != null) ...[
+        'format: ${localBook.format.name}',
+        'indexStatus: ${localBook.indexStatus.name}',
+        'chapterCount: ${localBook.chapterCount}',
+        'charset: ${localBook.charset ?? ''}',
+        'sourceFile: ${sourcePath.isEmpty ? '未记录' : sourcePath}',
+        'sourceExists: $sourceExists',
+        'storageFile: ${storagePath.isEmpty ? '未记录' : storagePath}',
+        if (resolvedStoragePath.isNotEmpty &&
+            resolvedStoragePath != storagePath)
+          'resolvedStorageFile: $resolvedStoragePath',
+        'storageExists: $storageExists',
+        if ((localBook.lastError?.trim().isNotEmpty ?? false))
+          'lastError: ${localBook.lastError!.trim()}',
+      ],
+    ].join('\n');
+    await Clipboard.setData(ClipboardData(text: content));
+    if (!mounted) {
+      return;
+    }
+    _showMessage('已复制本地图书诊断信息。');
+  }
+
   Future<void> _refreshReaderInfoSnapshot({bool force = false}) async {
     final now = DateTime.now();
 
@@ -1539,6 +1596,12 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
                         : () => _loadCurrentChapter(initialScrollRatio: null),
                 child: const Text('重试'),
               ),
+              if (_isLocalContent)
+                OutlinedButton.icon(
+                  onPressed: _copyLocalReaderDiagnostics,
+                  icon: const Icon(Icons.copy_rounded, size: 16),
+                  label: const Text('复制诊断信息'),
+                ),
               if (canSwitchSource)
                 OutlinedButton.icon(
                   onPressed:
@@ -1787,9 +1850,12 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
     return RepaintBoundary(
       child: Padding(
         padding: EdgeInsets.only(bottom: paddingBottom),
-        child: Text(
-          _applyParagraphIndent(paragraph),
-          style: textStyle,
+        child: Text.rich(
+          _buildParagraphDisplayTextSpan(
+            displayText: _applyParagraphIndent(paragraph),
+            indentLength: _paragraphIndentLength(),
+            baseStyle: textStyle,
+          ),
           textAlign: _paragraphTextAlign(_settings),
         ),
       ),
@@ -1855,7 +1921,11 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
                       baseStyle: textStyle,
                       colors: colors,
                     )
-                    : TextSpan(text: displayText, style: textStyle);
+                    : _buildParagraphDisplayTextSpan(
+                      displayText: displayText,
+                      indentLength: indentLength,
+                      baseStyle: textStyle,
+                    );
 
             final needsPainter = wavyRanges.isNotEmpty;
             final textPainter =
@@ -2075,12 +2145,24 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
     required _ReaderThemeColors colors,
   }) {
     if (ranges.isEmpty) {
-      return TextSpan(text: displayText, style: baseStyle);
+      return _buildParagraphDisplayTextSpan(
+        displayText: displayText,
+        indentLength: indentLength,
+        baseStyle: baseStyle,
+      );
     }
 
     final merged = _mergeBookmarkRanges(ranges);
     final spans = <TextSpan>[];
-    var cursor = 0;
+    if (indentLength > 0) {
+      spans.add(
+        TextSpan(
+          text: displayText.substring(0, indentLength),
+          style: _paragraphIndentTextStyle(baseStyle),
+        ),
+      );
+    }
+    var cursor = indentLength;
     for (final range in merged) {
       final start = _clampInt(
         range.start + indentLength,
@@ -2118,7 +2200,36 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
       );
     }
 
-    return TextSpan(children: spans);
+    return TextSpan(style: baseStyle, children: spans);
+  }
+
+  TextStyle _paragraphIndentTextStyle(TextStyle baseStyle) {
+    return baseStyle.copyWith(
+      decoration: TextDecoration.none,
+      decorationStyle: TextDecorationStyle.solid,
+      decorationColor: null,
+      decorationThickness: null,
+    );
+  }
+
+  TextSpan _buildParagraphDisplayTextSpan({
+    required String displayText,
+    required int indentLength,
+    required TextStyle baseStyle,
+  }) {
+    if (indentLength <= 0 || indentLength >= displayText.length) {
+      return TextSpan(text: displayText, style: baseStyle);
+    }
+    return TextSpan(
+      style: baseStyle,
+      children: [
+        TextSpan(
+          text: displayText.substring(0, indentLength),
+          style: _paragraphIndentTextStyle(baseStyle),
+        ),
+        TextSpan(text: displayText.substring(indentLength)),
+      ],
+    );
   }
 
   List<_BookmarkRange> _mergeBookmarkRanges(List<_BookmarkRange> ranges) {
@@ -3433,6 +3544,28 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
     return _settings.pageAnimationStyle;
   }
 
+  bool _currentChapterHasInlineImageParagraphs() {
+    return _paragraphs.any(_isInlineImageParagraph);
+  }
+
+  String? _pageAnimationInactiveReason({
+    ReaderPageTurnMode? modeOverride,
+    bool? isMangaChapterOverride,
+  }) {
+    final isMangaChapter = isMangaChapterOverride ?? _isMangaChapter;
+    if (isMangaChapter) {
+      return '当前章节为图片阅读内容，正文分页动画不会生效。';
+    }
+    final effectiveMode = modeOverride ?? _settings.pageTurnMode;
+    if (_pageTurnUsesScroll(effectiveMode)) {
+      return '滚动触发模式下不使用分页动画。';
+    }
+    if (_currentChapterHasInlineImageParagraphs()) {
+      return '当前章节包含插图，已退回滚动正文，本章不会展示分页动画。';
+    }
+    return null;
+  }
+
   _PagedAnimationMotionSpec _pageSwitchMotionSpecForStyle(
     ReaderPageAnimationStyle style,
   ) {
@@ -3658,6 +3791,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
     required int pageIndex,
     required Size pageSize,
     required EdgeInsets padding,
+    bool includeBackgroundDecoration = false,
   }) {
     return KeyedSubtree(
       key: ValueKey<int>(pageIndex),
@@ -3666,6 +3800,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
         pageIndex: pageIndex,
         pageSize: pageSize,
         padding: padding,
+        includeBackgroundDecoration: includeBackgroundDecoration,
       ),
     );
   }
@@ -3688,6 +3823,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
         pageIndex: safeIndex,
         pageSize: pagedSize,
         padding: contentPadding,
+        includeBackgroundDecoration: true,
       );
     }
 
@@ -3700,6 +3836,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
         pageIndex: safeIndex,
         pageSize: pagedSize,
         padding: contentPadding,
+        includeBackgroundDecoration: true,
       );
     }
 
@@ -3709,6 +3846,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
         pageIndex: _pagedTransition.fromIndex,
         pageSize: pagedSize,
         padding: contentPadding,
+        includeBackgroundDecoration: true,
       ),
     );
     final toPage = SelectionContainer.disabled(
@@ -3717,6 +3855,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
         pageIndex: _pagedTransition.toIndex,
         pageSize: pagedSize,
         padding: contentPadding,
+        includeBackgroundDecoration: true,
       ),
     );
     final effectRenderer = _resolvePagedAnimationEffectRenderer(animationStyle);
@@ -3822,31 +3961,35 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
     required int pageIndex,
     required Size pageSize,
     required EdgeInsets padding,
+    bool includeBackgroundDecoration = false,
   }) {
     final pages = _pagedPages;
     if (pageIndex < 0 || pageIndex >= pages.length) {
       return const SizedBox.shrink();
     }
 
+    final content = Column(
+      children: [
+        SelectionContainer.disabled(child: _buildPinnedChapterHeader(colors)),
+        Expanded(
+          child: Padding(
+            padding: padding,
+            child: _buildPagedPage(colors: colors, page: pages[pageIndex]),
+          ),
+        ),
+      ],
+    );
+
     return SizedBox(
       width: pageSize.width,
       height: pageSize.height,
-      child: DecoratedBox(
-        decoration: _buildReaderBackgroundDecoration(colors),
-        child: Column(
-          children: [
-            SelectionContainer.disabled(
-              child: _buildPinnedChapterHeader(colors),
-            ),
-            Expanded(
-              child: Padding(
-                padding: padding,
-                child: _buildPagedPage(colors: colors, page: pages[pageIndex]),
-              ),
-            ),
-          ],
-        ),
-      ),
+      child:
+          includeBackgroundDecoration
+              ? DecoratedBox(
+                decoration: _buildReaderBackgroundDecoration(colors),
+                child: content,
+              )
+              : content,
     );
   }
 
@@ -3937,7 +4080,11 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
                   baseStyle: textStyle,
                   colors: colors,
                 )
-                : TextSpan(text: displayText, style: textStyle);
+                : _buildParagraphDisplayTextSpan(
+                  displayText: displayText,
+                  indentLength: indentLength,
+                  baseStyle: textStyle,
+                );
 
         final wavyRanges = <_WavyRange>[];
         if (mergedRanges.isNotEmpty) {
@@ -4136,31 +4283,35 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
     required int pageIndex,
     required Size pageSize,
     required EdgeInsets padding,
+    bool includeBackgroundDecoration = false,
   }) {
     final pages = _pagedPages;
     if (pageIndex < 0 || pageIndex >= pages.length) {
       return const SizedBox.shrink();
     }
 
+    final content = Column(
+      children: [
+        SelectionContainer.disabled(child: _buildPinnedChapterHeader(colors)),
+        Expanded(
+          child: Padding(
+            padding: padding,
+            child: _buildPagedPage(colors: colors, page: pages[pageIndex]),
+          ),
+        ),
+      ],
+    );
+
     return SizedBox(
       width: pageSize.width,
       height: pageSize.height,
-      child: DecoratedBox(
-        decoration: _buildReaderBackgroundDecoration(colors),
-        child: Column(
-          children: [
-            SelectionContainer.disabled(
-              child: _buildPinnedChapterHeader(colors),
-            ),
-            Expanded(
-              child: Padding(
-                padding: padding,
-                child: _buildPagedPage(colors: colors, page: pages[pageIndex]),
-              ),
-            ),
-          ],
-        ),
-      ),
+      child:
+          includeBackgroundDecoration
+              ? DecoratedBox(
+                decoration: _buildReaderBackgroundDecoration(colors),
+                child: content,
+              )
+              : content,
     );
   }
 
@@ -4195,6 +4346,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
         pageIndex: _curlAnimationToIndex,
         pageSize: pagedSize,
         padding: contentPadding,
+        includeBackgroundDecoration: true,
       ),
     );
     final currentPage = SelectionContainer.disabled(
@@ -4203,6 +4355,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
         pageIndex: _curlAnimationFromIndex,
         pageSize: pagedSize,
         padding: contentPadding,
+        includeBackgroundDecoration: true,
       ),
     );
 
@@ -4991,13 +5144,52 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
     );
   }
 
+  Color _effectiveBodyTextColorForSettings(
+    _ReaderThemeColors colors,
+    ReaderSettings settings,
+  ) {
+    final customColorValue = settings.bodyTextColorValue;
+    return customColorValue == null ? colors.text : Color(customColorValue);
+  }
+
+  TextStyle _previewBodyTextStyleForSettings(
+    _ReaderThemeColors colors,
+    ReaderSettings settings,
+  ) {
+    return _typographyResolver.resolveBodyStyle(
+      settings: settings,
+      color: _effectiveBodyTextColorForSettings(colors, settings),
+    );
+  }
+
+  List<({String label, Color color})> _bodyDecorationColorPresets(
+    _ReaderThemeColors colors,
+    ReaderSettings settings,
+  ) {
+    final textColor = _effectiveBodyTextColorForSettings(colors, settings);
+    return <({String label, Color color})>[
+      (label: '跟随字色', color: textColor),
+      (label: '主题主色', color: Theme.of(context).colorScheme.primary),
+      (label: '辅助信息', color: colors.meta),
+      (label: '分隔线', color: colors.divider),
+    ];
+  }
+
   Future<int?> _showBodyTextDecorationColorPickerDialog(
     BuildContext context, {
     int? initialColorValue,
+    required ReaderSettings previewSettings,
   }) async {
+    final previewColors = _resolveThemeColors(
+      previewSettings.themeMode,
+      previewSettings,
+    );
     Color draftColor = Color(
       initialColorValue ??
-          _resolveThemeColors(_settings.themeMode, _settings).text.toARGB32(),
+          _effectiveBodyTextColorForSettings(
+            previewColors,
+            previewSettings,
+          ).toARGB32(),
     );
 
     return showDialog<int>(
@@ -5025,17 +5217,37 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
                       ),
                       child: Text(
                         '正文预览：山高月小，水落石出。',
-                        style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                          color: _paragraphTextStyle(
-                            _resolveThemeColors(_settings.themeMode, _settings),
-                          ).color,
-                          decoration: TextDecoration.underline,
-                          decorationStyle: TextDecorationStyle.dashed,
-                          decorationColor: preview,
-                          decorationThickness: 2.2,
-                          height: 1.6,
+                        style: _previewBodyTextStyleForSettings(
+                          previewColors,
+                          previewSettings.copyWith(
+                            bodyTextDecorationColorValue: preview.toARGB32(),
+                          ),
                         ),
                       ),
+                    ),
+                    const SizedBox(height: 12),
+                    Wrap(
+                      spacing: 8,
+                      runSpacing: 8,
+                      children: _bodyDecorationColorPresets(
+                            previewColors,
+                            previewSettings,
+                          )
+                          .map((preset) {
+                            final selected =
+                                preset.color.toARGB32() ==
+                                draftColor.toARGB32();
+                            return ChoiceChip(
+                              label: Text(preset.label),
+                              selected: selected,
+                              onSelected: (_) {
+                                setDialogState(() {
+                                  draftColor = preset.color;
+                                });
+                              },
+                            );
+                          })
+                          .toList(growable: false),
                     ),
                     const SizedBox(height: 12),
                     ColorPicker(
@@ -5063,9 +5275,9 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
                 ),
                 FilledButton(
                   onPressed:
-                      () => Navigator.of(dialogContext).pop(
-                        draftColor.toARGB32(),
-                      ),
+                      () => Navigator.of(
+                        dialogContext,
+                      ).pop(draftColor.toARGB32()),
                   child: const Text('应用'),
                 ),
               ],
@@ -5082,6 +5294,32 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
       ReaderBodyTextDecorationStyle.solid => '实线',
       ReaderBodyTextDecorationStyle.dashed => '虚线',
     };
+  }
+
+  Widget _buildBodyDecorationPreviewChip({
+    required BuildContext context,
+    required ReaderSettings settings,
+  }) {
+    final colors = _resolveThemeColors(settings.themeMode, settings);
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      decoration: BoxDecoration(
+        color: Theme.of(context).colorScheme.surface,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(
+          color: Theme.of(
+            context,
+          ).colorScheme.outlineVariant.withValues(alpha: 0.4),
+        ),
+      ),
+      child: Text(
+        settings.bodyTextDecorationStyle == ReaderBodyTextDecorationStyle.none
+            ? '当前未启用字线'
+            : '正文预览：山高月小，水落石出。',
+        style: _previewBodyTextStyleForSettings(colors, settings),
+      ),
+    );
   }
 
   Future<int?> _showBodyTextColorPickerDialog(
@@ -6454,7 +6692,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
       false => _settings.copyWith(
         themeMode: ReaderThemeMode.dark,
         backgroundStyle: ReaderBackgroundStyle.plain,
-        backgroundTone: ReaderBackgroundTone.containerHigh,
+        backgroundTone: ReaderBackgroundTone.pureBlack,
         clearBackgroundImage: true,
       ),
     };
@@ -6637,6 +6875,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
       }
 
       final bootSettings = normalizedSettings.copyWith(autoReadEnabled: false);
+      _debugLogReaderBackground('bootstrap', bootSettings);
       if (mounted) {
         setState(() {
           _settings = bootSettings;
@@ -6773,6 +7012,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
         setState(() {
           _isBootstrapping = false;
         });
+        unawaited(_syncVolumeKeyPageInterception());
         _scheduleReadingRecordSessionStart(initialRatio: _currentScrollRatio());
         _reconcileAutoRead(restart: true);
       }
@@ -8686,6 +8926,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
         setState(() {
           _isLoadingContent = false;
         });
+        unawaited(_syncVolumeKeyPageInterception());
         if (readingRecordStartRatio != null) {
           _scheduleReadingRecordSessionStart(
             initialRatio: readingRecordStartRatio,
@@ -11099,6 +11340,21 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
                 });
               }
 
+              Future<void> persistBackgroundDraftNow(
+                ReaderSettings nextDraft,
+              ) async {
+                if (mounted) {
+                  setState(() {
+                    _settings = nextDraft;
+                  });
+                  unawaited(_syncVolumeKeyPageInterception());
+                } else {
+                  _settings = nextDraft;
+                }
+                _debugLogReaderBackground('persist', nextDraft);
+                await persistDraftNow(nextDraft);
+              }
+
               Future<void> applyCustomBackgroundImage() async {
                 final storedPath = await _pickBackgroundImagePath();
                 if (storedPath == null || !context.mounted) {
@@ -11122,6 +11378,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
                   _customBackgroundImages = nextCustoms;
                 });
                 updateCustomBackgrounds(nextCustoms);
+                await persistBackgroundDraftNow(draft);
                 for (final removedSource in removedSources) {
                   unawaited(
                     _deleteManagedBackgroundFileIfNeeded(removedSource),
@@ -11129,7 +11386,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
                 }
               }
 
-              void applyStoredCustomBackground(String source) {
+              Future<void> applyStoredCustomBackground(String source) async {
                 final normalized = source.trim();
                 if (normalized.isEmpty) {
                   return;
@@ -11137,9 +11394,10 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
                 setModalState(() {
                   draft = draft.copyWith(backgroundImageBase64: normalized);
                 });
+                await persistBackgroundDraftNow(draft);
               }
 
-              void removeActiveBackground() {
+              Future<void> removeActiveBackground() async {
                 final active = draft.backgroundImageBase64?.trim();
                 final isActivePreset =
                     active != null &&
@@ -11149,6 +11407,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
                 setModalState(() {
                   draft = draft.copyWith(clearBackgroundImage: true);
                 });
+                await persistBackgroundDraftNow(draft);
 
                 if (active != null &&
                     active.isNotEmpty &&
@@ -12269,11 +12528,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
                             backgroundImageBase64: preset.assetPath,
                           );
                         });
-                        if (mounted) {
-                          setState(() {
-                            _settings = draft;
-                          });
-                        }
+                        unawaited(persistBackgroundDraftNow(draft));
                       },
                     ),
                   ),
@@ -12303,7 +12558,8 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
                           previewBytes == null
                               ? Icons.broken_image_outlined
                               : null,
-                      onTap: () => applyStoredCustomBackground(source),
+                      onTap:
+                          () => unawaited(applyStoredCustomBackground(source)),
                     ),
                   ),
                 );
@@ -12323,6 +12579,10 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
               );
               final disablePageAnimationSelection =
                   !isMangaChapter && _pageTurnUsesScroll(draft.pageTurnMode);
+              final pageAnimationInactiveReason = _pageAnimationInactiveReason(
+                modeOverride: draft.pageTurnMode,
+                isMangaChapterOverride: isMangaChapter,
+              );
               Widget buildPageAnimationSelector() {
                 return SingleChildScrollView(
                   scrollDirection: Axis.horizontal,
@@ -12683,89 +12943,23 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
                         child: SingleChildScrollView(
                           scrollDirection: Axis.horizontal,
                           child: Row(
-                            children: [
-                              _buildThemeColorDot(
-                                draft: draft,
-                                color: const Color(0xFFFDFDFD),
-                                label: '明亮',
-                                mode: ReaderThemeMode.light,
-                                backgroundStyle: ReaderBackgroundStyle.plain,
-                                backgroundTone: ReaderBackgroundTone.surface,
-                                onChanged: (next) {
-                                  setModalState(() {
-                                    draft = next;
-                                  });
-                                },
-                              ),
-                              _buildThemeColorDot(
-                                draft: draft,
-                                color: const Color(0xFFF7EEDC),
-                                label: '护眼',
-                                mode: ReaderThemeMode.sepia,
-                                backgroundStyle: ReaderBackgroundStyle.warm,
-                                backgroundTone: ReaderBackgroundTone.container,
-                                onChanged: (next) {
-                                  setModalState(() {
-                                    draft = next;
-                                  });
-                                },
-                              ),
-                              _buildThemeColorDot(
-                                draft: draft,
-                                color: const Color(0xFFE8EDF5),
-                                label: '浅灰',
-                                mode: ReaderThemeMode.light,
-                                backgroundStyle: ReaderBackgroundStyle.paper,
-                                backgroundTone:
-                                    ReaderBackgroundTone.containerHigh,
-                                onChanged: (next) {
-                                  setModalState(() {
-                                    draft = next;
-                                  });
-                                },
-                              ),
-                              _buildThemeColorDot(
-                                draft: draft,
-                                color: const Color(0xFF242831),
-                                label: '夜间',
-                                mode: ReaderThemeMode.dark,
-                                backgroundStyle: ReaderBackgroundStyle.plain,
-                                backgroundTone:
-                                    ReaderBackgroundTone.containerHigh,
-                                onChanged: (next) {
-                                  setModalState(() {
-                                    draft = next;
-                                  });
-                                },
-                              ),
-                              _buildThemeColorDot(
-                                draft: draft,
-                                color: const Color(0xFF16181D),
-                                label: '深夜',
-                                mode: ReaderThemeMode.dark,
-                                backgroundStyle: ReaderBackgroundStyle.plain,
-                                backgroundTone:
-                                    ReaderBackgroundTone.containerHighest,
-                                onChanged: (next) {
-                                  setModalState(() {
-                                    draft = next;
-                                  });
-                                },
-                              ),
-                              _buildThemeColorDot(
-                                draft: draft,
-                                color: const Color(0xFF000000),
-                                label: '纯黑',
-                                mode: ReaderThemeMode.dark,
-                                backgroundStyle: ReaderBackgroundStyle.plain,
-                                backgroundTone: ReaderBackgroundTone.pureBlack,
-                                onChanged: (next) {
-                                  setModalState(() {
-                                    draft = next;
-                                  });
-                                },
-                              ),
-                            ],
+                            children: _readerBackgroundColorOptions()
+                                .map(
+                                  (option) => _buildThemeColorDot(
+                                    draft: draft,
+                                    color: option.previewColor,
+                                    label: option.label,
+                                    mode: option.mode,
+                                    backgroundStyle: option.backgroundStyle,
+                                    backgroundTone: option.backgroundTone,
+                                    onChanged: (next) {
+                                      setModalState(() {
+                                        draft = next;
+                                      });
+                                    },
+                                  ),
+                                )
+                                .toList(growable: false),
                           ),
                         ),
                       ),
@@ -12889,6 +13083,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
                                         clearBackgroundImage: true,
                                       );
                                     });
+                                    unawaited(persistBackgroundDraftNow(draft));
                                   },
                                 ),
                                 const SizedBox(width: 8),
@@ -12904,7 +13099,9 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
                                 if (hasBackgroundImage) ...[
                                   const SizedBox(width: 8),
                                   OutlinedButton(
-                                    onPressed: removeActiveBackground,
+                                    onPressed:
+                                        () =>
+                                            unawaited(removeActiveBackground()),
                                     child: const Text('移除'),
                                   ),
                                 ],
@@ -12991,11 +13188,11 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            if (_pageTurnUsesScroll(draft.pageTurnMode))
+                            if (pageAnimationInactiveReason != null)
                               Padding(
                                 padding: const EdgeInsets.only(bottom: 6),
                                 child: Text(
-                                  '滚动触发模式下不使用分页动画',
+                                  pageAnimationInactiveReason,
                                   style: Theme.of(
                                     context,
                                   ).textTheme.labelSmall?.copyWith(
@@ -13128,69 +13325,74 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
                         context: context,
                         label: '字线',
                         labelWidth: 46,
-                        child: Wrap(
-                          spacing: 8,
-                          runSpacing: 8,
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            buildSummaryAction(
-                              icon: Icons.format_underlined_rounded,
-                              label: '样式',
-                              value: _bodyTextDecorationStyleLabel(draft),
-                              onTap: () async {
-                                if (!context.mounted) {
-                                  return;
-                                }
-                                await showModalBottomSheet<void>(
-                                  context: context,
-                                  showDragHandle: true,
-                                  useSafeArea: true,
-                                  backgroundColor:
-                                      readerModalTheme.colorScheme.surface,
-                                  builder: (sheetContext) {
-                                    return Padding(
-                                      padding: const EdgeInsets.fromLTRB(
-                                        16,
-                                        6,
-                                        16,
-                                        16,
-                                      ),
-                                      child: Column(
-                                        mainAxisSize: MainAxisSize.min,
-                                        crossAxisAlignment:
-                                            CrossAxisAlignment.stretch,
-                                        children: [
-                                          Text(
-                                            '字线样式',
-                                            textAlign: TextAlign.center,
-                                            style: Theme.of(sheetContext)
-                                                .textTheme
-                                                .titleMedium
-                                                ?.copyWith(
-                                                  fontWeight: FontWeight.w700,
-                                                ),
+                            Wrap(
+                              spacing: 8,
+                              runSpacing: 8,
+                              children: [
+                                buildSummaryAction(
+                                  icon: Icons.format_underlined_rounded,
+                                  label: '样式',
+                                  value: _bodyTextDecorationStyleLabel(draft),
+                                  onTap: () async {
+                                    if (!context.mounted) {
+                                      return;
+                                    }
+                                    await showModalBottomSheet<void>(
+                                      context: context,
+                                      showDragHandle: true,
+                                      useSafeArea: true,
+                                      backgroundColor:
+                                          readerModalTheme.colorScheme.surface,
+                                      builder: (sheetContext) {
+                                        return Padding(
+                                          padding: const EdgeInsets.fromLTRB(
+                                            16,
+                                            6,
+                                            16,
+                                            16,
                                           ),
-                                          const SizedBox(height: 10),
-                                          Wrap(
-                                            spacing: 8,
-                                            runSpacing: 8,
-                                            alignment: WrapAlignment.center,
-                                            children:
-                                                ReaderBodyTextDecorationStyle
+                                          child: Column(
+                                            mainAxisSize: MainAxisSize.min,
+                                            crossAxisAlignment:
+                                                CrossAxisAlignment.stretch,
+                                            children: [
+                                              Text(
+                                                '字线样式',
+                                                textAlign: TextAlign.center,
+                                                style: Theme.of(sheetContext)
+                                                    .textTheme
+                                                    .titleMedium
+                                                    ?.copyWith(
+                                                      fontWeight:
+                                                          FontWeight.w700,
+                                                    ),
+                                              ),
+                                              const SizedBox(height: 10),
+                                              Wrap(
+                                                spacing: 8,
+                                                runSpacing: 8,
+                                                alignment: WrapAlignment.center,
+                                                children: ReaderBodyTextDecorationStyle
                                                     .values
                                                     .map(
                                                       (style) => ChoiceChip(
-                                                        label: Text(
-                                                          switch (style) {
-                                                            ReaderBodyTextDecorationStyle.none =>
-                                                              '无',
-                                                            ReaderBodyTextDecorationStyle.solid =>
-                                                              '实线',
-                                                            ReaderBodyTextDecorationStyle.dashed =>
-                                                              '虚线',
-                                                          },
-                                                        ),
+                                                        label: Text(switch (style) {
+                                                          ReaderBodyTextDecorationStyle
+                                                              .none =>
+                                                            '无',
+                                                          ReaderBodyTextDecorationStyle
+                                                              .solid =>
+                                                            '实线',
+                                                          ReaderBodyTextDecorationStyle
+                                                              .dashed =>
+                                                            '虚线',
+                                                        }),
                                                         selected:
-                                                            draft.bodyTextDecorationStyle ==
+                                                            draft
+                                                                .bodyTextDecorationStyle ==
                                                             style,
                                                         onSelected: (_) {
                                                           setModalState(() {
@@ -13209,79 +13411,92 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
                                                       ),
                                                     )
                                                     .toList(growable: false),
+                                              ),
+                                            ],
                                           ),
-                                        ],
-                                      ),
+                                        );
+                                      },
                                     );
                                   },
-                                );
-                              },
-                            ),
-                            buildSummaryAction(
-                              icon: Icons.colorize_rounded,
-                              label: '颜色',
-                              value:
-                                  draft.bodyTextDecorationColorValue == null
-                                      ? '跟随字色'
-                                      : '自定义',
-                              onTap: () async {
-                                if (draft.bodyTextDecorationStyle ==
-                                    ReaderBodyTextDecorationStyle.none) {
-                                  _showMessage('请先启用字线样式。');
-                                  return;
-                                }
-                                final selectedColor =
-                                    await _showBodyTextDecorationColorPickerDialog(
-                                      context,
-                                      initialColorValue:
-                                          draft.bodyTextDecorationColorValue,
-                                    );
-                                if (selectedColor == null || !context.mounted) {
-                                  return;
-                                }
-                                setModalState(() {
-                                  draft = draft.copyWith(
-                                    bodyTextDecorationColorValue:
-                                        selectedColor,
-                                  );
-                                });
-                              },
-                            ),
-                            if (draft.bodyTextDecorationColorValue != null)
-                              Tooltip(
-                                message: '跟随字色',
-                                child: GestureDetector(
-                                  onTap: () {
+                                ),
+                                buildSummaryAction(
+                                  icon: Icons.colorize_rounded,
+                                  label: '颜色',
+                                  value:
+                                      draft.bodyTextDecorationColorValue == null
+                                          ? '跟随主题'
+                                          : '自定义',
+                                  onTap: () async {
+                                    if (draft.bodyTextDecorationStyle ==
+                                        ReaderBodyTextDecorationStyle.none) {
+                                      _showMessage('请先启用字线样式。');
+                                      return;
+                                    }
+                                    final selectedColor =
+                                        await _showBodyTextDecorationColorPickerDialog(
+                                          context,
+                                          initialColorValue:
+                                              draft
+                                                  .bodyTextDecorationColorValue,
+                                          previewSettings: draft,
+                                        );
+                                    if (selectedColor == null ||
+                                        !context.mounted) {
+                                      return;
+                                    }
                                     setModalState(() {
                                       draft = draft.copyWith(
-                                        clearBodyTextDecorationColor: true,
+                                        bodyTextDecorationColorValue:
+                                            selectedColor,
                                       );
                                     });
                                   },
-                                  child: Container(
-                                    width: 30,
-                                    height: 30,
-                                    decoration: BoxDecoration(
-                                      color: Theme.of(context)
-                                          .colorScheme
-                                          .surfaceContainerHighest,
-                                      shape: BoxShape.circle,
-                                      border: Border.all(
-                                        color: Theme.of(context)
-                                            .colorScheme
-                                            .outlineVariant,
+                                ),
+                                if (draft.bodyTextDecorationColorValue != null)
+                                  Tooltip(
+                                    message: '跟随主题',
+                                    child: GestureDetector(
+                                      onTap: () {
+                                        setModalState(() {
+                                          draft = draft.copyWith(
+                                            clearBodyTextDecorationColor: true,
+                                          );
+                                        });
+                                      },
+                                      child: Container(
+                                        width: 30,
+                                        height: 30,
+                                        decoration: BoxDecoration(
+                                          color:
+                                              Theme.of(context)
+                                                  .colorScheme
+                                                  .surfaceContainerHighest,
+                                          shape: BoxShape.circle,
+                                          border: Border.all(
+                                            color:
+                                                Theme.of(
+                                                  context,
+                                                ).colorScheme.outlineVariant,
+                                          ),
+                                        ),
+                                        child: Icon(
+                                          Icons.restart_alt_rounded,
+                                          size: 14,
+                                          color:
+                                              Theme.of(
+                                                context,
+                                              ).colorScheme.onSurfaceVariant,
+                                        ),
                                       ),
                                     ),
-                                    child: Icon(
-                                      Icons.restart_alt_rounded,
-                                      size: 14,
-                                      color: Theme.of(context)
-                                          .colorScheme
-                                          .onSurfaceVariant,
-                                    ),
                                   ),
-                                ),
-                              ),
+                              ],
+                            ),
+                            const SizedBox(height: 10),
+                            _buildBodyDecorationPreviewChip(
+                              context: context,
+                              settings: draft,
+                            ),
                           ],
                         ),
                       ),
@@ -13811,104 +14026,31 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
                                         child: SingleChildScrollView(
                                           scrollDirection: Axis.horizontal,
                                           child: Row(
-                                            children: [
-                                              _buildThemeColorDot(
-                                                draft: draft,
-                                                color: const Color(0xFFFDFDFD),
-                                                label: '明亮',
-                                                mode: ReaderThemeMode.light,
-                                                backgroundStyle:
-                                                    ReaderBackgroundStyle.plain,
-                                                backgroundTone:
-                                                    ReaderBackgroundTone
-                                                        .surface,
-                                                onChanged: (next) {
-                                                  setModalState(() {
-                                                    draft = next;
-                                                  });
-                                                },
-                                              ),
-                                              _buildThemeColorDot(
-                                                draft: draft,
-                                                color: const Color(0xFFF7EEDC),
-                                                label: '护眼',
-                                                mode: ReaderThemeMode.sepia,
-                                                backgroundStyle:
-                                                    ReaderBackgroundStyle.warm,
-                                                backgroundTone:
-                                                    ReaderBackgroundTone
-                                                        .container,
-                                                onChanged: (next) {
-                                                  setModalState(() {
-                                                    draft = next;
-                                                  });
-                                                },
-                                              ),
-                                              _buildThemeColorDot(
-                                                draft: draft,
-                                                color: const Color(0xFFE8EDF5),
-                                                label: '浅灰',
-                                                mode: ReaderThemeMode.light,
-                                                backgroundStyle:
-                                                    ReaderBackgroundStyle.paper,
-                                                backgroundTone:
-                                                    ReaderBackgroundTone
-                                                        .containerHigh,
-                                                onChanged: (next) {
-                                                  setModalState(() {
-                                                    draft = next;
-                                                  });
-                                                },
-                                              ),
-                                              _buildThemeColorDot(
-                                                draft: draft,
-                                                color: const Color(0xFF242831),
-                                                label: '夜间',
-                                                mode: ReaderThemeMode.dark,
-                                                backgroundStyle:
-                                                    ReaderBackgroundStyle.plain,
-                                                backgroundTone:
-                                                    ReaderBackgroundTone
-                                                        .containerHigh,
-                                                onChanged: (next) {
-                                                  setModalState(() {
-                                                    draft = next;
-                                                  });
-                                                },
-                                              ),
-                                              _buildThemeColorDot(
-                                                draft: draft,
-                                                color: const Color(0xFF16181D),
-                                                label: '深夜',
-                                                mode: ReaderThemeMode.dark,
-                                                backgroundStyle:
-                                                    ReaderBackgroundStyle.plain,
-                                                backgroundTone:
-                                                    ReaderBackgroundTone
-                                                        .containerHighest,
-                                                onChanged: (next) {
-                                                  setModalState(() {
-                                                    draft = next;
-                                                  });
-                                                },
-                                              ),
-                                              _buildThemeColorDot(
-                                                draft: draft,
-                                                color: const Color(0xFF000000),
-                                                label: '纯黑',
-                                                mode: ReaderThemeMode.dark,
-                                                backgroundStyle:
-                                                    ReaderBackgroundStyle.plain,
-                                                backgroundTone:
-                                                    ReaderBackgroundTone
-                                                        .pureBlack,
-                                                onChanged: (next) {
-                                                  setModalState(() {
-                                                    draft = next;
-                                                  });
-                                                },
-                                              ),
-                                            ],
+                                            children:
+                                                _readerBackgroundColorOptions()
+                                                    .map(
+                                                      (
+                                                        option,
+                                                      ) => _buildThemeColorDot(
+                                                        draft: draft,
+                                                        color:
+                                                            option.previewColor,
+                                                        label: option.label,
+                                                        mode: option.mode,
+                                                        backgroundStyle:
+                                                            option
+                                                                .backgroundStyle,
+                                                        backgroundTone:
+                                                            option
+                                                                .backgroundTone,
+                                                        onChanged: (next) {
+                                                          setModalState(() {
+                                                            draft = next;
+                                                          });
+                                                        },
+                                                      ),
+                                                    )
+                                                    .toList(growable: false),
                                           ),
                                         ),
                                       ),
@@ -13938,6 +14080,11 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
                                                             true,
                                                       );
                                                     });
+                                                    unawaited(
+                                                      persistBackgroundDraftNow(
+                                                        draft,
+                                                      ),
+                                                    );
                                                   },
                                                 ),
                                                 const SizedBox(width: 8),
@@ -13956,7 +14103,9 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
                                                   const SizedBox(width: 8),
                                                   OutlinedButton(
                                                     onPressed:
-                                                        removeActiveBackground,
+                                                        () => unawaited(
+                                                          removeActiveBackground(),
+                                                        ),
                                                     child: const Text('移除'),
                                                   ),
                                                 ],
@@ -14244,16 +14393,14 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
                                           crossAxisAlignment:
                                               CrossAxisAlignment.start,
                                           children: [
-                                            if (!isMangaChapter &&
-                                                _pageTurnUsesScroll(
-                                                  draft.pageTurnMode,
-                                                ))
+                                            if (pageAnimationInactiveReason !=
+                                                null)
                                               Padding(
                                                 padding: const EdgeInsets.only(
                                                   bottom: 6,
                                                 ),
                                                 child: Text(
-                                                  '滚动触发模式下不使用分页动画',
+                                                  pageAnimationInactiveReason,
                                                   style: Theme.of(context)
                                                       .textTheme
                                                       .labelSmall
@@ -14496,118 +14643,28 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
                                                     Wrap(
                                                       spacing: 8,
                                                       runSpacing: 8,
-                                                      children: [
-                                                        ChoiceChip(
-                                                          label: const Text(
-                                                            '日间',
+                                                      children: _readerBackgroundColorOptions()
+                                                          .map(
+                                                            (
+                                                              option,
+                                                            ) => _buildBackgroundColorChoiceChip(
+                                                              draft: draft,
+                                                              option: option,
+                                                              onChanged: (
+                                                                next,
+                                                              ) {
+                                                                setModalState(
+                                                                  () {
+                                                                    draft =
+                                                                        next;
+                                                                  },
+                                                                );
+                                                              },
+                                                            ),
+                                                          )
+                                                          .toList(
+                                                            growable: false,
                                                           ),
-                                                          selected:
-                                                              draft.themeMode ==
-                                                                  ReaderThemeMode
-                                                                      .light &&
-                                                              draft.backgroundStyle ==
-                                                                  ReaderBackgroundStyle
-                                                                      .plain,
-                                                          onSelected: (_) {
-                                                            setModalState(() {
-                                                              draft = draft.copyWith(
-                                                                themeMode:
-                                                                    ReaderThemeMode
-                                                                        .light,
-                                                                backgroundStyle:
-                                                                    ReaderBackgroundStyle
-                                                                        .plain,
-                                                                backgroundTone:
-                                                                    ReaderBackgroundTone
-                                                                        .surface,
-                                                                clearBackgroundImage:
-                                                                    true,
-                                                              );
-                                                            });
-                                                          },
-                                                        ),
-                                                        ChoiceChip(
-                                                          label: const Text(
-                                                            '护眼',
-                                                          ),
-                                                          selected:
-                                                              draft.themeMode ==
-                                                              ReaderThemeMode
-                                                                  .sepia,
-                                                          onSelected: (_) {
-                                                            setModalState(() {
-                                                              draft = draft.copyWith(
-                                                                themeMode:
-                                                                    ReaderThemeMode
-                                                                        .sepia,
-                                                                backgroundStyle:
-                                                                    ReaderBackgroundStyle
-                                                                        .warm,
-                                                                backgroundTone:
-                                                                    ReaderBackgroundTone
-                                                                        .container,
-                                                                clearBackgroundImage:
-                                                                    true,
-                                                              );
-                                                            });
-                                                          },
-                                                        ),
-                                                        ChoiceChip(
-                                                          label: const Text(
-                                                            '夜间',
-                                                          ),
-                                                          selected:
-                                                              draft.themeMode ==
-                                                              ReaderThemeMode
-                                                                  .dark,
-                                                          onSelected: (_) {
-                                                            setModalState(() {
-                                                              draft = draft.copyWith(
-                                                                themeMode:
-                                                                    ReaderThemeMode
-                                                                        .dark,
-                                                                backgroundStyle:
-                                                                    ReaderBackgroundStyle
-                                                                        .plain,
-                                                                backgroundTone:
-                                                                    ReaderBackgroundTone
-                                                                        .containerHigh,
-                                                                clearBackgroundImage:
-                                                                    true,
-                                                              );
-                                                            });
-                                                          },
-                                                        ),
-                                                        ChoiceChip(
-                                                          label: const Text(
-                                                            '纯黑',
-                                                          ),
-                                                          selected:
-                                                              draft.themeMode ==
-                                                                  ReaderThemeMode
-                                                                      .dark &&
-                                                              draft.backgroundTone ==
-                                                                  ReaderBackgroundTone
-                                                                      .pureBlack,
-                                                          onSelected: (_) {
-                                                            setModalState(() {
-                                                              draft = draft.copyWith(
-                                                                themeMode:
-                                                                    ReaderThemeMode
-                                                                        .dark,
-                                                                backgroundStyle:
-                                                                    ReaderBackgroundStyle
-                                                                        .plain,
-                                                                backgroundTone:
-                                                                    ReaderBackgroundTone
-                                                                        .pureBlack,
-                                                                clearBackgroundImage:
-                                                                    true,
-                                                              );
-                                                            });
-                                                          },
-                                                        ),
-                                                      ],
                                                     ),
                                                     const SizedBox(height: 10),
                                                     Text(
@@ -15035,6 +15092,148 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
     );
   }
 
+  List<_ReaderBackgroundColorOption> _readerBackgroundColorOptions() {
+    return <_ReaderBackgroundColorOption>[
+      _createReaderBackgroundColorOption(
+        label: '明亮',
+        mode: ReaderThemeMode.light,
+        backgroundStyle: ReaderBackgroundStyle.plain,
+        backgroundTone: ReaderBackgroundTone.surface,
+      ),
+      _createReaderBackgroundColorOption(
+        label: '护眼',
+        mode: ReaderThemeMode.sepia,
+        backgroundStyle: ReaderBackgroundStyle.warm,
+        backgroundTone: ReaderBackgroundTone.container,
+      ),
+      _createReaderBackgroundColorOption(
+        label: '浅灰',
+        mode: ReaderThemeMode.light,
+        backgroundStyle: ReaderBackgroundStyle.paper,
+        backgroundTone: ReaderBackgroundTone.containerHigh,
+      ),
+      _createReaderThemePaletteBackgroundColorOption(
+        themeOption: appThemeFlameOrangeOption,
+        backgroundTone: ReaderBackgroundTone.flameOrangeTint,
+      ),
+      _createReaderThemePaletteBackgroundColorOption(
+        themeOption: appThemePineGreenOption,
+        backgroundTone: ReaderBackgroundTone.pineGreenTint,
+      ),
+      _createReaderThemePaletteBackgroundColorOption(
+        themeOption: appThemeSeaBlueOption,
+        backgroundTone: ReaderBackgroundTone.seaBlueTint,
+      ),
+      _createReaderThemePaletteBackgroundColorOption(
+        themeOption: appThemeNightPurpleOption,
+        backgroundTone: ReaderBackgroundTone.nightPurpleTint,
+      ),
+      _createReaderThemePaletteBackgroundColorOption(
+        themeOption: appThemeMistTealOption,
+        backgroundTone: ReaderBackgroundTone.mistTealTint,
+      ),
+      _createReaderThemePaletteBackgroundColorOption(
+        themeOption: appThemeBerryRoseOption,
+        backgroundTone: ReaderBackgroundTone.berryRoseTint,
+      ),
+      _createReaderThemePaletteBackgroundColorOption(
+        themeOption: appThemeAmberGoldOption,
+        backgroundTone: ReaderBackgroundTone.amberGoldTint,
+      ),
+      _createReaderBackgroundColorOption(
+        label: '夜间',
+        mode: ReaderThemeMode.dark,
+        backgroundStyle: ReaderBackgroundStyle.plain,
+        backgroundTone: ReaderBackgroundTone.pureBlack,
+      ),
+    ];
+  }
+
+  _ReaderBackgroundColorOption _createReaderBackgroundColorOption({
+    required String label,
+    required ReaderThemeMode mode,
+    required ReaderBackgroundStyle backgroundStyle,
+    required ReaderBackgroundTone backgroundTone,
+  }) {
+    final previewSettings = ReaderSettings(
+      themeMode: mode,
+      backgroundStyle: backgroundStyle,
+      backgroundTone: backgroundTone,
+    );
+    final previewColors = _resolveThemeColors(mode, previewSettings);
+    return _ReaderBackgroundColorOption(
+      label: label,
+      previewColor: previewColors.background,
+      mode: mode,
+      backgroundStyle: backgroundStyle,
+      backgroundTone: backgroundTone,
+    );
+  }
+
+  _ReaderBackgroundColorOption _createReaderThemePaletteBackgroundColorOption({
+    required AppThemeSeedOption themeOption,
+    required ReaderBackgroundTone backgroundTone,
+  }) {
+    return _createReaderBackgroundColorOption(
+      label: themeOption.label,
+      mode: ReaderThemeMode.light,
+      backgroundStyle: ReaderBackgroundStyle.paper,
+      backgroundTone: backgroundTone,
+    );
+  }
+
+  ReaderSettings _applyReaderBackgroundColorOption(
+    ReaderSettings settings,
+    _ReaderBackgroundColorOption option,
+  ) {
+    return settings.copyWith(
+      themeMode: option.mode,
+      backgroundStyle: option.backgroundStyle,
+      backgroundTone: option.backgroundTone,
+      clearBackgroundImage: true,
+    );
+  }
+
+  bool _isReaderBackgroundColorOptionSelected(
+    ReaderSettings settings,
+    _ReaderBackgroundColorOption option,
+  ) {
+    final normalizedTone = normalizeReaderBackgroundTone(
+      mode: settings.themeMode,
+      tone: settings.backgroundTone,
+    );
+    return settings.themeMode == option.mode &&
+        settings.backgroundStyle == option.backgroundStyle &&
+        normalizedTone == option.backgroundTone;
+  }
+
+  Widget _buildBackgroundColorChoiceChip({
+    required ReaderSettings draft,
+    required _ReaderBackgroundColorOption option,
+    required ValueChanged<ReaderSettings> onChanged,
+  }) {
+    return ChoiceChip(
+      label: Text(option.label),
+      selected: _isReaderBackgroundColorOptionSelected(draft, option),
+      onSelected: (_) {
+        onChanged(_applyReaderBackgroundColorOption(draft, option));
+      },
+    );
+  }
+
+  Color? _readerPaletteSeedColorForTone(ReaderBackgroundTone tone) {
+    return switch (tone) {
+      ReaderBackgroundTone.flameOrangeTint => appThemeFlameOrangeOption.color,
+      ReaderBackgroundTone.pineGreenTint => appThemePineGreenOption.color,
+      ReaderBackgroundTone.seaBlueTint => appThemeSeaBlueOption.color,
+      ReaderBackgroundTone.nightPurpleTint => appThemeNightPurpleOption.color,
+      ReaderBackgroundTone.mistTealTint => appThemeMistTealOption.color,
+      ReaderBackgroundTone.berryRoseTint => appThemeBerryRoseOption.color,
+      ReaderBackgroundTone.amberGoldTint => appThemeAmberGoldOption.color,
+      _ => null,
+    };
+  }
+
   Widget _buildThemeColorDot({
     required ReaderSettings draft,
     required Color color,
@@ -15044,10 +15243,18 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
     required ReaderBackgroundTone backgroundTone,
     required ValueChanged<ReaderSettings> onChanged,
   }) {
+    final normalizedTone = normalizeReaderBackgroundTone(
+      mode: draft.themeMode,
+      tone: draft.backgroundTone,
+    );
     final selected =
         draft.themeMode == mode &&
         draft.backgroundStyle == backgroundStyle &&
-        draft.backgroundTone == backgroundTone;
+        normalizedTone == backgroundTone;
+    final iconColor =
+        ThemeData.estimateBrightnessForColor(color) == Brightness.dark
+            ? Colors.white
+            : null;
 
     return Tooltip(
       message: label,
@@ -15079,11 +15286,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
           ),
           child:
               selected
-                  ? Icon(
-                    Icons.check_rounded,
-                    size: 14,
-                    color: mode == ReaderThemeMode.dark ? Colors.white : null,
-                  )
+                  ? Icon(Icons.check_rounded, size: 14, color: iconColor)
                   : null,
         ),
       ),
@@ -15177,26 +15380,36 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
 
   Future<String?> _pickBackgroundImagePath() async {
     try {
+      debugPrint('[reader-bg][pick] start');
       final picked = await _imageSelectionService.pickImage(
         confirmButtonText: '选择背景',
       );
       if (picked == null) {
+        debugPrint('[reader-bg][pick] cancelled');
         return null;
       }
 
       final Uint8List bytes = picked.bytes;
       if (bytes.isEmpty) {
+        debugPrint('[reader-bg][pick] empty-bytes');
         _showMessage('背景图片读取失败。');
         return null;
       }
-      return _storeCustomBackgroundImage(bytes);
+      final storedPath = await _storeCustomBackgroundImage(bytes);
+      debugPrint('[reader-bg][pick] stored=$storedPath');
+      return storedPath;
     } on ImageSelectionException catch (error) {
+      debugPrint('[reader-bg][pick] image-selection-error=${error.message}');
       _showMessage(error.message);
       return null;
     } on PlatformException catch (error) {
+      debugPrint(
+        '[reader-bg][pick] platform-error=${error.message ?? error.code}',
+      );
       _showMessage('选择背景失败：${error.message ?? error.code}');
       return null;
     } catch (error) {
+      debugPrint('[reader-bg][pick] error=$error');
       _showMessage('选择背景失败：$error');
       return null;
     }
@@ -15357,6 +15570,16 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
     ReaderThemeMode mode,
     ReaderSettings settings,
   ) {
+    if (_isClassicLightReaderBackground(mode, settings)) {
+      return const _ReaderThemeColors(
+        background: Color(0xFFFDFDFD),
+        text: Color(0xFF111827),
+        meta: Color(0xFF6B7280),
+        divider: Color(0xFFE5E7EB),
+        overlay: Color(0xFFF7F7F7),
+      );
+    }
+
     final scheme = _colorSchemeForReaderMode(mode);
 
     final baseBackground = _backgroundForTone(scheme, settings.backgroundTone);
@@ -15388,6 +15611,15 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
     );
   }
 
+  bool _isClassicLightReaderBackground(
+    ReaderThemeMode mode,
+    ReaderSettings settings,
+  ) {
+    return mode == ReaderThemeMode.light &&
+        settings.backgroundStyle == ReaderBackgroundStyle.plain &&
+        settings.backgroundTone == ReaderBackgroundTone.surface;
+  }
+
   ColorScheme _colorSchemeForReaderMode(ReaderThemeMode mode) {
     final currentScheme = Theme.of(context).colorScheme;
     final targetBrightness =
@@ -15405,6 +15637,15 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
   }
 
   Color _backgroundForTone(ColorScheme scheme, ReaderBackgroundTone tone) {
+    final paletteSeedColor = _readerPaletteSeedColorForTone(tone);
+    if (paletteSeedColor != null) {
+      return _blendReaderToneColor(
+        base: scheme.surface,
+        tint: paletteSeedColor,
+        alpha: 0.12,
+      );
+    }
+
     return switch (tone) {
       ReaderBackgroundTone.surface => scheme.surface,
       ReaderBackgroundTone.containerLow => scheme.surfaceContainerLow,
@@ -15412,10 +15653,29 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
       ReaderBackgroundTone.containerHigh => scheme.surfaceContainerHigh,
       ReaderBackgroundTone.containerHighest => scheme.surfaceContainerHighest,
       ReaderBackgroundTone.pureBlack => const Color(0xFF000000),
+      ReaderBackgroundTone.primaryTint => scheme.surface,
+      ReaderBackgroundTone.secondaryTint => scheme.surface,
+      ReaderBackgroundTone.tertiaryTint => scheme.surface,
+      ReaderBackgroundTone.flameOrangeTint => scheme.surface,
+      ReaderBackgroundTone.pineGreenTint => scheme.surface,
+      ReaderBackgroundTone.seaBlueTint => scheme.surface,
+      ReaderBackgroundTone.nightPurpleTint => scheme.surface,
+      ReaderBackgroundTone.mistTealTint => scheme.surface,
+      ReaderBackgroundTone.berryRoseTint => scheme.surface,
+      ReaderBackgroundTone.amberGoldTint => scheme.surface,
     };
   }
 
   Color _overlayForTone(ColorScheme scheme, ReaderBackgroundTone tone) {
+    final paletteSeedColor = _readerPaletteSeedColorForTone(tone);
+    if (paletteSeedColor != null) {
+      return _blendReaderToneColor(
+        base: scheme.surfaceContainerLow,
+        tint: paletteSeedColor,
+        alpha: 0.18,
+      );
+    }
+
     return switch (tone) {
       ReaderBackgroundTone.surface => scheme.surfaceContainerLow,
       ReaderBackgroundTone.containerLow => scheme.surfaceContainer,
@@ -15423,7 +15683,25 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
       ReaderBackgroundTone.containerHigh => scheme.surfaceContainerHighest,
       ReaderBackgroundTone.containerHighest => scheme.surfaceContainerHighest,
       ReaderBackgroundTone.pureBlack => const Color(0xFF0A0A0A),
+      ReaderBackgroundTone.primaryTint => scheme.surfaceContainerLow,
+      ReaderBackgroundTone.secondaryTint => scheme.surfaceContainerLow,
+      ReaderBackgroundTone.tertiaryTint => scheme.surfaceContainerLow,
+      ReaderBackgroundTone.flameOrangeTint => scheme.surfaceContainerLow,
+      ReaderBackgroundTone.pineGreenTint => scheme.surfaceContainerLow,
+      ReaderBackgroundTone.seaBlueTint => scheme.surfaceContainerLow,
+      ReaderBackgroundTone.nightPurpleTint => scheme.surfaceContainerLow,
+      ReaderBackgroundTone.mistTealTint => scheme.surfaceContainerLow,
+      ReaderBackgroundTone.berryRoseTint => scheme.surfaceContainerLow,
+      ReaderBackgroundTone.amberGoldTint => scheme.surfaceContainerLow,
     };
+  }
+
+  Color _blendReaderToneColor({
+    required Color base,
+    required Color tint,
+    required double alpha,
+  }) {
+    return Color.alphaBlend(tint.withValues(alpha: alpha), base);
   }
 
   Color _shiftLightness(Color color, double amount) {
@@ -15608,6 +15886,22 @@ class _ReaderThemeColors {
   final Color meta;
   final Color divider;
   final Color overlay;
+}
+
+class _ReaderBackgroundColorOption {
+  const _ReaderBackgroundColorOption({
+    required this.label,
+    required this.previewColor,
+    required this.mode,
+    required this.backgroundStyle,
+    required this.backgroundTone,
+  });
+
+  final String label;
+  final Color previewColor;
+  final ReaderThemeMode mode;
+  final ReaderBackgroundStyle backgroundStyle;
+  final ReaderBackgroundTone backgroundTone;
 }
 
 class _ReaderBackgroundPreset {

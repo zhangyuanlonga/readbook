@@ -2,6 +2,7 @@ const SOURCE_HOST = 'https://www.example.com';
 
 function createBook(partial = {}) {
   return {
+    // 可选：站点有稳定书籍主键时填写；没有可留空。
     id: '',
     title: '',
     author: '',
@@ -24,6 +25,7 @@ function createBook(partial = {}) {
 
 function createChapter(partial = {}) {
   return {
+    // 可选：站点有稳定章节主键时填写；没有可留空。
     id: '',
     title: '',
     url: '',
@@ -153,7 +155,6 @@ export default {
       const linkNode = item.querySelector('a');
 
       return createBook({
-        id: item.getAttribute('data-id') || String(index),
         title: ctx.html.text(titleNode),
         author: ctx.html.text(authorNode),
         sourceId: ctx.source.id,
@@ -237,7 +238,6 @@ export default {
 
     return ctx.html.collect(chapterNodes, (node, index) =>
       createChapter({
-        id: node.getAttribute('data-id') || String(index),
         title: ctx.html.text(node),
         sourceId: ctx.source.id,
         url: ctx.utils.absoluteUrl(

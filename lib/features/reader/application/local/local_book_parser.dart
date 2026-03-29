@@ -5,6 +5,7 @@ class LocalParsedChapter {
     required this.title,
     required this.content,
     this.imageUrls = const <String>[],
+    this.sourceRef,
     this.startOffset,
     this.endOffset,
   });
@@ -12,6 +13,7 @@ class LocalParsedChapter {
   final String title;
   final String content;
   final List<String> imageUrls;
+  final String? sourceRef;
   final int? startOffset;
   final int? endOffset;
 }

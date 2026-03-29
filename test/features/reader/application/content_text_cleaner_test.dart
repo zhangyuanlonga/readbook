@@ -34,6 +34,24 @@ void main() {
       expect(cleaned, isNot(contains(r'\\r\\n')));
     });
 
+    test('unwraps json encoded string arrays', () {
+      const raw = '["第一段内容","第二段内容"]';
+
+      final cleaned = cleaner.clean(raw);
+
+      expect(cleaned, '第一段内容\n\n第二段内容');
+      expect(cleaned, isNot(startsWith('["')));
+    });
+
+    test('unwraps json encoded text strings', () {
+      const raw = '"第一段\\n\\n第二段"';
+
+      final cleaned = cleaner.clean(raw);
+
+      expect(cleaned, '第一段\n\n第二段');
+      expect(cleaned, isNot(startsWith('"')));
+    });
+
     test('filters zero-width and replacement characters', () {
       const raw = '一\uFEFF二\u200B三\uFFFD四';
 

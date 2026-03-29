@@ -11,6 +11,7 @@ import '../../../app/layout/app_layout.dart';
 import '../../../app/layout/app_spacing.dart';
 import '../../../app/widgets/switch_source_candidate_sheet.dart';
 import '../../../app/widgets/disk_cached_cover_image.dart';
+import '../../../app/widgets/text_cover_placeholder.dart';
 
 import '../../../core/errors/app_exception.dart';
 import '../../../core/errors/error_codes.dart';
@@ -21,7 +22,9 @@ import '../../../domain/entities/chapter.dart';
 import '../../../domain/entities/local_book.dart';
 import '../../bookshelf/application/bookshelf_service.dart';
 import '../../reader/application/content_provider.dart';
+import '../../reader/application/local/local_book_index_service.dart';
 import '../../reader/application/local/local_reader_identity.dart';
+import '../../reader/application/local/local_book_storage_service.dart';
 import '../../reader/application/local_content_provider.dart';
 import '../../reader/application/reader_system_settings_service.dart';
 import '../../reader/application/source_content_provider.dart';
@@ -89,11 +92,14 @@ class _BookDetailPageState extends State<BookDetailPage> {
   String? _displayTitle;
   BookDetailLoadResult? _result;
   LocalBook? _localBookMeta;
+  StreamSubscription<LocalBookIndexEvent>? _localIndexEventSubscription;
   final SearchHitCacheService _searchHitCacheService = SearchHitCacheService();
   final SourceSwitchScoreService _switchSourceScoreService =
       SourceSwitchScoreService();
   final ReaderSystemSettingsService _readerSystemSettingsService =
       ReaderSystemSettingsService();
+  final LocalBookStorageService _localBookStorageService =
+      LocalBookStorageService();
 
   @override
   void initState() {
@@ -122,6 +128,9 @@ class _BookDetailPageState extends State<BookDetailPage> {
     _applyLocalSchemeFallback();
     _displayTitle = _normalizeRouteParam(widget.title);
     final hydratedFromCache = _hydrateCachedDetailIfAvailable();
+    _localIndexEventSubscription = LocalBookIndexService.watchEvents.listen(
+      _handleLocalIndexEvent,
+    );
     if (hydratedFromCache) {
       unawaited(_load(forceRefresh: true, backgroundRefresh: true));
     } else {
@@ -132,6 +141,7 @@ class _BookDetailPageState extends State<BookDetailPage> {
   @override
   void dispose() {
     _cancelActiveSwitchSourceSearch();
+    _localIndexEventSubscription?.cancel();
     super.dispose();
   }
 
@@ -223,9 +233,26 @@ class _BookDetailPageState extends State<BookDetailPage> {
                                   ),
                                 ),
                                 const SizedBox(height: 10),
-                                FilledButton.tonal(
-                                  onPressed: () => _load(forceRefresh: true),
-                                  child: const Text('重试'),
+                                Wrap(
+                                  spacing: 8,
+                                  runSpacing: 8,
+                                  children: [
+                                    FilledButton.tonal(
+                                      onPressed:
+                                          () => _load(forceRefresh: true),
+                                      child: const Text('重试'),
+                                    ),
+                                    if (_isLocalContent)
+                                      OutlinedButton.icon(
+                                        onPressed:
+                                            _copyLocalDiagnosticsFromError,
+                                        icon: const Icon(
+                                          Icons.copy_rounded,
+                                          size: 16,
+                                        ),
+                                        label: const Text('复制诊断信息'),
+                                      ),
+                                  ],
                                 ),
                               ],
                             ),
@@ -363,7 +390,12 @@ class _BookDetailPageState extends State<BookDetailPage> {
       title: detail.title,
       sourceName: result.sourceName,
       author: detail.author,
-      cover: _buildCoverPreview(detail.coverUrl, heroTag: heroTag),
+      cover: _buildCoverPreview(
+        detail.coverUrl,
+        title: detail.title,
+        author: detail.author,
+        heroTag: heroTag,
+      ),
       intro: intro,
       primaryActions: LayoutBuilder(
         builder: (context, constraints) {
@@ -390,7 +422,12 @@ class _BookDetailPageState extends State<BookDetailPage> {
     return 'book_cover_${sourceId.trim()}_${bookId.trim()}_${detailUrl.hashCode}';
   }
 
-  Widget _buildCoverPreview(String? coverUrl, {required String heroTag}) {
+  Widget _buildCoverPreview(
+    String? coverUrl, {
+    required String title,
+    String? author,
+    required String heroTag,
+  }) {
     final uri = Uri.tryParse(coverUrl ?? '');
     if (uri != null && uri.hasScheme) {
       return Hero(
@@ -402,31 +439,25 @@ class _BookDetailPageState extends State<BookDetailPage> {
             width: 84,
             height: 120,
             fit: BoxFit.cover,
-            fallback: _buildCoverFallback('封面加载失败'),
+            fallback: _buildCoverFallback(title: title, author: author),
           ),
         ),
       );
     }
 
-    return Hero(tag: heroTag, child: _buildCoverFallback('暂无封面'));
+    return Hero(
+      tag: heroTag,
+      child: _buildCoverFallback(title: title, author: author),
+    );
   }
 
-  Widget _buildCoverFallback(String text) {
-    final colorScheme = Theme.of(context).colorScheme;
-    return Container(
+  Widget _buildCoverFallback({required String title, String? author}) {
+    return TextCoverPlaceholder(
+      title: title,
+      author: author,
       width: 84,
       height: 120,
-      decoration: BoxDecoration(
-        color: colorScheme.surfaceContainerHighest,
-        borderRadius: BorderRadius.circular(14),
-      ),
-      alignment: Alignment.center,
-      padding: const EdgeInsets.all(10),
-      child: Text(
-        text,
-        textAlign: TextAlign.center,
-        style: Theme.of(context).textTheme.bodySmall,
-      ),
+      borderRadius: BorderRadius.circular(14),
     );
   }
 
@@ -628,7 +659,13 @@ class _BookDetailPageState extends State<BookDetailPage> {
                     borderRadius: BorderRadius.circular(12),
                   ),
                   child: Text(
-                    _contentCapabilities.canReindexLocal
+                    _isLocalContent &&
+                            (_localBookMeta?.indexStatus ==
+                                    LocalBookIndexStatus.pending ||
+                                _localBookMeta?.indexStatus ==
+                                    LocalBookIndexStatus.indexing)
+                        ? '正在建立目录，请稍候，完成后会自动刷新。'
+                        : _contentCapabilities.canReindexLocal
                         ? '目录暂时为空，可点击下方重新索引重试。'
                         : '目录暂时为空，可下拉页面刷新重试。',
                     style: Theme.of(context).textTheme.bodySmall?.copyWith(
@@ -636,6 +673,15 @@ class _BookDetailPageState extends State<BookDetailPage> {
                     ),
                   ),
                 ),
+                if (_isLocalContent &&
+                    (_localBookMeta?.indexStatus ==
+                            LocalBookIndexStatus.pending ||
+                        _localBookMeta?.indexStatus ==
+                            LocalBookIndexStatus.indexing))
+                  const Padding(
+                    padding: EdgeInsets.only(top: 8),
+                    child: LinearProgressIndicator(minHeight: 2),
+                  ),
                 if (_contentCapabilities.canReindexLocal && !_isLocalTxtContent)
                   Padding(
                     padding: const EdgeInsets.only(top: 8),
@@ -1238,6 +1284,20 @@ class _BookDetailPageState extends State<BookDetailPage> {
     });
   }
 
+  Future<void> _handleLocalIndexEvent(LocalBookIndexEvent event) async {
+    if (!mounted || !_isLocalContent || event.bookId != _activeBookId) {
+      return;
+    }
+    if (event.status == LocalBookIndexStatus.ready && event.chapterCount > 0) {
+      if (_isLoading) {
+        return;
+      }
+      await _load(backgroundRefresh: true);
+      return;
+    }
+    await _syncLocalBookMeta();
+  }
+
   Widget? _buildLocalRecoveryPanel() {
     if (!_isLocalTxtContent) {
       return null;
@@ -1258,6 +1318,7 @@ class _BookDetailPageState extends State<BookDetailPage> {
 
   bool _hasLocalRepairIssue(LocalBook localBook) {
     return _tocWarningText != null ||
+        localBook.indexStatus == LocalBookIndexStatus.stale ||
         localBook.indexStatus == LocalBookIndexStatus.failed ||
         localBook.chapterCount <= 0 ||
         (localBook.lastError?.trim().isNotEmpty ?? false);
@@ -1496,8 +1557,10 @@ class _BookDetailPageState extends State<BookDetailPage> {
   ) async {
     final sourcePath = book.sourcePath?.trim() ?? '';
     final storagePath = book.storagePath.trim();
+    final resolvedStoragePath = await _localBookStorageService
+        .resolveStoragePath(book.storagePath);
     final sourceStat = await _tryStatFile(sourcePath);
-    final storageStat = await _tryStatFile(storagePath);
+    final storageStat = await _tryStatFile(resolvedStoragePath);
 
     final sourceFileExists = sourceStat != null;
     final storageFileExists = storageStat != null;
@@ -1513,6 +1576,7 @@ class _BookDetailPageState extends State<BookDetailPage> {
     return _LocalBookDiagnosticsSnapshot(
       sourcePath: sourcePath,
       storagePath: storagePath,
+      resolvedStoragePath: resolvedStoragePath,
       sourceFileExists: sourceFileExists,
       storageFileExists: storageFileExists,
       sourceFileChanged: sourceFileChanged,
@@ -1551,6 +1615,29 @@ class _BookDetailPageState extends State<BookDetailPage> {
     _showMessage('已复制本地图书诊断信息。');
   }
 
+  Future<void> _copyLocalDiagnosticsFromError() async {
+    final book =
+        _localBookMeta ??
+        await AppDatabase.instance.getLocalBookById(_activeBookId);
+    if (book == null) {
+      final content = [
+        '本地图书诊断',
+        'bookId: $_activeBookId',
+        'sourceId: ${_activeSourceId ?? ''}',
+        'detailUrl: ${_activeDetailUrl ?? ''}',
+        'title: ${_displayTitle ?? ''}',
+        'error: ${_errorText ?? ''}',
+      ].join('\n');
+      await Clipboard.setData(ClipboardData(text: content));
+      if (!mounted) {
+        return;
+      }
+      _showMessage('已复制基础诊断信息。');
+      return;
+    }
+    await _copyLocalDiagnostics(book);
+  }
+
   String _buildLocalDiagnosticsText(
     LocalBook book,
     _LocalBookDiagnosticsSnapshot diagnostics,
@@ -1565,6 +1652,10 @@ class _BookDetailPageState extends State<BookDetailPage> {
       '长章节拆分(系统): ${diagnostics.globalSplitLongChapterEnabled ? '默认开启' : '默认关闭'}${diagnostics.splitSettingNeedsReindex ? '，当前书需重新索引生效' : ''}',
       '原文件: ${_localFileName(book.sourcePath)} / ${diagnostics.sourceFileExists ? '已找到' : '缺失'}',
       '应用副本: ${_localFileName(book.storagePath)} / ${diagnostics.storageFileExists ? '已找到' : '缺失'}',
+      if (diagnostics.resolvedStoragePath.trim().isNotEmpty &&
+          diagnostics.resolvedStoragePath.trim() !=
+              diagnostics.storagePath.trim())
+        '应用副本解析路径: ${diagnostics.resolvedStoragePath}',
       '文件变化: ${diagnostics.sourcePath.isEmpty
           ? '未记录原文件路径'
           : diagnostics.sourceFileChanged
@@ -1588,6 +1679,7 @@ class _BookDetailPageState extends State<BookDetailPage> {
       LocalBookIndexStatus.pending => '待建立',
       LocalBookIndexStatus.indexing => '索引中',
       LocalBookIndexStatus.ready => '已就绪',
+      LocalBookIndexStatus.stale => '需重建',
       LocalBookIndexStatus.failed => '失败',
     };
   }
@@ -1787,6 +1879,7 @@ class _LocalBookDiagnosticsSnapshot {
   const _LocalBookDiagnosticsSnapshot({
     required this.sourcePath,
     required this.storagePath,
+    required this.resolvedStoragePath,
     required this.sourceFileExists,
     required this.storageFileExists,
     required this.sourceFileChanged,
@@ -1796,6 +1889,7 @@ class _LocalBookDiagnosticsSnapshot {
 
   final String sourcePath;
   final String storagePath;
+  final String resolvedStoragePath;
   final bool sourceFileExists;
   final bool storageFileExists;
   final bool sourceFileChanged;

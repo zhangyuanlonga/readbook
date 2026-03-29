@@ -1,6 +1,6 @@
 enum LocalBookFormat { txt, epub }
 
-enum LocalBookIndexStatus { pending, indexing, ready, failed }
+enum LocalBookIndexStatus { pending, indexing, ready, stale, failed }
 
 class LocalBook {
   const LocalBook({

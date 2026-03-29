@@ -6,6 +6,7 @@ import 'package:go_router/go_router.dart';
 import '../../../app/layout/app_layout.dart';
 import '../../../app/layout/app_spacing.dart';
 import '../../../app/widgets/disk_cached_cover_image.dart';
+import '../../../app/widgets/text_cover_placeholder.dart';
 import '../../../data/datasources/local/app_database.dart';
 import '../../../data/repositories/bookmark_repository_impl.dart';
 import '../../../domain/entities/bookmark.dart';
@@ -262,7 +263,7 @@ class _BookmarksPageState extends State<BookmarksPage> {
             Row(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                _buildCover(book?.coverUrl),
+                _buildCover(book?.coverUrl, title: title, author: rawAuthor),
                 const SizedBox(width: 12),
                 Expanded(
                   child: Column(
@@ -368,10 +369,10 @@ class _BookmarksPageState extends State<BookmarksPage> {
     );
   }
 
-  Widget _buildCover(String? coverUrl) {
+  Widget _buildCover(String? coverUrl, {String? title, String? author}) {
     final uri = Uri.tryParse(coverUrl ?? '');
     if (uri == null || !uri.hasScheme) {
-      return _buildCoverFallback();
+      return _buildCoverFallback(title: title, author: author);
     }
 
     return ClipRRect(
@@ -381,25 +382,18 @@ class _BookmarksPageState extends State<BookmarksPage> {
         width: 54,
         height: 74,
         fit: BoxFit.cover,
-        fallback: _buildCoverFallback(),
+        fallback: _buildCoverFallback(title: title, author: author),
       ),
     );
   }
 
-  Widget _buildCoverFallback() {
-    final colorScheme = Theme.of(context).colorScheme;
-    return Container(
+  Widget _buildCoverFallback({String? title, String? author}) {
+    return TextCoverPlaceholder(
+      title: title,
+      author: author,
       width: 54,
       height: 74,
-      alignment: Alignment.center,
-      decoration: BoxDecoration(
-        color: colorScheme.surfaceContainerHighest,
-        borderRadius: BorderRadius.circular(10),
-      ),
-      child: Icon(
-        Icons.menu_book_outlined,
-        color: colorScheme.onSurfaceVariant,
-      ),
+      borderRadius: BorderRadius.circular(10),
     );
   }
 

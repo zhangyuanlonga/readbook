@@ -1,5 +1,7 @@
 import 'dart:convert';
 import 'dart:io';
+import 'dart:math';
+import 'dart:typed_data';
 
 import 'package:charset/charset.dart';
 
@@ -14,6 +16,8 @@ import 'local_text_encoding_detector.dart';
 class TxtLocalBookParser implements LocalBookParser {
   const TxtLocalBookParser();
 
+  static const int _streamingIndexThresholdBytes = 1024 * 1024;
+  static const int _streamReadChunkBytes = 64 * 1024;
   static const int _chunkLengthWithoutPattern = 10 * 1024;
   static const int _chapterPatternDetectionSampleLength = 200000;
   static const int _chapterPatternDetectionGapThreshold = 1000;
@@ -36,6 +40,14 @@ class TxtLocalBookParser implements LocalBookParser {
         stage: ErrorStage.content,
         briefMessage: '本地文件不存在：${book.storagePath}',
       );
+    }
+
+    final fileLength = await file.length();
+    if (_canUseStreamingIndex(book, fileLength)) {
+      final parsed = await _parseWithStreamingIndex(file, book, fileLength);
+      if (parsed != null) {
+        return parsed;
+      }
     }
 
     final bytes = await file.readAsBytes();
@@ -78,6 +90,345 @@ class TxtLocalBookParser implements LocalBookParser {
     }
 
     return LocalParsedBook(chapters: chapters, charset: decoded.charsetName);
+  }
+
+  bool _canUseStreamingIndex(LocalBook book, int fileLength) {
+    return fileLength >= _streamingIndexThresholdBytes &&
+        _normalizeCharsetName(book.charset) == 'utf-8';
+  }
+
+  Future<LocalParsedBook?> _parseWithStreamingIndex(
+    File file,
+    LocalBook book,
+    int fileLength,
+  ) async {
+    final sampleLength =
+        fileLength < _chapterPatternDetectionSampleLength
+            ? fileLength
+            : _chapterPatternDetectionSampleLength;
+    final sampleBytes = await file
+        .openRead(0, sampleLength)
+        .fold<BytesBuilder>(
+          BytesBuilder(copy: false),
+          (builder, chunk) => builder..add(chunk),
+        );
+    final rawSample = sampleBytes.takeBytes();
+    if (rawSample.isEmpty) {
+      return null;
+    }
+
+    final bomInfo = _detectBom(rawSample);
+    if (bomInfo.charsetName != null && bomInfo.charsetName != 'utf-8') {
+      return null;
+    }
+    final sampleText = utf8.decode(
+      rawSample.sublist(bomInfo.length),
+      allowMalformed: true,
+    );
+    if (sampleText.trim().isEmpty) {
+      return null;
+    }
+
+    final selectedPattern = _detectChapterPattern(sampleText);
+    final chapters =
+        selectedPattern == null
+            ? await _splitByFixedLengthStreaming(
+              file,
+              fileLength: fileLength,
+              bomLength: bomInfo.length,
+            )
+            : await _splitByPatternStreaming(
+              file,
+              fileLength: fileLength,
+              bomLength: bomInfo.length,
+              pattern: selectedPattern.compiled,
+              splitLongChapter: book.splitLongChapter,
+            );
+    if (chapters.isEmpty) {
+      return null;
+    }
+    return LocalParsedBook(chapters: chapters, charset: 'utf-8');
+  }
+
+  Future<List<LocalParsedChapter>> _splitByFixedLengthStreaming(
+    File file, {
+    required int fileLength,
+    required int bomLength,
+  }) async {
+    if (fileLength <= bomLength) {
+      return const <LocalParsedChapter>[];
+    }
+
+    final chapters = <LocalParsedChapter>[];
+    var start = bomLength;
+    var index = 0;
+    while (start < fileLength) {
+      final end = await _findChunkEndByMaxBytesInFile(
+        file,
+        start,
+        min(start + _chunkLengthWithoutPattern, fileLength),
+      );
+      final safeEnd = end <= start ? fileLength : end;
+      if (safeEnd <= start) {
+        break;
+      }
+      index += 1;
+      chapters.add(
+        LocalParsedChapter(
+          title: '第 $index 段',
+          content: '',
+          startOffset: start,
+          endOffset: safeEnd,
+        ),
+      );
+      start = await _skipLeadingWhitespaceBytes(file, safeEnd, fileLength);
+    }
+    return chapters;
+  }
+
+  Future<List<LocalParsedChapter>> _splitByPatternStreaming(
+    File file, {
+    required int fileLength,
+    required int bomLength,
+    required RegExp pattern,
+    required bool splitLongChapter,
+  }) async {
+    final chapters = <LocalParsedChapter>[];
+    final handle = await file.open(mode: FileMode.read);
+    try {
+      await handle.setPosition(bomLength);
+      var bufferStartOffset = bomLength;
+      var carry = <int>[];
+      String? currentTitle;
+      int? currentContentStart;
+      var currentHasContent = false;
+      int? prefaceStart;
+      var prefaceHasContent = false;
+
+      void pushChapter(String title, int startOffset, int endOffset) {
+        if (endOffset <= startOffset) {
+          return;
+        }
+        chapters.add(
+          LocalParsedChapter(
+            title: title,
+            content: '',
+            startOffset: startOffset,
+            endOffset: endOffset,
+          ),
+        );
+      }
+
+      void finalizeCurrent(int endOffset) {
+        if (currentTitle == null ||
+            !currentHasContent ||
+            currentContentStart == null) {
+          currentTitle = null;
+          currentContentStart = null;
+          currentHasContent = false;
+          return;
+        }
+        pushChapter(currentTitle!, currentContentStart!, endOffset);
+        currentTitle = null;
+        currentContentStart = null;
+        currentHasContent = false;
+      }
+
+      void processLine(String lineText, int lineStart, int lineEnd) {
+        final trimmed = lineText.trim();
+        if (_matchesChapterTitleLine(pattern, lineText)) {
+          if (currentTitle == null) {
+            if (prefaceHasContent && prefaceStart != null) {
+              pushChapter('前言', prefaceStart!, lineStart);
+            }
+          } else {
+            finalizeCurrent(lineStart);
+          }
+          currentTitle = trimmed;
+          currentContentStart = null;
+          currentHasContent = false;
+          prefaceStart = null;
+          prefaceHasContent = false;
+          return;
+        }
+        if (trimmed.isEmpty) {
+          return;
+        }
+        if (currentTitle == null) {
+          prefaceStart ??= lineStart;
+          prefaceHasContent = true;
+          return;
+        }
+        currentContentStart ??= lineStart;
+        currentHasContent = true;
+      }
+
+      while (true) {
+        final chunk = await handle.read(_streamReadChunkBytes);
+        if (chunk.isEmpty) {
+          break;
+        }
+        final buffer = <int>[...carry, ...chunk];
+        var lineStartIndex = 0;
+        for (var index = 0; index < buffer.length; index += 1) {
+          final byte = buffer[index];
+          if (byte != 0x0A && byte != 0x0D) {
+            continue;
+          }
+          if (byte == 0x0D && index + 1 == buffer.length) {
+            break;
+          }
+          var separatorLength = 1;
+          if (byte == 0x0D &&
+              index + 1 < buffer.length &&
+              buffer[index + 1] == 0x0A) {
+            separatorLength = 2;
+          }
+          final lineBytes = buffer.sublist(lineStartIndex, index);
+          final lineStart = bufferStartOffset + lineStartIndex;
+          final lineEnd = bufferStartOffset + index + separatorLength;
+          processLine(
+            utf8.decode(lineBytes, allowMalformed: true),
+            lineStart,
+            lineEnd,
+          );
+          lineStartIndex = index + separatorLength;
+          if (separatorLength == 2) {
+            index += 1;
+          }
+        }
+        carry = buffer.sublist(lineStartIndex);
+        bufferStartOffset += buffer.length - carry.length;
+      }
+
+      if (carry.isNotEmpty) {
+        processLine(
+          utf8.decode(carry, allowMalformed: true),
+          bufferStartOffset,
+          fileLength,
+        );
+      }
+
+      if (currentTitle == null) {
+        if (prefaceHasContent && prefaceStart != null) {
+          pushChapter('前言', prefaceStart!, fileLength);
+        }
+      } else {
+        finalizeCurrent(fileLength);
+      }
+    } finally {
+      await handle.close();
+    }
+
+    if (chapters.isEmpty || !splitLongChapter) {
+      return chapters;
+    }
+    return _splitLongChaptersByOffsets(file, chapters);
+  }
+
+  bool _matchesChapterTitleLine(RegExp pattern, String lineText) {
+    if (lineText.trim().isEmpty) {
+      return false;
+    }
+    return pattern.hasMatch(lineText) || pattern.hasMatch('\n$lineText');
+  }
+
+  Future<List<LocalParsedChapter>> _splitLongChaptersByOffsets(
+    File file,
+    List<LocalParsedChapter> chapters,
+  ) async {
+    final output = <LocalParsedChapter>[];
+    for (final chapter in chapters) {
+      final start = chapter.startOffset;
+      final end = chapter.endOffset;
+      if (start == null || end == null || end <= start) {
+        continue;
+      }
+      final length = end - start;
+      if (length <= _maxLengthWithPattern) {
+        output.add(chapter);
+        continue;
+      }
+
+      var pieceStart = start;
+      var splitIndex = 0;
+      while (pieceStart < end) {
+        final pieceEnd = await _findChunkEndByMaxBytesInFile(
+          file,
+          pieceStart,
+          min(pieceStart + _maxLengthWithPattern, end),
+        );
+        final safePieceEnd = pieceEnd <= pieceStart ? end : pieceEnd;
+        if (safePieceEnd <= pieceStart) {
+          break;
+        }
+        splitIndex += 1;
+        output.add(
+          LocalParsedChapter(
+            title: '${chapter.title}($splitIndex)',
+            content: '',
+            startOffset: pieceStart,
+            endOffset: safePieceEnd,
+          ),
+        );
+        pieceStart = await _skipLeadingWhitespaceBytes(file, safePieceEnd, end);
+      }
+    }
+    return output;
+  }
+
+  Future<int> _findChunkEndByMaxBytesInFile(
+    File file,
+    int start,
+    int proposedEnd,
+  ) async {
+    if (proposedEnd <= start) {
+      return start;
+    }
+    final bytes = await file
+        .openRead(start, proposedEnd)
+        .fold<BytesBuilder>(
+          BytesBuilder(copy: false),
+          (builder, chunk) => builder..add(chunk),
+        );
+    final buffer = bytes.takeBytes();
+    if (buffer.isEmpty) {
+      return proposedEnd;
+    }
+    for (
+      var index = buffer.length - 1;
+      index >= _splitBreakMinDistance;
+      index -= 1
+    ) {
+      final byte = buffer[index];
+      if (byte == 0x0A || byte == 0x0D) {
+        return start + index;
+      }
+    }
+    return proposedEnd;
+  }
+
+  Future<int> _skipLeadingWhitespaceBytes(File file, int start, int end) async {
+    if (start >= end) {
+      return end;
+    }
+    final bytes = await file
+        .openRead(start, end)
+        .fold<BytesBuilder>(
+          BytesBuilder(copy: false),
+          (builder, chunk) => builder..add(chunk),
+        );
+    final buffer = bytes.takeBytes();
+    var index = 0;
+    while (index < buffer.length) {
+      final byte = buffer[index];
+      if (byte == 0x0A || byte == 0x0D || byte == 0x09 || byte == 0x20) {
+        index += 1;
+        continue;
+      }
+      break;
+    }
+    return start + index;
   }
 
   _ResolvedTxtChapterPattern? _detectChapterPattern(String text) {

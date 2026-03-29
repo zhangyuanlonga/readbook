@@ -7,6 +7,7 @@ import 'package:go_router/go_router.dart';
 import '../../../app/layout/app_layout.dart';
 import '../../../app/layout/app_spacing.dart';
 import '../../../app/widgets/disk_cached_cover_image.dart';
+import '../../../app/widgets/text_cover_placeholder.dart';
 import '../../../domain/entities/reading_record.dart';
 import '../../../domain/entities/reading_record_day.dart';
 import '../../../domain/entities/reading_record_session.dart';
@@ -1602,7 +1603,11 @@ class _ReadingRecordsPageState extends State<ReadingRecordsPage> {
                   child: Row(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      _buildCover(record.coverUrl),
+                      _buildCover(
+                        record.coverUrl,
+                        title: record.bookTitle,
+                        author: record.bookAuthor,
+                      ),
                       const SizedBox(width: 12),
                       Expanded(
                         child: Column(
@@ -1775,6 +1780,8 @@ class _ReadingRecordsPageState extends State<ReadingRecordsPage> {
                                 children: [
                                   _buildCover(
                                     item.coverUrl,
+                                    title: item.bookTitle,
+                                    author: item.bookAuthor,
                                     width: 42,
                                     height: 58,
                                   ),
@@ -1907,6 +1914,8 @@ class _ReadingRecordsPageState extends State<ReadingRecordsPage> {
                                 children: [
                                   _buildCover(
                                     session.coverUrl,
+                                    title: session.bookTitle,
+                                    author: session.bookAuthor,
                                     width: 42,
                                     height: 58,
                                   ),
@@ -2056,6 +2065,8 @@ class _ReadingRecordsPageState extends State<ReadingRecordsPage> {
                 borderRadius: BorderRadius.circular(10),
                 child: _buildCover(
                   visible[index].coverUrl,
+                  title: visible[index].bookTitle,
+                  author: visible[index].bookAuthor,
                   width: 44,
                   height: 62,
                 ),
@@ -2130,12 +2141,19 @@ class _ReadingRecordsPageState extends State<ReadingRecordsPage> {
 
   Widget _buildCover(
     String? coverUrl, {
+    String? title,
+    String? author,
     double width = 54,
     double height = 74,
   }) {
     final uri = Uri.tryParse(coverUrl ?? '');
     if (uri == null || !uri.hasScheme) {
-      return _buildCoverFallback(width: width, height: height);
+      return _buildCoverFallback(
+        title: title,
+        author: author,
+        width: width,
+        height: height,
+      );
     }
 
     return ClipRRect(
@@ -2145,25 +2163,28 @@ class _ReadingRecordsPageState extends State<ReadingRecordsPage> {
         width: width,
         height: height,
         fit: BoxFit.cover,
-        fallback: _buildCoverFallback(width: width, height: height),
+        fallback: _buildCoverFallback(
+          title: title,
+          author: author,
+          width: width,
+          height: height,
+        ),
       ),
     );
   }
 
-  Widget _buildCoverFallback({required double width, required double height}) {
-    final colorScheme = Theme.of(context).colorScheme;
-    return Container(
+  Widget _buildCoverFallback({
+    String? title,
+    String? author,
+    required double width,
+    required double height,
+  }) {
+    return TextCoverPlaceholder(
+      title: title,
+      author: author,
       width: width,
       height: height,
-      alignment: Alignment.center,
-      decoration: BoxDecoration(
-        color: colorScheme.surfaceContainerHighest,
-        borderRadius: BorderRadius.circular(10),
-      ),
-      child: Icon(
-        Icons.menu_book_outlined,
-        color: colorScheme.onSurfaceVariant,
-      ),
+      borderRadius: BorderRadius.circular(10),
     );
   }
 

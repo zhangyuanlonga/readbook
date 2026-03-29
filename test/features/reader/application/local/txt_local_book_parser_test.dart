@@ -277,6 +277,41 @@ $longContent
       expect(result.chapters.first.title, '第1章 開始');
       expect(await file.readAsBytes(), rawBytes);
     });
+
+    test('uses streaming index path for large utf8 books', () async {
+      final file = File('${tempDir.path}/large_streaming.txt');
+      final buffer = StringBuffer();
+      for (var index = 1; index <= 120; index += 1) {
+        buffer.writeln('第$index章 流式章节');
+        for (var line = 0; line < 900; line += 1) {
+          buffer.writeln('这是第$index章的正文内容，行号$line。');
+        }
+        buffer.writeln();
+      }
+      await file.writeAsString(buffer.toString());
+      expect(await file.length(), greaterThan(1024 * 1024));
+
+      final now = DateTime.parse('2026-02-23T12:00:00.000Z');
+      final result = await parser.parse(
+        LocalBook(
+          id: 'local_txt_streaming',
+          title: '大文件流式索引测试',
+          format: LocalBookFormat.txt,
+          storagePath: file.path,
+          charset: 'utf-8',
+          fileSize: await file.length(),
+          createdAt: now,
+          updatedAt: now,
+        ),
+      );
+
+      expect(result.charset, 'utf-8');
+      expect(result.chapters.length, greaterThan(50));
+      expect(result.chapters.first.title, '第1章 流式章节');
+      expect(result.chapters.first.content, isEmpty);
+      expect(result.chapters.first.startOffset, isNotNull);
+      expect(result.chapters.first.endOffset, isNotNull);
+    });
   });
 }
 

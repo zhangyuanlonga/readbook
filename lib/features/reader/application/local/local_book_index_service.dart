@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 
 import '../../../../core/errors/app_exception.dart';
@@ -12,6 +13,7 @@ import '../../../../domain/repositories/local_book_repository.dart';
 import '../reader_system_settings_service.dart';
 import 'epub_local_book_parser.dart';
 import 'local_book_parser.dart';
+import 'local_book_storage_service.dart';
 import 'txt_local_book_parser.dart';
 
 class LocalBookIndexService {
@@ -20,6 +22,7 @@ class LocalBookIndexService {
     List<LocalBookParser>? parsers,
     AppLogger? logger,
     ReaderSystemSettingsService? readerSystemSettingsService,
+    LocalBookStorageService? storageService,
   }) : _localBookRepository =
            localBookRepository ?? LocalBookRepositoryImpl(AppDatabase.instance),
        _parsers =
@@ -30,12 +33,21 @@ class LocalBookIndexService {
            ],
        _readerSystemSettingsService =
            readerSystemSettingsService ?? ReaderSystemSettingsService(),
+       _storageService =
+           storageService ?? LocalBookStorageService(logger: logger),
        _logger = logger ?? AppLogger.instance;
 
   final LocalBookRepository _localBookRepository;
   final List<LocalBookParser> _parsers;
   final ReaderSystemSettingsService _readerSystemSettingsService;
+  final LocalBookStorageService _storageService;
   final AppLogger _logger;
+  static final Map<String, Future<List<LocalChapter>>> _activeIndexTasks =
+      <String, Future<List<LocalChapter>>>{};
+  static final StreamController<LocalBookIndexEvent> _eventController =
+      StreamController<LocalBookIndexEvent>.broadcast();
+
+  static Stream<LocalBookIndexEvent> get watchEvents => _eventController.stream;
 
   Future<List<LocalChapter>> ensureIndexed({
     required String bookId,
@@ -50,6 +62,59 @@ class LocalBookIndexService {
       );
     }
 
+    final activeTask = _activeIndexTasks[normalizedBookId];
+    if (activeTask != null) {
+      return activeTask;
+    }
+
+    final task = _ensureIndexedInternal(
+      normalizedBookId: normalizedBookId,
+      force: force,
+    );
+    _activeIndexTasks[normalizedBookId] = task;
+    try {
+      return await task;
+    } finally {
+      if (identical(_activeIndexTasks[normalizedBookId], task)) {
+        _activeIndexTasks.remove(normalizedBookId);
+      }
+    }
+  }
+
+  Future<LocalBook?> refreshBookState({required String bookId}) async {
+    final normalizedBookId = bookId.trim();
+    if (normalizedBookId.isEmpty) {
+      return null;
+    }
+    final loadedBook = await _localBookRepository.getBookById(normalizedBookId);
+    if (loadedBook == null) {
+      return null;
+    }
+    final refreshed = await _refreshBookBeforeIndex(loadedBook);
+    final nextBook =
+        refreshed.shouldReindex &&
+                refreshed.book.indexStatus == LocalBookIndexStatus.ready
+            ? refreshed.book.copyWith(
+              indexStatus: LocalBookIndexStatus.stale,
+              updatedAt: DateTime.now(),
+            )
+            : refreshed.book;
+    if (_isBookMetaChanged(previous: loadedBook, next: nextBook)) {
+      await _localBookRepository.upsertBook(nextBook);
+      _emitIndexEvent(
+        bookId: normalizedBookId,
+        status: nextBook.indexStatus,
+        chapterCount: nextBook.chapterCount,
+      );
+    }
+    return nextBook;
+  }
+
+  Future<List<LocalChapter>> _ensureIndexedInternal({
+    required String normalizedBookId,
+    required bool force,
+  }) async {
+    final startedAt = DateTime.now();
     final loadedBook = await _localBookRepository.getBookById(normalizedBookId);
     if (loadedBook == null) {
       throw AppException(
@@ -78,10 +143,16 @@ class LocalBookIndexService {
       status: LocalBookIndexStatus.indexing,
       clearLastError: true,
     );
+    _emitIndexEvent(
+      bookId: normalizedBookId,
+      status: LocalBookIndexStatus.indexing,
+      chapterCount: preparedBook.chapterCount,
+    );
 
     final parser = _resolveParser(preparedBook.format);
     try {
-      final parsedBook = await parser.parse(preparedBook);
+      final bookForParsing = await _hydrateReadableBook(preparedBook);
+      final parsedBook = await parser.parse(bookForParsing);
       if (parsedBook.chapters.isEmpty) {
         throw AppException(
           code: ErrorCode.ruleMatchEmpty,
@@ -94,6 +165,21 @@ class LocalBookIndexService {
         book: preparedBook,
         parsedBook: parsedBook,
       );
+      _logger.info(
+        'Local book indexed',
+        context: {
+          'bookId': normalizedBookId,
+          'format': preparedBook.format.name,
+          'chapterCount': persisted.length,
+          'force': force,
+          'costMs': DateTime.now().difference(startedAt).inMilliseconds,
+        },
+      );
+      _emitIndexEvent(
+        bookId: normalizedBookId,
+        status: LocalBookIndexStatus.ready,
+        chapterCount: persisted.length,
+      );
       return persisted;
     } on AppException catch (error) {
       await _localBookRepository.updateBookIndexState(
@@ -101,6 +187,11 @@ class LocalBookIndexService {
         status: LocalBookIndexStatus.failed,
         chapterCount: 0,
         lastError: error.briefMessage,
+      );
+      _emitIndexEvent(
+        bookId: normalizedBookId,
+        status: LocalBookIndexStatus.failed,
+        chapterCount: 0,
       );
       rethrow;
     } catch (error) {
@@ -110,6 +201,21 @@ class LocalBookIndexService {
         status: LocalBookIndexStatus.failed,
         chapterCount: 0,
         lastError: message,
+      );
+      _emitIndexEvent(
+        bookId: normalizedBookId,
+        status: LocalBookIndexStatus.failed,
+        chapterCount: 0,
+      );
+      _logger.warn(
+        'Local book index failed',
+        context: {
+          'bookId': normalizedBookId,
+          'format': preparedBook.format.name,
+          'force': force,
+          'costMs': DateTime.now().difference(startedAt).inMilliseconds,
+          'error': message,
+        },
       );
       _logger.error(
         'Local book indexing failed',
@@ -137,12 +243,34 @@ class LocalBookIndexService {
     prepared = refreshedFile.book;
     shouldReindex = shouldReindex || refreshedFile.shouldReindex;
 
+    if (prepared.format == LocalBookFormat.epub &&
+        prepared.indexStatus == LocalBookIndexStatus.ready &&
+        prepared.chapterCount > 0) {
+      final chapterMetas = await _localBookRepository.getChapterMetas(
+        prepared.id,
+      );
+      final hasLegacyChaptersWithoutSourceRef = chapterMetas.any(
+        (chapter) => (chapter.sourceRef?.trim().isEmpty ?? true),
+      );
+      if (hasLegacyChaptersWithoutSourceRef) {
+        prepared = prepared.copyWith(
+          indexStatus: LocalBookIndexStatus.stale,
+          updatedAt: DateTime.now(),
+        );
+        shouldReindex = true;
+      }
+    }
+
     if (prepared.format == LocalBookFormat.txt) {
       final splitLongChapterEnabled =
           await _readerSystemSettingsService
               .loadLocalTxtSplitLongChapterEnabled();
       if (prepared.splitLongChapter != splitLongChapterEnabled) {
         prepared = prepared.copyWith(
+          indexStatus:
+              prepared.indexStatus == LocalBookIndexStatus.ready
+                  ? LocalBookIndexStatus.stale
+                  : prepared.indexStatus,
           splitLongChapter: splitLongChapterEnabled,
           updatedAt: DateTime.now(),
         );
@@ -160,43 +288,34 @@ class LocalBookIndexService {
   Future<_PreparedBookResult> _refreshStorageFromSourceIfChanged(
     LocalBook book,
   ) async {
-    var nextBook = book;
-    var shouldReindex = false;
-
-    final normalizedSourcePath = (book.sourcePath ?? '').trim();
-    if (normalizedSourcePath.isNotEmpty) {
-      final sourceFile = File(normalizedSourcePath);
-      if (await sourceFile.exists()) {
-        final sourceStat = await sourceFile.stat();
-        final sourceModifiedMs = sourceStat.modified.millisecondsSinceEpoch;
-        final sourceChanged =
-            book.sourceFileSize != sourceStat.size ||
-            book.sourceFileLastModifiedMs != sourceModifiedMs;
-
-        if (sourceChanged) {
-          final storageFile = File(book.storagePath);
-          if (await storageFile.exists()) {
-            await storageFile.delete();
-          }
-          await sourceFile.copy(storageFile.path);
-          shouldReindex = true;
-        }
-
-        final storageStat = await _statOrNull(File(book.storagePath));
-        nextBook = nextBook.copyWith(
-          fileSize: storageStat?.size ?? sourceStat.size,
-          sourceFileSize: sourceStat.size,
-          sourceFileLastModifiedMs: sourceModifiedMs,
-          storageFileLastModifiedMs:
-              storageStat?.modified.millisecondsSinceEpoch ??
-              nextBook.storageFileLastModifiedMs,
-          updatedAt: sourceChanged ? DateTime.now() : nextBook.updatedAt,
-        );
-      }
+    final restored = await _storageService.restoreStorageFromSourceIfNeeded(
+      book,
+    );
+    var nextBook = restored.book;
+    var shouldReindex = restored.shouldReindex;
+    if (shouldReindex && nextBook.indexStatus == LocalBookIndexStatus.ready) {
+      nextBook = nextBook.copyWith(
+        indexStatus: LocalBookIndexStatus.stale,
+        updatedAt: DateTime.now(),
+      );
     }
 
-    final storageStat = await _statOrNull(File(nextBook.storagePath));
+    final resolvedStorageFile = await _storageService.resolveStorageFile(
+      nextBook,
+    );
+    final storageStat = await _statOrNull(resolvedStorageFile);
     if (storageStat == null) {
+      final normalizedSourcePath = (book.sourcePath ?? '').trim();
+      final sourceUnavailable =
+          normalizedSourcePath.isEmpty ||
+          !await File(normalizedSourcePath).exists();
+      if (sourceUnavailable) {
+        throw AppException(
+          code: ErrorCode.validation,
+          stage: ErrorStage.content,
+          briefMessage: '本地书籍文件已失效，原文件也不可用，请重新导入。',
+        );
+      }
       return _PreparedBookResult(book: nextBook, shouldReindex: true);
     }
 
@@ -214,6 +333,16 @@ class LocalBookIndexService {
       updatedAt: DateTime.now(),
     );
     return _PreparedBookResult(book: nextBook, shouldReindex: true);
+  }
+
+  Future<LocalBook> _hydrateReadableBook(LocalBook book) async {
+    final resolvedStoragePath = await _storageService.resolveStoragePath(
+      book.storagePath,
+    );
+    if (resolvedStoragePath == book.storagePath) {
+      return book;
+    }
+    return book.copyWith(storagePath: resolvedStoragePath);
   }
 
   bool _shouldReturnExistingChapters({
@@ -295,6 +424,7 @@ class LocalBookIndexService {
                     ? ''
                     : chapter.content,
             imageUrls: chapter.imageUrls,
+            sourceRef: chapter.sourceRef,
             createdAt: now,
             updatedAt: now,
             startOffset: chapter.startOffset,
@@ -315,6 +445,23 @@ class LocalBookIndexService {
       clearLastError: true,
     );
     return chapters;
+  }
+
+  void _emitIndexEvent({
+    required String bookId,
+    required LocalBookIndexStatus status,
+    required int chapterCount,
+  }) {
+    if (_eventController.isClosed) {
+      return;
+    }
+    _eventController.add(
+      LocalBookIndexEvent(
+        bookId: bookId,
+        status: status,
+        chapterCount: chapterCount,
+      ),
+    );
   }
 
   bool _isBookMetaChanged({
@@ -375,6 +522,18 @@ class _PreparedBookResult {
 
   final LocalBook book;
   final bool shouldReindex;
+}
+
+class LocalBookIndexEvent {
+  const LocalBookIndexEvent({
+    required this.bookId,
+    required this.status,
+    required this.chapterCount,
+  });
+
+  final String bookId;
+  final LocalBookIndexStatus status;
+  final int chapterCount;
 }
 
 class _UnsupportedLocalBookParser implements LocalBookParser {

@@ -38,6 +38,17 @@ class LocalBookRepositoryImpl implements LocalBookRepository {
       );
 
   @override
+  Future<void> updateChapterContent({
+    required String chapterId,
+    required String content,
+    List<String> imageUrls = const <String>[],
+  }) => _database.updateLocalChapterContent(
+    chapterId: chapterId,
+    content: content,
+    imageUrls: imageUrls,
+  );
+
+  @override
   Future<void> replaceChapters({
     required String bookId,
     required List<LocalChapter> chapters,

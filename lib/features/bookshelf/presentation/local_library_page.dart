@@ -339,10 +339,37 @@ class _LocalLibraryPageState extends State<LocalLibraryPage> {
     });
   }
 
+  Future<void> _editPendingItemTitle(_PendingImportItem item) async {
+    if (_isImporting) {
+      return;
+    }
+    final edited = await _showEditTitlePage(item.title);
+    if (!mounted || edited == null) {
+      return;
+    }
+    final normalized =
+        LocalBookImportService.normalizeImportedDisplayName(edited).trim();
+    if (normalized.isEmpty || normalized == item.title) {
+      return;
+    }
+    setState(() {
+      item.title = normalized;
+    });
+  }
+
   Future<String?> _showUrlImportPage() async {
     return Navigator.of(context).push<String>(
       MaterialPageRoute<String>(
         builder: (pageContext) => const _LocalUrlImportPage(),
+      ),
+    );
+  }
+
+  Future<String?> _showEditTitlePage(String initialTitle) async {
+    return Navigator.of(context).push<String>(
+      MaterialPageRoute<String>(
+        builder:
+            (pageContext) => _PendingTitleEditPage(initialTitle: initialTitle),
       ),
     );
   }
@@ -701,13 +728,28 @@ class _LocalLibraryPageState extends State<LocalLibraryPage> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(
-                      item.title,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                        fontWeight: FontWeight.w600,
-                      ),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: Text(
+                            item.title,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: Theme.of(context).textTheme.titleSmall
+                                ?.copyWith(fontWeight: FontWeight.w600),
+                          ),
+                        ),
+                        const SizedBox(width: 6),
+                        IconButton(
+                          tooltip: '编辑名称',
+                          visualDensity: VisualDensity.compact,
+                          onPressed:
+                              _isImporting
+                                  ? null
+                                  : () => _editPendingItemTitle(item),
+                          icon: const Icon(Icons.edit_outlined, size: 18),
+                        ),
+                      ],
                     ),
                     const SizedBox(height: 4),
                     Text(
@@ -768,11 +810,12 @@ class _PendingImportItem {
   _PendingImportItem._({
     required this.id,
     required this.type,
-    required this.title,
+    required String title,
     required this.subtitle,
     this.path,
     this.url,
-  }) : selected = true,
+  }) : title = LocalBookImportService.normalizeImportedDisplayName(title),
+       selected = true,
        errorText = null;
 
   factory _PendingImportItem.file({
@@ -805,7 +848,7 @@ class _PendingImportItem {
 
   final String id;
   final _PendingImportType type;
-  final String title;
+  String title;
   final String subtitle;
   final String? path;
   final String? url;
@@ -832,6 +875,105 @@ class _LocalUrlImportPage extends StatefulWidget {
 
   @override
   State<_LocalUrlImportPage> createState() => _LocalUrlImportPageState();
+}
+
+class _PendingTitleEditPage extends StatefulWidget {
+  const _PendingTitleEditPage({required this.initialTitle});
+
+  final String initialTitle;
+
+  @override
+  State<_PendingTitleEditPage> createState() => _PendingTitleEditPageState();
+}
+
+class _PendingTitleEditPageState extends State<_PendingTitleEditPage> {
+  late final TextEditingController _controller = TextEditingController(
+    text: widget.initialTitle,
+  );
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  void _submit() {
+    Navigator.of(context).pop(_controller.text);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final horizontal = AppSpacing.pageHorizontal(context);
+    final maxWidth = AppLayout.pageContentMaxWidth(context, maxWidth: 760);
+    final keyboardInset = AppLayout.keyboardInset(context);
+    final bottomSafe = MediaQuery.viewPaddingOf(context).bottom;
+    final canSubmit = _controller.text.trim().isNotEmpty;
+
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text('编辑书名'),
+        actions: [
+          TextButton(
+            onPressed: canSubmit ? _submit : null,
+            child: const Text('完成'),
+          ),
+          const SizedBox(width: 8),
+        ],
+      ),
+      body: AnimatedPadding(
+        duration: const Duration(milliseconds: 180),
+        curve: Curves.easeOutCubic,
+        padding: EdgeInsets.only(bottom: keyboardInset),
+        child: SafeArea(
+          top: false,
+          child: Center(
+            child: ConstrainedBox(
+              constraints: BoxConstraints(maxWidth: maxWidth),
+              child: Padding(
+                padding: EdgeInsets.fromLTRB(
+                  horizontal,
+                  12,
+                  horizontal,
+                  12 + bottomSafe,
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    Text(
+                      '导入前可先调整书名，后续会按这个名称入库。',
+                      style: Theme.of(context).textTheme.bodyMedium,
+                    ),
+                    const SizedBox(height: 8),
+                    TextField(
+                      controller: _controller,
+                      autofocus: true,
+                      textInputAction: TextInputAction.done,
+                      onChanged: (_) => setState(() {}),
+                      onSubmitted: (_) {
+                        if (canSubmit) {
+                          _submit();
+                        }
+                      },
+                      decoration: const InputDecoration(
+                        hintText: '请输入书名',
+                        border: OutlineInputBorder(),
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    FilledButton.icon(
+                      onPressed: canSubmit ? _submit : null,
+                      icon: const Icon(Icons.check_rounded),
+                      label: const Text('保存名称'),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
 }
 
 class _LocalUrlImportPageState extends State<_LocalUrlImportPage> {

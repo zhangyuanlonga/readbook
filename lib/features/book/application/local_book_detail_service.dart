@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import '../../../core/errors/app_exception.dart';
 import '../../../core/errors/error_codes.dart';
 import '../../../core/errors/error_stage.dart';
@@ -36,6 +38,7 @@ class LocalBookDetailService {
     required String bookId,
     bool forceReindex = false,
     bool withContent = true,
+    bool allowBackgroundIndex = false,
   }) async {
     final normalizedBookId = bookId.trim();
     if (normalizedBookId.isEmpty) {
@@ -55,21 +58,32 @@ class LocalBookDetailService {
       );
     }
 
+    final refreshedBook = await _indexService.refreshBookState(
+      bookId: normalizedBookId,
+    );
+    if (refreshedBook != null) {
+      book = refreshedBook;
+    }
+
     final needsIndex =
         forceReindex ||
         book.indexStatus != LocalBookIndexStatus.ready ||
         book.chapterCount <= 0;
 
     if (needsIndex) {
-      await _indexService.ensureIndexed(
-        bookId: normalizedBookId,
-        force: forceReindex,
-      );
-      final refreshed = await _localBookRepository.getBookById(
-        normalizedBookId,
-      );
-      if (refreshed != null) {
-        book = refreshed;
+      if (allowBackgroundIndex && !forceReindex) {
+        unawaited(_indexService.ensureIndexed(bookId: normalizedBookId));
+      } else {
+        await _indexService.ensureIndexed(
+          bookId: normalizedBookId,
+          force: forceReindex,
+        );
+        final refreshed = await _localBookRepository.getBookById(
+          normalizedBookId,
+        );
+        if (refreshed != null) {
+          book = refreshed;
+        }
       }
     }
 

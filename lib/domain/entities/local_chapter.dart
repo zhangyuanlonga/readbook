@@ -6,6 +6,7 @@ class LocalChapter {
     required this.title,
     required this.content,
     this.imageUrls = const <String>[],
+    this.sourceRef,
     required this.createdAt,
     required this.updatedAt,
     this.startOffset,
@@ -18,6 +19,7 @@ class LocalChapter {
   final String title;
   final String content;
   final List<String> imageUrls;
+  final String? sourceRef;
   final DateTime createdAt;
   final DateTime updatedAt;
   final int? startOffset;
@@ -30,6 +32,8 @@ class LocalChapter {
     String? title,
     String? content,
     List<String>? imageUrls,
+    String? sourceRef,
+    bool clearSourceRef = false,
     DateTime? createdAt,
     DateTime? updatedAt,
     int? startOffset,
@@ -44,6 +48,7 @@ class LocalChapter {
       title: title ?? this.title,
       content: content ?? this.content,
       imageUrls: imageUrls ?? this.imageUrls,
+      sourceRef: clearSourceRef ? null : (sourceRef ?? this.sourceRef),
       createdAt: createdAt ?? this.createdAt,
       updatedAt: updatedAt ?? this.updatedAt,
       startOffset: clearStartOffset ? null : (startOffset ?? this.startOffset),
@@ -59,6 +64,7 @@ class LocalChapter {
       'title': title,
       'content': content,
       'imageUrls': imageUrls,
+      'sourceRef': sourceRef,
       'createdAt': createdAt.toIso8601String(),
       'updatedAt': updatedAt.toIso8601String(),
       'startOffset': startOffset,
@@ -74,6 +80,7 @@ class LocalChapter {
       title: _requiredString(json, 'title'),
       content: json['content']?.toString() ?? '',
       imageUrls: _optionalStringList(json['imageUrls']),
+      sourceRef: _optionalString(json['sourceRef']),
       createdAt: _requiredDateTime(json, 'createdAt'),
       updatedAt: _requiredDateTime(json, 'updatedAt'),
       startOffset: _optionalInt(json['startOffset']),
@@ -131,5 +138,10 @@ class LocalChapter {
           .toList(growable: false);
     }
     return const <String>[];
+  }
+
+  static String? _optionalString(Object? value) {
+    final normalized = value?.toString().trim() ?? '';
+    return normalized.isEmpty ? null : normalized;
   }
 }

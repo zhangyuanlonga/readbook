@@ -64,6 +64,7 @@ class LocalContentProvider extends ContentProvider {
       bookId: resolvedBookId,
       forceReindex: forceRefresh,
       withContent: false,
+      allowBackgroundIndex: !forceRefresh,
     );
 
     final detail = BookDetail(

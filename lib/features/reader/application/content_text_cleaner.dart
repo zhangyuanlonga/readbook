@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import 'package:html/parser.dart' as html_parser;
 
 class ContentTextCleaner {
@@ -36,16 +38,15 @@ class ContentTextCleaner {
     r'[\u0000-\u0008\u000B\u000C\u000E-\u001F]',
   );
 
-  static final RegExp _paragraphEndPattern = RegExp(
-    r'[。！？!?…]+$|[”’」』）)\]]$',
-  );
+  static final RegExp _paragraphEndPattern = RegExp(r'[。！？!?…]+$|[”’」』）)\]]$');
 
   String clean(String source) {
-    if (source.trim().isEmpty) {
+    final unwrapped = _unwrapStructuredTextPayload(source);
+    if (unwrapped.trim().isEmpty) {
       return '';
     }
 
-    final withoutScript = source.replaceAll(_removeTagPattern, ' ');
+    final withoutScript = unwrapped.replaceAll(_removeTagPattern, ' ');
 
     // Inject explicit line breaks into HTML before extracting plain text.
     final normalizedHtml = withoutScript
@@ -79,6 +80,84 @@ class ContentTextCleaner {
     }
 
     return paragraphs.join('\n\n').trim();
+  }
+
+  String _unwrapStructuredTextPayload(String source) {
+    var current = source.trim();
+    if (current.isEmpty) {
+      return '';
+    }
+
+    for (var depth = 0; depth < 3; depth++) {
+      final decoded = _tryDecodeJsonLikePayload(current);
+      if (decoded == null) {
+        break;
+      }
+      final extracted = _extractStructuredText(decoded)?.trim();
+      if (extracted == null || extracted.isEmpty || extracted == current) {
+        break;
+      }
+      current = extracted;
+    }
+
+    return current;
+  }
+
+  Object? _tryDecodeJsonLikePayload(String value) {
+    final trimmed = value.trim();
+    if (trimmed.isEmpty) {
+      return null;
+    }
+    final startsLikeJson =
+        trimmed.startsWith('{') ||
+        trimmed.startsWith('[') ||
+        trimmed.startsWith('"');
+    if (!startsLikeJson) {
+      return null;
+    }
+
+    try {
+      return jsonDecode(trimmed);
+    } catch (_) {
+      return null;
+    }
+  }
+
+  String? _extractStructuredText(Object? value) {
+    if (value == null) {
+      return null;
+    }
+    if (value is String) {
+      final trimmed = value.trim();
+      return trimmed.isEmpty ? null : trimmed;
+    }
+    if (value is List) {
+      final parts = value
+          .map(_extractStructuredText)
+          .whereType<String>()
+          .map((item) => item.trim())
+          .where((item) => item.isNotEmpty)
+          .toList(growable: false);
+      if (parts.isEmpty) {
+        return null;
+      }
+      return parts.join('\n\n');
+    }
+    if (value is Map) {
+      for (final key in const ['content', 'text', 'body', 'txt', 'data']) {
+        final extracted = _extractStructuredText(value[key]);
+        if (extracted != null && extracted.isNotEmpty) {
+          return extracted;
+        }
+      }
+      if (value.length == 1) {
+        final extracted = _extractStructuredText(value.values.first);
+        if (extracted != null && extracted.isNotEmpty) {
+          return extracted;
+        }
+      }
+    }
+    return null;
   }
 
   List<String> _buildParagraphs(String text) {
@@ -204,11 +283,13 @@ class ContentTextCleaner {
     final leftLast = left.codeUnitAt(left.length - 1);
     final rightFirst = right.codeUnitAt(0);
 
-    final leftAscii = (leftLast >= 0x30 && leftLast <= 0x39) ||
+    final leftAscii =
+        (leftLast >= 0x30 && leftLast <= 0x39) ||
         (leftLast >= 0x41 && leftLast <= 0x5A) ||
         (leftLast >= 0x61 && leftLast <= 0x7A);
 
-    final rightAscii = (rightFirst >= 0x30 && rightFirst <= 0x39) ||
+    final rightAscii =
+        (rightFirst >= 0x30 && rightFirst <= 0x39) ||
         (rightFirst >= 0x41 && rightFirst <= 0x5A) ||
         (rightFirst >= 0x61 && rightFirst <= 0x7A);
 

@@ -3,6 +3,7 @@ import 'dart:io';
 
 import 'package:archive/archive.dart';
 import 'package:flutter_appread/domain/entities/local_book.dart';
+import 'package:flutter_appread/domain/entities/local_chapter.dart';
 import 'package:flutter_appread/features/reader/application/local/epub_local_book_parser.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -197,8 +198,31 @@ void main() {
       );
 
       expect(result.chapters, hasLength(1));
-      expect(result.chapters.first.imageUrls, isNotEmpty);
-      final firstImageUri = Uri.parse(result.chapters.first.imageUrls.first);
+      expect(result.chapters.first.imageUrls, isEmpty);
+      expect(result.chapters.first.sourceRef, 'OPS/chapter1.xhtml');
+      final parsedChapter = await parser.parseChapter(
+        book: LocalBook(
+          id: 'local_epub_image_1',
+          title: 'epub图片测试',
+          format: LocalBookFormat.epub,
+          storagePath: file.path,
+          fileSize: await file.length(),
+          createdAt: now,
+          updatedAt: now,
+        ),
+        chapter: LocalChapter(
+          id: 'chapter_1',
+          bookId: 'local_epub_image_1',
+          chapterIndex: 0,
+          title: result.chapters.first.title,
+          content: '',
+          sourceRef: result.chapters.first.sourceRef,
+          createdAt: now,
+          updatedAt: now,
+        ),
+      );
+      expect(parsedChapter.imageUrls, isNotEmpty);
+      final firstImageUri = Uri.parse(parsedChapter.imageUrls.first);
       expect(firstImageUri.scheme, 'file');
       expect(File.fromUri(firstImageUri).existsSync(), isTrue);
     });
@@ -237,9 +261,31 @@ void main() {
       );
 
       expect(result.chapters, hasLength(1));
-      expect(result.chapters.first.content, contains('第一段文字。'));
-      expect(result.chapters.first.content, contains('[[appread-image:'));
-      expect(result.chapters.first.content, contains('第二段文字。'));
+      expect(result.chapters.first.content, isEmpty);
+      final parsedChapter = await parser.parseChapter(
+        book: LocalBook(
+          id: 'local_epub_mixed_1',
+          title: 'epub图文测试',
+          format: LocalBookFormat.epub,
+          storagePath: file.path,
+          fileSize: await file.length(),
+          createdAt: now,
+          updatedAt: now,
+        ),
+        chapter: LocalChapter(
+          id: 'chapter_1',
+          bookId: 'local_epub_mixed_1',
+          chapterIndex: 0,
+          title: result.chapters.first.title,
+          content: '',
+          sourceRef: result.chapters.first.sourceRef,
+          createdAt: now,
+          updatedAt: now,
+        ),
+      );
+      expect(parsedChapter.content, contains('第一段文字。'));
+      expect(parsedChapter.content, contains('[[appread-image:'));
+      expect(parsedChapter.content, contains('第二段文字。'));
     });
   });
 }

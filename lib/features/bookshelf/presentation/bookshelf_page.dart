@@ -8,11 +8,13 @@ import 'package:path_provider/path_provider.dart';
 
 import '../../../app/layout/app_spacing.dart';
 import '../../../app/widgets/disk_cached_cover_image.dart';
+import '../../../app/widgets/text_cover_placeholder.dart';
 import '../../../core/errors/app_exception.dart';
 import '../../../core/media/image_selection_service.dart';
 import '../../../data/datasources/local/app_database.dart';
 import '../../../domain/entities/bookshelf_book.dart';
 import '../../../domain/entities/reading_progress.dart';
+import '../../../domain/entities/reading_record.dart';
 import '../application/bookshelf_service.dart';
 import '../application/bookshelf_system_settings_service.dart';
 import '../application/local_book_import_service.dart';
@@ -105,6 +107,8 @@ class _BookshelfPageState extends State<BookshelfPage>
   Future<void>? _activeBookshelfLoad;
   bool _reloadAfterActiveLoad = false;
   bool? _lastKnownAutoRefreshOnTabActiveEnabled;
+  bool _hasShownContinueReadingPrompt = false;
+  ReadingRecord? _continueReadingRecord;
 
   static const String _kLocalBookSourceId =
       LocalBookImportService.localBookSourceId;
@@ -123,6 +127,8 @@ class _BookshelfPageState extends State<BookshelfPage>
   static const double _kBooksModeSwitchCurveSpan = 0.42;
   static const Duration _kAutoRefreshDebounce = Duration(milliseconds: 800);
   static const Duration _kDuplicateLoadCooldown = Duration(milliseconds: 700);
+  static const Duration _kContinueReadingPromptDuration = Duration(seconds: 6);
+  static const double _kContinueReadingCardHeight = 84;
 
   @override
   void initState() {
@@ -178,6 +184,10 @@ class _BookshelfPageState extends State<BookshelfPage>
     final horizontal = AppSpacing.pageHorizontal(context);
     final bottomSafe = MediaQuery.viewPaddingOf(context).bottom;
     final filteredBooks = _filteredBooks;
+    final continueReadingVisible =
+        _continueReadingRecord != null && !_isSelectionMode;
+    final continueReadingReservedSpace =
+        continueReadingVisible ? _kContinueReadingCardHeight + 12 : 0.0;
 
     return Scaffold(
       appBar: AppBar(
@@ -239,41 +249,63 @@ class _BookshelfPageState extends State<BookshelfPage>
           _isSelectionMode
               ? _buildSelectionActionBar(filteredBooks: filteredBooks)
               : null,
-      body: DecoratedBox(
-        decoration: BoxDecoration(
-          gradient: LinearGradient(
-            begin: Alignment.topCenter,
-            end: Alignment.bottomCenter,
-            colors: [colorScheme.surface, colorScheme.surfaceContainerLow],
-          ),
-        ),
-        child: RefreshIndicator(
-          onRefresh: () => _loadBookshelf(force: true),
-          child: CustomScrollView(
-            physics: const AlwaysScrollableScrollPhysics(),
-            slivers: [
-              if (_books.isNotEmpty)
-                SliverPadding(
-                  padding: EdgeInsets.fromLTRB(horizontal, 12, horizontal, 0),
-                  sliver: SliverToBoxAdapter(child: _buildViewModeEditBar()),
-                ),
-              if (_books.isNotEmpty)
-                SliverPadding(
-                  padding: EdgeInsets.fromLTRB(horizontal, 8, horizontal, 0),
-                  sliver: SliverToBoxAdapter(child: _buildFilterBar()),
-                ),
-              SliverPadding(
-                padding: EdgeInsets.fromLTRB(
-                  horizontal,
-                  12,
-                  horizontal,
-                  16 + bottomSafe,
-                ),
-                sliver: _buildBooksContentSliver(filteredBooks),
+      body: Stack(
+        children: [
+          DecoratedBox(
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                begin: Alignment.topCenter,
+                end: Alignment.bottomCenter,
+                colors: [colorScheme.surface, colorScheme.surfaceContainerLow],
               ),
-            ],
+            ),
+            child: RefreshIndicator(
+              onRefresh: () => _loadBookshelf(force: true),
+              child: CustomScrollView(
+                physics: const AlwaysScrollableScrollPhysics(),
+                slivers: [
+                  if (_books.isNotEmpty)
+                    SliverPadding(
+                      padding: EdgeInsets.fromLTRB(
+                        horizontal,
+                        12,
+                        horizontal,
+                        0,
+                      ),
+                      sliver: SliverToBoxAdapter(
+                        child: _buildViewModeEditBar(),
+                      ),
+                    ),
+                  if (_books.isNotEmpty)
+                    SliverPadding(
+                      padding: EdgeInsets.fromLTRB(
+                        horizontal,
+                        8,
+                        horizontal,
+                        0,
+                      ),
+                      sliver: SliverToBoxAdapter(child: _buildFilterBar()),
+                    ),
+                  SliverPadding(
+                    padding: EdgeInsets.fromLTRB(
+                      horizontal,
+                      12,
+                      horizontal,
+                      16 + bottomSafe + continueReadingReservedSpace,
+                    ),
+                    sliver: _buildBooksContentSliver(filteredBooks),
+                  ),
+                ],
+              ),
+            ),
           ),
-        ),
+          Positioned(
+            left: horizontal,
+            right: horizontal,
+            bottom: 12,
+            child: _buildContinueReadingPromptCard(),
+          ),
+        ],
       ),
     );
   }
@@ -1162,6 +1194,8 @@ class _BookshelfPageState extends State<BookshelfPage>
                       ),
                       child: _buildCover(
                         book.coverUrl,
+                        title: book.title,
+                        author: book.author,
                         width: double.infinity,
                         height: double.infinity,
                       ),
@@ -1378,6 +1412,8 @@ class _BookshelfPageState extends State<BookshelfPage>
                       Positioned.fill(
                         child: _buildCover(
                           book.coverUrl,
+                          title: book.title,
+                          author: book.author,
                           width: 68,
                           height: 96,
                         ),
@@ -1619,6 +1655,7 @@ class _BookshelfPageState extends State<BookshelfPage>
       _activeFilter,
       _activeCustomTag,
       identityHashCode(_books),
+      identityHashCode(_progressByBookKey),
       identityHashCode(_sourceTypeBySourceId),
       identityHashCode(_bookTagsByKey),
       identityHashCode(_tagOrder),
@@ -1672,12 +1709,32 @@ class _BookshelfPageState extends State<BookshelfPage>
     _orderedBaseFiltersCache = List<_BookshelfFilter>.unmodifiable(
       orderedBaseFilters,
     );
-    _filteredBooksCache = List<BookshelfBook>.unmodifiable(
-      _books
-          .where((book) => _bookMatchesFilter(book, _activeFilter))
-          .toList(growable: false),
-    );
+    final filteredBooks = _books
+      .where((book) => _bookMatchesFilter(book, _activeFilter))
+      .toList(growable: true)..sort(_compareBookshelfBooks);
+    _filteredBooksCache = List<BookshelfBook>.unmodifiable(filteredBooks);
     _derivedBookshelfFingerprint = fingerprint;
+  }
+
+  int _compareBookshelfBooks(BookshelfBook a, BookshelfBook b) {
+    final progressA = _progressByBookKey[_bookKey(a)];
+    final progressB = _progressByBookKey[_bookKey(b)];
+    if (progressA != null && progressB != null) {
+      final compare = progressB.updatedAt.compareTo(progressA.updatedAt);
+      if (compare != 0) {
+        return compare;
+      }
+    } else if (progressA != null) {
+      return -1;
+    } else if (progressB != null) {
+      return 1;
+    }
+
+    final addedCompare = b.addedAt.compareTo(a.addedAt);
+    if (addedCompare != 0) {
+      return addedCompare;
+    }
+    return a.title.compareTo(b.title);
   }
 
   Future<void> _persistTagOrder(List<String> tags) async {
@@ -1922,7 +1979,13 @@ class _BookshelfPageState extends State<BookshelfPage>
                   child: Row(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      _buildCover(book.coverUrl, width: 56, height: 82),
+                      _buildCover(
+                        book.coverUrl,
+                        title: book.title,
+                        author: book.author,
+                        width: 56,
+                        height: 82,
+                      ),
                       const SizedBox(width: 14),
                       Expanded(
                         child: Padding(
@@ -2967,12 +3030,19 @@ class _BookshelfPageState extends State<BookshelfPage>
 
   Widget _buildCover(
     String? coverUrl, {
+    String? title,
+    String? author,
     double width = 78,
     double height = 108,
   }) {
     final uri = Uri.tryParse(coverUrl ?? '');
     if (uri == null || !uri.hasScheme) {
-      return _buildCoverFallback(width: width, height: height);
+      return _buildCoverFallback(
+        title: title,
+        author: author,
+        width: width,
+        height: height,
+      );
     }
 
     return ClipRRect(
@@ -2982,21 +3052,28 @@ class _BookshelfPageState extends State<BookshelfPage>
         width: width,
         height: height,
         fit: BoxFit.cover,
-        fallback: _buildCoverFallback(width: width, height: height),
+        fallback: _buildCoverFallback(
+          title: title,
+          author: author,
+          width: width,
+          height: height,
+        ),
       ),
     );
   }
 
-  Widget _buildCoverFallback({double width = 78, double height = 108}) {
-    return Container(
+  Widget _buildCoverFallback({
+    String? title,
+    String? author,
+    double width = 78,
+    double height = 108,
+  }) {
+    return TextCoverPlaceholder(
+      title: title,
+      author: author,
       width: width,
       height: height,
-      alignment: Alignment.center,
-      decoration: BoxDecoration(
-        color: Theme.of(context).colorScheme.surfaceContainerHighest,
-        borderRadius: BorderRadius.circular(12),
-      ),
-      child: const Icon(Icons.menu_book_outlined),
+      borderRadius: BorderRadius.circular(12),
     );
   }
 
@@ -3120,6 +3197,7 @@ class _BookshelfPageState extends State<BookshelfPage>
         _ensureFilterStillValid();
       });
       _syncSelectionWithBooks();
+      unawaited(_maybeShowContinueReadingPrompt(ticket: ticket));
 
       await _loadBookshelfMetadata(books, ticket: ticket);
 
@@ -3423,6 +3501,285 @@ class _BookshelfPageState extends State<BookshelfPage>
     }
 
     ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(text)));
+  }
+
+  Future<void> _maybeShowContinueReadingPrompt({required int ticket}) async {
+    if (_hasShownContinueReadingPrompt || !mounted || ticket != _loadTicket) {
+      return;
+    }
+    if (!_isBookshelfRoute(_lastKnownRouteLocation)) {
+      return;
+    }
+
+    _hasShownContinueReadingPrompt = true;
+
+    List<ReadingRecord> records;
+    try {
+      records = await AppDatabase.instance.listLatestReadingRecords();
+    } catch (_) {
+      return;
+    }
+
+    if (!mounted || ticket != _loadTicket || records.isEmpty) {
+      return;
+    }
+
+    final latest = records.first;
+    final title = latest.bookTitle.trim();
+    if (title.isEmpty) {
+      return;
+    }
+
+    if (!mounted || ticket != _loadTicket) {
+      return;
+    }
+
+    setState(() {
+      _continueReadingRecord = latest;
+    });
+    Future<void>.delayed(_kContinueReadingPromptDuration, () {
+      if (!mounted || ticket != _loadTicket) {
+        return;
+      }
+      if (_continueReadingRecord?.bookId != latest.bookId) {
+        return;
+      }
+      _dismissContinueReadingPrompt();
+    });
+  }
+
+  Future<void> _openLatestReadingRecord(ReadingRecord record) async {
+    _dismissContinueReadingPrompt();
+    final progress = await _readerPreferencesService.loadProgress(
+      record.bookId,
+    );
+    if (!mounted) {
+      return;
+    }
+
+    final hasMatchedProgress =
+        progress != null &&
+        progress.sourceId.trim() == record.sourceId.trim() &&
+        progress.detailUrl.trim() == record.detailUrl.trim();
+    if (hasMatchedProgress) {
+      _continueReading(progress);
+      return;
+    }
+
+    final chapterId =
+        record.lastChapterId?.trim().isNotEmpty == true
+            ? record.lastChapterId!.trim()
+            : '';
+    final chapterUrl =
+        record.lastChapterUrl?.trim().isNotEmpty == true
+            ? record.lastChapterUrl!.trim()
+            : '';
+    final chapterTitle =
+        record.lastChapterTitle?.trim().isNotEmpty == true
+            ? record.lastChapterTitle!.trim()
+            : record.bookTitle.trim();
+
+    if (chapterId.isNotEmpty && chapterUrl.isNotEmpty) {
+      final route =
+          Uri(
+            path: '/reader/${record.bookId}/$chapterId',
+            queryParameters: <String, String>{
+              'chapterUrl': chapterUrl,
+              'chapterTitle': chapterTitle,
+              'sourceId': record.sourceId,
+              'detailUrl': record.detailUrl,
+              if (record.lastChapterIndex != null)
+                'chapterIndex': record.lastChapterIndex.toString(),
+            },
+          ).toString();
+      context.push(route);
+      return;
+    }
+
+    context.push(
+      buildBookDetailRoute(
+        bookId: record.bookId,
+        sourceId: record.sourceId,
+        detailUrl: record.detailUrl,
+        title: record.bookTitle,
+      ),
+    );
+  }
+
+  void _dismissContinueReadingPrompt() {
+    if (!mounted || _continueReadingRecord == null) {
+      return;
+    }
+    setState(() {
+      _continueReadingRecord = null;
+    });
+  }
+
+  Widget _buildContinueReadingPromptCard() {
+    final record = _continueReadingRecord;
+    final visible = record != null && !_isSelectionMode;
+
+    return IgnorePointer(
+      ignoring: !visible,
+      child: AnimatedSlide(
+        duration: const Duration(milliseconds: 240),
+        curve: Curves.easeOutCubic,
+        offset: visible ? Offset.zero : const Offset(0, 1.15),
+        child: AnimatedOpacity(
+          duration: const Duration(milliseconds: 180),
+          opacity: visible ? 1 : 0,
+          child:
+              record == null
+                  ? const SizedBox.shrink()
+                  : _buildContinueReadingCard(record),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildContinueReadingCard(ReadingRecord record) {
+    final colorScheme = Theme.of(context).colorScheme;
+    final title = _toSingleLineText(record.bookTitle);
+    final chapterTitle = _toSingleLineText(
+      record.lastChapterTitle?.trim() ?? '',
+    );
+    final footer = _formatRelativeReadTime(record.lastReadAt);
+    final subtitle =
+        chapterTitle.isNotEmpty
+            ? '上次阅读 $footer · $chapterTitle'
+            : '上次阅读 $footer';
+
+    return Material(
+      elevation: 6,
+      color: Colors.transparent,
+      child: Container(
+        decoration: BoxDecoration(
+          color: Color.alphaBlend(
+            colorScheme.primary.withValues(alpha: 0.05),
+            colorScheme.surface,
+          ),
+          borderRadius: BorderRadius.circular(18),
+          border: Border.all(
+            color: colorScheme.outlineVariant.withValues(alpha: 0.24),
+          ),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withValues(alpha: 0.05),
+              blurRadius: 18,
+              offset: const Offset(0, 8),
+            ),
+          ],
+        ),
+        child: InkWell(
+          borderRadius: BorderRadius.circular(18),
+          onTap: () => unawaited(_openLatestReadingRecord(record)),
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(10, 10, 10, 10),
+            child: Row(
+              children: [
+                _buildCover(
+                  record.coverUrl,
+                  title: record.bookTitle,
+                  author: record.bookAuthor,
+                  width: 42,
+                  height: 58,
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Text(
+                        '继续阅读',
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: Theme.of(
+                          context,
+                        ).textTheme.labelMedium?.copyWith(
+                          color: colorScheme.primary,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        title.isEmpty ? '继续阅读' : title,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        subtitle,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                          color: colorScheme.onSurfaceVariant,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  crossAxisAlignment: CrossAxisAlignment.end,
+                  children: [
+                    Text(
+                      '上次阅读',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                        color: colorScheme.onSurfaceVariant,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                    const SizedBox(height: 6),
+                    Container(
+                      width: 28,
+                      height: 28,
+                      decoration: BoxDecoration(
+                        color: colorScheme.primaryContainer.withValues(
+                          alpha: 0.88,
+                        ),
+                        borderRadius: BorderRadius.circular(999),
+                      ),
+                      child: Icon(
+                        Icons.chevron_right_rounded,
+                        size: 20,
+                        color: colorScheme.onPrimaryContainer,
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  String _formatRelativeReadTime(DateTime time) {
+    final now = DateTime.now();
+    final diff = now.difference(time);
+    if (diff.inMinutes < 1) {
+      return '刚刚阅读';
+    }
+    if (diff.inHours < 1) {
+      return '${diff.inMinutes} 分钟前';
+    }
+    if (diff.inDays < 1) {
+      return '${diff.inHours} 小时前';
+    }
+    if (diff.inDays < 7) {
+      return '${diff.inDays} 天前';
+    }
+    final month = time.month.toString().padLeft(2, '0');
+    final day = time.day.toString().padLeft(2, '0');
+    return '$month-$day';
   }
 
   Future<void> _openFromBookshelf(

@@ -1,6 +1,6 @@
 # 脚本源文档索引
 
-更新时间：2026-03-25
+更新时间：2026-03-27
 
 这组文档已从 `flutter_testjs` 迁入当前仓库，用于说明脚本源 / 新规则运行时在 `flutterreadbook` 中的规范、能力边界和迁移方案。
 
@@ -10,15 +10,17 @@
 - 部分“当前项目 / 对方项目”的表述仍然是迁移视角
 - 在当前仓库语境下，可以将“当前项目”理解为脚本源运行时内核，将“对方项目”理解为 `flutterreadbook` 的产品层和既有业务壳
 
-这套文档当前只保留一条主阅读路径：先会写书源，再了解规范，再确认实现边界。
+这套文档当前建议按这条路径阅读：先分清新旧 JS 规则，再会写书源，再了解规范，最后确认实现边界。
 
 ## 主线文档
 
-1. [官方书源编写手册](./official-source-author-guide.md)
+1. [JS 规则速查](./js-rules-quick-reference.md)
+   先把旧 `js:` / `<js>` 和新脚本源 JS 的关系、边界、模板入口看明白。
+2. [官方书源编写手册](./official-source-author-guide.md)
    书源作者的主入口。包含模板、流程、标准对象、方法职责和完整 `ctx.*` API。
-2. [书源规范 v1](./source-spec-v1.md)
+3. [书源规范 v1](./source-spec-v1.md)
    规范性文档。只定义书源文件结构、标准对象和兼容约定。
-3. [宿主运行时 API](./runtime-ctx-api.md)
+4. [宿主运行时 API](./runtime-ctx-api.md)
    边界说明文档。只说明当前运行时到底开放了什么，以及哪些能力不要误解。
 
 ## 辅助文档
@@ -43,10 +45,18 @@
 
 ## 模板
 
-- [标准书源模板](../templates/source_template_v1.js)
+- [标准完整模板](../templates/source_template_v1.js)
+  当前沿用 `flutter_testjs` 主线模板整理出的官方示例。
+- [最小骨架模板](../templates/source_template_minimal_v1.js)
+  当前仓库补充的本地简化示例，不是主线官方模板。
+- [HTML 站点模板](../templates/source_template_html_v1.js)
+  当前仓库补充的本地 HTML 示例，不是主线官方模板。
+- [JSON API 模板](../templates/source_template_api_v1.js)
+  当前仓库补充的本地 API 示例，不是主线官方模板。
 
 一句话分工：
 
+- 速查文档负责“先分清新旧规则和模板入口”
 - 主手册负责“怎么写”
 - 规范文档负责“什么算合规”
 - 运行时文档负责“当前实现到哪里”

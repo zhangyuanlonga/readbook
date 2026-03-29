@@ -18,6 +18,22 @@ SKIP_PUB_GET="${SKIP_PUB_GET:-0}"
 SKIP_POD_INSTALL="${SKIP_POD_INSTALL:-0}"
 PREPARE_APPLE_PODS="${PREPARE_APPLE_PODS:-1}"
 
+artifact_base_name() {
+  local base="${ARTIFACT_NAME}"
+  if [[ -n "${BUILD_NAME}" ]]; then
+    base="${base} v${BUILD_NAME}"
+  fi
+  echo "${base}"
+}
+
+artifact_mode_suffix() {
+  if [[ "${BUILD_MODE}" == "release" ]]; then
+    echo ""
+  else
+    echo " ${BUILD_MODE}"
+  fi
+}
+
 usage() {
   cat <<USAGE
 Usage:
@@ -163,18 +179,3 @@ rm -rf "${TMP_DIR}"
 echo ""
 echo "Done. macOS artifact is ready:"
 echo "${ARCHIVE_PATH}"
-artifact_base_name() {
-  local base="${ARTIFACT_NAME}"
-  if [[ -n "${BUILD_NAME}" ]]; then
-    base="${base} v${BUILD_NAME}"
-  fi
-  echo "${base}"
-}
-
-artifact_mode_suffix() {
-  if [[ "${BUILD_MODE}" == "release" ]]; then
-    echo ""
-  else
-    echo " ${BUILD_MODE}"
-  fi
-}

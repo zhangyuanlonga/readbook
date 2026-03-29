@@ -1,8 +1,8 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
 import 'package:path/path.dart' as p;
-import 'package:path_provider/path_provider.dart';
 import 'package:uuid/uuid.dart';
 
 import '../../../core/errors/app_exception.dart';
@@ -15,8 +15,8 @@ import '../../../domain/entities/bookshelf_book.dart';
 import '../../../domain/entities/local_book.dart';
 import '../../../domain/repositories/local_book_repository.dart';
 import '../../reader/application/reader_system_settings_service.dart';
-import '../../reader/application/local/epub_local_book_parser.dart';
-import '../../reader/application/local/local_text_encoding_detector.dart';
+import '../../reader/application/local/local_book_index_service.dart';
+import '../../reader/application/local/local_book_storage_service.dart';
 import 'bookshelf_service.dart';
 
 class LocalBookImportResult {
@@ -34,7 +34,8 @@ class LocalBookImportService {
     LocalBookRepository? localBookRepository,
     BookshelfService? bookshelfService,
     ReaderSystemSettingsService? readerSystemSettingsService,
-    LocalTextEncodingDetector? textEncodingDetector,
+    LocalBookIndexService? localBookIndexService,
+    LocalBookStorageService? localBookStorageService,
     AppLogger? logger,
     Future<Directory> Function()? supportDirectoryProvider,
   }) : _localBookRepository =
@@ -42,20 +43,24 @@ class LocalBookImportService {
        _bookshelfService = bookshelfService ?? BookshelfService(),
        _readerSystemSettingsService =
            readerSystemSettingsService ?? ReaderSystemSettingsService(),
-       _textEncodingDetector =
-           textEncodingDetector ?? const LocalTextEncodingDetector(),
+       _localBookIndexService =
+           localBookIndexService ?? LocalBookIndexService(),
        _logger = logger ?? AppLogger.instance,
-       _supportDirectoryProvider =
-           supportDirectoryProvider ?? getApplicationSupportDirectory;
+       _localBookStorageService =
+           localBookStorageService ??
+           LocalBookStorageService(
+             logger: logger ?? AppLogger.instance,
+             supportDirectoryProvider: supportDirectoryProvider,
+           );
 
   static const String localBookSourceId = '__local_book__';
 
   final LocalBookRepository _localBookRepository;
   final BookshelfService _bookshelfService;
   final ReaderSystemSettingsService _readerSystemSettingsService;
-  final LocalTextEncodingDetector _textEncodingDetector;
+  final LocalBookIndexService _localBookIndexService;
   final AppLogger _logger;
-  final Future<Directory> Function() _supportDirectoryProvider;
+  final LocalBookStorageService _localBookStorageService;
   final Uuid _uuid = const Uuid();
 
   Future<LocalBookImportResult> importFromFile({
@@ -96,33 +101,129 @@ class LocalBookImportService {
             .loadLocalTxtSplitLongChapterEnabled();
     final existingBook = await _findBySourcePath(normalizedPath);
     final bookId = existingBook?.id ?? _buildBookId();
+    final storedStoragePath = _localBookStorageService.buildStoredStoragePath(
+      bookId: bookId,
+      format: format,
+    );
+    final prepared = await _prepareImportedBook(
+      sourceFile: sourceFile,
+      sourcePath: normalizedPath,
+      displayName: displayName,
+      format: format,
+      sourceStat: sourceStat,
+      now: now,
+      splitLongChapterDefault: splitLongChapterDefault,
+      existingBook: existingBook,
+      bookId: bookId,
+      storedStoragePath: storedStoragePath,
+    );
+    await _persistImportedBook(prepared.localBook);
+    await _bookshelfService.upsert(prepared.bookshelfBook);
 
-    final storageDir = await _resolveStorageDirectory();
-    final targetFile = File(
-      p.join(storageDir.path, '$bookId${_extensionForFormat(format)}'),
+    _logger.info(
+      'Local book imported',
+      context: {
+        'bookId': bookId,
+        'format': format.name,
+        'sourcePath': normalizedPath,
+        if (prepared.storageResult.originalCharset != null)
+          'sourceCharset': prepared.storageResult.originalCharset,
+        if (prepared.localBook.charset != null)
+          'normalizedCharset': prepared.localBook.charset,
+        'charsetConverted': prepared.storageResult.convertedToUtf8,
+      },
     );
 
-    final storageResult = await _copyIntoStorage(
+    unawaited(_warmUpLocalBookIndex(bookId));
+
+    return LocalBookImportResult(
+      localBook: prepared.localBook,
+      bookshelfBook: prepared.bookshelfBook,
+    );
+  }
+
+  Future<void> _warmUpLocalBookIndex(String bookId) async {
+    try {
+      await _localBookIndexService.ensureIndexed(bookId: bookId);
+    } catch (error) {
+      _logger.warn(
+        'Warm up local book index failed',
+        context: {'bookId': bookId, 'error': error.toString()},
+      );
+    }
+  }
+
+  Future<_PreparedImportedBook> _prepareImportedBook({
+    required File sourceFile,
+    required String sourcePath,
+    required String? displayName,
+    required LocalBookFormat format,
+    required FileStat sourceStat,
+    required DateTime now,
+    required bool splitLongChapterDefault,
+    required LocalBook? existingBook,
+    required String bookId,
+    required String storedStoragePath,
+  }) async {
+    final resolvedStoragePath = await _localBookStorageService
+        .resolveStoragePath(storedStoragePath);
+    final targetFile = File(resolvedStoragePath);
+    final storageResult = await _localBookStorageService.copyIntoStorage(
       sourceFile: sourceFile,
       targetFile: targetFile,
       format: format,
-      sourcePath: normalizedPath,
+      sourcePath: sourcePath,
       bookId: bookId,
     );
-    final targetStat = storageResult.storageStat;
-    final normalizedCharset = storageResult.normalizedCharset;
+    final localBook = _buildImportedLocalBook(
+      existingBook: existingBook,
+      bookId: bookId,
+      format: format,
+      storedStoragePath: storedStoragePath,
+      sourcePath: sourcePath,
+      targetFile: targetFile,
+      sourceStat: sourceStat,
+      storageStat: storageResult.storageStat,
+      normalizedCharset: storageResult.normalizedCharset,
+      displayName: displayName,
+      splitLongChapterDefault: splitLongChapterDefault,
+      now: now,
+    );
+    return _PreparedImportedBook(
+      localBook: localBook,
+      bookshelfBook: _buildBookshelfBook(localBook, now: now),
+      storageResult: storageResult,
+    );
+  }
 
-    final title = _resolveTitle(displayName ?? p.basename(normalizedPath));
-    final localBook =
-        existingBook?.copyWith(
+  LocalBook _buildImportedLocalBook({
+    required LocalBook? existingBook,
+    required String bookId,
+    required LocalBookFormat format,
+    required String storedStoragePath,
+    required String sourcePath,
+    required File targetFile,
+    required FileStat sourceStat,
+    required FileStat storageStat,
+    required String? normalizedCharset,
+    required String? displayName,
+    required bool splitLongChapterDefault,
+    required DateTime now,
+  }) {
+    final recoverableSourcePath = _localBookStorageService
+        .normalizeRecoverableSourcePath(sourcePath);
+    final title = _resolveTitle(displayName ?? p.basename(sourcePath));
+    return existingBook?.copyWith(
           title: title,
           format: format,
-          storagePath: targetFile.path,
-          sourcePath: normalizedPath,
-          fileSize: targetStat.size,
+          storagePath: storedStoragePath,
+          sourcePath: recoverableSourcePath,
+          clearSourcePath: recoverableSourcePath == null,
+          fileSize: storageStat.size,
           sourceFileSize: sourceStat.size,
           sourceFileLastModifiedMs: sourceStat.modified.millisecondsSinceEpoch,
-          storageFileLastModifiedMs: targetStat.modified.millisecondsSinceEpoch,
+          storageFileLastModifiedMs:
+              storageStat.modified.millisecondsSinceEpoch,
           indexStatus: LocalBookIndexStatus.pending,
           chapterCount: 0,
           splitLongChapter: splitLongChapterDefault,
@@ -135,12 +236,13 @@ class LocalBookImportService {
           id: bookId,
           title: title,
           format: format,
-          storagePath: targetFile.path,
-          sourcePath: normalizedPath,
-          fileSize: targetStat.size,
+          storagePath: storedStoragePath,
+          sourcePath: recoverableSourcePath,
+          fileSize: storageStat.size,
           sourceFileSize: sourceStat.size,
           sourceFileLastModifiedMs: sourceStat.modified.millisecondsSinceEpoch,
-          storageFileLastModifiedMs: targetStat.modified.millisecondsSinceEpoch,
+          storageFileLastModifiedMs:
+              storageStat.modified.millisecondsSinceEpoch,
           indexStatus: LocalBookIndexStatus.pending,
           chapterCount: 0,
           splitLongChapter: splitLongChapterDefault,
@@ -150,45 +252,33 @@ class LocalBookImportService {
           author: existingBook?.author,
           coverPath: existingBook?.coverPath,
         );
+  }
 
+  Future<void> _persistImportedBook(LocalBook localBook) async {
     await _localBookRepository.upsertBook(localBook);
     await _localBookRepository.replaceChapters(
-      bookId: bookId,
+      bookId: localBook.id,
       chapters: const [],
     );
     await _localBookRepository.updateBookIndexState(
-      bookId: bookId,
+      bookId: localBook.id,
       status: LocalBookIndexStatus.pending,
       chapterCount: 0,
       clearLastError: true,
     );
+  }
 
-    final shelfBook = BookshelfBook(
-      bookId: bookId,
+  BookshelfBook _buildBookshelfBook(
+    LocalBook localBook, {
+    required DateTime now,
+  }) {
+    return BookshelfBook(
+      bookId: localBook.id,
       sourceId: localBookSourceId,
-      title: title,
-      detailUrl: 'local://book/$bookId',
+      title: localBook.title,
+      detailUrl: 'local://book/${localBook.id}',
       addedAt: now,
-      author: '本地导入',
-    );
-    await _bookshelfService.upsert(shelfBook);
-
-    _logger.info(
-      'Local book imported',
-      context: {
-        'bookId': bookId,
-        'format': format.name,
-        'sourcePath': normalizedPath,
-        if (storageResult.originalCharset != null)
-          'sourceCharset': storageResult.originalCharset,
-        if (normalizedCharset != null) 'normalizedCharset': normalizedCharset,
-        'charsetConverted': storageResult.convertedToUtf8,
-      },
-    );
-
-    return LocalBookImportResult(
-      localBook: localBook,
-      bookshelfBook: shelfBook,
+      author: localBook.author,
     );
   }
 
@@ -204,38 +294,7 @@ class LocalBookImportService {
 
     final localBook = await _localBookRepository.getBookById(normalizedBookId);
     if (localBook != null) {
-      final file = File(localBook.storagePath);
-      if (await file.exists()) {
-        try {
-          await file.delete();
-        } catch (error) {
-          _logger.warn(
-            'Delete local book file failed',
-            context: {
-              'bookId': normalizedBookId,
-              'path': localBook.storagePath,
-              'error': error.toString(),
-            },
-          );
-        }
-      }
-      if (localBook.format == LocalBookFormat.epub) {
-        final assetDir = EpubLocalBookParser.resolveAssetDirectory(localBook);
-        if (await assetDir.exists()) {
-          try {
-            await assetDir.delete(recursive: true);
-          } catch (error) {
-            _logger.warn(
-              'Delete local epub asset directory failed',
-              context: {
-                'bookId': normalizedBookId,
-                'path': assetDir.path,
-                'error': error.toString(),
-              },
-            );
-          }
-        }
-      }
+      await _localBookStorageService.deleteStoredBookArtifacts(localBook);
     }
 
     await _localBookRepository.deleteBook(normalizedBookId);
@@ -261,74 +320,6 @@ class LocalBookImportService {
     return null;
   }
 
-  Future<Directory> _resolveStorageDirectory() async {
-    final baseDir = await _supportDirectoryProvider();
-    final storageDir = Directory(p.join(baseDir.path, 'local_books'));
-    if (!await storageDir.exists()) {
-      await storageDir.create(recursive: true);
-    }
-    return storageDir;
-  }
-
-  Future<_LocalStorageWriteResult> _copyIntoStorage({
-    required File sourceFile,
-    required File targetFile,
-    required LocalBookFormat format,
-    required String sourcePath,
-    required String bookId,
-  }) async {
-    if (await targetFile.exists()) {
-      await targetFile.delete();
-    }
-
-    if (format != LocalBookFormat.txt) {
-      await sourceFile.copy(targetFile.path);
-      final copiedStat = await targetFile.stat();
-      return _LocalStorageWriteResult(storageStat: copiedStat);
-    }
-
-    final bytes = await sourceFile.readAsBytes();
-    if (bytes.isEmpty) {
-      await targetFile.writeAsBytes(const <int>[], flush: true);
-      final emptyStat = await targetFile.stat();
-      return _LocalStorageWriteResult(
-        storageStat: emptyStat,
-        normalizedCharset: 'utf-8',
-        originalCharset: 'utf-8',
-      );
-    }
-
-    try {
-      final decoded = _textEncodingDetector.decodeBestEffort(bytes);
-      final normalizedText = decoded.text.replaceFirst('\uFEFF', '');
-      final normalizedBytes = utf8.encode(normalizedText);
-      await targetFile.writeAsBytes(normalizedBytes, flush: true);
-      final normalizedStat = await targetFile.stat();
-      return _LocalStorageWriteResult(
-        storageStat: normalizedStat,
-        normalizedCharset: 'utf-8',
-        originalCharset: decoded.charsetName,
-        convertedToUtf8:
-            decoded.charsetName != 'utf-8' ||
-            decoded.bomLength > 0 ||
-            decoded.fallbackUsed,
-      );
-    } catch (error) {
-      _logger.warn(
-        'Normalize local txt encoding failed, fallback to raw copy',
-        context: <String, Object?>{
-          'bookId': bookId,
-          'sourcePath': sourcePath,
-          'targetPath': targetFile.path,
-          'error': error.toString(),
-        },
-      );
-      await sourceFile.copy(targetFile.path);
-      final copiedStat = await targetFile.stat();
-      return _LocalStorageWriteResult(storageStat: copiedStat);
-    }
-  }
-
   String _buildBookId() {
     final raw = _uuid.v4().replaceAll('-', '');
     return 'local_$raw';
@@ -343,15 +334,8 @@ class LocalBookImportService {
     };
   }
 
-  String _extensionForFormat(LocalBookFormat format) {
-    return switch (format) {
-      LocalBookFormat.txt => '.txt',
-      LocalBookFormat.epub => '.epub',
-    };
-  }
-
   String _resolveTitle(String fileName) {
-    final trimmed = fileName.trim();
+    final trimmed = _normalizeImportedFileName(fileName);
     if (trimmed.isEmpty) {
       return '未命名本地书籍';
     }
@@ -363,18 +347,78 @@ class LocalBookImportService {
 
     return trimmed.substring(0, dotIndex).trim();
   }
+
+  static String normalizeImportedDisplayName(String rawName) {
+    final normalized = _normalizeImportedFileName(rawName).trim();
+    return normalized.isEmpty ? rawName.trim() : normalized;
+  }
+
+  static String _normalizeImportedFileName(String rawName) {
+    final trimmed = rawName.trim();
+    if (trimmed.isEmpty) {
+      return trimmed;
+    }
+
+    final candidates = <String>[trimmed];
+    final utf8Candidate = _tryRepairUtf8Mojibake(trimmed);
+    if (utf8Candidate != null && utf8Candidate.trim().isNotEmpty) {
+      candidates.add(utf8Candidate);
+    }
+
+    String best = trimmed;
+    var bestScore = _scoreImportedFileName(trimmed);
+    for (final candidate in candidates) {
+      final score = _scoreImportedFileName(candidate);
+      if (score > bestScore) {
+        best = candidate;
+        bestScore = score;
+      }
+    }
+    return best;
+  }
+
+  static String? _tryRepairUtf8Mojibake(String value) {
+    try {
+      final repaired =
+          utf8.decode(latin1.encode(value), allowMalformed: true).trim();
+      return repaired.isEmpty ? null : repaired;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  static int _scoreImportedFileName(String value) {
+    if (value.isEmpty) {
+      return -9999;
+    }
+    var score = 0;
+    for (final rune in value.runes) {
+      if (rune >= 0x4E00 && rune <= 0x9FFF) {
+        score += 8;
+      } else if ((rune >= 0x30 && rune <= 0x39) ||
+          (rune >= 0x41 && rune <= 0x5A) ||
+          (rune >= 0x61 && rune <= 0x7A)) {
+        score += 2;
+      } else if (rune == 0xFFFD) {
+        score -= 20;
+      } else if (rune < 0x20) {
+        score -= 10;
+      } else if ('ÃÂâõðþÿ�'.contains(String.fromCharCode(rune))) {
+        score -= 6;
+      }
+    }
+    return score;
+  }
 }
 
-class _LocalStorageWriteResult {
-  const _LocalStorageWriteResult({
-    required this.storageStat,
-    this.normalizedCharset,
-    this.originalCharset,
-    this.convertedToUtf8 = false,
+class _PreparedImportedBook {
+  const _PreparedImportedBook({
+    required this.localBook,
+    required this.bookshelfBook,
+    required this.storageResult,
   });
 
-  final FileStat storageStat;
-  final String? normalizedCharset;
-  final String? originalCharset;
-  final bool convertedToUtf8;
+  final LocalBook localBook;
+  final BookshelfBook bookshelfBook;
+  final LocalBookStorageWriteResult storageResult;
 }

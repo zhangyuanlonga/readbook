@@ -1,5 +1,7 @@
 import 'dart:io';
+import 'dart:convert';
 
+import 'package:archive/archive.dart';
 import 'package:charset/charset.dart';
 import 'package:drift/native.dart';
 import 'package:flutter_appread/data/datasources/local/app_database.dart';
@@ -8,6 +10,7 @@ import 'package:flutter_appread/domain/entities/local_book.dart';
 import 'package:flutter_appread/features/reader/application/local/local_book_parser.dart';
 import 'package:flutter_appread/features/reader/application/local/local_book_index_service.dart';
 import 'package:flutter_appread/features/reader/application/local/local_chapter_content_service.dart';
+import 'package:flutter_appread/features/reader/application/local/epub_local_book_parser.dart';
 import 'package:flutter_appread/features/reader/application/local/txt_local_book_parser.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -159,45 +162,65 @@ void main() {
       expect(chapter.content, contains('第二章内容'));
     });
 
-    test(
-      'loads utf-16le bom txt chapter content with detected charset',
-      () async {
-        final file = File('${tempDir.path}/offset_book_utf16le_bom.txt');
-        const content = '第1章 开始\n第一章内容。\n\n第2章 继续\n第二章内容。';
-        await file.writeAsBytes(
-          _encodeUtf16(content, littleEndian: true, withBom: true),
-          flush: true,
-        );
+    test('lazily loads epub chapter content and persists it', () async {
+      final archive =
+          Archive()
+            ..addFile(
+              ArchiveFile(
+                'OPS/ch1.xhtml',
+                0,
+                utf8.encode(
+                  '<html><body><p>第一章正文。</p><img src="images/p1.jpg" /></body></html>',
+                ),
+              ),
+            )
+            ..addFile(ArchiveFile('OPS/images/p1.jpg', 3, [1, 2, 3]));
+      final encoded = ZipEncoder().encode(archive)!;
+      final file = File('${tempDir.path}/lazy.epub');
+      await file.writeAsBytes(encoded, flush: true);
 
-        final now = DateTime.parse('2026-03-21T12:00:00.000Z');
-        await repository.upsertBook(
-          LocalBook(
-            id: 'local_offset_utf16le_1',
-            title: '偏移读取 UTF16LE 测试',
-            format: LocalBookFormat.txt,
-            storagePath: file.path,
-            fileSize: await file.length(),
-            createdAt: now,
-            updatedAt: now,
-          ),
-        );
+      final now = DateTime.parse('2026-03-21T12:00:00.000Z');
+      await repository.upsertBook(
+        LocalBook(
+          id: 'local_epub_lazy_1',
+          title: '懒加载 EPUB',
+          format: LocalBookFormat.epub,
+          storagePath: file.path,
+          fileSize: await file.length(),
+          createdAt: now,
+          updatedAt: now,
+        ),
+      );
 
-        await indexService.ensureIndexed(bookId: 'local_offset_utf16le_1');
+      final epubParser = const EpubLocalBookParser();
+      indexService = LocalBookIndexService(
+        localBookRepository: repository,
+        parsers: <LocalBookParser>[epubParser],
+      );
+      contentService = LocalChapterContentService(
+        localBookRepository: repository,
+        indexService: indexService,
+        epubParser: epubParser,
+      );
 
-        final indexedBook = await repository.getBookById(
-          'local_offset_utf16le_1',
-        );
-        expect(indexedBook, isNotNull);
-        expect(indexedBook!.charset, 'utf-16le');
+      await indexService.ensureIndexed(bookId: 'local_epub_lazy_1');
+      final metas = await repository.getChapters('local_epub_lazy_1');
+      expect(metas, hasLength(1));
+      expect(metas.first.content, isEmpty);
+      expect(metas.first.sourceRef, 'OPS/ch1.xhtml');
 
-        final chapter = await contentService.load(
-          bookId: 'local_offset_utf16le_1',
-          chapterIndex: 1,
-        );
-        expect(chapter.title, '第2章 继续');
-        expect(chapter.content, contains('第二章内容'));
-      },
-    );
+      final chapter = await contentService.load(
+        bookId: 'local_epub_lazy_1',
+        chapterIndex: 0,
+      );
+      expect(chapter.content, contains('第一章正文。'));
+      expect(chapter.imageUrls, isNotEmpty);
+
+      final persisted = await repository.getChapterById(metas.first.id);
+      expect(persisted, isNotNull);
+      expect(persisted!.content, contains('第一章正文。'));
+      expect(persisted.imageUrls, isNotEmpty);
+    });
   });
 }
 

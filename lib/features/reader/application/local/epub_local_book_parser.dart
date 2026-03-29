@@ -10,6 +10,7 @@ import '../../../../core/errors/app_exception.dart';
 import '../../../../core/errors/error_codes.dart';
 import '../../../../core/errors/error_stage.dart';
 import '../../../../domain/entities/local_book.dart';
+import '../../../../domain/entities/local_chapter.dart';
 import 'local_text_encoding_detector.dart';
 import 'local_book_parser.dart';
 
@@ -110,7 +111,6 @@ class EpubLocalBookParser implements LocalBookParser {
     );
 
     final chapters = <LocalParsedChapter>[];
-    var offset = 0;
     var index = 0;
 
     for (final entry in chapterCandidates) {
@@ -120,33 +120,29 @@ class EpubLocalBookParser implements LocalBookParser {
       }
 
       final document = html_parser.parse(html);
-      final extraction = await _extractChapterContent(
-        book: book,
-        documentHtml: document.outerHtml,
-        chapterEntryName: entry.name,
-        archiveFileIndex: archiveFileIndex,
-        assetRootDir: assetDir,
+      final normalizedPreview = _normalizeText(
+        document.body?.text ?? document.outerHtml,
       );
-
-      final normalized = _normalizeText(extraction.content);
-      if (normalized.length < 20 && extraction.imageUrls.isEmpty) {
+      final hasInlineImages = document
+          .querySelectorAll('*')
+          .any(
+            (element) =>
+                (element.localName ?? '').toLowerCase() == 'img' ||
+                (element.localName ?? '').toLowerCase() == 'image',
+          );
+      if (normalizedPreview.length < 20 && !hasInlineImages) {
         continue;
       }
 
       final title = _resolveTitle(document.outerHtml, entry.name, index + 1);
-      final start = offset;
-      offset += normalized.length;
-
       chapters.add(
         LocalParsedChapter(
           title: title,
-          content: normalized,
-          imageUrls: extraction.imageUrls,
-          startOffset: start,
-          endOffset: offset,
+          content: '',
+          imageUrls: const <String>[],
+          sourceRef: _normalizeArchivePath(entry.name),
         ),
       );
-      offset += 1;
       index += 1;
     }
 
@@ -157,14 +153,91 @@ class EpubLocalBookParser implements LocalBookParser {
         briefMessage: 'EPUB 未解析出正文章节，可能是受保护或结构异常文件。',
       );
     }
-
-    final fallbackCoverPath = _resolveCoverPathFromChapterImages(chapters);
-
     return LocalParsedBook(
       chapters: chapters,
       title: metadata.title,
       author: metadata.author,
-      coverPath: coverPath ?? fallbackCoverPath,
+      coverPath: coverPath,
+    );
+  }
+
+  Future<LocalParsedChapter> parseChapter({
+    required LocalBook book,
+    required LocalChapter chapter,
+  }) async {
+    final sourceRef = chapter.sourceRef?.trim() ?? '';
+    if (sourceRef.isEmpty) {
+      throw AppException(
+        code: ErrorCode.validation,
+        stage: ErrorStage.content,
+        briefMessage: 'EPUB 章节定位信息缺失，请重新索引后重试。',
+      );
+    }
+
+    final file = File(book.storagePath);
+    if (!await file.exists()) {
+      throw AppException(
+        code: ErrorCode.validation,
+        stage: ErrorStage.content,
+        briefMessage: '本地文件不存在：${book.storagePath}',
+      );
+    }
+
+    final bytes = await file.readAsBytes();
+    if (bytes.isEmpty) {
+      throw AppException(
+        code: ErrorCode.ruleMatchEmpty,
+        stage: ErrorStage.content,
+        briefMessage: 'EPUB 文件为空，无法读取章节内容。',
+      );
+    }
+
+    Archive archive;
+    try {
+      archive = ZipDecoder().decodeBytes(bytes, verify: false);
+    } catch (error) {
+      throw AppException(
+        code: ErrorCode.decode,
+        stage: ErrorStage.content,
+        briefMessage: 'EPUB 解压失败：$error',
+      );
+    }
+
+    final archiveFileIndex = <String, ArchiveFile>{
+      for (final entry in archive.files.where((item) => item.isFile))
+        _normalizeArchivePath(entry.name): entry,
+    };
+    final archiveEntry = _findArchiveFile(archiveFileIndex, sourceRef);
+    if (archiveEntry == null) {
+      throw AppException(
+        code: ErrorCode.ruleMatchEmpty,
+        stage: ErrorStage.content,
+        briefMessage: '未找到 EPUB 章节资源，请重新索引后重试。',
+      );
+    }
+
+    final assetDir = await _ensureAssetDirectory(book);
+    final html = _readArchiveEntryAsText(archiveEntry);
+    final extraction = await _extractChapterContent(
+      book: book,
+      documentHtml: html,
+      chapterEntryName: archiveEntry.name,
+      archiveFileIndex: archiveFileIndex,
+      assetRootDir: assetDir,
+    );
+    final normalized = _normalizeText(extraction.content);
+    if (normalized.isEmpty && extraction.imageUrls.isEmpty) {
+      throw AppException(
+        code: ErrorCode.ruleMatchEmpty,
+        stage: ErrorStage.content,
+        briefMessage: 'EPUB 章节内容为空，请重新索引后重试。',
+      );
+    }
+    return LocalParsedChapter(
+      title: chapter.title,
+      content: normalized,
+      imageUrls: extraction.imageUrls,
+      sourceRef: sourceRef,
     );
   }
 
@@ -180,6 +253,14 @@ class EpubLocalBookParser implements LocalBookParser {
       await directory.delete(recursive: true);
     }
     await directory.create(recursive: true);
+    return directory;
+  }
+
+  Future<Directory> _ensureAssetDirectory(LocalBook book) async {
+    final directory = resolveAssetDirectory(book);
+    if (!await directory.exists()) {
+      await directory.create(recursive: true);
+    }
     return directory;
   }
 
@@ -734,28 +815,6 @@ class EpubLocalBookParser implements LocalBookParser {
     return targetFile.path;
   }
 
-  String? _resolveCoverPathFromChapterImages(
-    List<LocalParsedChapter> chapters,
-  ) {
-    for (final chapter in chapters) {
-      for (final imageUrl in chapter.imageUrls) {
-        final normalized = imageUrl.trim();
-        if (normalized.isEmpty) {
-          continue;
-        }
-        final uri = Uri.tryParse(normalized);
-        if (uri == null || uri.scheme != 'file') {
-          continue;
-        }
-        final path = uri.toFilePath(windows: Platform.isWindows).trim();
-        if (path.isNotEmpty) {
-          return path;
-        }
-      }
-    }
-    return null;
-  }
-
   Future<_EpubChapterExtraction> _extractChapterContent({
     required LocalBook book,
     required String documentHtml,
@@ -903,7 +962,7 @@ class EpubLocalBookParser implements LocalBookParser {
       return resolvedPath;
     }
 
-    final archiveEntry = archiveFileIndex[resolvedPath];
+    final archiveEntry = _findArchiveFile(archiveFileIndex, resolvedPath);
     if (archiveEntry == null) {
       return null;
     }

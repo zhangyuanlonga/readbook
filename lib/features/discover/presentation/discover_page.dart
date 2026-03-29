@@ -8,6 +8,7 @@ import 'package:go_router/go_router.dart';
 import '../../../app/layout/app_layout.dart';
 import '../../../app/layout/app_spacing.dart';
 import '../../../app/widgets/disk_cached_cover_image.dart';
+import '../../../app/widgets/text_cover_placeholder.dart';
 import '../../../core/errors/app_exception.dart';
 import '../../../data/datasources/local/app_database.dart';
 import '../../../data/repositories/source_repository_impl.dart';
@@ -897,6 +898,8 @@ class _DiscoverPageState extends State<DiscoverPage>
                 children: <Widget>[
                   _buildCoverPreview(
                     book.coverUrl,
+                    title: book.title,
+                    author: book.author,
                     heroTag: heroTag,
                     width: coverWidth,
                     height: coverHeight,
@@ -994,6 +997,8 @@ class _DiscoverPageState extends State<DiscoverPage>
 
   Widget _buildCoverPreview(
     String? coverUrl, {
+    required String title,
+    String? author,
     required String heroTag,
     required double width,
     required double height,
@@ -1002,7 +1007,12 @@ class _DiscoverPageState extends State<DiscoverPage>
     if (trimmed == null || trimmed.isEmpty) {
       return Hero(
         tag: heroTag,
-        child: _buildCoverFallback(width: width, height: height),
+        child: _buildCoverFallback(
+          title: title,
+          author: author,
+          width: width,
+          height: height,
+        ),
       );
     }
 
@@ -1010,7 +1020,12 @@ class _DiscoverPageState extends State<DiscoverPage>
     if (uri == null || !uri.hasScheme) {
       return Hero(
         tag: heroTag,
-        child: _buildCoverFallback(width: width, height: height),
+        child: _buildCoverFallback(
+          title: title,
+          author: author,
+          width: width,
+          height: height,
+        ),
       );
     }
 
@@ -1023,26 +1038,29 @@ class _DiscoverPageState extends State<DiscoverPage>
           width: width,
           height: height,
           fit: BoxFit.cover,
-          fallback: _buildCoverFallback(width: width, height: height),
+          fallback: _buildCoverFallback(
+            title: title,
+            author: author,
+            width: width,
+            height: height,
+          ),
         ),
       ),
     );
   }
 
-  Widget _buildCoverFallback({required double width, required double height}) {
-    return Container(
+  Widget _buildCoverFallback({
+    required String title,
+    String? author,
+    required double width,
+    required double height,
+  }) {
+    return TextCoverPlaceholder(
+      title: title,
+      author: author,
       width: width,
       height: height,
-      decoration: BoxDecoration(
-        color: Theme.of(context).colorScheme.surfaceContainerHighest,
-        borderRadius: BorderRadius.circular(8),
-      ),
-      alignment: Alignment.center,
-      child: Icon(
-        Icons.menu_book_rounded,
-        size: (width * 0.42).clamp(20.0, 22.0).toDouble(),
-        color: Theme.of(context).colorScheme.onSurfaceVariant,
-      ),
+      borderRadius: BorderRadius.circular(8),
     );
   }
 

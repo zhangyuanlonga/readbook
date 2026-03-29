@@ -11,6 +11,33 @@ enum ReaderBackgroundTone {
   containerHigh,
   containerHighest,
   pureBlack,
+  primaryTint,
+  secondaryTint,
+  tertiaryTint,
+  flameOrangeTint,
+  pineGreenTint,
+  seaBlueTint,
+  nightPurpleTint,
+  mistTealTint,
+  berryRoseTint,
+  amberGoldTint,
+}
+
+ReaderBackgroundTone normalizeReaderBackgroundTone({
+  required ReaderThemeMode mode,
+  required ReaderBackgroundTone tone,
+}) {
+  if (mode == ReaderThemeMode.dark &&
+      (tone == ReaderBackgroundTone.containerHigh ||
+          tone == ReaderBackgroundTone.containerHighest)) {
+    return ReaderBackgroundTone.pureBlack;
+  }
+  if (tone == ReaderBackgroundTone.primaryTint ||
+      tone == ReaderBackgroundTone.secondaryTint ||
+      tone == ReaderBackgroundTone.tertiaryTint) {
+    return ReaderBackgroundTone.surface;
+  }
+  return tone;
 }
 
 enum ReaderFontWeightLevel { light, regular, medium }
@@ -413,9 +440,12 @@ class ReaderSettings {
     );
 
     final backgroundToneName = json['backgroundTone']?.toString();
-    final backgroundTone = ReaderBackgroundTone.values.firstWhere(
-      (item) => item.name == backgroundToneName,
-      orElse: () => ReaderBackgroundTone.surface,
+    final backgroundTone = normalizeReaderBackgroundTone(
+      mode: mode,
+      tone: ReaderBackgroundTone.values.firstWhere(
+        (item) => item.name == backgroundToneName,
+        orElse: () => ReaderBackgroundTone.surface,
+      ),
     );
 
     final fontWeightName = json['fontWeightLevel']?.toString();
@@ -453,13 +483,14 @@ class ReaderSettings {
     final bodyTextColorValue = _asInt(json['bodyTextColorValue']);
     final bodyTextDecorationStyleName =
         json['bodyTextDecorationStyle']?.toString();
-    final bodyTextDecorationStyle =
-        ReaderBodyTextDecorationStyle.values.firstWhere(
+    final bodyTextDecorationStyle = ReaderBodyTextDecorationStyle.values
+        .firstWhere(
           (item) => item.name == bodyTextDecorationStyleName,
           orElse: () => ReaderBodyTextDecorationStyle.none,
         );
-    final bodyTextDecorationColorValue =
-        _asInt(json['bodyTextDecorationColorValue']);
+    final bodyTextDecorationColorValue = _asInt(
+      json['bodyTextDecorationColorValue'],
+    );
     final fontFamilyKey = json['fontFamilyKey']?.toString().trim();
     final customFontPath = json['customFontPath']?.toString().trim();
     final legacyHorizontalPadding = _asDouble(json['horizontalPadding']) ?? 18;

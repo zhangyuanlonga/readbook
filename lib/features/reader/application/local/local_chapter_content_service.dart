@@ -11,12 +11,17 @@ import '../../../../data/repositories/local_book_repository_impl.dart';
 import '../../../../domain/entities/local_book.dart';
 import '../../../../domain/entities/local_chapter.dart';
 import '../../../../domain/repositories/local_book_repository.dart';
+import 'epub_local_book_parser.dart';
+import 'local_book_parser.dart';
 import 'local_book_index_service.dart';
+import 'local_book_storage_service.dart';
 
 class LocalChapterContentService {
   LocalChapterContentService({
     LocalBookRepository? localBookRepository,
     LocalBookIndexService? indexService,
+    EpubLocalBookParser? epubParser,
+    LocalBookStorageService? storageService,
   }) : _localBookRepository =
            localBookRepository ?? LocalBookRepositoryImpl(AppDatabase.instance),
        _indexService =
@@ -25,10 +30,14 @@ class LocalChapterContentService {
              localBookRepository:
                  localBookRepository ??
                  LocalBookRepositoryImpl(AppDatabase.instance),
-           );
+           ),
+       _epubParser = epubParser ?? const EpubLocalBookParser(),
+       _storageService = storageService ?? LocalBookStorageService();
 
   final LocalBookRepository _localBookRepository;
   final LocalBookIndexService _indexService;
+  final EpubLocalBookParser _epubParser;
+  final LocalBookStorageService _storageService;
 
   Future<LocalChapter> load({
     required String bookId,
@@ -51,6 +60,13 @@ class LocalChapterContentService {
         stage: ErrorStage.content,
         briefMessage: '未找到本地书籍，请确认文件是否已移除。',
       );
+    }
+
+    final refreshedBook = await _indexService.refreshBookState(
+      bookId: normalizedBookId,
+    );
+    if (refreshedBook != null) {
+      book = refreshedBook;
     }
 
     if (_needsReindex(book)) {
@@ -76,15 +92,33 @@ class LocalChapterContentService {
       );
     }
 
-    if (_canUseStoredChapterContent(book: book, chapter: chapter)) {
+    if (_canUseStoredChapterContent(chapter: chapter)) {
       return chapter;
     }
 
-    final hydratedContent = await _loadTxtChapterContentByOffsets(
+    final readableBook = await _hydrateReadableBook(book);
+
+    if (book.format == LocalBookFormat.txt) {
+      final hydratedContent = await _loadTxtChapterContentByOffsets(
+        chapter: chapter,
+        book: readableBook,
+      );
+      return chapter.copyWith(content: hydratedContent);
+    }
+
+    final hydrated = await _loadEpubChapterContent(
       chapter: chapter,
-      book: book,
+      book: readableBook,
     );
-    return chapter.copyWith(content: hydratedContent);
+    await _localBookRepository.updateChapterContent(
+      chapterId: chapter.id,
+      content: hydrated.content,
+      imageUrls: hydrated.imageUrls,
+    );
+    return chapter.copyWith(
+      content: hydrated.content,
+      imageUrls: hydrated.imageUrls,
+    );
   }
 
   bool _needsReindex(LocalBook book) {
@@ -149,14 +183,25 @@ class LocalChapterContentService {
     return chapterIndex.clamp(0, chapterCount - 1).toInt();
   }
 
-  bool _canUseStoredChapterContent({
-    required LocalBook book,
+  bool _canUseStoredChapterContent({required LocalChapter chapter}) {
+    return chapter.content.trim().isNotEmpty;
+  }
+
+  Future<LocalParsedChapter> _loadEpubChapterContent({
     required LocalChapter chapter,
+    required LocalBook book,
   }) {
-    if (chapter.content.trim().isNotEmpty) {
-      return true;
+    return _epubParser.parseChapter(book: book, chapter: chapter);
+  }
+
+  Future<LocalBook> _hydrateReadableBook(LocalBook book) async {
+    final resolvedStoragePath = await _storageService.resolveStoragePath(
+      book.storagePath,
+    );
+    if (resolvedStoragePath == book.storagePath) {
+      return book;
     }
-    return book.format != LocalBookFormat.txt;
+    return book.copyWith(storagePath: resolvedStoragePath);
   }
 
   Future<String> _loadTxtChapterContentByOffsets({
@@ -183,8 +228,19 @@ class LocalChapterContentService {
     }
 
     final fileLength = await file.length();
-    final safeStart = startOffset.clamp(0, fileLength).toInt();
-    final safeEnd = endOffset.clamp(0, fileLength).toInt();
+    var safeStart = startOffset.clamp(0, fileLength).toInt();
+    var safeEnd = endOffset.clamp(0, fileLength).toInt();
+    final normalizedCharset = _normalizeCharsetName(book.charset);
+    if (normalizedCharset == 'utf-16' ||
+        normalizedCharset == 'utf-16le' ||
+        normalizedCharset == 'utf-16be') {
+      if (safeStart.isOdd) {
+        safeStart -= 1;
+      }
+      if (safeEnd.isOdd) {
+        safeEnd -= 1;
+      }
+    }
     if (safeEnd <= safeStart) {
       throw AppException(
         code: ErrorCode.ruleMatchEmpty,
@@ -214,6 +270,17 @@ class LocalChapterContentService {
   String _decodeBytes(List<int> bytes, {required String? preferredCharset}) {
     final normalized = _normalizeCharsetName(preferredCharset);
     if (normalized != null) {
+      if (normalized == 'utf-16le' || normalized == 'utf-16be') {
+        final preferred = _tryDecodeByCharset(bytes, normalized);
+        final alternate = _tryDecodeByCharset(
+          bytes,
+          normalized == 'utf-16le' ? 'utf-16be' : 'utf-16le',
+        );
+        final best = _pickBetterDecodedText(preferred, alternate);
+        if (best != null) {
+          return best;
+        }
+      }
       final preferred = _tryDecodeByCharset(bytes, normalized);
       if (preferred != null) {
         return preferred;
@@ -234,6 +301,48 @@ class LocalChapterContentService {
       }
     }
     return utf8.decode(bytes, allowMalformed: true);
+  }
+
+  String? _pickBetterDecodedText(String? primary, String? alternate) {
+    final primaryScore = _decodedTextScore(primary);
+    final alternateScore = _decodedTextScore(alternate);
+    if (primaryScore == null && alternateScore == null) {
+      return null;
+    }
+    if (alternateScore != null &&
+        (primaryScore == null || alternateScore > primaryScore)) {
+      return alternate;
+    }
+    return primary;
+  }
+
+  int? _decodedTextScore(String? value) {
+    final text = value?.trim();
+    if (text == null || text.isEmpty) {
+      return null;
+    }
+    var hanCount = 0;
+    var replacementCount = 0;
+    var nulCount = 0;
+    var controlCount = 0;
+    for (final rune in text.runes) {
+      if (rune >= 0x4E00 && rune <= 0x9FFF) {
+        hanCount += 1;
+      }
+      if (rune == 0xFFFD) {
+        replacementCount += 1;
+      }
+      if (rune == 0) {
+        nulCount += 1;
+      }
+      if (rune < 0x20 && rune != 0x09 && rune != 0x0A && rune != 0x0D) {
+        controlCount += 1;
+      }
+    }
+    return hanCount * 8 -
+        replacementCount * 20 -
+        nulCount * 40 -
+        controlCount * 12;
   }
 
   String? _normalizeCharsetName(String? value) {

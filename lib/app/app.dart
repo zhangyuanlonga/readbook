@@ -22,69 +22,20 @@ import 'layout/app_layout.dart';
 import 'layout/app_spacing.dart';
 import 'router.dart';
 import 'theme/app_theme.dart';
+import 'theme/app_theme_palette.dart';
 import 'theme/app_theme_provider.dart';
 import 'theme/app_theme_seed_provider.dart';
 
 class App extends ConsumerWidget {
   const App({super.key});
 
-  static const Color _pureWhiteSeed = Color(0xFFFFFFFF);
-  static const Color _neutralSeed = Color(0xFF9E9E9E);
-
-  ColorScheme _buildLightScheme(Color seedColor) {
-    if (seedColor.toARGB32() == _pureWhiteSeed.toARGB32()) {
-      final neutralBase = ColorScheme.fromSeed(
-        seedColor: _neutralSeed,
-        dynamicSchemeVariant: DynamicSchemeVariant.neutral,
-        brightness: Brightness.light,
-      );
-
-      const pureWhite = Color(0xFFFFFFFF);
-      const subtleOutline = Color(0xFFE6E6E6);
-      return neutralBase.copyWith(
-        surface: pureWhite,
-        surfaceDim: pureWhite,
-        surfaceBright: pureWhite,
-        surfaceContainerLowest: pureWhite,
-        surfaceContainerLow: pureWhite,
-        surfaceContainer: pureWhite,
-        surfaceContainerHigh: pureWhite,
-        surfaceContainerHighest: pureWhite,
-        surfaceTint: Colors.transparent,
-        outlineVariant: subtleOutline,
-      );
-    }
-
-    final base = ColorScheme.fromSeed(
-      seedColor: seedColor,
-      dynamicSchemeVariant: DynamicSchemeVariant.tonalSpot,
-      brightness: Brightness.light,
-    );
-    return base;
-  }
-
-  ColorScheme _buildDarkScheme(Color seedColor) {
-    if (seedColor.toARGB32() == _pureWhiteSeed.toARGB32()) {
-      return ColorScheme.fromSeed(
-        seedColor: _neutralSeed,
-        dynamicSchemeVariant: DynamicSchemeVariant.neutral,
-        brightness: Brightness.dark,
-      );
-    }
-    return ColorScheme.fromSeed(
-      seedColor: seedColor,
-      dynamicSchemeVariant: DynamicSchemeVariant.tonalSpot,
-      brightness: Brightness.dark,
-    );
-  }
-
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final seedColor = ref.watch(appSeedColorProvider);
     final themeMode = ref.watch(appThemeModeProvider);
 
-    final lightScheme = _buildLightScheme(seedColor);
-    final darkScheme = _buildDarkScheme(seedColor);
+    final lightScheme = buildAppLightColorScheme(seedColor);
+    final darkScheme = buildAppDarkColorScheme(seedColor);
 
     return MaterialApp.router(
       title: '书享阅读',

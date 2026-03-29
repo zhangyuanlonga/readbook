@@ -125,9 +125,12 @@ class ReaderPreferencesService {
     );
 
     final backgroundToneName = prefs.getString(_backgroundToneKey);
-    final backgroundTone = ReaderBackgroundTone.values.firstWhere(
-      (item) => item.name == backgroundToneName,
-      orElse: () => ReaderBackgroundTone.surface,
+    final backgroundTone = normalizeReaderBackgroundTone(
+      mode: mode,
+      tone: ReaderBackgroundTone.values.firstWhere(
+        (item) => item.name == backgroundToneName,
+        orElse: () => ReaderBackgroundTone.surface,
+      ),
     );
 
     final fontWeightName = prefs.getString(_fontWeightLevelKey);
@@ -150,8 +153,8 @@ class ReaderPreferencesService {
     final bodyTextDecorationStyleName = prefs.getString(
       _bodyTextDecorationStyleKey,
     );
-    final bodyTextDecorationStyle =
-        ReaderBodyTextDecorationStyle.values.firstWhere(
+    final bodyTextDecorationStyle = ReaderBodyTextDecorationStyle.values
+        .firstWhere(
           (item) => item.name == bodyTextDecorationStyleName,
           orElse: () => ReaderBodyTextDecorationStyle.none,
         );

@@ -7,6 +7,7 @@ import 'package:go_router/go_router.dart';
 import '../../../app/layout/app_layout.dart';
 import '../../../app/layout/app_spacing.dart';
 import '../../../app/shell_navigation_provider.dart';
+import '../../../app/theme/app_theme_palette.dart';
 import '../../../app/theme/app_theme_provider.dart';
 import '../../../app/theme/app_theme_seed_provider.dart';
 
@@ -18,16 +19,6 @@ class AppearancePage extends ConsumerStatefulWidget {
 }
 
 class _AppearancePageState extends ConsumerState<AppearancePage> {
-  static const List<_SeedColorOption> _seedColorOptions = [
-    _SeedColorOption('焰阳橙', Color(0xFFE7573B)),
-    _SeedColorOption('松烟绿', Color(0xFF2E7D32)),
-    _SeedColorOption('澄海蓝', Color(0xFF1565C0)),
-    _SeedColorOption('星夜紫', Color(0xFF6750A4)),
-    _SeedColorOption('雾岚青', Color(0xFF0F8B8D)),
-    _SeedColorOption('莓霞红', Color(0xFFB83280)),
-    _SeedColorOption('琥珀金', Color(0xFFB7791F)),
-    _SeedColorOption('霁雪白', Color(0xFFFFFFFF)),
-  ];
   static const List<_ThemeModeOption> _themeModeOptions = [
     _ThemeModeOption(
       mode: ThemeMode.light,
@@ -151,7 +142,7 @@ class _AppearancePageState extends ConsumerState<AppearancePage> {
                           return Wrap(
                             spacing: spacing,
                             runSpacing: spacing,
-                            children: _seedColorOptions
+                            children: appThemeSeedOptions
                                 .map(
                                   (option) => SizedBox(
                                     width: itemWidth,
@@ -209,10 +200,10 @@ class _AppearancePageState extends ConsumerState<AppearancePage> {
       (option) => option.mode == selectedThemeMode,
     );
     final visibleDestinations = visibleAppShellDestinations(navigationState);
-    final previewTint =
-        selectedSeedColor.computeLuminance() > 0.96
-            ? colorScheme.primary
-            : selectedSeedColor;
+    final previewTint = appThemeDisplayColor(
+      selectedSeedColor,
+      brightness: colorScheme.brightness,
+    );
 
     return Container(
       decoration: BoxDecoration(
@@ -284,7 +275,7 @@ class _AppearancePageState extends ConsumerState<AppearancePage> {
                 _buildPreviewMetaChip(
                   context,
                   icon: Icons.color_lens_outlined,
-                  label: _selectedSeedColorLabel(selectedSeedColor),
+                  label: appThemeSeedLabel(selectedSeedColor),
                   accentColor: previewTint,
                 ),
                 _buildPreviewMetaChip(
@@ -545,7 +536,7 @@ class _AppearancePageState extends ConsumerState<AppearancePage> {
 
   Widget _buildThemeColorTile(
     BuildContext context, {
-    required _SeedColorOption option,
+    required AppThemeSeedOption option,
     required Color selectedSeedColor,
     required VoidCallback onTap,
   }) {
@@ -602,15 +593,6 @@ class _AppearancePageState extends ConsumerState<AppearancePage> {
         ),
       ),
     );
-  }
-
-  String _selectedSeedColorLabel(Color selectedSeedColor) {
-    for (final option in _seedColorOptions) {
-      if (option.color.toARGB32() == selectedSeedColor.toARGB32()) {
-        return option.label;
-      }
-    }
-    return '自定义颜色';
   }
 }
 
@@ -894,13 +876,6 @@ Widget _buildNavigationErrorBanner(
       ],
     ),
   );
-}
-
-class _SeedColorOption {
-  const _SeedColorOption(this.label, this.color);
-
-  final String label;
-  final Color color;
 }
 
 class _ThemeModeOption {
