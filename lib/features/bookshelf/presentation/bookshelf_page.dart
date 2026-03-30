@@ -3639,6 +3639,7 @@ class _BookshelfPageState extends State<BookshelfPage>
 
   Widget _buildContinueReadingCard(ReadingRecord record) {
     final colorScheme = Theme.of(context).colorScheme;
+    final textTheme = Theme.of(context).textTheme;
     final title = _toSingleLineText(record.bookTitle);
     final chapterTitle = _toSingleLineText(
       record.lastChapterTitle?.trim() ?? '',
@@ -3650,106 +3651,125 @@ class _BookshelfPageState extends State<BookshelfPage>
             : '上次阅读 $footer';
 
     return Material(
-      elevation: 6,
       color: Colors.transparent,
       child: Container(
         decoration: BoxDecoration(
           color: Color.alphaBlend(
-            colorScheme.primary.withValues(alpha: 0.05),
+            colorScheme.primary.withValues(alpha: 0.045),
             colorScheme.surface,
           ),
           borderRadius: BorderRadius.circular(18),
           border: Border.all(
-            color: colorScheme.outlineVariant.withValues(alpha: 0.24),
+            color: colorScheme.outlineVariant.withValues(alpha: 0.42),
           ),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withValues(alpha: 0.05),
-              blurRadius: 18,
-              offset: const Offset(0, 8),
-            ),
-          ],
         ),
         child: InkWell(
           borderRadius: BorderRadius.circular(18),
           onTap: () => unawaited(_openLatestReadingRecord(record)),
           child: Padding(
-            padding: const EdgeInsets.fromLTRB(10, 10, 10, 10),
+            padding: const EdgeInsets.fromLTRB(12, 12, 12, 12),
             child: Row(
+              crossAxisAlignment: CrossAxisAlignment.center,
               children: [
-                _buildCover(
-                  record.coverUrl,
-                  title: record.bookTitle,
-                  author: record.bookAuthor,
-                  width: 42,
-                  height: 58,
+                ClipRRect(
+                  borderRadius: BorderRadius.circular(12),
+                  child: _buildCover(
+                    record.coverUrl,
+                    title: record.bookTitle,
+                    author: record.bookAuthor,
+                    width: 44,
+                    height: 62,
+                  ),
                 ),
-                const SizedBox(width: 10),
+                const SizedBox(width: 12),
                 Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
-                      Text(
-                        '继续阅读',
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: Theme.of(
-                          context,
-                        ).textTheme.labelMedium?.copyWith(
-                          color: colorScheme.primary,
-                          fontWeight: FontWeight.w700,
-                        ),
+                      Row(
+                        children: [
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 8,
+                              vertical: 3,
+                            ),
+                            decoration: BoxDecoration(
+                              color: colorScheme.primary.withValues(
+                                alpha: 0.10,
+                              ),
+                              borderRadius: BorderRadius.circular(999),
+                            ),
+                            child: Text(
+                              '继续阅读',
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: textTheme.labelSmall?.copyWith(
+                                color: colorScheme.primary,
+                                fontWeight: FontWeight.w700,
+                              ),
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: Text(
+                              footer,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: textTheme.labelSmall?.copyWith(
+                                color: colorScheme.onSurfaceVariant,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                          ),
+                        ],
                       ),
-                      const SizedBox(height: 2),
+                      const SizedBox(height: 8),
                       Text(
                         title.isEmpty ? '继续阅读' : title,
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
-                        style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                          fontWeight: FontWeight.w700,
+                        style: textTheme.titleSmall?.copyWith(
+                          fontWeight: FontWeight.w800,
+                          height: 1.2,
                         ),
                       ),
-                      const SizedBox(height: 2),
+                      const SizedBox(height: 4),
                       Text(
                         subtitle,
-                        maxLines: 1,
+                        maxLines: 2,
                         overflow: TextOverflow.ellipsis,
-                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                        style: textTheme.bodySmall?.copyWith(
                           color: colorScheme.onSurfaceVariant,
+                          height: 1.35,
                         ),
                       ),
                     ],
                   ),
                 ),
-                const SizedBox(width: 8),
+                const SizedBox(width: 10),
                 Column(
                   mainAxisAlignment: MainAxisAlignment.center,
                   crossAxisAlignment: CrossAxisAlignment.end,
                   children: [
-                    Text(
-                      '上次阅读',
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                        color: colorScheme.onSurfaceVariant,
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-                    const SizedBox(height: 6),
                     Container(
-                      width: 28,
-                      height: 28,
+                      width: 34,
+                      height: 34,
                       decoration: BoxDecoration(
-                        color: colorScheme.primaryContainer.withValues(
-                          alpha: 0.88,
+                        color: colorScheme.surfaceContainerHighest.withValues(
+                          alpha: 0.9,
+                        ),
+                        border: Border.all(
+                          color: colorScheme.outlineVariant.withValues(
+                            alpha: 0.45,
+                          ),
                         ),
                         borderRadius: BorderRadius.circular(999),
                       ),
                       child: Icon(
                         Icons.chevron_right_rounded,
-                        size: 20,
-                        color: colorScheme.onPrimaryContainer,
+                        size: 22,
+                        color: colorScheme.primary,
                       ),
                     ),
                   ],

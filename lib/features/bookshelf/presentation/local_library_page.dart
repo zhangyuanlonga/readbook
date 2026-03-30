@@ -27,6 +27,7 @@ class _LocalLibraryPageState extends State<LocalLibraryPage> {
   bool _isImporting = false;
   int _importTotal = 0;
   int _importCompleted = 0;
+  String? _currentImportLabel;
   List<_PendingImportItem> _pendingItems = <_PendingImportItem>[];
 
   int get _pendingSelectedCount =>
@@ -154,27 +155,34 @@ class _LocalLibraryPageState extends State<LocalLibraryPage> {
     for (final item in selected) {
       try {
         item.errorText = null;
+        item.status = _PendingImportStatus.importing;
+        _updateCurrentImportLabel(item.title);
         if (item.type == _PendingImportType.file) {
           await _importFromFileItem(item);
         } else {
           await _importFromUrlItem(item);
         }
         succeededKeys.add(item.key);
+        item.status = _PendingImportStatus.succeeded;
         successCount += 1;
       } on AppException catch (error) {
         item.errorText = error.briefMessage;
+        item.status = _PendingImportStatus.failed;
         failureCount += 1;
       } on _ImportException catch (error) {
         item.errorText = error.message;
+        item.status = _PendingImportStatus.failed;
         failureCount += 1;
       } catch (error) {
         item.errorText = '导入失败：$error';
+        item.status = _PendingImportStatus.failed;
         failureCount += 1;
       } finally {
-        _importCompleted += 1;
-        if (mounted) {
-          setState(() {});
-        }
+        _setImportProgress(
+          completed: _importCompleted + 1,
+          currentLabel:
+              item.status == _PendingImportStatus.succeeded ? null : item.title,
+        );
       }
     }
 
@@ -214,6 +222,8 @@ class _LocalLibraryPageState extends State<LocalLibraryPage> {
     return _localBookImportService.importFromFile(
       filePath: path,
       displayName: item.title,
+      waitForIndexing: true,
+      onProgress: (progress) => _handleImportProgress(item, progress),
     );
   }
 
@@ -240,6 +250,7 @@ class _LocalLibraryPageState extends State<LocalLibraryPage> {
 
     File? tempFile;
     try {
+      _handlePendingStatus(item, _PendingImportStatus.downloading);
       final response = await Dio(
         BaseOptions(
           connectTimeout: const Duration(seconds: 12),
@@ -278,6 +289,8 @@ class _LocalLibraryPageState extends State<LocalLibraryPage> {
         return await _localBookImportService.importFromFile(
           filePath: finalized.path,
           displayName: '$safeBase$extension',
+          waitForIndexing: true,
+          onProgress: (progress) => _handleImportProgress(item, progress),
         );
       } finally {
         try {
@@ -389,8 +402,79 @@ class _LocalLibraryPageState extends State<LocalLibraryPage> {
       if (!value) {
         _importTotal = 0;
         _importCompleted = 0;
+        _currentImportLabel = null;
       }
     });
+  }
+
+  void _setImportProgress({required int completed, String? currentLabel}) {
+    if (!mounted) {
+      return;
+    }
+    setState(() {
+      _importCompleted = completed;
+      _currentImportLabel = currentLabel;
+    });
+  }
+
+  void _updateCurrentImportLabel(String? label) {
+    if (!mounted) {
+      return;
+    }
+    setState(() {
+      _currentImportLabel = label;
+    });
+  }
+
+  void _handlePendingStatus(
+    _PendingImportItem item,
+    _PendingImportStatus status, {
+    String? errorText,
+  }) {
+    if (!mounted) {
+      return;
+    }
+    setState(() {
+      item.status = status;
+      if (errorText != null) {
+        item.errorText = errorText;
+      }
+      _currentImportLabel = item.title;
+    });
+  }
+
+  void _handleImportProgress(
+    _PendingImportItem item,
+    LocalBookImportProgress progress,
+  ) {
+    final nextStatus = switch (progress.stage) {
+      LocalBookImportStage.preparing => _PendingImportStatus.importing,
+      LocalBookImportStage.persisted => _PendingImportStatus.persisted,
+      LocalBookImportStage.indexing => _PendingImportStatus.indexing,
+      LocalBookImportStage.completed => _PendingImportStatus.succeeded,
+    };
+    _handlePendingStatus(item, nextStatus);
+  }
+
+  double? get _importProgressValue {
+    if (!_isImporting || _importTotal <= 0) {
+      return null;
+    }
+    return (_importCompleted / _importTotal).clamp(0, 1).toDouble();
+  }
+
+  String get _importProgressText {
+    if (_importTotal <= 0) {
+      return '准备导入';
+    }
+    if (_importCompleted >= _importTotal) {
+      return '导入完成';
+    }
+    final current = _currentImportLabel?.trim();
+    if (current != null && current.isNotEmpty) {
+      return '正在处理《$current》';
+    }
+    return '正在导入';
   }
 
   String _sanitizeFileToken(String value) {
@@ -540,8 +624,18 @@ class _LocalLibraryPageState extends State<LocalLibraryPage> {
       body: CustomScrollView(
         physics: const AlwaysScrollableScrollPhysics(),
         slivers: [
+          if (_isImporting)
+            SliverPadding(
+              padding: EdgeInsets.fromLTRB(horizontal, 12, horizontal, 0),
+              sliver: SliverToBoxAdapter(child: _buildImportProgressCard()),
+            ),
           SliverPadding(
-            padding: EdgeInsets.fromLTRB(horizontal, 12, horizontal, 0),
+            padding: EdgeInsets.fromLTRB(
+              horizontal,
+              _isImporting ? 12 : 12,
+              horizontal,
+              0,
+            ),
             sliver: SliverToBoxAdapter(child: _buildImportSection()),
           ),
           SliverPadding(
@@ -591,7 +685,7 @@ class _LocalLibraryPageState extends State<LocalLibraryPage> {
           ),
           const SizedBox(height: 6),
           Text(
-            '先选择本地图书，确认后再导入；导入成功后返回书架列表。',
+            '先选择本地图书，确认后再导入；批量导入会等待解析完成，再返回书架列表。',
             style: Theme.of(context).textTheme.bodySmall?.copyWith(
               color: colorScheme.onSurfaceVariant,
             ),
@@ -662,6 +756,58 @@ class _LocalLibraryPageState extends State<LocalLibraryPage> {
     );
   }
 
+  Widget _buildImportProgressCard() {
+    final colorScheme = Theme.of(context).colorScheme;
+    final progressValue = _importProgressValue;
+
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: colorScheme.primaryContainer.withValues(alpha: 0.45),
+        borderRadius: BorderRadius.circular(16),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Expanded(
+                child: Text(
+                  _importProgressText,
+                  style: Theme.of(
+                    context,
+                  ).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w700),
+                ),
+              ),
+              Text(
+                '$_importCompleted/$_importTotal',
+                style: Theme.of(context).textTheme.labelMedium?.copyWith(
+                  color: colorScheme.onSurfaceVariant,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          ClipRRect(
+            borderRadius: BorderRadius.circular(999),
+            child: LinearProgressIndicator(
+              value: progressValue,
+              minHeight: 8,
+              backgroundColor: colorScheme.surface,
+            ),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            '每本书完成入库后会继续解析目录，只有解析完成才算本次导入完成。',
+            style: Theme.of(context).textTheme.bodySmall?.copyWith(
+              color: colorScheme.onSurfaceVariant,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   Widget _buildImportListEmptyState() {
     final colorScheme = Theme.of(context).colorScheme;
 
@@ -698,9 +844,7 @@ class _LocalLibraryPageState extends State<LocalLibraryPage> {
         item.errorText == null
             ? colorScheme.onSurfaceVariant
             : colorScheme.error;
-    final statusLabel = item.errorText == null ? '待导入' : '导入失败';
-    final statusColor =
-        item.errorText == null ? colorScheme.primary : colorScheme.error;
+    final statusMeta = _statusPresentation(item.status, colorScheme);
 
     return Material(
       color: colorScheme.surfaceContainerLow,
@@ -765,9 +909,9 @@ class _LocalLibraryPageState extends State<LocalLibraryPage> {
               ),
               const SizedBox(width: 6),
               _buildStatusChip(
-                label: statusLabel,
-                color: statusColor,
-                textColor: statusColor,
+                label: statusMeta.label,
+                color: statusMeta.color,
+                textColor: statusMeta.color,
               ),
               IconButton(
                 tooltip: '移除',
@@ -802,9 +946,55 @@ class _LocalLibraryPageState extends State<LocalLibraryPage> {
       ),
     );
   }
+
+  _PendingStatusPresentation _statusPresentation(
+    _PendingImportStatus status,
+    ColorScheme colorScheme,
+  ) {
+    return switch (status) {
+      _PendingImportStatus.pending => _PendingStatusPresentation(
+        label: '待导入',
+        color: colorScheme.primary,
+      ),
+      _PendingImportStatus.downloading => _PendingStatusPresentation(
+        label: '下载中',
+        color: colorScheme.tertiary,
+      ),
+      _PendingImportStatus.importing => _PendingStatusPresentation(
+        label: '入库中',
+        color: colorScheme.primary,
+      ),
+      _PendingImportStatus.persisted => _PendingStatusPresentation(
+        label: '已入库',
+        color: colorScheme.secondary,
+      ),
+      _PendingImportStatus.indexing => _PendingStatusPresentation(
+        label: '解析中',
+        color: colorScheme.secondary,
+      ),
+      _PendingImportStatus.succeeded => _PendingStatusPresentation(
+        label: '已完成',
+        color: colorScheme.primary,
+      ),
+      _PendingImportStatus.failed => _PendingStatusPresentation(
+        label: '失败',
+        color: colorScheme.error,
+      ),
+    };
+  }
 }
 
 enum _PendingImportType { file, url }
+
+enum _PendingImportStatus {
+  pending,
+  downloading,
+  importing,
+  persisted,
+  indexing,
+  succeeded,
+  failed,
+}
 
 class _PendingImportItem {
   _PendingImportItem._({
@@ -816,7 +1006,8 @@ class _PendingImportItem {
     this.url,
   }) : title = LocalBookImportService.normalizeImportedDisplayName(title),
        selected = true,
-       errorText = null;
+       errorText = null,
+       status = _PendingImportStatus.pending;
 
   factory _PendingImportItem.file({
     required String path,
@@ -854,6 +1045,7 @@ class _PendingImportItem {
   final String? url;
   bool selected;
   String? errorText;
+  _PendingImportStatus status;
 
   String get key => switch (type) {
     _PendingImportType.file => 'file:${path ?? ''}',
@@ -868,6 +1060,13 @@ class _ImportException implements Exception {
 
   @override
   String toString() => message;
+}
+
+class _PendingStatusPresentation {
+  const _PendingStatusPresentation({required this.label, required this.color});
+
+  final String label;
+  final Color color;
 }
 
 class _LocalUrlImportPage extends StatefulWidget {

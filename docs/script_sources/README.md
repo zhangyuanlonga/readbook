@@ -1,6 +1,6 @@
 # 脚本源文档索引
 
-更新时间：2026-03-27
+更新时间：2026-03-30
 
 这组文档已从 `flutter_testjs` 迁入当前仓库，用于说明脚本源 / 新规则运行时在 `flutterreadbook` 中的规范、能力边界和迁移方案。
 
@@ -33,6 +33,8 @@
   迁移主文档之一。用于说明当前代码中哪些模块适合直接抽成可嵌入内核。
 - [统一书源调度方案](./unified-source-dispatch-plan.md)
   用于说明旧规则源与脚本源并存时，为什么需要统一调度抽象，以及推荐如何落地。
+- [去 Legado 迁移审计与实施清单](./legado-removal-migration-audit.md)
+  用于梳理去 Legado 的缺口、影响面、分阶段迁移顺序和验收项。
 - [总体架构](./architecture.md)
   只在需要了解整体系统背景时阅读。
 - [开发计划](./development-plan.md)

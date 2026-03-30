@@ -29,6 +29,23 @@ class LocalBookImportResult {
   final BookshelfBook bookshelfBook;
 }
 
+enum LocalBookImportStage { preparing, persisted, indexing, completed }
+
+class LocalBookImportProgress {
+  const LocalBookImportProgress({
+    required this.stage,
+    required this.bookId,
+    required this.displayName,
+  });
+
+  final LocalBookImportStage stage;
+  final String bookId;
+  final String displayName;
+}
+
+typedef LocalBookImportProgressCallback =
+    void Function(LocalBookImportProgress progress);
+
 class LocalBookImportService {
   LocalBookImportService({
     LocalBookRepository? localBookRepository,
@@ -66,6 +83,8 @@ class LocalBookImportService {
   Future<LocalBookImportResult> importFromFile({
     required String filePath,
     String? displayName,
+    bool waitForIndexing = false,
+    LocalBookImportProgressCallback? onProgress,
   }) async {
     final normalizedPath = filePath.trim();
     if (normalizedPath.isEmpty) {
@@ -101,6 +120,16 @@ class LocalBookImportService {
             .loadLocalTxtSplitLongChapterEnabled();
     final existingBook = await _findBySourcePath(normalizedPath);
     final bookId = existingBook?.id ?? _buildBookId();
+    final normalizedDisplayName = normalizeImportedDisplayName(
+      displayName ?? p.basename(normalizedPath),
+    );
+    onProgress?.call(
+      LocalBookImportProgress(
+        stage: LocalBookImportStage.preparing,
+        bookId: bookId,
+        displayName: normalizedDisplayName,
+      ),
+    );
     final storedStoragePath = _localBookStorageService.buildStoredStoragePath(
       bookId: bookId,
       format: format,
@@ -119,6 +148,13 @@ class LocalBookImportService {
     );
     await _persistImportedBook(prepared.localBook);
     await _bookshelfService.upsert(prepared.bookshelfBook);
+    onProgress?.call(
+      LocalBookImportProgress(
+        stage: LocalBookImportStage.persisted,
+        bookId: bookId,
+        displayName: normalizedDisplayName,
+      ),
+    );
 
     _logger.info(
       'Local book imported',
@@ -134,7 +170,25 @@ class LocalBookImportService {
       },
     );
 
-    unawaited(_warmUpLocalBookIndex(bookId));
+    if (waitForIndexing) {
+      onProgress?.call(
+        LocalBookImportProgress(
+          stage: LocalBookImportStage.indexing,
+          bookId: bookId,
+          displayName: normalizedDisplayName,
+        ),
+      );
+      await _localBookIndexService.ensureIndexed(bookId: bookId);
+      onProgress?.call(
+        LocalBookImportProgress(
+          stage: LocalBookImportStage.completed,
+          bookId: bookId,
+          displayName: normalizedDisplayName,
+        ),
+      );
+    } else {
+      unawaited(_warmUpLocalBookIndex(bookId));
+    }
 
     return LocalBookImportResult(
       localBook: prepared.localBook,
