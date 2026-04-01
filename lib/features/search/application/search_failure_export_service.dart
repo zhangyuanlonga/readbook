@@ -6,7 +6,7 @@ import 'package:path_provider/path_provider.dart';
 import '../../../core/errors/app_exception.dart';
 import '../../../core/errors/error_codes.dart';
 import '../../../core/errors/error_stage.dart';
-import '../../../domain/entities/source_definition.dart';
+import '../../../runtime/sources/source_registry.dart';
 import 'search_service.dart';
 
 typedef SearchExportDirectoryResolver = Future<Directory> Function();
@@ -46,7 +46,7 @@ class SearchFailureExportService {
 
   Future<SearchFailureExportResult> exportFailedSources({
     required SearchExecutionReport report,
-    required Iterable<SourceDefinition> sources,
+    required Iterable<RegisteredSource> sources,
     required SearchContentMode contentMode,
     String? preferredFilePath,
   }) async {
@@ -58,8 +58,8 @@ class SearchFailureExportService {
       );
     }
 
-    final sourceById = <String, SourceDefinition>{
-      for (final source in sources) source.id: source,
+    final sourceById = <String, RegisteredSource>{
+      for (final source in sources) source.runtime.id: source,
     };
 
     final now = _now();
@@ -68,8 +68,25 @@ class SearchFailureExportService {
     final items = report.failures
         .map((failure) {
           final source = sourceById[failure.sourceId];
-          final normalizedSource = source?.toJson();
-          final originalSource = source?.originalSource;
+          final normalizedSource =
+              source == null
+                  ? null
+                  : <String, dynamic>{
+                    'id': source.runtime.id,
+                    'name': source.runtime.name,
+                    'group': source.runtime.group,
+                    'revision': source.runtime.revision,
+                    'manifest': <String, dynamic>{
+                      'name': source.definition.manifest.name,
+                      'group': source.definition.manifest.group,
+                      'author': source.definition.manifest.author,
+                      'description': source.definition.manifest.description,
+                      'homepage': source.definition.manifest.homepage,
+                      'domains': source.definition.manifest.domains,
+                      'enabled': source.definition.manifest.enabled,
+                      'capabilities': source.definition.manifest.capabilities.toList(growable: false),
+                    },
+                  };
 
           return <String, dynamic>{
             'sourceId': failure.sourceId,
@@ -86,16 +103,13 @@ class SearchFailureExportService {
                 'requestUrl': failure.requestUrl,
             },
             'source': normalizedSource,
-            'sourceRaw': originalSource,
-            'sourcePayload': originalSource ?? normalizedSource,
             'sourceFound': source != null,
-            'sourceRawExact': originalSource != null,
           };
         })
         .toList(growable: false);
 
     final payload = <String, dynamic>{
-      'schema': 'flutter_appread.search_failures.v2',
+      'schema': 'flutter_appread.search_failures.v3',
       'exportedAt': now.toIso8601String(),
       'keyword': report.keyword,
       'contentMode': contentMode.name,
@@ -105,8 +119,7 @@ class SearchFailureExportService {
         'failedSourceCount': report.failedSourceCount,
         'bookCount': report.books.length,
       },
-      'note':
-          'source 为当前应用保存的标准化书源，sourceRaw 为原始导入书源，sourcePayload 优先返回原始书源用于回放。',
+      'note': 'source 为当前运行时已注册脚本源快照。',
       'failures': items,
     };
 
@@ -239,41 +252,33 @@ class SearchFailureExportService {
   static Future<Directory> _defaultExportDirectoryResolver() async {
     final downloadDirectory = await getDownloadsDirectory();
     if (downloadDirectory != null) {
-      return Directory(
-        _joinPath(downloadDirectory.path, 'flutter_appread_exports'),
-      );
+      return downloadDirectory;
     }
-    return _defaultFallbackDirectoryResolver();
-  }
-
-  static Future<Directory> _defaultFallbackDirectoryResolver() async {
-    final documentsDirectory = await getApplicationDocumentsDirectory();
-    return Directory(
-      _joinPath(documentsDirectory.path, 'flutter_appread_exports'),
+    throw AppException(
+      code: ErrorCode.unknown,
+      stage: ErrorStage.search,
+      briefMessage: '当前平台未提供下载目录。',
     );
   }
 
-  bool _isSamePath(String left, String right) {
-    final normalizedLeft = left.replaceAll('\\', '/');
-    final normalizedRight = right.replaceAll('\\', '/');
-    return normalizedLeft == normalizedRight;
-  }
-
-  static String _formatTimestamp(DateTime dateTime) {
-    final year = dateTime.year.toString().padLeft(4, '0');
-    final month = dateTime.month.toString().padLeft(2, '0');
-    final day = dateTime.day.toString().padLeft(2, '0');
-    final hour = dateTime.hour.toString().padLeft(2, '0');
-    final minute = dateTime.minute.toString().padLeft(2, '0');
-    final second = dateTime.second.toString().padLeft(2, '0');
-    return '$year$month$day-$hour$minute$second';
+  static Future<Directory> _defaultFallbackDirectoryResolver() async {
+    final supportDirectory = await getApplicationSupportDirectory();
+    return Directory(_joinPath(supportDirectory.path, 'exports'));
   }
 
   static String _joinPath(String left, String right) {
-    final separator = Platform.pathSeparator;
-    if (left.endsWith(separator)) {
+    if (left.endsWith(Platform.pathSeparator)) {
       return '$left$right';
     }
-    return '$left$separator$right';
+    return '$left${Platform.pathSeparator}$right';
+  }
+
+  static String _formatTimestamp(DateTime value) {
+    String twoDigits(int input) => input.toString().padLeft(2, '0');
+    return '${value.year}${twoDigits(value.month)}${twoDigits(value.day)}_${twoDigits(value.hour)}${twoDigits(value.minute)}${twoDigits(value.second)}';
+  }
+
+  bool _isSamePath(String left, String right) {
+    return left.trim() == right.trim();
   }
 }

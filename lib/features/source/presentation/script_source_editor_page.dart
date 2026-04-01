@@ -42,13 +42,11 @@ class _ScriptSourceEditorPageState extends State<ScriptSourceEditorPage> {
       widget.scriptSourceId?.trim().isNotEmpty == true && _source != null;
 
   Map<String, TextStyle> get _editorThemeStyles {
-    final root = atomOneDarkTheme['root'] ?? const TextStyle(color: Colors.white);
+    final root =
+        atomOneDarkTheme['root'] ?? const TextStyle(color: Colors.white);
     return <String, TextStyle>{
       ...atomOneDarkTheme,
-      'root': root.copyWith(
-        color: Colors.white,
-        backgroundColor: Colors.black,
-      ),
+      'root': root.copyWith(color: Colors.white, backgroundColor: Colors.black),
     };
   }
 
@@ -95,10 +93,7 @@ class _ScriptSourceEditorPageState extends State<ScriptSourceEditorPage> {
     }
   }
 
-  Future<void> _applySourceCode(
-    String value, {
-    required bool markDirty,
-  }) async {
+  Future<void> _applySourceCode(String value, {required bool markDirty}) async {
     _isApplyingEditorValue = true;
     _controller.fullText = value;
     _isApplyingEditorValue = false;
@@ -314,7 +309,8 @@ class _ScriptSourceEditorPageState extends State<ScriptSourceEditorPage> {
                         background: Colors.black,
                         textStyle: const TextStyle(
                           color: Colors.white,
-                          fontFamily: 'Menlo, Consolas, "Courier New", monospace',
+                          fontFamily:
+                              'Menlo, Consolas, "Courier New", monospace',
                           fontSize: 13,
                           height: 1.45,
                         ),
@@ -350,7 +346,7 @@ String? validateScriptSourceDraft(String sourceCode) {
     return '脚本内容不能为空。';
   }
   if (trimmed.startsWith('{') || trimmed.startsWith('[')) {
-    return '检测到你粘贴的内容更像旧规则 JSON，不是脚本配置。请返回“规则配置”页导入；如果要写脚本配置，请使用 `export default { meta, ... }`。';
+    return '检测到你粘贴的内容更像 JSON 配置，不是脚本源脚本。当前版本只支持脚本源；如果要编写脚本，请使用 `export default { meta, ... }`。';
   }
   if (!trimmed.contains('export default') &&
       !trimmed.contains('globalThis.__sourceDefinition')) {
@@ -374,7 +370,7 @@ String toFriendlyScriptEditorError(Object error) {
 
   if (error is SourceScriptCompileException) {
     if (raw.contains('无法读取书源导出的 meta')) {
-      return '无法识别脚本配置格式。请确认内容使用 `export default` 导出，并包含 `meta.name`。如果你粘贴的是旧规则 JSON，请返回“规则配置”页导入。';
+      return '无法识别脚本配置格式。请确认内容使用 `export default` 导出，并包含 `meta.name`。当前版本不再支持 JSON 书源配置导入。';
     }
     if (raw.contains('当前仅支持以')) {
       return '脚本导出格式不支持。请使用 `export default { meta, ... }` 或 `globalThis.__sourceDefinition = { meta, ... }`。';

@@ -2,8 +2,6 @@ import 'package:drift/native.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_appread/data/datasources/local/app_database.dart';
 import 'package:flutter_appread/data/repositories/script_source_repository_impl.dart';
-import 'package:flutter_appread/domain/entities/source_definition.dart';
-import 'package:flutter_appread/domain/repositories/source_repository.dart';
 import 'package:flutter_appread/features/source/application/script_source_runtime_service.dart';
 import 'package:flutter_appread/features/source/application/source_runtime_facade.dart';
 import 'package:flutter_appread/features/source/presentation/source_page.dart';
@@ -40,17 +38,12 @@ void main() {
       await tester.pumpWidget(
         MaterialApp(
           home: SourcePage(
-            sourceRepository: _FakeSourceRepository(),
             sourceRuntimeFacade: facade,
             bootstrapOnInit: false,
             enableRouterNavigation: false,
           ),
         ),
       );
-      await tester.pump(const Duration(milliseconds: 200));
-      await tester.pump(const Duration(milliseconds: 400));
-
-      await tester.tap(find.text('脚本源'));
       await tester.pump(const Duration(milliseconds: 200));
       await tester.pump(const Duration(milliseconds: 400));
 
@@ -65,36 +58,6 @@ void main() {
       await tester.pump(const Duration(milliseconds: 10));
     });
   });
-}
-
-class _FakeSourceRepository implements SourceRepository {
-  @override
-  Future<void> clear() async {}
-
-  @override
-  Future<void> deleteById(String sourceId) async {}
-
-  @override
-  Future<void> deleteByIds(List<String> sourceIds) async {}
-
-  @override
-  Future<List<SourceDefinition>> getAll() async => const <SourceDefinition>[];
-
-  @override
-  Future<void> setEnabled({
-    required String sourceId,
-    required bool enabled,
-  }) async {}
-
-  @override
-  Future<void> setGroup({required String sourceId, String? group}) async {}
-
-  @override
-  Future<void> upsertAll(List<SourceDefinition> sources) async {}
-
-  @override
-  Stream<List<SourceDefinition>> watchAll() =>
-      const Stream<List<SourceDefinition>>.empty();
 }
 
 class _FakeScriptSourceRuntimeService extends ScriptSourceRuntimeService {

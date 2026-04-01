@@ -24,8 +24,7 @@ class MainActivity : FlutterActivity() {
         private const val READER_VOLUME_KEY_CHANNEL_NAME = "com.jiangyan.shuxiangread/reader_volume_keys"
         private const val READER_VOLUME_KEY_EVENT_CHANNEL_NAME = "com.jiangyan.shuxiangread/reader_volume_keys/events"
         private const val METHOD_SET_INTERCEPT_VOLUME_KEYS = "setInterceptVolumeKeys"
-        private const val DEFAULT_PAYLOAD_LABEL = "外部书源"
-        private const val PAYLOAD_TYPE_SOURCE = "source"
+        private const val DEFAULT_PAYLOAD_LABEL = "外部导入"
         private const val PAYLOAD_TYPE_LOCAL_BOOK = "localBook"
     }
 
@@ -183,16 +182,7 @@ class MainActivity : FlutterActivity() {
             }
         }
 
-        if (!looksLikeSourceText(text)) {
-            return null
-        }
-
-        return mapOf(
-            "bytes" to text.toByteArray(Charsets.UTF_8),
-            "label" to (intent.getStringExtra(Intent.EXTRA_SUBJECT)?.trim().takeUnless { it.isNullOrEmpty() }
-                ?: "外部分享文本"),
-            "type" to PAYLOAD_TYPE_SOURCE,
-        )
+        return null
     }
 
     private fun buildPayloadFromSendMultipleIntent(intent: Intent): Map<String, Any>? {
@@ -222,27 +212,8 @@ class MainActivity : FlutterActivity() {
                 "label" to label,
                 "mimeType" to (mimeType ?: ""),
             )
-            PAYLOAD_TYPE_SOURCE -> buildSourcePayloadFromUri(uri, label)
             else -> null
         }
-    }
-
-    private fun buildSourcePayloadFromUri(uri: Uri, label: String): Map<String, Any>? {
-        val bytes = try {
-            contentResolver.openInputStream(uri)?.use { it.readBytes() }
-        } catch (_: Exception) {
-            null
-        } ?: return null
-
-        if (bytes.isEmpty()) {
-            return null
-        }
-
-        return mapOf(
-            "type" to PAYLOAD_TYPE_SOURCE,
-            "bytes" to bytes,
-            "label" to label
-        )
     }
 
     private fun resolvePayloadLabel(uri: Uri): String {
@@ -278,50 +249,10 @@ class MainActivity : FlutterActivity() {
         if (extension == "epub" || normalizedMimeType == "application/epub+zip") {
             return PAYLOAD_TYPE_LOCAL_BOOK
         }
-        if (extension == "json" || normalizedMimeType == "application/json") {
-            return PAYLOAD_TYPE_SOURCE
-        }
         if (extension == "txt" || normalizedMimeType == "text/plain" || normalizedMimeType == "application/octet-stream") {
-            val preview = readPreviewText(uri)
-            return if (looksLikeSourceText(preview)) {
-                PAYLOAD_TYPE_SOURCE
-            } else {
-                PAYLOAD_TYPE_LOCAL_BOOK
-            }
+            return PAYLOAD_TYPE_LOCAL_BOOK
         }
         return null
-    }
-
-    private fun readPreviewText(uri: Uri): String {
-        return try {
-            contentResolver.openInputStream(uri)?.use { input ->
-                val buffer = ByteArray(4096)
-                val read = input.read(buffer)
-                if (read <= 0) {
-                    ""
-                } else {
-                    String(buffer, 0, read, Charsets.UTF_8)
-                }
-            } ?: ""
-        } catch (_: Exception) {
-            ""
-        }
-    }
-
-    private fun looksLikeSourceText(content: String): Boolean {
-        val trimmed = content.trimStart()
-        if (trimmed.isEmpty()) {
-            return false
-        }
-        if (!trimmed.startsWith("{") && !trimmed.startsWith("[")) {
-            return false
-        }
-        return trimmed.contains("\"bookSourceName\"") ||
-            trimmed.contains("\"bookSourceUrl\"") ||
-            trimmed.contains("\"ruleSearch\"") ||
-            trimmed.contains("\"ruleBookInfo\"") ||
-            trimmed.contains("\"ruleToc\"") ||
-            trimmed.contains("\"sourceType\"")
     }
 
     private fun cacheExternalFileFromCall(arguments: Any?): Map<String, Any>? {

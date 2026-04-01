@@ -13,29 +13,8 @@ import '../../../domain/entities/reading_record.dart';
 import '../../../domain/entities/reading_record_day.dart';
 import '../../../domain/entities/reading_record_session.dart';
 import '../../../domain/entities/script_source.dart';
-import '../../../domain/entities/source_definition.dart';
 
 part 'app_database.g.dart';
-
-class Sources extends Table {
-  TextColumn get id => text()();
-  TextColumn get name => text()();
-  TextColumn get baseUrl => text()();
-  TextColumn get group => text().nullable()();
-  BoolColumn get enabled => boolean().withDefault(const Constant(true))();
-  TextColumn get comment => text().nullable()();
-  TextColumn get headersJson => text().withDefault(const Constant('{}'))();
-  TextColumn get rulesJson => text().withDefault(const Constant('{}'))();
-  TextColumn get healthStatus =>
-      text().withDefault(const Constant('unknown'))();
-  DateTimeColumn get lastCheckedAt => dateTime().nullable()();
-  DateTimeColumn get createdAt => dateTime().withDefault(currentDateAndTime)();
-  DateTimeColumn get updatedAt => dateTime().withDefault(currentDateAndTime)();
-  TextColumn get rawJson => text().withDefault(const Constant('{}'))();
-
-  @override
-  Set<Column<Object>> get primaryKey => {id};
-}
 
 class ChapterCaches extends Table {
   TextColumn get cacheKey => text()();
@@ -233,46 +212,6 @@ class StoredScriptSources extends Table {
   Set<Column<Object>> get primaryKey => {id};
 }
 
-class SourceListCountSummary {
-  const SourceListCountSummary({
-    required this.totalCount,
-    required this.enabledCount,
-    required this.novelCount,
-    required this.mangaCount,
-  });
-
-  final int totalCount;
-  final int enabledCount;
-  final int novelCount;
-  final int mangaCount;
-}
-
-class SourceListItem {
-  const SourceListItem({
-    required this.id,
-    required this.name,
-    required this.baseUrl,
-    required this.group,
-    required this.enabled,
-    required this.comment,
-    required this.sourceType,
-    required this.lastCheckStatus,
-    required this.lastCheckedAt,
-  });
-
-  final String id;
-  final String name;
-  final String baseUrl;
-  final String? group;
-  final bool enabled;
-  final String? comment;
-  final int sourceType;
-  final SourceHealthStatus lastCheckStatus;
-  final DateTime? lastCheckedAt;
-
-  bool get isMangaSource => sourceType == 2;
-}
-
 class ChapterCacheBookSummary {
   const ChapterCacheBookSummary({
     required this.bookId,
@@ -313,7 +252,6 @@ class SearchSourceHitUpsert {
 
 @DriftDatabase(
   tables: [
-    Sources,
     ChapterCaches,
     StoredLocalBooks,
     StoredLocalChapters,
@@ -333,10 +271,6 @@ class AppDatabase extends _$AppDatabase {
   @override
   int get schemaVersion => 17;
 
-  static const String _mangaSourceMatcherSql =
-      '(raw_json LIKE \'%"sourceType":2,%\' OR '
-      'raw_json LIKE \'%"sourceType":2}%\')';
-
   @override
   MigrationStrategy get migration {
     return MigrationStrategy(
@@ -350,9 +284,6 @@ class AppDatabase extends _$AppDatabase {
         if (from < 3) {
           await migrator.createTable(storedLocalBooks);
           await migrator.createTable(storedLocalChapters);
-        }
-        if (from < 4) {
-          // rulesJson stores serialized SourceRuleSet; no table migration required.
         }
         if (from < 5) {
           await migrator.createTable(searchSourceHits);
@@ -522,7 +453,7 @@ class AppDatabase extends _$AppDatabase {
 
     await customStatement(
       'ALTER TABLE ${_quoteIdentifier(tableName)} '
-      'RENAME TO ${_quoteIdentifier('${tableName}_legacy_v14')}',
+      'RENAME TO ${_quoteIdentifier('${tableName}_migration_v14_backup')}',
     );
     await migrator.createTable(storedLocalBooks);
     await customStatement('''
@@ -565,10 +496,10 @@ class AppDatabase extends _$AppDatabase {
         split_long_chapter,
         created_at,
         updated_at
-      FROM ${_quoteIdentifier('${tableName}_legacy_v14')}
+      FROM ${_quoteIdentifier('${tableName}_migration_v14_backup')}
     ''');
     await customStatement(
-      'DROP TABLE ${_quoteIdentifier('${tableName}_legacy_v14')}',
+      'DROP TABLE ${_quoteIdentifier('${tableName}_migration_v14_backup')}',
     );
   }
 
@@ -595,44 +526,6 @@ class AppDatabase extends _$AppDatabase {
   String _quoteIdentifier(String identifier) {
     final escaped = identifier.replaceAll('"', '""');
     return '"$escaped"';
-  }
-
-  Future<List<SourceDefinition>> getAllSources() async {
-    final rows =
-        await (select(sources)..orderBy([
-          (table) => OrderingTerm.asc(table.group),
-          (table) => OrderingTerm.asc(table.name),
-        ])).get();
-    return rows.map(_mapRowToSource).toList();
-  }
-
-  Future<Map<String, int>> querySourceTypeMap() async {
-    final rows =
-        await customSelect(
-          'SELECT id, CASE WHEN $_mangaSourceMatcherSql THEN 2 ELSE 0 END AS sourceType '
-          'FROM sources',
-          readsFrom: {sources},
-        ).get();
-
-    final result = <String, int>{};
-    for (final row in rows) {
-      final sourceId = (row.data['id'] ?? '').toString().trim();
-      if (sourceId.isEmpty) {
-        continue;
-      }
-      result[sourceId] = _decodeInt(row.data['sourceType']) ?? 0;
-    }
-    return result;
-  }
-
-  Stream<List<SourceDefinition>> watchAllSources() {
-    final query = select(sources)..orderBy([
-      (table) => OrderingTerm.asc(table.group),
-      (table) => OrderingTerm.asc(table.name),
-    ]);
-    return query.watch().map(
-      (rows) => rows.map(_mapRowToSource).toList(growable: false),
-    );
   }
 
   Future<List<ScriptSource>> getAllScriptSources() async {
@@ -712,226 +605,6 @@ class AppDatabase extends _$AppDatabase {
   }
 
   Future<void> clearScriptSources() => delete(storedScriptSources).go();
-
-  Stream<List<SourceListItem>> watchSourceListItems() {
-    final sql =
-        'SELECT id, name, base_url AS baseUrl, "group" AS sourceGroup, '
-        'enabled, comment, '
-        'CASE WHEN $_mangaSourceMatcherSql THEN 2 ELSE 0 END AS sourceType, '
-        'health_status AS healthStatus, last_checked_at AS lastCheckedAt '
-        'FROM sources '
-        'ORDER BY sourceGroup COLLATE NOCASE ASC, name COLLATE NOCASE ASC';
-
-    return customSelect(sql, readsFrom: {sources}).watch().map(
-      (rows) => rows.map(_mapSourceListItem).toList(growable: false),
-    );
-  }
-
-  Future<List<SourceListItem>> querySourceListItems({
-    required int limit,
-    required int offset,
-    String keyword = '',
-    bool? enabledOnly,
-    bool? isMangaSource,
-    String? groupEquals,
-    bool includeUngroupedOnly = false,
-  }) async {
-    final safeLimit = limit < 1 ? 1 : limit;
-    final safeOffset = offset < 0 ? 0 : offset;
-    final filter = _buildSourceListSqlFilter(
-      keyword: keyword,
-      enabledOnly: enabledOnly,
-      isMangaSource: isMangaSource,
-      groupEquals: groupEquals,
-      includeUngroupedOnly: includeUngroupedOnly,
-    );
-
-    final rows =
-        await customSelect(
-          'SELECT id, name, base_url AS baseUrl, "group" AS sourceGroup, '
-          'enabled, comment, '
-          'CASE WHEN $_mangaSourceMatcherSql THEN 2 ELSE 0 END AS sourceType, '
-          'health_status AS healthStatus, last_checked_at AS lastCheckedAt '
-          'FROM sources '
-          '${filter.whereClause} '
-          'ORDER BY sourceGroup COLLATE NOCASE ASC, name COLLATE NOCASE ASC '
-          'LIMIT ? OFFSET ?',
-          variables: <Variable<Object>>[
-            ...filter.variables,
-            Variable<int>(safeLimit),
-            Variable<int>(safeOffset),
-          ],
-          readsFrom: {sources},
-        ).get();
-
-    return rows.map(_mapSourceListItem).toList(growable: false);
-  }
-
-  Future<int> countSourceListItems({
-    String keyword = '',
-    bool? enabledOnly,
-    bool? isMangaSource,
-    String? groupEquals,
-    bool includeUngroupedOnly = false,
-  }) async {
-    final filter = _buildSourceListSqlFilter(
-      keyword: keyword,
-      enabledOnly: enabledOnly,
-      isMangaSource: isMangaSource,
-      groupEquals: groupEquals,
-      includeUngroupedOnly: includeUngroupedOnly,
-    );
-
-    final row =
-        await customSelect(
-          'SELECT COUNT(*) AS totalCount '
-          'FROM sources '
-          '${filter.whereClause}',
-          variables: filter.variables,
-          readsFrom: {sources},
-        ).getSingle();
-
-    final value = row.data['totalCount'];
-    if (value is int) {
-      return value;
-    }
-    if (value is BigInt) {
-      return value.toInt();
-    }
-    if (value is num) {
-      return value.toInt();
-    }
-    if (value is String) {
-      return int.tryParse(value.trim()) ?? 0;
-    }
-    return 0;
-  }
-
-  Future<SourceListCountSummary> summarizeSourceListItems({
-    String keyword = '',
-    bool? isMangaSource,
-    String? groupEquals,
-    bool includeUngroupedOnly = false,
-  }) async {
-    final filter = _buildSourceListSqlFilter(
-      keyword: keyword,
-      isMangaSource: isMangaSource,
-      groupEquals: groupEquals,
-      includeUngroupedOnly: includeUngroupedOnly,
-    );
-
-    final row =
-        await customSelect(
-          'SELECT COUNT(*) AS totalCount, '
-          'SUM(CASE WHEN enabled = 1 THEN 1 ELSE 0 END) AS enabledCount, '
-          'SUM(CASE WHEN $_mangaSourceMatcherSql THEN 1 ELSE 0 END) AS mangaCount '
-          'FROM sources '
-          '${filter.whereClause}',
-          variables: filter.variables,
-          readsFrom: {sources},
-        ).getSingle();
-
-    final totalCount = _decodeInt(row.data['totalCount']) ?? 0;
-    final enabledCount = _decodeInt(row.data['enabledCount']) ?? 0;
-    final mangaCount = _decodeInt(row.data['mangaCount']) ?? 0;
-    final safeMangaCount = mangaCount.clamp(0, totalCount);
-    final novelCount = (totalCount - safeMangaCount).clamp(0, totalCount);
-
-    return SourceListCountSummary(
-      totalCount: totalCount,
-      enabledCount: enabledCount.clamp(0, totalCount),
-      novelCount: novelCount,
-      mangaCount: safeMangaCount,
-    );
-  }
-
-  Future<SourceDefinition?> getSourceById(String sourceId) async {
-    final normalized = sourceId.trim();
-    if (normalized.isEmpty) {
-      return null;
-    }
-
-    final row =
-        await (select(sources)
-          ..where((table) => table.id.equals(normalized))).getSingleOrNull();
-
-    if (row == null) {
-      return null;
-    }
-
-    return _mapRowToSource(row);
-  }
-
-  Future<void> upsertSources(List<SourceDefinition> items) async {
-    if (items.isEmpty) {
-      return;
-    }
-
-    final now = DateTime.now();
-
-    await batch((batch) {
-      for (final item in items) {
-        batch.insert(
-          sources,
-          _toCompanion(item, now),
-          mode: InsertMode.insertOrReplace,
-        );
-      }
-    });
-  }
-
-  Future<void> setSourceEnabled(String id, bool enabled) {
-    return (update(sources)..where((table) => table.id.equals(id))).write(
-      SourcesCompanion(
-        enabled: Value(enabled),
-        updatedAt: Value(DateTime.now()),
-      ),
-    );
-  }
-
-  Future<void> setSourceGroup(String id, String? group) {
-    final normalized = group?.trim();
-    return (update(sources)..where((table) => table.id.equals(id))).write(
-      SourcesCompanion(
-        group: Value(
-          normalized == null || normalized.isEmpty ? null : normalized,
-        ),
-        updatedAt: Value(DateTime.now()),
-      ),
-    );
-  }
-
-  Future<List<String>> listSourceGroups() async {
-    final query =
-        await customSelect(
-          'SELECT DISTINCT "group" FROM sources',
-          readsFrom: {sources},
-        ).get();
-    final groups = <String>{};
-    for (final row in query) {
-      final value = row.data['group'] as String?;
-      final normalized = value?.trim() ?? '';
-      if (normalized.isNotEmpty) {
-        groups.add(normalized);
-      }
-    }
-    final sorted = groups.toList()..sort((a, b) => a.compareTo(b));
-    return sorted;
-  }
-
-  Future<void> deleteSource(String id) {
-    return (delete(sources)..where((table) => table.id.equals(id))).go();
-  }
-
-  Future<void> deleteSourcesByIds(List<String> ids) {
-    if (ids.isEmpty) {
-      return Future.value();
-    }
-
-    return (delete(sources)..where((table) => table.id.isIn(ids))).go();
-  }
-
-  Future<void> clearSources() => delete(sources).go();
 
   Future<ChapterCache?> getChapterCache(String cacheKey) {
     final normalizedKey = cacheKey.trim();
@@ -2242,59 +1915,6 @@ class AppDatabase extends _$AppDatabase {
     );
   }
 
-  SourceDefinition _mapRowToSource(Source row) {
-    final rules = _decodeMap(row.rulesJson);
-    final headers = _decodeMap(
-      row.headersJson,
-    ).map((key, value) => MapEntry(key, value.toString()));
-    final raw = _decodeMap(row.rawJson);
-    final originalSource = _decodeNullableMap(raw['originalSource']);
-
-    final status = SourceHealthStatus.values.firstWhere(
-      (item) => item.name == row.healthStatus,
-      orElse: () => SourceHealthStatus.unknown,
-    );
-
-    final sourceType =
-        _decodeInt(raw['sourceType']) ??
-        _decodeInt(originalSource?['bookSourceType']) ??
-        0;
-
-    final hasExploreEnabled = raw.containsKey('exploreEnabled');
-    final exploreEnabled =
-        hasExploreEnabled
-            ? _decodeBool(raw['exploreEnabled'])
-            : _decodeBool(originalSource?['enabledExplore']);
-
-    final exploreUrl =
-        _nullableString(raw['exploreUrl']) ??
-        _nullableString(originalSource?['exploreUrl']) ??
-        _nullableString(originalSource?['discoverUrl']);
-    final jsCapability = SourceJsCapability.values.firstWhere(
-      (item) => item.name == _nullableString(raw['jsCapability']),
-      orElse: () => SourceJsCapability.full,
-    );
-
-    return SourceDefinition(
-      id: row.id,
-      name: row.name,
-      baseUrl: row.baseUrl,
-      group: row.group,
-      enabled: row.enabled,
-      sourceType: sourceType,
-      comment: row.comment,
-      headers: headers,
-      rules: SourceRuleSet.fromJson(rules),
-      lastCheckStatus: status,
-      lastCheckedAt: row.lastCheckedAt,
-      lastCheckMessage: _nullableString(raw['lastCheckMessage']),
-      exploreEnabled: exploreEnabled,
-      exploreUrl: exploreUrl,
-      jsCapability: jsCapability,
-      originalSource: originalSource,
-    );
-  }
-
   ScriptSource _mapRowToScriptSource(StoredScriptSource row) {
     return ScriptSource(
       id: row.id,
@@ -2307,206 +1927,6 @@ class AppDatabase extends _$AppDatabase {
       createdAt: row.createdAt,
       updatedAt: row.updatedAt,
     );
-  }
-
-  SourcesCompanion _toCompanion(SourceDefinition source, DateTime now) {
-    final rulesJson = jsonEncode(source.rules.toJson());
-    final headersJson = jsonEncode(source.headers);
-    final rawJson = jsonEncode(source.toJson());
-
-    return SourcesCompanion(
-      id: Value(source.id),
-      name: Value(source.name),
-      baseUrl: Value(source.baseUrl),
-      group: Value(source.group),
-      enabled: Value(source.enabled),
-      comment: Value(source.comment),
-      headersJson: Value(headersJson),
-      rulesJson: Value(rulesJson),
-      healthStatus: Value(source.lastCheckStatus.name),
-      lastCheckedAt: Value(source.lastCheckedAt),
-      createdAt: Value(now),
-      updatedAt: Value(now),
-      rawJson: Value(rawJson),
-    );
-  }
-
-  SourceListItem _mapSourceListItem(QueryRow row) {
-    return SourceListItem(
-      id: (row.data['id'] ?? '').toString(),
-      name: (row.data['name'] ?? '').toString(),
-      baseUrl: (row.data['baseUrl'] ?? '').toString(),
-      group: _nullableString(row.data['sourceGroup']),
-      enabled: _decodeBool(row.data['enabled']),
-      comment: _nullableString(row.data['comment']),
-      sourceType: _decodeInt(row.data['sourceType']) ?? 0,
-      lastCheckStatus: _decodeSourceHealthStatus(
-        row.data['healthStatus']?.toString(),
-      ),
-      lastCheckedAt: _decodeNullableDateTime(row.data['lastCheckedAt']),
-    );
-  }
-
-  _SourceListSqlFilter _buildSourceListSqlFilter({
-    required String keyword,
-    bool? enabledOnly,
-    bool? isMangaSource,
-    String? groupEquals,
-    bool includeUngroupedOnly = false,
-  }) {
-    final clauses = <String>[];
-    final variables = <Variable<Object>>[];
-
-    final normalizedKeyword = keyword.trim().toLowerCase();
-    if (normalizedKeyword.isNotEmpty) {
-      final pattern = '%$normalizedKeyword%';
-      const keywordClause =
-          "(LOWER(name) LIKE ? "
-          "OR LOWER(base_url) LIKE ?)";
-      clauses.add(keywordClause);
-      for (var i = 0; i < 2; i++) {
-        variables.add(Variable<String>(pattern));
-      }
-    }
-
-    if (enabledOnly != null) {
-      clauses.add('enabled = ?');
-      variables.add(Variable<int>(enabledOnly ? 1 : 0));
-    }
-
-    if (isMangaSource != null) {
-      clauses.add(
-        isMangaSource
-            ? _mangaSourceMatcherSql
-            : 'NOT ($_mangaSourceMatcherSql)',
-      );
-    }
-
-    if (groupEquals != null && groupEquals.trim().isNotEmpty) {
-      clauses.add('"group" = ?');
-      variables.add(Variable<String>(groupEquals.trim()));
-    } else if (includeUngroupedOnly) {
-      clauses.add('("group" IS NULL OR TRIM("group") = \'\')');
-    }
-
-    final whereClause = clauses.isEmpty ? '' : 'WHERE ${clauses.join(' AND ')}';
-    return _SourceListSqlFilter(whereClause: whereClause, variables: variables);
-  }
-
-  int? _decodeInt(Object? value) {
-    if (value is int) {
-      return value;
-    }
-    if (value is num) {
-      return value.toInt();
-    }
-    if (value is String) {
-      return int.tryParse(value.trim());
-    }
-    return null;
-  }
-
-  bool _decodeBool(Object? value) {
-    if (value is bool) {
-      return value;
-    }
-    if (value is int) {
-      return value != 0;
-    }
-    if (value is num) {
-      return value != 0;
-    }
-    if (value is String) {
-      final normalized = value.trim().toLowerCase();
-      return normalized == '1' || normalized == 'true';
-    }
-    return false;
-  }
-
-  DateTime? _decodeNullableDateTime(Object? value) {
-    if (value == null) {
-      return null;
-    }
-    if (value is DateTime) {
-      return value;
-    }
-    if (value is int) {
-      return _decodeEpochDateTime(value);
-    }
-    if (value is num) {
-      return _decodeEpochDateTime(value.toInt());
-    }
-    if (value is String) {
-      final normalized = value.trim();
-      if (normalized.isEmpty) {
-        return null;
-      }
-      final parsedDateTime = DateTime.tryParse(normalized);
-      if (parsedDateTime != null) {
-        return parsedDateTime;
-      }
-      final parsedEpoch = int.tryParse(normalized);
-      if (parsedEpoch != null) {
-        return _decodeEpochDateTime(parsedEpoch);
-      }
-    }
-    return null;
-  }
-
-  DateTime _decodeEpochDateTime(int epoch) {
-    final absEpoch = epoch.abs();
-    if (absEpoch >= 1000000000000000) {
-      return DateTime.fromMicrosecondsSinceEpoch(epoch);
-    }
-    if (absEpoch >= 1000000000000) {
-      return DateTime.fromMillisecondsSinceEpoch(epoch);
-    }
-    if (absEpoch >= 1000000000) {
-      return DateTime.fromMillisecondsSinceEpoch(epoch * 1000);
-    }
-    return DateTime.fromMillisecondsSinceEpoch(epoch);
-  }
-
-  SourceHealthStatus _decodeSourceHealthStatus(String? rawStatus) {
-    final normalized = rawStatus?.trim();
-    return SourceHealthStatus.values.firstWhere(
-      (item) => item.name == normalized,
-      orElse: () => SourceHealthStatus.unknown,
-    );
-  }
-
-  Map<String, dynamic>? _decodeNullableMap(Object? value) {
-    if (value is! Map) {
-      return null;
-    }
-
-    return value.map((key, item) => MapEntry(key.toString(), item));
-  }
-
-  String? _nullableString(Object? value) {
-    if (value == null) {
-      return null;
-    }
-    final text = value.toString().trim();
-    if (text.isEmpty) {
-      return null;
-    }
-    return text;
-  }
-
-  Map<String, dynamic> _decodeMap(String source) {
-    try {
-      final decoded = jsonDecode(source);
-      if (decoded is Map<String, dynamic>) {
-        return decoded;
-      }
-      if (decoded is Map) {
-        return decoded.map((key, value) => MapEntry(key.toString(), value));
-      }
-      return const {};
-    } on FormatException {
-      return const {};
-    }
   }
 
   List<String> _decodeStringList(String? raw) {
@@ -2527,6 +1947,31 @@ class AppDatabase extends _$AppDatabase {
       return const <String>[];
     }
   }
+
+  String? _nullableString(Object? value) {
+    if (value == null) {
+      return null;
+    }
+    final text = value.toString().trim();
+    if (text.isEmpty) {
+      return null;
+    }
+    return text;
+  }
+
+  DateTime _decodeEpochDateTime(int epoch) {
+    final absEpoch = epoch.abs();
+    if (absEpoch >= 1000000000000000) {
+      return DateTime.fromMicrosecondsSinceEpoch(epoch);
+    }
+    if (absEpoch >= 1000000000000) {
+      return DateTime.fromMillisecondsSinceEpoch(epoch);
+    }
+    if (absEpoch >= 1000000000) {
+      return DateTime.fromMillisecondsSinceEpoch(epoch * 1000);
+    }
+    return DateTime.fromMillisecondsSinceEpoch(epoch);
+  }
 }
 
 QueryExecutor _openConnection() {
@@ -2546,14 +1991,4 @@ QueryExecutor _openConnection() {
     final file = File(p.join(databaseDir.path, 'appread_sources.db'));
     return NativeDatabase.createInBackground(file);
   });
-}
-
-class _SourceListSqlFilter {
-  const _SourceListSqlFilter({
-    required this.whereClause,
-    required this.variables,
-  });
-
-  final String whereClause;
-  final List<Variable<Object>> variables;
 }

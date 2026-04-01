@@ -33,6 +33,7 @@ import '../../reader/application/switch_source_shared.dart';
 import '../../reader/presentation/chapter_cache_sheets.dart';
 import '../../search/application/search_hit_cache_service.dart';
 import '../../search/application/search_service.dart';
+import '../../source/application/source_runtime_facade.dart';
 import '../application/book_detail_service.dart';
 import 'book_detail_switch_source_helper.dart';
 import 'widgets/book_detail_primary_actions.dart';
@@ -118,6 +119,7 @@ class _BookDetailPageState extends State<BookDetailPage> {
       switchSourceSearchService: _switchSourceSearchService,
       searchHitCacheService: _searchHitCacheService,
       switchSourceScoreService: _switchSourceScoreService,
+      sourceRuntimeFacade: SourceRuntimeFacade.instance,
     );
     _cachedChapterCountStreamBuilder =
         widget.cachedChapterCountStreamBuilder ??
@@ -1704,8 +1706,8 @@ class _BookDetailPageState extends State<BookDetailPage> {
 
     return switch (error.code) {
       ErrorCode.network => '网络请求失败，请检查网络或更换书源后重试。',
-      ErrorCode.validation => '书源规则不完整，暂时无法加载详情。',
-      ErrorCode.ruleParse => '书源规则语法错误，无法解析详情。',
+      ErrorCode.validation => '脚本源配置不完整，暂时无法加载详情。',
+      ErrorCode.ruleParse => '脚本源脚本语法错误，无法解析详情。',
       ErrorCode.ruleMatchEmpty => '未获取到有效内容，请更换书源或稍后重试。',
       ErrorCode.decode => '响应解析失败，可能是编码或格式不兼容。',
       ErrorCode.unknownSource => '书源不存在或已被删除。',
@@ -1734,8 +1736,8 @@ class _BookDetailPageState extends State<BookDetailPage> {
 
     return switch (error.code) {
       ErrorCode.network => '目录加载失败（网络异常），已展示详情。可稍后刷新目录重试。',
-      ErrorCode.validation => '目录规则不完整，目录暂不可用。',
-      ErrorCode.ruleParse => '目录规则语法错误，目录暂不可用。',
+      ErrorCode.validation => '脚本源配置不完整，目录暂不可用。',
+      ErrorCode.ruleParse => '脚本源脚本语法错误，目录暂不可用。',
       ErrorCode.ruleMatchEmpty => '未获取到目录内容，目录暂为空。',
       ErrorCode.decode => '目录解析失败，目录暂不可用。',
       ErrorCode.unknownSource => '书源不存在，目录暂不可用。',

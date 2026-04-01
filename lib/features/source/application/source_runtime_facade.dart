@@ -192,6 +192,26 @@ class SourceRuntimeFacade {
     return _scriptRuntimeService.search(sourceId: sourceId, keyword: keyword);
   }
 
+  Future<List<runtime_models.DiscoverCategory>> discoverCategories({
+    required String sourceId,
+  }) {
+    return _scriptRuntimeService.discoverCategories(sourceId: sourceId);
+  }
+
+  Future<List<runtime_models.Book>> discoverBooks({
+    required String sourceId,
+    required runtime_models.DiscoverCategory category,
+    required int page,
+    required int pageSize,
+  }) {
+    return _scriptRuntimeService.discoverBooks(
+      sourceId: sourceId,
+      category: category,
+      page: page,
+      pageSize: pageSize,
+    );
+  }
+
   Future<runtime_models.Book> detail({
     required String sourceId,
     required runtime_models.Book book,

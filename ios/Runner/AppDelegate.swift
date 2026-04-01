@@ -13,8 +13,7 @@ import UniformTypeIdentifiers
   private let readerVolumeKeyChannelName = "com.jiangyan.shuxiangread/reader_volume_keys"
   private let readerVolumeKeyEventChannelName = "com.jiangyan.shuxiangread/reader_volume_keys/events"
   private let methodSetInterceptVolumeKeys = "setInterceptVolumeKeys"
-  private let defaultPayloadLabel = "外部书源"
-  private let payloadTypeSource = "source"
+  private let defaultPayloadLabel = "外部导入"
   private let payloadTypeLocalBook = "localBook"
   private let readerVolumeBaseline: Float = 0.5
 
@@ -280,15 +279,6 @@ import UniformTypeIdentifiers
         "label": label,
         "mimeType": mimeType ?? "",
       ]
-    case payloadTypeSource:
-      guard let data = try? Data(contentsOf: url), !data.isEmpty else {
-        return nil
-      }
-      return [
-        "type": payloadTypeSource,
-        "bytes": FlutterStandardTypedData(bytes: data),
-        "label": label,
-      ]
     default:
       return nil
     }
@@ -305,62 +295,12 @@ import UniformTypeIdentifiers
     if extensionName == "epub" || normalizedMimeType == "application/epub+zip" {
       return payloadTypeLocalBook
     }
-    if extensionName == "json" || normalizedMimeType == "application/json" {
-      return payloadTypeSource
-    }
     if extensionName == "txt" ||
       normalizedMimeType == "text/plain" ||
       normalizedMimeType == "application/octet-stream" {
-      let preview = readPreviewText(url)
-      return looksLikeSourceText(preview) ? payloadTypeSource : payloadTypeLocalBook
+      return payloadTypeLocalBook
     }
     return nil
-  }
-
-  private func readPreviewText(_ url: URL) -> String {
-    guard let handle = try? FileHandle(forReadingFrom: url) else {
-      return ""
-    }
-    defer {
-      try? handle.close()
-    }
-
-    let data: Data
-    if #available(iOS 13.4, *) {
-      data = (try? handle.read(upToCount: 4096)) ?? Data()
-    } else {
-      data = handle.readData(ofLength: 4096)
-    }
-
-    if data.isEmpty {
-      return ""
-    }
-    if let utf8 = String(data: data, encoding: .utf8) {
-      return utf8
-    }
-    if let utf16LE = String(data: data, encoding: .utf16LittleEndian) {
-      return utf16LE
-    }
-    if let utf16BE = String(data: data, encoding: .utf16BigEndian) {
-      return utf16BE
-    }
-    return ""
-  }
-
-  private func looksLikeSourceText(_ content: String) -> Bool {
-    let trimmed = content.trimmingCharacters(in: .whitespacesAndNewlines)
-    if trimmed.isEmpty {
-      return false
-    }
-    if !trimmed.hasPrefix("{") && !trimmed.hasPrefix("[") {
-      return false
-    }
-    return trimmed.contains("\"bookSourceName\"") ||
-      trimmed.contains("\"bookSourceUrl\"") ||
-      trimmed.contains("\"ruleSearch\"") ||
-      trimmed.contains("\"ruleBookInfo\"") ||
-      trimmed.contains("\"ruleToc\"") ||
-      trimmed.contains("\"sourceType\"")
   }
 
   private func resolveMimeType(from url: URL) -> String? {

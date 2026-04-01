@@ -118,6 +118,28 @@ class ScriptSourceRuntimeService {
     return _executor.search(source, keyword);
   }
 
+  Future<List<runtime_models.DiscoverCategory>> discoverCategories({
+    required String sourceId,
+  }) async {
+    final source = _requireSource(sourceId);
+    return _executor.discoverCategories(source);
+  }
+
+  Future<List<runtime_models.Book>> discoverBooks({
+    required String sourceId,
+    required runtime_models.DiscoverCategory category,
+    required int page,
+    required int pageSize,
+  }) async {
+    final source = _requireSource(sourceId);
+    return _executor.discoverBooks(
+      source,
+      category: category,
+      page: page,
+      pageSize: pageSize,
+    );
+  }
+
   Future<runtime_models.Book> detail({
     required String sourceId,
     required runtime_models.Book book,

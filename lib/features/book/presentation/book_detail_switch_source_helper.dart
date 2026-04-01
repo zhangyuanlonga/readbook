@@ -3,13 +3,13 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 
 import '../../../core/errors/app_exception.dart';
-import '../../../data/datasources/local/app_database.dart';
 import '../../../domain/entities/book.dart';
-import '../../../domain/entities/source_definition.dart';
 import '../../reader/application/source_switch_score_service.dart';
 import '../../reader/application/switch_source_shared.dart';
 import '../../search/application/search_hit_cache_service.dart';
 import '../../search/application/search_service.dart';
+import '../../source/application/source_runtime_facade.dart';
+import '../../../runtime/sources/source_registry.dart';
 
 class BookDetailSwitchSourceScope {
   const BookDetailSwitchSourceScope({
@@ -28,13 +28,16 @@ class BookDetailSwitchSourceHelper {
     required SearchService switchSourceSearchService,
     required SearchHitCacheService searchHitCacheService,
     required SourceSwitchScoreService switchSourceScoreService,
+    SourceRuntimeFacade? sourceRuntimeFacade,
   }) : _switchSourceSearchService = switchSourceSearchService,
        _searchHitCacheService = searchHitCacheService,
-       _switchSourceScoreService = switchSourceScoreService;
+       _switchSourceScoreService = switchSourceScoreService,
+       _sourceRuntimeFacade = sourceRuntimeFacade ?? SourceRuntimeFacade.instance;
 
   final SearchService _switchSourceSearchService;
   final SearchHitCacheService _searchHitCacheService;
   final SourceSwitchScoreService _switchSourceScoreService;
+  final SourceRuntimeFacade _sourceRuntimeFacade;
 
   static const int _candidateLimit = 24;
   static const int _lagTolerance = 20;
@@ -51,11 +54,15 @@ class BookDetailSwitchSourceHelper {
   Future<BookDetailSwitchSourceScope> buildScope({
     required String currentSourceId,
   }) async {
-    List<SourceDefinition> sources;
+    List<RegisteredSource> sources;
     try {
-      sources = await AppDatabase.instance.getAllSources().timeout(
-        _scopeLoadTimeout,
-      );
+      sources = _sourceRuntimeFacade.registeredScriptSources(enabledOnly: true);
+      if (sources.isEmpty) {
+        final report = await _sourceRuntimeFacade.reloadScriptSources().timeout(
+          _scopeLoadTimeout,
+        );
+        sources = report.loaded;
+      }
     } catch (_) {
       return const BookDetailSwitchSourceScope(
         sourceIds: <String>[],
@@ -71,9 +78,9 @@ class BookDetailSwitchSourceHelper {
       );
     }
 
-    SourceDefinition? currentSource;
+    RegisteredSource? currentSource;
     for (final source in sources) {
-      if (source.id == currentSourceId) {
+      if (source.runtime.id == currentSourceId) {
         currentSource = source;
         break;
       }
@@ -81,8 +88,8 @@ class BookDetailSwitchSourceHelper {
 
     if (currentSource == null) {
       final fallbackSourceIds = sources
-          .where((source) => source.enabled && source.id != currentSourceId)
-          .map((source) => source.id)
+          .where((source) => source.runtime.id != currentSourceId)
+          .map((source) => source.runtime.id)
           .toList(growable: false);
       if (fallbackSourceIds.isEmpty) {
         return const BookDetailSwitchSourceScope(
@@ -97,15 +104,14 @@ class BookDetailSwitchSourceHelper {
       );
     }
 
-    final isMangaType = currentSource.isMangaSource;
+    final isMangaType = _isMangaSource(currentSource);
     final sourceIds = sources
         .where(
           (source) =>
-              source.enabled &&
-              source.id != currentSourceId &&
-              source.isMangaSource == isMangaType,
+              source.runtime.id != currentSourceId &&
+              _isMangaSource(source) == isMangaType,
         )
-        .map((source) => source.id)
+        .map((source) => source.runtime.id)
         .toList(growable: false);
     if (sourceIds.isEmpty) {
       return BookDetailSwitchSourceScope(
@@ -120,6 +126,17 @@ class BookDetailSwitchSourceHelper {
       contentMode:
           isMangaType ? SearchContentMode.manga : SearchContentMode.novel,
     );
+  }
+
+  bool _isMangaSource(RegisteredSource source) {
+    final capabilities = source.definition.manifest.capabilities
+        .map((item) => item.trim().toLowerCase())
+        .where((item) => item.isNotEmpty)
+        .toSet();
+    return capabilities.contains('manga') ||
+        capabilities.contains('comic') ||
+        capabilities.contains('manhua') ||
+        capabilities.contains('manhwa');
   }
 
   Future<String?> resolveSearchKeyword({

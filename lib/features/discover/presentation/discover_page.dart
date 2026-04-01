@@ -10,11 +10,7 @@ import '../../../app/layout/app_spacing.dart';
 import '../../../app/widgets/disk_cached_cover_image.dart';
 import '../../../app/widgets/text_cover_placeholder.dart';
 import '../../../core/errors/app_exception.dart';
-import '../../../data/datasources/local/app_database.dart';
-import '../../../data/repositories/source_repository_impl.dart';
 import '../../../domain/entities/book.dart';
-import '../../../domain/entities/source_definition.dart';
-import '../../../domain/repositories/source_repository.dart';
 import '../../book/presentation/book_detail_route.dart';
 import '../application/discover_preferences_service.dart';
 import '../application/explore_service.dart';
@@ -34,14 +30,11 @@ class DiscoverPage extends StatefulWidget {
     super.key,
     ExploreService? exploreService,
     DiscoverPreferencesService? discoverPreferencesService,
-    SourceRepository? sourceRepository,
   }) : _exploreService = exploreService,
-       _discoverPreferencesService = discoverPreferencesService,
-       _sourceRepository = sourceRepository;
+       _discoverPreferencesService = discoverPreferencesService;
 
   final ExploreService? _exploreService;
   final DiscoverPreferencesService? _discoverPreferencesService;
-  final SourceRepository? _sourceRepository;
 
   @override
   State<DiscoverPage> createState() => _DiscoverPageState();
@@ -63,9 +56,7 @@ class _DiscoverPageState extends State<DiscoverPage>
 
   late final ExploreService _exploreService;
   late final DiscoverPreferencesService _discoverPreferencesService;
-  late final SourceRepository _sourceRepository;
   final ScrollController _booksScrollController = ScrollController();
-  StreamSubscription<List<SourceDefinition>>? _sourceChangesSubscription;
   Timer? _sourceRefreshDebounce;
 
   bool _isLoadingSources = false;
@@ -76,8 +67,8 @@ class _DiscoverPageState extends State<DiscoverPage>
   int _discoverCapableCount = 0;
   int _sourceProbeToken = 0;
 
-  List<SourceDefinition> _discoverSources = const <SourceDefinition>[];
-  SourceDefinition? _selectedSource;
+  List<DiscoverSource> _discoverSources = const <DiscoverSource>[];
+  DiscoverSource? _selectedSource;
   List<ExploreCategoryItem> _categories = const <ExploreCategoryItem>[];
   int _selectedCategoryIndex = -1;
   List<Book> _books = const <Book>[];
@@ -120,12 +111,7 @@ class _DiscoverPageState extends State<DiscoverPage>
     _exploreService = widget._exploreService ?? ExploreService();
     _discoverPreferencesService =
         widget._discoverPreferencesService ?? DiscoverPreferencesService();
-    _sourceRepository =
-        widget._sourceRepository ?? SourceRepositoryImpl(AppDatabase.instance);
     _booksScrollController.addListener(_onBookListScroll);
-    _sourceChangesSubscription = _sourceRepository.watchAll().listen((_) {
-      _scheduleSourceRefresh();
-    });
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) {
         return;
@@ -137,7 +123,6 @@ class _DiscoverPageState extends State<DiscoverPage>
   @override
   void dispose() {
     _sourceRefreshDebounce?.cancel();
-    _sourceChangesSubscription?.cancel();
     _booksScrollController.removeListener(_onBookListScroll);
     _booksScrollController.dispose();
     super.dispose();
@@ -205,19 +190,6 @@ class _DiscoverPageState extends State<DiscoverPage>
     if (position.pixels + 280 >= position.maxScrollExtent) {
       unawaited(_loadBooks(reset: false));
     }
-  }
-
-  void _scheduleSourceRefresh() {
-    if (!mounted) {
-      return;
-    }
-    _sourceRefreshDebounce?.cancel();
-    _sourceRefreshDebounce = Timer(const Duration(milliseconds: 220), () {
-      if (!mounted) {
-        return;
-      }
-      unawaited(_loadSources());
-    });
   }
 
   Future<void> _bootstrapDiscoverState() async {
@@ -304,7 +276,7 @@ class _DiscoverPageState extends State<DiscoverPage>
     final source = _selectedSource;
     final summary =
         source == null
-            ? (_isLoadingSources ? '正在加载可用书源...' : '请选择书源')
+            ? (_isLoadingSources ? '正在加载可用源脚本...' : '请选择源脚本')
             : _buildSourceSummary(source);
     final categoryName = _selectedCategory?.title ?? '未选分类';
     final status = _resolveSourceStatus(source?.id);
@@ -326,7 +298,7 @@ class _DiscoverPageState extends State<DiscoverPage>
                   _buildSourceStatusPill(context, status)
                 else
                   Text(
-                    '当前书源',
+                    '当前源脚本',
                     style: textTheme.labelLarge?.copyWith(
                       fontWeight: FontWeight.w700,
                       color: colorScheme.onSurfaceVariant,
@@ -353,7 +325,7 @@ class _DiscoverPageState extends State<DiscoverPage>
 
             // -- Row 2: source name (prominent) --
             Text(
-              source?.name ?? '未选择书源',
+              source?.name ?? '未选择源脚本',
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
               style: textTheme.titleMedium?.copyWith(
@@ -454,7 +426,7 @@ class _DiscoverPageState extends State<DiscoverPage>
 
   Widget _buildCategoryStripCard(BuildContext context) {
     if (_isLoadingSources && _discoverSources.isEmpty) {
-      return _buildLoadingCard(context, message: '正在加载发现书源...');
+      return _buildLoadingCard(context, message: '正在加载发现源脚本...');
     }
     if (_discoverSources.isEmpty) {
       return const SizedBox.shrink();
@@ -470,12 +442,12 @@ class _DiscoverPageState extends State<DiscoverPage>
       return _buildLoadingCard(context, message: '正在解析分类...');
     }
     if (_categories.isEmpty) {
-      return _buildInfoCard(context, message: '该书源没有可用的发现分类。');
+      return _buildInfoCard(context, message: '该源脚本没有可用的发现分类。');
     }
 
     final actionableEntries = _actionableCategoryEntries;
     if (actionableEntries.isEmpty) {
-      return _buildInfoCard(context, message: '该书源暂无可点击分类。');
+      return _buildInfoCard(context, message: '该源脚本暂无可点击分类。');
     }
 
     final previewCount = math.min(
@@ -588,10 +560,10 @@ class _DiscoverPageState extends State<DiscoverPage>
 
   Widget _buildCategoryPanelCard(BuildContext context) {
     if (_isLoadingSources && _discoverSources.isEmpty) {
-      return _buildLoadingCard(context, message: '正在加载发现书源...');
+      return _buildLoadingCard(context, message: '正在加载发现源脚本...');
     }
     if (_discoverSources.isEmpty) {
-      return _buildInfoCard(context, message: '暂无支持发现的书源。');
+      return _buildInfoCard(context, message: '暂无支持发现的源脚本。');
     }
     final actionableCount = _actionableCategoryEntries.length;
 
@@ -635,7 +607,7 @@ class _DiscoverPageState extends State<DiscoverPage>
     if (actionableEntries.isEmpty) {
       return _buildPanelMessage(
         context,
-        message: '该书源暂无可点击分类。',
+        message: '该源脚本暂无可点击分类。',
         icon: Icons.grid_off_rounded,
       );
     }
@@ -718,7 +690,7 @@ class _DiscoverPageState extends State<DiscoverPage>
     if (_isLoadingSources && _discoverSources.isEmpty) {
       return <Widget>[
         SliverToBoxAdapter(
-          child: _buildLoadingCard(context, message: '正在加载发现书源...'),
+          child: _buildLoadingCard(context, message: '正在加载发现源脚本...'),
         ),
       ];
     }
@@ -746,7 +718,7 @@ class _DiscoverPageState extends State<DiscoverPage>
     if (_categories.isEmpty) {
       return <Widget>[
         SliverToBoxAdapter(
-          child: _buildInfoCard(context, message: '该书源没有可用的发现分类。'),
+          child: _buildInfoCard(context, message: '该源脚本没有可用的发现分类。'),
         ),
       ];
     }
@@ -1173,14 +1145,14 @@ class _DiscoverPageState extends State<DiscoverPage>
           crossAxisAlignment: CrossAxisAlignment.start,
           children: <Widget>[
             Text(
-              '暂无支持发现的已启用书源',
+              '暂无支持发现的已启用源脚本',
               style: Theme.of(
                 context,
               ).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w700),
             ),
             const SizedBox(height: 8),
             Text(
-              '请先在书源页导入并启用带 `exploreUrl + ruleExplore` 的书源。',
+              '请先在源脚本页导入并启用支持 `discoverCategories + discoverBooks` 的源脚本。',
               style: Theme.of(context).textTheme.bodySmall,
             ),
             if (_enabledSourceCount > 0) ...<Widget>[
@@ -1196,7 +1168,7 @@ class _DiscoverPageState extends State<DiscoverPage>
             FilledButton.icon(
               onPressed: () => context.push('/source'),
               icon: const Icon(Icons.storage_rounded),
-              label: const Text('前往书源页'),
+              label: const Text('前往源脚本页'),
             ),
             const SizedBox(height: 8),
             TextButton.icon(
@@ -1326,12 +1298,12 @@ class _DiscoverPageState extends State<DiscoverPage>
         _enabledSourceCount = 0;
         _discoverCapableCount = 0;
         _isLoadingSources = false;
-        _sourceErrorText = _toReadableError(error, fallback: '加载发现书源失败');
+        _sourceErrorText = _toReadableError(error, fallback: '加载发现源脚本失败');
       });
     }
   }
 
-  void _syncSourceRuntimeCache(List<SourceDefinition> sources) {
+  void _syncSourceRuntimeCache(List<DiscoverSource> sources) {
     final sourceIdSet = sources.map((item) => item.id).toSet();
     _probingSourceIds.removeWhere((id) => !sourceIdSet.contains(id));
     _verifiedSourceIds.removeWhere((id) => !sourceIdSet.contains(id));
@@ -1339,15 +1311,15 @@ class _DiscoverPageState extends State<DiscoverPage>
     _sourceBookErrorById.removeWhere((id, _) => !sourceIdSet.contains(id));
   }
 
-  List<SourceDefinition> _buildInitialProbeSources({
-    required List<SourceDefinition> sources,
+  List<DiscoverSource> _buildInitialProbeSources({
+    required List<DiscoverSource> sources,
     required String? selectedSourceId,
   }) {
     if (sources.isEmpty) {
-      return const <SourceDefinition>[];
+      return const <DiscoverSource>[];
     }
 
-    final output = <SourceDefinition>[];
+    final output = <DiscoverSource>[];
     if (selectedSourceId != null && selectedSourceId.isNotEmpty) {
       for (final source in sources) {
         if (source.id == selectedSourceId) {
@@ -1370,7 +1342,7 @@ class _DiscoverPageState extends State<DiscoverPage>
   }
 
   Future<void> _probeSourceCompatibilityInBackground(
-    List<SourceDefinition> sources,
+    List<DiscoverSource> sources,
   ) async {
     if (sources.isEmpty || !mounted) {
       return;
@@ -1425,7 +1397,7 @@ class _DiscoverPageState extends State<DiscoverPage>
   }
 
   Future<void> _loadCategoriesForSource(
-    SourceDefinition source, {
+    DiscoverSource source, {
     required bool preserveCurrentCategory,
   }) async {
     final requestToken = ++_categoryRequestToken;
@@ -1627,7 +1599,7 @@ class _DiscoverPageState extends State<DiscoverPage>
       return;
     }
 
-    final selected = await showModalBottomSheet<SourceDefinition>(
+    final selected = await showModalBottomSheet<DiscoverSource>(
       context: context,
       isScrollControlled: true,
       useSafeArea: true,
@@ -1672,7 +1644,7 @@ class _DiscoverPageState extends State<DiscoverPage>
   Future<void> _handleSourceSwitch(int offset) async {
     await _runSourceSwitchAction(
       action: () => _switchSourceByOffset(offset),
-      fallback: '切换书源失败',
+      fallback: '切换源脚本失败',
     );
   }
 
@@ -1704,7 +1676,7 @@ class _DiscoverPageState extends State<DiscoverPage>
       return;
     }
 
-    final sources = List<SourceDefinition>.of(
+    final sources = List<DiscoverSource>.of(
       _discoverSources,
       growable: false,
     );
@@ -1768,7 +1740,7 @@ class _DiscoverPageState extends State<DiscoverPage>
       return;
     }
 
-    final sources = List<SourceDefinition>.of(
+    final sources = List<DiscoverSource>.of(
       _discoverSources,
       growable: false,
     );
@@ -1932,7 +1904,7 @@ class _DiscoverPageState extends State<DiscoverPage>
       case _SourceRuntimeStatus.checking:
         return '检查中';
       case _SourceRuntimeStatus.parseFailed:
-        return '规则异常';
+        return '脚本异常';
       case _SourceRuntimeStatus.requestFailed:
         return '访问失败';
       case _SourceRuntimeStatus.unknown:
@@ -1956,8 +1928,8 @@ class _DiscoverPageState extends State<DiscoverPage>
     }
   }
 
-  SourceDefinition? _findSourceById(
-    List<SourceDefinition> sources,
+  DiscoverSource? _findSourceById(
+    List<DiscoverSource> sources,
     String? sourceId,
   ) {
     if (sourceId == null || sourceId.isEmpty) {
@@ -1997,7 +1969,7 @@ class _DiscoverPageState extends State<DiscoverPage>
     return 'discover_cover_${book.sourceId}_${book.id}_${book.detailUrl.hashCode}_$listIndex';
   }
 
-  String _buildSourceSummary(SourceDefinition source) {
+  String _buildSourceSummary(DiscoverSource source) {
     final group = source.group?.trim();
     final host = _extractHost(source.baseUrl);
     if (group == null || group.isEmpty) {
@@ -2050,7 +2022,7 @@ class _SourcePickerSheet extends StatefulWidget {
     required this.bookErrorBySourceId,
   });
 
-  final List<SourceDefinition> sources;
+  final List<DiscoverSource> sources;
   final String? selectedSourceId;
   final Set<String> checkingSourceIds;
   final Map<String, String> parseErrorBySourceId;
@@ -2064,7 +2036,7 @@ class _SourcePickerSheetState extends State<_SourcePickerSheet> {
   final TextEditingController _searchController = TextEditingController();
   _SourceTypeFilter _sourceTypeFilter = _SourceTypeFilter.all;
 
-  List<SourceDefinition> get _filteredSources {
+  List<DiscoverSource> get _filteredSources {
     final keyword = _searchController.text.trim().toLowerCase();
     final result = widget.sources
         .where((source) {
@@ -2141,14 +2113,14 @@ class _SourcePickerSheetState extends State<_SourcePickerSheet> {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: <Widget>[
                   Text(
-                    '切换发现书源',
+                    '切换发现源脚本',
                     style: Theme.of(context).textTheme.titleMedium?.copyWith(
                       fontWeight: FontWeight.w700,
                     ),
                   ),
                   const SizedBox(height: 2),
                   Text(
-                    '共 ${widget.sources.length} 个发现书源',
+                    '共 ${widget.sources.length} 个发现源脚本',
                     style: Theme.of(context).textTheme.bodySmall?.copyWith(
                       color: Theme.of(context).colorScheme.onSurfaceVariant,
                     ),
@@ -2162,7 +2134,7 @@ class _SourcePickerSheetState extends State<_SourcePickerSheet> {
               onChanged: (_) => setState(() {}),
               decoration: InputDecoration(
                 isDense: true,
-                hintText: '搜索规则名称或域名',
+                hintText: '搜索源脚本名称或域名',
                 prefixIcon: const Icon(Icons.search_rounded, size: 18),
                 border: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(12),
@@ -2206,7 +2178,7 @@ class _SourcePickerSheetState extends State<_SourcePickerSheet> {
                   filteredSources.isEmpty
                       ? Center(
                         child: Text(
-                          '没有匹配的书源',
+                          '没有匹配的源脚本',
                           style: Theme.of(context).textTheme.bodySmall,
                         ),
                       )
@@ -2326,7 +2298,7 @@ class _SourcePickerSheetState extends State<_SourcePickerSheet> {
     );
   }
 
-  Widget _buildSourceTypePill(BuildContext context, SourceDefinition source) {
+  Widget _buildSourceTypePill(BuildContext context, DiscoverSource source) {
     final typeColor = _sourceTypeColor(context, source);
     return DecoratedBox(
       decoration: BoxDecoration(
@@ -2345,7 +2317,7 @@ class _SourcePickerSheetState extends State<_SourcePickerSheet> {
     );
   }
 
-  bool _matchesSourceTypeFilter(SourceDefinition source) {
+  bool _matchesSourceTypeFilter(DiscoverSource source) {
     switch (_sourceTypeFilter) {
       case _SourceTypeFilter.all:
         return true;
@@ -2373,19 +2345,19 @@ class _SourcePickerSheetState extends State<_SourcePickerSheet> {
     }).length;
   }
 
-  bool _isNovelSource(SourceDefinition source) {
+  bool _isNovelSource(DiscoverSource source) {
     return source.sourceType == 0 && !source.isMangaSource;
   }
 
-  bool _isMangaSource(SourceDefinition source) {
+  bool _isMangaSource(DiscoverSource source) {
     return source.isMangaSource;
   }
 
-  bool _isUnknownSource(SourceDefinition source) {
+  bool _isUnknownSource(DiscoverSource source) {
     return !_isNovelSource(source) && !_isMangaSource(source);
   }
 
-  String _sourceTypeLabel(SourceDefinition source) {
+  String _sourceTypeLabel(DiscoverSource source) {
     if (_isMangaSource(source)) {
       return '漫画';
     }
@@ -2395,7 +2367,7 @@ class _SourcePickerSheetState extends State<_SourcePickerSheet> {
     return '未知';
   }
 
-  Color _sourceTypeColor(BuildContext context, SourceDefinition source) {
+  Color _sourceTypeColor(BuildContext context, DiscoverSource source) {
     final scheme = Theme.of(context).colorScheme;
     if (_isMangaSource(source)) {
       return scheme.tertiary;
@@ -2406,7 +2378,7 @@ class _SourcePickerSheetState extends State<_SourcePickerSheet> {
     return scheme.onSurfaceVariant;
   }
 
-  String _buildSourceSummary(SourceDefinition source) {
+  String _buildSourceSummary(DiscoverSource source) {
     final host = _extractHost(source.baseUrl);
     final group = source.group?.trim();
     if (group == null || group.isEmpty) {
@@ -2480,7 +2452,7 @@ String _sourceStatusLabel(_SourceRuntimeStatus status) {
     case _SourceRuntimeStatus.checking:
       return '检查中';
     case _SourceRuntimeStatus.parseFailed:
-      return '规则异常';
+      return '脚本异常';
     case _SourceRuntimeStatus.requestFailed:
       return '访问失败';
     case _SourceRuntimeStatus.unknown:

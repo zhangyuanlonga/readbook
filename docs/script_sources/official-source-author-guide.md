@@ -1,5 +1,13 @@
 # 官方书源编写手册
 
+更新时间：2026-04-01
+
+当前产品说明：
+
+- `flutterreadbook` 当前只支持脚本源。
+- App 不再导入或执行旧规则 JSON。
+- 如果你在迁移历史书源，请把旧规则字段映射为脚本源的 `search / detail / chapters / content` 方法，而不是继续维护旧 JSON。
+
 本手册面向“书源作者”。目标不是解释内部实现，而是帮助你从用户视角快速理解：
 
 - 书源文件应该怎么写
@@ -12,9 +20,9 @@
 
 相关文档：
 
-- 速查入口：[js-rules-quick-reference.md](./js-rules-quick-reference.md)
 - 规范定义：[source-spec-v1.md](./source-spec-v1.md)
 - 运行时边界：[runtime-ctx-api.md](./runtime-ctx-api.md)
+- 总体架构：[architecture.md](./architecture.md)
 - 官方模板：[source_template_v1.js](../templates/source_template_v1.js)
 
 ---
@@ -110,7 +118,6 @@ export default {
     return {
       title: chapter.title,
       content: '',
-      sourceId: ctx.source.id,
     };
   },
 };
@@ -258,7 +265,6 @@ export default {
         SOURCE_HOST,
         item.querySelector('a')?.getAttribute('href') || '',
       ),
-      sourceId: ctx.source.id,
       extra: {
         searchIndex: index,
       },
@@ -280,20 +286,19 @@ export default {
       status: ctx.html.text(doc.querySelector('.status')),
       category: ctx.html.text(doc.querySelector('.category')),
       latestChapter: ctx.html.text(doc.querySelector('.latest')),
-      sourceId: ctx.source.id,
+      tocUrl: ctx.utils.absoluteUrl(
+        book.detailUrl,
+        doc.querySelector('.catalog-link')?.getAttribute('href') || '',
+      ),
       extra: {
         ...book.extra,
-        catalogUrl: ctx.utils.absoluteUrl(
-          book.detailUrl,
-          doc.querySelector('.catalog-link')?.getAttribute('href') || '',
-        ),
       },
     };
   },
 
   async chapters(ctx, book) {
     const response = await ctx.http.request({
-      url: book.extra.catalogUrl || book.detailUrl,
+      url: book.tocUrl || book.detailUrl,
       method: 'GET',
       timeoutMs: 6000,
     });
@@ -301,11 +306,9 @@ export default {
     const doc = ctx.html.parse(response.text);
     const nodes = doc.querySelectorAll('.chapter-list a');
 
-    return ctx.html.collect(nodes, (node, index) => ({
+    return ctx.html.collect(nodes, (node) => ({
       title: ctx.html.text(node),
       url: ctx.utils.absoluteUrl(book.detailUrl, node.getAttribute('href') || ''),
-      index,
-      sourceId: ctx.source.id,
     }));
   },
 
@@ -321,7 +324,6 @@ export default {
     return {
       title: chapter.title,
       content: ctx.html.text(doc.querySelector('.content')),
-      sourceId: ctx.source.id,
     };
   },
 };
@@ -417,18 +419,17 @@ rateLimits: {
 ```js
 {
   title: '书名',
+  type: 'novel',
+  detailUrl: 'https://...',
+  tocUrl: 'https://.../catalog',
   author: '作者',
   cover: 'https://...',
   intro: '简介',
   status: '连载中',
   category: '玄幻',
-  score: '9.2',
   wordCount: '235000',
   updateTime: '2026-03-25 09:30:00',
-  tags: ['科幻', '群像'],
   latestChapter: '第100章',
-  detailUrl: 'https://...',
-  sourceId: 'runtime-generated-id',
   extra: {},
   debug: {}
 }
@@ -438,18 +439,18 @@ rateLimits: {
 
 - `id`：可选的源内唯一 ID；站点有稳定主键时填写，没有可留空
 - `title`：书名
+- `type`：作品类型，推荐 `novel / comic / audio`
 - `author`：作者
 - `cover`：封面 URL
 - `intro`：简介
 - `status`：连载状态
 - `category`：分类
-- `score`：评分
 - `wordCount`：字数
 - `updateTime`：最近更新时间
-- `tags`：标签列表
 - `latestChapter`：最新章节名
 - `detailUrl`：详情页 URL
-- `sourceId`：运行时生成的源 ID
+- `tocUrl`：目录入口 URL（建议在 `detail` 阶段补齐）
+- `sourceId`：运行时源 ID（脚本通常不必手动填写）
 - `extra`：跨步骤透传数据
 - `debug`：仅用于调试
 
@@ -457,13 +458,11 @@ rateLimits: {
 
 ```js
 {
-  id: 'chapter-id',
   title: '第一章',
   url: 'https://...',
-  index: 1,
-  vip: false,
+  isVip: false,
+  isPay: false,
   updateTime: '2026-03-25 09:30:00',
-  sourceId: 'runtime-generated-id',
   extra: {},
   debug: {}
 }
@@ -473,6 +472,9 @@ rateLimits: {
 
 - `id`：可选的章节唯一 ID；站点有稳定主键时填写，没有可留空
 - `url`：章节页 URL 或正文接口地址
+- `章节顺序`：按返回数组顺序确定，不再要求单独 `index` 字段
+- `isVip`：是否 VIP 章节（身份限制）
+- `isPay`：是否已购买（支付状态）
 - `extra`：继续透传章节请求真正需要的参数，例如 `chapterId`
 
 ### 5.3 Content
@@ -482,8 +484,6 @@ rateLimits: {
   title: '第一章',
   content: '正文内容...',
   nextUrl: null,
-  images: [],
-  sourceId: 'runtime-generated-id',
   extra: {},
   debug: {}
 }
@@ -498,7 +498,6 @@ rateLimits: {
 
 - `bookId`
 - `rawId`
-- `catalogUrl`
 - `ajaxUrl`
 - `token`
 - `csrf`
@@ -603,11 +602,10 @@ async init(ctx, task) {
 
 最少字段建议：
 
-- `id`
 - `title`
-- `author`
+- `type`（建议：`novel/comic/audio`）
 - `detailUrl`
-- `sourceId`
+- `author`（建议）
 
 推荐补齐：
 
@@ -615,10 +613,8 @@ async init(ctx, task) {
 - `intro`
 - `status`
 - `category`
-- `score`
 - `wordCount`
 - `updateTime`
-- `tags`
 - `latestChapter`
 - `extra`
 - `debug`
@@ -628,11 +624,10 @@ async init(ctx, task) {
 ```js
 return [
   {
-    id: 'book-1',
     title: '凡人修仙传',
+    type: 'novel',
     author: '忘语',
     detailUrl: 'https://example.com/book/1',
-    sourceId: ctx.source.id,
   },
 ];
 ```
@@ -655,15 +650,14 @@ return [
 
 - 返回一个单独的 `Book`
 - 保留已有关键字段
-- 尽量补齐 `intro / status / category / score / wordCount / updateTime / tags / latestChapter`
+- 尽量补齐 `intro / status / category / wordCount / updateTime / latestChapter`
 
 最少字段建议：
 
-- `id`
 - `title`
-- `author`
+- `type`（建议沿用 `search` 产物）
 - `detailUrl`
-- `sourceId`
+- `author`（建议）
 
 最小示例：
 
@@ -673,7 +667,6 @@ return {
   intro: '一个普通山村小子的修仙故事。',
   status: '已完结',
   category: '仙侠',
-  sourceId: ctx.source.id,
 };
 ```
 
@@ -693,15 +686,13 @@ return {
 
 最少字段建议：
 
-- `id`
 - `title`
 - `url`
-- `index`
-- `sourceId`
 
 推荐补齐：
 
-- `vip`
+- `isVip`
+- `isPay`
 - `extra`
 - `debug`
 
@@ -710,11 +701,8 @@ return {
 ```js
 return [
   {
-    id: 'chapter-1',
     title: '第一章 山边小村',
     url: 'https://example.com/book/1/chapter/1',
-    index: 1,
-    sourceId: ctx.source.id,
   },
 ];
 ```
@@ -738,12 +726,11 @@ return [
 
 - `title`
 - `content`
-- `sourceId`
 
 推荐补齐：
 
 - `nextUrl`
-- `images`
+- `content` 中内联 `<img src="...">`（用于正文插图定位）
 - `extra`
 - `debug`
 
@@ -753,7 +740,6 @@ return [
 return {
   title: chapter.title,
   content: '这里是正文内容……',
-  sourceId: ctx.source.id,
 };
 ```
 
@@ -776,10 +762,9 @@ return {
 async detail(ctx, book) {
   return {
     ...book,
-    sourceId: ctx.source.id,
+    tocUrl: 'https://example.com/catalog/123',
     extra: {
       ...book.extra,
-      catalogUrl: 'https://example.com/catalog/123',
     },
   };
 }
@@ -857,8 +842,7 @@ string
 
 适用场景：
 
-- 给 `Book / Chapter / Content` 填充 `sourceId`
-- 调试时标识当前正在执行哪个源
+- 在适配层或调试日志中标识当前正在执行哪个源
 
 示例：
 
@@ -1271,10 +1255,8 @@ const doc = ctx.html.parse(response.text);
 const items = doc.querySelectorAll('.book-item');
 
 return ctx.html.collect(items, (node, index) => ({
-  id: node.getAttribute('data-id') || String(index),
   title: ctx.html.text(node.querySelector('.title')),
   author: ctx.html.text(node.querySelector('.author')),
-  sourceId: ctx.source.id,
 }));
 ```
 
@@ -1399,10 +1381,8 @@ Array<any>
 const books = ctx.html.collect(
   doc.querySelectorAll('.book-item'),
   (node, index) => ({
-    id: node.getAttribute('data-id') || String(index),
     title: ctx.html.text(node.querySelector('.title')),
     author: ctx.html.text(node.querySelector('.author')),
-    sourceId: ctx.source.id,
   }),
 );
 ```
@@ -3382,7 +3362,7 @@ if (!response.ok) {
 
 - `meta` 字段完整且对用户可读
 - `search / detail / chapters / content` 均有返回值
-- `sourceId` 已正确填写为 `ctx.source.id`
+- `Book / Chapter / Content` 满足最小字段（`title/detailUrl`、`title/url`、`title/content`）
 - URL 已做绝对路径处理
 - 站点私有参数已统一放入 `extra`
 - 正文页能稳定拿到 `content`

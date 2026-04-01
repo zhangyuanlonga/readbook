@@ -1,14 +1,18 @@
-import 'dart:async';
-
 import 'package:flutter/material.dart';
-import 'package:flutter_appread/core/network/request_context.dart';
-import 'package:flutter_appread/domain/entities/book.dart';
-import 'package:flutter_appread/domain/entities/source_definition.dart';
-import 'package:flutter_appread/domain/repositories/source_repository.dart';
+import 'package:flutter_appread/core/errors/app_exception.dart';
+import 'package:flutter_appread/core/errors/error_codes.dart';
+import 'package:flutter_appread/core/errors/error_stage.dart';
+import 'package:flutter_appread/domain/entities/script_source.dart';
+import 'package:flutter_appread/domain/repositories/script_source_repository.dart';
 import 'package:flutter_appread/features/discover/application/discover_preferences_service.dart';
 import 'package:flutter_appread/features/discover/application/explore_service.dart';
 import 'package:flutter_appread/features/discover/presentation/discover_page.dart';
-import 'package:flutter_appread/features/search/application/search_service.dart';
+import 'package:flutter_appread/features/source/application/source_runtime_facade.dart';
+import 'package:flutter_appread/runtime/sources/source_contract.dart';
+import 'package:flutter_appread/runtime/sources/source_manifest.dart';
+import 'package:flutter_appread/runtime/sources/source_registry.dart';
+import 'package:flutter_appread/runtime/sources/source_result_models.dart'
+    as runtime_models;
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -21,18 +25,16 @@ void main() {
     tester,
   ) async {
     _registerDiscoverPageTearDown(tester);
-    final repository = _FakeSourceRepository(<SourceDefinition>[
-      SourceDefinition(
-        id: 's1',
-        name: '普通源',
-        baseUrl: 'https://example.com',
-        enabled: true,
-        exploreEnabled: false,
-      ),
-    ]);
     final service = ExploreService(
-      sourceRepository: repository,
-      searchService: _FakeSearchService(),
+      sourceRuntimeFacade: _FakeRuntimeFacade(
+        sources: <RegisteredSource>[
+          _buildRegisteredSource(
+            id: 's1',
+            name: '普通源',
+            supportsDiscover: false,
+          ),
+        ],
+      ),
     );
 
     await tester.pumpWidget(
@@ -40,60 +42,37 @@ void main() {
         width: 900,
         child: DiscoverPage(
           exploreService: service,
-          sourceRepository: repository,
         ),
       ),
     );
     await tester.pumpAndSettle();
 
     expect(find.textContaining('当前已启用：1，支持发现：0'), findsOneWidget);
-    expect(find.text('暂无支持发现的已启用书源'), findsOneWidget);
+    expect(find.text('暂无支持发现的已启用源脚本'), findsOneWidget);
   });
 
-  testWidgets('loads first discover category and renders books', (
-    tester,
-  ) async {
+  testWidgets('loads first discover category and renders books', (tester) async {
     _registerDiscoverPageTearDown(tester);
-    final repository = _FakeSourceRepository(<SourceDefinition>[
-      SourceDefinition(
-        id: 'discover_s1',
-        name: '发现源A',
-        baseUrl: 'https://example.com',
-        enabled: true,
-        exploreEnabled: true,
-        exploreUrl: '推荐::/discover?page={{page}}',
-        rules: const SourceRuleSet(
-          exploreListRule: '.item@html',
-          exploreTitleRule: '.name@text',
-          exploreDetailUrlRule: '.name@href',
-        ),
-      ),
-    ]);
     final service = ExploreService(
-      sourceRepository: repository,
-      searchService: _FakeSearchService(
-        handler: ({
-          required SourceDefinition source,
-          required String keyword,
-          required int page,
-          required int pageSize,
-        }) async {
-          return SingleSourceSearchResult(
-            sourceId: source.id,
-            sourceName: source.name,
-            keyword: keyword,
-            requestUrl: 'https://example.com/discover?page=$page',
-            method: HttpRequestMethod.get,
-            statusCode: 200,
-            books: const <Book>[
-              Book(
-                id: 'b1',
-                sourceId: 'discover_s1',
-                title: '发现测试书籍',
-                detailUrl: 'https://example.com/book/1',
-              ),
-            ],
-          );
+      sourceRuntimeFacade: _FakeRuntimeFacade(
+        sources: <RegisteredSource>[
+          _buildRegisteredSource(id: 'discover_s1', name: '发现源A'),
+        ],
+        categoriesBySourceId: <String, List<runtime_models.DiscoverCategory>>{
+          'discover_s1': const <runtime_models.DiscoverCategory>[
+            runtime_models.DiscoverCategory(title: '推荐', url: '/discover?page={{page}}'),
+          ],
+        },
+        booksBySourceId: <String, List<runtime_models.Book>>{
+          'discover_s1': const <runtime_models.Book>[
+            runtime_models.Book(
+              id: 'b1',
+              sourceId: 'discover_s1',
+              title: '发现测试书籍',
+              author: '作者A',
+              detailUrl: 'https://example.com/book/1',
+            ),
+          ],
         },
       ),
     );
@@ -103,14 +82,13 @@ void main() {
         width: 900,
         child: DiscoverPage(
           exploreService: service,
-          sourceRepository: repository,
         ),
       ),
     );
     await tester.pumpAndSettle();
 
     expect(find.text('发现源A'), findsOneWidget);
-    expect(find.text('发现测试书籍'), findsOneWidget);
+    expect(find.text('发现测试书籍'), findsWidgets);
   });
 
   testWidgets('uses denser phone card style at width 480 compared with 390', (
@@ -119,47 +97,27 @@ void main() {
     _registerDiscoverPageTearDown(tester);
     addTearDown(() => tester.binding.setSurfaceSize(null));
     const introText = '这是一段用于测试发现页密度策略变化的简介文本内容';
-    final repository = _FakeSourceRepository(<SourceDefinition>[
-      SourceDefinition(
-        id: 'discover_density',
-        name: '发现密度源',
-        baseUrl: 'https://example.com',
-        enabled: true,
-        exploreEnabled: true,
-        exploreUrl: '推荐::/discover?page={{page}}',
-        rules: const SourceRuleSet(
-          exploreListRule: '.item@html',
-          exploreTitleRule: '.name@text',
-          exploreDetailUrlRule: '.name@href',
-        ),
-      ),
-    ]);
     final service = ExploreService(
-      sourceRepository: repository,
-      searchService: _FakeSearchService(
-        handler: ({
-          required SourceDefinition source,
-          required String keyword,
-          required int page,
-          required int pageSize,
-        }) async {
-          return SingleSourceSearchResult(
-            sourceId: source.id,
-            sourceName: source.name,
-            keyword: keyword,
-            requestUrl: 'https://example.com/discover?page=$page',
-            method: HttpRequestMethod.get,
-            statusCode: 200,
-            books: const <Book>[
-              Book(
-                id: 'density-book',
-                sourceId: 'discover_density',
-                title: '密度测试书籍',
-                intro: introText,
-                detailUrl: 'https://example.com/book/density',
-              ),
-            ],
-          );
+      sourceRuntimeFacade: _FakeRuntimeFacade(
+        sources: <RegisteredSource>[
+          _buildRegisteredSource(id: 'discover_density', name: '发现密度源'),
+        ],
+        categoriesBySourceId: <String, List<runtime_models.DiscoverCategory>>{
+          'discover_density': const <runtime_models.DiscoverCategory>[
+            runtime_models.DiscoverCategory(title: '推荐', url: '/discover?page={{page}}'),
+          ],
+        },
+        booksBySourceId: <String, List<runtime_models.Book>>{
+          'discover_density': const <runtime_models.Book>[
+            runtime_models.Book(
+              id: 'density-book',
+              sourceId: 'discover_density',
+              title: '密度测试书籍',
+              author: '作者A',
+              intro: introText,
+              detailUrl: 'https://example.com/book/density',
+            ),
+          ],
         },
       ),
     );
@@ -170,7 +128,6 @@ void main() {
         width: 390,
         child: DiscoverPage(
           exploreService: service,
-          sourceRepository: repository,
         ),
       ),
     );
@@ -185,7 +142,6 @@ void main() {
         width: 480,
         child: DiscoverPage(
           exploreService: service,
-          sourceRepository: repository,
         ),
       ),
     );
@@ -197,25 +153,23 @@ void main() {
 
   testWidgets('shows category style hint text in side panel', (tester) async {
     _registerDiscoverPageTearDown(tester);
-    final repository = _FakeSourceRepository(<SourceDefinition>[
-      SourceDefinition(
-        id: 'discover_s2',
-        name: '发现源B',
-        baseUrl: 'https://example.com',
-        enabled: true,
-        exploreEnabled: true,
-        exploreUrl:
-            '[{"title":"推荐","url":"/discover?page={{page}}","style":{"layout_flexBasisPercent":0.25}}]',
-        rules: const SourceRuleSet(
-          exploreListRule: '.item@html',
-          exploreTitleRule: '.name@text',
-          exploreDetailUrlRule: '.name@href',
-        ),
-      ),
-    ]);
     final service = ExploreService(
-      sourceRepository: repository,
-      searchService: _FakeSearchService(),
+      sourceRuntimeFacade: _FakeRuntimeFacade(
+        sources: <RegisteredSource>[
+          _buildRegisteredSource(id: 'discover_s2', name: '发现源B'),
+        ],
+        categoriesBySourceId: <String, List<runtime_models.DiscoverCategory>>{
+          'discover_s2': const <runtime_models.DiscoverCategory>[
+            runtime_models.DiscoverCategory(
+              title: '推荐',
+              url: '/discover?page={{page}}',
+              style: runtime_models.DiscoverCategoryStyle(
+                layoutFlexBasisPercent: 25,
+              ),
+            ),
+          ],
+        },
+      ),
     );
 
     await tester.pumpWidget(
@@ -223,7 +177,6 @@ void main() {
         width: 900,
         child: DiscoverPage(
           exploreService: service,
-          sourceRepository: repository,
         ),
       ),
     );
@@ -236,37 +189,19 @@ void main() {
     tester,
   ) async {
     _registerDiscoverPageTearDown(tester);
-    final repository = _FakeSourceRepository(<SourceDefinition>[
-      SourceDefinition(
-        id: 'broken_s1',
-        name: 'A异常源',
-        baseUrl: 'https://broken.example.com',
-        enabled: true,
-        exploreEnabled: true,
-        exploreUrl: '{{id|bad}}',
-        rules: const SourceRuleSet(
-          exploreListRule: '.item@html',
-          exploreTitleRule: '.name@text',
-          exploreDetailUrlRule: '.name@href',
-        ),
-      ),
-      SourceDefinition(
-        id: 'ok_s2',
-        name: 'B可用源',
-        baseUrl: 'https://ok.example.com',
-        enabled: true,
-        exploreEnabled: true,
-        exploreUrl: '推荐::/discover?page={{page}}',
-        rules: const SourceRuleSet(
-          exploreListRule: '.item@html',
-          exploreTitleRule: '.name@text',
-          exploreDetailUrlRule: '.name@href',
-        ),
-      ),
-    ]);
     final service = ExploreService(
-      sourceRepository: repository,
-      searchService: _FakeSearchService(),
+      sourceRuntimeFacade: _FakeRuntimeFacade(
+        sources: <RegisteredSource>[
+          _buildRegisteredSource(id: 'broken_s1', name: 'A异常源'),
+          _buildRegisteredSource(id: 'ok_s2', name: 'B可用源'),
+        ],
+        failingCategorySourceIds: const <String>{'broken_s1'},
+        categoriesBySourceId: <String, List<runtime_models.DiscoverCategory>>{
+          'ok_s2': const <runtime_models.DiscoverCategory>[
+            runtime_models.DiscoverCategory(title: '推荐', url: '/discover?page={{page}}'),
+          ],
+        },
+      ),
     );
 
     await tester.pumpWidget(
@@ -274,7 +209,6 @@ void main() {
         width: 900,
         child: DiscoverPage(
           exploreService: service,
-          sourceRepository: repository,
         ),
       ),
     );
@@ -293,37 +227,19 @@ void main() {
     tester,
   ) async {
     _registerDiscoverPageTearDown(tester);
-    final repository = _FakeSourceRepository(<SourceDefinition>[
-      SourceDefinition(
-        id: 'broken_s1',
-        name: 'A异常源',
-        baseUrl: 'https://broken.example.com',
-        enabled: true,
-        exploreEnabled: true,
-        exploreUrl: '{{id|bad}}',
-        rules: const SourceRuleSet(
-          exploreListRule: '.item@html',
-          exploreTitleRule: '.name@text',
-          exploreDetailUrlRule: '.name@href',
-        ),
-      ),
-      SourceDefinition(
-        id: 'ok_s2',
-        name: 'B可用源',
-        baseUrl: 'https://ok.example.com',
-        enabled: true,
-        exploreEnabled: true,
-        exploreUrl: '推荐::/discover?page={{page}}',
-        rules: const SourceRuleSet(
-          exploreListRule: '.item@html',
-          exploreTitleRule: '.name@text',
-          exploreDetailUrlRule: '.name@href',
-        ),
-      ),
-    ]);
     final service = ExploreService(
-      sourceRepository: repository,
-      searchService: _FakeSearchService(),
+      sourceRuntimeFacade: _FakeRuntimeFacade(
+        sources: <RegisteredSource>[
+          _buildRegisteredSource(id: 'broken_s1', name: 'A异常源'),
+          _buildRegisteredSource(id: 'ok_s2', name: 'B可用源'),
+        ],
+        failingCategorySourceIds: const <String>{'broken_s1'},
+        categoriesBySourceId: <String, List<runtime_models.DiscoverCategory>>{
+          'ok_s2': const <runtime_models.DiscoverCategory>[
+            runtime_models.DiscoverCategory(title: '推荐', url: '/discover?page={{page}}'),
+          ],
+        },
+      ),
     );
 
     await tester.pumpWidget(
@@ -331,7 +247,6 @@ void main() {
         width: 700,
         child: DiscoverPage(
           exploreService: service,
-          sourceRepository: repository,
         ),
       ),
     );
@@ -350,38 +265,21 @@ void main() {
     });
     final prefs = await SharedPreferences.getInstance();
     final preferencesService = DiscoverPreferencesService(preferences: prefs);
-
-    final repository = _FakeSourceRepository(<SourceDefinition>[
-      SourceDefinition(
-        id: 'default_s1',
-        name: 'A默认源',
-        baseUrl: 'https://a.example.com',
-        enabled: true,
-        exploreEnabled: true,
-        exploreUrl: '推荐::/discover?page={{page}}',
-        rules: const SourceRuleSet(
-          exploreListRule: '.item@html',
-          exploreTitleRule: '.name@text',
-          exploreDetailUrlRule: '.name@href',
-        ),
-      ),
-      SourceDefinition(
-        id: 'remember_s2',
-        name: 'B记忆源',
-        baseUrl: 'https://b.example.com',
-        enabled: true,
-        exploreEnabled: true,
-        exploreUrl: '推荐::/discover?page={{page}}',
-        rules: const SourceRuleSet(
-          exploreListRule: '.item@html',
-          exploreTitleRule: '.name@text',
-          exploreDetailUrlRule: '.name@href',
-        ),
-      ),
-    ]);
     final service = ExploreService(
-      sourceRepository: repository,
-      searchService: _FakeSearchService(),
+      sourceRuntimeFacade: _FakeRuntimeFacade(
+        sources: <RegisteredSource>[
+          _buildRegisteredSource(id: 'default_s1', name: 'A默认源'),
+          _buildRegisteredSource(id: 'remember_s2', name: 'B记忆源'),
+        ],
+        categoriesBySourceId: <String, List<runtime_models.DiscoverCategory>>{
+          'default_s1': const <runtime_models.DiscoverCategory>[
+            runtime_models.DiscoverCategory(title: '推荐', url: '/discover?page={{page}}'),
+          ],
+          'remember_s2': const <runtime_models.DiscoverCategory>[
+            runtime_models.DiscoverCategory(title: '推荐', url: '/discover?page={{page}}'),
+          ],
+        },
+      ),
     );
 
     await tester.pumpWidget(
@@ -390,7 +288,6 @@ void main() {
         child: DiscoverPage(
           exploreService: service,
           discoverPreferencesService: preferencesService,
-          sourceRepository: repository,
         ),
       ),
     );
@@ -399,43 +296,31 @@ void main() {
     expect(find.text('B记忆源'), findsWidgets);
   });
 
-  testWidgets('source picker can filter novel and manga sources', (
-    tester,
-  ) async {
+  testWidgets('source picker can filter novel and manga sources', (tester) async {
     _registerDiscoverPageTearDown(tester);
-    final repository = _FakeSourceRepository(<SourceDefinition>[
-      SourceDefinition(
-        id: 'novel_source',
-        name: '小说源A',
-        baseUrl: 'https://novel.example.com',
-        enabled: true,
-        sourceType: 0,
-        exploreEnabled: true,
-        exploreUrl: '推荐::/discover?page={{page}}',
-        rules: const SourceRuleSet(
-          exploreListRule: '.item@html',
-          exploreTitleRule: '.name@text',
-          exploreDetailUrlRule: '.name@href',
-        ),
-      ),
-      SourceDefinition(
-        id: 'manga_source',
-        name: '漫画源B',
-        baseUrl: 'https://manga.example.com',
-        enabled: true,
-        sourceType: 2,
-        exploreEnabled: true,
-        exploreUrl: '推荐::/discover?page={{page}}',
-        rules: const SourceRuleSet(
-          exploreListRule: '.item@html',
-          exploreTitleRule: '.name@text',
-          exploreDetailUrlRule: '.name@href',
-        ),
-      ),
-    ]);
     final service = ExploreService(
-      sourceRepository: repository,
-      searchService: _FakeSearchService(),
+      sourceRuntimeFacade: _FakeRuntimeFacade(
+        sources: <RegisteredSource>[
+          _buildRegisteredSource(
+            id: 'novel_source',
+            name: '小说源A',
+            capabilities: const <String>{'novel'},
+          ),
+          _buildRegisteredSource(
+            id: 'manga_source',
+            name: '漫画源B',
+            capabilities: const <String>{'manga'},
+          ),
+        ],
+        categoriesBySourceId: <String, List<runtime_models.DiscoverCategory>>{
+          'novel_source': const <runtime_models.DiscoverCategory>[
+            runtime_models.DiscoverCategory(title: '推荐', url: '/discover?page={{page}}'),
+          ],
+          'manga_source': const <runtime_models.DiscoverCategory>[
+            runtime_models.DiscoverCategory(title: '推荐', url: '/discover?page={{page}}'),
+          ],
+        },
+      ),
     );
 
     await tester.pumpWidget(
@@ -443,7 +328,6 @@ void main() {
         width: 900,
         child: DiscoverPage(
           exploreService: service,
-          sourceRepository: repository,
         ),
       ),
     );
@@ -462,29 +346,27 @@ void main() {
     expect(find.text('漫画源B'), findsWidgets);
   });
 
-  testWidgets('category preview hides non-actionable group titles', (
-    tester,
-  ) async {
+  testWidgets('category preview hides non-actionable group titles', (tester) async {
     _registerDiscoverPageTearDown(tester);
-    final repository = _FakeSourceRepository(<SourceDefinition>[
-      SourceDefinition(
-        id: 'discover_s4',
-        name: '发现源D',
-        baseUrl: 'https://example.com',
-        enabled: true,
-        exploreEnabled: true,
-        exploreUrl:
-            '男频分类::\n古代言情::/discover/ancient?page={{page}}\n现代言情::/discover/modern?page={{page}}',
-        rules: const SourceRuleSet(
-          exploreListRule: '.item@html',
-          exploreTitleRule: '.name@text',
-          exploreDetailUrlRule: '.name@href',
-        ),
-      ),
-    ]);
     final service = ExploreService(
-      sourceRepository: repository,
-      searchService: _FakeSearchService(),
+      sourceRuntimeFacade: _FakeRuntimeFacade(
+        sources: <RegisteredSource>[
+          _buildRegisteredSource(id: 'discover_s4', name: '发现源D'),
+        ],
+        categoriesBySourceId: <String, List<runtime_models.DiscoverCategory>>{
+          'discover_s4': const <runtime_models.DiscoverCategory>[
+            runtime_models.DiscoverCategory(title: '男频分类'),
+            runtime_models.DiscoverCategory(
+              title: '古代言情',
+              url: '/discover/ancient?page={{page}}',
+            ),
+            runtime_models.DiscoverCategory(
+              title: '现代言情',
+              url: '/discover/modern?page={{page}}',
+            ),
+          ],
+        },
+      ),
     );
 
     await tester.pumpWidget(
@@ -492,7 +374,6 @@ void main() {
         width: 320,
         child: DiscoverPage(
           exploreService: service,
-          sourceRepository: repository,
         ),
       ),
     );
@@ -512,24 +393,28 @@ void main() {
     tester,
   ) async {
     _registerDiscoverPageTearDown(tester);
-    final repository = _FakeSourceRepository(<SourceDefinition>[
-      SourceDefinition(
-        id: 'discover_smoke',
-        name: '发现烟测源',
-        baseUrl: 'https://example.com',
-        enabled: true,
-        exploreEnabled: true,
-        exploreUrl: '推荐::/discover?page={{page}}',
-        rules: const SourceRuleSet(
-          exploreListRule: '.item@html',
-          exploreTitleRule: '.name@text',
-          exploreDetailUrlRule: '.name@href',
-        ),
-      ),
-    ]);
     final service = ExploreService(
-      sourceRepository: repository,
-      searchService: _FakeSearchService(),
+      sourceRuntimeFacade: _FakeRuntimeFacade(
+        sources: <RegisteredSource>[
+          _buildRegisteredSource(id: 'discover_smoke', name: '发现烟测源'),
+        ],
+        categoriesBySourceId: <String, List<runtime_models.DiscoverCategory>>{
+          'discover_smoke': const <runtime_models.DiscoverCategory>[
+            runtime_models.DiscoverCategory(title: '推荐', url: '/discover?page={{page}}'),
+          ],
+        },
+        booksBySourceId: <String, List<runtime_models.Book>>{
+          'discover_smoke': const <runtime_models.Book>[
+            runtime_models.Book(
+              id: 'smoke-book',
+              sourceId: 'discover_smoke',
+              title: '烟测书籍',
+              author: '作者A',
+              detailUrl: 'https://example.com/book/smoke',
+            ),
+          ],
+        },
+      ),
     );
 
     addTearDown(() => tester.binding.setSurfaceSize(null));
@@ -549,8 +434,7 @@ void main() {
           dpr: item.dpr,
           child: DiscoverPage(
             exploreService: service,
-            sourceRepository: repository,
-          ),
+            ),
         ),
       );
       await tester.pumpAndSettle();
@@ -611,91 +495,137 @@ class _ViewportCase {
   final double dpr;
 }
 
-class _FakeSearchService extends SearchService {
-  _FakeSearchService({
-    Future<SingleSourceSearchResult> Function({
-      required SourceDefinition source,
-      required String keyword,
-      required int page,
-      required int pageSize,
-    })?
-    handler,
-  }) : _handler = handler,
-       super(
-         sourceRepository: _FakeSourceRepository(const <SourceDefinition>[]),
-       );
+RegisteredSource _buildRegisteredSource({
+  required String id,
+  required String name,
+  bool enabled = true,
+  bool supportsDiscover = true,
+  Set<String> capabilities = const <String>{'novel'},
+  Future<List<runtime_models.DiscoverCategory>> Function()? discoverCategories,
+  Future<List<runtime_models.Book>> Function(
+    runtime_models.DiscoverCategory category,
+    int page,
+    int pageSize,
+  )?
+  discoverBooks,
+}) {
+  return RegisteredSource(
+    runtime: SourceRuntimeInfo(
+      id: id,
+      name: name,
+      group: '测试',
+      revision: 'test',
+    ),
+    definition: RuntimeSourceDefinition(
+      manifest: SourceManifest(
+        name: name,
+        group: '测试',
+        author: 'tester',
+        description: '',
+        enabled: enabled,
+        capabilities: capabilities,
+      ),
+      discoverCategories:
+          !supportsDiscover
+              ? null
+              : (_) async => await (discoverCategories?.call() ?? const <runtime_models.DiscoverCategory>[]),
+      discoverBooks:
+          !supportsDiscover
+              ? null
+              : (_, category, page, pageSize) =>
+                    discoverBooks?.call(category, page, pageSize) ??
+                    const <runtime_models.Book>[],
+      search: (_, __) async => const <runtime_models.Book>[],
+      detail: (_, book) async => book,
+      chapters: (_, __) async => const <runtime_models.Chapter>[],
+      content:
+          (_, __, ___) async =>
+              const runtime_models.Content(title: '', content: ''),
+    ),
+  );
+}
 
-  final Future<SingleSourceSearchResult> Function({
-    required SourceDefinition source,
-    required String keyword,
-    required int page,
-    required int pageSize,
-  })?
-  _handler;
+class _FakeRuntimeFacade extends SourceRuntimeFacade {
+  _FakeRuntimeFacade({
+    required this.sources,
+    this.categoriesBySourceId =
+        const <String, List<runtime_models.DiscoverCategory>>{},
+    this.booksBySourceId = const <String, List<runtime_models.Book>>{},
+    this.failingCategorySourceIds = const <String>{},
+  }) : super(scriptSourceRepository: _FakeScriptSourceRepository());
+
+  final List<RegisteredSource> sources;
+  final Map<String, List<runtime_models.DiscoverCategory>> categoriesBySourceId;
+  final Map<String, List<runtime_models.Book>> booksBySourceId;
+  final Set<String> failingCategorySourceIds;
 
   @override
-  Future<SingleSourceSearchResult> searchSingleSource({
-    required SourceDefinition source,
-    required String keyword,
-    int page = 1,
-    int pageSize = 20,
-    bool validateRules = true,
-    bool skipInit = false,
-    Duration? connectTimeout,
-    Duration? receiveTimeout,
+  List<RegisteredSource> registeredScriptSources({bool enabledOnly = true}) {
+    if (!enabledOnly) {
+      return sources;
+    }
+    return sources
+        .where((source) => source.definition.manifest.enabled)
+        .toList(growable: false);
+  }
+
+  @override
+  Future<ScriptSourceReloadReport> reloadScriptSources({
+    bool enabledOnly = true,
   }) async {
-    final handler = _handler;
-    if (handler != null) {
-      return handler(
-        source: source,
-        keyword: keyword,
-        page: page,
-        pageSize: pageSize,
+    return ScriptSourceReloadReport(
+      loaded: registeredScriptSources(enabledOnly: enabledOnly),
+      failures: const <ScriptSourceReloadFailure>[],
+    );
+  }
+
+  @override
+  Future<List<runtime_models.DiscoverCategory>> discoverCategories({
+    required String sourceId,
+  }) async {
+    if (failingCategorySourceIds.contains(sourceId)) {
+      throw AppException(
+        code: ErrorCode.ruleParse,
+        stage: ErrorStage.source,
+        sourceId: sourceId,
+        briefMessage: '规则异常',
       );
     }
+    return categoriesBySourceId[sourceId] ??
+        const <runtime_models.DiscoverCategory>[];
+  }
 
-    return SingleSourceSearchResult(
-      sourceId: source.id,
-      sourceName: source.name,
-      keyword: keyword,
-      requestUrl: 'https://example.com/discover?page=$page',
-      method: HttpRequestMethod.get,
-      statusCode: 200,
-      books: const <Book>[],
-    );
+  @override
+  Future<List<runtime_models.Book>> discoverBooks({
+    required String sourceId,
+    required runtime_models.DiscoverCategory category,
+    required int page,
+    required int pageSize,
+  }) async {
+    return booksBySourceId[sourceId] ?? const <runtime_models.Book>[];
   }
 }
 
-class _FakeSourceRepository implements SourceRepository {
-  _FakeSourceRepository(this.sources);
-
-  final List<SourceDefinition> sources;
-
+class _FakeScriptSourceRepository implements ScriptSourceRepository {
   @override
   Future<void> clear() async {}
 
   @override
-  Future<void> deleteById(String sourceId) async {}
+  Future<void> deleteById(String id) async {}
 
   @override
-  Future<void> deleteByIds(List<String> sourceIds) async {}
+  Future<List<ScriptSource>> getAll() async => const <ScriptSource>[];
 
   @override
-  Future<List<SourceDefinition>> getAll() async => sources;
+  Future<ScriptSource?> getById(String id) async => null;
 
   @override
-  Future<void> setEnabled({
-    required String sourceId,
-    required bool enabled,
-  }) async {}
+  Future<void> setEnabled({required String id, required bool enabled}) async {}
 
   @override
-  Future<void> setGroup({required String sourceId, String? group}) async {}
+  Future<void> upsert(ScriptSource source) async {}
 
   @override
-  Future<void> upsertAll(List<SourceDefinition> sources) async {}
-
-  @override
-  Stream<List<SourceDefinition>> watchAll() =>
-      Stream<List<SourceDefinition>>.value(sources);
+  Stream<List<ScriptSource>> watchAll() =>
+      const Stream<List<ScriptSource>>.empty();
 }

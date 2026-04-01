@@ -32,6 +32,97 @@ class SourceExecutor {
   final BrowserRuntime _browserRuntime;
   final void Function(String message)? _logger;
 
+  Future<List<DiscoverCategory>> discoverCategories(
+    RegisteredSource source,
+  ) async {
+    final handler = source.definition.discoverCategories;
+    if (handler == null) {
+      throw StateError(
+        'Script runtime source does not support discoverCategories: ${source.runtime.id}',
+      );
+    }
+
+    final cacheKey = CacheKeyBuilder.discoverCategories(
+      sourceId: source.runtime.id,
+    );
+    final cached = _cacheManager.get<List<DiscoverCategory>>(cacheKey);
+    if (cached != null) {
+      return cached;
+    }
+
+    final task = SourceTask(
+      sourceId: source.runtime.id,
+      step: SourceTaskStep.discoverCategories,
+    );
+    final context = _createContext(source);
+    await _runInitIfNeeded(source, context, task);
+
+    final categories = await handler(context);
+    _cacheManager.put<List<DiscoverCategory>>(
+      key: cacheKey,
+      sourceId: source.runtime.id,
+      step: CacheStep.discoverCategories,
+      value: categories,
+      policy: CachePolicy.forStep(CacheStep.discoverCategories),
+    );
+    return categories;
+  }
+
+  Future<List<Book>> discoverBooks(
+    RegisteredSource source, {
+    required DiscoverCategory category,
+    required int page,
+    required int pageSize,
+  }) async {
+    final handler = source.definition.discoverBooks;
+    if (handler == null) {
+      throw StateError(
+        'Script runtime source does not support discoverBooks: ${source.runtime.id}',
+      );
+    }
+
+    final cacheKey = CacheKeyBuilder.discoverBooks(
+      sourceId: source.runtime.id,
+      categoryTitle: category.title,
+      categoryUrl: category.url,
+      page: page,
+      pageSize: pageSize,
+    );
+    final cached = _cacheManager.get<List<Book>>(cacheKey);
+    if (cached != null) {
+      return cached;
+    }
+
+    final task = SourceTask(
+      sourceId: source.runtime.id,
+      step: SourceTaskStep.discoverBooks,
+      category: category,
+      page: page,
+      pageSize: pageSize,
+    );
+    final context = _createContext(source);
+    await _runInitIfNeeded(source, context, task);
+
+    final books = await handler(context, category, page, pageSize);
+    final normalized = books
+        .map(
+          (Book book) =>
+              book.sourceId.isEmpty
+                  ? book.copyWith(sourceId: source.runtime.id)
+                  : book,
+        )
+        .toList(growable: false);
+
+    _cacheManager.put<List<Book>>(
+      key: cacheKey,
+      sourceId: source.runtime.id,
+      step: CacheStep.discoverBooks,
+      value: normalized,
+      policy: CachePolicy.forStep(CacheStep.discoverBooks),
+    );
+    return normalized;
+  }
+
   Future<List<Book>> search(RegisteredSource source, String keyword) async {
     final cacheKey = CacheKeyBuilder.search(
       sourceId: source.runtime.id,

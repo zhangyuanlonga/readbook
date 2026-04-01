@@ -1,7 +1,7 @@
 import '../../domain/entities/local_book.dart';
 import '../../domain/entities/local_chapter.dart';
 import '../../domain/repositories/local_book_repository.dart';
-import '../datasources/local/app_database.dart';
+import '../../data/datasources/local/app_database.dart';
 
 class LocalBookRepositoryImpl implements LocalBookRepository {
   LocalBookRepositoryImpl(this._database);

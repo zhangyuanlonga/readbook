@@ -9,12 +9,10 @@ import '../../../app/layout/app_layout.dart';
 import '../../../app/layout/app_spacing.dart';
 
 import '../../../core/errors/app_exception.dart';
-import '../../../data/datasources/local/app_database.dart';
-import '../../../data/repositories/source_repository_impl.dart';
 import '../../../domain/entities/book.dart';
-import '../../../domain/repositories/source_repository.dart';
+import '../../../runtime/sources/source_registry.dart';
 import '../../book/presentation/book_detail_route.dart';
-import '../../source/presentation/source_filter_sheet.dart';
+import '../../source/application/source_runtime_facade.dart';
 import '../application/search_history_service.dart';
 import '../application/search_service.dart';
 import '../application/search_system_settings_service.dart';
@@ -37,9 +35,7 @@ class SearchPage extends StatefulWidget {
 class _SearchPageState extends State<SearchPage> {
   final TextEditingController _keywordController = TextEditingController();
   final FocusNode _searchFocusNode = FocusNode();
-  final SourceRepository _sourceRepository = SourceRepositoryImpl(
-    AppDatabase.instance,
-  );
+  final SourceRuntimeFacade _sourceRuntimeFacade = SourceRuntimeFacade.instance;
   late final SearchService _searchService;
   final SearchHistoryService _historyService = SearchHistoryService();
   final SearchSystemSettingsService _searchSystemSettingsService =
@@ -93,7 +89,7 @@ class _SearchPageState extends State<SearchPage> {
   @override
   void initState() {
     super.initState();
-    _searchService = SearchService(sourceRepository: _sourceRepository);
+    _searchService = SearchService(sourceRuntimeFacade: _sourceRuntimeFacade);
     _pageScrollController.addListener(_onPageScroll);
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
@@ -496,28 +492,32 @@ class _SearchPageState extends State<SearchPage> {
   Future<void> _refreshSourceCount() async {
     if (!mounted) return;
 
-    final isMangaMode = _searchContentMode == SearchContentMode.manga;
+    final requestedMode = _searchContentMode;
 
     setState(() {
       _isLoadingSourceCount = true;
     });
 
     try {
-      final count = await AppDatabase.instance
-          .countSourceListItems(enabledOnly: true, isMangaSource: isMangaMode)
-          .timeout(_sourceCountLoadTimeout);
+      final sources = await _loadAvailableScriptSourcesForUi(
+        contentMode: requestedMode,
+      ).timeout(_sourceCountLoadTimeout);
 
-      if (!mounted ||
-          isMangaMode != (_searchContentMode == SearchContentMode.manga)) {
+      if (!mounted || requestedMode != _searchContentMode) {
         return;
       }
 
+      final availableSourceIds =
+          sources.map((source) => source.runtime.id).toSet();
+      final nextSelectedSourceIds =
+          _selectedSourceIds.where(availableSourceIds.contains).toSet();
+
       setState(() {
-        _availableSourceCount = count;
+        _availableSourceCount = sources.length;
+        _selectedSourceIds = nextSelectedSourceIds;
       });
     } catch (error) {
-      if (!mounted ||
-          isMangaMode != (_searchContentMode == SearchContentMode.manga)) {
+      if (!mounted || requestedMode != _searchContentMode) {
         return;
       }
 
@@ -526,8 +526,7 @@ class _SearchPageState extends State<SearchPage> {
         _availableSourceCount = 0;
       });
     } finally {
-      if (mounted &&
-          isMangaMode == (_searchContentMode == SearchContentMode.manga)) {
+      if (mounted && requestedMode == _searchContentMode) {
         setState(() {
           _isLoadingSourceCount = false;
         });
@@ -536,23 +535,108 @@ class _SearchPageState extends State<SearchPage> {
   }
 
   Future<void> _showSourceFilterSheet() async {
-    final selected = await showSourceFilterSheet(
+    final requestedMode = _searchContentMode;
+    final sources = await _loadAvailableScriptSourcesForUi(
+      contentMode: requestedMode,
+    );
+    if (!mounted || requestedMode != _searchContentMode) {
+      return;
+    }
+
+    final filterItems = sources
+        .map(
+          (source) => _ScriptSourceFilterItem(
+            id: source.runtime.id,
+            name: source.runtime.name,
+            group:
+                source.runtime.group.trim().isEmpty
+                    ? null
+                    : source.runtime.group.trim(),
+          ),
+        )
+        .toList(growable: false);
+    final selected = await showModalBottomSheet<Set<String>>(
       context: context,
-      config: SourceFilterSheetConfig(
-        initialSelectedIds: _selectedSourceIds,
-        enabledOnly: true,
-        isMangaSource: _searchContentMode == SearchContentMode.manga,
-        allSelectionLabel: '全部书源',
-        allSummaryLabel: '全部',
-      ),
+      isScrollControlled: true,
+      showDragHandle: true,
+      useSafeArea: true,
+      builder:
+          (context) => _ScriptSourceFilterSheet(
+            items: filterItems,
+            initialSelectedIds: _selectedSourceIds,
+          ),
     );
 
-    if (!mounted || selected == null) return;
+    if (!mounted || requestedMode != _searchContentMode || selected == null) {
+      return;
+    }
+    final allowedIds = filterItems.map((item) => item.id).toSet();
+    final normalized = selected.where(allowedIds.contains).toSet();
 
     setState(() {
-      _selectedSourceIds = selected;
+      _selectedSourceIds = normalized;
     });
     _clearSearchOutput();
+  }
+
+  Future<List<RegisteredSource>> _loadAvailableScriptSourcesForUi({
+    required SearchContentMode contentMode,
+  }) async {
+    var sources = _sourceRuntimeFacade.registeredScriptSources(
+      enabledOnly: true,
+    );
+    if (sources.isEmpty) {
+      final report = await _sourceRuntimeFacade.reloadScriptSources();
+      sources = report.loaded;
+    }
+
+    final filtered = sources
+        .where(
+          (source) =>
+              _matchesScriptSourceContentMode(source, contentMode: contentMode),
+        )
+        .toList(growable: false);
+    filtered.sort((a, b) {
+      final groupCompare = a.runtime.group.toLowerCase().compareTo(
+        b.runtime.group.toLowerCase(),
+      );
+      if (groupCompare != 0) {
+        return groupCompare;
+      }
+      return a.runtime.name.toLowerCase().compareTo(
+        b.runtime.name.toLowerCase(),
+      );
+    });
+    return filtered;
+  }
+
+  bool _matchesScriptSourceContentMode(
+    RegisteredSource source, {
+    required SearchContentMode contentMode,
+  }) {
+    final capabilities =
+        source.definition.manifest.capabilities
+            .map((item) => item.trim().toLowerCase())
+            .where((item) => item.isNotEmpty)
+            .toSet();
+    final declaresManga =
+        capabilities.contains('manga') ||
+        capabilities.contains('comic') ||
+        capabilities.contains('manhua') ||
+        capabilities.contains('manhwa');
+    final declaresNovel =
+        capabilities.contains('novel') ||
+        capabilities.contains('book') ||
+        capabilities.contains('text');
+
+    if (contentMode == SearchContentMode.manga) {
+      return declaresManga;
+    }
+
+    if (declaresManga && !declaresNovel) {
+      return false;
+    }
+    return true;
   }
 
   // ── Scroll pagination ──
@@ -1157,4 +1241,161 @@ class _DeferredProgressUiUpdate {
   final int sessionId;
   final bool forceRenderState;
   final bool isFinalReport;
+}
+
+class _ScriptSourceFilterItem {
+  const _ScriptSourceFilterItem({
+    required this.id,
+    required this.name,
+    this.group,
+  });
+
+  final String id;
+  final String name;
+  final String? group;
+}
+
+class _ScriptSourceFilterSheet extends StatefulWidget {
+  const _ScriptSourceFilterSheet({
+    required this.items,
+    required this.initialSelectedIds,
+  });
+
+  final List<_ScriptSourceFilterItem> items;
+  final Set<String> initialSelectedIds;
+
+  @override
+  State<_ScriptSourceFilterSheet> createState() =>
+      _ScriptSourceFilterSheetState();
+}
+
+class _ScriptSourceFilterSheetState extends State<_ScriptSourceFilterSheet> {
+  late final Set<String> _allIds;
+  late Set<String> _draftSelectedIds;
+
+  @override
+  void initState() {
+    super.initState();
+    _allIds = widget.items.map((item) => item.id).toSet();
+    _draftSelectedIds =
+        widget.initialSelectedIds.isEmpty
+            ? <String>{..._allIds}
+            : widget.initialSelectedIds.where(_allIds.contains).toSet();
+    if (_allIds.isNotEmpty && _draftSelectedIds.isEmpty) {
+      _draftSelectedIds = <String>{..._allIds};
+    }
+  }
+
+  bool get _allSelected =>
+      _allIds.isNotEmpty && _draftSelectedIds.length == _allIds.length;
+
+  Set<String> _resultSelection() {
+    if (_allIds.isEmpty) {
+      return <String>{};
+    }
+    if (_draftSelectedIds.isEmpty ||
+        _draftSelectedIds.length == _allIds.length) {
+      return <String>{};
+    }
+    return Set<String>.of(_draftSelectedIds);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return SafeArea(
+      child: SizedBox(
+        height: MediaQuery.of(context).size.height * 0.78,
+        child: Column(
+          children: [
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: Text('指定源脚本', style: theme.textTheme.titleMedium),
+                  ),
+                  Text(
+                    '共 ${widget.items.length} 个',
+                    style: theme.textTheme.bodySmall,
+                  ),
+                ],
+              ),
+            ),
+            const Divider(height: 1),
+            if (widget.items.isEmpty)
+              Expanded(
+                child: Center(
+                  child: Text('当前模式下没有可用源脚本', style: theme.textTheme.bodyMedium),
+                ),
+              )
+            else
+              Expanded(
+                child: ListView(
+                  children: [
+                    CheckboxListTile(
+                      value: _allSelected,
+                      title: Text('全部源脚本 (${widget.items.length})'),
+                      controlAffinity: ListTileControlAffinity.leading,
+                      onChanged: (value) {
+                        if (value == true) {
+                          setState(() {
+                            _draftSelectedIds = <String>{..._allIds};
+                          });
+                        }
+                      },
+                    ),
+                    const Divider(height: 1),
+                    ...widget.items.map((item) {
+                      final selected = _draftSelectedIds.contains(item.id);
+                      return CheckboxListTile(
+                        value: selected,
+                        title: Text(item.name),
+                        subtitle:
+                            item.group == null || item.group!.trim().isEmpty
+                                ? null
+                                : Text(item.group!),
+                        controlAffinity: ListTileControlAffinity.leading,
+                        onChanged: (value) {
+                          setState(() {
+                            if (value == true) {
+                              _draftSelectedIds.add(item.id);
+                            } else {
+                              _draftSelectedIds.remove(item.id);
+                            }
+                          });
+                        },
+                      );
+                    }),
+                  ],
+                ),
+              ),
+            const Divider(height: 1),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 10, 16, 12),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: OutlinedButton(
+                      onPressed: () => Navigator.of(context).pop(),
+                      child: const Text('取消'),
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: FilledButton(
+                      onPressed: () {
+                        Navigator.of(context).pop(_resultSelection());
+                      },
+                      child: const Text('应用筛选'),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
 }

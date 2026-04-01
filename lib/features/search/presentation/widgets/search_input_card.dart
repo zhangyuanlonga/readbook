@@ -233,8 +233,8 @@ class SearchInputCard extends StatelessWidget {
   }
 
   String _buildSourceLabel() {
-    if (isLoadingSourceCount && availableSourceCount == 0) return '书源...';
-    if (availableSourceCount == 0) return '无书源';
+    if (isLoadingSourceCount && availableSourceCount == 0) return '源脚本...';
+    if (availableSourceCount == 0) return '无源脚本';
     if (selectedSourceCount == 0) return '全部$availableSourceCount';
     return '$selectedSourceCount源';
   }

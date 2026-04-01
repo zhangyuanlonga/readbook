@@ -13,8 +13,8 @@ void main() {
     test('json draft shows redirect hint', () {
       final message = validateScriptSourceDraft('{"name":"旧规则"}');
       expect(message, isNotNull);
-      expect(message, contains('旧规则 JSON'));
-      expect(message, contains('规则配置'));
+      expect(message, contains('JSON 配置'));
+      expect(message, contains('当前版本只支持脚本源'));
     });
 
     test('draft without meta.name shows direct fix hint', () {

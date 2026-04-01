@@ -13,11 +13,11 @@ import '../core/auth/auth_token_refresher_impl.dart';
 import '../core/device/device_identity_service.dart';
 import '../core/device/device_heartbeat_service.dart';
 import '../core/network/api_client.dart';
-import '../data/datasources/local/app_database.dart';
 import '../domain/entities/announcement.dart';
 import '../features/announcement/application/announcement_read_state_service.dart';
 import '../features/announcement/application/announcement_service.dart';
 import '../features/source/application/external_source_import_bridge.dart';
+import '../features/source/application/source_runtime_facade.dart';
 import 'layout/app_layout.dart';
 import 'layout/app_spacing.dart';
 import 'router.dart';
@@ -125,7 +125,7 @@ class _SystemUiOverlayWrapperState extends State<_SystemUiOverlayWrapper>
     ApiClient.defaultAuthTokenRefresher ??= _authTokenRefresher;
     WidgetsBinding.instance.addObserver(this);
     _incomingImportSub = ExternalImportBridge.instance.payloadStream.listen(
-      _onIncomingSourceImportPayload,
+      _onIncomingExternalImportPayload,
     );
     _authEventSub = AuthEventBus.instance.stream.listen(_handleAuthEvent);
     unawaited(ExternalImportBridge.instance.initialize());
@@ -153,7 +153,7 @@ class _SystemUiOverlayWrapperState extends State<_SystemUiOverlayWrapper>
 
   Future<void> _warmupLocalDatabase() async {
     try {
-      await AppDatabase.instance.countSourceListItems();
+      await SourceRuntimeFacade.instance.listScriptSources();
     } catch (_) {
       // Ignore warmup failures to avoid affecting app startup or first frame.
     }
@@ -691,19 +691,12 @@ class _SystemUiOverlayWrapperState extends State<_SystemUiOverlayWrapper>
     return '$month-$day $hour:$minute';
   }
 
-  void _onIncomingSourceImportPayload(IncomingExternalImportPayload payload) {
+  void _onIncomingExternalImportPayload(IncomingExternalImportPayload payload) {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) {
         return;
       }
-      switch (payload.type) {
-        case ExternalImportPayloadType.source:
-          _safeGo('/source');
-          break;
-        case ExternalImportPayloadType.localBook:
-          _safeGo('/bookshelf');
-          break;
-      }
+      _safeGo('/bookshelf');
     });
   }
 

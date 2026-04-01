@@ -54,6 +54,40 @@ class SourceScriptCompiler {
                 );
               }
               : null,
+      discoverCategories:
+          inspection.hasDiscoverCategories
+              ? (SourceRuntimeContext ctx) async {
+                final result = await runner.run(
+                  methodName: 'discoverCategories',
+                  ctx: ctx,
+                  args: const <Object?>[],
+                );
+                return _decodeDiscoverCategories(result);
+              }
+              : null,
+      discoverBooks:
+          inspection.hasDiscoverBooks
+              ? (
+                SourceRuntimeContext ctx,
+                DiscoverCategory category,
+                int page,
+                int pageSize,
+              ) async {
+                final result = await runner.run(
+                  methodName: 'discoverBooks',
+                  ctx: ctx,
+                  args: <Object?>[
+                    _discoverCategoryToMap(category),
+                    page,
+                    pageSize,
+                  ],
+                );
+                return _decodeDiscoverBooks(
+                  result,
+                  fallbackSourceId: ctx.source.id,
+                );
+              }
+              : null,
       search: (SourceRuntimeContext ctx, String keyword) async {
         final result = await runner.run(
           methodName: 'search',
@@ -111,6 +145,8 @@ class SourceScriptCompiler {
 return {
   meta: globalThis.__sourceDefinition?.meta ?? {},
   hasInit: typeof globalThis.__sourceDefinition?.init === 'function',
+  hasDiscoverCategories: typeof globalThis.__sourceDefinition?.discoverCategories === 'function',
+  hasDiscoverBooks: typeof globalThis.__sourceDefinition?.discoverBooks === 'function',
   hasSearch: typeof globalThis.__sourceDefinition?.search === 'function',
   hasDetail: typeof globalThis.__sourceDefinition?.detail === 'function',
   hasChapters: typeof globalThis.__sourceDefinition?.chapters === 'function',
@@ -900,6 +936,8 @@ class _SourceInspection {
   const _SourceInspection({
     required this.meta,
     required this.hasInit,
+    required this.hasDiscoverCategories,
+    required this.hasDiscoverBooks,
     required this.hasSearch,
     required this.hasDetail,
     required this.hasChapters,
@@ -908,6 +946,8 @@ class _SourceInspection {
 
   final Map<String, dynamic> meta;
   final bool hasInit;
+  final bool hasDiscoverCategories;
+  final bool hasDiscoverBooks;
   final bool hasSearch;
   final bool hasDetail;
   final bool hasChapters;
@@ -917,6 +957,8 @@ class _SourceInspection {
     return _SourceInspection(
       meta: _asMap(map['meta']),
       hasInit: map['hasInit'] == true,
+      hasDiscoverCategories: map['hasDiscoverCategories'] == true,
+      hasDiscoverBooks: map['hasDiscoverBooks'] == true,
       hasSearch: map['hasSearch'] == true,
       hasDetail: map['hasDetail'] == true,
       hasChapters: map['hasChapters'] == true,
@@ -1001,6 +1043,30 @@ Object? _decodeDynamic(String output) {
 List<Book> _decodeBooks(Object? result, {required String fallbackSourceId}) {
   if (result is! List) {
     throw const SourceScriptCompileException('search 必须返回数组。');
+  }
+  return result
+      .map(
+        (Object? item) =>
+            Book.fromMap(_asMap(item), fallbackSourceId: fallbackSourceId),
+      )
+      .toList(growable: false);
+}
+
+List<DiscoverCategory> _decodeDiscoverCategories(Object? result) {
+  if (result is! List) {
+    throw const SourceScriptCompileException('discoverCategories 必须返回数组。');
+  }
+  return result
+      .map((Object? item) => DiscoverCategory.fromMap(_asMap(item)))
+      .toList(growable: false);
+}
+
+List<Book> _decodeDiscoverBooks(
+  Object? result, {
+  required String fallbackSourceId,
+}) {
+  if (result is! List) {
+    throw const SourceScriptCompileException('discoverBooks 必须返回数组。');
   }
   return result
       .map(
@@ -1231,8 +1297,25 @@ Map<String, Object?> _taskToMap(SourceTask task) {
   return <String, Object?>{
     'step': task.step.name,
     'keyword': task.keyword,
+    'category':
+        task.category == null ? null : _discoverCategoryToMap(task.category!),
+    'page': task.page,
+    'pageSize': task.pageSize,
     'book': task.book == null ? null : _bookToMap(task.book!),
     'chapter': task.chapter == null ? null : _chapterToMap(task.chapter!),
+  };
+}
+
+Map<String, Object?> _discoverCategoryToMap(DiscoverCategory category) {
+  return <String, Object?>{
+    'title': category.title,
+    'url': category.url,
+    'style': <String, Object?>{
+      'layoutFlexGrow': category.style.layoutFlexGrow,
+      'layoutFlexBasisPercent': category.style.layoutFlexBasisPercent,
+    },
+    'extra': category.extra,
+    'debug': category.debug,
   };
 }
 

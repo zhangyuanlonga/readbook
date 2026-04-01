@@ -1,5 +1,92 @@
 typedef RuntimeExtra = Map<String, dynamic>;
 
+class DiscoverCategoryStyle {
+  const DiscoverCategoryStyle({
+    this.layoutFlexGrow,
+    this.layoutFlexBasisPercent,
+  });
+
+  final double? layoutFlexGrow;
+  final double? layoutFlexBasisPercent;
+
+  factory DiscoverCategoryStyle.fromMap(Map<String, dynamic> map) {
+    return DiscoverCategoryStyle(
+      layoutFlexGrow: _readDouble(map['layoutFlexGrow']),
+      layoutFlexBasisPercent: _readDouble(map['layoutFlexBasisPercent']),
+    );
+  }
+
+  DiscoverCategoryStyle copyWith({
+    Object? layoutFlexGrow = _doubleSentinel,
+    Object? layoutFlexBasisPercent = _doubleSentinel,
+  }) {
+    return DiscoverCategoryStyle(
+      layoutFlexGrow:
+          identical(layoutFlexGrow, _doubleSentinel)
+              ? this.layoutFlexGrow
+              : layoutFlexGrow as double?,
+      layoutFlexBasisPercent:
+          identical(layoutFlexBasisPercent, _doubleSentinel)
+              ? this.layoutFlexBasisPercent
+              : layoutFlexBasisPercent as double?,
+    );
+  }
+}
+
+class DiscoverCategory {
+  const DiscoverCategory({
+    required this.title,
+    this.url,
+    this.style = const DiscoverCategoryStyle(),
+    this.extra = const <String, dynamic>{},
+    this.debug = const <String, dynamic>{},
+  });
+
+  final String title;
+  final String? url;
+  final DiscoverCategoryStyle style;
+  final RuntimeExtra extra;
+  final RuntimeExtra debug;
+
+  bool get isActionable => (url?.trim().isNotEmpty ?? false);
+
+  factory DiscoverCategory.fromMap(Map<String, dynamic> map) {
+    final rawStyle = _toRuntimeExtra(map['style']);
+    final title =
+        map['title']?.toString() ??
+        map['name']?.toString() ??
+        map['label']?.toString() ??
+        '';
+    final rawUrl =
+        map['url']?.toString() ??
+        map['href']?.toString() ??
+        map['link']?.toString();
+    return DiscoverCategory(
+      title: title,
+      url: rawUrl,
+      style: DiscoverCategoryStyle.fromMap(rawStyle),
+      extra: _toRuntimeExtra(map['extra']),
+      debug: _toRuntimeExtra(map['debug']),
+    );
+  }
+
+  DiscoverCategory copyWith({
+    String? title,
+    Object? url = _stringSentinel,
+    DiscoverCategoryStyle? style,
+    RuntimeExtra? extra,
+    RuntimeExtra? debug,
+  }) {
+    return DiscoverCategory(
+      title: title ?? this.title,
+      url: identical(url, _stringSentinel) ? this.url : url as String?,
+      style: style ?? this.style,
+      extra: extra ?? this.extra,
+      debug: debug ?? this.debug,
+    );
+  }
+}
+
 class Book {
   const Book({
     required this.id,
@@ -228,6 +315,7 @@ class Content {
 }
 
 const Object _stringSentinel = Object();
+const Object _doubleSentinel = Object();
 
 RuntimeExtra _toRuntimeExtra(dynamic value) {
   if (value is Map<String, dynamic>) {
@@ -249,4 +337,14 @@ int _readInt(dynamic value, {required int fallback}) {
     return value.round();
   }
   return int.tryParse(value?.toString() ?? '') ?? fallback;
+}
+
+double? _readDouble(dynamic value) {
+  if (value is double) {
+    return value;
+  }
+  if (value is int) {
+    return value.toDouble();
+  }
+  return double.tryParse(value?.toString() ?? '');
 }

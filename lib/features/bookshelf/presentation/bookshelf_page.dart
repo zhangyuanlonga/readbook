@@ -24,6 +24,8 @@ import '../../book/presentation/book_detail_route.dart';
 import '../../announcement/application/announcement_service.dart';
 import '../../announcement/application/announcement_read_state_service.dart';
 import '../../source/application/external_source_import_bridge.dart';
+import '../../source/application/source_runtime_facade.dart';
+import '../../../runtime/sources/source_registry.dart';
 import 'widgets/bookshelf_grid_sliver.dart';
 import 'widgets/bookshelf_page_sections.dart';
 
@@ -3354,12 +3356,34 @@ class _BookshelfPageState extends State<BookshelfPage>
 
   Future<Map<String, int>> _loadSourceTypeMap() async {
     try {
-      return await AppDatabase.instance.querySourceTypeMap().timeout(
-        _kSourceMapLoadTimeout,
+      var sources = SourceRuntimeFacade.instance.registeredScriptSources(
+        enabledOnly: false,
       );
+      if (sources.isEmpty) {
+        final report = await SourceRuntimeFacade.instance
+            .reloadScriptSources(enabledOnly: false)
+            .timeout(_kSourceMapLoadTimeout);
+        sources = report.loaded;
+      }
+      return <String, int>{
+        for (final source in sources)
+          source.runtime.id: _inferScriptSourceType(source),
+      };
     } catch (_) {
       return const <String, int>{};
     }
+  }
+
+  int _inferScriptSourceType(RegisteredSource source) {
+    final capabilities = source.definition.manifest.capabilities
+        .map((item) => item.trim().toLowerCase())
+        .where((item) => item.isNotEmpty)
+        .toSet();
+    final isManga = capabilities.contains('manga') ||
+        capabilities.contains('comic') ||
+        capabilities.contains('manhua') ||
+        capabilities.contains('manhwa');
+    return isManga ? 2 : 0;
   }
 
   Future<void> _loadProgressMapInBatches(

@@ -1,5 +1,13 @@
 # 书源规范 v1
 
+更新时间：2026-04-01
+
+当前产品说明：
+
+- 本规范只适用于脚本源。
+- `flutterreadbook` 运行时不再导入或执行旧规则 JSON。
+- 与旧规则字段的迁移关系仅属于历史迁移话题，不属于现行规范的一部分。
+
 这份文档只定义规范，不重复作者手册中的入门说明、详细示例和 API 参考。
 
 如果你是第一次写书源，请先看：
@@ -124,20 +132,18 @@ meta: {
 
 ```js
 {
-  id: 'book-remote-id',
   title: '书名',
+  type: 'novel',
+  detailUrl: 'https://...',
+  tocUrl: 'https://.../catalog',
   author: '作者',
   cover: 'https://...',
   intro: '简介',
   status: '连载',
   category: '玄幻',
-  score: '9.2',
   wordCount: '235000',
   updateTime: '2026-03-25 09:30:00',
-  tags: ['科幻', '群像'],
   latestChapter: '第100章',
-  detailUrl: 'https://...',
-  sourceId: 'runtime-generated-id',
   extra: {},
   debug: {}
 }
@@ -147,13 +153,11 @@ meta: {
 
 ```js
 {
-  id: 'chapter-id',
   title: '第一章',
   url: 'https://...',
-  index: 1,
-  vip: false,
+  isVip: false,
+  isPay: false,
   updateTime: '2026-03-25 09:30:00',
-  sourceId: 'runtime-generated-id',
   extra: {},
   debug: {}
 }
@@ -166,12 +170,29 @@ meta: {
   title: '第一章',
   content: '正文内容...',
   nextUrl: null,
-  images: [],
-  sourceId: 'runtime-generated-id',
   extra: {},
   debug: {}
 }
 ```
+
+正文插图约定：
+
+- 不单独维护 `images` 数组
+- 插图位置直接通过 `content` 中内联 `<img src="...">` 表达
+
+MVP 最小字段（建议先只保证这些）：
+
+- `Book`：`title`、`detailUrl`（`tocUrl` 建议在 `detail` 阶段补齐）
+- `Chapter`：`title`、`url`
+- `Content`：`title`、`content`
+
+可省略字段（脚本可不返回）：
+
+- `Book.id`、`Chapter.id`：若站点无稳定主键可不填，宿主可按 URL 生成兜底标识
+- `sourceId`：不要求脚本填写，宿主可按 `ctx.source.id` 在适配层补齐
+- `Book.type`：建议有能力时填写，推荐枚举 `novel / comic / audio`
+- `Chapter.isVip / Chapter.isPay`：建议有能力时填写，默认可为 `false`
+- 其他业务可选字段：按站点能力逐步补齐即可
 
 ---
 
@@ -180,7 +201,7 @@ meta: {
 `extra`：
 
 - 用于跨步骤传递站点私有上下文
-- 适合放 `token`、`rawId`、`catalogUrl`、`csrf` 等关键参数
+- 适合放 `token`、`rawId`、`csrf` 等关键参数
 - 不建议放整页 HTML、整份 JSON 或大块二进制数据
 
 `debug`：
@@ -246,3 +267,12 @@ meta: {
 - 优先新增可选字段
 - 不轻易修改已有字段含义
 - 新能力优先加到 `ctx` 或 `extra`
+
+---
+
+## 10. 规范与模板联动
+
+为了避免规范和示例漂移，约定如下：
+
+- 修改 `Book / Chapter / Content` 字段定义时，必须同步更新模板示例
+- 统一同步到官方模板 `docs/templates/source_template_v1.js`

@@ -13,13 +13,23 @@ import '../session/source_session.dart';
 import 'source_manifest.dart';
 import 'source_result_models.dart';
 
-enum SourceTaskStep { search, detail, chapters, content }
+enum SourceTaskStep {
+  discoverCategories,
+  discoverBooks,
+  search,
+  detail,
+  chapters,
+  content,
+}
 
 class SourceTask {
   const SourceTask({
     required this.sourceId,
     required this.step,
     this.keyword,
+    this.category,
+    this.page,
+    this.pageSize,
     this.book,
     this.chapter,
   });
@@ -27,6 +37,9 @@ class SourceTask {
   final String sourceId;
   final SourceTaskStep step;
   final String? keyword;
+  final DiscoverCategory? category;
+  final int? page;
+  final int? pageSize;
   final Book? book;
   final Chapter? chapter;
 }
@@ -581,6 +594,15 @@ typedef SourceInitHandler =
     FutureOr<void> Function(SourceRuntimeContext ctx, SourceTask task);
 typedef SourceSearchHandler =
     FutureOr<List<Book>> Function(SourceRuntimeContext ctx, String keyword);
+typedef SourceDiscoverCategoriesHandler =
+    FutureOr<List<DiscoverCategory>> Function(SourceRuntimeContext ctx);
+typedef SourceDiscoverBooksHandler =
+    FutureOr<List<Book>> Function(
+      SourceRuntimeContext ctx,
+      DiscoverCategory category,
+      int page,
+      int pageSize,
+    );
 typedef SourceDetailHandler =
     FutureOr<Book> Function(SourceRuntimeContext ctx, Book book);
 typedef SourceChaptersHandler =
@@ -600,10 +622,14 @@ class RuntimeSourceDefinition {
     required this.chapters,
     required this.content,
     this.init,
+    this.discoverCategories,
+    this.discoverBooks,
   });
 
   final SourceManifest manifest;
   final SourceInitHandler? init;
+  final SourceDiscoverCategoriesHandler? discoverCategories;
+  final SourceDiscoverBooksHandler? discoverBooks;
   final SourceSearchHandler search;
   final SourceDetailHandler detail;
   final SourceChaptersHandler chapters;

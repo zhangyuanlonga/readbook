@@ -37,13 +37,14 @@ import '../../../domain/entities/chapter.dart';
 import '../../../domain/entities/reader_settings.dart';
 import '../../../domain/entities/reading_progress.dart';
 import '../../../domain/entities/reader_toc_snapshot.dart';
-import '../../../domain/entities/source_definition.dart';
 import '../../../domain/repositories/bookmark_repository.dart';
 import '../../bookshelf/application/bookshelf_service.dart';
 import '../../book/application/book_detail_service.dart';
 import '../../book/presentation/book_detail_route.dart';
 import '../../search/application/search_hit_cache_service.dart';
 import '../../search/application/search_service.dart';
+import '../../source/application/source_runtime_facade.dart';
+import '../../../runtime/sources/source_registry.dart';
 import '../application/content_provider.dart';
 import '../application/chapter_content_service.dart';
 import '../application/local/local_reader_identity.dart';
@@ -5615,23 +5616,28 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
   Future<_SwitchSourceScope> _buildSwitchSourceScope({
     required String currentSourceId,
   }) async {
-    final sources = await AppDatabase.instance.getAllSources();
-    SourceDefinition? currentSource;
+    var sources = SourceRuntimeFacade.instance.registeredScriptSources(
+      enabledOnly: true,
+    );
+    if (sources.isEmpty) {
+      final report = await SourceRuntimeFacade.instance.reloadScriptSources();
+      sources = report.loaded;
+    }
+    RegisteredSource? currentSource;
     for (final source in sources) {
-      if (source.id == currentSourceId) {
+      if (source.runtime.id == currentSourceId) {
         currentSource = source;
         break;
       }
     }
-    final isMangaType = currentSource?.isMangaSource ?? _isMangaChapter;
+    final isMangaType = _isRuntimeMangaSource(currentSource) ?? _isMangaChapter;
     final sourceIds = sources
         .where(
           (source) =>
-              source.enabled &&
-              source.id != currentSourceId &&
-              source.isMangaSource == isMangaType,
+              source.runtime.id != currentSourceId &&
+              (_isRuntimeMangaSource(source) ?? false) == isMangaType,
         )
-        .map((source) => source.id)
+        .map((source) => source.runtime.id)
         .toList(growable: false);
 
     return _SwitchSourceScope(
@@ -5639,6 +5645,21 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
       contentMode:
           isMangaType ? SearchContentMode.manga : SearchContentMode.novel,
     );
+  }
+
+  bool? _isRuntimeMangaSource(RegisteredSource? source) {
+    if (source == null) {
+      return null;
+    }
+    final capabilities =
+        source.definition.manifest.capabilities
+            .map((item) => item.trim().toLowerCase())
+            .where((item) => item.isNotEmpty)
+            .toSet();
+    return capabilities.contains('manga') ||
+        capabilities.contains('comic') ||
+        capabilities.contains('manhua') ||
+        capabilities.contains('manhwa');
   }
 
   Future<void> _loadSwitchSourceCandidatesProgressively({
@@ -7069,12 +7090,12 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
       ErrorCode.network when message.contains('超时') => '请求超时，请稍后重试或切换书源。',
       ErrorCode.network => '网络请求失败，请检查网络或更换书源。',
       ErrorCode.validation
-          when message.contains('正文规则') || message.contains('ruleContent') =>
-        '书源缺少正文规则（ruleContent），无法读取该章节。',
-      ErrorCode.validation => '书源规则配置不完整，无法继续阅读。',
-      ErrorCode.ruleParse => '书源规则语法错误，正文解析失败。',
+          when message.contains('正文') && message.contains('缺少') =>
+        '脚本源缺少正文解析配置，无法读取该章节。',
+      ErrorCode.validation => '脚本源配置不完整，无法继续阅读。',
+      ErrorCode.ruleParse => '脚本源脚本语法错误，正文解析失败。',
       ErrorCode.ruleMatchEmpty when message.contains('解析为空') =>
-        '正文规则未命中，当前章节暂无可读内容。',
+        '正文解析未命中，当前章节暂无可读内容。',
       ErrorCode.ruleMatchEmpty => '当前章节没有可读取内容，请切换章节或书源。',
       ErrorCode.decode => '正文解析失败，可能是编码或数据格式不兼容。',
       ErrorCode.unknownSource => '书源不存在或已被删除。',

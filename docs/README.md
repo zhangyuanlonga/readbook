@@ -1,6 +1,6 @@
 # 项目文档入口
 
-更新时间：2026-03-27
+更新时间：2026-04-01
 用途：当前项目文档总入口。
 
 当前文档按“主项目文档 + 脚本源运行时文档”两组维护。
@@ -21,9 +21,7 @@
 - `docs/engineering_delivery_guide.md`
   书源列表性能、Android 发布和移动端后端集成。
 - `docs/script_sources/README.md`
-  脚本源 / 新规则运行时文档入口，包含规范、运行时 API、迁移方案和模板。
-- `docs/script_sources/js-rules-quick-reference.md`
-  新旧 JS 规则速查，适合先快速确认该用旧规则还是新脚本源。
+  脚本源运行时文档入口，包含作者手册、规范、运行时 API、架构和模板。
 
 ## 使用建议
 
@@ -42,8 +40,7 @@
 
 建议阅读顺序：
 
-1. `docs/script_sources/js-rules-quick-reference.md`
-2. `docs/script_sources/official-source-author-guide.md`
-3. `docs/script_sources/source-spec-v1.md`
-4. `docs/script_sources/runtime-ctx-api.md`
-5. `docs/script_sources/runtime-core-embedding-plan.md`
+1. `docs/script_sources/official-source-author-guide.md`
+2. `docs/script_sources/source-spec-v1.md`
+3. `docs/script_sources/runtime-ctx-api.md`
+4. `docs/script_sources/architecture.md`

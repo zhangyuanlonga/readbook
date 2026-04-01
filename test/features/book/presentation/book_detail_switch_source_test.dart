@@ -2,8 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter_appread/domain/entities/book.dart';
 import 'package:flutter_appread/domain/entities/book_detail.dart';
 import 'package:flutter_appread/domain/entities/chapter.dart';
-import 'package:flutter_appread/domain/entities/source_definition.dart';
-import 'package:flutter_appread/domain/repositories/source_repository.dart';
 import 'package:flutter_appread/features/book/application/book_detail_service.dart';
 import 'package:flutter_appread/features/book/presentation/book_detail_page.dart';
 import 'package:flutter_appread/features/search/application/search_service.dart';
@@ -150,7 +148,7 @@ class _FakeBookDetailService extends BookDetailService {
   _FakeBookDetailService({
     required Map<String, BookDetailLoadResult> bySourceId,
   }) : _bySourceId = bySourceId,
-       super(sourceRepository: _NoopSourceRepository());
+       super();
 
   final Map<String, BookDetailLoadResult> _bySourceId;
   final List<String> loadedSourceIds = <String>[];
@@ -174,8 +172,7 @@ class _FakeBookDetailService extends BookDetailService {
 }
 
 class _FakeSearchService extends SearchService {
-  _FakeSearchService(this._report)
-    : super(sourceRepository: _NoopSourceRepository());
+  _FakeSearchService(this._report) : super();
 
   final SearchExecutionReport _report;
   int callCount = 0;
@@ -194,34 +191,4 @@ class _FakeSearchService extends SearchService {
     callCount += 1;
     return _report;
   }
-}
-
-class _NoopSourceRepository implements SourceRepository {
-  @override
-  Future<void> clear() async {}
-
-  @override
-  Future<void> deleteById(String sourceId) async {}
-
-  @override
-  Future<void> deleteByIds(List<String> sourceIds) async {}
-
-  @override
-  Future<List<SourceDefinition>> getAll() async => const <SourceDefinition>[];
-
-  @override
-  Future<void> setEnabled({
-    required String sourceId,
-    required bool enabled,
-  }) async {}
-
-  @override
-  Future<void> setGroup({required String sourceId, String? group}) async {}
-
-  @override
-  Future<void> upsertAll(List<SourceDefinition> sources) async {}
-
-  @override
-  Stream<List<SourceDefinition>> watchAll() =>
-      const Stream<List<SourceDefinition>>.empty();
 }

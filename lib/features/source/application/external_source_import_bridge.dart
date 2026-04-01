@@ -4,27 +4,18 @@ import 'dart:collection';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 
-enum ExternalImportPayloadType { source, localBook }
+enum ExternalImportPayloadType { localBook }
 
 class IncomingExternalImportPayload {
-  const IncomingExternalImportPayload.source({
-    required this.bytes,
-    required this.label,
-  }) : type = ExternalImportPayloadType.source,
-       uri = null,
-       mimeType = null;
-
   const IncomingExternalImportPayload.localBook({
     required this.uri,
     required this.label,
     this.mimeType,
-  }) : type = ExternalImportPayloadType.localBook,
-       bytes = null;
+  }) : type = ExternalImportPayloadType.localBook;
 
   final ExternalImportPayloadType type;
-  final Uint8List? bytes;
   final String label;
-  final String? uri;
+  final String uri;
   final String? mimeType;
 }
 
@@ -112,8 +103,7 @@ class ExternalImportBridge {
     IncomingExternalImportPayload payload,
   ) async {
     if (payload.type != ExternalImportPayloadType.localBook ||
-        payload.uri == null ||
-        payload.uri!.trim().isEmpty) {
+        payload.uri.trim().isEmpty) {
       return null;
     }
 
@@ -195,18 +185,6 @@ class ExternalImportBridge {
         mimeType: mimeType,
       );
     }
-
-    final bytesRaw = raw['bytes'];
-    Uint8List? bytes;
-    if (bytesRaw is Uint8List) {
-      bytes = bytesRaw;
-    } else if (bytesRaw is List<int>) {
-      bytes = Uint8List.fromList(bytesRaw);
-    }
-    if (bytes == null || bytes.isEmpty) {
-      return null;
-    }
-
-    return IncomingExternalImportPayload.source(bytes: bytes, label: label);
+    return null;
   }
 }
