@@ -7,18 +7,25 @@ import 'package:flutter_appread/data/repositories/local_book_repository_impl.dar
 import 'package:flutter_appread/features/bookshelf/application/bookshelf_service.dart';
 import 'package:flutter_appread/features/bookshelf/application/local_book_import_service.dart';
 import 'package:flutter_appread/features/reader/application/reader_system_settings_service.dart';
+import 'package:flutter_appread/features/reader/application/local/local_book_storage_service.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
+  TestWidgetsFlutterBinding.ensureInitialized();
+
   group('LocalBookImportService', () {
     late AppDatabase database;
     late Directory tempDir;
+    late LocalBookStorageService storageService;
 
     setUp(() async {
       SharedPreferences.setMockInitialValues({});
       database = AppDatabase(executor: NativeDatabase.memory());
       tempDir = await Directory.systemTemp.createTemp('local_book_import_test');
+      storageService = LocalBookStorageService(
+        supportDirectoryProvider: () async => tempDir,
+      );
     });
 
     tearDown(() async {
@@ -36,7 +43,7 @@ void main() {
       final service = LocalBookImportService(
         localBookRepository: LocalBookRepositoryImpl(database),
         bookshelfService: BookshelfService(preferences: prefs),
-        supportDirectoryProvider: () async => tempDir,
+        localBookStorageService: storageService,
       );
 
       final result = await service.importFromFile(
@@ -47,7 +54,10 @@ void main() {
       expect(result.localBook.id, startsWith('local_'));
       expect(result.localBook.format.name, 'txt');
       expect(result.localBook.title, '演示书籍');
-      expect(File(result.localBook.storagePath).existsSync(), isTrue);
+      final resolvedStoragePath = await storageService.resolveStoragePath(
+        result.localBook.storagePath,
+      );
+      expect(File(resolvedStoragePath).existsSync(), isTrue);
 
       final stored = await database.getLocalBookById(result.localBook.id);
       expect(stored, isNotNull);
@@ -79,7 +89,7 @@ void main() {
       final service = LocalBookImportService(
         localBookRepository: LocalBookRepositoryImpl(database),
         bookshelfService: BookshelfService(preferences: prefs),
-        supportDirectoryProvider: () async => tempDir,
+        localBookStorageService: storageService,
       );
 
       final result = await service.importFromFile(
@@ -87,8 +97,10 @@ void main() {
         displayName: 'utf16le_bom.txt',
       );
 
-      final storageText =
-          await File(result.localBook.storagePath).readAsString();
+      final resolvedStoragePath = await storageService.resolveStoragePath(
+        result.localBook.storagePath,
+      );
+      final storageText = await File(resolvedStoragePath).readAsString();
       expect(storageText, contains('第1章 开始'));
       expect(storageText, contains('第二章内容'));
       expect(result.localBook.charset, 'utf-8');
@@ -103,7 +115,7 @@ void main() {
         bookshelfService: BookshelfService(
           preferences: await SharedPreferences.getInstance(),
         ),
-        supportDirectoryProvider: () async => tempDir,
+        localBookStorageService: storageService,
       );
 
       final first = await service.importFromFile(filePath: sourceFile.path);
@@ -113,7 +125,10 @@ void main() {
 
       expect(second.localBook.id, first.localBook.id);
       expect(second.localBook.storagePath, first.localBook.storagePath);
-      expect(File(second.localBook.storagePath).readAsStringSync(), '覆盖内容');
+      final resolvedStoragePath = await storageService.resolveStoragePath(
+        second.localBook.storagePath,
+      );
+      expect(File(resolvedStoragePath).readAsStringSync(), '覆盖内容');
       expect(second.localBook.sourceFileSize, await sourceFile.length());
     });
 
@@ -125,11 +140,14 @@ void main() {
       final service = LocalBookImportService(
         localBookRepository: LocalBookRepositoryImpl(database),
         bookshelfService: BookshelfService(preferences: prefs),
-        supportDirectoryProvider: () async => tempDir,
+        localBookStorageService: storageService,
       );
 
       final result = await service.importFromFile(filePath: sourceFile.path);
-      final storageFile = File(result.localBook.storagePath);
+      final resolvedStoragePath = await storageService.resolveStoragePath(
+        result.localBook.storagePath,
+      );
+      final storageFile = File(resolvedStoragePath);
       expect(storageFile.existsSync(), isTrue);
 
       await service.removeLocalBook(
@@ -151,7 +169,7 @@ void main() {
         bookshelfService: BookshelfService(
           preferences: await SharedPreferences.getInstance(),
         ),
-        supportDirectoryProvider: () async => tempDir,
+        localBookStorageService: storageService,
       );
 
       expect(
@@ -182,7 +200,7 @@ void main() {
           localBookRepository: LocalBookRepositoryImpl(database),
           bookshelfService: BookshelfService(preferences: prefs),
           readerSystemSettingsService: systemSettingsService,
-          supportDirectoryProvider: () async => tempDir,
+          localBookStorageService: storageService,
         );
 
         final result = await service.importFromFile(filePath: sourceFile.path);

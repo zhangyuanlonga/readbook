@@ -1,19 +1,25 @@
 const String sourceScriptTemplateV1 = r'''
 function createBook(partial = {}) {
   return {
+    // 可选：站点有稳定主键时填写；没有可留空，宿主可兜底生成。
     id: '',
+    // 推荐：novel / comic / audio
+    type: '',
     title: '',
     author: '',
     cover: '',
     intro: '',
     status: '',
     category: '',
+    // 以下字段当前运行时仍支持，适合搜索结果增强展示。
     score: '',
     wordCount: '',
     updateTime: '',
     tags: [],
     latestChapter: '',
     detailUrl: '',
+    // 建议在 detail 阶段补齐。
+    tocUrl: '',
     sourceId: '',
     extra: {},
     debug: {},
@@ -27,7 +33,9 @@ function createChapter(partial = {}) {
     title: '',
     url: '',
     index: 0,
-    vip: false,
+    // 运行时兼容 `vip` 与 `isVip`，模板统一使用 `isVip`。
+    isVip: false,
+    isPay: false,
     updateTime: '',
     sourceId: '',
     extra: {},
@@ -41,6 +49,7 @@ function createContent(partial = {}) {
     title: '',
     content: '',
     nextUrl: null,
+    // 图片型正文可直接返回图片 URL 数组。
     images: [],
     sourceId: '',
     extra: {},
@@ -96,6 +105,7 @@ export default {
       createBook({
         id: 'scratch-book-1',
         title: `${keyword} 调试样书`,
+        type: 'novel',
         author: '调试作者',
         latestChapter: '第3章 调试正文',
         score: '9.1',
@@ -136,6 +146,7 @@ export default {
         title: '第一章 调试开始',
         url: '/chapters/1',
         index: 1,
+        isVip: false,
         updateTime: '2026-03-24 21:00:00',
         sourceId: ctx.source.id,
         extra: {
@@ -147,6 +158,7 @@ export default {
         title: '第二章 调试继续',
         url: '/chapters/2',
         index: 2,
+        isVip: false,
         updateTime: '2026-03-25 08:00:00',
         sourceId: ctx.source.id,
         extra: {
@@ -171,19 +183,25 @@ const SOURCE_HOST = 'https://www.example.com';
 
 function createBook(partial = {}) {
   return {
+    // 可选：站点有稳定主键时填写；没有可留空，宿主可兜底生成。
     id: '',
+    // 推荐：novel / comic / audio
+    type: '',
     title: '',
     author: '',
     cover: '',
     intro: '',
     status: '',
     category: '',
+    // 以下字段当前运行时仍支持，适合搜索结果增强展示。
     score: '',
     wordCount: '',
     updateTime: '',
     tags: [],
     latestChapter: '',
     detailUrl: '',
+    // 建议在 detail 阶段补齐。
+    tocUrl: '',
     sourceId: '',
     extra: {},
     debug: {},
@@ -197,7 +215,9 @@ function createChapter(partial = {}) {
     title: '',
     url: '',
     index: 0,
-    vip: false,
+    // 运行时兼容 `vip` 与 `isVip`，模板统一使用 `isVip`。
+    isVip: false,
+    isPay: false,
     updateTime: '',
     sourceId: '',
     extra: {},
@@ -211,6 +231,7 @@ function createContent(partial = {}) {
     title: '',
     content: '',
     nextUrl: null,
+    // 图片型正文可直接返回图片 URL 数组。
     images: [],
     sourceId: '',
     extra: {},

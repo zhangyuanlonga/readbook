@@ -55,20 +55,42 @@ class LocalBookImportService {
     LocalBookStorageService? localBookStorageService,
     AppLogger? logger,
     Future<Directory> Function()? supportDirectoryProvider,
-  }) : _localBookRepository =
-           localBookRepository ?? LocalBookRepositoryImpl(AppDatabase.instance),
-       _bookshelfService = bookshelfService ?? BookshelfService(),
-       _readerSystemSettingsService =
-           readerSystemSettingsService ?? ReaderSystemSettingsService(),
+  }) : this._(
+         localBookRepository:
+             localBookRepository ?? LocalBookRepositoryImpl(AppDatabase.instance),
+         bookshelfService: bookshelfService ?? BookshelfService(),
+         readerSystemSettingsService:
+             readerSystemSettingsService ?? ReaderSystemSettingsService(),
+         localBookStorageService:
+             localBookStorageService ??
+             LocalBookStorageService(
+               logger: logger ?? AppLogger.instance,
+               supportDirectoryProvider: supportDirectoryProvider,
+             ),
+         localBookIndexService: localBookIndexService,
+         logger: logger ?? AppLogger.instance,
+       );
+
+  LocalBookImportService._({
+    required LocalBookRepository localBookRepository,
+    required BookshelfService bookshelfService,
+    required ReaderSystemSettingsService readerSystemSettingsService,
+    required LocalBookStorageService localBookStorageService,
+    required AppLogger logger,
+    LocalBookIndexService? localBookIndexService,
+  }) : _localBookRepository = localBookRepository,
+       _bookshelfService = bookshelfService,
+       _readerSystemSettingsService = readerSystemSettingsService,
+       _localBookStorageService = localBookStorageService,
        _localBookIndexService =
-           localBookIndexService ?? LocalBookIndexService(),
-       _logger = logger ?? AppLogger.instance,
-       _localBookStorageService =
-           localBookStorageService ??
-           LocalBookStorageService(
-             logger: logger ?? AppLogger.instance,
-             supportDirectoryProvider: supportDirectoryProvider,
-           );
+           localBookIndexService ??
+           LocalBookIndexService(
+             localBookRepository: localBookRepository,
+             readerSystemSettingsService: readerSystemSettingsService,
+             storageService: localBookStorageService,
+             logger: logger,
+           ),
+       _logger = logger;
 
   static const String localBookSourceId = '__local_book__';
 

@@ -132,8 +132,10 @@ meta: {
 
 ```js
 {
+  id: 'book-remote-id',
   title: '书名',
   type: 'novel',
+  sourceId: 'runtime-generated-id',
   detailUrl: 'https://...',
   tocUrl: 'https://.../catalog',
   author: '作者',
@@ -141,8 +143,10 @@ meta: {
   intro: '简介',
   status: '连载',
   category: '玄幻',
+  score: '9.2',
   wordCount: '235000',
   updateTime: '2026-03-25 09:30:00',
+  tags: ['科幻', '群像'],
   latestChapter: '第100章',
   extra: {},
   debug: {}
@@ -153,11 +157,14 @@ meta: {
 
 ```js
 {
+  id: 'chapter-id',
   title: '第一章',
   url: 'https://...',
+  index: 1,
   isVip: false,
   isPay: false,
   updateTime: '2026-03-25 09:30:00',
+  sourceId: 'runtime-generated-id',
   extra: {},
   debug: {}
 }
@@ -170,6 +177,8 @@ meta: {
   title: '第一章',
   content: '正文内容...',
   nextUrl: null,
+  images: [],
+  sourceId: 'runtime-generated-id',
   extra: {},
   debug: {}
 }
@@ -177,8 +186,9 @@ meta: {
 
 正文插图约定：
 
-- 不单独维护 `images` 数组
-- 插图位置直接通过 `content` 中内联 `<img src="...">` 表达
+- 纯文本/HTML 正文直接放在 `content`
+- 图片型正文可通过 `images` 返回图片 URL 数组
+- 如果正文同时包含图文混排，优先把可读主内容放在 `content`
 
 MVP 最小字段（建议先只保证这些）：
 
@@ -192,6 +202,7 @@ MVP 最小字段（建议先只保证这些）：
 - `sourceId`：不要求脚本填写，宿主可按 `ctx.source.id` 在适配层补齐
 - `Book.type`：建议有能力时填写，推荐枚举 `novel / comic / audio`
 - `Chapter.isVip / Chapter.isPay`：建议有能力时填写，默认可为 `false`
+- `Content.images`：图片型正文时建议填写；纯文本正文可留空
 - 其他业务可选字段：按站点能力逐步补齐即可
 
 ---

@@ -5,7 +5,9 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 void main() {
   testWidgets('app opens bookshelf first with expected tabs', (tester) async {
-    SharedPreferences.setMockInitialValues({});
+    SharedPreferences.setMockInitialValues({
+      'app.shell.navigation.discover': true,
+    });
 
     await tester.pumpWidget(const ProviderScope(child: App()));
     await tester.pump();

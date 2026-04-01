@@ -250,9 +250,10 @@ class BookDetailService {
         author: _normalizeOptionalText(detailed.author),
         intro: _normalizeOptionalText(detailed.intro),
         coverUrl: _normalizeOptionalText(detailed.cover),
-        tocUrl: _normalizeOptionalText(
-          detailed.extra['catalogUrl']?.toString(),
-        ),
+        tocUrl:
+            _normalizeOptionalText(detailed.tocUrl) ??
+            _normalizeOptionalText(detailed.extra['tocUrl']?.toString()) ??
+            _normalizeOptionalText(detailed.extra['catalogUrl']?.toString()),
       ),
       chapters: chapters,
       sourceName: registered.runtime.name,

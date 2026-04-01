@@ -11,17 +11,21 @@ import 'package:flutter_appread/features/reader/application/local/local_book_par
 import 'package:flutter_appread/features/reader/application/local/local_book_index_service.dart';
 import 'package:flutter_appread/features/reader/application/local/local_chapter_content_service.dart';
 import 'package:flutter_appread/features/reader/application/local/epub_local_book_parser.dart';
+import 'package:flutter_appread/features/reader/application/local/local_book_storage_service.dart';
 import 'package:flutter_appread/features/reader/application/local/txt_local_book_parser.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 void main() {
+  TestWidgetsFlutterBinding.ensureInitialized();
+
   group('LocalChapterContentService', () {
     late Directory tempDir;
     late AppDatabase database;
     late LocalBookRepositoryImpl repository;
     late LocalBookIndexService indexService;
     late LocalChapterContentService contentService;
+    late LocalBookStorageService storageService;
 
     setUp(() async {
       SharedPreferences.setMockInitialValues({});
@@ -30,13 +34,18 @@ void main() {
       );
       database = AppDatabase(executor: NativeDatabase.memory());
       repository = LocalBookRepositoryImpl(database);
+      storageService = LocalBookStorageService(
+        supportDirectoryProvider: () async => tempDir,
+      );
       indexService = LocalBookIndexService(
         localBookRepository: repository,
         parsers: <LocalBookParser>[const TxtLocalBookParser()],
+        storageService: storageService,
       );
       contentService = LocalChapterContentService(
         localBookRepository: repository,
         indexService: indexService,
+        storageService: storageService,
       );
     });
 
@@ -196,11 +205,13 @@ void main() {
       indexService = LocalBookIndexService(
         localBookRepository: repository,
         parsers: <LocalBookParser>[epubParser],
+        storageService: storageService,
       );
       contentService = LocalChapterContentService(
         localBookRepository: repository,
         indexService: indexService,
         epubParser: epubParser,
+        storageService: storageService,
       );
 
       await indexService.ensureIndexed(bookId: 'local_epub_lazy_1');

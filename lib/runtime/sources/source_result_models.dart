@@ -92,6 +92,7 @@ class Book {
     required this.id,
     required this.title,
     required this.author,
+    this.type = '',
     this.cover = '',
     this.intro = '',
     this.status = '',
@@ -102,6 +103,7 @@ class Book {
     this.tags = const <String>[],
     this.latestChapter = '',
     this.detailUrl = '',
+    this.tocUrl = '',
     this.sourceId = '',
     this.extra = const <String, dynamic>{},
     this.debug = const <String, dynamic>{},
@@ -110,6 +112,7 @@ class Book {
   final String id;
   final String title;
   final String author;
+  final String type;
   final String cover;
   final String intro;
   final String status;
@@ -120,6 +123,7 @@ class Book {
   final List<String> tags;
   final String latestChapter;
   final String detailUrl;
+  final String tocUrl;
   final String sourceId;
   final RuntimeExtra extra;
   final RuntimeExtra debug;
@@ -132,6 +136,7 @@ class Book {
       id: map['id']?.toString() ?? '',
       title: map['title']?.toString() ?? '',
       author: map['author']?.toString() ?? '',
+      type: map['type']?.toString() ?? '',
       cover: map['cover']?.toString() ?? '',
       intro: map['intro']?.toString() ?? '',
       status: map['status']?.toString() ?? '',
@@ -144,6 +149,10 @@ class Book {
           .toList(growable: false),
       latestChapter: map['latestChapter']?.toString() ?? '',
       detailUrl: map['detailUrl']?.toString() ?? '',
+      tocUrl:
+          map['tocUrl']?.toString() ??
+          map['catalogUrl']?.toString() ??
+          '',
       sourceId: map['sourceId']?.toString() ?? fallbackSourceId,
       extra: _toRuntimeExtra(map['extra']),
       debug: _toRuntimeExtra(map['debug']),
@@ -154,6 +163,7 @@ class Book {
     String? id,
     String? title,
     String? author,
+    String? type,
     String? cover,
     String? intro,
     String? status,
@@ -164,6 +174,7 @@ class Book {
     List<String>? tags,
     String? latestChapter,
     String? detailUrl,
+    String? tocUrl,
     String? sourceId,
     RuntimeExtra? extra,
     RuntimeExtra? debug,
@@ -172,6 +183,7 @@ class Book {
       id: id ?? this.id,
       title: title ?? this.title,
       author: author ?? this.author,
+      type: type ?? this.type,
       cover: cover ?? this.cover,
       intro: intro ?? this.intro,
       status: status ?? this.status,
@@ -182,6 +194,7 @@ class Book {
       tags: tags ?? this.tags,
       latestChapter: latestChapter ?? this.latestChapter,
       detailUrl: detailUrl ?? this.detailUrl,
+      tocUrl: tocUrl ?? this.tocUrl,
       sourceId: sourceId ?? this.sourceId,
       extra: extra ?? this.extra,
       debug: debug ?? this.debug,
@@ -196,6 +209,7 @@ class Chapter {
     required this.url,
     required this.index,
     this.vip = false,
+    this.isPay = false,
     this.updateTime = '',
     this.sourceId = '',
     this.extra = const <String, dynamic>{},
@@ -207,6 +221,7 @@ class Chapter {
   final String url;
   final int index;
   final bool vip;
+  final bool isPay;
   final String updateTime;
   final String sourceId;
   final RuntimeExtra extra;
@@ -221,7 +236,11 @@ class Chapter {
       title: map['title']?.toString() ?? '',
       url: map['url']?.toString() ?? '',
       index: _readInt(map['index'], fallback: 0),
-      vip: map['vip'] is bool ? map['vip'] as bool : false,
+      vip:
+          map['isVip'] is bool
+              ? map['isVip'] as bool
+              : (map['vip'] is bool ? map['vip'] as bool : false),
+      isPay: map['isPay'] is bool ? map['isPay'] as bool : false,
       updateTime: map['updateTime']?.toString() ?? '',
       sourceId: map['sourceId']?.toString() ?? fallbackSourceId,
       extra: _toRuntimeExtra(map['extra']),
@@ -235,6 +254,7 @@ class Chapter {
     String? url,
     int? index,
     bool? vip,
+    bool? isPay,
     String? updateTime,
     String? sourceId,
     RuntimeExtra? extra,
@@ -246,6 +266,7 @@ class Chapter {
       url: url ?? this.url,
       index: index ?? this.index,
       vip: vip ?? this.vip,
+      isPay: isPay ?? this.isPay,
       updateTime: updateTime ?? this.updateTime,
       sourceId: sourceId ?? this.sourceId,
       extra: extra ?? this.extra,
@@ -259,6 +280,7 @@ class Content {
     required this.title,
     required this.content,
     this.nextUrl,
+    // Keep image array support for image-heavy sources such as manga readers.
     this.images = const <String>[],
     this.sourceId = '',
     this.extra = const <String, dynamic>{},

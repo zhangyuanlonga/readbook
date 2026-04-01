@@ -6,6 +6,8 @@ const SOURCE_HOST = 'https://www.example.com';
 // 3) 站点私有参数统一放到 extra，调试信息放 debug
 function createBook(partial = {}) {
   return {
+    // 可选：站点有稳定主键时填写；没有可留空，宿主可兜底生成。
+    id: '',
     // MVP 建议至少保证：title、detailUrl
     title: '',
     // 作品类型：novel(小说) / comic(漫画) / audio(听书)
@@ -17,10 +19,14 @@ function createBook(partial = {}) {
     intro: '',
     status: '',
     category: '',
+    // 以下字段当前运行时仍支持，适合搜索结果增强展示。
+    score: '',
     wordCount: '',
     updateTime: '',
+    tags: [],
     latestChapter: '',
     detailUrl: '',
+    sourceId: '',
     extra: {},
     debug: {},
     ...partial,
@@ -29,6 +35,8 @@ function createBook(partial = {}) {
 
 function createChapter(partial = {}) {
   return {
+    // 可选：站点有稳定章节主键时填写；没有可留空。
+    id: '',
     // MVP 建议至少保证：title、url
     title: '',
     url: '',
@@ -36,7 +44,9 @@ function createChapter(partial = {}) {
     isVip: false,
     // 是否已购买（支付状态）
     isPay: false,
+    index: 0,
     updateTime: '',
+    sourceId: '',
     extra: {},
     debug: {},
     ...partial,
@@ -46,10 +56,12 @@ function createChapter(partial = {}) {
 function createContent(partial = {}) {
   return {
     // MVP 建议至少保证：title、content
-    // 插图建议直接以内联 HTML（如 <img src="...">）放在 content 中保留位置语义。
+    // 文本正文放 content；图片型正文可额外返回 images。
     title: '',
     content: '',
     nextUrl: null,
+    images: [],
+    sourceId: '',
     extra: {},
     debug: {},
     ...partial,
