@@ -36,7 +36,8 @@ class BookDetailService {
     Object? ruleEngine,
     Object? urlTemplateResolver,
     Object? responseProcessor,
-  }) : _sourceRuntimeFacade = sourceRuntimeFacade ?? SourceRuntimeFacade.instance;
+  }) : _sourceRuntimeFacade =
+           sourceRuntimeFacade ?? SourceRuntimeFacade.instance;
 
   final SourceRuntimeFacade? _sourceRuntimeFacade;
 
@@ -197,7 +198,6 @@ class BookDetailService {
     }
 
     final runtimeBook = runtime_models.Book(
-      id: bookId,
       title: fallbackTitle ?? bookId,
       author: fallbackAuthor ?? '',
       detailUrl: detailUrl,
@@ -212,21 +212,21 @@ class BookDetailService {
     final chapters = runtimeChapters
         .map(
           (chapter) => Chapter(
-            id:
-                chapter.id.trim().isNotEmpty
-                    ? chapter.id.trim()
-                    : _buildScriptChapterId(
-                      bookId: bookId,
-                      chapterUrl: chapter.url,
-                      index: chapter.index,
-                    ),
+            id: _buildScriptChapterId(
+              bookId: bookId,
+              chapterUrl: chapter.url,
+              index: chapter.index,
+            ),
             bookId: bookId,
             title:
                 chapter.title.trim().isNotEmpty
                     ? chapter.title.trim()
+                    : chapter.isVolume
+                    ? '未命名分卷'
                     : '第 ${chapter.index + 1} 章',
             chapterUrl: chapter.url.trim(),
             index: chapter.index,
+            isVolume: chapter.isVolume,
           ),
         )
         .toList(growable: false);

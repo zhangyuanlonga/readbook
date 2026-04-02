@@ -496,14 +496,11 @@ class SearchService {
     required String sourceId,
   }) {
     final normalizedDetailUrl = book.detailUrl.trim();
-    final resolvedId =
-        book.id.trim().isNotEmpty
-            ? book.id.trim()
-            : _buildRuntimeBookId(
-              sourceId: sourceId,
-              detailUrl: normalizedDetailUrl,
-              title: book.title,
-            );
+    final resolvedId = _buildRuntimeBookId(
+      sourceId: sourceId,
+      detailUrl: normalizedDetailUrl,
+      title: book.title,
+    );
     return Book(
       id: resolvedId,
       sourceId: sourceId,

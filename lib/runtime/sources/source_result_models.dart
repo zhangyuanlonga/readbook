@@ -89,7 +89,6 @@ class DiscoverCategory {
 
 class Book {
   const Book({
-    required this.id,
     required this.title,
     required this.author,
     this.type = '',
@@ -109,7 +108,6 @@ class Book {
     this.debug = const <String, dynamic>{},
   });
 
-  final String id;
   final String title;
   final String author;
   final String type;
@@ -133,7 +131,6 @@ class Book {
     String fallbackSourceId = '',
   }) {
     return Book(
-      id: map['id']?.toString() ?? '',
       title: map['title']?.toString() ?? '',
       author: map['author']?.toString() ?? '',
       type: map['type']?.toString() ?? '',
@@ -149,10 +146,7 @@ class Book {
           .toList(growable: false),
       latestChapter: map['latestChapter']?.toString() ?? '',
       detailUrl: map['detailUrl']?.toString() ?? '',
-      tocUrl:
-          map['tocUrl']?.toString() ??
-          map['catalogUrl']?.toString() ??
-          '',
+      tocUrl: map['tocUrl']?.toString() ?? map['catalogUrl']?.toString() ?? '',
       sourceId: map['sourceId']?.toString() ?? fallbackSourceId,
       extra: _toRuntimeExtra(map['extra']),
       debug: _toRuntimeExtra(map['debug']),
@@ -160,7 +154,6 @@ class Book {
   }
 
   Book copyWith({
-    String? id,
     String? title,
     String? author,
     String? type,
@@ -180,7 +173,6 @@ class Book {
     RuntimeExtra? debug,
   }) {
     return Book(
-      id: id ?? this.id,
       title: title ?? this.title,
       author: author ?? this.author,
       type: type ?? this.type,
@@ -204,10 +196,10 @@ class Book {
 
 class Chapter {
   const Chapter({
-    required this.id,
     required this.title,
     required this.url,
     required this.index,
+    this.isVolume = false,
     this.vip = false,
     this.isPay = false,
     this.updateTime = '',
@@ -216,10 +208,10 @@ class Chapter {
     this.debug = const <String, dynamic>{},
   });
 
-  final String id;
   final String title;
   final String url;
   final int index;
+  final bool isVolume;
   final bool vip;
   final bool isPay;
   final String updateTime;
@@ -230,12 +222,13 @@ class Chapter {
   factory Chapter.fromMap(
     Map<String, dynamic> map, {
     String fallbackSourceId = '',
+    int fallbackIndex = 0,
   }) {
     return Chapter(
-      id: map['id']?.toString() ?? '',
       title: map['title']?.toString() ?? '',
       url: map['url']?.toString() ?? '',
-      index: _readInt(map['index'], fallback: 0),
+      index: _readInt(map['index'], fallback: fallbackIndex),
+      isVolume: map['isVolume'] is bool ? map['isVolume'] as bool : false,
       vip:
           map['isVip'] is bool
               ? map['isVip'] as bool
@@ -249,10 +242,10 @@ class Chapter {
   }
 
   Chapter copyWith({
-    String? id,
     String? title,
     String? url,
     int? index,
+    bool? isVolume,
     bool? vip,
     bool? isPay,
     String? updateTime,
@@ -261,10 +254,10 @@ class Chapter {
     RuntimeExtra? debug,
   }) {
     return Chapter(
-      id: id ?? this.id,
       title: title ?? this.title,
       url: url ?? this.url,
       index: index ?? this.index,
+      isVolume: isVolume ?? this.isVolume,
       vip: vip ?? this.vip,
       isPay: isPay ?? this.isPay,
       updateTime: updateTime ?? this.updateTime,
@@ -280,7 +273,7 @@ class Content {
     required this.title,
     required this.content,
     this.nextUrl,
-    // Keep image array support for image-heavy sources such as manga readers.
+    // Keep image array support for pure image chapters such as manga readers.
     this.images = const <String>[],
     this.sourceId = '',
     this.extra = const <String, dynamic>{},

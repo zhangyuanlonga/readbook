@@ -163,7 +163,7 @@ class SourceExecutor {
   Future<Book> detail(RegisteredSource source, Book book) async {
     final cacheKey = CacheKeyBuilder.detail(
       sourceId: source.runtime.id,
-      bookId: book.id,
+      bookId: _runtimeBookCacheId(book),
     );
     final cached = _cacheManager.get<Book>(cacheKey);
     if (cached != null) {
@@ -196,7 +196,7 @@ class SourceExecutor {
   Future<List<Chapter>> chapters(RegisteredSource source, Book book) async {
     final cacheKey = CacheKeyBuilder.chapters(
       sourceId: source.runtime.id,
-      bookId: book.id,
+      bookId: _runtimeBookCacheId(book),
     );
     final cached = _cacheManager.get<List<Chapter>>(cacheKey);
     if (cached != null) {
@@ -238,7 +238,7 @@ class SourceExecutor {
   ) async {
     final cacheKey = CacheKeyBuilder.content(
       sourceId: source.runtime.id,
-      chapterId: chapter.id,
+      chapterId: _runtimeChapterCacheId(chapter),
     );
     final cached = _cacheManager.get<Content>(cacheKey);
     if (cached != null) {
@@ -309,5 +309,29 @@ class SourceExecutor {
         _logger?.call('[${runtime.id}] $message');
       },
     );
+  }
+
+  String _runtimeBookCacheId(Book book) {
+    final detailUrl = book.detailUrl.trim();
+    if (detailUrl.isNotEmpty) {
+      return Uri.encodeComponent(detailUrl);
+    }
+    final title = book.title.trim();
+    if (title.isNotEmpty) {
+      return Uri.encodeComponent(title);
+    }
+    return 'anonymous-book';
+  }
+
+  String _runtimeChapterCacheId(Chapter chapter) {
+    final chapterUrl = chapter.url.trim();
+    if (chapterUrl.isNotEmpty) {
+      return Uri.encodeComponent(chapterUrl);
+    }
+    final title = chapter.title.trim();
+    if (title.isNotEmpty) {
+      return '${chapter.index}:${Uri.encodeComponent(title)}';
+    }
+    return 'chapter-${chapter.index}';
   }
 }

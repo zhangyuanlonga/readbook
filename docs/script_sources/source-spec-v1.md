@@ -36,6 +36,8 @@
 export default {
   meta: {},
   async init(ctx, task) {},
+  async discoverCategories(ctx) {},
+  async discoverBooks(ctx, category, page, pageSize) {},
   async search(ctx, keyword) {},
   async detail(ctx, book) {},
   async chapters(ctx, book) {},
@@ -47,16 +49,19 @@ export default {
 
 - `meta` 为元信息
 - `init` 为可选方法
+- `discoverCategories / discoverBooks` 为可选发现方法
 - `search / detail / chapters / content` 为核心方法
+- 规范只约束导出结构、方法签名和返回结果语义，不约束作者内部实现方式
 
 `init(ctx, task)` 中 `task` 推荐结构：
 
 ```js
 {
-  step: 'search' | 'detail' | 'chapters' | 'content',
+  step: 'discoverCategories' | 'discoverBooks' | 'search' | 'detail' | 'chapters' | 'content',
   keyword: '关键词',
   book: null,
   chapter: null,
+  category: null,
 }
 ```
 
@@ -76,6 +81,8 @@ meta: {
   homepage: 'https://www.example.com',
   enabled: true,
   capabilities: ['search', 'detail', 'chapters', 'content'],
+  // 源实现 discoverCategories / discoverBooks 后，再额外声明 'discover'
+  // capabilities: ['search', 'detail', 'chapters', 'content', 'discover'],
   rateLimits: {
     'www.example.com': {
       minIntervalMs: 800,
@@ -109,6 +116,8 @@ meta: {
 
 核心方法：
 
+- `discoverCategories(ctx)` -> `Promise<DiscoverCategory[]>`
+- `discoverBooks(ctx, category, page, pageSize)` -> `Promise<Book[]>`
 - `search(ctx, keyword)` -> `Promise<Book[]>`
 - `detail(ctx, book)` -> `Promise<Book>`
 - `chapters(ctx, book)` -> `Promise<Chapter[]>`
@@ -120,6 +129,7 @@ meta: {
 
 说明：
 
+- `discoverCategories / discoverBooks` 建议成对实现
 - `search / detail / chapters / content` 建议都存在
 - 某一步暂时不支持时，可以返回空结果或显式抛错
 - 详细职责、示例和 `ctx` API 见主手册
@@ -128,14 +138,38 @@ meta: {
 
 ## 5. 标准对象
 
-### 5.1 `Book`
+以下对象示例用于说明运行时支持的标准字段。
+不表示作者必须返回完整对象，也不表示必须按示例里的字段来源实现。
+
+### 5.1 `DiscoverCategory`
 
 ```js
 {
-  id: 'book-remote-id',
+  title: '男生 · 玄幻',
+  url: 'https://...',
+  style: {
+    layoutFlexGrow: 1,
+    layoutFlexBasisPercent: 50,
+  },
+  extra: {},
+  debug: {}
+}
+```
+
+说明：
+
+- `title`：分类标题
+- `url`：分类请求入口，或宿主/脚本可继续解析的分类标识
+- `style`：可选展示样式提示
+- `extra`：discover 链路继续透传的私有参数
+- `debug`：仅用于调试
+
+### 5.2 `Book`
+
+```js
+{
   title: '书名',
   type: 'novel',
-  sourceId: 'runtime-generated-id',
   detailUrl: 'https://...',
   tocUrl: 'https://.../catalog',
   author: '作者',
@@ -153,32 +187,28 @@ meta: {
 }
 ```
 
-### 5.2 `Chapter`
+### 5.3 `Chapter`
 
 ```js
 {
-  id: 'chapter-id',
   title: '第一章',
   url: 'https://...',
-  index: 1,
+  isVolume: false,
   isVip: false,
   isPay: false,
   updateTime: '2026-03-25 09:30:00',
-  sourceId: 'runtime-generated-id',
   extra: {},
   debug: {}
 }
 ```
 
-### 5.3 `Content`
+### 5.4 `Content`
 
 ```js
 {
   title: '第一章',
   content: '正文内容...',
   nextUrl: null,
-  images: [],
-  sourceId: 'runtime-generated-id',
   extra: {},
   debug: {}
 }
@@ -187,23 +217,30 @@ meta: {
 正文插图约定：
 
 - 纯文本/HTML 正文直接放在 `content`
-- 图片型正文可通过 `images` 返回图片 URL 数组
-- 如果正文同时包含图文混排，优先把可读主内容放在 `content`
+- 正文插图也应保留在 `content` 的原始位置
+- `images` 只用于纯图片章节，例如漫画页
 
 MVP 最小字段（建议先只保证这些）：
 
+- `DiscoverCategory`：`title`、`url`
 - `Book`：`title`、`detailUrl`（`tocUrl` 建议在 `detail` 阶段补齐）
 - `Chapter`：`title`、`url`
 - `Content`：`title`、`content`
 
 可省略字段（脚本可不返回）：
 
-- `Book.id`、`Chapter.id`：若站点无稳定主键可不填，宿主可按 URL 生成兜底标识
 - `sourceId`：不要求脚本填写，宿主可按 `ctx.source.id` 在适配层补齐
 - `Book.type`：建议有能力时填写，推荐枚举 `novel / comic / audio`
+- `Chapter.isVolume`：分卷标题节点时建议填写；正文节点可留 `false`
 - `Chapter.isVip / Chapter.isPay`：建议有能力时填写，默认可为 `false`
-- `Content.images`：图片型正文时建议填写；纯文本正文可留空
+- `Content.images`：仅纯图片章节时建议填写；正文插图不要拆到这里
 - 其他业务可选字段：按站点能力逐步补齐即可
+
+补充原则：
+
+- 作者可以自由选择 HTML、API、浏览器、正则、DOM 等实现路径
+- 宿主只关心每个约定方法最终返回的标准格式内容
+- 不要为了贴示例对象而伪造站点本来没有的字段
 
 ---
 
@@ -255,6 +292,8 @@ MVP 最小字段（建议先只保证这些）：
 
 书源流程是链式的：
 
+- `discoverCategories` 产出的 `DiscoverCategory` 会进入 `discoverBooks`
+- `discoverBooks` 产出的 `Book` 会进入 `detail`
 - `search` 产出的 `Book` 会进入 `detail`
 - `detail` 产出的 `Book` 会进入 `chapters`
 - `content` 同时消费 `book + chapter`
@@ -285,5 +324,5 @@ MVP 最小字段（建议先只保证这些）：
 
 为了避免规范和示例漂移，约定如下：
 
-- 修改 `Book / Chapter / Content` 字段定义时，必须同步更新模板示例
+- 修改 `DiscoverCategory / Book / Chapter / Content` 字段定义时，必须同步更新模板示例
 - 统一同步到官方模板 `docs/templates/source_template_v1.js`

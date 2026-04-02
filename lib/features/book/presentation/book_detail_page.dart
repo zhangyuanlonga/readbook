@@ -406,9 +406,10 @@ class _BookDetailPageState extends State<BookDetailPage> {
             isInBookshelf: _isInBookshelf,
             isShelfActionLoading: _isShelfActionLoading,
             onRead:
-                result.chapters.isEmpty
+                _readableChapters(result.chapters).isEmpty
                     ? null
-                    : () => _openChapter(result.chapters.first),
+                    : () =>
+                        _openChapter(_readableChapters(result.chapters).first),
             onToggleBookshelf: _toggleBookshelf,
           );
         },
@@ -464,12 +465,22 @@ class _BookDetailPageState extends State<BookDetailPage> {
   }
 
   Chapter? _resolveLatestChapter(BookDetailLoadResult result) {
-    if (result.chapters.isEmpty) {
+    final readableChapters = _readableChapters(result.chapters);
+    if (readableChapters.isEmpty) {
       return null;
     }
 
-    final chapter = result.chapters.last;
+    final chapter = readableChapters.last;
     return _normalizeText(chapter.title).isEmpty ? null : chapter;
+  }
+
+  List<Chapter> _readableChapters(List<Chapter> chapters) {
+    return chapters
+        .where(
+          (chapter) =>
+              !chapter.isVolume && chapter.chapterUrl.trim().isNotEmpty,
+        )
+        .toList(growable: false);
   }
 
   String? _resolveIntro(String? rawIntro) {
@@ -510,7 +521,8 @@ class _BookDetailPageState extends State<BookDetailPage> {
   }
 
   Widget _buildCacheCard(BookDetailLoadResult result) {
-    final totalChapters = result.chapters.length;
+    final readableChapters = _readableChapters(result.chapters);
+    final totalChapters = readableChapters.length;
 
     final sourceId = _activeSourceId;
     if (sourceId == null || sourceId.isEmpty) {
@@ -555,7 +567,7 @@ class _BookDetailPageState extends State<BookDetailPage> {
             context: context,
             bookId: _activeBookId,
             sourceId: sourceId,
-            chapters: result.chapters,
+            chapters: readableChapters,
             initialStartIndex: startIndex,
             initialEndIndex: endIndex,
             entryPoint: ChapterCacheEntryPoint.detail,
@@ -613,6 +625,8 @@ class _BookDetailPageState extends State<BookDetailPage> {
 
   Widget _buildChapterSection(BookDetailLoadResult result) {
     final displayedChapters = _buildDisplayedChapters(result.chapters);
+    final readableChapters = _readableChapters(displayedChapters);
+    final hasVolumeItems = displayedChapters.any((chapter) => chapter.isVolume);
     final previewCount =
         displayedChapters.length > _tocPreviewLimit
             ? _tocPreviewLimit
@@ -625,19 +639,19 @@ class _BookDetailPageState extends State<BookDetailPage> {
     final localTxtControls = _buildLocalRecoveryPanel();
 
     final primaryActions =
-        displayedChapters.isNotEmpty
+        readableChapters.isNotEmpty
             ? Row(
               children: [
                 Expanded(
                   child: FilledButton.tonal(
-                    onPressed: () => _openChapter(displayedChapters.first),
+                    onPressed: () => _openChapter(readableChapters.first),
                     child: const Text('阅读当前首章'),
                   ),
                 ),
                 const SizedBox(width: 8),
                 Expanded(
                   child: OutlinedButton(
-                    onPressed: () => _openChapter(displayedChapters.last),
+                    onPressed: () => _openChapter(readableChapters.last),
                     child: const Text('阅读当前末章'),
                   ),
                 ),
@@ -708,7 +722,14 @@ class _BookDetailPageState extends State<BookDetailPage> {
           (entry) => BookDetailChapterTile(
             displayIndex: entry.key,
             title: _normalizeSingleLineText(entry.value.title),
-            onTap: () => _openChapter(entry.value),
+            onTap:
+                entry.value.isVolume || entry.value.chapterUrl.trim().isEmpty
+                    ? null
+                    : () => _openChapter(entry.value),
+            enabled:
+                !entry.value.isVolume &&
+                entry.value.chapterUrl.trim().isNotEmpty,
+            isVolume: entry.value.isVolume,
             showDivider:
                 hasMoreChapters || entry.key < previewChapters.length - 1,
           ),
@@ -733,7 +754,9 @@ class _BookDetailPageState extends State<BookDetailPage> {
       emptyState: emptyState,
       previewChildren: previewChildren,
       showAllChaptersLabel:
-          hasMoreChapters ? '查看全部目录（${displayedChapters.length} 章）' : null,
+          hasMoreChapters
+              ? '查看全部目录（${displayedChapters.length} ${hasVolumeItems ? '项' : '章'}）'
+              : null,
       onShowAllChapters:
           hasMoreChapters
               ? () => _showAllChaptersSheet(displayedChapters)
@@ -769,7 +792,7 @@ class _BookDetailPageState extends State<BookDetailPage> {
                 LayoutBuilder(
                   builder: (context, constraints) {
                     final title = Text(
-                      '全部目录（${chapters.length} 章）',
+                      '全部目录（${chapters.length} ${chapters.any((chapter) => chapter.isVolume) ? '项' : '章'}）',
                       style: Theme.of(context).textTheme.titleMedium?.copyWith(
                         fontWeight: FontWeight.w700,
                       ),
@@ -802,16 +825,52 @@ class _BookDetailPageState extends State<BookDetailPage> {
                       final chapter = chapters[index];
                       return ListTile(
                         dense: true,
-                        leading: Text('${index + 1}'),
+                        leading:
+                            chapter.isVolume
+                                ? Container(
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 8,
+                                    vertical: 4,
+                                  ),
+                                  decoration: BoxDecoration(
+                                    color:
+                                        Theme.of(
+                                          context,
+                                        ).colorScheme.primaryContainer,
+                                    borderRadius: BorderRadius.circular(999),
+                                  ),
+                                  child: Text(
+                                    '卷',
+                                    style: Theme.of(
+                                      context,
+                                    ).textTheme.labelSmall?.copyWith(
+                                      fontWeight: FontWeight.w700,
+                                      color:
+                                          Theme.of(
+                                            context,
+                                          ).colorScheme.onPrimaryContainer,
+                                    ),
+                                  ),
+                                )
+                                : Text('${index + 1}'),
                         title: Text(
                           _normalizeSingleLineText(chapter.title),
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
+                          style:
+                              chapter.isVolume
+                                  ? Theme.of(context).textTheme.bodyMedium
+                                      ?.copyWith(fontWeight: FontWeight.w700)
+                                  : null,
                         ),
-                        onTap: () {
-                          Navigator.of(context).pop();
-                          _openChapter(chapter);
-                        },
+                        onTap:
+                            chapter.isVolume ||
+                                    chapter.chapterUrl.trim().isEmpty
+                                ? null
+                                : () {
+                                  Navigator.of(context).pop();
+                                  _openChapter(chapter);
+                                },
                       );
                     },
                   ),
@@ -1142,6 +1201,11 @@ class _BookDetailPageState extends State<BookDetailPage> {
   }
 
   void _openChapter(Chapter chapter) {
+    if (chapter.isVolume || chapter.chapterUrl.trim().isEmpty) {
+      _showMessage('当前节点是分卷标题，不能直接阅读。');
+      return;
+    }
+
     final sourceId = _activeSourceId;
     final detailUrl = _activeDetailUrl;
     if (sourceId == null ||

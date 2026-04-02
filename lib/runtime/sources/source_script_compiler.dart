@@ -29,7 +29,29 @@ class SourceScriptCompiler {
   Future<RuntimeSourceDefinition> compile(String sourceCode) async {
     final normalizedSource = _normalizeSourceCode(sourceCode);
     final inspection = await _inspectSource(normalizedSource);
-    final manifest = SourceManifest.fromMap(inspection.meta);
+    final rawManifest = SourceManifest.fromMap(inspection.meta);
+    final hasDiscoverMethods =
+        inspection.hasDiscoverCategories && inspection.hasDiscoverBooks;
+    final hasDiscoverMethodGap =
+        inspection.hasDiscoverCategories != inspection.hasDiscoverBooks;
+    if (hasDiscoverMethodGap) {
+      throw const SourceScriptCompileException(
+        'discoverCategories 与 discoverBooks 必须成对实现。',
+      );
+    }
+
+    if (rawManifest.supportsCapability('discover') && !hasDiscoverMethods) {
+      throw const SourceScriptCompileException(
+        'meta.capabilities 声明了 discover，但书源缺少 discoverCategories/discoverBooks 实现。',
+      );
+    }
+
+    final manifest =
+        hasDiscoverMethods && !rawManifest.supportsCapability('discover')
+            ? rawManifest.copyWith(
+              capabilities: <String>{...rawManifest.capabilities, 'discover'},
+            )
+            : rawManifest;
 
     if (!inspection.hasSearch ||
         !inspection.hasDetail ||
@@ -1091,9 +1113,14 @@ List<Chapter> _decodeChapters(
     throw const SourceScriptCompileException('chapters 必须返回数组。');
   }
   return result
+      .asMap()
+      .entries
       .map(
-        (Object? item) =>
-            Chapter.fromMap(_asMap(item), fallbackSourceId: fallbackSourceId),
+        (entry) => Chapter.fromMap(
+          _asMap(entry.value),
+          fallbackSourceId: fallbackSourceId,
+          fallbackIndex: entry.key,
+        ).copyWith(index: entry.key),
       )
       .toList(growable: false);
 }
@@ -1321,7 +1348,6 @@ Map<String, Object?> _discoverCategoryToMap(DiscoverCategory category) {
 
 Map<String, Object?> _bookToMap(Book book) {
   return <String, Object?>{
-    'id': book.id,
     'title': book.title,
     'author': book.author,
     'type': book.type,
@@ -1344,10 +1370,10 @@ Map<String, Object?> _bookToMap(Book book) {
 
 Map<String, Object?> _chapterToMap(Chapter chapter) {
   return <String, Object?>{
-    'id': chapter.id,
     'title': chapter.title,
     'url': chapter.url,
     'index': chapter.index,
+    'isVolume': chapter.isVolume,
     'vip': chapter.vip,
     'isVip': chapter.vip,
     'isPay': chapter.isPay,

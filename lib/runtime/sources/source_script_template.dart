@@ -1,8 +1,20 @@
 const String sourceScriptTemplateV1 = r'''
+function createDiscoverCategory(partial = {}) {
+  return {
+    title: '',
+    url: '',
+    style: {
+      layoutFlexGrow: null,
+      layoutFlexBasisPercent: null,
+    },
+    extra: {},
+    debug: {},
+    ...partial,
+  };
+}
+
 function createBook(partial = {}) {
   return {
-    // 可选：站点有稳定主键时填写；没有可留空，宿主可兜底生成。
-    id: '',
     // 推荐：novel / comic / audio
     type: '',
     title: '',
@@ -11,7 +23,6 @@ function createBook(partial = {}) {
     intro: '',
     status: '',
     category: '',
-    // 以下字段当前运行时仍支持，适合搜索结果增强展示。
     score: '',
     wordCount: '',
     updateTime: '',
@@ -20,7 +31,6 @@ function createBook(partial = {}) {
     detailUrl: '',
     // 建议在 detail 阶段补齐。
     tocUrl: '',
-    sourceId: '',
     extra: {},
     debug: {},
     ...partial,
@@ -29,15 +39,14 @@ function createBook(partial = {}) {
 
 function createChapter(partial = {}) {
   return {
-    id: '',
     title: '',
     url: '',
-    index: 0,
+    // 分卷标题节点：true 表示目录分组，不是可直接阅读的章节。
+    isVolume: false,
     // 运行时兼容 `vip` 与 `isVip`，模板统一使用 `isVip`。
     isVip: false,
     isPay: false,
     updateTime: '',
-    sourceId: '',
     extra: {},
     debug: {},
     ...partial,
@@ -49,9 +58,8 @@ function createContent(partial = {}) {
     title: '',
     content: '',
     nextUrl: null,
-    // 图片型正文可直接返回图片 URL 数组。
-    images: [],
-    sourceId: '',
+    // 文本正文和正文插图都应按原始顺序保留在 content。
+    // 只有纯图片章节（例如漫画页）才额外返回 images。
     extra: {},
     debug: {},
     ...partial,
@@ -85,6 +93,7 @@ export default {
     domains: ['debug.local'],
     homepage: 'https://debug.local',
     enabled: true,
+    // 实现 discoverCategories / discoverBooks 后，再把 'discover' 加进来。
     capabilities: ['search', 'detail', 'chapters', 'content'],
     rateLimits: {
       'debug.local': {
@@ -100,10 +109,28 @@ export default {
     }
   },
 
+  // async discoverCategories(ctx) {
+  //   return [
+  //     createDiscoverCategory({
+  //       title: '推荐',
+  //       url: 'https://debug.local/discover/recommend',
+  //     }),
+  //   ];
+  // },
+  //
+  // async discoverBooks(ctx, category, page, pageSize) {
+  //   return [
+  //     createBook({
+  //       title: `${category.title} 第 ${page} 页`,
+  //       type: 'novel',
+  //       detailUrl: 'https://debug.local/books/discover-1',
+  //     }),
+  //   ];
+  // },
+
   async search(ctx, keyword) {
     return [
       createBook({
-        id: 'scratch-book-1',
         title: `${keyword} 调试样书`,
         type: 'novel',
         author: '调试作者',
@@ -113,7 +140,6 @@ export default {
         updateTime: '2026-03-25 08:00:00',
         tags: ['调试', '示例'],
         detailUrl: '/books/debug',
-        sourceId: ctx.source.id,
         extra: {
           debugMode: true,
         },
@@ -131,7 +157,6 @@ export default {
       wordCount: book.wordCount || '128000',
       updateTime: book.updateTime || '2026-03-25 08:00:00',
       tags: book.tags?.length ? book.tags : ['调试', '示例'],
-      sourceId: ctx.source.id,
       extra: {
         ...book.extra,
         catalogKey: 'debug-catalog',
@@ -142,27 +167,21 @@ export default {
   async chapters(ctx, book) {
     return [
       createChapter({
-        id: 'debug-chapter-1',
         title: '第一章 调试开始',
         url: '/chapters/1',
-        index: 1,
         isVip: false,
         updateTime: '2026-03-24 21:00:00',
-        sourceId: ctx.source.id,
         extra: {
-          fromBook: book.id,
+          fromBookTitle: book.title,
         },
       }),
       createChapter({
-        id: 'debug-chapter-2',
         title: '第二章 调试继续',
         url: '/chapters/2',
-        index: 2,
         isVip: false,
         updateTime: '2026-03-25 08:00:00',
-        sourceId: ctx.source.id,
         extra: {
-          fromBook: book.id,
+          fromBookTitle: book.title,
         },
       }),
     ];
@@ -172,7 +191,6 @@ export default {
     return createContent({
       title: chapter.title,
       content: `${book.title}\n\n${chapter.title}\n\n这里是临时脚本调试正文。`,
-      sourceId: ctx.source.id,
     });
   },
 };
@@ -181,10 +199,23 @@ export default {
 const String sourceScriptOfficialTemplateV1 = r'''
 const SOURCE_HOST = 'https://www.example.com';
 
+function createDiscoverCategory(partial = {}) {
+  return {
+    // discover MVP 建议至少保证：title、url
+    title: '',
+    url: '',
+    style: {
+      layoutFlexGrow: null,
+      layoutFlexBasisPercent: null,
+    },
+    extra: {},
+    debug: {},
+    ...partial,
+  };
+}
+
 function createBook(partial = {}) {
   return {
-    // 可选：站点有稳定主键时填写；没有可留空，宿主可兜底生成。
-    id: '',
     // 推荐：novel / comic / audio
     type: '',
     title: '',
@@ -193,7 +224,6 @@ function createBook(partial = {}) {
     intro: '',
     status: '',
     category: '',
-    // 以下字段当前运行时仍支持，适合搜索结果增强展示。
     score: '',
     wordCount: '',
     updateTime: '',
@@ -202,7 +232,6 @@ function createBook(partial = {}) {
     detailUrl: '',
     // 建议在 detail 阶段补齐。
     tocUrl: '',
-    sourceId: '',
     extra: {},
     debug: {},
     ...partial,
@@ -211,15 +240,14 @@ function createBook(partial = {}) {
 
 function createChapter(partial = {}) {
   return {
-    id: '',
     title: '',
     url: '',
-    index: 0,
+    // 分卷标题节点：true 表示目录分组，不是可直接阅读的章节。
+    isVolume: false,
     // 运行时兼容 `vip` 与 `isVip`，模板统一使用 `isVip`。
     isVip: false,
     isPay: false,
     updateTime: '',
-    sourceId: '',
     extra: {},
     debug: {},
     ...partial,
@@ -231,9 +259,8 @@ function createContent(partial = {}) {
     title: '',
     content: '',
     nextUrl: null,
-    // 图片型正文可直接返回图片 URL 数组。
-    images: [],
-    sourceId: '',
+    // 文本正文和正文插图都应按原始顺序保留在 content。
+    // 只有纯图片章节（例如漫画页）才额外返回 images。
     extra: {},
     debug: {},
     ...partial,
@@ -269,6 +296,7 @@ export default {
     domains: ['www.example.com'],
     homepage: SOURCE_HOST,
     enabled: true,
+    // 如果源同时实现 discoverCategories / discoverBooks，再把 'discover' 加进来。
     capabilities: ['search', 'detail', 'chapters', 'content'],
     rateLimits: {
       'www.example.com': {
@@ -305,6 +333,30 @@ export default {
       });
     }
   },
+
+  // 发现链路是可选能力：
+  // 1) discoverCategories 返回分类数组
+  // 2) discoverBooks 接收当前分类，返回该分类下的 Book[]
+  // 3) 只有两个方法都实现时，才建议在 capabilities 里声明 'discover'
+  //
+  // async discoverCategories(ctx) {
+  //   return [
+  //     createDiscoverCategory({
+  //       title: '推荐',
+  //       url: `${SOURCE_HOST}/discover/recommend`,
+  //     }),
+  //   ];
+  // },
+  //
+  // async discoverBooks(ctx, category, page, pageSize) {
+  //   return [
+  //     createBook({
+  //       title: `${category.title} 第 ${page} 页`,
+  //       type: 'novel',
+  //       detailUrl: `${SOURCE_HOST}/book/1`,
+  //     }),
+  //   ];
+  // },
 
   async search(ctx, keyword) {
     const response = await requestJson(ctx, `${SOURCE_HOST}/search`, {
@@ -343,10 +395,8 @@ export default {
       const linkNode = item.querySelector('a');
 
       return createBook({
-        id: item.getAttribute('data-id') || String(index),
         title: ctx.html.text(titleNode),
         author: ctx.html.text(authorNode),
-        sourceId: ctx.source.id,
         detailUrl: ctx.utils.absoluteUrl(
           SOURCE_HOST,
           linkNode?.getAttribute('href') || '',
@@ -390,7 +440,6 @@ export default {
 
     return createBook({
       ...book,
-      sourceId: ctx.source.id,
       intro: ctx.html.text(doc.querySelector('.book-intro')),
       cover: ctx.utils.absoluteUrl(
         SOURCE_HOST,
@@ -427,14 +476,11 @@ export default {
 
     return ctx.html.collect(chapterNodes, (node, index) =>
       createChapter({
-        id: node.getAttribute('data-id') || String(index),
         title: ctx.html.text(node),
-        sourceId: ctx.source.id,
         url: ctx.utils.absoluteUrl(
           SOURCE_HOST,
           node.getAttribute('href') || '',
         ),
-        index,
         updateTime: ctx.html.text(node.parentElement?.querySelector('.chapter-time')),
       }),
     );
@@ -469,7 +515,6 @@ export default {
     return createContent({
       title: chapter.title,
       content: ctx.html.text(contentNode),
-      sourceId: ctx.source.id,
       nextUrl: null,
     });
   },

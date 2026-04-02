@@ -6,7 +6,7 @@
 
 - `flutterreadbook` 当前只支持脚本源。
 - App 不再导入或执行旧规则 JSON。
-- 如果你在迁移历史书源，请把旧规则字段映射为脚本源的 `search / detail / chapters / content` 方法，而不是继续维护旧 JSON。
+- 如果你在迁移历史书源，请把旧规则字段映射为脚本源的 `search / detail / chapters / content` 方法；如果旧源有发现页能力，再额外映射为 `discoverCategories / discoverBooks`，而不是继续维护旧 JSON。
 
 本手册面向“书源作者”。目标不是解释内部实现，而是帮助你从用户视角快速理解：
 
@@ -17,6 +17,13 @@
 - 出现验证码、登录、动态页面时应该怎么处理
 
 如果你只想尽快写出一个可运行的书源，先看“快速开始”和“完整流程示例”两节即可。
+
+需要先强调一个原则：
+
+- 固定的是导出结构、方法签名，以及返回结果要符合标准对象语义
+- 不固定的是你内部怎么实现：HTML、JSON API、浏览器驱动、正则、DOM 解析、helper 拆分方式都可以
+- 官方模板和手册示例只是固定示例，不是唯一写法，也不是强制实现路径
+- 作者只需要按约定方法返回标准格式内容，宿主就能继续跑后续链路
 
 相关文档：
 
@@ -42,10 +49,16 @@
 4. `chapters`
 5. `content`
 
+可选发现流程是：
+
+1. `discoverCategories`
+2. `discoverBooks`
+
 其中：
 
 - `init` 是可选的
 - `search / detail / chapters / content` 是书源的核心方法
+- `discoverCategories / discoverBooks` 是发现页可选方法，两个方法建议成对实现
 - `ctx` 是书源运行时的顶层上下文对象
 
 推荐理解方式：
@@ -72,7 +85,7 @@ ctx = {
 }
 ```
 
-官方推荐写法：
+官方示例写法之一：
 
 - 方法和 helper 显式接收 `ctx`
 
@@ -98,6 +111,8 @@ export default {
     homepage: 'https://www.example.com',
     enabled: true,
     capabilities: ['search', 'detail', 'chapters', 'content'],
+    // 如果实现 discoverCategories / discoverBooks，再加上 'discover'
+    // capabilities: ['search', 'detail', 'chapters', 'content', 'discover'],
   },
 
   async init(ctx, task) {},
@@ -120,6 +135,14 @@ export default {
       content: '',
     };
   },
+
+  // async discoverCategories(ctx) {
+  //   return [];
+  // },
+
+  // async discoverBooks(ctx, category, page, pageSize) {
+  //   return [];
+  // },
 };
 ```
 
@@ -170,14 +193,20 @@ function requestJsonLite(url, options = {}) {
 3. `chapters` 能返回 `Chapter[]`
 4. `content` 能返回 `Content`
 
+如果你要接入发现页，再额外保证：
+
+5. `discoverCategories` 能返回 `DiscoverCategory[]`
+6. `discoverBooks` 能根据当前分类返回 `Book[]`
+
 如果某一步暂时不支持，也建议显式返回空数组、原对象，或直接抛出明确错误，而不是静默失败。
 
 补充说明：
 
 - `ctx.source.id` 是源被用户添加到 App 后，由宿主自动生成并注入的源 ID
-- `Book.id` / `Chapter.id` 是结果对象自己的字段，不是源 ID
-- 如果站点有稳定书籍 / 章节主键，可以显式填写
-- 如果没有稳定主键，可以留空，把后续真正要用的参数放进 `extra`
+- `sourceId` 是运行时字段，脚本通常不必手动填写
+- 不要把站点内部主键当成标准对象必填字段
+- 大多数 HTML 源直接依赖 `detailUrl / url + extra` 就足够
+- 如果后续步骤需要站点私有参数，把它们放进 `extra`
 
 ### 2.4 推荐开发顺序
 
@@ -190,6 +219,11 @@ function requestJsonLite(url, options = {}) {
 5. 如果有登录、验证码或公共 token，再补 `init`
 
 原因很简单：这是用户实际使用时最容易定位问题的顺序。
+
+如果这个源同时支持发现页，建议在正文链路稳定之后再补：
+
+6. `discoverCategories`
+7. `discoverBooks`
 
 ---
 
@@ -284,7 +318,6 @@ export default {
       ...book,
       intro: ctx.html.text(doc.querySelector('.intro')),
       status: ctx.html.text(doc.querySelector('.status')),
-      category: ctx.html.text(doc.querySelector('.category')),
       latestChapter: ctx.html.text(doc.querySelector('.latest')),
       tocUrl: ctx.utils.absoluteUrl(
         book.detailUrl,
@@ -406,15 +439,42 @@ rateLimits: {
 
 ## 5. 标准对象
 
-平台当前统一的标准对象只有三类：
+平台当前统一的标准对象有四类：
 
+- `DiscoverCategory`
 - `Book`
 - `Chapter`
 - `Content`
 
-建议所有方法只围绕这三类对象进行数据传递。
+建议所有方法只围绕这四类对象进行数据传递。
 
-### 5.1 Book
+这里的对象示例展示的是“运行时支持的标准字段集合”。
+不是要求每个源、每一步都把所有字段都填满。
+
+### 5.1 DiscoverCategory
+
+```js
+{
+  title: '男生 · 玄幻',
+  url: 'https://...',
+  style: {
+    layoutFlexGrow: 1,
+    layoutFlexBasisPercent: 50,
+  },
+  extra: {},
+  debug: {}
+}
+```
+
+字段建议：
+
+- `title`：分类标题
+- `url`：分类请求入口，或后续 `discoverBooks` 能继续解析的分类标识
+- `style`：可选展示样式提示
+- `extra`：discover 链路继续透传的私有参数
+- `debug`：仅用于调试
+
+### 5.2 Book
 
 ```js
 {
@@ -426,7 +486,6 @@ rateLimits: {
   cover: 'https://...',
   intro: '简介',
   status: '连载中',
-  category: '玄幻',
   wordCount: '235000',
   updateTime: '2026-03-25 09:30:00',
   latestChapter: '第100章',
@@ -437,7 +496,6 @@ rateLimits: {
 
 字段建议：
 
-- `id`：可选的源内唯一 ID；站点有稳定主键时填写，没有可留空
 - `title`：书名
 - `type`：作品类型，推荐 `novel / comic / audio`
 - `author`：作者
@@ -454,12 +512,19 @@ rateLimits: {
 - `extra`：跨步骤透传数据
 - `debug`：仅用于调试
 
-### 5.2 Chapter
+实现原则：
+
+- 只返回当前步骤已经稳定拿到的字段
+- 不要为了贴合示例对象，去伪造站点本来没有的字段
+- 后续步骤真正依赖的私有参数，优先放进 `extra`
+
+### 5.3 Chapter
 
 ```js
 {
   title: '第一章',
   url: 'https://...',
+  isVolume: false,
   isVip: false,
   isPay: false,
   updateTime: '2026-03-25 09:30:00',
@@ -470,14 +535,14 @@ rateLimits: {
 
 字段建议：
 
-- `id`：可选的章节唯一 ID；站点有稳定主键时填写，没有可留空
 - `url`：章节页 URL 或正文接口地址
 - `章节顺序`：按返回数组顺序确定，不再要求单独 `index` 字段
+- `isVolume`：是否为分卷标题节点；为 `true` 时表示目录分组，不是可直接阅读的正文
 - `isVip`：是否 VIP 章节（身份限制）
 - `isPay`：是否已购买（支付状态）
 - `extra`：继续透传章节请求真正需要的参数，例如 `chapterId`
 
-### 5.3 Content
+### 5.4 Content
 
 ```js
 {
@@ -489,7 +554,13 @@ rateLimits: {
 }
 ```
 
-### 5.4 `extra` 应该放什么
+正文约定：
+
+- 文本正文和正文插图都应按原始顺序保留在 `content`
+- `images` 只用于纯图片章节，例如漫画页
+- 不要把正文插图拆成单独图片数组，否则位置语义会丢失
+
+### 5.5 `extra` 应该放什么
 
 `extra` 用于跨步骤传递站点内部上下文。
 它的原则是：只放后续步骤确实需要的关键参数。
@@ -511,7 +582,7 @@ rateLimits: {
 - 大块二进制数据
 - 明显只用于临时调试的垃圾数据
 
-### 5.5 `debug` 应该怎么用
+### 5.6 `debug` 应该怎么用
 
 `debug` 只用于调试，不应被业务流程依赖。
 
@@ -553,17 +624,18 @@ rateLimits: {
 
 ```js
 {
-  step: 'search' | 'detail' | 'chapters' | 'content',
+  step: 'discoverCategories' | 'discoverBooks' | 'search' | 'detail' | 'chapters' | 'content',
   keyword: '关键词',
   book: null,
   chapter: null,
+  category: null,
 }
 ```
 
 建议理解：
 
 - `task.step` 一定存在
-- `task.keyword / task.book / task.chapter` 按步骤出现
+- `task.keyword / task.book / task.chapter / task.category` 按步骤出现
 - 不要假设这几个字段会在所有步骤里同时有值
 
 示例：
@@ -581,7 +653,93 @@ async init(ctx, task) {
 }
 ```
 
-### 6.2 `search(ctx, keyword)`：搜索书籍
+### 6.2 `discoverCategories(ctx)`：获取发现分类
+
+作用：
+
+- 返回发现页分类列表
+
+输出：
+
+- `Promise<DiscoverCategory[]>`
+
+最低要求：
+
+- 返回数组
+- 每项至少能让后续 `discoverBooks` 识别当前分类
+
+最少字段建议：
+
+- `title`
+- `url`
+
+推荐补齐：
+
+- `style`
+- `extra`
+- `debug`
+
+最小示例：
+
+```js
+return [
+  {
+    title: '男生 · 玄幻',
+    url: 'https://example.com/discover/xuanhuan',
+  },
+];
+```
+
+### 6.3 `discoverBooks(ctx, category, page, pageSize)`：按分类取书
+
+作用：
+
+- 根据当前发现分类返回该分类下的书籍列表
+
+输入：
+
+- `DiscoverCategory`
+- `page`
+- `pageSize`
+
+输出：
+
+- `Promise<Book[]>`
+
+最低要求：
+
+- 返回数组
+- 每项至少能让后续 `detail` 找到这本书
+
+最少字段建议：
+
+- `title`
+- `detailUrl`
+
+推荐补齐：
+
+- `author`
+- `cover`
+- `intro`
+- `status`
+- `category`
+- `wordCount`
+- `latestChapter`
+- `extra`
+- `debug`
+
+最小示例：
+
+```js
+return [
+  {
+    title: '凡人修仙传',
+    detailUrl: 'https://example.com/book/1',
+  },
+];
+```
+
+### 6.4 `search(ctx, keyword)`：搜索书籍
 
 作用：
 
@@ -632,7 +790,7 @@ return [
 ];
 ```
 
-### 6.3 `detail(ctx, book)`：补齐详情
+### 6.5 `detail(ctx, book)`：补齐详情
 
 作用：
 
@@ -670,7 +828,7 @@ return {
 };
 ```
 
-### 6.4 `chapters(ctx, book)`：获取目录
+### 6.6 `chapters(ctx, book)`：获取目录
 
 作用：
 
@@ -707,7 +865,7 @@ return [
 ];
 ```
 
-### 6.5 `content(ctx, book, chapter)`：获取正文
+### 6.7 `content(ctx, book, chapter)`：获取正文
 
 作用：
 
@@ -750,6 +908,15 @@ return {
 书源流程不是孤立的，而是链式的。
 
 推荐模式：
+
+1. `discoverCategories` 返回 `DiscoverCategory[]`
+2. `discoverBooks` 根据分类返回 `Book[]`
+3. `search` 返回基础 `Book`
+4. `detail` 在原有 `Book` 上补字段
+5. `chapters` 使用 `detail` 阶段传下来的 `extra`
+6. `content` 同时消费 `book + chapter`
+
+正文主链最常见的模式：
 
 1. `search` 返回基础 `Book`
 2. `detail` 在原有 `Book` 上补字段

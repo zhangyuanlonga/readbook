@@ -4,10 +4,23 @@ const SOURCE_HOST = 'https://www.example.com';
 // 1) 保证每一步返回结构稳定
 // 2) 只覆盖当前步骤拿到的字段
 // 3) 站点私有参数统一放到 extra，调试信息放 debug
+function createDiscoverCategory(partial = {}) {
+  return {
+    // discover MVP 建议至少保证：title、url
+    title: '',
+    url: '',
+    style: {
+      layoutFlexGrow: null,
+      layoutFlexBasisPercent: null,
+    },
+    extra: {},
+    debug: {},
+    ...partial,
+  };
+}
+
 function createBook(partial = {}) {
   return {
-    // 可选：站点有稳定主键时填写；没有可留空，宿主可兜底生成。
-    id: '',
     // MVP 建议至少保证：title、detailUrl
     title: '',
     // 作品类型：novel(小说) / comic(漫画) / audio(听书)
@@ -19,14 +32,12 @@ function createBook(partial = {}) {
     intro: '',
     status: '',
     category: '',
-    // 以下字段当前运行时仍支持，适合搜索结果增强展示。
     score: '',
     wordCount: '',
     updateTime: '',
     tags: [],
     latestChapter: '',
     detailUrl: '',
-    sourceId: '',
     extra: {},
     debug: {},
     ...partial,
@@ -35,18 +46,16 @@ function createBook(partial = {}) {
 
 function createChapter(partial = {}) {
   return {
-    // 可选：站点有稳定章节主键时填写；没有可留空。
-    id: '',
     // MVP 建议至少保证：title、url
     title: '',
     url: '',
+    // 分卷标题节点：true 表示目录分组，不是可直接阅读的章节。
+    isVolume: false,
     // 是否 VIP 章节（身份限制）
     isVip: false,
     // 是否已购买（支付状态）
     isPay: false,
-    index: 0,
     updateTime: '',
-    sourceId: '',
     extra: {},
     debug: {},
     ...partial,
@@ -56,12 +65,11 @@ function createChapter(partial = {}) {
 function createContent(partial = {}) {
   return {
     // MVP 建议至少保证：title、content
-    // 文本正文放 content；图片型正文可额外返回 images。
+    // 文本正文和正文插图都应按原始顺序保留在 content。
+    // 只有纯图片章节（例如漫画页）才额外返回 images。
     title: '',
     content: '',
     nextUrl: null,
-    images: [],
-    sourceId: '',
     extra: {},
     debug: {},
     ...partial,
@@ -99,6 +107,7 @@ export default {
     domains: ['www.example.com'],
     homepage: SOURCE_HOST,
     enabled: true,
+    // 如果源同时实现 discoverCategories / discoverBooks，再把 'discover' 加进来。
     capabilities: ['search', 'detail', 'chapters', 'content'],
     rateLimits: {
       'www.example.com': {
@@ -140,6 +149,63 @@ export default {
       });
     }
   },
+
+  // 发现链路是可选能力：
+  // 1) discoverCategories 返回分类数组
+  // 2) discoverBooks 接收当前分类，返回该分类下的 Book[]
+  // 3) 只有两个方法都实现时，才建议在 capabilities 里声明 'discover'
+  //
+  // async discoverCategories(ctx) {
+  //   const response = await ctx.http.request({
+  //     url: `${SOURCE_HOST}/book-cate`,
+  //     method: 'GET',
+  //     timeoutMs: 6000,
+  //   });
+  //
+  //   const doc = ctx.html.parse(response.text);
+  //   const items = doc.querySelectorAll('.cate-item a');
+  //
+  //   return ctx.html.collect(items, (node) =>
+  //     createDiscoverCategory({
+  //       title: ctx.html.text(node.querySelector('.cate-name')) || ctx.html.text(node),
+  //       url: ctx.utils.absoluteUrl(
+  //         SOURCE_HOST,
+  //         node.getAttribute('href') || '',
+  //       ),
+  //     }),
+  //   );
+  // },
+  //
+  // async discoverBooks(ctx, category, page, pageSize) {
+  //   const response = await ctx.http.request({
+  //     url: category.url,
+  //     method: 'GET',
+  //     query: {
+  //       page: String(page),
+  //       pageSize: String(pageSize),
+  //     },
+  //     timeoutMs: 6000,
+  //   });
+  //
+  //   const doc = ctx.html.parse(response.text);
+  //   const items = doc.querySelectorAll('.book-item');
+  //
+  //   return ctx.html.collect(items, (item, index) =>
+  //     createBook({
+  //       title: ctx.html.text(item.querySelector('.book-title')),
+  //       type: 'novel',
+  //       author: ctx.html.text(item.querySelector('.book-author')),
+  //       detailUrl: ctx.utils.absoluteUrl(
+  //         SOURCE_HOST,
+  //         item.querySelector('a')?.getAttribute('href') || '',
+  //       ),
+  //       extra: {
+  //         discoverCategoryTitle: category.title,
+  //         rawDiscoverIndex: index,
+  //       },
+  //     }),
+  //   );
+  // },
 
   async search(ctx, keyword) {
     // Step 1: 请求搜索页/接口

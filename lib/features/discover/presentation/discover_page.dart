@@ -1152,7 +1152,7 @@ class _DiscoverPageState extends State<DiscoverPage>
             ),
             const SizedBox(height: 8),
             Text(
-              '请先在源脚本页导入并启用支持 `discoverCategories + discoverBooks` 的源脚本。',
+              '请先在源脚本页导入并启用声明了 `discover` 能力、且实现 `discoverCategories + discoverBooks` 的源脚本。',
               style: Theme.of(context).textTheme.bodySmall,
             ),
             if (_enabledSourceCount > 0) ...<Widget>[
@@ -1676,10 +1676,7 @@ class _DiscoverPageState extends State<DiscoverPage>
       return;
     }
 
-    final sources = List<DiscoverSource>.of(
-      _discoverSources,
-      growable: false,
-    );
+    final sources = List<DiscoverSource>.of(_discoverSources, growable: false);
     if (sources.length < 2) {
       return;
     }
@@ -1740,10 +1737,7 @@ class _DiscoverPageState extends State<DiscoverPage>
       return;
     }
 
-    final sources = List<DiscoverSource>.of(
-      _discoverSources,
-      growable: false,
-    );
+    final sources = List<DiscoverSource>.of(_discoverSources, growable: false);
     if (sources.length < 2) {
       return;
     }

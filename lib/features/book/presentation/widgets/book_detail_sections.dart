@@ -506,24 +506,35 @@ class BookDetailChapterSectionCard extends StatelessWidget {
 class BookDetailChapterTile extends StatelessWidget {
   const BookDetailChapterTile({
     super.key,
-    required this.displayIndex,
+    this.displayIndex,
     required this.title,
-    required this.onTap,
+    this.onTap,
     this.showDivider = true,
+    this.enabled = true,
+    this.isVolume = false,
   });
 
-  final int displayIndex;
+  final int? displayIndex;
   final String title;
-  final VoidCallback onTap;
+  final VoidCallback? onTap;
   final bool showDivider;
+  final bool enabled;
+  final bool isVolume;
 
   @override
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
+    final titleStyle = Theme.of(context).textTheme.bodyMedium?.copyWith(
+      color:
+          enabled
+              ? (isVolume ? colorScheme.primary : colorScheme.onSurface)
+              : colorScheme.onSurfaceVariant,
+      fontWeight: isVolume ? FontWeight.w700 : FontWeight.w400,
+    );
 
     return InkWell(
       borderRadius: BorderRadius.circular(10),
-      onTap: onTap,
+      onTap: enabled ? onTap : null,
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 10),
         decoration: BoxDecoration(
@@ -540,17 +551,43 @@ class BookDetailChapterTile extends StatelessWidget {
           children: [
             SizedBox(
               width: 28,
-              child: Text(
-                '${displayIndex + 1}',
-                textAlign: TextAlign.center,
-                style: Theme.of(context).textTheme.bodySmall,
-              ),
+              child:
+                  isVolume
+                      ? Container(
+                        alignment: Alignment.center,
+                        padding: const EdgeInsets.symmetric(vertical: 4),
+                        decoration: BoxDecoration(
+                          color: colorScheme.primaryContainer,
+                          borderRadius: BorderRadius.circular(999),
+                        ),
+                        child: Text(
+                          '卷',
+                          textAlign: TextAlign.center,
+                          style: Theme.of(
+                            context,
+                          ).textTheme.labelSmall?.copyWith(
+                            color: colorScheme.onPrimaryContainer,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                      )
+                      : Text(
+                        '${(displayIndex ?? 0) + 1}',
+                        textAlign: TextAlign.center,
+                        style: Theme.of(context).textTheme.bodySmall,
+                      ),
             ),
             const SizedBox(width: 6),
             Expanded(
-              child: Text(title, maxLines: 1, overflow: TextOverflow.ellipsis),
+              child: Text(
+                title,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: titleStyle,
+              ),
             ),
-            Icon(Icons.chevron_right, color: colorScheme.onSurfaceVariant),
+            if (!isVolume)
+              Icon(Icons.chevron_right, color: colorScheme.onSurfaceVariant),
           ],
         ),
       ),

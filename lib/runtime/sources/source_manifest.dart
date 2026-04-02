@@ -32,12 +32,44 @@ class SourceManifest {
           .toList(growable: false),
       homepage: map['homepage']?.toString(),
       enabled: map['enabled'] is bool ? map['enabled'] as bool : true,
-      capabilities:
-          (map['capabilities'] as List<dynamic>? ?? const <dynamic>[])
-              .map((dynamic value) => value.toString())
-              .toSet(),
+      capabilities: _normalizeCapabilities(
+        map['capabilities'] as List<dynamic>? ?? const <dynamic>[],
+      ),
       rateLimits: SourceRateLimit.parseMap(map['rateLimits']),
     );
+  }
+
+  SourceManifest copyWith({
+    String? name,
+    String? group,
+    String? author,
+    String? description,
+    List<String>? domains,
+    Object? homepage = _sentinel,
+    bool? enabled,
+    Set<String>? capabilities,
+    Map<String, SourceRateLimit>? rateLimits,
+  }) {
+    return SourceManifest(
+      name: name ?? this.name,
+      group: group ?? this.group,
+      author: author ?? this.author,
+      description: description ?? this.description,
+      domains: domains ?? this.domains,
+      homepage:
+          identical(homepage, _sentinel) ? this.homepage : homepage as String?,
+      enabled: enabled ?? this.enabled,
+      capabilities: capabilities ?? this.capabilities,
+      rateLimits: rateLimits ?? this.rateLimits,
+    );
+  }
+
+  bool supportsCapability(String capability) {
+    final normalized = capability.trim().toLowerCase();
+    if (normalized.isEmpty) {
+      return false;
+    }
+    return capabilities.contains(normalized);
   }
 
   SourceRateLimit? rateLimitForUri(Uri uri) {
@@ -48,6 +80,15 @@ class SourceManifest {
     return rateLimits[host];
   }
 }
+
+Set<String> _normalizeCapabilities(Iterable<dynamic> rawValues) {
+  return rawValues
+      .map((dynamic value) => value.toString().trim().toLowerCase())
+      .where((String value) => value.isNotEmpty)
+      .toSet();
+}
+
+const Object _sentinel = Object();
 
 class SourceRateLimit {
   const SourceRateLimit({required this.minInterval});

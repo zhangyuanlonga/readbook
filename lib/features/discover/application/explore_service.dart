@@ -21,11 +21,13 @@ class ExploreCategoryItem {
     required this.title,
     this.url,
     this.style = const ExploreCategoryStyle(),
+    this.extra = const <String, dynamic>{},
   });
 
   final String title;
   final String? url;
   final ExploreCategoryStyle style;
+  final Map<String, dynamic> extra;
 
   bool get isActionable {
     final value = url?.trim();
@@ -81,18 +83,15 @@ class DiscoverSourceSummary {
 
 class ExploreService {
   ExploreService({SourceRuntimeFacade? sourceRuntimeFacade})
-    : _sourceRuntimeFacade = sourceRuntimeFacade ?? SourceRuntimeFacade.instance;
+    : _sourceRuntimeFacade =
+          sourceRuntimeFacade ?? SourceRuntimeFacade.instance;
 
   final SourceRuntimeFacade? _sourceRuntimeFacade;
 
   Future<DiscoverSourceSummary> loadDiscoverSourceSummary() async {
     final sources = await _loadAvailableScriptSources();
     final discoverSources = sources
-        .where(
-          (source) =>
-              source.definition.discoverCategories != null &&
-              source.definition.discoverBooks != null,
-        )
+        .where(_supportsRuntimeDiscover)
         .map(_mapScriptSourceToDiscoverSource)
         .toList(growable: false);
 
@@ -101,6 +100,13 @@ class ExploreService {
       discoverCapableCount: discoverSources.length,
       discoverSources: discoverSources,
     );
+  }
+
+  bool _supportsRuntimeDiscover(RegisteredSource source) {
+    final manifest = source.definition.manifest;
+    return manifest.supportsCapability('discover') &&
+        source.definition.discoverCategories != null &&
+        source.definition.discoverBooks != null;
   }
 
   Future<List<DiscoverSource>> loadDiscoverSources() async {
@@ -165,16 +171,12 @@ class ExploreService {
   }
 
   int _inferRuntimeSourceType(RegisteredSource source) {
-    final capabilities =
-        source.definition.manifest.capabilities
-            .map((item) => item.trim().toLowerCase())
-            .where((item) => item.isNotEmpty)
-            .toSet();
+    final manifest = source.definition.manifest;
     final isManga =
-        capabilities.contains('manga') ||
-        capabilities.contains('comic') ||
-        capabilities.contains('manhua') ||
-        capabilities.contains('manhwa');
+        manifest.supportsCapability('manga') ||
+        manifest.supportsCapability('comic') ||
+        manifest.supportsCapability('manhua') ||
+        manifest.supportsCapability('manhwa');
     return isManga ? 2 : 0;
   }
 
@@ -200,6 +202,7 @@ class ExploreService {
               layoutFlexGrow: item.style.layoutFlexGrow,
               layoutFlexBasisPercent: item.style.layoutFlexBasisPercent,
             ),
+            extra: item.extra,
           ),
         )
         .toList(growable: false);
@@ -227,6 +230,7 @@ class ExploreService {
         layoutFlexGrow: category.style.layoutFlexGrow,
         layoutFlexBasisPercent: category.style.layoutFlexBasisPercent,
       ),
+      extra: category.extra,
     );
     final runtimeBooks = await facade.discoverBooks(
       sourceId: source.id,
@@ -251,14 +255,11 @@ class ExploreService {
     required String sourceId,
   }) {
     final normalizedDetailUrl = book.detailUrl.trim();
-    final resolvedId =
-        book.id.trim().isNotEmpty
-            ? book.id.trim()
-            : _buildRuntimeBookId(
-              sourceId: sourceId,
-              detailUrl: normalizedDetailUrl,
-              title: book.title,
-            );
+    final resolvedId = _buildRuntimeBookId(
+      sourceId: sourceId,
+      detailUrl: normalizedDetailUrl,
+      title: book.title,
+    );
     return Book(
       id: resolvedId,
       sourceId: sourceId,

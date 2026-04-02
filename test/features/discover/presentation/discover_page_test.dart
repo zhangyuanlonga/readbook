@@ -38,12 +38,7 @@ void main() {
     );
 
     await tester.pumpWidget(
-      _TestHarness(
-        width: 900,
-        child: DiscoverPage(
-          exploreService: service,
-        ),
-      ),
+      _TestHarness(width: 900, child: DiscoverPage(exploreService: service)),
     );
     await tester.pumpAndSettle();
 
@@ -51,7 +46,9 @@ void main() {
     expect(find.text('暂无支持发现的已启用源脚本'), findsOneWidget);
   });
 
-  testWidgets('loads first discover category and renders books', (tester) async {
+  testWidgets('loads first discover category and renders books', (
+    tester,
+  ) async {
     _registerDiscoverPageTearDown(tester);
     final service = ExploreService(
       sourceRuntimeFacade: _FakeRuntimeFacade(
@@ -60,13 +57,15 @@ void main() {
         ],
         categoriesBySourceId: <String, List<runtime_models.DiscoverCategory>>{
           'discover_s1': const <runtime_models.DiscoverCategory>[
-            runtime_models.DiscoverCategory(title: '推荐', url: '/discover?page={{page}}'),
+            runtime_models.DiscoverCategory(
+              title: '推荐',
+              url: '/discover?page={{page}}',
+            ),
           ],
         },
         booksBySourceId: <String, List<runtime_models.Book>>{
           'discover_s1': const <runtime_models.Book>[
             runtime_models.Book(
-              id: 'b1',
               sourceId: 'discover_s1',
               title: '发现测试书籍',
               author: '作者A',
@@ -78,12 +77,7 @@ void main() {
     );
 
     await tester.pumpWidget(
-      _TestHarness(
-        width: 900,
-        child: DiscoverPage(
-          exploreService: service,
-        ),
-      ),
+      _TestHarness(width: 900, child: DiscoverPage(exploreService: service)),
     );
     await tester.pumpAndSettle();
 
@@ -104,13 +98,15 @@ void main() {
         ],
         categoriesBySourceId: <String, List<runtime_models.DiscoverCategory>>{
           'discover_density': const <runtime_models.DiscoverCategory>[
-            runtime_models.DiscoverCategory(title: '推荐', url: '/discover?page={{page}}'),
+            runtime_models.DiscoverCategory(
+              title: '推荐',
+              url: '/discover?page={{page}}',
+            ),
           ],
         },
         booksBySourceId: <String, List<runtime_models.Book>>{
           'discover_density': const <runtime_models.Book>[
             runtime_models.Book(
-              id: 'density-book',
               sourceId: 'discover_density',
               title: '密度测试书籍',
               author: '作者A',
@@ -124,12 +120,7 @@ void main() {
 
     await tester.binding.setSurfaceSize(const Size(390, 844));
     await tester.pumpWidget(
-      _TestHarness(
-        width: 390,
-        child: DiscoverPage(
-          exploreService: service,
-        ),
-      ),
+      _TestHarness(width: 390, child: DiscoverPage(exploreService: service)),
     );
     await tester.pumpAndSettle();
 
@@ -138,12 +129,7 @@ void main() {
 
     await tester.binding.setSurfaceSize(const Size(480, 844));
     await tester.pumpWidget(
-      _TestHarness(
-        width: 480,
-        child: DiscoverPage(
-          exploreService: service,
-        ),
-      ),
+      _TestHarness(width: 480, child: DiscoverPage(exploreService: service)),
     );
     await tester.pumpAndSettle();
 
@@ -173,12 +159,7 @@ void main() {
     );
 
     await tester.pumpWidget(
-      _TestHarness(
-        width: 900,
-        child: DiscoverPage(
-          exploreService: service,
-        ),
-      ),
+      _TestHarness(width: 900, child: DiscoverPage(exploreService: service)),
     );
     await tester.pumpAndSettle();
 
@@ -198,19 +179,17 @@ void main() {
         failingCategorySourceIds: const <String>{'broken_s1'},
         categoriesBySourceId: <String, List<runtime_models.DiscoverCategory>>{
           'ok_s2': const <runtime_models.DiscoverCategory>[
-            runtime_models.DiscoverCategory(title: '推荐', url: '/discover?page={{page}}'),
+            runtime_models.DiscoverCategory(
+              title: '推荐',
+              url: '/discover?page={{page}}',
+            ),
           ],
         },
       ),
     );
 
     await tester.pumpWidget(
-      _TestHarness(
-        width: 900,
-        child: DiscoverPage(
-          exploreService: service,
-        ),
-      ),
+      _TestHarness(width: 900, child: DiscoverPage(exploreService: service)),
     );
     await tester.pumpAndSettle();
 
@@ -236,19 +215,17 @@ void main() {
         failingCategorySourceIds: const <String>{'broken_s1'},
         categoriesBySourceId: <String, List<runtime_models.DiscoverCategory>>{
           'ok_s2': const <runtime_models.DiscoverCategory>[
-            runtime_models.DiscoverCategory(title: '推荐', url: '/discover?page={{page}}'),
+            runtime_models.DiscoverCategory(
+              title: '推荐',
+              url: '/discover?page={{page}}',
+            ),
           ],
         },
       ),
     );
 
     await tester.pumpWidget(
-      _TestHarness(
-        width: 700,
-        child: DiscoverPage(
-          exploreService: service,
-        ),
-      ),
+      _TestHarness(width: 700, child: DiscoverPage(exploreService: service)),
     );
     await tester.pumpAndSettle();
 
@@ -273,10 +250,16 @@ void main() {
         ],
         categoriesBySourceId: <String, List<runtime_models.DiscoverCategory>>{
           'default_s1': const <runtime_models.DiscoverCategory>[
-            runtime_models.DiscoverCategory(title: '推荐', url: '/discover?page={{page}}'),
+            runtime_models.DiscoverCategory(
+              title: '推荐',
+              url: '/discover?page={{page}}',
+            ),
           ],
           'remember_s2': const <runtime_models.DiscoverCategory>[
-            runtime_models.DiscoverCategory(title: '推荐', url: '/discover?page={{page}}'),
+            runtime_models.DiscoverCategory(
+              title: '推荐',
+              url: '/discover?page={{page}}',
+            ),
           ],
         },
       ),
@@ -296,7 +279,9 @@ void main() {
     expect(find.text('B记忆源'), findsWidgets);
   });
 
-  testWidgets('source picker can filter novel and manga sources', (tester) async {
+  testWidgets('source picker can filter novel and manga sources', (
+    tester,
+  ) async {
     _registerDiscoverPageTearDown(tester);
     final service = ExploreService(
       sourceRuntimeFacade: _FakeRuntimeFacade(
@@ -304,32 +289,33 @@ void main() {
           _buildRegisteredSource(
             id: 'novel_source',
             name: '小说源A',
-            capabilities: const <String>{'novel'},
+            capabilities: const <String>{'novel', 'discover'},
           ),
           _buildRegisteredSource(
             id: 'manga_source',
             name: '漫画源B',
-            capabilities: const <String>{'manga'},
+            capabilities: const <String>{'manga', 'discover'},
           ),
         ],
         categoriesBySourceId: <String, List<runtime_models.DiscoverCategory>>{
           'novel_source': const <runtime_models.DiscoverCategory>[
-            runtime_models.DiscoverCategory(title: '推荐', url: '/discover?page={{page}}'),
+            runtime_models.DiscoverCategory(
+              title: '推荐',
+              url: '/discover?page={{page}}',
+            ),
           ],
           'manga_source': const <runtime_models.DiscoverCategory>[
-            runtime_models.DiscoverCategory(title: '推荐', url: '/discover?page={{page}}'),
+            runtime_models.DiscoverCategory(
+              title: '推荐',
+              url: '/discover?page={{page}}',
+            ),
           ],
         },
       ),
     );
 
     await tester.pumpWidget(
-      _TestHarness(
-        width: 900,
-        child: DiscoverPage(
-          exploreService: service,
-        ),
-      ),
+      _TestHarness(width: 900, child: DiscoverPage(exploreService: service)),
     );
     await tester.pumpAndSettle();
 
@@ -346,7 +332,9 @@ void main() {
     expect(find.text('漫画源B'), findsWidgets);
   });
 
-  testWidgets('category preview hides non-actionable group titles', (tester) async {
+  testWidgets('category preview hides non-actionable group titles', (
+    tester,
+  ) async {
     _registerDiscoverPageTearDown(tester);
     final service = ExploreService(
       sourceRuntimeFacade: _FakeRuntimeFacade(
@@ -370,12 +358,7 @@ void main() {
     );
 
     await tester.pumpWidget(
-      _TestHarness(
-        width: 320,
-        child: DiscoverPage(
-          exploreService: service,
-        ),
-      ),
+      _TestHarness(width: 320, child: DiscoverPage(exploreService: service)),
     );
     await tester.pumpAndSettle();
 
@@ -400,13 +383,15 @@ void main() {
         ],
         categoriesBySourceId: <String, List<runtime_models.DiscoverCategory>>{
           'discover_smoke': const <runtime_models.DiscoverCategory>[
-            runtime_models.DiscoverCategory(title: '推荐', url: '/discover?page={{page}}'),
+            runtime_models.DiscoverCategory(
+              title: '推荐',
+              url: '/discover?page={{page}}',
+            ),
           ],
         },
         booksBySourceId: <String, List<runtime_models.Book>>{
           'discover_smoke': const <runtime_models.Book>[
             runtime_models.Book(
-              id: 'smoke-book',
               sourceId: 'discover_smoke',
               title: '烟测书籍',
               author: '作者A',
@@ -432,9 +417,7 @@ void main() {
           width: item.size.width,
           height: item.size.height,
           dpr: item.dpr,
-          child: DiscoverPage(
-            exploreService: service,
-            ),
+          child: DiscoverPage(exploreService: service),
         ),
       );
       await tester.pumpAndSettle();
@@ -500,7 +483,7 @@ RegisteredSource _buildRegisteredSource({
   required String name,
   bool enabled = true,
   bool supportsDiscover = true,
-  Set<String> capabilities = const <String>{'novel'},
+  Set<String>? capabilities,
   Future<List<runtime_models.DiscoverCategory>> Function()? discoverCategories,
   Future<List<runtime_models.Book>> Function(
     runtime_models.DiscoverCategory category,
@@ -509,6 +492,8 @@ RegisteredSource _buildRegisteredSource({
   )?
   discoverBooks,
 }) {
+  final normalizedCapabilities =
+      capabilities ?? <String>{'novel', if (supportsDiscover) 'discover'};
   return RegisteredSource(
     runtime: SourceRuntimeInfo(
       id: id,
@@ -523,18 +508,20 @@ RegisteredSource _buildRegisteredSource({
         author: 'tester',
         description: '',
         enabled: enabled,
-        capabilities: capabilities,
+        capabilities: normalizedCapabilities,
       ),
       discoverCategories:
           !supportsDiscover
               ? null
-              : (_) async => await (discoverCategories?.call() ?? const <runtime_models.DiscoverCategory>[]),
+              : (_) async =>
+                  await (discoverCategories?.call() ??
+                      const <runtime_models.DiscoverCategory>[]),
       discoverBooks:
           !supportsDiscover
               ? null
               : (_, category, page, pageSize) =>
-                    discoverBooks?.call(category, page, pageSize) ??
-                    const <runtime_models.Book>[],
+                  discoverBooks?.call(category, page, pageSize) ??
+                  const <runtime_models.Book>[],
       search: (_, __) async => const <runtime_models.Book>[],
       detail: (_, book) async => book,
       chapters: (_, __) async => const <runtime_models.Chapter>[],

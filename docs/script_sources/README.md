@@ -28,6 +28,8 @@
 
 - [第二阶段：Browser / Cookie / Cache 设计说明](./stage-two-browser-sources.md)
   只在你需要理解浏览器能力的设计取舍时阅读，不是入门必读。
+- [脚本源调试工作台任务拆分](./debug-workbench-task-plan.md)
+  用于推进调试 UI、联调流程和运行时可观测性的具体实施文档。
 
 ## 模板
 

@@ -60,7 +60,6 @@ void main() {
           booksBySourceId: <String, List<runtime_models.Book>>{
             's1': const <runtime_models.Book>[
               runtime_models.Book(
-                id: 'book_s1',
                 title: 'A书',
                 author: '作者A',
                 detailUrl: 'https://example.com/book/a',
@@ -68,7 +67,6 @@ void main() {
             ],
             's2': const <runtime_models.Book>[
               runtime_models.Book(
-                id: 'book_s2',
                 title: 'B书',
                 author: '作者B',
                 detailUrl: 'https://example.com/book/b',
@@ -97,7 +95,6 @@ void main() {
           booksBySourceId: <String, List<runtime_models.Book>>{
             'script_source_1': const <runtime_models.Book>[
               runtime_models.Book(
-                id: 'script_book_1',
                 title: '脚本书源结果',
                 author: '脚本作者',
                 detailUrl: 'https://script.example.com/book/1',
@@ -125,7 +122,6 @@ void main() {
           booksBySourceId: <String, List<runtime_models.Book>>{
             's1': const <runtime_models.Book>[
               runtime_models.Book(
-                id: 'book_1',
                 title: '凡人修仙传',
                 author: '忘语',
                 detailUrl: 'https://example.com/book/1',
@@ -133,7 +129,6 @@ void main() {
             ],
             's2': const <runtime_models.Book>[
               runtime_models.Book(
-                id: 'book_2',
                 title: '凡人修仙传',
                 author: '忘语',
                 detailUrl: 'https://example.com/book/2',

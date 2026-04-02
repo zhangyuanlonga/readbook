@@ -31,7 +31,6 @@ void main() {
           booksBySourceId: <String, List<runtime_models.Book>>{
             's1': const <runtime_models.Book>[
               runtime_models.Book(
-                id: 'book_1',
                 title: '凡人修仙传',
                 author: '忘语',
                 detailUrl: 'https://example.com/book/1',
@@ -63,7 +62,6 @@ void main() {
           booksBySourceId: <String, List<runtime_models.Book>>{
             's1': const <runtime_models.Book>[
               runtime_models.Book(
-                id: 'book_1',
                 title: '测试书',
                 author: '',
                 detailUrl: 'https://example.com/book/1',

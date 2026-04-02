@@ -11,41 +11,75 @@ import 'package:flutter_test/flutter_test.dart';
 
 void main() {
   group('ExploreService', () {
-    test('loadDiscoverSources keeps enabled runtime discover sources only', () async {
-      final service = ExploreService(
-        sourceRuntimeFacade: _FakeRuntimeFacade(
-          sources: <RegisteredSource>[
-            _buildRegisteredSource(id: 'novel_a', name: '小说源A'),
-            _buildRegisteredSource(id: 'disabled_b', name: '禁用源B', enabled: false),
-            _buildRegisteredSource(
-              id: 'no_discover_c',
-              name: '无发现源C',
-              supportsDiscover: false,
-            ),
-          ],
-        ),
-      );
+    test(
+      'loadDiscoverSources keeps enabled runtime discover sources only',
+      () async {
+        final service = ExploreService(
+          sourceRuntimeFacade: _FakeRuntimeFacade(
+            sources: <RegisteredSource>[
+              _buildRegisteredSource(id: 'novel_a', name: '小说源A'),
+              _buildRegisteredSource(
+                id: 'disabled_b',
+                name: '禁用源B',
+                enabled: false,
+              ),
+              _buildRegisteredSource(
+                id: 'no_discover_c',
+                name: '无发现源C',
+                supportsDiscover: false,
+              ),
+            ],
+          ),
+        );
 
-      final sources = await service.loadDiscoverSources();
-      expect(sources.map((source) => source.id), <String>['novel_a']);
-    });
+        final sources = await service.loadDiscoverSources();
+        expect(sources.map((source) => source.id), <String>['novel_a']);
+      },
+    );
 
-    test('loadDiscoverSourceSummary reports enabled and discover counts', () async {
-      final service = ExploreService(
-        sourceRuntimeFacade: _FakeRuntimeFacade(
-          sources: <RegisteredSource>[
-            _buildRegisteredSource(id: 's1', name: '源1'),
-            _buildRegisteredSource(id: 's2', name: '源2', supportsDiscover: false),
-            _buildRegisteredSource(id: 's3', name: '源3', enabled: false),
-          ],
-        ),
-      );
+    test(
+      'loadDiscoverSourceSummary reports enabled and discover counts',
+      () async {
+        final service = ExploreService(
+          sourceRuntimeFacade: _FakeRuntimeFacade(
+            sources: <RegisteredSource>[
+              _buildRegisteredSource(id: 's1', name: '源1'),
+              _buildRegisteredSource(
+                id: 's2',
+                name: '源2',
+                supportsDiscover: false,
+              ),
+              _buildRegisteredSource(id: 's3', name: '源3', enabled: false),
+            ],
+          ),
+        );
 
-      final summary = await service.loadDiscoverSourceSummary();
-      expect(summary.enabledSourceCount, 2);
-      expect(summary.discoverCapableCount, 1);
-      expect(summary.discoverSources.map((item) => item.id), <String>['s1']);
-    });
+        final summary = await service.loadDiscoverSourceSummary();
+        expect(summary.enabledSourceCount, 2);
+        expect(summary.discoverCapableCount, 1);
+        expect(summary.discoverSources.map((item) => item.id), <String>['s1']);
+      },
+    );
+
+    test(
+      'loadDiscoverSources ignores sources without discover capability declaration',
+      () async {
+        final service = ExploreService(
+          sourceRuntimeFacade: _FakeRuntimeFacade(
+            sources: <RegisteredSource>[
+              _buildRegisteredSource(
+                id: 'implicit_methods',
+                name: '隐式发现源',
+                capabilities: const <String>{'novel'},
+              ),
+            ],
+          ),
+        );
+
+        final sources = await service.loadDiscoverSources();
+        expect(sources, isEmpty);
+      },
+    );
 
     test('parseCategories reads runtime categories and styles', () async {
       final runtimeSource = _buildRegisteredSource(id: 'json', name: '发现源');
@@ -62,7 +96,10 @@ void main() {
                   layoutFlexBasisPercent: 50,
                 ),
               ),
-              runtime_models.DiscoverCategory(title: '女频', url: '/rank/girl?page={{page}}'),
+              runtime_models.DiscoverCategory(
+                title: '女频',
+                url: '/rank/girl?page={{page}}',
+              ),
             ],
           },
         ),
@@ -82,7 +119,9 @@ void main() {
 
     test('parseCategories allows direct discover source input', () async {
       final service = ExploreService(
-        sourceRuntimeFacade: _FakeRuntimeFacade(sources: const <RegisteredSource>[]),
+        sourceRuntimeFacade: _FakeRuntimeFacade(
+          sources: const <RegisteredSource>[],
+        ),
       );
 
       final categories = await service.parseCategories(
@@ -103,13 +142,15 @@ void main() {
           sources: <RegisteredSource>[runtimeSource],
           categoriesBySourceId: <String, List<runtime_models.DiscoverCategory>>{
             'mapped': const <runtime_models.DiscoverCategory>[
-              runtime_models.DiscoverCategory(title: '推荐', url: '/discover?page={{page}}'),
+              runtime_models.DiscoverCategory(
+                title: '推荐',
+                url: '/discover?page={{page}}',
+              ),
             ],
           },
           booksBySourceId: <String, List<runtime_models.Book>>{
             'mapped': const <runtime_models.Book>[
               runtime_models.Book(
-                id: 'book-1',
                 title: '测试书籍',
                 author: '作者A',
                 intro: '简介',
@@ -136,7 +177,10 @@ void main() {
       expect(pageResult.requestUrl, '');
       expect(pageResult.hasMore, isFalse);
       expect(pageResult.books, hasLength(1));
-      expect(pageResult.books.first.id, 'book-1');
+      expect(
+        pageResult.books.first.id,
+        'mapped:https%3A%2F%2Fexample.com%2Fbook%2F1',
+      );
       expect(pageResult.books.first.title, '测试书籍');
       expect(pageResult.books.first.sourceId, 'mapped');
       expect(pageResult.books.first.detailUrl, 'https://example.com/book/1');
@@ -149,7 +193,7 @@ RegisteredSource _buildRegisteredSource({
   required String name,
   bool enabled = true,
   bool supportsDiscover = true,
-  Set<String> capabilities = const <String>{'novel'},
+  Set<String>? capabilities,
   Future<List<runtime_models.DiscoverCategory>> Function()? discoverCategories,
   Future<List<runtime_models.Book>> Function(
     runtime_models.DiscoverCategory category,
@@ -158,6 +202,8 @@ RegisteredSource _buildRegisteredSource({
   )?
   discoverBooks,
 }) {
+  final normalizedCapabilities =
+      capabilities ?? <String>{'novel', if (supportsDiscover) 'discover'};
   return RegisteredSource(
     runtime: SourceRuntimeInfo(
       id: id,
@@ -172,18 +218,20 @@ RegisteredSource _buildRegisteredSource({
         author: 'tester',
         description: '',
         enabled: enabled,
-        capabilities: capabilities,
+        capabilities: normalizedCapabilities,
       ),
       discoverCategories:
           !supportsDiscover
               ? null
-              : (_) async => await (discoverCategories?.call() ?? const <runtime_models.DiscoverCategory>[]),
+              : (_) async =>
+                  await (discoverCategories?.call() ??
+                      const <runtime_models.DiscoverCategory>[]),
       discoverBooks:
           !supportsDiscover
               ? null
               : (_, category, page, pageSize) =>
-                    discoverBooks?.call(category, page, pageSize) ??
-                    const <runtime_models.Book>[],
+                  discoverBooks?.call(category, page, pageSize) ??
+                  const <runtime_models.Book>[],
       search: (_, __) async => const <runtime_models.Book>[],
       detail: (_, book) async => book,
       chapters: (_, __) async => const <runtime_models.Chapter>[],
@@ -197,7 +245,8 @@ RegisteredSource _buildRegisteredSource({
 class _FakeRuntimeFacade extends SourceRuntimeFacade {
   _FakeRuntimeFacade({
     required this.sources,
-    this.categoriesBySourceId = const <String, List<runtime_models.DiscoverCategory>>{},
+    this.categoriesBySourceId =
+        const <String, List<runtime_models.DiscoverCategory>>{},
     this.booksBySourceId = const <String, List<runtime_models.Book>>{},
   }) : super(scriptSourceRepository: _FakeScriptSourceRepository());
 
@@ -216,7 +265,9 @@ class _FakeRuntimeFacade extends SourceRuntimeFacade {
   }
 
   @override
-  Future<ScriptSourceReloadReport> reloadScriptSources({bool enabledOnly = true}) async {
+  Future<ScriptSourceReloadReport> reloadScriptSources({
+    bool enabledOnly = true,
+  }) async {
     return ScriptSourceReloadReport(
       loaded: registeredScriptSources(enabledOnly: enabledOnly),
       failures: const <ScriptSourceReloadFailure>[],
@@ -227,7 +278,8 @@ class _FakeRuntimeFacade extends SourceRuntimeFacade {
   Future<List<runtime_models.DiscoverCategory>> discoverCategories({
     required String sourceId,
   }) async {
-    return categoriesBySourceId[sourceId] ?? const <runtime_models.DiscoverCategory>[];
+    return categoriesBySourceId[sourceId] ??
+        const <runtime_models.DiscoverCategory>[];
   }
 
   @override

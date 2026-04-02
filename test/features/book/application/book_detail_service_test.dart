@@ -22,22 +22,28 @@ void main() {
           ],
           detailedBooksBySourceId: <String, runtime_models.Book>{
             'source_1': const runtime_models.Book(
-              id: 'book_1',
               title: '测试书籍',
               author: '作者A',
               intro: '简介A',
               cover: 'https://example.com/cover.jpg',
               detailUrl: 'https://example.com/book/1',
-              extra: <String, dynamic>{'catalogUrl': 'https://example.com/book/1/catalog'},
+              extra: <String, dynamic>{
+                'catalogUrl': 'https://example.com/book/1/catalog',
+              },
             ),
           },
           chaptersBySourceId: <String, List<runtime_models.Chapter>>{
             'source_1': const <runtime_models.Chapter>[
               runtime_models.Chapter(
-                id: 'chapter_1',
+                title: '第一卷',
+                url: '',
+                index: 0,
+                isVolume: true,
+              ),
+              runtime_models.Chapter(
                 title: '第一章',
                 url: 'https://example.com/book/1/ch1',
-                index: 0,
+                index: 1,
               ),
             ],
           },
@@ -54,8 +60,11 @@ void main() {
       expect(result.detail.title, '测试书籍');
       expect(result.detail.author, '作者A');
       expect(result.detail.tocUrl, 'https://example.com/book/1/catalog');
-      expect(result.chapters, hasLength(1));
-      expect(result.chapters.first.title, '第一章');
+      expect(result.chapters, hasLength(2));
+      expect(result.chapters.first.title, '第一卷');
+      expect(result.chapters.first.isVolume, isTrue);
+      expect(result.chapters.last.title, '第一章');
+      expect(result.chapters.last.isVolume, isFalse);
       expect(result.sourceName, '脚本源');
       expect(result.tocFromCache, isFalse);
       expect(result.tocError, isNull);
@@ -69,7 +78,6 @@ void main() {
           ],
           detailedBooksBySourceId: <String, runtime_models.Book>{
             'source_2': const runtime_models.Book(
-              id: 'book_2',
               title: '缓存书籍',
               author: '作者B',
               detailUrl: 'https://example.com/book/2',
@@ -78,7 +86,6 @@ void main() {
           chaptersBySourceId: <String, List<runtime_models.Chapter>>{
             'source_2': const <runtime_models.Chapter>[
               runtime_models.Chapter(
-                id: 'chapter_2',
                 title: '第二章',
                 url: 'https://example.com/book/2/ch2',
                 index: 1,
@@ -105,7 +112,9 @@ void main() {
 
     test('throws unknown source when runtime source is missing', () async {
       final service = BookDetailService(
-        sourceRuntimeFacade: _FakeRuntimeFacade(sources: const <RegisteredSource>[]),
+        sourceRuntimeFacade: _FakeRuntimeFacade(
+          sources: const <RegisteredSource>[],
+        ),
       );
 
       try {
