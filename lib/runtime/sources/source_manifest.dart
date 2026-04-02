@@ -23,7 +23,7 @@ class SourceManifest {
 
   factory SourceManifest.fromMap(Map<String, dynamic> map) {
     return SourceManifest(
-      name: map['name']?.toString() ?? '未命名书源',
+      name: map['name']?.toString() ?? '未命名书享源',
       group: map['group']?.toString() ?? '未分组',
       author: map['author']?.toString() ?? 'unknown',
       description: map['description']?.toString() ?? '',

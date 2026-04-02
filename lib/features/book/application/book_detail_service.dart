@@ -191,7 +191,7 @@ class BookDetailService {
             : await facade.ensureRegisteredScriptSourceById(sourceId);
     if (facade == null || registered == null) {
       throw UnknownSourceException(
-        briefMessage: '未找到书源：$sourceId',
+        briefMessage: '未找到书享源：$sourceId',
         sourceId: sourceId,
         stage: ErrorStage.detail,
       );

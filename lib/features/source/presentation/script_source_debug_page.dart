@@ -175,7 +175,9 @@ return content;
 
     return Scaffold(
       appBar: AppBar(
-        title: Text(widget.title?.trim().isNotEmpty == true ? widget.title! : '脚本调试'),
+        title: Text(
+          widget.title?.trim().isNotEmpty == true ? widget.title! : '书享源调试',
+        ),
         actions: [
           FilledButton(
             onPressed: _isRunning ? null : _runPipeline,
@@ -214,7 +216,9 @@ return content;
                           style: const TextStyle(color: Colors.white),
                           decoration: InputDecoration(
                             labelText: '调试关键词',
-                            labelStyle: const TextStyle(color: Color(0xFF8D95A2)),
+                            labelStyle: const TextStyle(
+                              color: Color(0xFF8D95A2),
+                            ),
                             filled: true,
                             fillColor: const Color(0xFF0B0F14),
                             border: OutlineInputBorder(
@@ -305,10 +309,7 @@ class _StageResult {
 }
 
 class _StageResultCard extends StatelessWidget {
-  const _StageResultCard({
-    required this.result,
-    required this.formatValue,
-  });
+  const _StageResultCard({required this.result, required this.formatValue});
 
   final _StageResult result;
   final String Function(Object? value) formatValue;
@@ -380,9 +381,9 @@ class _StageResultCard extends StatelessWidget {
           const SizedBox(height: 10),
           Text(
             '日志 ${result.logs.length} 条 · 轨迹 ${result.debugTraces.length} 条',
-            style: Theme.of(context).textTheme.bodySmall?.copyWith(
-              color: const Color(0xFF7F8792),
-            ),
+            style: Theme.of(
+              context,
+            ).textTheme.bodySmall?.copyWith(color: const Color(0xFF7F8792)),
           ),
           if (result.logs.isNotEmpty) ...[
             const SizedBox(height: 10),

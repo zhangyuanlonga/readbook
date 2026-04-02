@@ -42,7 +42,7 @@ class SourceScriptCompiler {
 
     if (rawManifest.supportsCapability('discover') && !hasDiscoverMethods) {
       throw const SourceScriptCompileException(
-        'meta.capabilities 声明了 discover，但书源缺少 discoverCategories/discoverBooks 实现。',
+        'meta.capabilities 声明了 discover，但书享源缺少 discoverCategories/discoverBooks 实现。',
       );
     }
 
@@ -58,7 +58,7 @@ class SourceScriptCompiler {
         !inspection.hasChapters ||
         !inspection.hasContent) {
       throw const SourceScriptCompileException(
-        '书源缺少必须方法，至少需要 search/detail/chapters/content。',
+        '书享源缺少必须方法，至少需要 search/detail/chapters/content。',
       );
     }
 
@@ -149,7 +149,7 @@ class SourceScriptCompiler {
     final runtime = createJsRuntimeAdapter();
     if (!runtime.isSupported) {
       throw SourceScriptCompileException(
-        runtime.unsupportedReason ?? '当前平台不支持 JS 书源调试。',
+        runtime.unsupportedReason ?? '当前平台不支持 JS 书享源调试。',
       );
     }
 
@@ -182,7 +182,7 @@ return {
 
       final decoded = _decodeDynamic(result.output);
       if (decoded is! Map<String, dynamic>) {
-        throw const SourceScriptCompileException('无法读取书源导出的 meta。');
+        throw const SourceScriptCompileException('无法读取书享源导出的 meta。');
       }
 
       return _SourceInspection.fromMap(decoded);
@@ -261,7 +261,7 @@ class SourceScriptDebugService {
     final context = SourceRuntimeContext(
       source: const SourceRuntimeInfo(
         id: '__script_debug__',
-        name: '脚本调试',
+        name: '书享源调试',
         group: '调试',
         revision: 'debug',
       ),
@@ -269,7 +269,7 @@ class SourceScriptDebugService {
         requestEngine: _requestEngine,
         session: session,
         manifest: const SourceManifest(
-          name: '脚本调试',
+          name: '书享源调试',
           group: '调试',
           author: 'debugger',
           description: '',
@@ -384,7 +384,7 @@ class _SourceScriptRunner {
     final runtime = createJsRuntimeAdapter();
     if (!runtime.isSupported) {
       throw SourceScriptCompileException(
-        runtime.unsupportedReason ?? '当前平台不支持 JS 书源调试。',
+        runtime.unsupportedReason ?? '当前平台不支持 JS 书享源调试。',
       );
     }
 
@@ -1045,7 +1045,7 @@ String _normalizeSourceCode(String sourceCode) {
     return trimmed;
   }
   throw const SourceScriptCompileException(
-    '当前仅支持以 `export default` 或 `globalThis.__sourceDefinition = ...` 导出书源。',
+    '当前仅支持以 `export default` 或 `globalThis.__sourceDefinition = ...` 导出书享源。',
   );
 }
 

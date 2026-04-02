@@ -41,8 +41,7 @@ class SearchInputCard extends StatelessWidget {
     final theme = Theme.of(context);
     final colorScheme = theme.colorScheme;
     final isMangaMode = searchContentMode == SearchContentMode.manga;
-    final hintText =
-        isMangaMode ? '输入漫画名或作者' : '输入书名或作者';
+    final hintText = isMangaMode ? '输入漫画名或作者' : '输入书名或作者';
 
     return Card(
       child: Padding(
@@ -74,8 +73,7 @@ class SearchInputCard extends StatelessWidget {
                   isSearching
                       ? null
                       : (selection) {
-                        final mode =
-                            selection.isEmpty ? null : selection.first;
+                        final mode = selection.isEmpty ? null : selection.first;
                         if (mode != null && mode != searchContentMode) {
                           onContentModeChanged(mode);
                         }
@@ -233,8 +231,8 @@ class SearchInputCard extends StatelessWidget {
   }
 
   String _buildSourceLabel() {
-    if (isLoadingSourceCount && availableSourceCount == 0) return '源脚本...';
-    if (availableSourceCount == 0) return '无源脚本';
+    if (isLoadingSourceCount && availableSourceCount == 0) return '书享源...';
+    if (availableSourceCount == 0) return '无书享源';
     if (selectedSourceCount == 0) return '全部$availableSourceCount';
     return '$selectedSourceCount源';
   }

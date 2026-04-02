@@ -129,9 +129,39 @@ final GoRouter appRouter = GoRouter(
     GoRoute(
       path: '/source/script-editor',
       name: 'script-source-editor',
-      builder:
-          (context, state) => ScriptSourceEditorPage(
-            scriptSourceId: state.uri.queryParameters['id'],
+      pageBuilder:
+          (context, state) => CustomTransitionPage<void>(
+            key: state.pageKey,
+            transitionDuration: const Duration(milliseconds: 220),
+            reverseTransitionDuration: const Duration(milliseconds: 180),
+            child: ScriptSourceEditorPage(
+              scriptSourceId: state.uri.queryParameters['id'],
+            ),
+            transitionsBuilder: (
+              context,
+              animation,
+              secondaryAnimation,
+              child,
+            ) {
+              final curvedAnimation = CurvedAnimation(
+                parent: animation,
+                curve: Curves.easeOutCubic,
+                reverseCurve: Curves.easeInCubic,
+              );
+              return FadeTransition(
+                opacity: Tween<double>(
+                  begin: 0.82,
+                  end: 1,
+                ).animate(curvedAnimation),
+                child: SlideTransition(
+                  position: Tween<Offset>(
+                    begin: const Offset(0, 0.02),
+                    end: Offset.zero,
+                  ).animate(curvedAnimation),
+                  child: child,
+                ),
+              );
+            },
           ),
     ),
     GoRoute(

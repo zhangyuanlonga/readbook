@@ -1313,7 +1313,7 @@ class _ScriptSourceFilterSheetState extends State<_ScriptSourceFilterSheet> {
               child: Row(
                 children: [
                   Expanded(
-                    child: Text('指定源脚本', style: theme.textTheme.titleMedium),
+                    child: Text('指定书享源', style: theme.textTheme.titleMedium),
                   ),
                   Text(
                     '共 ${widget.items.length} 个',
@@ -1326,7 +1326,10 @@ class _ScriptSourceFilterSheetState extends State<_ScriptSourceFilterSheet> {
             if (widget.items.isEmpty)
               Expanded(
                 child: Center(
-                  child: Text('当前模式下没有可用源脚本', style: theme.textTheme.bodyMedium),
+                  child: Text(
+                    '当前模式下没有可用书享源',
+                    style: theme.textTheme.bodyMedium,
+                  ),
                 ),
               )
             else
@@ -1335,7 +1338,7 @@ class _ScriptSourceFilterSheetState extends State<_ScriptSourceFilterSheet> {
                   children: [
                     CheckboxListTile(
                       value: _allSelected,
-                      title: Text('全部源脚本 (${widget.items.length})'),
+                      title: Text('全部书享源 (${widget.items.length})'),
                       controlAffinity: ListTileControlAffinity.leading,
                       onChanged: (value) {
                         if (value == true) {

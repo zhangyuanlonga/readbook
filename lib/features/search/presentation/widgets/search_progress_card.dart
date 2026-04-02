@@ -22,9 +22,7 @@ class SearchProgressCard extends StatelessWidget {
     final sourceCount = report?.sourceCount ?? 1;
     final processedCount = report?.processedSourceCount ?? 0;
     final progressValue =
-        sourceCount == 0
-            ? 0.0
-            : (processedCount / sourceCount).clamp(0.0, 1.0);
+        sourceCount == 0 ? 0.0 : (processedCount / sourceCount).clamp(0.0, 1.0);
     final progressPercent = (progressValue * 100).round();
     final bookCount = report?.books.length ?? 0;
 
@@ -50,7 +48,7 @@ class SearchProgressCard extends StatelessWidget {
                   Expanded(
                     child: Text(
                       report == null
-                          ? '正在搜索书源...'
+                          ? '正在搜索书享源...'
                           : '$processedCount/$sourceCount 源 · $bookCount 本',
                       style: theme.textTheme.bodySmall?.copyWith(
                         fontWeight: FontWeight.w600,

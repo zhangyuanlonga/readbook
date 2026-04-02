@@ -86,10 +86,10 @@ function requestJsonLite(url, options = {}) {
 
 export default {
   meta: {
-    name: '临时脚本源',
+    name: '临时书享源',
     group: '调试',
     author: 'you',
-    description: '直接在调试器里粘贴的书源脚本。',
+    description: '直接在调试器里粘贴的书享源脚本。',
     domains: ['debug.local'],
     homepage: 'https://debug.local',
     enabled: true,
@@ -150,7 +150,7 @@ export default {
   async detail(ctx, book) {
     return createBook({
       ...book,
-      intro: `${book.title} 的详情来自临时脚本源。`,
+      intro: `${book.title} 的详情来自临时书享源。`,
       category: '调试分类',
       status: '连载',
       score: book.score || '9.1',
@@ -190,7 +190,7 @@ export default {
   async content(ctx, book, chapter) {
     return createContent({
       title: chapter.title,
-      content: `${book.title}\n\n${chapter.title}\n\n这里是临时脚本调试正文。`,
+      content: `${book.title}\n\n${chapter.title}\n\n这里是临时书享源调试正文。`,
     });
   },
 };
@@ -289,10 +289,10 @@ function requestJsonLite(url, options = {}) {
 
 export default {
   meta: {
-    name: '示例书源',
+    name: '示例书享源',
     group: '默认分组',
     author: 'your_name',
-    description: '一个演示 API / HTML / 浏览器混合流程的模板书源。',
+    description: '一个演示 API / HTML / 浏览器混合流程的模板书享源。',
     domains: ['www.example.com'],
     homepage: SOURCE_HOST,
     enabled: true,

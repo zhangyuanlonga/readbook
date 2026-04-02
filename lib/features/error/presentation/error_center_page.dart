@@ -90,7 +90,7 @@ class _ErrorCenterPageState extends State<ErrorCenterPage> {
                                 },
                               ),
                               const SizedBox(height: 8),
-                              const Text('日志包含时间、阶段、书源、请求地址，可用于问题排查。'),
+                              const Text('日志包含时间、阶段、书享源、请求地址，可用于问题排查。'),
                             ],
                           ),
                         ),

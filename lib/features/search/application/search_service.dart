@@ -200,13 +200,13 @@ class SearchService {
     if (enabledScriptSources.isEmpty) {
       if (sourceIdSet != null && sourceIdSet.isNotEmpty) {
         throw UnknownSourceException(
-          briefMessage: '没有可用已选书源，请调整筛选条件或启用书源。',
+          briefMessage: '没有可用已选书享源，请调整筛选条件或启用书享源。',
           stage: ErrorStage.search,
         );
       }
       final modeLabel = contentMode == SearchContentMode.manga ? '漫画' : '小说';
       throw UnknownSourceException(
-        briefMessage: '没有可用$modeLabel书源，请先在书源页导入并启用对应书源。',
+        briefMessage: '没有可用$modeLabel书享源，请先在书享源页导入并启用对应书享源。',
         stage: ErrorStage.search,
       );
     }
@@ -906,12 +906,12 @@ class SearchService {
     final detail = _sanitizeDebugMessage(error.briefMessage);
 
     return switch (error.code) {
-      ErrorCode.network => '$stageText网络请求失败，请检查书源地址或网络设置。',
-      ErrorCode.validation => '$stageText脚本源配置不完整：$detail',
-      ErrorCode.ruleParse => '$stageText脚本解析失败，请检查脚本语法。',
-      ErrorCode.ruleMatchEmpty => '$stageText未匹配到有效结果，请尝试其他书源。',
+      ErrorCode.network => '$stageText网络请求失败，请检查书享源地址或网络设置。',
+      ErrorCode.validation => '$stageText书享源配置不完整：$detail',
+      ErrorCode.ruleParse => '$stageText书享源解析失败，请检查脚本语法。',
+      ErrorCode.ruleMatchEmpty => '$stageText未匹配到有效结果，请尝试其他书享源。',
       ErrorCode.decode => '$stageText响应解析失败，可能编码或格式不兼容。',
-      ErrorCode.unknownSource => '书源不存在或已被删除。',
+      ErrorCode.unknownSource => '书享源不存在或已被删除。',
       ErrorCode.unknown =>
         detail.isEmpty ? '$stageText发生未知错误，请稍后重试。' : '$stageText$detail',
     };
@@ -934,7 +934,7 @@ class SearchService {
       ErrorStage.detail => '详情阶段：',
       ErrorStage.toc => '目录阶段：',
       ErrorStage.content => '正文阶段：',
-      ErrorStage.source => '书源阶段：',
+      ErrorStage.source => '书享源阶段：',
       ErrorStage.reader => '阅读阶段：',
       ErrorStage.unknown => '未知阶段：',
     };

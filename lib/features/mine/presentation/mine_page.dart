@@ -118,7 +118,7 @@ class _MinePageState extends ConsumerState<MinePage> {
                           ),
                           _MineActionItem(
                             icon: Icons.menu_book_rounded,
-                            label: '配置',
+                            label: '书享源',
                             onTap: () => context.push('/source'),
                           ),
                           _MineActionItem(

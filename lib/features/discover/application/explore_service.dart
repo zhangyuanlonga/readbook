@@ -189,7 +189,7 @@ class ExploreService {
         code: ErrorCode.unknownSource,
         stage: ErrorStage.source,
         sourceId: source.id,
-        briefMessage: '脚本运行时不可用。',
+        briefMessage: '书享源运行时不可用。',
       );
     }
     final categories = await facade.discoverCategories(sourceId: source.id);
@@ -220,7 +220,7 @@ class ExploreService {
         code: ErrorCode.unknownSource,
         stage: ErrorStage.search,
         sourceId: source.id,
-        briefMessage: '脚本运行时不可用。',
+        briefMessage: '书享源运行时不可用。',
       );
     }
     final runtimeCategory = runtime_models.DiscoverCategory(

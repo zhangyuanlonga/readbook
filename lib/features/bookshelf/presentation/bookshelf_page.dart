@@ -3375,11 +3375,13 @@ class _BookshelfPageState extends State<BookshelfPage>
   }
 
   int _inferScriptSourceType(RegisteredSource source) {
-    final capabilities = source.definition.manifest.capabilities
-        .map((item) => item.trim().toLowerCase())
-        .where((item) => item.isNotEmpty)
-        .toSet();
-    final isManga = capabilities.contains('manga') ||
+    final capabilities =
+        source.definition.manifest.capabilities
+            .map((item) => item.trim().toLowerCase())
+            .where((item) => item.isNotEmpty)
+            .toSet();
+    final isManga =
+        capabilities.contains('manga') ||
         capabilities.contains('comic') ||
         capabilities.contains('manhua') ||
         capabilities.contains('manhwa');
@@ -3905,7 +3907,7 @@ class _BookshelfPageState extends State<BookshelfPage>
         return;
       }
       _openReaderFallbackForSourceSwitch(book);
-      _showMessage('当前书源可能不可用，可在阅读页直接换源。');
+      _showMessage('当前书享源可能不可用，可在阅读页直接换源。');
     } catch (_) {
       if (!mounted) {
         return;

@@ -1122,7 +1122,7 @@ class _SearchConcurrencySettingPanelState
                     ),
                     const SizedBox(height: 3),
                     Text(
-                      '控制搜索和换源时同时请求的书源数量，默认 15。',
+                      '控制搜索和换源时同时请求的书享源数量，默认 15。',
                       style: textTheme.bodySmall?.copyWith(
                         color: colorScheme.onSurfaceVariant,
                         height: 1.35,
@@ -1173,7 +1173,7 @@ class _SearchConcurrencySettingPanelState
                         ),
                       ),
                       Text(
-                        '当前最大并发书源数',
+                        '当前最大并发书享源数',
                         style: textTheme.bodySmall?.copyWith(
                           color: colorScheme.onSurfaceVariant,
                         ),

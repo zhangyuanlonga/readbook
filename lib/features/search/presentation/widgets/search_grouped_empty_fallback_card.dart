@@ -19,10 +19,10 @@ class SearchGroupedEmptyFallbackCard extends StatelessWidget {
     final theme = Theme.of(context);
     final emptyTip =
         canDisablePrecise
-            ? '当前分组无结果，可尝试关闭精准匹配或切换全部书源。'
+            ? '当前分组无结果，可尝试关闭精准匹配或切换全部书享源。'
             : canSwitchAllSources
-            ? '当前筛选书源无结果，可切换全部书源后重试。'
-            : '暂无可展示结果，请检查脚本源配置或更换关键词。';
+            ? '当前筛选书享源无结果，可切换全部书享源后重试。'
+            : '暂无可展示结果，请检查书享源配置或更换关键词。';
 
     return Card(
       child: Padding(
@@ -47,7 +47,7 @@ class SearchGroupedEmptyFallbackCard extends StatelessWidget {
                     OutlinedButton.icon(
                       onPressed: onSwitchAllSources,
                       icon: const Icon(Icons.travel_explore_rounded, size: 18),
-                      label: const Text('切换全部书源'),
+                      label: const Text('切换全部书享源'),
                     ),
                 ],
               ),

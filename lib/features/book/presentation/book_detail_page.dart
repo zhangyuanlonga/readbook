@@ -512,7 +512,7 @@ class _BookDetailPageState extends State<BookDetailPage> {
     final sourceLabel = _resolveCurrentSourceDisplayName();
     final enabled = !(_isLoading || _isSwitchingSource || _isMissingParams);
     return BookDetailActionEntryCard(
-      title: '切换书源',
+      title: '切换书享源',
       subtitle: sourceLabel,
       buttonLabel: _isSwitchingSource ? '切换中' : '去换源',
       onPressed: enabled ? _handleSwitchSource : null,
@@ -597,7 +597,7 @@ class _BookDetailPageState extends State<BookDetailPage> {
     if (sourceId.isNotEmpty) {
       return sourceId;
     }
-    return '当前书源未知';
+    return '当前书享源未知';
   }
 
   String _normalizeText(String text) {
@@ -931,7 +931,7 @@ class _BookDetailPageState extends State<BookDetailPage> {
         currentSourceId.isEmpty ||
         currentDetailUrl == null ||
         currentDetailUrl.isEmpty) {
-      _showMessage('缺少当前书源信息，暂时无法换源。');
+      _showMessage('缺少当前书享源信息，暂时无法换源。');
       return;
     }
 
@@ -975,14 +975,14 @@ class _BookDetailPageState extends State<BookDetailPage> {
         currentSourceId: currentSourceId,
       );
       if (scope.sourceIds.isEmpty && !scope.allowUnscopedSearch) {
-        _showMessage('暂无可切换的同类型书源。');
+        _showMessage('暂无可切换的同类型书享源。');
         return;
       }
     } on AppException catch (error) {
-      _showMessage('查找可切换书源失败：${error.briefMessage}');
+      _showMessage('查找可切换书享源失败：${error.briefMessage}');
       return;
     } catch (_) {
-      _showMessage('查找可切换书源失败，请稍后重试。');
+      _showMessage('查找可切换书享源失败，请稍后重试。');
       return;
     }
 
@@ -1054,16 +1054,16 @@ class _BookDetailPageState extends State<BookDetailPage> {
           _showMessage('已换源，但书架同步失败，请稍后重试。');
           break;
         case _DetailSwitchSourceApplyResult.failed:
-          _showMessage('切换书源失败，已保留当前书源。');
+          _showMessage('切换书享源失败，已保留当前书享源。');
           break;
       }
     } on AppException catch (error) {
       if (mounted) {
-        _showMessage('查找可切换书源失败：${error.briefMessage}');
+        _showMessage('查找可切换书享源失败：${error.briefMessage}');
       }
     } catch (_) {
       if (mounted) {
-        _showMessage('切换书源失败，请稍后重试。');
+        _showMessage('切换书享源失败，请稍后重试。');
       }
     }
   }
@@ -1769,12 +1769,12 @@ class _BookDetailPageState extends State<BookDetailPage> {
     }
 
     return switch (error.code) {
-      ErrorCode.network => '网络请求失败，请检查网络或更换书源后重试。',
-      ErrorCode.validation => '脚本源配置不完整，暂时无法加载详情。',
-      ErrorCode.ruleParse => '脚本源脚本语法错误，无法解析详情。',
-      ErrorCode.ruleMatchEmpty => '未获取到有效内容，请更换书源或稍后重试。',
+      ErrorCode.network => '网络请求失败，请检查网络或更换书享源后重试。',
+      ErrorCode.validation => '书享源配置不完整，暂时无法加载详情。',
+      ErrorCode.ruleParse => '书享源脚本语法错误，无法解析详情。',
+      ErrorCode.ruleMatchEmpty => '未获取到有效内容，请更换书享源或稍后重试。',
       ErrorCode.decode => '响应解析失败，可能是编码或格式不兼容。',
-      ErrorCode.unknownSource => '书源不存在或已被删除。',
+      ErrorCode.unknownSource => '书享源不存在或已被删除。',
       ErrorCode.unknown => '加载失败，请稍后重试。',
     };
   }
@@ -1800,11 +1800,11 @@ class _BookDetailPageState extends State<BookDetailPage> {
 
     return switch (error.code) {
       ErrorCode.network => '目录加载失败（网络异常），已展示详情。可稍后刷新目录重试。',
-      ErrorCode.validation => '脚本源配置不完整，目录暂不可用。',
-      ErrorCode.ruleParse => '脚本源脚本语法错误，目录暂不可用。',
+      ErrorCode.validation => '书享源配置不完整，目录暂不可用。',
+      ErrorCode.ruleParse => '书享源脚本语法错误，目录暂不可用。',
       ErrorCode.ruleMatchEmpty => '未获取到目录内容，目录暂为空。',
       ErrorCode.decode => '目录解析失败，目录暂不可用。',
-      ErrorCode.unknownSource => '书源不存在，目录暂不可用。',
+      ErrorCode.unknownSource => '书享源不存在，目录暂不可用。',
       ErrorCode.unknown => '目录加载失败，目录暂不可用。',
     };
   }

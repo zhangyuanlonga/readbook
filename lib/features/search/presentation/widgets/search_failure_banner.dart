@@ -34,7 +34,7 @@ class SearchFailureBanner extends StatelessWidget {
               const SizedBox(width: 8),
               Expanded(
                 child: Text(
-                  '${report.failedSourceCount} 个书源异常',
+                  '${report.failedSourceCount} 个书享源异常',
                   style: theme.textTheme.labelMedium?.copyWith(
                     color: colorScheme.onErrorContainer,
                     fontWeight: FontWeight.w600,
@@ -81,7 +81,7 @@ class SearchFailureBanner extends StatelessWidget {
                       const SizedBox(width: 8),
                       Expanded(
                         child: Text(
-                          '书源异常明细 (${report.failures.length})',
+                          '书享源异常明细 (${report.failures.length})',
                           style: theme.textTheme.titleMedium?.copyWith(
                             fontWeight: FontWeight.w700,
                           ),
