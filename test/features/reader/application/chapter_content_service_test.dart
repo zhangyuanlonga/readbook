@@ -59,6 +59,40 @@ void main() {
       expect(second.fromCache, isTrue);
     });
 
+    test('passes detail url and title into runtime content context', () async {
+      final database = AppDatabase(executor: NativeDatabase.memory());
+      addTearDown(database.close);
+
+      final runtimeFacade = _FakeRuntimeFacade(
+        sources: <RegisteredSource>[
+          _buildRegisteredSource(id: 'source_context', name: '脚本源'),
+        ],
+        contentsBySourceId: <String, runtime_models.Content>{
+          'source_context': const runtime_models.Content(
+            title: '章节标题',
+            content: '正文内容',
+          ),
+        },
+      );
+      final service = ChapterContentService(
+        database: database,
+        sourceRuntimeFacade: runtimeFacade,
+      );
+
+      await service.load(
+        sourceId: 'source_context',
+        chapterUrl: 'https://example.com/context-ch1',
+        bookId: 'book_1',
+        bookTitle: '示例书籍',
+        detailUrl: 'https://example.com/book/1',
+        chapterIndex: 0,
+        chapterTitle: '第一章',
+      );
+
+      expect(runtimeFacade.lastBook?.title, '示例书籍');
+      expect(runtimeFacade.lastBook?.detailUrl, 'https://example.com/book/1');
+    });
+
     test(
       'loads image content from runtime and restores it from cache',
       () async {
@@ -170,6 +204,8 @@ class _FakeRuntimeFacade extends SourceRuntimeFacade {
 
   final List<RegisteredSource> sources;
   final Map<String, runtime_models.Content> contentsBySourceId;
+  runtime_models.Book? lastBook;
+  runtime_models.Chapter? lastChapter;
 
   @override
   RegisteredSource? registeredScriptSourceById(String sourceId) {
@@ -194,6 +230,8 @@ class _FakeRuntimeFacade extends SourceRuntimeFacade {
     required runtime_models.Book book,
     required runtime_models.Chapter chapter,
   }) async {
+    lastBook = book;
+    lastChapter = chapter;
     return contentsBySourceId[sourceId] ??
         const runtime_models.Content(title: '', content: '');
   }

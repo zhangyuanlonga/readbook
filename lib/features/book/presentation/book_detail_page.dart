@@ -31,6 +31,7 @@ import '../../reader/application/source_content_provider.dart';
 import '../../reader/application/source_switch_score_service.dart';
 import '../../reader/application/switch_source_shared.dart';
 import '../../reader/presentation/chapter_cache_sheets.dart';
+import '../../reader/presentation/reader_route.dart';
 import '../../search/application/search_hit_cache_service.dart';
 import '../../search/application/search_service.dart';
 import '../../source/application/source_runtime_facade.dart';
@@ -1215,17 +1216,15 @@ class _BookDetailPageState extends State<BookDetailPage> {
       _showMessage('来源信息缺失，暂时无法开始阅读。');
       return;
     }
-    final route =
-        Uri(
-          path: '/reader/$_activeBookId/${chapter.id}',
-          queryParameters: {
-            'chapterUrl': chapter.chapterUrl,
-            'chapterTitle': chapter.title,
-            'sourceId': sourceId,
-            'detailUrl': detailUrl,
-            'chapterIndex': chapter.index.toString(),
-          },
-        ).toString();
+    final route = buildReaderRoute(
+      bookId: _activeBookId,
+      chapterId: chapter.id,
+      chapterUrl: chapter.chapterUrl,
+      chapterTitle: chapter.title,
+      sourceId: sourceId,
+      detailUrl: detailUrl,
+      chapterIndex: chapter.index,
+    );
 
     context.push(route);
   }

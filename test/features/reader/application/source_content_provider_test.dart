@@ -47,6 +47,7 @@ class _FakeChapterContentService extends ChapterContentService {
   String? chapterUrl;
   String? bookId;
   String? bookTitle;
+  String? detailUrl;
   int? chapterIndex;
   String? chapterTitle;
   String? nextChapterUrl;
@@ -57,6 +58,7 @@ class _FakeChapterContentService extends ChapterContentService {
     required String chapterUrl,
     String? bookId,
     String? bookTitle,
+    String? detailUrl,
     int? chapterIndex,
     String? chapterTitle,
     String? nextChapterUrl,
@@ -65,6 +67,7 @@ class _FakeChapterContentService extends ChapterContentService {
     this.chapterUrl = chapterUrl;
     this.bookId = bookId;
     this.bookTitle = bookTitle;
+    this.detailUrl = detailUrl;
     this.chapterIndex = chapterIndex;
     this.chapterTitle = chapterTitle;
     this.nextChapterUrl = nextChapterUrl;
@@ -149,6 +152,7 @@ void main() {
       bookId: 'book_1',
       chapterUrl: 'https://example.com/book/1/c1',
       bookTitle: '示例书籍',
+      detailUrl: 'https://example.com/book/1',
       chapterIndex: 0,
       chapterTitle: '第一章',
       nextChapterUrl: 'https://example.com/book/1/c2',
@@ -158,6 +162,7 @@ void main() {
     expect(fakeContentService.sourceId, 'source_a');
     expect(fakeContentService.bookId, 'book_1');
     expect(fakeContentService.bookTitle, '示例书籍');
+    expect(fakeContentService.detailUrl, 'https://example.com/book/1');
     expect(fakeContentService.chapterUrl, 'https://example.com/book/1/c1');
     expect(fakeContentService.chapterIndex, 0);
     expect(fakeContentService.chapterTitle, '第一章');

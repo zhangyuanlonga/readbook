@@ -91,6 +91,7 @@ class ChapterContentService {
     required String chapterUrl,
     String? bookId,
     String? bookTitle,
+    String? detailUrl,
     int? chapterIndex,
     String? chapterTitle,
     String? nextChapterUrl,
@@ -147,6 +148,8 @@ class ChapterContentService {
       sourceId: normalizedSourceId,
       chapterUrl: normalizedChapterUrl,
       bookId: normalizedBookId,
+      bookTitle: bookTitle?.trim(),
+      detailUrl: detailUrl?.trim(),
       chapterIndex: chapterIndex,
       chapterTitle: chapterTitle,
       cacheKey: cacheKey,
@@ -157,6 +160,8 @@ class ChapterContentService {
     required String sourceId,
     required String chapterUrl,
     required String bookId,
+    required String? bookTitle,
+    required String? detailUrl,
     required int? chapterIndex,
     required String? chapterTitle,
     required String cacheKey,
@@ -168,16 +173,16 @@ class ChapterContentService {
             : await facade.ensureRegisteredScriptSourceById(sourceId);
     if (facade == null || registered == null) {
       throw UnknownSourceException(
-        briefMessage: '未找到书源：$sourceId',
+        briefMessage: '未找到书享源：$sourceId',
         sourceId: sourceId,
         stage: ErrorStage.content,
       );
     }
 
     final runtimeBook = runtime_models.Book(
-      title: '',
+      title: bookTitle?.isNotEmpty == true ? bookTitle! : '',
       author: '',
-      detailUrl: '',
+      detailUrl: detailUrl?.isNotEmpty == true ? detailUrl! : '',
       sourceId: sourceId,
     );
     final runtimeChapter = runtime_models.Chapter(
@@ -227,7 +232,7 @@ class ChapterContentService {
     final normalizedContent = _cleaner.clean(content.content.trim());
     if (normalizedContent.isEmpty) {
       throw RuleMatchEmptyException(
-        briefMessage: '正文解析为空，请检查脚本源配置。',
+        briefMessage: '正文解析为空，请检查书享源配置。',
         stage: ErrorStage.content,
         sourceId: sourceId,
       );

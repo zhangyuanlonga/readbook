@@ -42,13 +42,14 @@ class ReaderSourceSwitchTargetResolver {
       lagTolerance: lagTolerance,
     );
 
-    final targetChapterIndex = _chapterNavigation.resolveNearestReadableChapterIndex(
-      targetChapters,
-      positionDecision.targetIndex.clamp(0, targetChapters.length - 1),
-      preferForward: true,
-    );
+    final targetChapterIndex = _chapterNavigation
+        .resolveNearestReadableChapterIndex(
+          targetChapters,
+          positionDecision.targetIndex.clamp(0, targetChapters.length - 1),
+          preferForward: true,
+        );
     if (targetChapterIndex == null) {
-      throw StateError('目标书源暂无可读章节。');
+      throw StateError('目标书享源暂无可读章节。');
     }
 
     final logicalPosition =

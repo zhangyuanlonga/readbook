@@ -15,46 +15,46 @@ import 'package:flutter_test/flutter_test.dart';
 void main() {
   group('BookDetailService', () {
     test('loads detail and chapters from runtime facade', () async {
-      final service = BookDetailService(
-        sourceRuntimeFacade: _FakeRuntimeFacade(
-          sources: <RegisteredSource>[
-            _buildRegisteredSource(id: 'source_1', name: '脚本源'),
-          ],
-          detailedBooksBySourceId: <String, runtime_models.Book>{
-            'source_1': const runtime_models.Book(
-              title: '测试书籍',
-              author: '作者A',
-              intro: '简介A',
-              cover: 'https://example.com/cover.jpg',
-              detailUrl: 'https://example.com/book/1',
-              extra: <String, dynamic>{
-                'catalogUrl': 'https://example.com/book/1/catalog',
-              },
+      final runtimeFacade = _FakeRuntimeFacade(
+        sources: <RegisteredSource>[
+          _buildRegisteredSource(id: 'source_1', name: '脚本源'),
+        ],
+        detailedBooksBySourceId: <String, runtime_models.Book>{
+          'source_1': const runtime_models.Book(
+            title: '测试书籍',
+            author: '作者A',
+            intro: '简介A',
+            cover: 'https://example.com/cover.jpg',
+            detailUrl: 'https://example.com/book/1',
+            extra: <String, dynamic>{
+              'catalogUrl': 'https://example.com/book/1/catalog',
+            },
+          ),
+        },
+        chaptersBySourceId: <String, List<runtime_models.Chapter>>{
+          'source_1': const <runtime_models.Chapter>[
+            runtime_models.Chapter(
+              title: '第一卷',
+              url: '',
+              index: 0,
+              isVolume: true,
             ),
-          },
-          chaptersBySourceId: <String, List<runtime_models.Chapter>>{
-            'source_1': const <runtime_models.Chapter>[
-              runtime_models.Chapter(
-                title: '第一卷',
-                url: '',
-                index: 0,
-                isVolume: true,
-              ),
-              runtime_models.Chapter(
-                title: '第一章',
-                url: 'https://example.com/book/1/ch1',
-                index: 1,
-              ),
-            ],
-          },
-        ),
+            runtime_models.Chapter(
+              title: '第一章',
+              url: 'https://example.com/book/1/ch1',
+              index: 1,
+            ),
+          ],
+        },
       );
+      final service = BookDetailService(sourceRuntimeFacade: runtimeFacade);
 
       final result = await service.load(
         sourceId: 'source_1',
         bookId: 'book_1',
         detailUrl: 'https://example.com/book/1',
         fallbackTitle: '后备标题',
+        forceRefresh: true,
       );
 
       expect(result.detail.title, '测试书籍');
@@ -64,6 +64,10 @@ void main() {
       expect(result.chapters.first.title, '第一卷');
       expect(result.chapters.first.isVolume, isTrue);
       expect(result.chapters.last.title, '第一章');
+      expect(
+        result.chapters.last.id,
+        'book_1:${Uri.encodeComponent('https://example.com/book/1/ch1')}',
+      );
       expect(result.chapters.last.isVolume, isFalse);
       expect(result.sourceName, '脚本源');
       expect(result.tocFromCache, isFalse);
@@ -127,7 +131,7 @@ void main() {
       } on AppException catch (error) {
         expect(error.code, ErrorCode.unknownSource);
         expect(error.stage, ErrorStage.detail);
-        expect(error.briefMessage, contains('未找到书源'));
+        expect(error.briefMessage, contains('未找到书享源'));
       }
     });
   });
@@ -171,6 +175,7 @@ class _FakeRuntimeFacade extends SourceRuntimeFacade {
   final List<RegisteredSource> sources;
   final Map<String, runtime_models.Book> detailedBooksBySourceId;
   final Map<String, List<runtime_models.Chapter>> chaptersBySourceId;
+  runtime_models.Book? lastDetailBook;
 
   @override
   RegisteredSource? registeredScriptSourceById(String sourceId) {
@@ -194,6 +199,7 @@ class _FakeRuntimeFacade extends SourceRuntimeFacade {
     required String sourceId,
     required runtime_models.Book book,
   }) async {
+    lastDetailBook = book;
     return detailedBooksBySourceId[sourceId] ?? book;
   }
 

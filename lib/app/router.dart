@@ -19,6 +19,7 @@ import '../features/mine/presentation/system_settings_page.dart';
 import '../features/auth/presentation/auth_page.dart';
 import '../features/auth/presentation/user_profile_page.dart';
 import '../features/reader/presentation/reader_page.dart';
+import '../features/reader/presentation/reader_route.dart';
 import '../features/search/presentation/search_page.dart';
 import '../features/source/presentation/source_page.dart';
 import '../features/source/presentation/script_source_editor_page.dart';
@@ -214,10 +215,16 @@ final GoRouter appRouter = GoRouter(
         query['sourceId'] = LocalBookImportService.localBookSourceId;
         query['detailUrl'] = 'local://book/$bookId';
         query['chapterUrl'] = 'local://chapter/$chapterId';
-        return Uri(
-          path: '/reader/$bookId/$chapterId',
-          queryParameters: query,
-        ).toString();
+        return buildReaderRoute(
+          bookId: bookId,
+          chapterId: chapterId,
+          chapterUrl: query['chapterUrl'],
+          chapterTitle: query['chapterTitle'],
+          sourceId: query['sourceId'],
+          detailUrl: query['detailUrl'],
+          chapterIndex: int.tryParse(query['chapterIndex'] ?? ''),
+          bookmarkId: query['bookmarkId'],
+        );
       },
       builder: (context, state) {
         final bookId = state.pathParameters['bookId'] ?? 'unknown-local-book';

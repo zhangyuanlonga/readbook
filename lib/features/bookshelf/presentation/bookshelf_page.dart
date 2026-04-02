@@ -19,6 +19,7 @@ import '../application/bookshelf_service.dart';
 import '../application/bookshelf_system_settings_service.dart';
 import '../application/local_book_import_service.dart';
 import '../../reader/application/reader_preferences_service.dart';
+import '../../reader/presentation/reader_route.dart';
 import '../../book/application/book_detail_service.dart';
 import '../../book/presentation/book_detail_route.dart';
 import '../../announcement/application/announcement_service.dart';
@@ -3606,18 +3607,15 @@ class _BookshelfPageState extends State<BookshelfPage>
             : record.bookTitle.trim();
 
     if (chapterId.isNotEmpty && chapterUrl.isNotEmpty) {
-      final route =
-          Uri(
-            path: '/reader/${record.bookId}/$chapterId',
-            queryParameters: <String, String>{
-              'chapterUrl': chapterUrl,
-              'chapterTitle': chapterTitle,
-              'sourceId': record.sourceId,
-              'detailUrl': record.detailUrl,
-              if (record.lastChapterIndex != null)
-                'chapterIndex': record.lastChapterIndex.toString(),
-            },
-          ).toString();
+      final route = buildReaderRoute(
+        bookId: record.bookId,
+        chapterId: chapterId,
+        chapterUrl: chapterUrl,
+        chapterTitle: chapterTitle,
+        sourceId: record.sourceId,
+        detailUrl: record.detailUrl,
+        chapterIndex: record.lastChapterIndex,
+      );
       context.push(route);
       return;
     }
@@ -3889,17 +3887,15 @@ class _BookshelfPageState extends State<BookshelfPage>
       }
 
       final chapter = detailResult.chapters.first;
-      final route =
-          Uri(
-            path: '/reader/${chapter.bookId}/${chapter.id}',
-            queryParameters: {
-              'chapterUrl': chapter.chapterUrl,
-              'chapterTitle': chapter.title,
-              'sourceId': book.sourceId,
-              'detailUrl': book.detailUrl,
-              'chapterIndex': chapter.index.toString(),
-            },
-          ).toString();
+      final route = buildReaderRoute(
+        bookId: chapter.bookId,
+        chapterId: chapter.id,
+        chapterUrl: chapter.chapterUrl,
+        chapterTitle: chapter.title,
+        sourceId: book.sourceId,
+        detailUrl: book.detailUrl,
+        chapterIndex: chapter.index,
+      );
 
       context.push(route);
     } on AppException {
@@ -3924,30 +3920,26 @@ class _BookshelfPageState extends State<BookshelfPage>
   }
 
   void _openReaderFallbackForSourceSwitch(BookshelfBook book) {
-    final route =
-        Uri(
-          path: '/reader/${book.bookId}/bootstrap',
-          queryParameters: {
-            'sourceId': book.sourceId,
-            'detailUrl': book.detailUrl,
-            'chapterTitle': book.title,
-          },
-        ).toString();
+    final route = buildReaderRoute(
+      bookId: book.bookId,
+      chapterId: 'bootstrap',
+      sourceId: book.sourceId,
+      detailUrl: book.detailUrl,
+      chapterTitle: book.title,
+    );
     context.push(route);
   }
 
   void _continueReading(ReadingProgress progress) {
-    final route =
-        Uri(
-          path: '/reader/${progress.bookId}/${progress.chapterId}',
-          queryParameters: {
-            'chapterUrl': progress.chapterUrl,
-            'chapterTitle': progress.chapterTitle,
-            'sourceId': progress.sourceId,
-            'detailUrl': progress.detailUrl,
-            'chapterIndex': progress.chapterIndex.toString(),
-          },
-        ).toString();
+    final route = buildReaderRoute(
+      bookId: progress.bookId,
+      chapterId: progress.chapterId,
+      chapterUrl: progress.chapterUrl,
+      chapterTitle: progress.chapterTitle,
+      sourceId: progress.sourceId,
+      detailUrl: progress.detailUrl,
+      chapterIndex: progress.chapterIndex,
+    );
 
     context.push(route);
   }

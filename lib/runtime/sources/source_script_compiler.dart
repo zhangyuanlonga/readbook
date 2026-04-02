@@ -932,7 +932,14 @@ const __fn = globalThis.__sourceDefinition?.['$methodName'];
 if (typeof __fn !== 'function') {
   return null;
 }
-return await __fn.apply(globalThis.__sourceDefinition, [__ctx, ...__args]);
+try {
+  return await __fn.apply(globalThis.__sourceDefinition, [__ctx, ...__args]);
+} catch (error) {
+  if (error && typeof error === 'object' && 'message' in error) {
+    throw String(error.message || error);
+  }
+  throw String(error);
+}
 ''');
 
       if (result.isError) {

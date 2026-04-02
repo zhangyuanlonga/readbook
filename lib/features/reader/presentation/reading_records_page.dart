@@ -15,6 +15,7 @@ import '../../book/presentation/book_detail_route.dart';
 import '../application/reader_preferences_service.dart';
 import '../application/reading_record_service.dart';
 import '../application/reader_system_settings_service.dart';
+import 'reader_route.dart';
 
 enum _ReadingRecordsView { latest, daily, timeline }
 
@@ -131,17 +132,15 @@ class _ReadingRecordsPageState extends State<ReadingRecordsPage> {
     final chapterIndex = progress?.chapterIndex ?? record.lastChapterIndex;
 
     if (chapterId.isNotEmpty && chapterUrl.isNotEmpty) {
-      final route =
-          Uri(
-            path: '/reader/${record.bookId}/$chapterId',
-            queryParameters: <String, String>{
-              'chapterUrl': chapterUrl,
-              'chapterTitle': chapterTitle,
-              'sourceId': record.sourceId,
-              'detailUrl': record.detailUrl,
-              if (chapterIndex != null) 'chapterIndex': chapterIndex.toString(),
-            },
-          ).toString();
+      final route = buildReaderRoute(
+        bookId: record.bookId,
+        chapterId: chapterId,
+        chapterUrl: chapterUrl,
+        chapterTitle: chapterTitle,
+        sourceId: record.sourceId,
+        detailUrl: record.detailUrl,
+        chapterIndex: chapterIndex,
+      );
       context.push(route);
       return;
     }
@@ -162,21 +161,18 @@ class _ReadingRecordsPageState extends State<ReadingRecordsPage> {
     final chapterTitle = session.chapterTitle?.trim();
 
     if (chapterId.isNotEmpty && chapterUrl.isNotEmpty) {
-      final route =
-          Uri(
-            path: '/reader/${session.bookId}/$chapterId',
-            queryParameters: <String, String>{
-              'chapterUrl': chapterUrl,
-              'chapterTitle':
-                  chapterTitle?.isNotEmpty == true
-                      ? chapterTitle!
-                      : session.bookTitle,
-              'sourceId': session.sourceId,
-              'detailUrl': session.detailUrl,
-              if (session.chapterIndex != null)
-                'chapterIndex': session.chapterIndex.toString(),
-            },
-          ).toString();
+      final route = buildReaderRoute(
+        bookId: session.bookId,
+        chapterId: chapterId,
+        chapterUrl: chapterUrl,
+        chapterTitle:
+            chapterTitle?.isNotEmpty == true
+                ? chapterTitle!
+                : session.bookTitle,
+        sourceId: session.sourceId,
+        detailUrl: session.detailUrl,
+        chapterIndex: session.chapterIndex,
+      );
       context.push(route);
       return;
     }

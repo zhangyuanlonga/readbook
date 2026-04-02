@@ -45,18 +45,26 @@ import '../../book/presentation/book_detail_route.dart';
 import '../../search/application/search_hit_cache_service.dart';
 import '../../search/application/search_service.dart';
 import '../../source/application/source_runtime_facade.dart';
-import '../../../runtime/sources/source_registry.dart';
 import '../application/content_provider.dart';
 import '../application/chapter_content_service.dart';
 import '../application/local/local_reader_identity.dart';
 import '../application/local_content_provider.dart';
+import '../application/reader_auto_read_coordinator.dart';
+import '../application/reader_catalog_search_service.dart';
+import '../application/reader_chapter_cache_decoder.dart';
+import '../application/reader_chapter_load_planner.dart';
+import '../application/reader_chapter_flow.dart';
 import '../application/reader_chapter_navigation.dart';
 import '../application/reader_font_registry_service.dart';
+import '../application/reader_jump_facade.dart';
+import '../application/reader_jump_planner.dart';
 import '../application/reader_logical_position.dart';
 import '../application/reader_preferences_service.dart';
 import '../application/reader_session_state.dart';
+import '../application/reader_session_state_resolver.dart';
+import '../application/reader_source_switch_coordinator.dart';
 import '../application/reader_source_switch_target_resolver.dart';
-import '../application/reading_record_metrics.dart';
+import '../application/reader_reading_record_coordinator.dart';
 import '../application/reading_record_service.dart';
 import '../application/reader_error_center_service.dart';
 import '../application/reader_system_settings_service.dart';
@@ -68,8 +76,11 @@ import '../application/source_switch_score_service.dart';
 import '../application/switch_source_shared.dart';
 import '../application/local/local_book_storage_service.dart';
 import 'chapter_cache_sheets.dart';
+import 'reader_catalog_sheet.dart';
 
 enum _ReaderSettingsTab { interface, reading }
+
+enum _ReaderViewportKind { textPaged, textScroll, mangaPaged, mangaContinuous }
 
 class ReaderPage extends ConsumerStatefulWidget {
   const ReaderPage({
@@ -109,8 +120,23 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
       ReaderFontRegistryService();
   final ReaderTypographyResolver _typographyResolver =
       const ReaderTypographyResolver();
+  final ReaderAutoReadCoordinator _autoReadCoordinator =
+      const ReaderAutoReadCoordinator();
+  final ReaderChapterCacheDecoder _chapterCacheDecoder =
+      const ReaderChapterCacheDecoder();
+  final ReaderChapterLoadPlanner _chapterLoadPlanner =
+      const ReaderChapterLoadPlanner();
+  final ReaderChapterFlow _chapterFlow = const ReaderChapterFlow();
   final ReaderChapterNavigation _chapterNavigation =
       const ReaderChapterNavigation();
+  final ReaderJumpFacade _jumpFacade = const ReaderJumpFacade();
+  final ReaderJumpPlanner _jumpPlanner = const ReaderJumpPlanner();
+  final ReaderCatalogSearchService _catalogSearchService =
+      const ReaderCatalogSearchService();
+  final ReaderReadingRecordCoordinator _readingRecordCoordinator =
+      const ReaderReadingRecordCoordinator();
+  final ReaderSessionStateResolver _sessionStateResolver =
+      const ReaderSessionStateResolver();
   final ReaderSystemSettingsService _systemSettingsService =
       ReaderSystemSettingsService();
   final LocalBookStorageService _localBookStorageService =
@@ -124,6 +150,8 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
   final SearchHitCacheService _searchHitCacheService = SearchHitCacheService();
   final SourceSwitchScoreService _switchSourceScoreService =
       SourceSwitchScoreService();
+  final ReaderSourceSwitchCoordinator _sourceSwitchCoordinator =
+      const ReaderSourceSwitchCoordinator();
   final ReaderSourceSwitchTargetResolver _sourceSwitchTargetResolver =
       const ReaderSourceSwitchTargetResolver();
   final ScrollTextReaderRenderer _scrollTextRenderer =
@@ -216,9 +244,8 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
   bool _isAutoReadRunning = false;
   bool _isAutoReadSessionEnabled = false;
   bool _isAutoReadAdvancingChapter = false;
-  double _scrollEdgeOverscrollDistance = 0;
-  bool _scrollEdgeAdvanceArmed = false;
-  int _scrollEdgeActionDirection = 0;
+  _ScrollEdgeAdvanceState _scrollEdgeAdvanceState =
+      const _ScrollEdgeAdvanceState();
   double? _swipeDragStartDx;
   double? _swipeDragCurrentDx;
   int? _tapPointerId;
@@ -237,10 +264,8 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
   MemoryImage? _cachedBackgroundImage;
   List<List<_PagedSlice>> _pagedPages = const [];
   int _currentPageIndex = 0;
-  bool _isPaginatingPages = false;
-  String? _paginationSignature;
+  _PagedPaginationState _pagedPaginationState = const _PagedPaginationState();
   int _paginationTaskId = 0;
-  double? _pendingPageRestoreRatio;
   double? _lastPaginationMaxWidth;
   double? _lastPaginationMaxHeight;
   bool _showChapterLoadingIndicator = false;
@@ -253,7 +278,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
   late final AnimationController _overlayControlsController;
   late final AnimationController _pagedTransitionController;
   late final AnimationController _curlAutoTurnController;
-  _ActiveReadingRecordSession? _activeReadingRecordSession;
+  ReaderReadingRecordSession? _activeReadingRecordSession;
   final Map<String, Uint8List> _backgroundPresetBytes = <String, Uint8List>{};
   final Map<String, String> _backgroundPresetBase64 = <String, String>{};
   final Map<String, Uint8List> _customBackgroundPreviewBytes =
@@ -261,8 +286,8 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
   final List<_ReaderBackgroundPreset> _backgroundPresets =
       <_ReaderBackgroundPreset>[];
   String? _catalogSearchCacheFingerprint;
-  Map<String, List<_CatalogSearchEntry>> _catalogSearchEntriesCache =
-      const <String, List<_CatalogSearchEntry>>{};
+  Map<String, List<ReaderCatalogSearchEntry>> _catalogSearchEntriesCache =
+      const <String, List<ReaderCatalogSearchEntry>>{};
   final Map<String, _PrecomputedChapterLayout> _precomputedChapterLayouts =
       <String, _PrecomputedChapterLayout>{};
   final Map<String, GlobalKey> _continuousTextChapterKeys =
@@ -336,7 +361,6 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
   static const double _kScrollAdvanceOverscrollTrigger = 56;
   static const double _kScrollAdvanceEdgeTolerance = 2;
   static const double _kScrollAdvanceNearEdgeThreshold = 24;
-  static const String _kCachedImagePayloadPrefix = '__appread_image_payload__:';
   static const Set<PointerDeviceKind> _kScrollDragDevices = <PointerDeviceKind>{
     PointerDeviceKind.touch,
     PointerDeviceKind.mouse,
@@ -354,13 +378,6 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
   double get _curlPreviewProgress => _curlTransition.previewProgress;
   bool get _curlCommitOnAnimationEnd => _curlTransition.commitOnAnimationEnd;
   bool get _isPagedTransitionAnimating => _pagedTransition.isAnimating;
-  static final RegExp _kSwitchSourceChapterPattern = RegExp(
-    r'第?\s*(\d{1,5})\s*章',
-  );
-  static final RegExp _kSwitchSourceChapterEnglishPattern = RegExp(
-    r'^(chapter|chap)\s*\d{1,5}\b',
-  );
-
   bool _pageTurnIncludesTap(ReaderPageTurnMode mode) {
     return mode == ReaderPageTurnMode.tap ||
         mode == ReaderPageTurnMode.tapAndSwipe ||
@@ -377,10 +394,17 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
         mode == ReaderPageTurnMode.tapAndScroll;
   }
 
-  bool get _shouldUseContinuousTextFlow =>
-      _pageTurnUsesScroll(_settings.pageTurnMode) &&
-      !_isMangaChapter &&
-      !_isPagedTextReaderEnabled();
+  String _pageTurnModeShortLabel(ReaderPageTurnMode mode) {
+    return switch (mode) {
+      ReaderPageTurnMode.tap => '点按',
+      ReaderPageTurnMode.swipe => '滑动',
+      ReaderPageTurnMode.scroll => '滚动',
+      ReaderPageTurnMode.tapAndSwipe => '点按+滑动',
+      ReaderPageTurnMode.tapAndScroll => '点按+滚动',
+    };
+  }
+
+  bool get _shouldUseContinuousTextFlow => _isTextScrollViewport;
 
   ReaderPageTurnMode _composePageTurnMode({
     required bool tapEnabled,
@@ -505,34 +529,33 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
     }
 
     if (event.direction == ReaderVolumeKeyDirection.up) {
-      await _turnReaderBackwardByHardwareKey();
+      await _turnReaderByDirection(forward: false);
       return;
     }
-    await _turnReaderForwardByHardwareKey();
+    await _turnReaderByDirection(forward: true);
   }
 
-  Future<void> _turnReaderBackwardByHardwareKey() async {
-    if (_isMangaPagedMode) {
-      await _goToPreviousMangaPage();
-      return;
+  Future<void> _turnReaderByDirection({
+    required bool forward,
+    bool includeMangaPaged = true,
+  }) async {
+    switch (_currentViewportKind) {
+      case _ReaderViewportKind.mangaPaged:
+        if (includeMangaPaged) {
+          await _turnMangaPage(forward: forward);
+        }
+        return;
+      case _ReaderViewportKind.textPaged:
+        await _turnPagedTextPage(direction: forward ? 1 : -1);
+        return;
+      case _ReaderViewportKind.textScroll:
+        if (_pageTurnUsesScroll(_settings.pageTurnMode)) {
+          await _advanceScrollReaderByStep(forward: forward);
+        }
+        return;
+      case _ReaderViewportKind.mangaContinuous:
+        return;
     }
-    if (_isPagedTextReaderEnabled()) {
-      await _goToPreviousPage(MediaQuery.sizeOf(context).height);
-      return;
-    }
-    await _advanceScrollReaderByStep(forward: false);
-  }
-
-  Future<void> _turnReaderForwardByHardwareKey() async {
-    if (_isMangaPagedMode) {
-      await _goToNextMangaPage();
-      return;
-    }
-    if (_isPagedTextReaderEnabled()) {
-      await _goToNextPage(MediaQuery.sizeOf(context).height);
-      return;
-    }
-    await _advanceScrollReaderByStep(forward: true);
   }
 
   Future<void> _advanceScrollReaderByStep({required bool forward}) async {
@@ -568,42 +591,17 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
     await _jumpToAdjacentReadableChapter(forward: forward);
   }
 
-  Future<void> _goToPreviousMangaPage() async {
-    if (!_isMangaPagedMode) {
-      return;
-    }
-    if (_mangaPageIndex <= 0) {
-      await _jumpToAdjacentReadableChapter(forward: false);
-      return;
-    }
-    final target = _mangaPageIndex - 1;
-    if (_mangaPageController.hasClients) {
-      await _mangaPageController.animateToPage(
-        target,
-        duration: _kMangaPagedTurnDuration,
-        curve: Curves.easeInOutCubic,
-      );
-    }
-    if (!mounted) {
-      return;
-    }
-    setState(() {
-      _mangaPageIndex = target;
-    });
-    _syncActiveReadingRecordSessionProgress();
-    _scheduleProgressSave();
-  }
-
-  Future<void> _goToNextMangaPage() async {
+  Future<void> _turnMangaPage({required bool forward}) async {
     if (!_isMangaPagedMode) {
       return;
     }
     final total = _chapterImageUrls.length;
-    if (_mangaPageIndex >= total - 1) {
-      await _jumpToAdjacentReadableChapter(forward: true);
+    final target = forward ? _mangaPageIndex + 1 : _mangaPageIndex - 1;
+    final isOutOfRange = forward ? target >= total : target < 0;
+    if (isOutOfRange) {
+      await _jumpToAdjacentReadableChapter(forward: forward);
       return;
     }
-    final target = _mangaPageIndex + 1;
     if (_mangaPageController.hasClients) {
       await _mangaPageController.animateToPage(
         target,
@@ -670,37 +668,14 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
   }
 
   ReaderSessionState? _currentTextSessionState() {
-    final chapterIndex = _currentIndex;
-    final logicalPosition = _currentLogicalPosition();
-    if (chapterIndex == null || logicalPosition == null) {
-      return null;
-    }
-    final metrics = _currentTextRenderMetrics();
-    final visiblePosition =
-        _isPagedTextReaderEnabled()
-            ? ReaderVisiblePosition(
-              pageCount: metrics.pageCount,
-              pageIndex:
-                  metrics.pageCount <= 0
-                      ? 0
-                      : metrics.currentPageIndex.clamp(
-                        0,
-                        metrics.pageCount - 1,
-                      ),
-            )
-            : ReaderVisiblePosition(
-              scrollOffset: metrics.hasScrollClients ? metrics.scrollOffset : 0,
-              maxScrollExtent:
-                  metrics.hasScrollClients ? metrics.maxScrollExtent : 0,
-            );
-    return ReaderSessionState(
-      currentChapterIndex: chapterIndex,
-      currentChapterId: _chapterId.trim(),
-      currentChapterUrl: (_chapterUrl ?? '').trim(),
-      currentChapterTitle: (_chapterTitle ?? '').trim(),
-      logicalPosition: logicalPosition,
-      visiblePosition: visiblePosition,
+    return _sessionStateResolver.resolve(
+      chapterIndex: _currentIndex,
+      chapterId: _chapterId,
+      chapterUrl: _chapterUrl,
+      chapterTitle: _chapterTitle,
+      logicalPosition: _currentLogicalPosition(),
       rendererKind: _activeTextRenderer.kind,
+      metrics: _currentTextRenderMetrics(),
       isAutoReading: _isAutoReadSessionEnabled,
       isChapterTransitioning: _isLoadingContent,
     );
@@ -712,27 +687,24 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
     double? initialScrollRatio,
   }) async {
     final sessionState = _currentTextSessionState();
-    final currentChapterIndex =
-        sessionState?.currentChapterIndex ?? _currentIndex;
-    if (currentChapterIndex == null) {
+    final decision = _chapterFlow.resolveAdjacentChapter(
+      chapters: _chapters,
+      currentChapterIndex: sessionState?.currentChapterIndex ?? _currentIndex,
+      forward: forward,
+      initialScrollRatio: initialScrollRatio,
+    );
+    if (decision.type == ReaderAdjacentChapterDecisionType.noCurrent) {
       return false;
     }
-
-    final targetIndex = _findReadableChapterIndex(
-      _chapters,
-      currentChapterIndex + (forward ? 1 : -1),
-      forward: forward,
-    );
-    if (targetIndex == null) {
+    if (decision.type == ReaderAdjacentChapterDecisionType.boundary) {
       if (showBoundaryHint) {
-        _showChapterBoundaryHint(isFirst: !forward);
+        _showChapterBoundaryHint(isFirst: decision.isFirstBoundary);
       }
       return false;
     }
-
     await _jumpTo(
-      targetIndex,
-      initialScrollRatio: initialScrollRatio ?? (forward ? 0 : 1),
+      decision.targetChapterIndex!,
+      initialScrollRatio: decision.initialScrollRatio,
     );
     return true;
   }
@@ -789,14 +761,18 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
       fallback: fallbackRatio,
     );
     if (nextPagedTextEnabled) {
-      _pendingPageRestoreRatio = anchorRatio;
+      _pagedPaginationState = _PagedPaginationState(
+        isPaginating: _pagedPaginationState.isPaginating,
+        signature: _pagedPaginationState.signature,
+        pendingRestoreRatio: anchorRatio,
+      );
     }
     _restoreScrollPosition(anchorRatio);
     _scheduleProgressSave();
   }
 
   bool _isSwipePaginationEnabled() {
-    return _isPagedTextReaderEnabled() &&
+    return _currentViewportKind == _ReaderViewportKind.textPaged &&
         _pageTurnIncludesSwipe(_settings.pageTurnMode);
   }
 
@@ -808,6 +784,34 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
     }
     return _settings.mangaReadMode != ReaderMangaReadMode.continuous;
   }
+
+  _ReaderViewportKind get _currentViewportKind {
+    if (_isMangaChapter) {
+      return _isMangaPagedMode
+          ? _ReaderViewportKind.mangaPaged
+          : _ReaderViewportKind.mangaContinuous;
+    }
+    return _isPagedTextReaderEnabled()
+        ? _ReaderViewportKind.textPaged
+        : _ReaderViewportKind.textScroll;
+  }
+
+  bool get _isTextPagedViewport =>
+      _currentViewportKind == _ReaderViewportKind.textPaged;
+
+  bool get _isTextScrollViewport =>
+      _currentViewportKind == _ReaderViewportKind.textScroll;
+
+  bool get _isMangaViewport =>
+      _currentViewportKind == _ReaderViewportKind.mangaPaged ||
+      _currentViewportKind == _ReaderViewportKind.mangaContinuous;
+
+  bool get _supportsAutoRead => !_isMangaViewport;
+
+  bool get _showsPinnedChapterHeader =>
+      _currentViewportKind != _ReaderViewportKind.textPaged;
+
+  bool get _showsReaderInfoBars => _isTextScrollViewport;
 
   bool get _hasVisibleReaderContent =>
       _content.trim().isNotEmpty || _chapterImageUrls.isNotEmpty;
@@ -827,6 +831,22 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
 
   bool get _shouldShowBlockingReaderLoading {
     return _showBlockingLoadingCard && _needsBlockingLoadingUi;
+  }
+
+  void _resetScrollEdgeAdvanceState() {
+    _scrollEdgeAdvanceState = const _ScrollEdgeAdvanceState();
+  }
+
+  void _updateScrollEdgeAdvanceState({
+    double? overscrollDistance,
+    bool? isArmed,
+    int? actionDirection,
+  }) {
+    _scrollEdgeAdvanceState = _scrollEdgeAdvanceState.copyWith(
+      overscrollDistance: overscrollDistance,
+      isArmed: isArmed,
+      actionDirection: actionDirection,
+    );
   }
 
   double get _overlayControlsShiftProgress =>
@@ -1406,18 +1426,13 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
   }
 
   Widget _buildReaderContent(_ReaderThemeColors colors) {
-    final isPaged = _isPagedTextReaderEnabled();
-    // Paged mode already renders progress/time overlays and a pinned header.
-    // Keep info bars for scroll text mode to avoid paged layout conflicts.
-    final showInfoBar = !_isMangaChapter && !isPaged;
-
     return Column(
       children: [
-        if (!isPaged) _buildPinnedChapterHeader(colors),
-        if (showInfoBar && _settings.infoHeaderEnabled)
+        if (_showsPinnedChapterHeader) _buildPinnedChapterHeader(colors),
+        if (_showsReaderInfoBars && _settings.infoHeaderEnabled)
           _buildReaderInfoBar(colors, isHeader: true),
         Expanded(child: _buildBody(colors)),
-        if (showInfoBar && _settings.infoFooterEnabled)
+        if (_showsReaderInfoBars && _settings.infoFooterEnabled)
           _buildReaderInfoBar(colors, isHeader: false),
       ],
     );
@@ -1763,7 +1778,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
                             child: CircularProgressIndicator(strokeWidth: 2),
                           )
                           : const Icon(Icons.swap_horiz_rounded),
-                  label: Text(_isSwitchSourceLoading ? '换源中...' : '切换书源'),
+                  label: Text(_isSwitchSourceLoading ? '换源中...' : '切换书享源'),
                 ),
             ],
           ),
@@ -1783,12 +1798,12 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
     }
 
     return _buildTapAwareBody(
-      child:
-          _chapterImageUrls.isNotEmpty
-              ? _buildMangaReader(colors)
-              : _isPagedTextReaderEnabled()
-              ? _buildPagedReader(colors)
-              : _buildReaderList(colors),
+      child: switch (_currentViewportKind) {
+        _ReaderViewportKind.mangaPaged ||
+        _ReaderViewportKind.mangaContinuous => _buildMangaReader(colors),
+        _ReaderViewportKind.textPaged => _buildPagedReader(colors),
+        _ReaderViewportKind.textScroll => _buildReaderList(colors),
+      },
     );
   }
 
@@ -2140,9 +2155,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
             return AnimatedBuilder(
               animation: _scrollController,
               builder: (context, _) {
-                if (!_scrollController.hasClients ||
-                    _isMangaChapter ||
-                    _isPagedTextReaderEnabled()) {
+                if (!_scrollController.hasClients || !_isTextScrollViewport) {
                   return const SizedBox.shrink();
                 }
 
@@ -2460,7 +2473,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
   }
 
   int _resolveChapterOffsetFromDisplayOffset(int displayOffset) {
-    if (_isPagedTextReaderEnabled() && _pagedPages.isNotEmpty) {
+    if (_isTextPagedViewport && _pagedPages.isNotEmpty) {
       return _resolveChapterOffsetFromPagedDisplayOffset(displayOffset);
     }
 
@@ -3192,7 +3205,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
   }
 
   bool _onReaderScrollNotification(ScrollNotification notification) {
-    if (_isPagedTextReaderEnabled()) {
+    if (!_isTextScrollViewport) {
       return false;
     }
 
@@ -3202,18 +3215,12 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
       _stopAutoReadSession();
     }
 
-    if (!_pageTurnUsesScroll(_settings.pageTurnMode) ||
-        _isMangaChapter ||
-        _isBootstrapping ||
-        _isLoadingContent ||
-        _errorText != null) {
+    if (_isBootstrapping || _isLoadingContent || _errorText != null) {
       if (notification is ScrollStartNotification ||
           notification is ScrollEndNotification ||
           (notification is UserScrollNotification &&
               notification.direction == ScrollDirection.idle)) {
-        _scrollEdgeOverscrollDistance = 0;
-        _scrollEdgeAdvanceArmed = false;
-        _scrollEdgeActionDirection = 0;
+        _resetScrollEdgeAdvanceState();
       }
       return false;
     }
@@ -3224,9 +3231,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
     }
 
     if (notification is ScrollStartNotification) {
-      _scrollEdgeOverscrollDistance = 0;
-      _scrollEdgeAdvanceArmed = false;
-      _scrollEdgeActionDirection = 0;
+      _resetScrollEdgeAdvanceState();
       return false;
     }
 
@@ -3244,27 +3249,22 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
         metrics.maxScrollExtent - _kScrollAdvanceNearEdgeThreshold;
     if (notification is UserScrollNotification) {
       if (notification.direction == ScrollDirection.reverse && nearBottom) {
-        _scrollEdgeAdvanceArmed = true;
-        _scrollEdgeActionDirection = 1;
+        _updateScrollEdgeAdvanceState(isArmed: true, actionDirection: 1);
       } else if (notification.direction == ScrollDirection.forward && nearTop) {
-        _scrollEdgeAdvanceArmed = true;
-        _scrollEdgeActionDirection = -1;
+        _updateScrollEdgeAdvanceState(isArmed: true, actionDirection: -1);
       } else if (notification.direction == ScrollDirection.forward) {
-        _scrollEdgeAdvanceArmed = false;
-        _scrollEdgeActionDirection = 0;
+        _updateScrollEdgeAdvanceState(isArmed: false, actionDirection: 0);
       } else if (notification.direction == ScrollDirection.idle) {
-        _scrollEdgeAdvanceArmed = false;
-        _scrollEdgeActionDirection = 0;
+        _updateScrollEdgeAdvanceState(isArmed: false, actionDirection: 0);
       }
     }
 
     if (!atBottom && !atTop) {
-      _scrollEdgeOverscrollDistance = 0;
+      _updateScrollEdgeAdvanceState(overscrollDistance: 0);
       if (notification is ScrollEndNotification ||
           (notification is UserScrollNotification &&
               notification.direction == ScrollDirection.idle)) {
-        _scrollEdgeAdvanceArmed = false;
-        _scrollEdgeActionDirection = 0;
+        _updateScrollEdgeAdvanceState(isArmed: false, actionDirection: 0);
       }
       return false;
     }
@@ -3274,11 +3274,9 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
         notification.scrollDelta != null) {
       final delta = notification.scrollDelta!;
       if (nearBottom && delta >= 0) {
-        _scrollEdgeAdvanceArmed = true;
-        _scrollEdgeActionDirection = 1;
+        _updateScrollEdgeAdvanceState(isArmed: true, actionDirection: 1);
       } else if (nearTop && delta <= 0) {
-        _scrollEdgeAdvanceArmed = true;
-        _scrollEdgeActionDirection = -1;
+        _updateScrollEdgeAdvanceState(isArmed: true, actionDirection: -1);
       }
     }
 
@@ -3291,16 +3289,19 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
               ? -1
               : 0;
       if (direction != 0) {
-        _scrollEdgeAdvanceArmed = true;
-        _scrollEdgeActionDirection = direction;
-        _scrollEdgeOverscrollDistance += notification.overscroll.abs();
+        _updateScrollEdgeAdvanceState(
+          isArmed: true,
+          actionDirection: direction,
+          overscrollDistance:
+              _scrollEdgeAdvanceState.overscrollDistance +
+              notification.overscroll.abs(),
+        );
       }
-      if (_scrollEdgeOverscrollDistance >= _kScrollAdvanceOverscrollTrigger &&
-          _scrollEdgeActionDirection != 0) {
-        _scrollEdgeOverscrollDistance = 0;
-        _scrollEdgeAdvanceArmed = false;
-        final actionDirection = _scrollEdgeActionDirection;
-        _scrollEdgeActionDirection = 0;
+      if (_scrollEdgeAdvanceState.overscrollDistance >=
+              _kScrollAdvanceOverscrollTrigger &&
+          _scrollEdgeAdvanceState.actionDirection != 0) {
+        final actionDirection = _scrollEdgeAdvanceState.actionDirection;
+        _resetScrollEdgeAdvanceState();
         unawaited(_handleScrollEdgeChapterAction(actionDirection));
       }
       return false;
@@ -3309,8 +3310,8 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
     if (notification is ScrollEndNotification ||
         (notification is UserScrollNotification &&
             notification.direction == ScrollDirection.idle)) {
-      var shouldAdvance = _scrollEdgeAdvanceArmed;
-      var actionDirection = _scrollEdgeActionDirection;
+      var shouldAdvance = _scrollEdgeAdvanceState.isArmed;
+      var actionDirection = _scrollEdgeAdvanceState.actionDirection;
       final isDragEnd =
           notification is ScrollEndNotification &&
           notification.dragDetails != null;
@@ -3332,9 +3333,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
           actionDirection = -1;
         }
       }
-      _scrollEdgeOverscrollDistance = 0;
-      _scrollEdgeAdvanceArmed = false;
-      _scrollEdgeActionDirection = 0;
+      _resetScrollEdgeAdvanceState();
       if (shouldAdvance && actionDirection != 0) {
         unawaited(_handleScrollEdgeChapterAction(actionDirection));
       }
@@ -3348,41 +3347,20 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
       return;
     }
     if (_shouldUseContinuousTextFlow) {
-      if (direction > 0) {
-        await _appendNextContinuousTextChapter();
-      } else {
-        await _prependPreviousContinuousTextChapter();
-      }
+      await _loadAdjacentContinuousTextChapter(forward: direction > 0);
       return;
     }
-    if (direction > 0) {
-      await _advanceChapterFromScrollEdge();
-      return;
-    }
-    await _retreatChapterFromScrollEdge();
+    await _jumpChapterFromScrollEdge(forward: direction > 0);
   }
 
-  Future<void> _advanceChapterFromScrollEdge() async {
+  Future<void> _jumpChapterFromScrollEdge({required bool forward}) async {
     if (_isScrollEdgeAdvancingChapter || _isAutoReadAdvancingChapter) {
       return;
     }
 
     _isScrollEdgeAdvancingChapter = true;
     try {
-      await _jumpToAdjacentReadableChapter(forward: true);
-    } finally {
-      _isScrollEdgeAdvancingChapter = false;
-    }
-  }
-
-  Future<void> _retreatChapterFromScrollEdge() async {
-    if (_isScrollEdgeAdvancingChapter || _isAutoReadAdvancingChapter) {
-      return;
-    }
-
-    _isScrollEdgeAdvancingChapter = true;
-    try {
-      await _jumpToAdjacentReadableChapter(forward: false);
+      await _jumpToAdjacentReadableChapter(forward: forward);
     } finally {
       _isScrollEdgeAdvancingChapter = false;
     }
@@ -3748,7 +3726,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
           _ensurePagination(maxWidth: maxWidth, maxHeight: maxHeight);
         });
 
-        if (_isPaginatingPages || _pagedPages.isEmpty) {
+        if (_pagedPaginationState.isPaginating || _pagedPages.isEmpty) {
           return Column(
             children: [
               _buildPinnedChapterHeader(colors),
@@ -4673,11 +4651,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
     required double maxWidth,
     required double maxHeight,
   }) {
-    if (!mounted) {
-      return;
-    }
-
-    if (!_isPagedTextReaderEnabled()) {
+    if (!mounted || !_isTextPagedViewport) {
       return;
     }
 
@@ -4693,30 +4667,33 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
       maxHeight: normalizedHeight,
     );
 
-    if (signature == _paginationSignature &&
+    if (signature == _pagedPaginationState.signature &&
         _pagedPages.isNotEmpty &&
-        !_isPaginatingPages) {
+        !_pagedPaginationState.isPaginating) {
       return;
     }
 
-    if (signature == _paginationSignature && _isPaginatingPages) {
+    if (signature == _pagedPaginationState.signature &&
+        _pagedPaginationState.isPaginating) {
       return;
     }
 
-    _paginationSignature = signature;
     final taskId = ++_paginationTaskId;
     _resetPagedTransitionState();
     _resetCurlAnimationState();
     final preservedRatio =
-        (_pendingPageRestoreRatio ?? _currentScrollRatio())
+        (_pagedPaginationState.pendingRestoreRatio ?? _currentScrollRatio())
             .clamp(0.0, 1.0)
             .toDouble();
 
     setState(() {
-      _isPaginatingPages = true;
+      _pagedPaginationState = _PagedPaginationState(
+        isPaginating: true,
+        signature: signature,
+        pendingRestoreRatio: preservedRatio,
+      );
       _pagedPages = const [];
       _currentPageIndex = 0;
-      _pendingPageRestoreRatio = preservedRatio;
     });
 
     unawaited(
@@ -4949,7 +4926,9 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
         return;
       }
       setState(() {
-        _isPaginatingPages = false;
+        _pagedPaginationState = _PagedPaginationState(
+          signature: _pagedPaginationState.signature,
+        );
         _pagedPages = const [];
         _resetCurlAnimationState();
       });
@@ -4961,7 +4940,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
     }
 
     var targetIndex = 0;
-    final pendingRatio = _pendingPageRestoreRatio;
+    final pendingRatio = _pagedPaginationState.pendingRestoreRatio;
     if (pendingRatio != null && pages.isNotEmpty) {
       targetIndex = (pendingRatio.clamp(0.0, 1.0) * (pages.length - 1))
           .round()
@@ -4969,9 +4948,10 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
     }
 
     setState(() {
-      _isPaginatingPages = false;
+      _pagedPaginationState = _PagedPaginationState(
+        signature: _pagedPaginationState.signature,
+      );
       _pagedPages = pages;
-      _pendingPageRestoreRatio = null;
       _currentPageIndex = targetIndex;
     });
 
@@ -5122,7 +5102,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
           child: GestureDetector(
             behavior: HitTestBehavior.opaque,
             onLongPress:
-                _isMangaChapter
+                _isMangaViewport
                     ? () => unawaited(_openMangaPositionSheet())
                     : null,
             child: child,
@@ -5182,12 +5162,12 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
         velocity >= _kSwipeTurnVelocityThreshold;
 
     if (isLeftTurn && !isRightTurn) {
-      unawaited(_goToNextPage(viewportSize.height));
+      unawaited(_turnPagedTextPage(direction: 1));
       return;
     }
 
     if (isRightTurn && !isLeftTurn) {
-      unawaited(_goToPreviousPage(viewportSize.height));
+      unawaited(_turnPagedTextPage(direction: -1));
     }
   }
 
@@ -5539,7 +5519,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
       return;
     }
 
-    final readableChapters = _readableChapters(_chapters);
+    final readableChapters = _chapterNavigation.readableChapters(_chapters);
     if (readableChapters.isEmpty) {
       _showMessage('当前目录没有可缓存的正文章节。');
       return;
@@ -5572,23 +5552,21 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
   }
 
   Future<void> _showSwitchSourceSheet() async {
-    if (_isSwitchSourceLoading) {
+    final validation = _sourceSwitchCoordinator.validateManualSwitchRequest(
+      isSwitchSourceLoading: _isSwitchSourceLoading,
+      canSwitchSource: _canSwitchSource,
+      sourceId: _sourceId,
+      detailUrl: _detailUrl,
+    );
+    if (!validation.canProceed) {
+      final message = (validation.message ?? '').trim();
+      if (message.isNotEmpty) {
+        _showMessage(message);
+      }
       return;
     }
-    if (!_canSwitchSource) {
-      _showMessage('当前书籍暂不支持换源。');
-      return;
-    }
-
-    final currentSourceId = _sourceId?.trim();
-    final currentDetailUrl = _detailUrl?.trim();
-    if (currentSourceId == null ||
-        currentSourceId.isEmpty ||
-        currentDetailUrl == null ||
-        currentDetailUrl.isEmpty) {
-      _showMessage('缺少当前书源信息，暂时无法换源。');
-      return;
-    }
+    final currentSourceId = validation.currentSourceId!;
+    final currentDetailUrl = validation.currentDetailUrl!;
 
     final keyword = await _resolveSwitchSourceSearchKeyword(
       currentSourceId: currentSourceId,
@@ -5602,18 +5580,18 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
       return;
     }
 
-    _SwitchSourceScope scope;
+    ReaderSwitchSourceScopePlan scope;
     try {
       scope = await _buildSwitchSourceScope(currentSourceId: currentSourceId);
       if (scope.sourceIds.isEmpty) {
-        _showMessage('暂无可切换的同类型书源。');
+        _showMessage('暂无可切换的同类型书享源。');
         return;
       }
     } on AppException catch (error) {
-      _showMessage('查找可切换书源失败：${error.briefMessage}');
+      _showMessage('查找可切换书享源失败：${error.briefMessage}');
       return;
     } catch (_) {
-      _showMessage('查找可切换书源失败，请稍后重试。');
+      _showMessage('查找可切换书享源失败，请稍后重试。');
       return;
     }
 
@@ -5678,7 +5656,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
     await _applySwitchSourceCandidate(selected);
   }
 
-  Future<_SwitchSourceScope> _buildSwitchSourceScope({
+  Future<ReaderSwitchSourceScopePlan> _buildSwitchSourceScope({
     required String currentSourceId,
   }) async {
     var sources = SourceRuntimeFacade.instance.registeredScriptSources(
@@ -5688,48 +5666,16 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
       final report = await SourceRuntimeFacade.instance.reloadScriptSources();
       sources = report.loaded;
     }
-    RegisteredSource? currentSource;
-    for (final source in sources) {
-      if (source.runtime.id == currentSourceId) {
-        currentSource = source;
-        break;
-      }
-    }
-    final isMangaType = _isRuntimeMangaSource(currentSource) ?? _isMangaChapter;
-    final sourceIds = sources
-        .where(
-          (source) =>
-              source.runtime.id != currentSourceId &&
-              (_isRuntimeMangaSource(source) ?? false) == isMangaType,
-        )
-        .map((source) => source.runtime.id)
-        .toList(growable: false);
-
-    return _SwitchSourceScope(
-      sourceIds: sourceIds,
-      contentMode:
-          isMangaType ? SearchContentMode.manga : SearchContentMode.novel,
+    return _sourceSwitchCoordinator.buildSwitchSourceScope(
+      sources: sources,
+      currentSourceId: currentSourceId,
+      fallbackIsMangaType: _isMangaChapter,
     );
-  }
-
-  bool? _isRuntimeMangaSource(RegisteredSource? source) {
-    if (source == null) {
-      return null;
-    }
-    final capabilities =
-        source.definition.manifest.capabilities
-            .map((item) => item.trim().toLowerCase())
-            .where((item) => item.isNotEmpty)
-            .toSet();
-    return capabilities.contains('manga') ||
-        capabilities.contains('comic') ||
-        capabilities.contains('manhua') ||
-        capabilities.contains('manhwa');
   }
 
   Future<void> _loadSwitchSourceCandidatesProgressively({
     required String keyword,
-    required _SwitchSourceScope scope,
+    required ReaderSwitchSourceScopePlan scope,
     required String currentSourceId,
     required ValueNotifier<SwitchSourceLookupState> lookupStateNotifier,
     required SearchCancellationToken cancellationToken,
@@ -5744,7 +5690,10 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
       final report = await _switchSourceSearchService.search(
         keyword: keyword,
         pageSize: 16,
-        contentMode: scope.contentMode,
+        contentMode:
+            scope.isMangaType
+                ? SearchContentMode.manga
+                : SearchContentMode.novel,
         sourceIds: scope.sourceIds,
         cancellationToken: cancellationToken,
         onProgress: (progress) {
@@ -5795,7 +5744,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
         sourceCount: report.sourceCount,
         processedSourceCount: report.processedSourceCount,
         candidates: candidates,
-        errorText: candidates.isEmpty ? '没有检索到可切换书源，请稍后重试。' : null,
+        errorText: candidates.isEmpty ? '没有检索到可切换书享源，请稍后重试。' : null,
         scoreRankingEnabled: scoreRankingEnabled,
       );
     } on AppException catch (error) {
@@ -5807,7 +5756,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
         sourceCount: scope.sourceIds.length,
         processedSourceCount: 0,
         candidates: const <SwitchSourceCandidate>[],
-        errorText: '查找可切换书源失败：${error.briefMessage}',
+        errorText: '查找可切换书享源失败：${error.briefMessage}',
         scoreRankingEnabled: scoreRankingEnabled,
       );
     } catch (_) {
@@ -5819,7 +5768,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
         sourceCount: scope.sourceIds.length,
         processedSourceCount: 0,
         candidates: const <SwitchSourceCandidate>[],
-        errorText: '查找可切换书源失败，请稍后重试。',
+        errorText: '查找可切换书享源失败，请稍后重试。',
         scoreRankingEnabled: scoreRankingEnabled,
       );
     }
@@ -5884,27 +5833,19 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
     required String currentDetailUrl,
   }) async {
     final currentTitle = _bookTitle.trim();
-    if (_isSwitchSourceBookTitleUsable(currentTitle)) {
-      return currentTitle;
-    }
-
-    final fallbackTitles = <String>[
-      widget.chapterTitle ?? '',
-      _chapterTitle ?? '',
-    ];
-    for (final candidate in fallbackTitles) {
-      final normalized = candidate.trim();
-      if (!_isSwitchSourceBookTitleUsable(normalized)) {
-        continue;
-      }
-      if (mounted && normalized != _bookTitle) {
+    final keyword = _sourceSwitchCoordinator.resolveKeywordFromKnownTitles(
+      currentTitle: currentTitle,
+      fallbackTitles: <String?>[widget.chapterTitle, _chapterTitle],
+    );
+    if (keyword != null) {
+      if (mounted && keyword != _bookTitle) {
         setState(() {
-          _bookTitle = normalized;
+          _bookTitle = keyword;
         });
       } else {
-        _bookTitle = normalized;
+        _bookTitle = keyword;
       }
-      return normalized;
+      return keyword;
     }
 
     try {
@@ -5919,7 +5860,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
         fallbackTitle: currentTitle.isEmpty ? null : currentTitle,
       );
       final refreshedTitle = detailResult.detail.title.trim();
-      if (_isSwitchSourceBookTitleUsable(refreshedTitle)) {
+      if (_sourceSwitchCoordinator.isBookTitleUsable(refreshedTitle)) {
         if (mounted && refreshedTitle != _bookTitle) {
           setState(() {
             _bookTitle = refreshedTitle;
@@ -5934,26 +5875,6 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
     }
 
     return null;
-  }
-
-  bool _isSwitchSourceBookTitleUsable(String title) {
-    final trimmed = title.trim();
-    if (trimmed.isEmpty) {
-      return false;
-    }
-    return !_looksLikeSwitchSourceChapterTitle(trimmed);
-  }
-
-  bool _looksLikeSwitchSourceChapterTitle(String text) {
-    final trimmed = text.trim();
-    if (trimmed.isEmpty) {
-      return false;
-    }
-    if (_kSwitchSourceChapterPattern.hasMatch(trimmed)) {
-      return true;
-    }
-    final lower = trimmed.toLowerCase();
-    return _kSwitchSourceChapterEnglishPattern.hasMatch(lower);
   }
 
   Future<SwitchSourceCandidate?> _showSwitchSourceCandidateSheet(
@@ -6101,24 +6022,14 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
   }
 
   bool _canAutoSwitchSourceOnFailure() {
-    if (!_canSwitchSource) {
-      return false;
-    }
-    if (!_autoSwitchSourceOnFailureEnabled) {
-      return false;
-    }
-    if (_isAutoSwitchingSource || _isSwitchSourceLoading) {
-      return false;
-    }
-    final sourceId = _sourceId?.trim();
-    final detailUrl = _detailUrl?.trim();
-    if (sourceId == null ||
-        sourceId.isEmpty ||
-        detailUrl == null ||
-        detailUrl.isEmpty) {
-      return false;
-    }
-    return true;
+    return _sourceSwitchCoordinator.canAutoSwitchOnFailure(
+      canSwitchSource: _canSwitchSource,
+      autoSwitchSourceOnFailureEnabled: _autoSwitchSourceOnFailureEnabled,
+      isAutoSwitchingSource: _isAutoSwitchingSource,
+      isSwitchSourceLoading: _isSwitchSourceLoading,
+      sourceId: _sourceId,
+      detailUrl: _detailUrl,
+    );
   }
 
   Future<bool> _tryAutoSwitchSourceOnFailure() async {
@@ -6154,7 +6065,10 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
       final report = await _switchSourceSearchService.search(
         keyword: keyword,
         pageSize: 16,
-        contentMode: scope.contentMode,
+        contentMode:
+            scope.isMangaType
+                ? SearchContentMode.manga
+                : SearchContentMode.novel,
         sourceIds: scope.sourceIds,
       );
 
@@ -6173,15 +6087,13 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
         return false;
       }
 
-      final upToDateCandidates = candidates
-          .where((candidate) => !candidate.isPotentiallyOutdated)
-          .toList(growable: false);
-      final orderedCandidates =
-          upToDateCandidates.isNotEmpty ? upToDateCandidates : candidates;
+      final autoTryCandidates = _sourceSwitchCoordinator
+          .prioritizeAutoSwitchCandidates(
+            candidates,
+            tryLimit: _kAutoSwitchSourceTryLimit,
+          );
 
-      for (final candidate in orderedCandidates.take(
-        _kAutoSwitchSourceTryLimit,
-      )) {
+      for (final candidate in autoTryCandidates) {
         final switched = await _applySwitchSourceCandidate(
           candidate,
           showResultMessage: false,
@@ -6189,7 +6101,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
         );
         if (switched) {
           if (mounted) {
-            _showMessage('检测到当前书源异常，已自动切换到 ${candidate.sourceName}。');
+            _showMessage('检测到当前书享源异常，已自动切换到 ${candidate.sourceName}。');
           }
           return true;
         }
@@ -6268,9 +6180,9 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
       }
 
       final chapters = detailResult.chapters;
-      if (_readableChapters(chapters).isEmpty) {
+      if (_chapterNavigation.readableChapters(chapters).isEmpty) {
         if (showResultMessage) {
-          _showMessage('目标书源暂无可读章节，无法切换。');
+          _showMessage('目标书享源暂无可读章节，无法切换。');
         }
         return false;
       }
@@ -6299,7 +6211,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
         );
         if (!shouldContinue) {
           if (showResultMessage) {
-            _showMessage('已取消切换：目标书源章节较少。');
+            _showMessage('已取消切换：目标书享源章节较少。');
           }
           return false;
         }
@@ -6330,58 +6242,11 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
         throw StateError('切换后正文加载失败。');
       }
 
-      final previousSourceId = snapshot.sourceId?.trim() ?? '';
-      final previousDetailUrl = snapshot.detailUrl?.trim() ?? '';
-      var shouldMigrateBookshelf = false;
-      if (previousSourceId.isNotEmpty && previousDetailUrl.isNotEmpty) {
-        if (snapshot.isInBookshelf) {
-          shouldMigrateBookshelf = true;
-        } else {
-          try {
-            shouldMigrateBookshelf = await _bookshelfService.contains(
-              sourceId: previousSourceId,
-              detailUrl: previousDetailUrl,
-            );
-          } catch (_) {
-            shouldMigrateBookshelf = false;
-          }
-        }
-      }
-
-      if (shouldMigrateBookshelf) {
-        try {
-          await _bookshelfService.replace(
-            previousSourceId: previousSourceId,
-            previousDetailUrl: previousDetailUrl,
-            preserveTags: true,
-            nextBook: BookshelfBook(
-              bookId: _currentBookId,
-              sourceId: candidate.book.sourceId,
-              title:
-                  _bookTitle.trim().isEmpty ? candidate.book.title : _bookTitle,
-              detailUrl: candidate.book.detailUrl,
-              author: _bookAuthor,
-              coverUrl: _bookCoverUrl,
-              latestChapter:
-                  _latestReadableChapterTitle(_chapters) ??
-                  candidate.book.latestChapter,
-              addedAt: DateTime.now(),
-            ),
-          );
-          if (mounted) {
-            setState(() {
-              _isInBookshelf = true;
-            });
-          }
-        } catch (_) {
-          await _refreshBookshelfState();
-          if (showResultMessage) {
-            _showMessage('已换源，但书架同步失败，请稍后重试。');
-          }
-        }
-      } else {
-        await _refreshBookshelfState();
-      }
+      await _syncBookshelfAfterSourceSwitch(
+        snapshot: snapshot,
+        candidate: candidate,
+        showResultMessage: showResultMessage,
+      );
 
       if (showResultMessage) {
         _showMessage('已切换到 ${candidate.sourceName}。');
@@ -6412,6 +6277,71 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
     }
   }
 
+  Future<void> _syncBookshelfAfterSourceSwitch({
+    required _ReaderSourceSnapshot snapshot,
+    required SwitchSourceCandidate candidate,
+    required bool showResultMessage,
+  }) async {
+    final migrationPlan = _sourceSwitchCoordinator.planBookshelfMigrationCheck(
+      previousSourceId: snapshot.sourceId,
+      previousDetailUrl: snapshot.detailUrl,
+      wasInBookshelf: snapshot.isInBookshelf,
+    );
+    var containsResult = false;
+    if (migrationPlan.requiresContainsCheck) {
+      try {
+        containsResult = await _bookshelfService.contains(
+          sourceId: migrationPlan.previousSourceId,
+          detailUrl: migrationPlan.previousDetailUrl,
+        );
+      } catch (_) {
+        containsResult = false;
+      }
+    }
+    final shouldMigrateBookshelf = _sourceSwitchCoordinator
+        .resolveBookshelfMigration(
+          plan: migrationPlan,
+          containsResult: containsResult,
+        );
+
+    if (!shouldMigrateBookshelf) {
+      await _refreshBookshelfState();
+      return;
+    }
+
+    try {
+      final replacementBook = _sourceSwitchCoordinator
+          .buildReplacementBookshelfBook(
+            currentBookId: _currentBookId,
+            nextSourceId: candidate.book.sourceId,
+            nextDetailUrl: candidate.book.detailUrl,
+            nextBookTitle: _bookTitle,
+            fallbackBookTitle: candidate.book.title,
+            nextBookAuthor: _bookAuthor,
+            nextBookCoverUrl: _bookCoverUrl,
+            latestReadableChapterTitle: _latestReadableChapterTitle(_chapters),
+            fallbackLatestChapterTitle: candidate.book.latestChapter,
+            addedAt: DateTime.now(),
+          );
+      await _bookshelfService.replace(
+        previousSourceId: migrationPlan.previousSourceId,
+        previousDetailUrl: migrationPlan.previousDetailUrl,
+        preserveTags: true,
+        nextBook: replacementBook,
+      );
+      if (mounted) {
+        setState(() {
+          _isInBookshelf = true;
+        });
+      }
+    } catch (_) {
+      await _refreshBookshelfState();
+      if (showResultMessage) {
+        _showMessage('已换源，但书架同步失败，请稍后重试。');
+      }
+    }
+  }
+
   Future<bool> _confirmSwitchSourceCoverage({
     required String sourceName,
     required int currentChapterCount,
@@ -6424,15 +6354,15 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
         targetChapterCount + _kSwitchSourceLagTolerance < currentChapterCount;
     final reasonText =
         isBehindCurrentReading
-            ? '该书源目录无法覆盖你当前阅读章节。'
+            ? '该书享源目录无法覆盖你当前阅读章节。'
             : shouldWarnByTotal
-            ? '该书源目录明显少于当前书源，可能更新较慢。'
-            : '该书源章节数量存在明显差异。';
+            ? '该书享源目录明显少于当前书享源，可能更新较慢。'
+            : '该书享源章节数量存在明显差异。';
     final detailText =
         StringBuffer()
-          ..writeln('当前书源：$currentChapterCount 章')
+          ..writeln('当前书享源：$currentChapterCount 章')
           ..writeln('当前阅读：第 $currentReadingChapterNo 章')
-          ..writeln('目标书源：$targetChapterCount 章');
+          ..writeln('目标书享源：$targetChapterCount 章');
 
     final confirmed = await showDialog<bool>(
       context: context,
@@ -6483,7 +6413,11 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
         logicalPosition: snapshot.textSessionState?.logicalPosition,
         fallback: snapshot.scrollRatio,
       );
-      _pendingPageRestoreRatio = restoreRatio;
+      _pagedPaginationState = _PagedPaginationState(
+        isPaginating: _pagedPaginationState.isPaginating,
+        signature: _pagedPaginationState.signature,
+        pendingRestoreRatio: restoreRatio,
+      );
     });
 
     _restoreScrollPosition(restoreRatio);
@@ -6581,7 +6515,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
                                   ),
                                 ),
                                 const SizedBox(width: 10),
-                                if (_canCacheChapter) ...[
+                                if (_canCacheChapter)
                                   _buildTopActionButton(
                                     icon:
                                         _isCurrentChapterCached
@@ -6589,42 +6523,45 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
                                             : Icons.cloud_download_outlined,
                                     tooltip:
                                         _isCurrentChapterCached
-                                            ? '已缓存'
+                                            ? '已缓存章节'
                                             : '缓存章节',
-                                    onPressed: _openChapterCache,
+                                    onPressed:
+                                        () => unawaited(_openChapterCache()),
                                     colors: colors,
                                   ),
-                                  const SizedBox(width: 6),
-                                ],
                                 if (_canSwitchSource) ...[
+                                  const SizedBox(width: 2),
                                   _buildTopActionButton(
                                     icon: Icons.swap_horiz_rounded,
-                                    tooltip: '切换书源',
+                                    tooltip:
+                                        _isSwitchSourceLoading
+                                            ? '换源中...'
+                                            : '切换书享源',
                                     onPressed:
                                         _isSwitchSourceLoading
                                             ? null
                                             : () => unawaited(
                                               _showSwitchSourceSheet(),
                                             ),
-                                    loading: _isSwitchSourceLoading,
                                     colors: colors,
+                                    loading: _isSwitchSourceLoading,
                                   ),
-                                  const SizedBox(width: 6),
                                 ],
+                                const SizedBox(width: 2),
                                 _buildTopActionButton(
                                   icon:
                                       _isInBookshelf
                                           ? Icons.bookmark_added
                                           : Icons.bookmark_add_outlined,
-                                  tooltip: _isInBookshelf ? '移出书架' : '加入书架',
+                                  tooltip: _isInBookshelf ? '从书架移除' : '加入书架',
                                   onPressed:
                                       _isShelfActionLoading
                                           ? null
-                                          : _toggleBookshelf,
-                                  loading: _isShelfActionLoading,
+                                          : () => unawaited(_toggleBookshelf()),
                                   colors: colors,
+                                  loading: _isShelfActionLoading,
                                 ),
-                                const SizedBox(width: 6),
+                                const SizedBox(width: 2),
                                 _buildTopActionButton(
                                   icon: Icons.info_outline,
                                   tooltip: '查看详情',
@@ -7170,21 +7107,21 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
 
     return switch (error.code) {
       ErrorCode.network when message.contains('状态码：403') =>
-        '章节被源站拦截（403），请在书源配置 Referer/Origin/User-Agent 后重试。',
+        '章节被源站拦截（403），请在书享源配置 Referer/Origin/User-Agent 后重试。',
       ErrorCode.network when message.contains('状态码：404') =>
         '章节地址已失效（404），请刷新目录后重试。',
-      ErrorCode.network when message.contains('超时') => '请求超时，请稍后重试或切换书源。',
-      ErrorCode.network => '网络请求失败，请检查网络或更换书源。',
+      ErrorCode.network when message.contains('超时') => '请求超时，请稍后重试或切换书享源。',
+      ErrorCode.network => '网络请求失败，请检查网络或更换书享源。',
       ErrorCode.validation
           when message.contains('正文') && message.contains('缺少') =>
-        '脚本源缺少正文解析配置，无法读取该章节。',
-      ErrorCode.validation => '脚本源配置不完整，无法继续阅读。',
-      ErrorCode.ruleParse => '脚本源脚本语法错误，正文解析失败。',
+        '书享源缺少正文解析配置，无法读取该章节。',
+      ErrorCode.validation => '书享源配置不完整，无法继续阅读。',
+      ErrorCode.ruleParse => '书享源脚本语法错误，正文解析失败。',
       ErrorCode.ruleMatchEmpty when message.contains('解析为空') =>
         '正文解析未命中，当前章节暂无可读内容。',
-      ErrorCode.ruleMatchEmpty => '当前章节没有可读取内容，请切换章节或书源。',
+      ErrorCode.ruleMatchEmpty => '当前章节没有可读取内容，请切换章节或书享源。',
       ErrorCode.decode => '正文解析失败，可能是编码或数据格式不兼容。',
-      ErrorCode.unknownSource => '书源不存在或已被删除。',
+      ErrorCode.unknownSource => '书享源不存在或已被删除。',
       ErrorCode.unknown => '加载失败，请稍后重试。',
     };
   }
@@ -7242,13 +7179,14 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
             .toList(growable: false),
       );
       _currentPageIndex = precomputedCurrentPageIndex ?? 0;
-      _paginationSignature = precomputedPaginationSignature;
+      _pagedPaginationState = _PagedPaginationState(
+        signature: precomputedPaginationSignature,
+      );
     } else {
       _pagedPages = const [];
       _currentPageIndex = 0;
-      _paginationSignature = null;
+      _pagedPaginationState = const _PagedPaginationState();
     }
-    _isPaginatingPages = false;
     _resetCatalogSearchCache();
     _resetPagedTransitionState();
     _resetCurlAnimationState();
@@ -7323,7 +7261,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
     }
 
     final chapter = _chapters[chapterIndex];
-    if (!_isReadableChapter(chapter)) {
+    if (!_chapterNavigation.isReadableChapter(chapter)) {
       return null;
     }
     if (chapterIndex == _currentIndex &&
@@ -7365,17 +7303,21 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
     );
   }
 
-  Future<void> _appendNextContinuousTextChapter() async {
+  Future<void> _loadAdjacentContinuousTextChapter({
+    required bool forward,
+  }) async {
     if (_isScrollEdgeAdvancingChapter ||
         !_shouldUseContinuousTextFlow ||
         _continuousTextChapters.isEmpty) {
       return;
     }
 
-    final targetIndex = _findReadableChapterIndex(
+    final targetIndex = _chapterNavigation.findReadableChapterIndex(
       _chapters,
-      _continuousTextChapters.last.chapterIndex + 1,
-      forward: true,
+      forward
+          ? _continuousTextChapters.last.chapterIndex + 1
+          : _continuousTextChapters.first.chapterIndex - 1,
+      forward: forward,
     );
     if (targetIndex == null) {
       return;
@@ -7394,44 +7336,9 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
       }
       setState(() {
         _continuousTextChapters = List<_ContinuousTextChapter>.unmodifiable(
-          <_ContinuousTextChapter>[..._continuousTextChapters, chapter],
-        );
-      });
-    } finally {
-      _isScrollEdgeAdvancingChapter = false;
-    }
-  }
-
-  Future<void> _prependPreviousContinuousTextChapter() async {
-    if (_isScrollEdgeAdvancingChapter ||
-        !_shouldUseContinuousTextFlow ||
-        _continuousTextChapters.isEmpty) {
-      return;
-    }
-
-    final targetIndex = _findReadableChapterIndex(
-      _chapters,
-      _continuousTextChapters.first.chapterIndex - 1,
-      forward: false,
-    );
-    if (targetIndex == null) {
-      return;
-    }
-
-    _isScrollEdgeAdvancingChapter = true;
-    try {
-      final chapter = await _loadContinuousTextChapter(targetIndex);
-      if (!mounted || chapter == null) {
-        return;
-      }
-      if (_continuousTextChapters.any(
-        (item) => item.chapterIndex == chapter.chapterIndex,
-      )) {
-        return;
-      }
-      setState(() {
-        _continuousTextChapters = List<_ContinuousTextChapter>.unmodifiable(
-          <_ContinuousTextChapter>[chapter, ..._continuousTextChapters],
+          forward
+              ? <_ContinuousTextChapter>[..._continuousTextChapters, chapter]
+              : <_ContinuousTextChapter>[chapter, ..._continuousTextChapters],
         );
       });
     } finally {
@@ -7617,7 +7524,8 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
 
   void _resetCatalogSearchCache() {
     _catalogSearchCacheFingerprint = null;
-    _catalogSearchEntriesCache = const <String, List<_CatalogSearchEntry>>{};
+    _catalogSearchEntriesCache =
+        const <String, List<ReaderCatalogSearchEntry>>{};
   }
 
   String _chapterLayoutCacheKey({
@@ -7735,74 +7643,72 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
         return;
       }
 
-      if (_isPagedTextReaderEnabled()) {
-        final plan = _activeTextRenderer.planRestore(
-          ratio: normalized,
-          metrics: _currentTextRenderMetrics(),
-        );
-        if (plan.shouldDefer) {
-          _pendingPageRestoreRatio = plan.normalizedRatio;
-          return;
-        }
-        setState(() {
-          _currentPageIndex = plan.pageIndex ?? 0;
-        });
-        return;
-      }
-
-      if (_isMangaPagedMode) {
-        final total = _chapterImageUrls.length;
-        if (total <= 1) {
+      switch (_currentViewportKind) {
+        case _ReaderViewportKind.textPaged:
+          final plan = _activeTextRenderer.planRestore(
+            ratio: normalized,
+            metrics: _currentTextRenderMetrics(),
+          );
+          if (plan.shouldDefer) {
+            _pagedPaginationState = _PagedPaginationState(
+              isPaginating: _pagedPaginationState.isPaginating,
+              signature: _pagedPaginationState.signature,
+              pendingRestoreRatio: plan.normalizedRatio,
+            );
+            return;
+          }
           setState(() {
-            _mangaPageIndex = 0;
+            _currentPageIndex = plan.pageIndex ?? 0;
           });
           return;
-        }
+        case _ReaderViewportKind.mangaPaged:
+          final total = _chapterImageUrls.length;
+          if (total <= 1) {
+            setState(() {
+              _mangaPageIndex = 0;
+            });
+            return;
+          }
 
-        final target = (normalized * (total - 1)).round().clamp(0, total - 1);
-        if (_mangaPageController.hasClients) {
-          _mangaPageController.jumpToPage(target);
-        }
-        setState(() {
-          _mangaPageIndex = target;
-        });
-        return;
+          final target = (normalized * (total - 1)).round().clamp(0, total - 1);
+          if (_mangaPageController.hasClients) {
+            _mangaPageController.jumpToPage(target);
+          }
+          setState(() {
+            _mangaPageIndex = target;
+          });
+          return;
+        case _ReaderViewportKind.textScroll:
+        case _ReaderViewportKind.mangaContinuous:
+          if (!_scrollController.hasClients) {
+            return;
+          }
+          final plan = _activeTextRenderer.planRestore(
+            ratio: normalized,
+            metrics: _currentTextRenderMetrics(),
+          );
+          _scrollController.jumpTo(plan.scrollOffset ?? 0);
+          return;
       }
-
-      if (!_scrollController.hasClients) {
-        return;
-      }
-
-      final plan = _activeTextRenderer.planRestore(
-        ratio: normalized,
-        metrics: _currentTextRenderMetrics(),
-      );
-      _scrollController.jumpTo(plan.scrollOffset ?? 0);
     });
   }
 
   bool _canRunAutoReadNow() {
-    if (!_isAutoReadSessionEnabled ||
-        _isMangaChapter ||
-        _isPagedTextReaderEnabled() ||
-        _showOverlayControls ||
-        _isBootstrapping ||
-        _isLoadingContent ||
-        _errorText != null ||
-        _content.trim().isEmpty) {
-      return false;
-    }
-
-    if (!_scrollController.hasClients) {
-      return false;
-    }
-
-    final position = _scrollController.position;
-    if (position.maxScrollExtent <= 0) {
-      return false;
-    }
-
-    return position.pixels < position.maxScrollExtent - 0.8;
+    final hasScrollClients = _scrollController.hasClients;
+    final position = hasScrollClients ? _scrollController.position : null;
+    return _autoReadCoordinator.canRunNow(
+      isAutoReadSessionEnabled: _isAutoReadSessionEnabled,
+      isMangaChapter: _isMangaChapter,
+      isPagedTextReaderEnabled: _isPagedTextReaderEnabled(),
+      showOverlayControls: _showOverlayControls,
+      isBootstrapping: _isBootstrapping,
+      isLoadingContent: _isLoadingContent,
+      hasError: _errorText != null,
+      hasTextContent: _content.trim().isNotEmpty,
+      hasScrollClients: hasScrollClients,
+      maxScrollExtent: position?.maxScrollExtent ?? 0,
+      scrollOffset: position?.pixels ?? 0,
+    );
   }
 
   double _autoReadProgressRatio() {
@@ -7814,79 +7720,6 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
       return 1;
     }
     return (_scrollController.position.pixels / maxExtent).clamp(0.0, 1.0);
-  }
-
-  List<_BookmarkGroup> _groupBookmarksForSheet(List<Bookmark> bookmarks) {
-    if (bookmarks.isEmpty) {
-      return const <_BookmarkGroup>[];
-    }
-
-    final sorted = [...bookmarks]..sort((a, b) {
-      final indexCompare = a.chapterIndex.compareTo(b.chapterIndex);
-      if (indexCompare != 0) {
-        return indexCompare;
-      }
-      final offsetCompare = a.startOffset.compareTo(b.startOffset);
-      if (offsetCompare != 0) {
-        return offsetCompare;
-      }
-      return b.createdAt.compareTo(a.createdAt);
-    });
-
-    final groups = <_BookmarkGroup>[];
-    for (final bookmark in sorted) {
-      final title = _resolveBookmarkChapterTitle(bookmark);
-      final existing =
-          groups.isNotEmpty && groups.last.chapterIndex == bookmark.chapterIndex
-              ? groups.last
-              : null;
-      if (existing != null) {
-        existing.bookmarks.add(bookmark);
-      } else {
-        groups.add(
-          _BookmarkGroup(
-            chapterIndex: bookmark.chapterIndex,
-            title: title,
-            bookmarks: [bookmark],
-          ),
-        );
-      }
-    }
-    return groups;
-  }
-
-  String _resolveBookmarkChapterTitle(Bookmark bookmark) {
-    final chapterId = bookmark.chapterId.trim();
-    if (chapterId.isNotEmpty) {
-      Chapter? matched;
-      for (final chapter in _chapters) {
-        if (chapter.id == chapterId) {
-          matched = chapter;
-          break;
-        }
-      }
-      if (matched != null && matched.title.trim().isNotEmpty) {
-        return matched.title.trim();
-      }
-    }
-
-    final index = bookmark.chapterIndex;
-    if (index >= 0 && index < _chapters.length) {
-      final title = _chapters[index].title.trim();
-      if (title.isNotEmpty) {
-        return title;
-      }
-    }
-    return '第 ${bookmark.chapterIndex + 1} 章';
-  }
-
-  String _formatBookmarkTime(DateTime time) {
-    final year = time.year.toString().padLeft(4, '0');
-    final month = time.month.toString().padLeft(2, '0');
-    final day = time.day.toString().padLeft(2, '0');
-    final hour = time.hour.toString().padLeft(2, '0');
-    final minute = time.minute.toString().padLeft(2, '0');
-    return '$year-$month-$day $hour:$minute';
   }
 
   Future<void> _refreshChapterBookmarks() async {
@@ -8039,7 +7872,10 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
   }
 
   Future<void> _jumpToBookmark(Bookmark bookmark) async {
-    final targetIndex = _resolveBookmarkChapterIndex(bookmark);
+    final targetIndex = _jumpFacade.resolveBookmarkChapterIndex(
+      bookmark: bookmark,
+      chapters: _chapters,
+    );
     if (targetIndex == null ||
         targetIndex < 0 ||
         targetIndex >= _chapters.length) {
@@ -8056,87 +7892,29 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
       return;
     }
 
-    final logicalPosition = _resolveBookmarkLogicalPosition(bookmark);
-    if (logicalPosition != null) {
+    final restorePlan = _jumpFacade.resolveBookmarkRestorePlan(
+      bookmark: bookmark,
+      document: _document,
+      currentChapterIndex: _currentIndex,
+      isPagedTextReaderEnabled: _isPagedTextReaderEnabled(),
+      currentPageIndex: _currentPageIndex,
+      chapterContent: _content,
+    );
+    if (restorePlan.logicalPosition != null) {
       final ratio = _resolveDocumentRestoreRatio(
-        logicalPosition: logicalPosition,
+        logicalPosition: restorePlan.logicalPosition,
       );
       _restoreScrollPosition(ratio);
       return;
     }
 
-    final fallbackRatio =
-        _resolveBookmarkScrollRatio(bookmark) ??
-        _findSnippetScrollRatio(bookmark.snippet);
+    final fallbackRatio = restorePlan.fallbackRatio;
     if (fallbackRatio != null) {
       _restoreScrollPosition(fallbackRatio);
       return;
     }
 
     _showMessage('未找到书签位置，已定位到章节开头。');
-  }
-
-  int? _resolveBookmarkChapterIndex(Bookmark bookmark) {
-    final chapterId = bookmark.chapterId.trim();
-    if (chapterId.isNotEmpty) {
-      for (final chapter in _chapters) {
-        if (chapter.id == chapterId) {
-          return chapter.index;
-        }
-      }
-    }
-
-    final index = bookmark.chapterIndex;
-    if (index >= 0 && index < _chapters.length) {
-      return index;
-    }
-    return null;
-  }
-
-  double? _resolveBookmarkScrollRatio(Bookmark bookmark) {
-    final length = _content.length;
-    if (length <= 0) {
-      return null;
-    }
-    final offset = bookmark.startOffset;
-    if (offset < 0 || offset > length) {
-      return null;
-    }
-    return (offset / length).clamp(0.0, 1.0);
-  }
-
-  double? _findSnippetScrollRatio(String snippet) {
-    final text = _content;
-    final normalized = snippet.trim();
-    if (text.isEmpty || normalized.isEmpty) {
-      return null;
-    }
-    final index = text.indexOf(normalized);
-    if (index < 0) {
-      return null;
-    }
-    return (index / text.length).clamp(0.0, 1.0);
-  }
-
-  ReaderLogicalPosition? _resolveBookmarkLogicalPosition(Bookmark bookmark) {
-    final chapterIndex = _currentIndex;
-    if (chapterIndex == null || _document.isEmpty) {
-      return null;
-    }
-
-    final ratio =
-        _resolveBookmarkScrollRatio(bookmark) ??
-        _findSnippetScrollRatio(bookmark.snippet);
-    if (ratio == null) {
-      return null;
-    }
-
-    return ReaderLogicalPosition.fromDocument(
-      document: _document,
-      chapterIndex: chapterIndex,
-      chapterPositionRatio: ratio,
-      pageIndex: _isPagedTextReaderEnabled() ? _currentPageIndex : null,
-    );
   }
 
   Bookmark? _currentSelectionBookmark() {
@@ -8163,15 +7941,13 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
   }
 
   bool _isAutoReadAtChapterEnd() {
-    if (!_scrollController.hasClients) {
-      return false;
-    }
-    final position = _scrollController.position;
-    final maxExtent = position.maxScrollExtent;
-    if (maxExtent <= 0.8) {
-      return true;
-    }
-    return position.pixels >= maxExtent - 0.8;
+    final hasScrollClients = _scrollController.hasClients;
+    final position = hasScrollClients ? _scrollController.position : null;
+    return _autoReadCoordinator.isAtChapterEnd(
+      hasScrollClients: hasScrollClients,
+      maxScrollExtent: position?.maxScrollExtent ?? 0,
+      scrollOffset: position?.pixels ?? 0,
+    );
   }
 
   void _scheduleAutoReadResume() {
@@ -8228,15 +8004,12 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
       }
 
       final position = _scrollController.position;
-      final speed =
-          _settings.autoReadSpeed
-              .clamp(
-                ReaderSettings.minAutoReadSpeed,
-                ReaderSettings.maxAutoReadSpeed,
-              )
-              .toDouble();
-      final distance = speed * (_kAutoReadStepDuration.inMilliseconds / 1000.0);
-      final target = min(position.pixels + distance, position.maxScrollExtent);
+      final target = _autoReadCoordinator.resolveStepTargetOffset(
+        currentOffset: position.pixels,
+        maxScrollExtent: position.maxScrollExtent,
+        autoReadSpeed: _settings.autoReadSpeed,
+        stepDuration: _kAutoReadStepDuration,
+      );
 
       if ((target - position.pixels).abs() < 0.5) {
         break;
@@ -8260,15 +8033,17 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
   }
 
   Future<void> _tryAutoReadAdvanceChapter() async {
-    if (!_isAutoReadSessionEnabled ||
-        _isAutoReadAdvancingChapter ||
-        _isMangaChapter ||
-        _isPagedTextReaderEnabled() ||
-        _showOverlayControls ||
-        _isBootstrapping ||
-        _isLoadingContent ||
-        _errorText != null ||
-        !_isAutoReadAtChapterEnd()) {
+    if (!_autoReadCoordinator.shouldTryAdvanceChapter(
+      isAutoReadSessionEnabled: _isAutoReadSessionEnabled,
+      isAutoReadAdvancingChapter: _isAutoReadAdvancingChapter,
+      isMangaChapter: _isMangaChapter,
+      isPagedTextReaderEnabled: _isPagedTextReaderEnabled(),
+      showOverlayControls: _showOverlayControls,
+      isBootstrapping: _isBootstrapping,
+      isLoadingContent: _isLoadingContent,
+      hasError: _errorText != null,
+      isAtChapterEnd: _isAutoReadAtChapterEnd(),
+    )) {
       return;
     }
 
@@ -8301,7 +8076,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
   }
 
   void _onScrollChanged() {
-    if (_isPagedTextReaderEnabled()) {
+    if (!_isTextScrollViewport) {
       return;
     }
     if (_isBootstrapping || _isLoadingContent || _errorText != null) {
@@ -8333,10 +8108,10 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
     final remainingBottom = position.maxScrollExtent - position.pixels;
 
     if (remainingBottom <= prefetchBottomDistance) {
-      unawaited(_appendNextContinuousTextChapter());
+      unawaited(_loadAdjacentContinuousTextChapter(forward: true));
     }
     if (position.pixels <= prefetchTopDistance) {
-      unawaited(_prependPreviousContinuousTextChapter());
+      unawaited(_loadAdjacentContinuousTextChapter(forward: false));
     }
   }
 
@@ -8347,59 +8122,36 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
     });
   }
 
-  bool get _canTrackReadingRecordSession {
-    final sourceId = (_sourceId ?? '').trim();
-    final detailUrl = (_detailUrl ?? '').trim();
-    final title = _bookTitle.trim();
-    if (!_readingRecordEnabled) {
-      return false;
-    }
-    if (_isBootstrapping || _isLoadingContent || _errorText != null) {
-      return false;
-    }
-    if (!_hasVisibleReaderContent) {
-      return false;
-    }
-    return sourceId.isNotEmpty && detailUrl.isNotEmpty && title.isNotEmpty;
-  }
-
   void _maybeStartReadingRecordSession({double? initialRatio}) {
-    if (!_canTrackReadingRecordSession) {
+    final result = _readingRecordCoordinator.startOrUpdateSession(
+      readingRecordEnabled: _readingRecordEnabled,
+      isBootstrapping: _isBootstrapping,
+      isLoadingContent: _isLoadingContent,
+      hasError: _errorText != null,
+      hasVisibleReaderContent: _hasVisibleReaderContent,
+      sourceId: _sourceId,
+      detailUrl: _detailUrl,
+      bookTitle: _bookTitle,
+      currentBookId: _currentBookId,
+      chapterId: _chapterId,
+      chapterUrl: _chapterUrl,
+      chapterTitle: _chapterTitle,
+      chapterIndex: _currentIndex,
+      bookAuthor: _bookAuthor,
+      coverUrl: _bookCoverUrl,
+      initialRatio: initialRatio ?? _currentScrollRatio(),
+      now: DateTime.now(),
+      existingSession: _activeReadingRecordSession,
+    );
+    _activeReadingRecordSession = result.session;
+    if (result.cancelAutoCommitTimer) {
       _readingRecordAutoCommitTimer?.cancel();
       _readingRecordAutoCommitTimer = null;
       return;
     }
-
-    final chapterUrl = (_chapterUrl ?? '').trim();
-    final existing = _activeReadingRecordSession;
-    if (existing != null &&
-        existing.bookId == _currentBookId &&
-        existing.chapterId == _chapterId &&
-        existing.chapterUrl == chapterUrl) {
-      _syncActiveReadingRecordSessionProgress(
-        ratio: initialRatio ?? _currentScrollRatio(),
-      );
+    if (result.scheduleAutoCommitTimer) {
       _scheduleReadingRecordAutoCommit();
-      return;
     }
-
-    final startRatio = (initialRatio ?? _currentScrollRatio()).clamp(0.0, 1.0);
-    _activeReadingRecordSession = _ActiveReadingRecordSession(
-      bookId: _currentBookId,
-      sourceId: _sourceId!.trim(),
-      detailUrl: _detailUrl!.trim(),
-      bookTitle: _bookTitle.trim(),
-      bookAuthor: _bookAuthor?.trim(),
-      coverUrl: _bookCoverUrl?.trim(),
-      chapterId: _chapterId.trim(),
-      chapterTitle: _chapterTitle?.trim(),
-      chapterIndex: _currentIndex,
-      chapterUrl: chapterUrl,
-      startAt: DateTime.now(),
-      startPositionRatio: startRatio.toDouble(),
-      furthestPositionRatio: startRatio.toDouble(),
-    );
-    _scheduleReadingRecordAutoCommit();
   }
 
   void _syncActiveReadingRecordSessionProgress({double? ratio}) {
@@ -8407,15 +8159,9 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
     if (session == null) {
       return;
     }
-
-    final currentRatio =
-        (ratio ?? _currentScrollRatio()).clamp(0.0, 1.0).toDouble();
-    if (currentRatio <= session.furthestPositionRatio) {
-      return;
-    }
-
-    _activeReadingRecordSession = session.copyWith(
-      furthestPositionRatio: currentRatio,
+    _activeReadingRecordSession = _readingRecordCoordinator.syncProgress(
+      session: session,
+      ratio: ratio ?? _currentScrollRatio(),
     );
   }
 
@@ -8440,43 +8186,19 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
     _readingRecordAutoCommitTimer = null;
     final session = _activeReadingRecordSession;
     _activeReadingRecordSession = null;
-    if (session == null) {
-      return;
-    }
-    if (!_readingRecordEnabled) {
+    final commitInput = _readingRecordCoordinator.buildCommitInput(
+      readingRecordEnabled: _readingRecordEnabled,
+      session: session,
+      endAt: DateTime.now(),
+      endRatio: _currentScrollRatio(),
+      chapterLength: _chapterTextLength(),
+      isMangaChapter: _isMangaChapter,
+    );
+    if (commitInput == null) {
       return;
     }
 
-    final endAt = DateTime.now();
-    final endRatio = _currentScrollRatio();
-    final readChars = estimateSessionReadChars(
-      chapterLength: _chapterTextLength(),
-      startRatio: session.startPositionRatio,
-      endRatio: endRatio,
-      furthestRatio: session.furthestPositionRatio,
-      countAsText: !_isMangaChapter,
-    );
-    unawaited(
-      _readingRecordService.commitSession(
-        ReadingRecordCommitInput(
-          bookId: session.bookId,
-          sourceId: session.sourceId,
-          detailUrl: session.detailUrl,
-          bookTitle: session.bookTitle,
-          bookAuthor: session.bookAuthor,
-          coverUrl: session.coverUrl,
-          chapterId: session.chapterId,
-          chapterTitle: session.chapterTitle,
-          chapterIndex: session.chapterIndex,
-          chapterUrl: session.chapterUrl,
-          startAt: session.startAt,
-          endAt: endAt,
-          readChars: readChars,
-          startPositionRatio: session.startPositionRatio,
-          endPositionRatio: endRatio.clamp(0.0, 1.0).toDouble(),
-        ),
-      ),
-    );
+    unawaited(_readingRecordService.commitSession(commitInput));
   }
 
   double _adaptiveReaderSheetHeightFactor(
@@ -8494,26 +8216,25 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
   }
 
   double _currentScrollRatio() {
-    if (_isPagedTextReaderEnabled()) {
-      return _activeTextRenderer.captureProgress(_currentTextRenderMetrics());
+    switch (_currentViewportKind) {
+      case _ReaderViewportKind.textPaged:
+        return _activeTextRenderer.captureProgress(_currentTextRenderMetrics());
+      case _ReaderViewportKind.mangaPaged:
+        final total = _chapterImageUrls.length;
+        if (total <= 1) {
+          return 0;
+        }
+        return (_mangaPageIndex / (total - 1)).clamp(0.0, 1.0);
+      case _ReaderViewportKind.textScroll:
+      case _ReaderViewportKind.mangaContinuous:
+        if (_shouldUseContinuousTextFlow) {
+          final currentChapter = _findCurrentContinuousTextChapter();
+          if (currentChapter != null) {
+            return _continuousTextChapterScrollRatioFor(currentChapter);
+          }
+        }
+        return _activeTextRenderer.captureProgress(_currentTextRenderMetrics());
     }
-
-    if (_isMangaPagedMode) {
-      final total = _chapterImageUrls.length;
-      if (total <= 1) {
-        return 0;
-      }
-      return (_mangaPageIndex / (total - 1)).clamp(0.0, 1.0);
-    }
-
-    if (_shouldUseContinuousTextFlow) {
-      final currentChapter = _findCurrentContinuousTextChapter();
-      if (currentChapter != null) {
-        return _continuousTextChapterScrollRatioFor(currentChapter);
-      }
-    }
-
-    return _activeTextRenderer.captureProgress(_currentTextRenderMetrics());
   }
 
   void _showChapterSwitchFailedSnackbar(int targetIndex) {
@@ -8595,6 +8316,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
       chapterUrl: chapterUrl,
       bookId: _currentBookId,
       bookTitle: _bookTitle,
+      detailUrl: _detailUrl,
       chapterId: chapterId,
       chapterIndex: chapterIndex,
       chapterTitle: chapterTitle,
@@ -8619,12 +8341,12 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
       return;
     }
 
-    final resolvedContinuousIndex =
-        chapterIndex ??
-        _chapters.indexWhere(
-          (item) =>
-              item.id == chapterId ||
-              item.chapterUrl.trim() == chapterUrl.trim(),
+    final resolvedContinuousIndex = _chapterLoadPlanner
+        .resolveContinuousChapterIndex(
+          chapterIndex: chapterIndex,
+          chapters: _chapters,
+          chapterId: chapterId,
+          chapterUrl: chapterUrl,
         );
     final resolvedContinuousChapter =
         resolvedContinuousIndex >= 0 &&
@@ -8637,14 +8359,13 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
     int? precomputedPageIndex;
     String? precomputedPaginationSignature;
 
-    final canPrepaginate =
-        _isPagedTextReaderEnabled() &&
-        snapshot.result.imageUrls.isEmpty &&
-        snapshot.result.content.trim().isNotEmpty &&
-        _lastPaginationMaxWidth != null &&
-        _lastPaginationMaxHeight != null &&
-        _lastPaginationMaxWidth! >= 20 &&
-        _lastPaginationMaxHeight! >= 40;
+    final canPrepaginate = _chapterLoadPlanner.canPrepaginate(
+      isPagedTextReaderEnabled: _isPagedTextReaderEnabled(),
+      hasImages: snapshot.result.imageUrls.isNotEmpty,
+      content: snapshot.result.content,
+      maxWidth: _lastPaginationMaxWidth,
+      maxHeight: _lastPaginationMaxHeight,
+    );
 
     if (canPrepaginate) {
       final paragraphs = snapshot.result.document.paragraphs;
@@ -8663,10 +8384,10 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
       if (cachedLayout != null) {
         precomputedParagraphs = cachedLayout.paragraphs;
         precomputedPagedPages = cachedLayout.pagedPages;
-        precomputedPageIndex = (targetRatio.clamp(0.0, 1.0) *
-                (cachedLayout.pagedPages.length - 1))
-            .round()
-            .clamp(0, cachedLayout.pagedPages.length - 1);
+        precomputedPageIndex = _chapterLoadPlanner.resolvePageIndexByRatio(
+          targetRatio: targetRatio,
+          pageCount: cachedLayout.pagedPages.length,
+        );
         precomputedPaginationSignature = cachedLayout.paginationSignature;
       } else {
         final pages = await _paginateParagraphSlices(
@@ -8677,10 +8398,10 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
         if (pages != null && pages.isNotEmpty) {
           precomputedParagraphs = effectiveParagraphs;
           precomputedPagedPages = pages;
-          precomputedPageIndex = (targetRatio.clamp(0.0, 1.0) *
-                  (pages.length - 1))
-              .round()
-              .clamp(0, pages.length - 1);
+          precomputedPageIndex = _chapterLoadPlanner.resolvePageIndexByRatio(
+            targetRatio: targetRatio,
+            pageCount: pages.length,
+          );
           precomputedPaginationSignature = signature;
         }
       }
@@ -8691,14 +8412,20 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
         _currentIndex = chapterIndex;
         _chapterId = chapterId;
         _chapterUrl = chapterUrl;
-        _chapterTitle =
-            snapshot.result.displayChapterTitle?.trim().isNotEmpty == true
-                ? snapshot.result.displayChapterTitle!.trim()
-                : chapterTitle;
+        _chapterTitle = _chapterLoadPlanner.resolveChapterTitleAfterLoad(
+          commitChapterIdentity: true,
+          loadedDisplayChapterTitle: snapshot.result.displayChapterTitle,
+          targetChapterTitle: chapterTitle,
+          currentChapterTitle: _chapterTitle,
+        );
       }
-      if (!commitChapterIdentity &&
-          snapshot.result.displayChapterTitle?.trim().isNotEmpty == true) {
-        _chapterTitle = snapshot.result.displayChapterTitle!.trim();
+      if (!commitChapterIdentity) {
+        _chapterTitle = _chapterLoadPlanner.resolveChapterTitleAfterLoad(
+          commitChapterIdentity: false,
+          loadedDisplayChapterTitle: snapshot.result.displayChapterTitle,
+          targetChapterTitle: chapterTitle,
+          currentChapterTitle: _chapterTitle,
+        );
       }
       _isCurrentChapterCached = snapshot.isCached;
       _errorText = null;
@@ -8721,8 +8448,11 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
       } else {
         _continuousTextChapters = const <_ContinuousTextChapter>[];
       }
-      _pendingPageRestoreRatio =
-          precomputedPaginationSignature == null ? targetRatio : null;
+      _pagedPaginationState = _PagedPaginationState(
+        signature: precomputedPaginationSignature,
+        pendingRestoreRatio:
+            precomputedPaginationSignature == null ? targetRatio : null,
+      );
     });
 
     _restoreScrollPosition(targetRatio);
@@ -8749,7 +8479,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
         return false;
       }
 
-      final decoded = _decodePersistedChapterCache(payload);
+      final decoded = _chapterCacheDecoder.decode(payload);
       final previewProgress = _bootstrapProgressForCurrentChapter();
       var previewRatio = 0.0;
       if (!mounted) {
@@ -8795,7 +8525,11 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
         } else {
           _continuousTextChapters = const <_ContinuousTextChapter>[];
         }
-        _pendingPageRestoreRatio = previewRatio;
+        _pagedPaginationState = _PagedPaginationState(
+          isPaginating: _pagedPaginationState.isPaginating,
+          signature: _pagedPaginationState.signature,
+          pendingRestoreRatio: previewRatio,
+        );
       });
 
       if (previewProgress != null) {
@@ -8890,60 +8624,6 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
     }
   }
 
-  _DecodedReaderChapterCache _decodePersistedChapterCache(String payload) {
-    final trimmed = payload.trim();
-    if (!trimmed.startsWith(_kCachedImagePayloadPrefix)) {
-      return _DecodedReaderChapterCache(content: trimmed);
-    }
-
-    final raw = trimmed.substring(_kCachedImagePayloadPrefix.length);
-    try {
-      final decoded = jsonDecode(raw);
-      if (decoded is List) {
-        final urls = decoded
-            .map((item) => item?.toString().trim() ?? '')
-            .where((item) => item.isNotEmpty)
-            .toList(growable: false);
-        return _DecodedReaderChapterCache(content: '', imageUrls: urls);
-      }
-
-      if (decoded is Map) {
-        final urls =
-            (decoded['imageUrls'] as List?)
-                ?.map((item) => item?.toString().trim() ?? '')
-                .where((item) => item.isNotEmpty)
-                .toList(growable: false) ??
-            const <String>[];
-        final headers =
-            (decoded['imageHeaders'] as Map?)
-                ?.map(
-                  (key, value) =>
-                      MapEntry(key.toString(), value?.toString().trim() ?? ''),
-                )
-                .map((key, value) => MapEntry(key.trim(), value.trim()))
-                .entries
-                .where(
-                  (entry) => entry.key.isNotEmpty && entry.value.isNotEmpty,
-                )
-                .fold<Map<String, String>>(
-                  <String, String>{},
-                  (result, entry) => result..[entry.key] = entry.value,
-                ) ??
-            const <String, String>{};
-
-        return _DecodedReaderChapterCache(
-          content: '',
-          imageUrls: urls,
-          imageHeaders: headers,
-        );
-      }
-    } on FormatException {
-      return _DecodedReaderChapterCache(content: trimmed);
-    }
-
-    return _DecodedReaderChapterCache(content: trimmed);
-  }
-
   Future<bool> _loadCurrentChapter({
     double? initialScrollRatio,
     ReaderLogicalPosition? initialLogicalPosition,
@@ -8959,15 +8639,17 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
     }
 
     double? readingRecordStartRatio;
-    final sourceId = sourceIdOverride ?? _sourceId;
-    final chapterId = chapterIdOverride ?? _chapterId;
-    final chapterUrl = chapterUrlOverride ?? _chapterUrl;
-    final chapterTitle = chapterTitleOverride ?? _chapterTitle;
-
-    if (sourceId == null ||
-        sourceId.isEmpty ||
-        chapterUrl == null ||
-        chapterUrl.isEmpty) {
+    final request = _chapterLoadPlanner.resolveLoadRequest(
+      sourceIdOverride: sourceIdOverride,
+      chapterIdOverride: chapterIdOverride,
+      chapterUrlOverride: chapterUrlOverride,
+      chapterTitleOverride: chapterTitleOverride,
+      currentSourceId: _sourceId,
+      currentChapterId: _chapterId,
+      currentChapterUrl: _chapterUrl,
+      currentChapterTitle: _chapterTitle,
+    );
+    if (request == null) {
       _stopAutoRead();
       setState(() {
         _errorText = '当前章节信息不完整。';
@@ -8985,16 +8667,18 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
     _scheduleChapterLoadingIndicator();
 
     try {
-      final resolvedIndex =
-          chapterIndexOverride ??
-          _currentIndex ??
-          _chapters.indexWhere((chapter) => chapter.chapterUrl == chapterUrl);
+      final resolvedIndex = _chapterLoadPlanner.resolveFetchChapterIndex(
+        chapterIndexOverride: chapterIndexOverride,
+        currentChapterIndex: _currentIndex,
+        chapters: _chapters,
+        chapterUrl: request.chapterUrl,
+      );
       final snapshot = await _fetchChapterContentSnapshot(
-        sourceId: sourceId,
-        chapterId: chapterId,
-        chapterUrl: chapterUrl,
-        chapterTitle: chapterTitle,
-        chapterIndex: resolvedIndex >= 0 ? resolvedIndex : null,
+        sourceId: request.sourceId,
+        chapterId: request.chapterId,
+        chapterUrl: request.chapterUrl,
+        chapterTitle: request.chapterTitle,
+        chapterIndex: resolvedIndex,
       );
 
       if (!mounted) {
@@ -9008,10 +8692,10 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
       );
       await _applyLoadedChapterSnapshot(
         snapshot: snapshot,
-        chapterId: chapterId,
-        chapterUrl: chapterUrl,
-        chapterTitle: chapterTitle,
-        chapterIndex: resolvedIndex >= 0 ? resolvedIndex : null,
+        chapterId: request.chapterId,
+        chapterUrl: request.chapterUrl,
+        chapterTitle: request.chapterTitle,
+        chapterIndex: resolvedIndex,
         targetRatio: targetRatio,
         commitChapterIdentity: commitChapterIdentity,
       );
@@ -9088,7 +8772,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
         detailUrl == null ||
         sourceId.isEmpty ||
         detailUrl.isEmpty) {
-      _showMessage('缺少书源参数，无法操作书架。');
+      _showMessage('缺少书享源参数，无法操作书架。');
       return;
     }
 
@@ -9222,12 +8906,13 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
           chapterUrl: chapterUrl,
           bookId: _currentBookId,
           bookTitle: _bookTitle,
+          detailUrl: _detailUrl,
           chapterId: chapter.id,
           chapterIndex: index,
           chapterTitle: chapter.title,
           nextChapterUrl: nextChapterUrl.isEmpty ? null : nextChapterUrl,
         );
-        if (_isPagedTextReaderEnabled() &&
+        if (_isTextPagedViewport &&
             result.imageUrls.isEmpty &&
             result.content.trim().isNotEmpty &&
             _lastPaginationMaxWidth != null &&
@@ -9310,23 +8995,15 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
     );
   }
 
-  Future<void> _goToPreviousPage(double viewportHeight) {
-    return _turnPagedTextPage(direction: -1);
-  }
-
-  Future<void> _goToNextPage(double viewportHeight) {
-    return _turnPagedTextPage(direction: 1);
-  }
-
   Future<void> _turnPagedTextPage({required int direction}) async {
-    if (!_isPagedTextReaderEnabled()) {
+    if (!_isTextPagedViewport) {
       return;
     }
 
     _clearSelectionState();
     _clearSystemSelection();
 
-    if (_isPaginatingPages) {
+    if (_pagedPaginationState.isPaginating) {
       return;
     }
 
@@ -9344,7 +9021,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
     );
     switch (turnDecision.type) {
       case PagedTurnDecisionType.crossChapter:
-        await _jumpPagedTextAcrossChapter(direction: safeDirection);
+        await _jumpToAdjacentReadableChapter(forward: safeDirection >= 0);
         return;
       case PagedTurnDecisionType.curl:
         await _autoTurnCurlPage(safeDirection);
@@ -9365,10 +9042,6 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
         );
         return;
     }
-  }
-
-  Future<void> _jumpPagedTextAcrossChapter({required int direction}) async {
-    await _jumpToAdjacentReadableChapter(forward: direction >= 0);
   }
 
   void _startPagedPageTransition({
@@ -9425,23 +9098,16 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
     }
 
     _stopAutoRead();
-    final resolvedIndex =
-        _currentIndex == null || index == _currentIndex
-            ? _resolveNearestReadableChapterIndex(
-              _chapters,
-              index,
-              preferForward: true,
-            )
-            : _findReadableChapterIndex(
-              _chapters,
-              index,
-              forward: index > _currentIndex!,
-            );
-    if (resolvedIndex == null) {
-      _showChapterBoundaryHint(isFirst: index <= (_currentIndex ?? 0));
+    final jumpDecision = _jumpPlanner.resolve(
+      chapters: _chapters,
+      requestedChapterIndex: index,
+      currentChapterIndex: _currentIndex,
+    );
+    if (jumpDecision.type == ReaderJumpDecisionType.boundary) {
+      _showChapterBoundaryHint(isFirst: jumpDecision.isFirstBoundary);
       return;
     }
-    final chapter = _chapters[resolvedIndex];
+    final chapter = _chapters[jumpDecision.targetChapterIndex!];
 
     final success = await _loadCurrentChapter(
       initialScrollRatio: initialScrollRatio ?? 0,
@@ -9450,7 +9116,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
       chapterIdOverride: chapter.id,
       chapterUrlOverride: chapter.chapterUrl,
       chapterTitleOverride: chapter.title,
-      chapterIndexOverride: resolvedIndex,
+      chapterIndexOverride: jumpDecision.targetChapterIndex,
       commitChapterIdentity: true,
     );
     if (success || !mounted) {
@@ -9462,7 +9128,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
     });
 
     _maybeStartReadingRecordSession(initialRatio: _currentScrollRatio());
-    _showChapterSwitchFailedSnackbar(resolvedIndex);
+    _showChapterSwitchFailedSnackbar(jumpDecision.targetChapterIndex!);
   }
 
   void _onReaderTap(Offset localPosition, Size size, EdgeInsets gestureInsets) {
@@ -9517,25 +9183,17 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
       return;
     }
 
-    final isPagedTextReader = _isPagedTextReaderEnabled();
-    final isScrollTextReader =
-        !_isMangaChapter && _pageTurnUsesScroll(_settings.pageTurnMode);
-
     if (localPosition.dx < centerLeft) {
-      if (isPagedTextReader) {
-        unawaited(_goToPreviousPage(size.height));
-      } else if (isScrollTextReader) {
-        unawaited(_advanceScrollReaderByStep(forward: false));
-      }
+      unawaited(
+        _turnReaderByDirection(forward: false, includeMangaPaged: false),
+      );
       return;
     }
 
     if (localPosition.dx > centerRight) {
-      if (isPagedTextReader) {
-        unawaited(_goToNextPage(size.height));
-      } else if (isScrollTextReader) {
-        unawaited(_advanceScrollReaderByStep(forward: true));
-      }
+      unawaited(
+        _turnReaderByDirection(forward: true, includeMangaPaged: false),
+      );
     }
   }
 
@@ -9612,7 +9270,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
   }
 
   Future<void> _openMangaPositionSheet() async {
-    if (!_isMangaChapter) {
+    if (!_isMangaViewport) {
       return;
     }
 
@@ -9621,7 +9279,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
       return;
     }
 
-    final isPagedMode = _isMangaPagedMode;
+    final isPagedMode = _currentViewportKind == _ReaderViewportKind.mangaPaged;
     double draftRatio = _currentScrollRatio();
     final readerModalTheme = _readerModalTheme();
 
@@ -9715,771 +9373,98 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
       return;
     }
     _stopAutoReadSession();
-
-    const itemExtent = 58.0;
-    final currentIndex = _currentIndex;
-    final anchorIndex =
-        currentIndex == null
-            ? 0
-            : (currentIndex - 2).clamp(0, _chapters.length - 1);
-    final scrollController = ScrollController(
-      initialScrollOffset: anchorIndex * itemExtent,
-    );
-    final scrollThumbVisible = ValueNotifier<bool>(false);
-    final searchController = TextEditingController();
-    final catalogSearchNotifier = ValueNotifier<_ReaderCatalogSearchState>(
-      const _ReaderCatalogSearchState(),
-    );
-    Timer? catalogSearchDebounceTimer;
-    var catalogSearchToken = 0;
-    double? selectedScrollRatio;
-    ReaderLogicalPosition? selectedLogicalPosition;
-    final readerModalTheme = _readerModalTheme();
-    var bookmarks = <Bookmark>[];
-    var isBookmarkLoading = true;
-    var hasBookmarkRequested = false;
-    var bookmarkErrorText = '';
-    var didTriggerBookmarkJump = false;
-    var activeTabIndex = 0;
-    var catalogDescending = false;
-
-    Future<void> loadBookmarks(StateSetter setModalState) async {
-      setModalState(() {
-        isBookmarkLoading = true;
-        bookmarkErrorText = '';
-      });
-      try {
-        final items = await _bookmarkRepository.listBookmarks(_currentBookId);
-        bookmarks = items;
-      } catch (error) {
-        bookmarkErrorText = '书签加载失败，请稍后重试。';
-      } finally {
-        setModalState(() {
-          isBookmarkLoading = false;
-        });
-      }
-    }
-
-    Future<void> ensureBookmarksLoaded(StateSetter setModalState) async {
-      if (hasBookmarkRequested) {
-        return;
-      }
-      hasBookmarkRequested = true;
-      await loadBookmarks(setModalState);
-    }
-
-    List<int> orderedChapterIndexes() {
-      if (!catalogDescending) {
-        return List<int>.generate(_chapters.length, (index) => index);
-      }
-      return List<int>.generate(
-        _chapters.length,
-        (index) => _chapters.length - 1 - index,
-      );
-    }
-
-    void scheduleCatalogSearch(String rawKeyword) {
-      final keyword = rawKeyword.trim();
-      catalogSearchDebounceTimer?.cancel();
-      if (keyword.isEmpty) {
-        catalogSearchToken += 1;
-        catalogSearchNotifier.value = const _ReaderCatalogSearchState();
-        return;
-      }
-
-      final normalizedKeyword = keyword.toLowerCase();
-      final cachedEntries = _peekCatalogSearchEntries(normalizedKeyword);
-      if (cachedEntries != null) {
-        catalogSearchToken += 1;
-        catalogSearchNotifier.value = _ReaderCatalogSearchState(
-          keyword: keyword,
-          entries: cachedEntries,
-          isLoading: false,
-        );
-        return;
-      }
-
-      final token = ++catalogSearchToken;
-      catalogSearchNotifier.value = _ReaderCatalogSearchState(
-        keyword: keyword,
-        entries: catalogSearchNotifier.value.entries,
-        isLoading: true,
-      );
-      catalogSearchDebounceTimer = Timer(const Duration(milliseconds: 150), () {
-        final entries = _lookupCatalogSearchEntries(keyword);
-        if (token != catalogSearchToken) {
-          return;
-        }
-        catalogSearchNotifier.value = _ReaderCatalogSearchState(
-          keyword: keyword,
-          entries: entries,
-          isLoading: false,
-        );
-      });
-    }
-
-    searchController.addListener(() {
-      scheduleCatalogSearch(searchController.text);
-    });
-
-    final selectedIndex = await showModalBottomSheet<int>(
+    final result = await showReaderCatalogSheet(
       context: context,
-      isScrollControlled: true,
-      useSafeArea: true,
-      showDragHandle: true,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
+      readerModalTheme: _readerModalTheme(),
+      chapters: _chapters,
+      currentChapterIndex: _currentIndex,
+      bookmarkRepository: _bookmarkRepository,
+      currentBookId: _currentBookId,
+      peekCatalogSearchEntries: _peekCatalogSearchEntries,
+      lookupCatalogSearchEntries: _lookupCatalogSearchEntries,
+      resolveCatalogSearchEntryTargetIndex:
+          _resolveCatalogSearchEntryTargetIndex,
+      refreshChapterBookmarks: _refreshChapterBookmarks,
+      showMessage: _showMessage,
+    );
+
+    if (!mounted) {
+      _scheduleAutoReadResume();
+      return;
+    }
+
+    if (result?.bookmark != null) {
+      await _jumpToBookmark(result!.bookmark!);
+      return;
+    }
+
+    final selection = result?.selection;
+
+    final selectionDecision = _jumpFacade.resolveCatalogSelection(
+      selectedIndex: selection?.chapterIndex,
+      chapters: _chapters,
+      currentChapterIndex: _currentIndex,
+      selectedScrollRatio: selection?.scrollRatio,
+      selectedLogicalPosition: selection?.logicalPosition,
+    );
+    switch (selectionDecision.type) {
+      case ReaderCatalogSelectionDecisionType.resumeAutoRead:
+        _scheduleAutoReadResume();
+        return;
+      case ReaderCatalogSelectionDecisionType.restoreCurrent:
+        if (selectionDecision.initialLogicalPosition != null) {
+          final ratio = _resolveDocumentRestoreRatio(
+            logicalPosition: selectionDecision.initialLogicalPosition,
+          );
+          _restoreScrollPosition(ratio);
+        } else if (selectionDecision.initialScrollRatio != null) {
+          _restoreScrollPosition(selectionDecision.initialScrollRatio!);
+        }
+        _scheduleAutoReadResume();
+        return;
+      case ReaderCatalogSelectionDecisionType.jumpChapter:
+        await _jumpTo(
+          selectionDecision.targetChapterIndex!,
+          initialScrollRatio: selectionDecision.initialScrollRatio,
+          initialLogicalPosition: selectionDecision.initialLogicalPosition,
+        );
+        return;
+    }
+  }
+
+  List<ReaderCatalogSearchEntry> _lookupCatalogSearchEntries(String keyword) {
+    final result = _catalogSearchService.lookup(
+      keyword: keyword,
+      state: ReaderCatalogSearchCacheState(
+        fingerprint: _catalogSearchCacheFingerprint,
+        entriesCache: _catalogSearchEntriesCache,
       ),
-      backgroundColor: readerModalTheme.colorScheme.surface,
-      builder: (context) {
-        return Theme(
-          data: readerModalTheme,
-          child: StatefulBuilder(
-            builder: (context, setModalState) {
-              final colorScheme = Theme.of(context).colorScheme;
-              final textTheme = Theme.of(context).textTheme;
-              final keyboardInset = MediaQuery.viewInsetsOf(context).bottom;
-              final safeBottom = _bottomSafeInset(context);
-              final sheetHeightFactor = _adaptiveReaderSheetHeightFactor(
-                context,
-                compact: 0.70,
-                regular: 0.70,
-                large: 0.70,
-              );
-              final sheetHorizontal = AppSpacing.pageHorizontal(context);
-
-              Widget buildCatalogTab() {
-                return ValueListenableBuilder<_ReaderCatalogSearchState>(
-                  valueListenable: catalogSearchNotifier,
-                  builder: (context, searchState, _) {
-                    final isSearching = searchState.keyword.isNotEmpty;
-                    final searchEntries = searchState.entries;
-                    final orderedIndexes = orderedChapterIndexes();
-                    final tocSearchEntries =
-                        catalogDescending
-                            ? ([...searchState.tocEntries]..sort(
-                              (a, b) =>
-                                  b.chapterIndex.compareTo(a.chapterIndex),
-                            ))
-                            : searchState.tocEntries;
-                    final contentSearchEntries =
-                        catalogDescending
-                            ? ([...searchState.contentEntries]..sort(
-                              (a, b) =>
-                                  b.chapterIndex.compareTo(a.chapterIndex),
-                            ))
-                            : searchState.contentEntries;
-
-                    return Column(
-                      children: [
-                        Padding(
-                          padding: EdgeInsets.fromLTRB(
-                            sheetHorizontal,
-                            6,
-                            sheetHorizontal,
-                            8,
-                          ),
-                          child: LayoutBuilder(
-                            builder: (context, constraints) {
-                              final locationButton =
-                                  currentIndex == null
-                                      ? null
-                                      : FilledButton.tonalIcon(
-                                        style: FilledButton.styleFrom(
-                                          backgroundColor:
-                                              colorScheme.primaryContainer,
-                                          foregroundColor:
-                                              colorScheme.onPrimaryContainer,
-                                          padding: const EdgeInsets.symmetric(
-                                            horizontal: 10,
-                                            vertical: 8,
-                                          ),
-                                          minimumSize: const Size(0, 36),
-                                          visualDensity: VisualDensity.compact,
-                                          shape: const StadiumBorder(),
-                                        ),
-                                        onPressed: () {
-                                          final currentDisplayIndex =
-                                              orderedIndexes.indexOf(
-                                                currentIndex,
-                                              );
-                                          final target =
-                                              ((currentDisplayIndex - 2).clamp(
-                                                        0,
-                                                        _chapters.length - 1,
-                                                      ) *
-                                                      itemExtent)
-                                                  .toDouble();
-                                          scrollController.animateTo(
-                                            target,
-                                            duration: const Duration(
-                                              milliseconds: 180,
-                                            ),
-                                            curve: Curves.easeOutCubic,
-                                          );
-                                        },
-                                        icon: const Icon(
-                                          Icons.my_location_outlined,
-                                          size: 17,
-                                        ),
-                                        label: Text('定位 ${currentIndex + 1}'),
-                                      );
-                              return _buildReaderCatalogSummaryCard(
-                                context,
-                                chapterCount: _chapters.length,
-                                currentIndex: currentIndex,
-                                locateButton: locationButton,
-                              );
-                            },
-                          ),
-                        ),
-                        Padding(
-                          padding: EdgeInsets.fromLTRB(
-                            sheetHorizontal,
-                            2,
-                            sheetHorizontal,
-                            10,
-                          ),
-                          child: Row(
-                            children: [
-                              Expanded(
-                                child: TextField(
-                                  controller: searchController,
-                                  decoration: InputDecoration(
-                                    isDense: true,
-                                    filled: true,
-                                    fillColor: colorScheme.surface,
-                                    hintText: '搜索目录标题或当前章节正文',
-                                    prefixIcon: Icon(
-                                      Icons.search_rounded,
-                                      size: 17,
-                                      color: colorScheme.onSurfaceVariant,
-                                    ),
-                                    contentPadding: const EdgeInsets.symmetric(
-                                      horizontal: 12,
-                                      vertical: 10,
-                                    ),
-                                    border: OutlineInputBorder(
-                                      borderRadius: BorderRadius.circular(14),
-                                    ),
-                                    enabledBorder: OutlineInputBorder(
-                                      borderRadius: BorderRadius.circular(14),
-                                      borderSide: BorderSide(
-                                        color: colorScheme.outlineVariant
-                                            .withValues(alpha: 0.6),
-                                      ),
-                                    ),
-                                    focusedBorder: OutlineInputBorder(
-                                      borderRadius: BorderRadius.circular(14),
-                                      borderSide: BorderSide(
-                                        color: colorScheme.primary.withValues(
-                                          alpha: 0.9,
-                                        ),
-                                        width: 1.1,
-                                      ),
-                                    ),
-                                  ),
-                                ),
-                              ),
-                              const SizedBox(width: 8),
-                              Tooltip(
-                                message: catalogDescending ? '当前倒序' : '当前正序',
-                                child: FilledButton.tonalIcon(
-                                  onPressed: () {
-                                    setModalState(() {
-                                      catalogDescending = !catalogDescending;
-                                    });
-                                  },
-                                  icon: Icon(
-                                    catalogDescending
-                                        ? Icons.south_rounded
-                                        : Icons.north_rounded,
-                                    size: 17,
-                                  ),
-                                  label: Text(catalogDescending ? '倒序' : '正序'),
-                                  style: FilledButton.styleFrom(
-                                    minimumSize: const Size(0, 40),
-                                    padding: const EdgeInsets.symmetric(
-                                      horizontal: 12,
-                                      vertical: 9,
-                                    ),
-                                    visualDensity: VisualDensity.compact,
-                                  ),
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                        Divider(
-                          height: 1,
-                          color: colorScheme.outlineVariant.withValues(
-                            alpha: 0.7,
-                          ),
-                        ),
-                        if (isSearching && searchState.isLoading)
-                          const Expanded(
-                            child: Center(
-                              child: SizedBox(
-                                width: 22,
-                                height: 22,
-                                child: CircularProgressIndicator(
-                                  strokeWidth: 2,
-                                ),
-                              ),
-                            ),
-                          )
-                        else if (isSearching && searchEntries.isEmpty)
-                          Expanded(
-                            child: Center(
-                              child: Padding(
-                                padding: const EdgeInsets.symmetric(
-                                  horizontal: 24,
-                                ),
-                                child: Column(
-                                  mainAxisAlignment: MainAxisAlignment.center,
-                                  children: [
-                                    Text(
-                                      '未找到匹配内容',
-                                      style: textTheme.bodyMedium?.copyWith(
-                                        color: colorScheme.onSurfaceVariant,
-                                        fontWeight: FontWeight.w600,
-                                      ),
-                                    ),
-                                    const SizedBox(height: 8),
-                                    Text(
-                                      '当前仅支持搜索目录标题与本章正文。',
-                                      textAlign: TextAlign.center,
-                                      style: textTheme.bodySmall?.copyWith(
-                                        color: colorScheme.onSurfaceVariant,
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                              ),
-                            ),
-                          )
-                        else if (isSearching)
-                          Expanded(
-                            child: _buildCatalogSearchResultList(
-                              context,
-                              scrollController: scrollController,
-                              tocEntries: tocSearchEntries,
-                              contentEntries: contentSearchEntries,
-                              onEntryTap: (entry) {
-                                selectedScrollRatio = entry.scrollRatio;
-                                selectedLogicalPosition = entry.logicalPosition;
-                                Navigator.of(context).pop(entry.chapterIndex);
-                              },
-                            ),
-                          )
-                        else
-                          Expanded(
-                            child: NotificationListener<ScrollNotification>(
-                              onNotification: (notification) {
-                                if (notification is ScrollStartNotification ||
-                                    notification is UserScrollNotification) {
-                                  scrollThumbVisible.value = true;
-                                } else if (notification
-                                    is ScrollEndNotification) {
-                                  scrollThumbVisible.value = false;
-                                }
-                                return false;
-                              },
-                              child: ValueListenableBuilder<bool>(
-                                valueListenable: scrollThumbVisible,
-                                builder: (context, visible, child) {
-                                  return Scrollbar(
-                                    controller: scrollController,
-                                    thumbVisibility: visible,
-                                    child: child!,
-                                  );
-                                },
-                                child: ListView.builder(
-                                  controller: scrollController,
-                                  itemCount: orderedIndexes.length,
-                                  itemExtent: itemExtent,
-                                  padding: const EdgeInsets.fromLTRB(
-                                    12,
-                                    8,
-                                    12,
-                                    10,
-                                  ),
-                                  itemBuilder: (context, index) {
-                                    final chapterIndex = orderedIndexes[index];
-                                    final chapter = _chapters[chapterIndex];
-                                    final selected =
-                                        chapterIndex == currentIndex;
-                                    return _buildReaderCatalogChapterTile(
-                                      context,
-                                      chapter: chapter,
-                                      index: chapterIndex,
-                                      selected: selected,
-                                      onTap:
-                                          () => Navigator.of(
-                                            context,
-                                          ).pop(chapterIndex),
-                                    );
-                                  },
-                                ),
-                              ),
-                            ),
-                          ),
-                      ],
-                    );
-                  },
-                );
-              }
-
-              Widget buildBookmarkTab() {
-                if (!hasBookmarkRequested) {
-                  unawaited(ensureBookmarksLoaded(setModalState));
-                }
-                final bookmarkGroups = _groupBookmarksForSheet(bookmarks);
-                final title =
-                    isBookmarkLoading ? '书签' : '书签（${bookmarks.length}）';
-
-                return Padding(
-                  padding: EdgeInsets.fromLTRB(
-                    sheetHorizontal,
-                    10,
-                    sheetHorizontal,
-                    12,
-                  ),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        title,
-                        style: textTheme.titleMedium?.copyWith(
-                          fontWeight: FontWeight.w700,
-                        ),
-                      ),
-                      const SizedBox(height: 8),
-                      if (isBookmarkLoading)
-                        Row(
-                          children: [
-                            const SizedBox(
-                              width: 18,
-                              height: 18,
-                              child: CircularProgressIndicator(strokeWidth: 2),
-                            ),
-                            const SizedBox(width: 8),
-                            Text(
-                              '正在加载书签...',
-                              style: textTheme.bodyMedium?.copyWith(
-                                color: colorScheme.onSurfaceVariant,
-                              ),
-                            ),
-                          ],
-                        )
-                      else if (bookmarkErrorText.isNotEmpty)
-                        Row(
-                          children: [
-                            Expanded(
-                              child: Text(
-                                bookmarkErrorText,
-                                style: textTheme.bodyMedium?.copyWith(
-                                  color: colorScheme.error,
-                                ),
-                              ),
-                            ),
-                            TextButton(
-                              onPressed:
-                                  () => unawaited(loadBookmarks(setModalState)),
-                              child: const Text('重试'),
-                            ),
-                          ],
-                        )
-                      else if (bookmarkGroups.isEmpty)
-                        Padding(
-                          padding: const EdgeInsets.symmetric(vertical: 18),
-                          child: Text(
-                            '当前书籍还没有书签。',
-                            style: textTheme.bodyMedium?.copyWith(
-                              color: colorScheme.onSurfaceVariant,
-                            ),
-                          ),
-                        )
-                      else
-                        Expanded(
-                          child: ListView.separated(
-                            itemCount: bookmarkGroups.length,
-                            separatorBuilder:
-                                (_, __) => const SizedBox(height: 12),
-                            itemBuilder: (context, index) {
-                              final group = bookmarkGroups[index];
-                              return _BookmarkGroupSection(
-                                title: group.title,
-                                items: group.bookmarks,
-                                timeLabel: _formatBookmarkTime,
-                                onTap: (bookmark) {
-                                  didTriggerBookmarkJump = true;
-                                  Navigator.of(context).pop();
-                                  unawaited(_jumpToBookmark(bookmark));
-                                },
-                                onDelete: (bookmark) async {
-                                  await _bookmarkRepository.removeBookmark(
-                                    bookmark.id,
-                                  );
-                                  await loadBookmarks(setModalState);
-                                  unawaited(_refreshChapterBookmarks());
-                                },
-                              );
-                            },
-                          ),
-                        ),
-                    ],
-                  ),
-                );
-              }
-
-              final bookmarkCountLabel = bookmarks.length.toString();
-
-              Tab buildCountTab({
-                required String label,
-                required String countText,
-              }) {
-                return Tab(
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Text(label),
-                      const SizedBox(width: 6),
-                      Container(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 7,
-                          vertical: 2,
-                        ),
-                        decoration: BoxDecoration(
-                          color: colorScheme.surfaceContainerHigh,
-                          borderRadius: BorderRadius.circular(999),
-                        ),
-                        child: Text(
-                          countText,
-                          style: textTheme.labelSmall?.copyWith(
-                            color: colorScheme.onSurfaceVariant,
-                            fontWeight: FontWeight.w600,
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                );
-              }
-
-              return AnimatedPadding(
-                duration: const Duration(milliseconds: 180),
-                curve: Curves.easeOutCubic,
-                padding: EdgeInsets.only(bottom: keyboardInset + safeBottom),
-                child: FractionallySizedBox(
-                  heightFactor: sheetHeightFactor,
-                  child: DefaultTabController(
-                    length: 2,
-                    child: Column(
-                      children: [
-                        Padding(
-                          padding: EdgeInsets.fromLTRB(
-                            sheetHorizontal,
-                            6,
-                            sheetHorizontal,
-                            4,
-                          ),
-                          child: DecoratedBox(
-                            decoration: BoxDecoration(
-                              color: colorScheme.surfaceContainerLow,
-                              borderRadius: BorderRadius.circular(18),
-                              border: Border.all(
-                                color: colorScheme.outlineVariant.withValues(
-                                  alpha: 0.28,
-                                ),
-                              ),
-                            ),
-                            child: Padding(
-                              padding: const EdgeInsets.all(4),
-                              child: TabBar(
-                                labelColor: colorScheme.primary,
-                                unselectedLabelColor:
-                                    colorScheme.onSurfaceVariant,
-                                dividerColor: Colors.transparent,
-                                indicatorSize: TabBarIndicatorSize.tab,
-                                indicator: BoxDecoration(
-                                  color: colorScheme.primaryContainer,
-                                  borderRadius: BorderRadius.circular(14),
-                                ),
-                                splashBorderRadius: BorderRadius.circular(14),
-                                onTap: (index) {
-                                  if (activeTabIndex == index) {
-                                    return;
-                                  }
-                                  setModalState(() {
-                                    activeTabIndex = index;
-                                  });
-                                  if (index == 1) {
-                                    unawaited(
-                                      ensureBookmarksLoaded(setModalState),
-                                    );
-                                  }
-                                },
-                                tabs: [
-                                  buildCountTab(
-                                    label: '目录',
-                                    countText: _chapters.length.toString(),
-                                  ),
-                                  buildCountTab(
-                                    label: '书签',
-                                    countText: bookmarkCountLabel,
-                                  ),
-                                ],
-                              ),
-                            ),
-                          ),
-                        ),
-                        Divider(
-                          height: 1,
-                          color: colorScheme.outlineVariant.withValues(
-                            alpha: 0.7,
-                          ),
-                        ),
-                        Expanded(
-                          child:
-                              activeTabIndex == 0
-                                  ? buildCatalogTab()
-                                  : buildBookmarkTab(),
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-              );
-            },
-          ),
-        );
-      },
+      chapterId: _chapterId,
+      chapterUrl: _chapterUrl,
+      currentChapterIndex: _currentIndex,
+      chapters: _chapters,
+      chapterContent: _content,
+      chapterParagraphs: _paragraphs,
+      chapterDocument: _document,
+      isPagedTextReaderEnabled: _isPagedTextReaderEnabled(),
+      currentPageIndex: _currentPageIndex,
     );
-
-    scrollController.dispose();
-    searchController.dispose();
-    scrollThumbVisible.dispose();
-    catalogSearchDebounceTimer?.cancel();
-    catalogSearchNotifier.dispose();
-
-    if (didTriggerBookmarkJump) {
-      return;
-    }
-
-    if (!mounted ||
-        selectedIndex == null ||
-        selectedIndex < 0 ||
-        selectedIndex >= _chapters.length) {
-      _scheduleAutoReadResume();
-      return;
-    }
-
-    if (selectedIndex == _currentIndex) {
-      if (selectedLogicalPosition != null) {
-        final ratio = _resolveDocumentRestoreRatio(
-          logicalPosition: selectedLogicalPosition,
-        );
-        _restoreScrollPosition(ratio);
-      } else if (selectedScrollRatio != null) {
-        _restoreScrollPosition(selectedScrollRatio!);
-      }
-      _scheduleAutoReadResume();
-      return;
-    }
-
-    await _jumpTo(
-      selectedIndex,
-      initialScrollRatio: selectedScrollRatio,
-      initialLogicalPosition: selectedLogicalPosition,
-    );
+    _catalogSearchCacheFingerprint = result.state.fingerprint;
+    _catalogSearchEntriesCache = result.state.entriesCache;
+    return result.entries;
   }
 
-  List<_CatalogSearchEntry> _buildFullTextSearchEntries(String keyword) {
-    if (keyword.isEmpty) {
-      return const [];
-    }
-
-    final normalizedKeyword = keyword.toLowerCase();
-    final entries = <_CatalogSearchEntry>[];
-
-    for (var index = 0; index < _chapters.length; index++) {
-      final title = _chapters[index].title;
-      if (_containsKeyword(title, keyword, normalizedKeyword)) {
-        entries.add(
-          _CatalogSearchEntry(
-            title: title,
-            subtitle: '第 ${index + 1} 章 · 目录匹配',
-            chapterIndex: index,
-          ),
-        );
-      }
-    }
-
-    final currentIndex = _currentIndex;
-    if (currentIndex == null || _content.trim().isEmpty) {
-      return entries;
-    }
-
-    final paragraphs = _paragraphs.isEmpty ? _document.paragraphs : _paragraphs;
-    if (paragraphs.isEmpty) {
-      if (_containsKeyword(_content, keyword, normalizedKeyword)) {
-        final logicalPosition = ReaderLogicalPosition.fromDocument(
-          document: _document,
-          chapterIndex: currentIndex,
-          chapterPositionRatio: 0,
-          pageIndex: _isPagedTextReaderEnabled() ? _currentPageIndex : null,
-        );
-        entries.add(
-          _CatalogSearchEntry(
-            title: '第 ${currentIndex + 1} 章正文',
-            subtitle: _buildSearchSnippet(_content, keyword),
-            chapterIndex: currentIndex,
-            scrollRatio: 0,
-            logicalPosition: logicalPosition,
-            isContent: true,
-          ),
-        );
-      }
-      return entries;
-    }
-
-    for (var index = 0; index < paragraphs.length; index++) {
-      final paragraph = paragraphs[index];
-      if (!_containsKeyword(paragraph, keyword, normalizedKeyword)) {
-        continue;
-      }
-
-      final ratio =
-          paragraphs.length <= 1 ? 0.0 : index / (paragraphs.length - 1);
-      final logicalPosition = ReaderLogicalPosition.fromDocument(
-        document: _document,
-        chapterIndex: currentIndex,
-        chapterPositionRatio: ratio,
-        pageIndex: _isPagedTextReaderEnabled() ? _currentPageIndex : null,
-      );
-      entries.add(
-        _CatalogSearchEntry(
-          title: '第 ${currentIndex + 1} 章正文命中',
-          subtitle: _buildSearchSnippet(paragraph, keyword),
-          chapterIndex: currentIndex,
-          scrollRatio: ratio,
-          logicalPosition: logicalPosition,
-          isContent: true,
-        ),
-      );
-      if (entries.length >= 60) {
-        break;
-      }
-    }
-
-    return entries;
-  }
-
-  List<_CatalogSearchEntry>? _peekCatalogSearchEntries(
+  List<ReaderCatalogSearchEntry>? _peekCatalogSearchEntries(
     String normalizedKeyword,
   ) {
-    final fingerprint = _buildCatalogSearchCacheFingerprint();
+    final fingerprint = _catalogSearchService.buildCacheFingerprint(
+      chapterId: _chapterId,
+      chapterUrl: _chapterUrl,
+      currentChapterIndex: _currentIndex,
+      chapters: _chapters,
+      chapterContent: _content,
+      chapterParagraphCount: _paragraphs.length,
+    );
     if (_catalogSearchCacheFingerprint != fingerprint) {
       _resetCatalogSearchCache();
       _catalogSearchCacheFingerprint = fingerprint;
@@ -10487,471 +9472,17 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
     return _catalogSearchEntriesCache[normalizedKeyword];
   }
 
-  List<_CatalogSearchEntry> _lookupCatalogSearchEntries(String keyword) {
-    final normalizedKeyword = keyword.trim().toLowerCase();
-    if (normalizedKeyword.isEmpty) {
-      return const <_CatalogSearchEntry>[];
-    }
-
-    final cached = _peekCatalogSearchEntries(normalizedKeyword);
-    if (cached != null) {
-      return cached;
-    }
-
-    final entries = List<_CatalogSearchEntry>.unmodifiable(
-      _buildFullTextSearchEntries(keyword),
+  int? _resolveCatalogSearchEntryTargetIndex(ReaderCatalogSearchEntry entry) {
+    final candidateIndex =
+        entry.isContent
+            ? entry.chapterIndex
+            : (entry.targetChapterIndex ??
+                (entry.isVolume ? null : entry.chapterIndex));
+    return _jumpFacade.resolveReadableChapterTargetIndex(
+      chapters: _chapters,
+      chapterIndex: candidateIndex,
+      preferForward: true,
     );
-    _catalogSearchEntriesCache = <String, List<_CatalogSearchEntry>>{
-      ..._catalogSearchEntriesCache,
-      normalizedKeyword: entries,
-    };
-    return entries;
-  }
-
-  String _buildCatalogSearchCacheFingerprint() {
-    final firstChapterId = _chapters.isEmpty ? '' : _chapters.first.id;
-    final lastChapterId = _chapters.isEmpty ? '' : _chapters.last.id;
-    return [
-      _chapterId,
-      _chapterUrl ?? '',
-      (_currentIndex ?? -1).toString(),
-      _chapters.length.toString(),
-      firstChapterId,
-      lastChapterId,
-      _content.hashCode.toString(),
-      _paragraphs.length.toString(),
-    ].join('|');
-  }
-
-  Widget _buildCatalogSearchResultList(
-    BuildContext context, {
-    required ScrollController scrollController,
-    required List<_CatalogSearchEntry> tocEntries,
-    required List<_CatalogSearchEntry> contentEntries,
-    required ValueChanged<_CatalogSearchEntry> onEntryTap,
-  }) {
-    final children = <Widget>[];
-
-    void appendSection(String title, List<_CatalogSearchEntry> entries) {
-      if (entries.isEmpty) {
-        return;
-      }
-      if (children.isNotEmpty) {
-        children.add(const SizedBox(height: 8));
-      }
-      children.add(
-        _buildCatalogSearchSectionHeader(
-          context,
-          title: title,
-          count: entries.length,
-        ),
-      );
-      children.add(const SizedBox(height: 6));
-      for (final entry in entries) {
-        children.add(
-          _buildCatalogSearchEntryTile(
-            context,
-            entry: entry,
-            onTap: () => onEntryTap(entry),
-          ),
-        );
-        children.add(const SizedBox(height: 8));
-      }
-    }
-
-    appendSection('目录匹配', tocEntries);
-    appendSection('当前章节正文', contentEntries);
-
-    return Scrollbar(
-      controller: scrollController,
-      thumbVisibility: true,
-      child: ListView(
-        controller: scrollController,
-        padding: const EdgeInsets.fromLTRB(12, 10, 12, 12),
-        children: children,
-      ),
-    );
-  }
-
-  Widget _buildReaderCatalogSummaryCard(
-    BuildContext context, {
-    required int chapterCount,
-    required int? currentIndex,
-    required Widget? locateButton,
-  }) {
-    final colorScheme = Theme.of(context).colorScheme;
-    final textTheme = Theme.of(context).textTheme;
-    final currentChapterTitle =
-        currentIndex != null &&
-                currentIndex >= 0 &&
-                currentIndex < _chapters.length
-            ? _chapters[currentIndex].title
-            : '尚未定位到章节';
-
-    return Container(
-      padding: const EdgeInsets.fromLTRB(12, 11, 12, 10),
-      decoration: BoxDecoration(
-        gradient: LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: [
-            colorScheme.surfaceContainerHigh,
-            colorScheme.surfaceContainerLow,
-          ],
-        ),
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(
-          color: colorScheme.outlineVariant.withValues(alpha: 0.25),
-        ),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      '阅读导航',
-                      style: textTheme.labelMedium?.copyWith(
-                        color: colorScheme.primary,
-                        fontWeight: FontWeight.w700,
-                      ),
-                    ),
-                    const SizedBox(height: 2),
-                    Text(
-                      '目录 $chapterCount 章',
-                      style: textTheme.titleSmall?.copyWith(
-                        fontWeight: FontWeight.w700,
-                      ),
-                    ),
-                    const SizedBox(height: 3),
-                    Text(
-                      currentIndex == null
-                          ? '可从目录或书签中快速定位'
-                          : '当前阅读 · 第 ${currentIndex + 1} 章',
-                      style: textTheme.bodySmall?.copyWith(
-                        color: colorScheme.onSurfaceVariant,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              if (locateButton != null) locateButton,
-            ],
-          ),
-          const SizedBox(height: 8),
-          Container(
-            width: double.infinity,
-            padding: const EdgeInsets.fromLTRB(10, 8, 10, 8),
-            decoration: BoxDecoration(
-              color: colorScheme.surface.withValues(alpha: 0.92),
-              borderRadius: BorderRadius.circular(12),
-            ),
-            child: Row(
-              children: [
-                Container(
-                  width: 24,
-                  height: 24,
-                  decoration: BoxDecoration(
-                    color: colorScheme.primaryContainer,
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                  child: Icon(
-                    Icons.menu_book_rounded,
-                    size: 14,
-                    color: colorScheme.onPrimaryContainer,
-                  ),
-                ),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: Text(
-                    currentChapterTitle,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: textTheme.bodyMedium?.copyWith(
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
-                ),
-                if (currentIndex != null) ...[
-                  const SizedBox(width: 8),
-                  Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 7,
-                      vertical: 3,
-                    ),
-                    decoration: BoxDecoration(
-                      color: colorScheme.primaryContainer,
-                      borderRadius: BorderRadius.circular(999),
-                    ),
-                    child: Text(
-                      '当前',
-                      style: textTheme.labelSmall?.copyWith(
-                        color: colorScheme.onPrimaryContainer,
-                        fontWeight: FontWeight.w700,
-                      ),
-                    ),
-                  ),
-                ],
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildReaderCatalogChapterTile(
-    BuildContext context, {
-    required Chapter chapter,
-    required int index,
-    required bool selected,
-    required VoidCallback onTap,
-  }) {
-    final colorScheme = Theme.of(context).colorScheme;
-    final textTheme = Theme.of(context).textTheme;
-    final borderRadius = BorderRadius.circular(14);
-    final selectedBackground = Color.alphaBlend(
-      colorScheme.primary.withValues(alpha: 0.15),
-      colorScheme.surfaceContainerLow,
-    );
-    final unselectedBackground = colorScheme.surface.withValues(alpha: 0.78);
-
-    return Material(
-      color: Colors.transparent,
-      borderRadius: borderRadius,
-      child: InkWell(
-        borderRadius: borderRadius,
-        onTap: onTap,
-        child: Ink(
-          decoration: BoxDecoration(
-            color: selected ? selectedBackground : unselectedBackground,
-            borderRadius: borderRadius,
-            border: Border.all(
-              color:
-                  selected
-                      ? colorScheme.primary.withValues(alpha: 0.28)
-                      : colorScheme.outlineVariant.withValues(alpha: 0.18),
-            ),
-          ),
-          child: Padding(
-            padding: const EdgeInsets.fromLTRB(10, 8, 10, 8),
-            child: Row(
-              children: [
-                Container(
-                  width: 28,
-                  height: 28,
-                  alignment: Alignment.center,
-                  decoration: BoxDecoration(
-                    color:
-                        selected
-                            ? colorScheme.primary
-                            : colorScheme.surfaceContainerHigh,
-                    borderRadius: BorderRadius.circular(9),
-                  ),
-                  child: Text(
-                    '${index + 1}',
-                    style: textTheme.labelSmall?.copyWith(
-                      fontWeight: FontWeight.w800,
-                      color:
-                          selected
-                              ? colorScheme.onPrimary
-                              : colorScheme.onSurfaceVariant,
-                    ),
-                  ),
-                ),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: Text(
-                    chapter.title,
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
-                    style: textTheme.bodyMedium?.copyWith(
-                      height: 1.2,
-                      fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
-                      color:
-                          selected
-                              ? colorScheme.primary
-                              : colorScheme.onSurface,
-                    ),
-                  ),
-                ),
-                const SizedBox(width: 6),
-                Icon(
-                  selected
-                      ? Icons.play_circle_fill_rounded
-                      : Icons.chevron_right_rounded,
-                  size: 18,
-                  color:
-                      selected
-                          ? colorScheme.primary
-                          : colorScheme.onSurfaceVariant,
-                ),
-              ],
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildCatalogSearchSectionHeader(
-    BuildContext context, {
-    required String title,
-    required int count,
-  }) {
-    final colorScheme = Theme.of(context).colorScheme;
-    final textTheme = Theme.of(context).textTheme;
-
-    return Row(
-      children: [
-        Text(
-          title,
-          style: textTheme.labelLarge?.copyWith(
-            fontWeight: FontWeight.w700,
-            color: colorScheme.primary,
-          ),
-        ),
-        const SizedBox(width: 8),
-        Container(
-          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-          decoration: BoxDecoration(
-            color: colorScheme.surfaceContainerHigh,
-            borderRadius: BorderRadius.circular(999),
-          ),
-          child: Text(
-            '$count',
-            style: textTheme.labelSmall?.copyWith(
-              color: colorScheme.onSurfaceVariant,
-              fontWeight: FontWeight.w700,
-            ),
-          ),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildCatalogSearchEntryTile(
-    BuildContext context, {
-    required _CatalogSearchEntry entry,
-    required VoidCallback onTap,
-  }) {
-    final colorScheme = Theme.of(context).colorScheme;
-    final textTheme = Theme.of(context).textTheme;
-    final accentColor =
-        entry.isContent ? colorScheme.tertiary : colorScheme.primary;
-
-    return Material(
-      color:
-          entry.isContent
-              ? colorScheme.tertiaryContainer.withValues(alpha: 0.32)
-              : colorScheme.surfaceContainerLow,
-      borderRadius: BorderRadius.circular(12),
-      child: InkWell(
-        borderRadius: BorderRadius.circular(12),
-        onTap: onTap,
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(10, 8, 10, 8),
-          child: Row(
-            children: [
-              Container(
-                width: 28,
-                height: 28,
-                decoration: BoxDecoration(
-                  color: accentColor.withValues(alpha: 0.12),
-                  borderRadius: BorderRadius.circular(9),
-                ),
-                child: Icon(
-                  entry.isContent
-                      ? Icons.article_outlined
-                      : Icons.list_alt_outlined,
-                  size: 16,
-                  color: accentColor,
-                ),
-              ),
-              const SizedBox(width: 8),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      entry.title,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: textTheme.bodyMedium?.copyWith(
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-                    const SizedBox(height: 2),
-                    Text(
-                      entry.subtitle,
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
-                      style: textTheme.bodySmall?.copyWith(
-                        color: colorScheme.onSurfaceVariant,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              const SizedBox(width: 8),
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
-                decoration: BoxDecoration(
-                  color: accentColor.withValues(alpha: 0.1),
-                  borderRadius: BorderRadius.circular(999),
-                ),
-                child: Text(
-                  entry.isContent ? '正文' : '目录',
-                  style: textTheme.labelSmall?.copyWith(
-                    color: accentColor,
-                    fontWeight: FontWeight.w700,
-                  ),
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
-  bool _containsKeyword(String text, String keyword, String normalizedKeyword) {
-    return text.contains(keyword) ||
-        text.toLowerCase().contains(normalizedKeyword);
-  }
-
-  String _buildSearchSnippet(String source, String keyword) {
-    final normalized = source.replaceAll(RegExp(r'\s+'), ' ').trim();
-    if (normalized.isEmpty) {
-      return '未匹配到可展示内容';
-    }
-
-    if (normalized.length <= 56) {
-      return normalized;
-    }
-
-    final keywordLower = keyword.toLowerCase();
-    final lower = normalized.toLowerCase();
-    final keywordIndex = lower.indexOf(keywordLower);
-    if (keywordIndex < 0) {
-      return '${normalized.substring(0, 56)}...';
-    }
-
-    final start = (keywordIndex - 14).clamp(0, normalized.length);
-    final end = (keywordIndex + keyword.length + 22).clamp(
-      0,
-      normalized.length,
-    );
-    final snippet = normalized.substring(start, end);
-
-    final prefix = start > 0 ? '...' : '';
-    final suffix = end < normalized.length ? '...' : '';
-    return '$prefix$snippet$suffix';
   }
 
   Future<void> _toggleAutoReadSession() async {
@@ -10960,7 +9491,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
       return;
     }
 
-    if (_isMangaChapter) {
+    if (!_supportsAutoRead) {
       _showMessage('漫画模式暂不支持自动阅读。');
       return;
     }
@@ -10972,27 +9503,21 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
   }
 
   void _startAutoReadSession({bool showMessage = false}) {
-    if (!mounted || _isMangaChapter) {
+    if (!mounted || !_supportsAutoRead) {
       return;
     }
 
     _autoReadResumeTimer?.cancel();
-    final previousPagedTextEnabled = _isPagedTextReaderEnabled();
-    final logicalAnchor = _currentLogicalPosition();
-    final fallbackRatio = _currentScrollRatio();
     _pageTurnModeBeforeAutoRead = _settings.pageTurnMode;
-    setState(() {
-      _isAutoReadSessionEnabled = true;
-      _settings = _settings.copyWith(
+    _applyReaderSettingsWithModeRestore(
+      nextSettings: _settings.copyWith(
         pageTurnMode: ReaderPageTurnMode.scroll,
         autoReadEnabled: false,
-      );
-    });
-    _syncContinuousTextFlowAfterSettingsApplied();
-    _restoreTextPositionFromLogicalAnchor(
-      previousPagedTextEnabled: previousPagedTextEnabled,
-      logicalAnchor: logicalAnchor,
-      fallbackRatio: fallbackRatio,
+      ),
+      syncVolumeKeyPageInterception: false,
+      beforeStateUpdate: () {
+        _isAutoReadSessionEnabled = true;
+      },
     );
     _reconcileAutoRead(restart: true);
     if (showMessage) {
@@ -11009,21 +9534,15 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
     _stopAutoRead();
 
     if (mounted) {
-      final previousPagedTextEnabled = _isPagedTextReaderEnabled();
-      final logicalAnchor = _currentLogicalPosition();
-      final fallbackRatio = _currentScrollRatio();
-      setState(() {
-        _isAutoReadSessionEnabled = false;
-        _settings = _settings.copyWith(
+      _applyReaderSettingsWithModeRestore(
+        nextSettings: _settings.copyWith(
           pageTurnMode: _pageTurnModeBeforeAutoRead,
           autoReadEnabled: false,
-        );
-      });
-      _syncContinuousTextFlowAfterSettingsApplied();
-      _restoreTextPositionFromLogicalAnchor(
-        previousPagedTextEnabled: previousPagedTextEnabled,
-        logicalAnchor: logicalAnchor,
-        fallbackRatio: fallbackRatio,
+        ),
+        syncVolumeKeyPageInterception: false,
+        beforeStateUpdate: () {
+          _isAutoReadSessionEnabled = false;
+        },
       );
     } else {
       _isAutoReadSessionEnabled = false;
@@ -11041,7 +9560,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
 
     final byId = chapters.indexWhere((chapter) => chapter.id == _chapterId);
     if (byId >= 0) {
-      return _resolveNearestReadableChapterIndex(
+      return _chapterNavigation.resolveNearestReadableChapterIndex(
         chapters,
         byId,
         preferForward: true,
@@ -11054,7 +9573,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
         (chapter) => chapter.chapterUrl == chapterUrl,
       );
       if (byUrl >= 0) {
-        return _resolveNearestReadableChapterIndex(
+        return _chapterNavigation.resolveNearestReadableChapterIndex(
           chapters,
           byUrl,
           preferForward: true,
@@ -11064,56 +9583,62 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
 
     final fromRoute = widget.chapterIndex;
     if (fromRoute != null && fromRoute >= 0 && fromRoute < chapters.length) {
-      return _resolveNearestReadableChapterIndex(
+      return _chapterNavigation.resolveNearestReadableChapterIndex(
         chapters,
         fromRoute,
         preferForward: true,
       );
     }
 
-    return _findReadableChapterIndex(chapters, 0, forward: true);
-  }
-
-  bool _isReadableChapter(Chapter chapter) {
-    return _chapterNavigation.isReadableChapter(chapter);
-  }
-
-  List<Chapter> _readableChapters(List<Chapter> chapters) {
-    return _chapterNavigation.readableChapters(chapters);
+    return _chapterNavigation.findReadableChapterIndex(
+      chapters,
+      0,
+      forward: true,
+    );
   }
 
   String? _latestReadableChapterTitle(List<Chapter> chapters) {
     for (var index = chapters.length - 1; index >= 0; index--) {
       final chapter = chapters[index];
-      if (_isReadableChapter(chapter)) {
+      if (_chapterNavigation.isReadableChapter(chapter)) {
         return chapter.title;
       }
     }
     return null;
   }
 
-  int? _findReadableChapterIndex(
-    List<Chapter> chapters,
-    int startIndex, {
-    required bool forward,
+  void _applyReaderSettingsWithModeRestore({
+    required ReaderSettings nextSettings,
+    VoidCallback? beforeStateUpdate,
+    bool syncVolumeKeyPageInterception = true,
   }) {
-    return _chapterNavigation.findReadableChapterIndex(
-      chapters,
-      startIndex,
-      forward: forward,
+    final previousSettings = _settings;
+    final previousPagedTextEnabled = _isPagedTextReaderEnabledFor(
+      previousSettings,
     );
-  }
+    final nextPagedTextEnabled = _isPagedTextReaderEnabledFor(nextSettings);
+    final didSwitchTextRenderMode =
+        !_isMangaChapter && previousPagedTextEnabled != nextPagedTextEnabled;
+    final logicalAnchor =
+        didSwitchTextRenderMode ? _currentLogicalPosition() : null;
+    final anchorFallbackRatio =
+        didSwitchTextRenderMode ? _currentScrollRatio() : 0.0;
 
-  int? _resolveNearestReadableChapterIndex(
-    List<Chapter> chapters,
-    int startIndex, {
-    required bool preferForward,
-  }) {
-    return _chapterNavigation.resolveNearestReadableChapterIndex(
-      chapters,
-      startIndex,
-      preferForward: preferForward,
-    );
+    setState(() {
+      beforeStateUpdate?.call();
+      _settings = nextSettings;
+    });
+    _syncContinuousTextFlowAfterSettingsApplied();
+    if (didSwitchTextRenderMode) {
+      _restoreTextPositionFromLogicalAnchor(
+        previousPagedTextEnabled: previousPagedTextEnabled,
+        logicalAnchor: logicalAnchor,
+        fallbackRatio: anchorFallbackRatio,
+      );
+    }
+    if (syncVolumeKeyPageInterception) {
+      unawaited(_syncVolumeKeyPageInterception());
+    }
   }
 
   void _applyProgressFallback(ReadingProgress progress) {
@@ -11382,8 +9907,8 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
         context: context,
         builder: (dialogContext) {
           return AlertDialog(
-            title: const Text('当前书源不可用'),
-            content: const Text('该书源可能已被删除或停用，是否现在切换到其他书源？'),
+            title: const Text('当前书享源不可用'),
+            content: const Text('该书享源可能已被删除或停用，是否现在切换到其他书享源？'),
             actions: [
               TextButton(
                 onPressed: () => Navigator.of(dialogContext).pop(false),
@@ -11551,35 +10076,11 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
                   return;
                 }
 
-                final previousSettings = _settings;
-                final previousPagedTextEnabled = _isPagedTextReaderEnabledFor(
-                  previousSettings,
-                );
-                final nextPagedTextEnabled = _isPagedTextReaderEnabledFor(
-                  draft,
-                );
-                final didSwitchTextRenderMode =
-                    !_isMangaChapter &&
-                    previousPagedTextEnabled != nextPagedTextEnabled;
-                final logicalAnchor =
-                    didSwitchTextRenderMode ? _currentLogicalPosition() : null;
-                final anchorFallbackRatio =
-                    didSwitchTextRenderMode ? _currentScrollRatio() : 0.0;
-
                 WidgetsBinding.instance.addPostFrameCallback((_) {
                   if (!mounted || identical(_settings, draft)) {
                     return;
                   }
-                  setState(() {
-                    _settings = draft;
-                  });
-                  _syncContinuousTextFlowAfterSettingsApplied();
-                  _restoreTextPositionFromLogicalAnchor(
-                    previousPagedTextEnabled: previousPagedTextEnabled,
-                    logicalAnchor: logicalAnchor,
-                    fallbackRatio: anchorFallbackRatio,
-                  );
-                  unawaited(_syncVolumeKeyPageInterception());
+                  _applyReaderSettingsWithModeRestore(nextSettings: draft);
                 });
               }
 
@@ -13049,6 +11550,74 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
                 );
               }
 
+              Widget buildSettingsOverviewChip({
+                required IconData icon,
+                required String label,
+                required String value,
+              }) {
+                final colorScheme = Theme.of(context).colorScheme;
+                return Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 10,
+                    vertical: 7,
+                  ),
+                  decoration: BoxDecoration(
+                    color: colorScheme.surfaceContainerLow,
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(
+                      color: colorScheme.outlineVariant.withValues(alpha: 0.35),
+                    ),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(icon, size: 15, color: colorScheme.primary),
+                      const SizedBox(width: 6),
+                      Text(
+                        '$label · $value',
+                        style: Theme.of(context).textTheme.labelMedium
+                            ?.copyWith(fontWeight: FontWeight.w600),
+                      ),
+                    ],
+                  ),
+                );
+              }
+
+              Widget buildSettingsGroupHeader({
+                required String title,
+                required String subtitle,
+                required List<Widget> chips,
+              }) {
+                final colorScheme = Theme.of(context).colorScheme;
+                return Container(
+                  margin: const EdgeInsets.only(bottom: 10),
+                  padding: const EdgeInsets.fromLTRB(2, 2, 2, 4),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        title,
+                        style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                          fontWeight: FontWeight.w800,
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        subtitle,
+                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                          color: colorScheme.onSurfaceVariant,
+                          height: 1.35,
+                        ),
+                      ),
+                      if (chips.isNotEmpty) ...[
+                        const SizedBox(height: 10),
+                        Wrap(spacing: 8, runSpacing: 8, children: chips),
+                      ],
+                    ],
+                  ),
+                );
+              }
+
               Widget buildCompactToggleRow({
                 required String label,
                 required bool value,
@@ -14010,9 +12579,58 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
 
                 final showInterfaceSettings =
                     initialTab == _ReaderSettingsTab.interface;
+                final basicOverviewChips = <Widget>[
+                  buildSettingsOverviewChip(
+                    icon: Icons.wb_twilight_outlined,
+                    label: '亮度',
+                    value: '${(draft.brightness * 100).round()}%',
+                  ),
+                  buildSettingsOverviewChip(
+                    icon: Icons.text_fields_rounded,
+                    label: '字号',
+                    value: draft.fontSize.toStringAsFixed(0),
+                  ),
+                  buildSettingsOverviewChip(
+                    icon: Icons.touch_app_outlined,
+                    label: '翻页',
+                    value: _pageTurnModeShortLabel(draft.pageTurnMode),
+                  ),
+                  buildSettingsOverviewChip(
+                    icon: Icons.format_line_spacing_rounded,
+                    label: '行距',
+                    value: _lineHeightValueLabel(draft),
+                  ),
+                ];
+                final advancedOverviewChips = <Widget>[
+                  buildSettingsOverviewChip(
+                    icon: Icons.space_dashboard_outlined,
+                    label: '信息栏',
+                    value: infoBarValue(),
+                  ),
+                  buildSettingsOverviewChip(
+                    icon: Icons.swap_horiz_rounded,
+                    label: '自动换源',
+                    value: draftAutoSwitchSourceOnFailureEnabled ? '已开启' : '关闭',
+                  ),
+                  buildSettingsOverviewChip(
+                    icon: Icons.volume_up_outlined,
+                    label: '音量键翻页',
+                    value: draft.volumeKeyPageEnabled ? '已开启' : '关闭',
+                  ),
+                  buildSettingsOverviewChip(
+                    icon: Icons.auto_awesome_motion_outlined,
+                    label: '自动阅读',
+                    value: '${draft.autoReadSpeed.round()} px/s',
+                  ),
+                ];
                 final selectedCards =
                     showInterfaceSettings
                         ? <Widget>[
+                          buildSettingsGroupHeader(
+                            title: '基础设置',
+                            subtitle: '高频阅读项，优先保留亮度、主题、字号、翻页与排版。',
+                            chips: basicOverviewChips,
+                          ),
                           interfaceCards[0],
                           interfaceCards[1],
                           readingCards[0],
@@ -14020,11 +12638,16 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
                           readingCards[2],
                         ]
                         : <Widget>[
+                          buildSettingsGroupHeader(
+                            title: '高级设置',
+                            subtitle: '低频行为与辅助项，包含信息栏、容错、按键和自动阅读。',
+                            chips: advancedOverviewChips,
+                          ),
                           quickToggleCard,
                           interfaceCards[2],
                           readingCards[3],
                         ];
-                final sheetTitle = showInterfaceSettings ? '界面设置' : '设置';
+                final sheetTitle = showInterfaceSettings ? '基础设置' : '高级设置';
                 final textSheetMaxWidth = AppLayout.pageContentMaxWidth(
                   context,
                   maxWidth: 760,
@@ -15954,16 +14577,6 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
   }
 }
 
-class _SwitchSourceScope {
-  const _SwitchSourceScope({
-    required this.sourceIds,
-    required this.contentMode,
-  });
-
-  final List<String> sourceIds;
-  final SearchContentMode contentMode;
-}
-
 class _ReaderSourceSnapshot {
   const _ReaderSourceSnapshot({
     required this.bookId,
@@ -16020,42 +14633,6 @@ class _PagedSlice {
   final int end;
 }
 
-class _CatalogSearchEntry {
-  const _CatalogSearchEntry({
-    required this.title,
-    required this.subtitle,
-    required this.chapterIndex,
-    this.scrollRatio,
-    this.logicalPosition,
-    this.isContent = false,
-  });
-
-  final String title;
-  final String subtitle;
-  final int chapterIndex;
-  final double? scrollRatio;
-  final ReaderLogicalPosition? logicalPosition;
-  final bool isContent;
-}
-
-class _ReaderCatalogSearchState {
-  const _ReaderCatalogSearchState({
-    this.keyword = '',
-    this.entries = const <_CatalogSearchEntry>[],
-    this.isLoading = false,
-  });
-
-  final String keyword;
-  final List<_CatalogSearchEntry> entries;
-  final bool isLoading;
-
-  List<_CatalogSearchEntry> get tocEntries =>
-      entries.where((entry) => !entry.isContent).toList(growable: false);
-
-  List<_CatalogSearchEntry> get contentEntries =>
-      entries.where((entry) => entry.isContent).toList(growable: false);
-}
-
 class _ChapterLoadSnapshot {
   const _ChapterLoadSnapshot({required this.result, required this.isCached});
 
@@ -16095,16 +14672,40 @@ class _ContinuousTextChapterLayout {
   final double endOffset;
 }
 
-class _DecodedReaderChapterCache {
-  const _DecodedReaderChapterCache({
-    required this.content,
-    this.imageUrls = const [],
-    this.imageHeaders = const {},
+class _ScrollEdgeAdvanceState {
+  const _ScrollEdgeAdvanceState({
+    this.overscrollDistance = 0,
+    this.isArmed = false,
+    this.actionDirection = 0,
   });
 
-  final String content;
-  final List<String> imageUrls;
-  final Map<String, String> imageHeaders;
+  final double overscrollDistance;
+  final bool isArmed;
+  final int actionDirection;
+
+  _ScrollEdgeAdvanceState copyWith({
+    double? overscrollDistance,
+    bool? isArmed,
+    int? actionDirection,
+  }) {
+    return _ScrollEdgeAdvanceState(
+      overscrollDistance: overscrollDistance ?? this.overscrollDistance,
+      isArmed: isArmed ?? this.isArmed,
+      actionDirection: actionDirection ?? this.actionDirection,
+    );
+  }
+}
+
+class _PagedPaginationState {
+  const _PagedPaginationState({
+    this.isPaginating = false,
+    this.signature,
+    this.pendingRestoreRatio,
+  });
+
+  final bool isPaginating;
+  final String? signature;
+  final double? pendingRestoreRatio;
 }
 
 class _PrecomputedChapterLayout {
@@ -16678,83 +15279,6 @@ class _WavyUnderlinePainter extends CustomPainter {
   }
 }
 
-class _BookmarkGroup {
-  _BookmarkGroup({
-    required this.chapterIndex,
-    required this.title,
-    required List<Bookmark> bookmarks,
-  }) : bookmarks = List<Bookmark>.from(bookmarks);
-
-  final int chapterIndex;
-  final String title;
-  final List<Bookmark> bookmarks;
-}
-
-class _ActiveReadingRecordSession {
-  const _ActiveReadingRecordSession({
-    required this.bookId,
-    required this.sourceId,
-    required this.detailUrl,
-    required this.bookTitle,
-    this.bookAuthor,
-    this.coverUrl,
-    required this.chapterId,
-    this.chapterTitle,
-    this.chapterIndex,
-    required this.chapterUrl,
-    required this.startAt,
-    required this.startPositionRatio,
-    required this.furthestPositionRatio,
-  });
-
-  final String bookId;
-  final String sourceId;
-  final String detailUrl;
-  final String bookTitle;
-  final String? bookAuthor;
-  final String? coverUrl;
-  final String chapterId;
-  final String? chapterTitle;
-  final int? chapterIndex;
-  final String chapterUrl;
-  final DateTime startAt;
-  final double startPositionRatio;
-  final double furthestPositionRatio;
-
-  _ActiveReadingRecordSession copyWith({
-    String? bookId,
-    String? sourceId,
-    String? detailUrl,
-    String? bookTitle,
-    String? bookAuthor,
-    String? coverUrl,
-    String? chapterId,
-    String? chapterTitle,
-    int? chapterIndex,
-    String? chapterUrl,
-    DateTime? startAt,
-    double? startPositionRatio,
-    double? furthestPositionRatio,
-  }) {
-    return _ActiveReadingRecordSession(
-      bookId: bookId ?? this.bookId,
-      sourceId: sourceId ?? this.sourceId,
-      detailUrl: detailUrl ?? this.detailUrl,
-      bookTitle: bookTitle ?? this.bookTitle,
-      bookAuthor: bookAuthor ?? this.bookAuthor,
-      coverUrl: coverUrl ?? this.coverUrl,
-      chapterId: chapterId ?? this.chapterId,
-      chapterTitle: chapterTitle ?? this.chapterTitle,
-      chapterIndex: chapterIndex ?? this.chapterIndex,
-      chapterUrl: chapterUrl ?? this.chapterUrl,
-      startAt: startAt ?? this.startAt,
-      startPositionRatio: startPositionRatio ?? this.startPositionRatio,
-      furthestPositionRatio:
-          furthestPositionRatio ?? this.furthestPositionRatio,
-    );
-  }
-}
-
 class _SelectionStyle {
   const _SelectionStyle({
     required this.bold,
@@ -16765,86 +15289,4 @@ class _SelectionStyle {
   final bool bold;
   final bool underline;
   final bool wavy;
-}
-
-class _BookmarkGroupSection extends StatelessWidget {
-  const _BookmarkGroupSection({
-    required this.title,
-    required this.items,
-    required this.timeLabel,
-    required this.onTap,
-    required this.onDelete,
-  });
-
-  final String title;
-  final List<Bookmark> items;
-  final String Function(DateTime) timeLabel;
-  final ValueChanged<Bookmark> onTap;
-  final ValueChanged<Bookmark> onDelete;
-
-  @override
-  Widget build(BuildContext context) {
-    final textTheme = Theme.of(context).textTheme;
-    final colorScheme = Theme.of(context).colorScheme;
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          title,
-          style: textTheme.labelLarge?.copyWith(fontWeight: FontWeight.w700),
-        ),
-        const SizedBox(height: 4),
-        ...items.map((bookmark) {
-          return Padding(
-            padding: const EdgeInsets.only(bottom: 4),
-            child: Material(
-              color: colorScheme.surfaceContainerHighest,
-              borderRadius: BorderRadius.circular(12),
-              child: InkWell(
-                borderRadius: BorderRadius.circular(12),
-                onTap: () => onTap(bookmark),
-                child: Padding(
-                  padding: const EdgeInsets.fromLTRB(10, 8, 6, 8),
-                  child: Row(
-                    children: [
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              bookmark.snippet,
-                              maxLines: 2,
-                              overflow: TextOverflow.ellipsis,
-                              style: textTheme.bodyMedium?.copyWith(
-                                fontWeight: FontWeight.w500,
-                                height: 1.2,
-                              ),
-                            ),
-                            const SizedBox(height: 3),
-                            Text(
-                              timeLabel(bookmark.createdAt),
-                              style: textTheme.bodySmall?.copyWith(
-                                color: colorScheme.onSurfaceVariant,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                      IconButton(
-                        tooltip: '删除',
-                        visualDensity: VisualDensity.compact,
-                        icon: const Icon(Icons.delete_outline, size: 18),
-                        onPressed: () => onDelete(bookmark),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-            ),
-          );
-        }),
-      ],
-    );
-  }
 }

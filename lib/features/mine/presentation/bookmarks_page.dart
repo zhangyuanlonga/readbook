@@ -13,6 +13,7 @@ import '../../../domain/entities/bookmark.dart';
 import '../../../domain/entities/bookshelf_book.dart';
 import '../../../domain/repositories/bookmark_repository.dart';
 import '../../bookshelf/application/bookshelf_service.dart';
+import '../../reader/presentation/reader_route.dart';
 
 class BookmarksPage extends StatefulWidget {
   const BookmarksPage({super.key});
@@ -525,16 +526,16 @@ class _BookmarksPageState extends State<BookmarksPage> {
         bookmark.chapterId.trim().isEmpty
             ? 'bootstrap'
             : bookmark.chapterId.trim();
-    final uri = Uri(
-      path: '/reader/${bookmark.bookId}/$chapterId',
-      queryParameters: {
-        'sourceId': book!.sourceId,
-        'detailUrl': book.detailUrl,
-        'chapterIndex': bookmark.chapterIndex.toString(),
-        'bookmarkId': bookmark.id,
-      },
+    context.push(
+      buildReaderRoute(
+        bookId: bookmark.bookId,
+        chapterId: chapterId,
+        sourceId: book!.sourceId,
+        detailUrl: book.detailUrl,
+        chapterIndex: bookmark.chapterIndex,
+        bookmarkId: bookmark.id,
+      ),
     );
-    context.push(uri.toString());
   }
 
   Future<void> _deleteBookmark(Bookmark bookmark) async {
