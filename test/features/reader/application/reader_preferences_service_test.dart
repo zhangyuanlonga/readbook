@@ -1,4 +1,5 @@
 import 'package:flutter_appread/domain/entities/reader_settings.dart';
+import 'package:flutter_appread/domain/entities/reader_logical_position.dart';
 import 'package:flutter_appread/domain/entities/reading_progress.dart';
 import 'package:flutter_appread/domain/entities/reader_toc_snapshot.dart';
 import 'package:flutter_appread/domain/entities/chapter.dart';
@@ -133,6 +134,12 @@ void main() {
         chapterIndex: 0,
         updatedAt: DateTime.parse('2026-02-12T12:00:00.000Z'),
         chapterPositionRatio: 0.63,
+        logicalPosition: const ReaderLogicalPosition(
+          chapterIndex: 0,
+          blockIndex: 4,
+          offsetInBlock: 9,
+          chapterPositionRatio: 0.63,
+        ),
       );
 
       await service.saveProgress(progress);
@@ -143,6 +150,8 @@ void main() {
       expect(restored.chapterTitle, '第一章');
       expect(restored.chapterIndex, 0);
       expect(restored.chapterPositionRatio, 0.63);
+      expect(restored.logicalPosition, isNotNull);
+      expect(restored.logicalPosition!.blockIndex, 4);
     });
 
     test('loads legacy progress payload without position ratio', () async {
@@ -156,6 +165,7 @@ void main() {
 
       expect(restored, isNotNull);
       expect(restored!.chapterPositionRatio, 0);
+      expect(restored.logicalPosition, isNull);
     });
 
     test('saves and loads toc snapshot', () async {
@@ -169,17 +179,18 @@ void main() {
         coverUrl: 'https://example.com/cover.jpg',
         chapters: const [
           Chapter(
-            id: 'chapter_1',
+            id: 'volume_1',
             bookId: 'book_1',
-            title: '第一章',
-            chapterUrl: 'https://example.com/book/1/chapter/1',
+            title: '第一卷',
+            chapterUrl: '',
             index: 0,
+            isVolume: true,
           ),
           Chapter(
             id: 'chapter_2',
             bookId: 'book_1',
-            title: '第二章',
-            chapterUrl: 'https://example.com/book/1/chapter/2',
+            title: '第一章',
+            chapterUrl: 'https://example.com/book/1/chapter/1',
             index: 1,
           ),
         ],
@@ -197,7 +208,9 @@ void main() {
       expect(restored.author, '作者甲');
       expect(restored.coverUrl, 'https://example.com/cover.jpg');
       expect(restored.chapters, hasLength(2));
-      expect(restored.chapters.first.title, '第一章');
+      expect(restored.chapters.first.title, '第一卷');
+      expect(restored.chapters.first.isVolume, isTrue);
+      expect(restored.chapters.first.chapterUrl, isEmpty);
       expect(restored.chapters.last.index, 1);
     });
   });

@@ -11,6 +11,7 @@ import '../../../../core/errors/error_codes.dart';
 import '../../../../core/errors/error_stage.dart';
 import '../../../../domain/entities/local_book.dart';
 import '../../../../domain/entities/local_chapter.dart';
+import '../../../../domain/entities/reader_document.dart';
 import 'local_text_encoding_detector.dart';
 import 'local_book_parser.dart';
 
@@ -35,8 +36,6 @@ class EpubLocalBookParser implements LocalBookParser {
     '.bmp',
   };
 
-  static const String _inlineImageMarkerPrefix = '[[appread-image:';
-  static const String _inlineImageMarkerSuffix = ']]';
   static const List<String> _htmlCharsetCandidates = <String>[
     'utf-8',
     'utf-16be',
@@ -865,9 +864,7 @@ class EpubLocalBookParser implements LocalBookParser {
           if (seen.add(imageUrl)) {
             output.add(imageUrl);
           }
-          blocks.add(
-            '$_inlineImageMarkerPrefix$imageUrl$_inlineImageMarkerSuffix',
-          );
+          blocks.add(ReaderDocument.inlineImageParagraph(imageUrl));
         }
         return;
       }

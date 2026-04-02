@@ -5,6 +5,7 @@ class Chapter {
     required this.title,
     required this.chapterUrl,
     required this.index,
+    this.isVolume = false,
   });
 
   final String id;
@@ -12,6 +13,7 @@ class Chapter {
   final String title;
   final String chapterUrl;
   final int index;
+  final bool isVolume;
 
   Map<String, dynamic> toJson() {
     return {
@@ -20,6 +22,7 @@ class Chapter {
       'title': title,
       'chapterUrl': chapterUrl,
       'index': index,
+      'isVolume': isVolume,
     };
   }
 
@@ -28,8 +31,9 @@ class Chapter {
       id: _requiredString(json, 'id'),
       bookId: _requiredString(json, 'bookId'),
       title: _requiredString(json, 'title'),
-      chapterUrl: _requiredString(json, 'chapterUrl'),
+      chapterUrl: _stringAllowEmpty(json['chapterUrl']),
       index: _requiredInt(json, 'index'),
+      isVolume: json['isVolume'] == true,
     );
   }
 
@@ -56,5 +60,9 @@ class Chapter {
       }
     }
     throw FormatException('Missing required int field: $key');
+  }
+
+  static String _stringAllowEmpty(Object? value) {
+    return value?.toString().trim() ?? '';
   }
 }

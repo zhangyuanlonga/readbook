@@ -140,13 +140,11 @@ class LocalContentProvider extends ContentProvider {
       chapterId: resolvedChapterId,
       chapterIndex: chapterIndex,
     );
-    final imageUrls =
-        chapter.content.trim().isEmpty ? chapter.imageUrls : const <String>[];
 
     return ChapterContentResult(
       content: chapter.content,
       fromCache: true,
-      imageUrls: imageUrls,
+      imageUrls: chapter.imageUrls,
     );
   }
 

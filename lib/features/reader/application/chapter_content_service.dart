@@ -6,17 +6,46 @@ import '../../../core/errors/error_codes.dart';
 import '../../../core/errors/error_stage.dart';
 import '../../../core/logging/app_logger.dart';
 import '../../../data/datasources/local/app_database.dart';
+import '../../../domain/entities/reader_document.dart';
 import '../../../runtime/sources/source_result_models.dart' as runtime_models;
 import '../../source/application/source_runtime_facade.dart';
 import 'content_text_cleaner.dart';
 
 class ChapterContentResult {
-  const ChapterContentResult({
+  factory ChapterContentResult({
+    required String content,
+    required bool fromCache,
+    List<String> imageUrls = const [],
+    Map<String, String> imageHeaders = const {},
+    String? displayChapterTitle,
+    ReaderDocument? document,
+  }) {
+    final resolvedDocument =
+        document ??
+        ReaderDocument.fromContent(content: content, imageUrls: imageUrls);
+    return ChapterContentResult._(
+      content:
+          resolvedDocument.isPureImageDocument
+              ? ''
+              : resolvedDocument.compatibilityContent,
+      fromCache: fromCache,
+      imageUrls:
+          resolvedDocument.isPureImageDocument
+              ? resolvedDocument.imageUrls
+              : const <String>[],
+      imageHeaders: Map<String, String>.unmodifiable(imageHeaders),
+      displayChapterTitle: displayChapterTitle,
+      document: resolvedDocument,
+    );
+  }
+
+  const ChapterContentResult._({
     required this.content,
     required this.fromCache,
-    this.imageUrls = const [],
-    this.imageHeaders = const {},
-    this.displayChapterTitle,
+    required this.imageUrls,
+    required this.imageHeaders,
+    required this.displayChapterTitle,
+    required this.document,
   });
 
   final String content;
@@ -24,8 +53,9 @@ class ChapterContentResult {
   final List<String> imageUrls;
   final Map<String, String> imageHeaders;
   final String? displayChapterTitle;
+  final ReaderDocument document;
 
-  bool get isImageContent => imageUrls.isNotEmpty;
+  bool get isImageContent => document.isPureImageDocument;
 }
 
 class ChapterContentService {
@@ -145,18 +175,12 @@ class ChapterContentService {
     }
 
     final runtimeBook = runtime_models.Book(
-      id: bookId.trim().isNotEmpty ? bookId.trim() : 'script-book',
       title: '',
       author: '',
       detailUrl: '',
       sourceId: sourceId,
     );
     final runtimeChapter = runtime_models.Chapter(
-      id: _buildScriptChapterId(
-        bookId: runtimeBook.id,
-        chapterUrl: chapterUrl,
-        index: chapterIndex ?? 0,
-      ),
       title:
           chapterTitle?.trim().isNotEmpty == true
               ? chapterTitle!.trim()
@@ -260,18 +284,6 @@ class ChapterContentService {
         },
       );
     }
-  }
-
-  String _buildScriptChapterId({
-    required String bookId,
-    required String chapterUrl,
-    required int index,
-  }) {
-    final normalizedChapterUrl = chapterUrl.trim();
-    if (normalizedChapterUrl.isNotEmpty) {
-      return '$bookId:${Uri.encodeComponent(normalizedChapterUrl)}';
-    }
-    return '${bookId}_$index';
   }
 
   String? _normalizeOptionalText(String? value) {

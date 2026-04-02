@@ -1,4 +1,5 @@
 import 'package:flutter_appread/domain/entities/reading_progress.dart';
+import 'package:flutter_appread/domain/entities/reader_logical_position.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
@@ -14,6 +15,13 @@ void main() {
         chapterIndex: 0,
         updatedAt: DateTime.parse('2026-02-12T12:00:00.000Z'),
         chapterPositionRatio: 0.42,
+        logicalPosition: const ReaderLogicalPosition(
+          chapterIndex: 0,
+          blockIndex: 3,
+          offsetInBlock: 10,
+          chapterPositionRatio: 0.42,
+          pageIndex: 2,
+        ),
       );
 
       final json = progress.toJson();
@@ -22,6 +30,9 @@ void main() {
       expect(restored.bookId, progress.bookId);
       expect(restored.chapterTitle, progress.chapterTitle);
       expect(restored.chapterPositionRatio, 0.42);
+      expect(restored.logicalPosition, isNotNull);
+      expect(restored.logicalPosition!.blockIndex, 3);
+      expect(restored.logicalPosition!.pageIndex, 2);
     });
 
     test('defaults ratio to zero when loading legacy payload', () {
@@ -37,6 +48,7 @@ void main() {
       });
 
       expect(restored.chapterPositionRatio, 0);
+      expect(restored.logicalPosition, isNull);
     });
 
     test('clamps ratio into valid range', () {

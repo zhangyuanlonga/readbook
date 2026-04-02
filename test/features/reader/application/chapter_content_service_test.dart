@@ -45,6 +45,8 @@ void main() {
       expect(first.content, '正文内容');
       expect(first.fromCache, isFalse);
       expect(first.displayChapterTitle, '章节标题');
+      expect(first.document.isPureImageDocument, isFalse);
+      expect(first.document.paragraphs, <String>['正文内容']);
 
       final second = await service.load(
         sourceId: 'source_1',
@@ -57,51 +59,57 @@ void main() {
       expect(second.fromCache, isTrue);
     });
 
-    test('loads image content from runtime and restores it from cache', () async {
-      final database = AppDatabase(executor: NativeDatabase.memory());
-      addTearDown(database.close);
+    test(
+      'loads image content from runtime and restores it from cache',
+      () async {
+        final database = AppDatabase(executor: NativeDatabase.memory());
+        addTearDown(database.close);
 
-      final service = ChapterContentService(
-        database: database,
-        sourceRuntimeFacade: _FakeRuntimeFacade(
-          sources: <RegisteredSource>[
-            _buildRegisteredSource(id: 'source_2', name: '脚本源B'),
-          ],
-          contentsBySourceId: <String, runtime_models.Content>{
-            'source_2': const runtime_models.Content(
-              title: '图片章节',
-              content: '',
-              images: <String>[
-                'https://example.com/1.jpg',
-                'https://example.com/2.jpg',
-              ],
-            ),
-          },
-        ),
-      );
+        final service = ChapterContentService(
+          database: database,
+          sourceRuntimeFacade: _FakeRuntimeFacade(
+            sources: <RegisteredSource>[
+              _buildRegisteredSource(id: 'source_2', name: '脚本源B'),
+            ],
+            contentsBySourceId: <String, runtime_models.Content>{
+              'source_2': const runtime_models.Content(
+                title: '图片章节',
+                content: '',
+                images: <String>[
+                  'https://example.com/1.jpg',
+                  'https://example.com/2.jpg',
+                ],
+              ),
+            },
+          ),
+        );
 
-      final first = await service.load(
-        sourceId: 'source_2',
-        chapterUrl: 'https://example.com/ch2',
-        bookId: 'book_2',
-        chapterIndex: 1,
-        chapterTitle: '第二章',
-      );
-      expect(first.isImageContent, isTrue);
-      expect(first.imageUrls, hasLength(2));
-      expect(first.fromCache, isFalse);
+        final first = await service.load(
+          sourceId: 'source_2',
+          chapterUrl: 'https://example.com/ch2',
+          bookId: 'book_2',
+          chapterIndex: 1,
+          chapterTitle: '第二章',
+        );
+        expect(first.isImageContent, isTrue);
+        expect(first.imageUrls, hasLength(2));
+        expect(first.fromCache, isFalse);
+        expect(first.content, isEmpty);
+        expect(first.document.isPureImageDocument, isTrue);
 
-      final second = await service.load(
-        sourceId: 'source_2',
-        chapterUrl: 'https://example.com/ch2',
-        bookId: 'book_2',
-        chapterIndex: 1,
-        chapterTitle: '第二章',
-      );
-      expect(second.isImageContent, isTrue);
-      expect(second.imageUrls, hasLength(2));
-      expect(second.fromCache, isTrue);
-    });
+        final second = await service.load(
+          sourceId: 'source_2',
+          chapterUrl: 'https://example.com/ch2',
+          bookId: 'book_2',
+          chapterIndex: 1,
+          chapterTitle: '第二章',
+        );
+        expect(second.isImageContent, isTrue);
+        expect(second.imageUrls, hasLength(2));
+        expect(second.fromCache, isTrue);
+        expect(second.document.isPureImageDocument, isTrue);
+      },
+    );
 
     test('throws unknown source when runtime source is missing', () async {
       final database = AppDatabase(executor: NativeDatabase.memory());
@@ -109,14 +117,13 @@ void main() {
 
       final service = ChapterContentService(
         database: database,
-        sourceRuntimeFacade: _FakeRuntimeFacade(sources: const <RegisteredSource>[]),
+        sourceRuntimeFacade: _FakeRuntimeFacade(
+          sources: const <RegisteredSource>[],
+        ),
       );
 
       await expectLater(
-        service.load(
-          sourceId: 'missing',
-          chapterUrl: 'https://example.com/ch',
-        ),
+        service.load(sourceId: 'missing', chapterUrl: 'https://example.com/ch'),
         throwsA(
           isA<AppException>()
               .having((error) => error.code, 'code', ErrorCode.unknownSource)

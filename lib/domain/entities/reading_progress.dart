@@ -1,3 +1,5 @@
+import 'reader_logical_position.dart';
+
 class ReadingProgress {
   const ReadingProgress({
     required this.bookId,
@@ -9,6 +11,7 @@ class ReadingProgress {
     required this.chapterIndex,
     required this.updatedAt,
     this.chapterPositionRatio = 0,
+    this.logicalPosition,
   });
 
   final String bookId;
@@ -20,6 +23,7 @@ class ReadingProgress {
   final int chapterIndex;
   final DateTime updatedAt;
   final double chapterPositionRatio;
+  final ReaderLogicalPosition? logicalPosition;
 
   Map<String, dynamic> toJson() {
     return {
@@ -32,6 +36,7 @@ class ReadingProgress {
       'chapterIndex': chapterIndex,
       'updatedAt': updatedAt.toIso8601String(),
       'chapterPositionRatio': chapterPositionRatio,
+      if (logicalPosition != null) 'logicalPosition': logicalPosition!.toJson(),
     };
   }
 
@@ -47,6 +52,7 @@ class ReadingProgress {
       updatedAt: _requiredDateTime(json, 'updatedAt'),
       chapterPositionRatio: (_asDouble(json['chapterPositionRatio']) ?? 0)
           .clamp(0.0, 1.0),
+      logicalPosition: _optionalLogicalPosition(json['logicalPosition']),
     );
   }
 
@@ -102,5 +108,14 @@ class ReadingProgress {
       throw FormatException('Invalid DateTime field: $key');
     }
     return parsed;
+  }
+
+  static ReaderLogicalPosition? _optionalLogicalPosition(Object? value) {
+    if (value is! Map) {
+      return null;
+    }
+    return ReaderLogicalPosition.fromJson(
+      value.map((key, nestedValue) => MapEntry(key.toString(), nestedValue)),
+    );
   }
 }

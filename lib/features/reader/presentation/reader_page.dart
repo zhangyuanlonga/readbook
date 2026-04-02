@@ -34,6 +34,7 @@ import '../../../domain/entities/bookmark.dart';
 import '../../../domain/entities/book.dart';
 import '../../../domain/entities/bookshelf_book.dart';
 import '../../../domain/entities/chapter.dart';
+import '../../../domain/entities/reader_document.dart';
 import '../../../domain/entities/reader_settings.dart';
 import '../../../domain/entities/reading_progress.dart';
 import '../../../domain/entities/reader_toc_snapshot.dart';
@@ -49,18 +50,22 @@ import '../application/content_provider.dart';
 import '../application/chapter_content_service.dart';
 import '../application/local/local_reader_identity.dart';
 import '../application/local_content_provider.dart';
+import '../application/reader_chapter_navigation.dart';
 import '../application/reader_font_registry_service.dart';
+import '../application/reader_logical_position.dart';
 import '../application/reader_preferences_service.dart';
+import '../application/reader_session_state.dart';
+import '../application/reader_source_switch_target_resolver.dart';
 import '../application/reading_record_metrics.dart';
 import '../application/reading_record_service.dart';
 import '../application/reader_error_center_service.dart';
 import '../application/reader_system_settings_service.dart';
 import '../application/reader_typography_resolver.dart';
+import '../application/text_reader_renderer.dart';
 import '../application/reader_volume_key_page_bridge.dart';
 import '../application/source_content_provider.dart';
 import '../application/source_switch_score_service.dart';
 import '../application/switch_source_shared.dart';
-import '../application/switch_source_position_resolver.dart';
 import '../application/local/local_book_storage_service.dart';
 import 'chapter_cache_sheets.dart';
 
@@ -104,6 +109,8 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
       ReaderFontRegistryService();
   final ReaderTypographyResolver _typographyResolver =
       const ReaderTypographyResolver();
+  final ReaderChapterNavigation _chapterNavigation =
+      const ReaderChapterNavigation();
   final ReaderSystemSettingsService _systemSettingsService =
       ReaderSystemSettingsService();
   final LocalBookStorageService _localBookStorageService =
@@ -117,8 +124,12 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
   final SearchHitCacheService _searchHitCacheService = SearchHitCacheService();
   final SourceSwitchScoreService _switchSourceScoreService =
       SourceSwitchScoreService();
-  final SwitchSourcePositionResolver _switchSourcePositionResolver =
-      const SwitchSourcePositionResolver();
+  final ReaderSourceSwitchTargetResolver _sourceSwitchTargetResolver =
+      const ReaderSourceSwitchTargetResolver();
+  final ScrollTextReaderRenderer _scrollTextRenderer =
+      const ScrollTextReaderRenderer();
+  final PagedTextReaderRenderer _pagedTextRenderer =
+      const PagedTextReaderRenderer();
   final ScrollController _scrollController = ScrollController();
   final PageController _mangaPageController = PageController();
   final GlobalKey _readerBodyKey = GlobalKey();
@@ -161,6 +172,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
   bool _hasPromptedMissingSourceSwitch = false;
   SearchCancellationToken? _activeSwitchSourceCancellationToken;
   String? _errorText;
+  ReaderDocument _document = ReaderDocument(blocks: const <ReaderBlock>[]);
   String _content = '';
   List<String> _paragraphs = const [];
   List<String> _chapterImageUrls = const [];
@@ -184,8 +196,6 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
   final Map<int, TapDownDetails> _mangaDoubleTapDetails =
       <int, TapDownDetails>{};
   final Set<int> _mangaZoomedPageIndexes = <int>{};
-  static const String _inlineImageMarkerPrefix = '[[appread-image:';
-  static const String _inlineImageMarkerSuffix = ']]';
   int _mangaPageIndex = 0;
   ReadingProgress? _bootstrapProgress;
   Timer? _progressDebounceTimer;
@@ -555,25 +565,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
       return;
     }
 
-    final index = _currentIndex;
-    if (index == null) {
-      return;
-    }
-
-    if (forward) {
-      if (index >= _chapters.length - 1) {
-        _showChapterBoundaryHint(isFirst: false);
-        return;
-      }
-      await _jumpTo(index + 1, initialScrollRatio: 0);
-      return;
-    }
-
-    if (index <= 0) {
-      _showChapterBoundaryHint(isFirst: true);
-      return;
-    }
-    await _jumpTo(index - 1, initialScrollRatio: 1);
+    await _jumpToAdjacentReadableChapter(forward: forward);
   }
 
   Future<void> _goToPreviousMangaPage() async {
@@ -581,12 +573,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
       return;
     }
     if (_mangaPageIndex <= 0) {
-      final index = _currentIndex;
-      if (index == null || index <= 0) {
-        _showChapterBoundaryHint(isFirst: true);
-        return;
-      }
-      await _jumpTo(index - 1, initialScrollRatio: 1);
+      await _jumpToAdjacentReadableChapter(forward: false);
       return;
     }
     final target = _mangaPageIndex - 1;
@@ -613,12 +600,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
     }
     final total = _chapterImageUrls.length;
     if (_mangaPageIndex >= total - 1) {
-      final index = _currentIndex;
-      if (index == null || index >= _chapters.length - 1) {
-        _showChapterBoundaryHint(isFirst: false);
-        return;
-      }
-      await _jumpTo(index + 1, initialScrollRatio: 0);
+      await _jumpToAdjacentReadableChapter(forward: true);
       return;
     }
     final target = _mangaPageIndex + 1;
@@ -639,14 +621,178 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
     _scheduleProgressSave();
   }
 
-  bool _isPagedTextReaderEnabled() {
+  bool _isPagedTextReaderEnabledFor(ReaderSettings settings) {
     if (_chapterImageUrls.isNotEmpty) {
       return false;
     }
     if (_paragraphs.any(_isInlineImageParagraph)) {
       return false;
     }
-    return !_pageTurnUsesScroll(_settings.pageTurnMode);
+    return !_pageTurnUsesScroll(settings.pageTurnMode);
+  }
+
+  bool _isPagedTextReaderEnabled() {
+    return _isPagedTextReaderEnabledFor(_settings);
+  }
+
+  TextReaderRenderer get _activeTextRenderer =>
+      _isPagedTextReaderEnabled() ? _pagedTextRenderer : _scrollTextRenderer;
+
+  ReaderRenderMetrics _currentTextRenderMetrics() {
+    if (_isPagedTextReaderEnabled()) {
+      return ReaderRenderMetrics(
+        pageCount: _pagedPages.length,
+        currentPageIndex: _currentPageIndex,
+      );
+    }
+    return ReaderRenderMetrics(
+      hasScrollClients: _scrollController.hasClients,
+      maxScrollExtent:
+          _scrollController.hasClients
+              ? _scrollController.position.maxScrollExtent
+              : 0,
+      scrollOffset:
+          _scrollController.hasClients ? _scrollController.position.pixels : 0,
+    );
+  }
+
+  ReaderLogicalPosition? _currentLogicalPosition() {
+    final chapterIndex = _currentIndex;
+    if (chapterIndex == null) {
+      return null;
+    }
+    return ReaderLogicalPosition.fromDocument(
+      document: _document,
+      chapterIndex: chapterIndex,
+      chapterPositionRatio: _currentScrollRatio(),
+      pageIndex: _isPagedTextReaderEnabled() ? _currentPageIndex : null,
+    );
+  }
+
+  ReaderSessionState? _currentTextSessionState() {
+    final chapterIndex = _currentIndex;
+    final logicalPosition = _currentLogicalPosition();
+    if (chapterIndex == null || logicalPosition == null) {
+      return null;
+    }
+    final metrics = _currentTextRenderMetrics();
+    final visiblePosition =
+        _isPagedTextReaderEnabled()
+            ? ReaderVisiblePosition(
+              pageCount: metrics.pageCount,
+              pageIndex:
+                  metrics.pageCount <= 0
+                      ? 0
+                      : metrics.currentPageIndex.clamp(
+                        0,
+                        metrics.pageCount - 1,
+                      ),
+            )
+            : ReaderVisiblePosition(
+              scrollOffset: metrics.hasScrollClients ? metrics.scrollOffset : 0,
+              maxScrollExtent:
+                  metrics.hasScrollClients ? metrics.maxScrollExtent : 0,
+            );
+    return ReaderSessionState(
+      currentChapterIndex: chapterIndex,
+      currentChapterId: _chapterId.trim(),
+      currentChapterUrl: (_chapterUrl ?? '').trim(),
+      currentChapterTitle: (_chapterTitle ?? '').trim(),
+      logicalPosition: logicalPosition,
+      visiblePosition: visiblePosition,
+      rendererKind: _activeTextRenderer.kind,
+      isAutoReading: _isAutoReadSessionEnabled,
+      isChapterTransitioning: _isLoadingContent,
+    );
+  }
+
+  Future<bool> _jumpToAdjacentReadableChapter({
+    required bool forward,
+    bool showBoundaryHint = true,
+    double? initialScrollRatio,
+  }) async {
+    final sessionState = _currentTextSessionState();
+    final currentChapterIndex =
+        sessionState?.currentChapterIndex ?? _currentIndex;
+    if (currentChapterIndex == null) {
+      return false;
+    }
+
+    final targetIndex = _findReadableChapterIndex(
+      _chapters,
+      currentChapterIndex + (forward ? 1 : -1),
+      forward: forward,
+    );
+    if (targetIndex == null) {
+      if (showBoundaryHint) {
+        _showChapterBoundaryHint(isFirst: !forward);
+      }
+      return false;
+    }
+
+    await _jumpTo(
+      targetIndex,
+      initialScrollRatio: initialScrollRatio ?? (forward ? 0 : 1),
+    );
+    return true;
+  }
+
+  ReadingProgress? _bootstrapProgressForCurrentChapter({bool consume = false}) {
+    final progress = _bootstrapProgress;
+    if (progress == null) {
+      return null;
+    }
+
+    final currentChapterId = _chapterId.trim();
+    final currentChapterUrl = (_chapterUrl ?? '').trim();
+    final matchesChapter =
+        progress.chapterId == currentChapterId ||
+        progress.chapterUrl == currentChapterUrl;
+    if (!matchesChapter) {
+      return null;
+    }
+
+    if (consume) {
+      _bootstrapProgress = null;
+    }
+    return progress;
+  }
+
+  double _resolveDocumentRestoreRatio({
+    ReaderDocument? document,
+    ReaderLogicalPosition? logicalPosition,
+    ReadingProgress? progress,
+    double fallback = 0,
+  }) {
+    final effectiveDocument = document ?? _document;
+    final effectivePosition = logicalPosition ?? progress?.logicalPosition;
+    if (effectivePosition != null && !effectiveDocument.isEmpty) {
+      return effectivePosition.approximateRatio(effectiveDocument);
+    }
+
+    final ratio = progress?.chapterPositionRatio ?? fallback;
+    return ratio.clamp(0.0, 1.0);
+  }
+
+  void _restoreTextPositionFromLogicalAnchor({
+    required bool previousPagedTextEnabled,
+    required ReaderLogicalPosition? logicalAnchor,
+    required double fallbackRatio,
+  }) {
+    final nextPagedTextEnabled = _isPagedTextReaderEnabled();
+    if (previousPagedTextEnabled == nextPagedTextEnabled) {
+      return;
+    }
+
+    final anchorRatio = _resolveDocumentRestoreRatio(
+      logicalPosition: logicalAnchor,
+      fallback: fallbackRatio,
+    );
+    if (nextPagedTextEnabled) {
+      _pendingPageRestoreRatio = anchorRatio;
+    }
+    _restoreScrollPosition(anchorRatio);
+    _scheduleProgressSave();
   }
 
   bool _isSwipePaginationEnabled() {
@@ -2105,17 +2251,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
   }
 
   String? _tryParseInlineImageParagraph(String paragraph) {
-    final normalized = paragraph.trim();
-    if (!normalized.startsWith(_inlineImageMarkerPrefix) ||
-        !normalized.endsWith(_inlineImageMarkerSuffix)) {
-      return null;
-    }
-    final raw = normalized.substring(
-      _inlineImageMarkerPrefix.length,
-      normalized.length - _inlineImageMarkerSuffix.length,
-    );
-    final imageUrl = raw.trim();
-    return imageUrl.isEmpty ? null : imageUrl;
+    return ReaderDocument.tryParseInlineImageParagraph(paragraph);
   }
 
   bool _isInlineImageParagraph(String paragraph) {
@@ -3231,14 +3367,9 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
       return;
     }
 
-    final index = _currentIndex;
-    if (index == null || index >= _chapters.length - 1) {
-      return;
-    }
-
     _isScrollEdgeAdvancingChapter = true;
     try {
-      await _jumpTo(index + 1, initialScrollRatio: 0);
+      await _jumpToAdjacentReadableChapter(forward: true);
     } finally {
       _isScrollEdgeAdvancingChapter = false;
     }
@@ -3249,14 +3380,9 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
       return;
     }
 
-    final index = _currentIndex;
-    if (index == null || index <= 0) {
-      return;
-    }
-
     _isScrollEdgeAdvancingChapter = true;
     try {
-      await _jumpTo(index - 1, initialScrollRatio: 1);
+      await _jumpToAdjacentReadableChapter(forward: false);
     } finally {
       _isScrollEdgeAdvancingChapter = false;
     }
@@ -3541,8 +3667,8 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
     return _settings.themeMode;
   }
 
-  ReaderPageAnimationStyle _effectivePageAnimationStyle() {
-    return _settings.pageAnimationStyle;
+  ReaderPageAnimationStyle _currentPagedAnimationStyle() {
+    return _pagedTextRenderer.resolveAnimationStyle(_settings);
   }
 
   bool _currentChapterHasInlineImageParagraphs() {
@@ -3565,55 +3691,6 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
       return '当前章节包含插图，已退回滚动正文，本章不会展示分页动画。';
     }
     return null;
-  }
-
-  _PagedAnimationMotionSpec _pageSwitchMotionSpecForStyle(
-    ReaderPageAnimationStyle style,
-  ) {
-    return switch (style) {
-      ReaderPageAnimationStyle.curl => const _PagedAnimationMotionSpec(
-        duration: _kCurlAutoTurnDuration,
-        switchInCurve: Curves.easeOutCubic,
-        switchOutCurve: Curves.easeInOutCubic,
-      ),
-      ReaderPageAnimationStyle.cover => const _PagedAnimationMotionSpec(
-        duration: Duration(milliseconds: 520),
-        switchInCurve: Curves.easeOutCubic,
-        switchOutCurve: Curves.easeInCubic,
-      ),
-      ReaderPageAnimationStyle.translate => const _PagedAnimationMotionSpec(
-        duration: Duration(milliseconds: 430),
-        switchInCurve: Curves.easeOutCubic,
-        switchOutCurve: Curves.easeInCubic,
-      ),
-      ReaderPageAnimationStyle.vertical => const _PagedAnimationMotionSpec(
-        duration: Duration(milliseconds: 460),
-        switchInCurve: Curves.easeOutCubic,
-        switchOutCurve: Curves.easeInCubic,
-      ),
-      ReaderPageAnimationStyle.fade => const _PagedAnimationMotionSpec(
-        duration: Duration(milliseconds: 380),
-        switchInCurve: Curves.easeInOutCubic,
-        switchOutCurve: Curves.easeInOutCubic,
-      ),
-      ReaderPageAnimationStyle.none => const _PagedAnimationMotionSpec(
-        duration: Duration.zero,
-        switchInCurve: Curves.linear,
-        switchOutCurve: Curves.linear,
-      ),
-    };
-  }
-
-  Duration _pageSwitchDurationForStyle(ReaderPageAnimationStyle style) {
-    return _pageSwitchMotionSpecForStyle(style).duration;
-  }
-
-  Curve _pageSwitchInCurveForStyle(ReaderPageAnimationStyle style) {
-    return _pageSwitchMotionSpecForStyle(style).switchInCurve;
-  }
-
-  Curve _pageSwitchOutCurveForStyle(ReaderPageAnimationStyle style) {
-    return _pageSwitchMotionSpecForStyle(style).switchOutCurve;
   }
 
   Widget _buildPagedReader(_ReaderThemeColors colors) {
@@ -3704,10 +3781,8 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
         );
         final pagedSize = constraints.biggest;
 
-        final animationStyle = _effectivePageAnimationStyle();
-        final switchDuration = _pageSwitchDurationForStyle(animationStyle);
-        final switchInCurve = _pageSwitchInCurveForStyle(animationStyle);
-        final switchOutCurve = _pageSwitchOutCurveForStyle(animationStyle);
+        final animationStyle = _currentPagedAnimationStyle();
+        final motion = _pagedTextRenderer.motionSpecForStyle(animationStyle);
 
         return _buildPagedTransitionStack(
           colors: colors,
@@ -3717,9 +3792,9 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
           pagedSize: pagedSize,
           contentPadding: contentPadding,
           bottomInset: bottomInset,
-          switchDuration: switchDuration,
-          switchInCurve: switchInCurve,
-          switchOutCurve: switchOutCurve,
+          switchDuration: motion.duration,
+          switchInCurve: motion.switchInCurve,
+          switchOutCurve: motion.switchOutCurve,
         );
       },
     );
@@ -4569,22 +4644,12 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
 
     final currentIndex = _currentPageIndex.clamp(0, pages.length - 1);
     if (direction < 0 && currentIndex <= 0) {
-      final index = _currentIndex;
-      if (index == null || index <= 0) {
-        _showChapterBoundaryHint(isFirst: true);
-        return;
-      }
-      await _jumpTo(index - 1, initialScrollRatio: 1);
+      await _jumpToAdjacentReadableChapter(forward: false);
       return;
     }
 
     if (direction > 0 && currentIndex >= pages.length - 1) {
-      final index = _currentIndex;
-      if (index == null || index >= _chapters.length - 1) {
-        _showChapterBoundaryHint(isFirst: false);
-        return;
-      }
-      await _jumpTo(index + 1, initialScrollRatio: 0);
+      await _jumpToAdjacentReadableChapter(forward: true);
       return;
     }
 
@@ -4642,11 +4707,16 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
     final taskId = ++_paginationTaskId;
     _resetPagedTransitionState();
     _resetCurlAnimationState();
+    final preservedRatio =
+        (_pendingPageRestoreRatio ?? _currentScrollRatio())
+            .clamp(0.0, 1.0)
+            .toDouble();
 
     setState(() {
       _isPaginatingPages = true;
       _pagedPages = const [];
       _currentPageIndex = 0;
+      _pendingPageRestoreRatio = preservedRatio;
     });
 
     unawaited(
@@ -4953,7 +5023,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
         final enableSwipeTurn = _isSwipePaginationEnabled();
         final enableCurlPreview =
             enableSwipeTurn &&
-            _effectivePageAnimationStyle() == ReaderPageAnimationStyle.curl;
+            _currentPagedAnimationStyle() == ReaderPageAnimationStyle.curl;
         return Listener(
           behavior: HitTestBehavior.translucent,
           onPointerDown: (event) {
@@ -5454,27 +5524,6 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
     return '${'　' * indentCount}$paragraph';
   }
 
-  List<String> _splitParagraphs(String content) {
-    final normalized = content
-        .replaceAll(r'\r\n', '\n')
-        .replaceAll(r'\n', '\n')
-        .replaceAll('\r\n', '\n')
-        .replaceAll('\r', '\n');
-
-    // Treat any explicit line break as paragraph boundary so indentation is
-    // consistently applied even when upstream content uses single '\n'.
-    final canonicalParagraphBreaks = normalized.replaceAll(
-      RegExp(r'\n+'),
-      '\n\n',
-    );
-
-    return canonicalParagraphBreaks
-        .split(RegExp(r'\n{2,}'))
-        .map((paragraph) => paragraph.trim())
-        .where((paragraph) => paragraph.isNotEmpty)
-        .toList(growable: false);
-  }
-
   Future<void> _openChapterCache() async {
     final sourceId = _sourceId;
     if (sourceId == null || sourceId.isEmpty || _chapters.isEmpty) {
@@ -5490,15 +5539,31 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
       return;
     }
 
-    final total = _chapters.length;
-    final startIndex = (_currentIndex ?? 0).clamp(0, max(0, total - 1)).toInt();
+    final readableChapters = _readableChapters(_chapters);
+    if (readableChapters.isEmpty) {
+      _showMessage('当前目录没有可缓存的正文章节。');
+      return;
+    }
+
+    final total = readableChapters.length;
+    final currentChapterId = _chapterId;
+    final currentChapterUrl = (_chapterUrl ?? '').trim();
+    final currentReadableIndex = readableChapters.indexWhere(
+      (chapter) =>
+          chapter.id == currentChapterId ||
+          chapter.chapterUrl.trim() == currentChapterUrl,
+    );
+    final startIndex =
+        (currentReadableIndex >= 0 ? currentReadableIndex : 0)
+            .clamp(0, max(0, total - 1))
+            .toInt();
     final endIndex = min(total - 1, startIndex + 49);
 
     await showChapterCacheFlow(
       context: context,
       bookId: _currentBookId,
       sourceId: sourceId,
-      chapters: _chapters,
+      chapters: readableChapters,
       initialStartIndex: startIndex,
       initialEndIndex: endIndex,
       entryPoint: ChapterCacheEntryPoint.reader,
@@ -6166,6 +6231,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
       chapterImageUrls: _chapterImageUrls,
       chapterImageHeaders: _chapterImageHeaders,
       scrollRatio: _currentScrollRatio(),
+      textSessionState: _currentTextSessionState(),
     );
 
     setState(() {
@@ -6202,19 +6268,21 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
       }
 
       final chapters = detailResult.chapters;
-      if (chapters.isEmpty) {
+      if (_readableChapters(chapters).isEmpty) {
         if (showResultMessage) {
           _showMessage('目标书源暂无可读章节，无法切换。');
         }
         return false;
       }
-      final positionDecision = _switchSourcePositionResolver.resolve(
+      final switchTarget = _sourceSwitchTargetResolver.resolve(
         currentChapters: snapshot.chapters,
         targetChapters: chapters,
         previousChapterTitle: snapshot.chapterTitle,
         previousChapterIndex: snapshot.currentIndex,
+        previousLogicalPosition: snapshot.textSessionState?.logicalPosition,
         lagTolerance: _kSwitchSourceLagTolerance,
       );
+      final positionDecision = switchTarget.positionDecision;
 
       if ((positionDecision.isBehindCurrentReading ||
               positionDecision.isSignificantlyBehind) &&
@@ -6237,10 +6305,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
         }
       }
 
-      final targetIndex = positionDecision.targetIndex.clamp(
-        0,
-        chapters.length - 1,
-      );
+      final targetIndex = switchTarget.targetChapterIndex;
       final targetChapter = chapters[targetIndex];
 
       setState(() {
@@ -6259,7 +6324,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
       });
 
       final loaded = await _loadCurrentChapter(
-        initialScrollRatio: snapshot.scrollRatio,
+        initialScrollRatio: switchTarget.logicalPosition.chapterPositionRatio,
       );
       if (!loaded) {
         throw StateError('切换后正文加载失败。');
@@ -6298,9 +6363,8 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
               author: _bookAuthor,
               coverUrl: _bookCoverUrl,
               latestChapter:
-                  _chapters.isNotEmpty
-                      ? _chapters.last.title
-                      : candidate.book.latestChapter,
+                  _latestReadableChapterTitle(_chapters) ??
+                  candidate.book.latestChapter,
               addedAt: DateTime.now(),
             ),
           );
@@ -6394,6 +6458,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
   }
 
   void _restoreSourceSnapshot(_ReaderSourceSnapshot snapshot) {
+    var restoreRatio = snapshot.scrollRatio;
     setState(() {
       _activeBookId = snapshot.bookId;
       _sourceId = snapshot.sourceId;
@@ -6414,11 +6479,15 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
         imageUrls: snapshot.chapterImageUrls,
         imageHeaders: snapshot.chapterImageHeaders,
       );
-      _pendingPageRestoreRatio = snapshot.scrollRatio;
+      restoreRatio = _resolveDocumentRestoreRatio(
+        logicalPosition: snapshot.textSessionState?.logicalPosition,
+        fallback: snapshot.scrollRatio,
+      );
+      _pendingPageRestoreRatio = restoreRatio;
     });
 
-    _restoreScrollPosition(snapshot.scrollRatio);
-    _scheduleReadingRecordSessionStart(initialRatio: snapshot.scrollRatio);
+    _restoreScrollPosition(restoreRatio);
+    _scheduleReadingRecordSessionStart(initialRatio: restoreRatio);
     _scheduleAutoReadResume();
   }
 
@@ -6955,8 +7024,12 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
           return;
         }
 
+        final bootstrapProgress = _bootstrapProgressForCurrentChapter(
+          consume: true,
+        );
         final loaded = await _loadCurrentChapter(
-          initialScrollRatio: _consumeBootstrapScrollRatio(),
+          initialScrollRatio: bootstrapProgress?.chapterPositionRatio,
+          initialLogicalPosition: bootstrapProgress?.logicalPosition,
         );
         if (loaded) {
           await _consumePendingBookmarkJump();
@@ -6994,16 +7067,29 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
       _chapters = detailResult.chapters;
       _currentIndex = _resolveCurrentIndex(_chapters);
 
-      if (_currentIndex != null) {
-        final current = _chapters[_currentIndex!];
-        _chapterId = current.id;
-        _chapterUrl = current.chapterUrl;
-        _chapterTitle = current.title;
+      if (_currentIndex == null) {
+        if (!mounted) {
+          return;
+        }
+        setState(() {
+          _errorText = '当前目录没有可阅读的正文章节。';
+          _isBootstrapping = false;
+        });
+        return;
       }
 
+      final current = _chapters[_currentIndex!];
+      _chapterId = current.id;
+      _chapterUrl = current.chapterUrl;
+      _chapterTitle = current.title;
+
       await _refreshBookshelfState();
+      final bootstrapProgress = _bootstrapProgressForCurrentChapter(
+        consume: true,
+      );
       final loaded = await _loadCurrentChapter(
-        initialScrollRatio: _consumeBootstrapScrollRatio(),
+        initialScrollRatio: bootstrapProgress?.chapterPositionRatio,
+        initialLogicalPosition: bootstrapProgress?.logicalPosition,
       );
       if (loaded) {
         await _consumePendingBookmarkJump();
@@ -7107,15 +7193,30 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
     String content, {
     List<String> imageUrls = const [],
     Map<String, String> imageHeaders = const {},
+    ReaderDocument? document,
     List<String>? precomputedParagraphs,
     List<List<_PagedSlice>>? precomputedPagedPages,
     int? precomputedCurrentPageIndex,
     String? precomputedPaginationSignature,
   }) {
+    final resolvedDocument =
+        document ??
+        ReaderDocument.fromContent(content: content, imageUrls: imageUrls);
+    final resolvedContent =
+        resolvedDocument.isPureImageDocument
+            ? ''
+            : resolvedDocument.compatibilityContent;
+    final resolvedParagraphs = resolvedDocument.paragraphs;
+    final resolvedImageUrls =
+        resolvedDocument.isPureImageDocument
+            ? resolvedDocument.imageUrls
+            : const <String>[];
+
     _stopAutoRead();
     _disposeMangaTransformControllers();
-    _content = content;
-    _chapterImageUrls = List.unmodifiable(imageUrls);
+    _document = resolvedDocument;
+    _content = resolvedContent;
+    _chapterImageUrls = List.unmodifiable(resolvedImageUrls);
     _chapterImageHeaders = Map.unmodifiable(imageHeaders);
     _mangaImageRetryNonce.clear();
     _mangaPageIndex = 0;
@@ -7131,7 +7232,9 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
     if (_mangaPageController.hasClients) {
       _mangaPageController.jumpToPage(0);
     }
-    _paragraphs = precomputedParagraphs ?? _splitParagraphs(content);
+    _paragraphs = List<String>.unmodifiable(
+      precomputedParagraphs ?? resolvedParagraphs,
+    );
     if (precomputedPagedPages != null && precomputedPagedPages.isNotEmpty) {
       _pagedPages = List<List<_PagedSlice>>.unmodifiable(
         precomputedPagedPages
@@ -7162,8 +7265,8 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
 
   bool _shouldBuildContinuousTextFlowFor(ChapterContentResult result) {
     return _shouldUseContinuousTextFlow &&
-        result.imageUrls.isEmpty &&
-        result.content.trim().isNotEmpty;
+        !result.isImageContent &&
+        result.document.paragraphs.isNotEmpty;
   }
 
   _ContinuousTextChapter _buildContinuousTextChapter({
@@ -7175,7 +7278,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
         snapshot.result.displayChapterTitle?.trim().isNotEmpty == true
             ? snapshot.result.displayChapterTitle!.trim()
             : chapter.title.trim();
-    final paragraphs = _splitParagraphs(snapshot.result.content);
+    final paragraphs = snapshot.result.document.paragraphs;
     final effectiveParagraphs =
         paragraphs.isEmpty && snapshot.result.content.trim().isNotEmpty
             ? <String>[snapshot.result.content]
@@ -7220,6 +7323,9 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
     }
 
     final chapter = _chapters[chapterIndex];
+    if (!_isReadableChapter(chapter)) {
+      return null;
+    }
     if (chapterIndex == _currentIndex &&
         _chapterImageUrls.isEmpty &&
         _content.trim().isNotEmpty) {
@@ -7266,8 +7372,12 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
       return;
     }
 
-    final targetIndex = _continuousTextChapters.last.chapterIndex + 1;
-    if (targetIndex >= _chapters.length) {
+    final targetIndex = _findReadableChapterIndex(
+      _chapters,
+      _continuousTextChapters.last.chapterIndex + 1,
+      forward: true,
+    );
+    if (targetIndex == null) {
       return;
     }
 
@@ -7299,8 +7409,12 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
       return;
     }
 
-    final targetIndex = _continuousTextChapters.first.chapterIndex - 1;
-    if (targetIndex < 0) {
+    final targetIndex = _findReadableChapterIndex(
+      _chapters,
+      _continuousTextChapters.first.chapterIndex - 1,
+      forward: false,
+    );
+    if (targetIndex == null) {
       return;
     }
 
@@ -7613,43 +7727,6 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
     });
   }
 
-  double? _consumeBootstrapScrollRatio() {
-    final progress = _bootstrapProgress;
-    if (progress == null) {
-      return null;
-    }
-
-    final currentChapterId = _chapterId.trim();
-    final currentChapterUrl = (_chapterUrl ?? '').trim();
-    final matchesChapter =
-        progress.chapterId == currentChapterId ||
-        progress.chapterUrl == currentChapterUrl;
-    if (!matchesChapter) {
-      return null;
-    }
-
-    _bootstrapProgress = null;
-    return progress.chapterPositionRatio;
-  }
-
-  double _previewBootstrapScrollRatio() {
-    final progress = _bootstrapProgress;
-    if (progress == null) {
-      return 0;
-    }
-
-    final currentChapterId = _chapterId.trim();
-    final currentChapterUrl = (_chapterUrl ?? '').trim();
-    final matchesChapter =
-        progress.chapterId == currentChapterId ||
-        progress.chapterUrl == currentChapterUrl;
-    if (!matchesChapter) {
-      return 0;
-    }
-
-    return progress.chapterPositionRatio.clamp(0.0, 1.0);
-  }
-
   void _restoreScrollPosition(double ratio) {
     final normalized = ratio.clamp(0.0, 1.0);
 
@@ -7659,18 +7736,16 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
       }
 
       if (_isPagedTextReaderEnabled()) {
-        final pages = _pagedPages;
-        if (pages.isEmpty) {
-          _pendingPageRestoreRatio = normalized;
+        final plan = _activeTextRenderer.planRestore(
+          ratio: normalized,
+          metrics: _currentTextRenderMetrics(),
+        );
+        if (plan.shouldDefer) {
+          _pendingPageRestoreRatio = plan.normalizedRatio;
           return;
         }
-
-        final targetIndex = (normalized * (pages.length - 1)).round().clamp(
-          0,
-          pages.length - 1,
-        );
         setState(() {
-          _currentPageIndex = targetIndex;
+          _currentPageIndex = plan.pageIndex ?? 0;
         });
         return;
       }
@@ -7698,13 +7773,11 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
         return;
       }
 
-      final maxExtent = _scrollController.position.maxScrollExtent;
-      if (maxExtent <= 0) {
-        _scrollController.jumpTo(0);
-        return;
-      }
-
-      _scrollController.jumpTo(maxExtent * normalized);
+      final plan = _activeTextRenderer.planRestore(
+        ratio: normalized,
+        metrics: _currentTextRenderMetrics(),
+      );
+      _scrollController.jumpTo(plan.scrollOffset ?? 0);
     });
   }
 
@@ -7983,11 +8056,20 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
       return;
     }
 
-    final ratio =
+    final logicalPosition = _resolveBookmarkLogicalPosition(bookmark);
+    if (logicalPosition != null) {
+      final ratio = _resolveDocumentRestoreRatio(
+        logicalPosition: logicalPosition,
+      );
+      _restoreScrollPosition(ratio);
+      return;
+    }
+
+    final fallbackRatio =
         _resolveBookmarkScrollRatio(bookmark) ??
         _findSnippetScrollRatio(bookmark.snippet);
-    if (ratio != null) {
-      _restoreScrollPosition(ratio);
+    if (fallbackRatio != null) {
+      _restoreScrollPosition(fallbackRatio);
       return;
     }
 
@@ -8034,6 +8116,27 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
       return null;
     }
     return (index / text.length).clamp(0.0, 1.0);
+  }
+
+  ReaderLogicalPosition? _resolveBookmarkLogicalPosition(Bookmark bookmark) {
+    final chapterIndex = _currentIndex;
+    if (chapterIndex == null || _document.isEmpty) {
+      return null;
+    }
+
+    final ratio =
+        _resolveBookmarkScrollRatio(bookmark) ??
+        _findSnippetScrollRatio(bookmark.snippet);
+    if (ratio == null) {
+      return null;
+    }
+
+    return ReaderLogicalPosition.fromDocument(
+      document: _document,
+      chapterIndex: chapterIndex,
+      chapterPositionRatio: ratio,
+      pageIndex: _isPagedTextReaderEnabled() ? _currentPageIndex : null,
+    );
   }
 
   Bookmark? _currentSelectionBookmark() {
@@ -8169,14 +8272,12 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
       return;
     }
 
-    final currentIndex = _currentIndex;
-    if (currentIndex == null || currentIndex >= _chapters.length - 1) {
-      return;
-    }
-
     _isAutoReadAdvancingChapter = true;
     try {
-      await _jumpTo(currentIndex + 1, initialScrollRatio: 0);
+      await _jumpToAdjacentReadableChapter(
+        forward: true,
+        showBoundaryHint: false,
+      );
     } finally {
       _isAutoReadAdvancingChapter = false;
     }
@@ -8394,11 +8495,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
 
   double _currentScrollRatio() {
     if (_isPagedTextReaderEnabled()) {
-      final pages = _pagedPages;
-      if (pages.length <= 1) {
-        return 0;
-      }
-      return (_currentPageIndex / (pages.length - 1)).clamp(0.0, 1.0);
+      return _activeTextRenderer.captureProgress(_currentTextRenderMetrics());
     }
 
     if (_isMangaPagedMode) {
@@ -8416,16 +8513,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
       }
     }
 
-    if (!_scrollController.hasClients) {
-      return 0;
-    }
-
-    final maxExtent = _scrollController.position.maxScrollExtent;
-    if (maxExtent <= 0) {
-      return 0;
-    }
-
-    return (_scrollController.position.pixels / maxExtent).clamp(0.0, 1.0);
+    return _activeTextRenderer.captureProgress(_currentTextRenderMetrics());
   }
 
   void _showChapterSwitchFailedSnackbar(int targetIndex) {
@@ -8559,7 +8647,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
         _lastPaginationMaxHeight! >= 40;
 
     if (canPrepaginate) {
-      final paragraphs = _splitParagraphs(snapshot.result.content);
+      final paragraphs = snapshot.result.document.paragraphs;
       final effectiveParagraphs =
           paragraphs.isEmpty ? <String>[snapshot.result.content] : paragraphs;
       final signature = _buildPaginationSignature(
@@ -8618,6 +8706,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
         snapshot.result.content,
         imageUrls: snapshot.result.imageUrls,
         imageHeaders: snapshot.result.imageHeaders,
+        document: snapshot.result.document,
         precomputedParagraphs: precomputedParagraphs,
         precomputedPagedPages: precomputedPagedPages,
         precomputedCurrentPageIndex: precomputedPageIndex,
@@ -8661,7 +8750,8 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
       }
 
       final decoded = _decodePersistedChapterCache(payload);
-      final previewRatio = _previewBootstrapScrollRatio();
+      final previewProgress = _bootstrapProgressForCurrentChapter();
+      var previewRatio = 0.0;
       if (!mounted) {
         return false;
       }
@@ -8681,6 +8771,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
           imageUrls: decoded.imageUrls,
           imageHeaders: decoded.imageHeaders,
         );
+        previewRatio = _resolveDocumentRestoreRatio(progress: previewProgress);
         if (resolvedCurrentChapter != null &&
             _shouldUseContinuousTextFlow &&
             decoded.imageUrls.isEmpty &&
@@ -8707,6 +8798,9 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
         _pendingPageRestoreRatio = previewRatio;
       });
 
+      if (previewProgress != null) {
+        _bootstrapProgress = null;
+      }
       _restoreScrollPosition(previewRatio);
       _scheduleReadingRecordSessionStart(initialRatio: previewRatio);
       return true;
@@ -8852,6 +8946,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
 
   Future<bool> _loadCurrentChapter({
     double? initialScrollRatio,
+    ReaderLogicalPosition? initialLogicalPosition,
     String? sourceIdOverride,
     String? chapterIdOverride,
     String? chapterUrlOverride,
@@ -8906,7 +9001,11 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
         return false;
       }
 
-      final targetRatio = initialScrollRatio?.clamp(0.0, 1.0) ?? 0.0;
+      final targetRatio = _resolveDocumentRestoreRatio(
+        document: snapshot.result.document,
+        logicalPosition: initialLogicalPosition,
+        fallback: initialScrollRatio ?? 0.0,
+      );
       await _applyLoadedChapterSnapshot(
         snapshot: snapshot,
         chapterId: chapterId,
@@ -9016,7 +9115,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
             detailUrl: detailUrl,
             author: _bookAuthor,
             coverUrl: _bookCoverUrl,
-            latestChapter: _chapters.isNotEmpty ? _chapters.last.title : null,
+            latestChapter: _latestReadableChapterTitle(_chapters),
             addedAt: DateTime.now(),
           ),
         );
@@ -9135,7 +9234,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
             _lastPaginationMaxHeight != null &&
             _lastPaginationMaxWidth! >= 20 &&
             _lastPaginationMaxHeight! >= 40) {
-          final paragraphs = _splitParagraphs(result.content);
+          final paragraphs = result.document.paragraphs;
           final effectiveParagraphs =
               paragraphs.isEmpty ? <String>[result.content] : paragraphs;
           final signature = _buildPaginationSignature(
@@ -9193,6 +9292,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
     final normalizedChapterUrl = _normalizeLocalChapterUrlForProgress(
       chapterUrl,
     );
+    final logicalPosition = _currentLogicalPosition();
 
     await _preferencesService.saveProgress(
       ReadingProgress(
@@ -9205,6 +9305,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
         chapterIndex: currentIndex,
         updatedAt: DateTime.now(),
         chapterPositionRatio: _currentScrollRatio(),
+        logicalPosition: logicalPosition,
       ),
     );
   }
@@ -9235,55 +9336,39 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
     }
 
     final safeDirection = direction >= 0 ? 1 : -1;
-    final targetIndex = _currentPageIndex + safeDirection;
-    if (targetIndex < 0 || targetIndex >= pages.length) {
-      await _jumpPagedTextAcrossChapter(direction: safeDirection);
-      return;
-    }
-
-    final animationStyle = _effectivePageAnimationStyle();
-    if (animationStyle == ReaderPageAnimationStyle.curl) {
-      await _autoTurnCurlPage(safeDirection);
-      return;
-    }
-
-    if (animationStyle == ReaderPageAnimationStyle.none) {
-      setState(() {
-        _currentPageIndex = targetIndex;
-      });
-      _syncActiveReadingRecordSessionProgress();
-      _scheduleProgressSave();
-      return;
-    }
-
-    _startPagedPageTransition(
-      style: animationStyle,
+    final turnDecision = _pagedTextRenderer.resolveTurnDecision(
       direction: safeDirection,
-      fromIndex: _currentPageIndex,
-      toIndex: targetIndex,
+      currentPageIndex: _currentPageIndex,
+      pageCount: pages.length,
+      settings: _settings,
     );
+    switch (turnDecision.type) {
+      case PagedTurnDecisionType.crossChapter:
+        await _jumpPagedTextAcrossChapter(direction: safeDirection);
+        return;
+      case PagedTurnDecisionType.curl:
+        await _autoTurnCurlPage(safeDirection);
+        return;
+      case PagedTurnDecisionType.immediate:
+        setState(() {
+          _currentPageIndex = turnDecision.targetPageIndex;
+        });
+        _syncActiveReadingRecordSessionProgress();
+        _scheduleProgressSave();
+        return;
+      case PagedTurnDecisionType.animated:
+        _startPagedPageTransition(
+          style: turnDecision.animationStyle,
+          direction: safeDirection,
+          fromIndex: _currentPageIndex,
+          toIndex: turnDecision.targetPageIndex,
+        );
+        return;
+    }
   }
 
   Future<void> _jumpPagedTextAcrossChapter({required int direction}) async {
-    final currentChapterIndex = _currentIndex;
-    if (currentChapterIndex == null) {
-      return;
-    }
-
-    if (direction < 0) {
-      if (currentChapterIndex <= 0) {
-        _showChapterBoundaryHint(isFirst: true);
-        return;
-      }
-      await _jumpTo(currentChapterIndex - 1, initialScrollRatio: 1);
-      return;
-    }
-
-    if (currentChapterIndex >= _chapters.length - 1) {
-      _showChapterBoundaryHint(isFirst: false);
-      return;
-    }
-    await _jumpTo(currentChapterIndex + 1, initialScrollRatio: 0);
+    await _jumpToAdjacentReadableChapter(forward: direction >= 0);
   }
 
   void _startPagedPageTransition({
@@ -9296,7 +9381,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
       return;
     }
 
-    final motion = _pageSwitchMotionSpecForStyle(style);
+    final motion = _pagedTextRenderer.motionSpecForStyle(style);
     _pagedTransitionController.duration = motion.duration;
     setState(() {
       _pagedTransition = _PagedPageTransitionState(
@@ -9330,21 +9415,42 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
     _scheduleProgressSave();
   }
 
-  Future<void> _jumpTo(int index, {double? initialScrollRatio}) async {
+  Future<void> _jumpTo(
+    int index, {
+    double? initialScrollRatio,
+    ReaderLogicalPosition? initialLogicalPosition,
+  }) async {
     if (_isLoadingContent || index < 0 || index >= _chapters.length) {
       return;
     }
 
     _stopAutoRead();
-    final chapter = _chapters[index];
+    final resolvedIndex =
+        _currentIndex == null || index == _currentIndex
+            ? _resolveNearestReadableChapterIndex(
+              _chapters,
+              index,
+              preferForward: true,
+            )
+            : _findReadableChapterIndex(
+              _chapters,
+              index,
+              forward: index > _currentIndex!,
+            );
+    if (resolvedIndex == null) {
+      _showChapterBoundaryHint(isFirst: index <= (_currentIndex ?? 0));
+      return;
+    }
+    final chapter = _chapters[resolvedIndex];
 
     final success = await _loadCurrentChapter(
       initialScrollRatio: initialScrollRatio ?? 0,
+      initialLogicalPosition: initialLogicalPosition,
       sourceIdOverride: _sourceId,
       chapterIdOverride: chapter.id,
       chapterUrlOverride: chapter.chapterUrl,
       chapterTitleOverride: chapter.title,
-      chapterIndexOverride: index,
+      chapterIndexOverride: resolvedIndex,
       commitChapterIdentity: true,
     );
     if (success || !mounted) {
@@ -9356,7 +9462,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
     });
 
     _maybeStartReadingRecordSession(initialRatio: _currentScrollRatio());
-    _showChapterSwitchFailedSnackbar(index);
+    _showChapterSwitchFailedSnackbar(resolvedIndex);
   }
 
   void _onReaderTap(Offset localPosition, Size size, EdgeInsets gestureInsets) {
@@ -9627,6 +9733,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
     Timer? catalogSearchDebounceTimer;
     var catalogSearchToken = 0;
     double? selectedScrollRatio;
+    ReaderLogicalPosition? selectedLogicalPosition;
     final readerModalTheme = _readerModalTheme();
     var bookmarks = <Bookmark>[];
     var isBookmarkLoading = true;
@@ -9960,6 +10067,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
                               contentEntries: contentSearchEntries,
                               onEntryTap: (entry) {
                                 selectedScrollRatio = entry.scrollRatio;
+                                selectedLogicalPosition = entry.logicalPosition;
                                 Navigator.of(context).pop(entry.chapterIndex);
                               },
                             ),
@@ -10268,14 +10376,23 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
     }
 
     if (selectedIndex == _currentIndex) {
-      if (selectedScrollRatio != null) {
+      if (selectedLogicalPosition != null) {
+        final ratio = _resolveDocumentRestoreRatio(
+          logicalPosition: selectedLogicalPosition,
+        );
+        _restoreScrollPosition(ratio);
+      } else if (selectedScrollRatio != null) {
         _restoreScrollPosition(selectedScrollRatio!);
       }
       _scheduleAutoReadResume();
       return;
     }
 
-    await _jumpTo(selectedIndex);
+    await _jumpTo(
+      selectedIndex,
+      initialScrollRatio: selectedScrollRatio,
+      initialLogicalPosition: selectedLogicalPosition,
+    );
   }
 
   List<_CatalogSearchEntry> _buildFullTextSearchEntries(String keyword) {
@@ -10304,16 +10421,22 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
       return entries;
     }
 
-    final paragraphs =
-        _paragraphs.isEmpty ? _splitParagraphs(_content) : _paragraphs;
+    final paragraphs = _paragraphs.isEmpty ? _document.paragraphs : _paragraphs;
     if (paragraphs.isEmpty) {
       if (_containsKeyword(_content, keyword, normalizedKeyword)) {
+        final logicalPosition = ReaderLogicalPosition.fromDocument(
+          document: _document,
+          chapterIndex: currentIndex,
+          chapterPositionRatio: 0,
+          pageIndex: _isPagedTextReaderEnabled() ? _currentPageIndex : null,
+        );
         entries.add(
           _CatalogSearchEntry(
             title: '第 ${currentIndex + 1} 章正文',
             subtitle: _buildSearchSnippet(_content, keyword),
             chapterIndex: currentIndex,
             scrollRatio: 0,
+            logicalPosition: logicalPosition,
             isContent: true,
           ),
         );
@@ -10329,12 +10452,19 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
 
       final ratio =
           paragraphs.length <= 1 ? 0.0 : index / (paragraphs.length - 1);
+      final logicalPosition = ReaderLogicalPosition.fromDocument(
+        document: _document,
+        chapterIndex: currentIndex,
+        chapterPositionRatio: ratio,
+        pageIndex: _isPagedTextReaderEnabled() ? _currentPageIndex : null,
+      );
       entries.add(
         _CatalogSearchEntry(
           title: '第 ${currentIndex + 1} 章正文命中',
           subtitle: _buildSearchSnippet(paragraph, keyword),
           chapterIndex: currentIndex,
           scrollRatio: ratio,
+          logicalPosition: logicalPosition,
           isContent: true,
         ),
       );
@@ -10847,6 +10977,9 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
     }
 
     _autoReadResumeTimer?.cancel();
+    final previousPagedTextEnabled = _isPagedTextReaderEnabled();
+    final logicalAnchor = _currentLogicalPosition();
+    final fallbackRatio = _currentScrollRatio();
     _pageTurnModeBeforeAutoRead = _settings.pageTurnMode;
     setState(() {
       _isAutoReadSessionEnabled = true;
@@ -10856,6 +10989,11 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
       );
     });
     _syncContinuousTextFlowAfterSettingsApplied();
+    _restoreTextPositionFromLogicalAnchor(
+      previousPagedTextEnabled: previousPagedTextEnabled,
+      logicalAnchor: logicalAnchor,
+      fallbackRatio: fallbackRatio,
+    );
     _reconcileAutoRead(restart: true);
     if (showMessage) {
       _showMessage('已开启自动阅读。');
@@ -10871,6 +11009,9 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
     _stopAutoRead();
 
     if (mounted) {
+      final previousPagedTextEnabled = _isPagedTextReaderEnabled();
+      final logicalAnchor = _currentLogicalPosition();
+      final fallbackRatio = _currentScrollRatio();
       setState(() {
         _isAutoReadSessionEnabled = false;
         _settings = _settings.copyWith(
@@ -10879,6 +11020,11 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
         );
       });
       _syncContinuousTextFlowAfterSettingsApplied();
+      _restoreTextPositionFromLogicalAnchor(
+        previousPagedTextEnabled: previousPagedTextEnabled,
+        logicalAnchor: logicalAnchor,
+        fallbackRatio: fallbackRatio,
+      );
     } else {
       _isAutoReadSessionEnabled = false;
     }
@@ -10895,7 +11041,11 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
 
     final byId = chapters.indexWhere((chapter) => chapter.id == _chapterId);
     if (byId >= 0) {
-      return byId;
+      return _resolveNearestReadableChapterIndex(
+        chapters,
+        byId,
+        preferForward: true,
+      );
     }
 
     final chapterUrl = _chapterUrl;
@@ -10904,16 +11054,66 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
         (chapter) => chapter.chapterUrl == chapterUrl,
       );
       if (byUrl >= 0) {
-        return byUrl;
+        return _resolveNearestReadableChapterIndex(
+          chapters,
+          byUrl,
+          preferForward: true,
+        );
       }
     }
 
     final fromRoute = widget.chapterIndex;
     if (fromRoute != null && fromRoute >= 0 && fromRoute < chapters.length) {
-      return fromRoute;
+      return _resolveNearestReadableChapterIndex(
+        chapters,
+        fromRoute,
+        preferForward: true,
+      );
     }
 
-    return 0;
+    return _findReadableChapterIndex(chapters, 0, forward: true);
+  }
+
+  bool _isReadableChapter(Chapter chapter) {
+    return _chapterNavigation.isReadableChapter(chapter);
+  }
+
+  List<Chapter> _readableChapters(List<Chapter> chapters) {
+    return _chapterNavigation.readableChapters(chapters);
+  }
+
+  String? _latestReadableChapterTitle(List<Chapter> chapters) {
+    for (var index = chapters.length - 1; index >= 0; index--) {
+      final chapter = chapters[index];
+      if (_isReadableChapter(chapter)) {
+        return chapter.title;
+      }
+    }
+    return null;
+  }
+
+  int? _findReadableChapterIndex(
+    List<Chapter> chapters,
+    int startIndex, {
+    required bool forward,
+  }) {
+    return _chapterNavigation.findReadableChapterIndex(
+      chapters,
+      startIndex,
+      forward: forward,
+    );
+  }
+
+  int? _resolveNearestReadableChapterIndex(
+    List<Chapter> chapters,
+    int startIndex, {
+    required bool preferForward,
+  }) {
+    return _chapterNavigation.resolveNearestReadableChapterIndex(
+      chapters,
+      startIndex,
+      preferForward: preferForward,
+    );
   }
 
   void _applyProgressFallback(ReadingProgress progress) {
@@ -11350,6 +11550,22 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
                 if (identical(_settings, draft)) {
                   return;
                 }
+
+                final previousSettings = _settings;
+                final previousPagedTextEnabled = _isPagedTextReaderEnabledFor(
+                  previousSettings,
+                );
+                final nextPagedTextEnabled = _isPagedTextReaderEnabledFor(
+                  draft,
+                );
+                final didSwitchTextRenderMode =
+                    !_isMangaChapter &&
+                    previousPagedTextEnabled != nextPagedTextEnabled;
+                final logicalAnchor =
+                    didSwitchTextRenderMode ? _currentLogicalPosition() : null;
+                final anchorFallbackRatio =
+                    didSwitchTextRenderMode ? _currentScrollRatio() : 0.0;
+
                 WidgetsBinding.instance.addPostFrameCallback((_) {
                   if (!mounted || identical(_settings, draft)) {
                     return;
@@ -11357,6 +11573,12 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
                   setState(() {
                     _settings = draft;
                   });
+                  _syncContinuousTextFlowAfterSettingsApplied();
+                  _restoreTextPositionFromLogicalAnchor(
+                    previousPagedTextEnabled: previousPagedTextEnabled,
+                    logicalAnchor: logicalAnchor,
+                    fallbackRatio: anchorFallbackRatio,
+                  );
                   unawaited(_syncVolumeKeyPageInterception());
                 });
               }
@@ -15762,6 +15984,7 @@ class _ReaderSourceSnapshot {
     required this.chapterImageUrls,
     required this.chapterImageHeaders,
     required this.scrollRatio,
+    required this.textSessionState,
   });
 
   final String bookId;
@@ -15782,6 +16005,7 @@ class _ReaderSourceSnapshot {
   final List<String> chapterImageUrls;
   final Map<String, String> chapterImageHeaders;
   final double scrollRatio;
+  final ReaderSessionState? textSessionState;
 }
 
 class _PagedSlice {
@@ -15802,6 +16026,7 @@ class _CatalogSearchEntry {
     required this.subtitle,
     required this.chapterIndex,
     this.scrollRatio,
+    this.logicalPosition,
     this.isContent = false,
   });
 
@@ -15809,6 +16034,7 @@ class _CatalogSearchEntry {
   final String subtitle;
   final int chapterIndex;
   final double? scrollRatio;
+  final ReaderLogicalPosition? logicalPosition;
   final bool isContent;
 }
 
@@ -16002,18 +16228,6 @@ class _CurlTransitionState {
       commitOnAnimationEnd: commitOnAnimationEnd ?? this.commitOnAnimationEnd,
     );
   }
-}
-
-class _PagedAnimationMotionSpec {
-  const _PagedAnimationMotionSpec({
-    required this.duration,
-    required this.switchInCurve,
-    required this.switchOutCurve,
-  });
-
-  final Duration duration;
-  final Curve switchInCurve;
-  final Curve switchOutCurve;
 }
 
 typedef _CoverTransitionBuilder =

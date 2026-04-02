@@ -114,7 +114,7 @@ void main() {
       sourceName: '源A',
       tocFromCache: false,
     );
-    const contentResult = ChapterContentResult(
+    final contentResult = ChapterContentResult(
       content: '正文内容',
       fromCache: false,
     );
