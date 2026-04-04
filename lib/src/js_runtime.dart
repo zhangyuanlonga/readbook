@@ -5,6 +5,7 @@ import 'js_runtime_stub.dart'
     as runtime_impl;
 
 typedef JsBridgeHandler = FutureOr<Object?> Function(dynamic args);
+typedef JsRuntimeAdapterFactory = JsRuntimeAdapter Function();
 
 class JsExecutionResult {
   const JsExecutionResult({required this.output, required this.isError});
@@ -25,4 +26,6 @@ abstract class JsRuntimeAdapter {
 }
 
 JsRuntimeAdapter createJsRuntimeAdapter() =>
-    runtime_impl.createJsRuntimeAdapter();
+    (debugJsRuntimeAdapterFactory ?? runtime_impl.createJsRuntimeAdapter)();
+
+JsRuntimeAdapterFactory? debugJsRuntimeAdapterFactory;

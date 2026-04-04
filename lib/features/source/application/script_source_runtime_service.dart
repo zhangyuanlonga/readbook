@@ -3,6 +3,7 @@ import '../../../runtime/cache/cache_manager.dart';
 import '../../../runtime/host/appread_browser_runtime.dart';
 import '../../../runtime/http/request_engine.dart';
 import '../../../runtime/session/session_manager.dart';
+import '../../../runtime/session/source_session.dart';
 import '../../../runtime/sources/persisted_source_loader.dart';
 import '../../../runtime/sources/source_executor.dart';
 import '../../../runtime/sources/source_file_store.dart';
@@ -113,9 +114,36 @@ class ScriptSourceRuntimeService {
   Future<List<runtime_models.Book>> search({
     required String sourceId,
     required String keyword,
+    bool allowInteractiveChallenge = true,
+    SessionCancellationHandle? cancellationHandle,
   }) async {
     final source = _requireSource(sourceId);
-    return _executor.search(source, keyword);
+    final session = sessionManager.sessionFor(sourceId);
+    const key = '__allow_interactive_challenge__';
+    final previousCancellation = session.get<SessionCancellationHandle>(
+      sessionCancellationHandleKey,
+    );
+    final previous = session.get<bool>(key);
+    session.set(key, allowInteractiveChallenge);
+    if (cancellationHandle != null) {
+      session.set(sessionCancellationHandleKey, cancellationHandle);
+    } else {
+      session.clear(sessionCancellationHandleKey);
+    }
+    try {
+      return _executor.search(source, keyword);
+    } finally {
+      if (previous == null) {
+        session.clear(key);
+      } else {
+        session.set(key, previous);
+      }
+      if (previousCancellation == null) {
+        session.clear(sessionCancellationHandleKey);
+      } else {
+        session.set(sessionCancellationHandleKey, previousCancellation);
+      }
+    }
   }
 
   Future<List<runtime_models.DiscoverCategory>> discoverCategories({

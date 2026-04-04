@@ -1,0 +1,59 @@
+[
+  {
+    "bookSourceName": "69书吧",
+    "bookSourceType": 0,
+    "bookSourceUrl": "https://www.69hao.com",
+    "customButton": false,
+    "customOrder": 0,
+    "enabled": true,
+    "enabledCookieJar": true,
+    "enabledExplore": true,
+    "eventListener": false,
+    "exploreUrl": "@js:\nvar url = source.key\nvar result = [];\nvar push = (title, url, type) =\u003E result.push({\n    title: title, url: url,\n    style: {\n    layout_flexGrow: 1,\n    layout_flexBasisPercent: type } });\n\ntry {\npush(\"🏷️全部分类🏷️\",null, 1)\n\nlis=org.jsoup.Jsoup.parse(java.ajax(source.key)).select(\".nav a\");\nfor (var i = 0; i \u003C lis.length-1; i++) {\n    text = lis[i].select('a').text();\n    href = url +String(lis[i].select('a').attr('href')).replace(/\\d+\\.html$/,\"{{page}}.html\");\n    push(text, href, 0.33);\n}\n  java.toast(\"🎉 列表刷新完成，数据已更新❗\");\n  JSON.stringify(result); \n\n} catch (error) {\n  java.toast(\"❌ 列表刷新失败，未获取到数据❗\");\n}",
+    "header": "@js:\nJSON.stringify({\n\"User-Agent\": \"Mozilla/5.0 (Linux; Android 15; V2403A Build/AP3A.240905.015.A1; wv) AppleWebKit/537.36 (KHTML, like Gecko) Version/4.0 Chrome/126.0.6478.71 Mobile Safari/537.36\",\n\"Accept-Language\":\"zh-CN,zh;q=0.9,en-US;q=0.8,en;q=0.7,en-GB;q=0.6\"})",
+    "lastUpdateTime": 1769567817292,
+    "respondTime": 180000,
+    "ruleBookInfo": {
+      "author": "a",
+      "coverUrl": "c",
+      "init": "@js:\n(function(){\n    let doc = org.jsoup.Jsoup.parse(result)\n    let og = (selector) =\u003E doc.select('[property=\"og:' + selector + '\"]').attr('content')||\"\"\n    return {\n    n: og('novel:book_name'),\n    a: og('novel:author'),\n    k: [og('novel:category'),og('novel:status'),\n(og('novel:update_time'))].filter(Boolean).join('•'),   \n    w:('{{@@##字数：([^\u003C]+)\u003C##$1###}}'),\n    l: og('novel:latest_chapter_name'),\n    i: og('description'),\n    c: og('image'),\n    t: og('novel:read_url')\n    }\n})()",
+      "intro": "i",
+      "kind": "k",
+      "lastChapter": "l",
+      "name": "n",
+      "wordCount": "w"
+    },
+    "ruleContent": {
+      "content": "#booktxt@html",
+      "nextContentUrl": "text.下一@href"
+    },
+    "ruleExplore": {
+      "author": ".s4@text||.btm@a@text",
+      "bookList": ".l@li||.item",
+      "bookUrl": "a@href",
+      "coverUrl": "img@data-original",
+      "intro": "dd@text",
+      "kind": ".s1,.s5@text||em.1@text",
+      "lastChapter": ".s3@text",
+      "name": ".s2@text||dl@dt@a@text",
+      "wordCount": "em.0@text"
+    },
+    "ruleSearch": {
+      "author": "a.2@text",
+      "bookList": ".item",
+      "bookUrl": "a.1@href",
+      "coverUrl": "img@data-original",
+      "intro": "dd@text",
+      "kind": "em.1@text",
+      "name": "a.1@text",
+      "wordCount": "em.0@text"
+    },
+    "ruleToc": {
+      "chapterList": "//div[@id='list']/dl/dt[contains(text(),'目录章节')]/following-sibling::a",
+      "chapterName": "text",
+      "chapterUrl": "href"
+    },
+    "searchUrl": "@js:\nresult = source.getKey();\ncookie.removeCookie(result)\nbasepath =`/ss/?searchkey=${key}`\nvar lis = java.ajax(result+basepath);\nhref=\t org.jsoup.Jsoup.parse(lis);\ncode= href.select(\".modal-code\").text();\n`${result}/ss?searchkey=${key},{\"body\":\"verifycode=${code}\",\n\"method\": \"POST\" }`",
+    "weight": 0
+  }
+]

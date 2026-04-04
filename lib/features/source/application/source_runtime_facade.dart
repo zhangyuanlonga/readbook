@@ -4,6 +4,7 @@ import '../../../data/datasources/local/app_database.dart';
 import '../../../data/repositories/script_source_repository_impl.dart';
 import '../../../domain/entities/script_source.dart';
 import '../../../domain/repositories/script_source_repository.dart';
+import '../../../runtime/session/source_session.dart';
 import '../../../runtime/sources/source_registry.dart';
 import '../../../runtime/sources/source_result_models.dart' as runtime_models;
 import 'script_source_runtime_service.dart';
@@ -188,8 +189,15 @@ class SourceRuntimeFacade {
   Future<List<runtime_models.Book>> search({
     required String sourceId,
     required String keyword,
+    bool allowInteractiveChallenge = true,
+    SessionCancellationHandle? cancellationHandle,
   }) {
-    return _scriptRuntimeService.search(sourceId: sourceId, keyword: keyword);
+    return _scriptRuntimeService.search(
+      sourceId: sourceId,
+      keyword: keyword,
+      allowInteractiveChallenge: allowInteractiveChallenge,
+      cancellationHandle: cancellationHandle,
+    );
   }
 
   Future<List<runtime_models.DiscoverCategory>> discoverCategories({

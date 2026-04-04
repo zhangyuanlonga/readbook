@@ -54,7 +54,7 @@ class SearchFailureExportService {
       throw AppException(
         code: ErrorCode.validation,
         stage: ErrorStage.search,
-        briefMessage: '没有失败书享源可导出。',
+        briefMessage: '没有失败书源可导出。',
       );
     }
 
@@ -120,7 +120,7 @@ class SearchFailureExportService {
         'failedSourceCount': report.failedSourceCount,
         'bookCount': report.books.length,
       },
-      'note': 'source 为当前运行时已注册书享源快照。',
+      'note': 'source 为当前运行时已注册书源快照。',
       'failures': items,
     };
 

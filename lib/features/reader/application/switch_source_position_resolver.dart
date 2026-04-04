@@ -33,7 +33,7 @@ class SwitchSourcePositionResolver {
     required int lagTolerance,
   }) {
     if (targetChapters.isEmpty) {
-      throw StateError('新书享源目录为空。');
+      throw StateError('新书源目录为空。');
     }
 
     final currentReadingChapterNo = (previousChapterIndex ?? 0) + 1;

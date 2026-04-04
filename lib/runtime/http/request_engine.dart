@@ -1,9 +1,9 @@
 import 'dart:convert';
+import 'dart:io' show HttpDate;
 import 'dart:typed_data';
 
 import 'package:charset/charset.dart' as charset;
 import 'package:http/http.dart' as http;
-import 'package:http_parser/http_parser.dart';
 
 import '../session/source_session.dart';
 import 'challenge_detector.dart';
@@ -44,6 +44,7 @@ class HttpPackageRequestEngine implements RequestEngine {
     RuntimeHttpRequest request, {
     SourceSession? session,
   }) async {
+    _throwIfCancelled(session);
     final uri = request.resolvedUri;
     final headers = <String, String>{
       ..._defaultHeaders,
@@ -64,6 +65,7 @@ class HttpPackageRequestEngine implements RequestEngine {
       request,
       headers,
     ).timeout(request.timeout);
+    _throwIfCancelled(session);
     _captureCookies(session, response, uri);
 
     final bytes = Uint8List.fromList(response.bodyBytes);
@@ -80,6 +82,12 @@ class HttpPackageRequestEngine implements RequestEngine {
       bytes: bytes,
       redirected: response.request?.url != uri,
     );
+  }
+
+  void _throwIfCancelled(SourceSession? session) {
+    if (session?.isCancelled ?? false) {
+      throw const SessionTaskCancelledException();
+    }
   }
 
   @override
@@ -379,7 +387,7 @@ class HttpPackageRequestEngine implements RequestEngine {
 
   DateTime? _tryParseExpires(String value) {
     try {
-      return parseHttpDate(value);
+      return HttpDate.parse(value);
     } catch (_) {
       return null;
     }

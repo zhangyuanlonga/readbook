@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 class SearchSystemSettingsService {
@@ -15,9 +16,15 @@ class SearchSystemSettingsService {
       'search.system.debugLogEnabled';
   static const String _maxConcurrentSourcesKey =
       'search.system.maxConcurrentSources';
-  static const int defaultMaxConcurrentSources = 15;
   static const int minMaxConcurrentSources = 1;
-  static const int maxMaxConcurrentSources = 30;
+  static int get defaultMaxConcurrentSources => _isDesktopPlatform ? 8 : 4;
+  static int get maxMaxConcurrentSources => _isDesktopPlatform ? 12 : 6;
+
+  static bool get _isDesktopPlatform =>
+      !kIsWeb &&
+      (defaultTargetPlatform == TargetPlatform.macOS ||
+          defaultTargetPlatform == TargetPlatform.windows ||
+          defaultTargetPlatform == TargetPlatform.linux);
 
   Future<bool> loadAggregateByTitleAuthorEnabled() async {
     final prefs = await _preferencesFuture;

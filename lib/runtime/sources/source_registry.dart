@@ -39,6 +39,8 @@ class SourceRegistry {
     RuntimeSourceDefinition definition, {
     String revision = 'local-1',
   }) {
+    final existing = _sources[runtimeId];
+    existing?.definition.dispose?.call();
     final registered = RegisteredSource(
       runtime: SourceRuntimeInfo(
         id: runtimeId,
@@ -65,10 +67,14 @@ class SourceRegistry {
   }
 
   void remove(String sourceId) {
-    _sources.remove(sourceId);
+    final removed = _sources.remove(sourceId);
+    removed?.definition.dispose?.call();
   }
 
   void clear() {
+    for (final source in _sources.values) {
+      source.definition.dispose?.call();
+    }
     _sources.clear();
     _slugCounts.clear();
   }

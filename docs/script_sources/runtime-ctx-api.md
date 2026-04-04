@@ -188,6 +188,12 @@ ctx = {
 - `ctx.browser.getHtml()`
 - `ctx.browser.getStorage()`
 
+补充说明：
+
+- 当前浏览器流程完成后，浏览器侧 cookie 会同步回当前源 session
+- 因此后续普通 `ctx.http.request(...)` 会按目标 URL 复用匹配的 cookie
+- 但这仍不等于“浏览器全部状态自动推断完成”
+
 ### 3.3 `getHtml()` 和 `getStorage()` 当前是“按需能力”
 
 这两个能力已经开放，但当前设计重点仍然是先保证 challenge 可继续执行。
@@ -201,7 +207,7 @@ ctx = {
 
 它当前更适合理解为：
 
-- 清理当前源上下文持有的 cookie 集合
+- 清理当前源上下文里与该域名匹配的 cookie 集合
 
 不建议把它理解成：
 

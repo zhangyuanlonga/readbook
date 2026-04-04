@@ -276,7 +276,7 @@ class _DiscoverPageState extends State<DiscoverPage>
     final source = _selectedSource;
     final summary =
         source == null
-            ? (_isLoadingSources ? '正在加载可用书享源...' : '请选择书享源')
+            ? (_isLoadingSources ? '正在加载可用书源...' : '请选择书源')
             : _buildSourceSummary(source);
     final categoryName = _selectedCategory?.title ?? '未选分类';
     final status = _resolveSourceStatus(source?.id);
@@ -298,7 +298,7 @@ class _DiscoverPageState extends State<DiscoverPage>
                   _buildSourceStatusPill(context, status)
                 else
                   Text(
-                    '当前书享源',
+                    '当前书源',
                     style: textTheme.labelLarge?.copyWith(
                       fontWeight: FontWeight.w700,
                       color: colorScheme.onSurfaceVariant,
@@ -325,7 +325,7 @@ class _DiscoverPageState extends State<DiscoverPage>
 
             // -- Row 2: source name (prominent) --
             Text(
-              source?.name ?? '未选择书享源',
+              source?.name ?? '未选择书源',
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
               style: textTheme.titleMedium?.copyWith(
@@ -426,7 +426,7 @@ class _DiscoverPageState extends State<DiscoverPage>
 
   Widget _buildCategoryStripCard(BuildContext context) {
     if (_isLoadingSources && _discoverSources.isEmpty) {
-      return _buildLoadingCard(context, message: '正在加载发现书享源...');
+      return _buildLoadingCard(context, message: '正在加载发现书源...');
     }
     if (_discoverSources.isEmpty) {
       return const SizedBox.shrink();
@@ -442,12 +442,12 @@ class _DiscoverPageState extends State<DiscoverPage>
       return _buildLoadingCard(context, message: '正在解析分类...');
     }
     if (_categories.isEmpty) {
-      return _buildInfoCard(context, message: '该书享源没有可用的发现分类。');
+      return _buildInfoCard(context, message: '该书源没有可用的发现分类。');
     }
 
     final actionableEntries = _actionableCategoryEntries;
     if (actionableEntries.isEmpty) {
-      return _buildInfoCard(context, message: '该书享源暂无可点击分类。');
+      return _buildInfoCard(context, message: '该书源暂无可点击分类。');
     }
 
     final previewCount = math.min(
@@ -560,10 +560,10 @@ class _DiscoverPageState extends State<DiscoverPage>
 
   Widget _buildCategoryPanelCard(BuildContext context) {
     if (_isLoadingSources && _discoverSources.isEmpty) {
-      return _buildLoadingCard(context, message: '正在加载发现书享源...');
+      return _buildLoadingCard(context, message: '正在加载发现书源...');
     }
     if (_discoverSources.isEmpty) {
-      return _buildInfoCard(context, message: '暂无支持发现的书享源。');
+      return _buildInfoCard(context, message: '暂无支持发现的书源。');
     }
     final actionableCount = _actionableCategoryEntries.length;
 
@@ -607,7 +607,7 @@ class _DiscoverPageState extends State<DiscoverPage>
     if (actionableEntries.isEmpty) {
       return _buildPanelMessage(
         context,
-        message: '该书享源暂无可点击分类。',
+        message: '该书源暂无可点击分类。',
         icon: Icons.grid_off_rounded,
       );
     }
@@ -690,7 +690,7 @@ class _DiscoverPageState extends State<DiscoverPage>
     if (_isLoadingSources && _discoverSources.isEmpty) {
       return <Widget>[
         SliverToBoxAdapter(
-          child: _buildLoadingCard(context, message: '正在加载发现书享源...'),
+          child: _buildLoadingCard(context, message: '正在加载发现书源...'),
         ),
       ];
     }
@@ -718,7 +718,7 @@ class _DiscoverPageState extends State<DiscoverPage>
     if (_categories.isEmpty) {
       return <Widget>[
         SliverToBoxAdapter(
-          child: _buildInfoCard(context, message: '该书享源没有可用的发现分类。'),
+          child: _buildInfoCard(context, message: '该书源没有可用的发现分类。'),
         ),
       ];
     }
@@ -1145,14 +1145,14 @@ class _DiscoverPageState extends State<DiscoverPage>
           crossAxisAlignment: CrossAxisAlignment.start,
           children: <Widget>[
             Text(
-              '暂无支持发现的已启用书享源',
+              '暂无支持发现的已启用书源',
               style: Theme.of(
                 context,
               ).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w700),
             ),
             const SizedBox(height: 8),
             Text(
-              '请先在书享源页导入并启用声明了 `discover` 能力、且实现 `discoverCategories + discoverBooks` 的书享源。',
+              '请先在书源页导入并启用声明了 `discover` 能力、且实现 `discoverCategories + discoverBooks` 的书源。',
               style: Theme.of(context).textTheme.bodySmall,
             ),
             if (_enabledSourceCount > 0) ...<Widget>[
@@ -1168,7 +1168,7 @@ class _DiscoverPageState extends State<DiscoverPage>
             FilledButton.icon(
               onPressed: () => context.push('/source'),
               icon: const Icon(Icons.storage_rounded),
-              label: const Text('前往书享源页'),
+              label: const Text('前往书源页'),
             ),
             const SizedBox(height: 8),
             TextButton.icon(
@@ -1298,7 +1298,7 @@ class _DiscoverPageState extends State<DiscoverPage>
         _enabledSourceCount = 0;
         _discoverCapableCount = 0;
         _isLoadingSources = false;
-        _sourceErrorText = _toReadableError(error, fallback: '加载发现书享源失败');
+        _sourceErrorText = _toReadableError(error, fallback: '加载发现书源失败');
       });
     }
   }
@@ -1644,7 +1644,7 @@ class _DiscoverPageState extends State<DiscoverPage>
   Future<void> _handleSourceSwitch(int offset) async {
     await _runSourceSwitchAction(
       action: () => _switchSourceByOffset(offset),
-      fallback: '切换书享源失败',
+      fallback: '切换书源失败',
     );
   }
 
@@ -1898,7 +1898,7 @@ class _DiscoverPageState extends State<DiscoverPage>
       case _SourceRuntimeStatus.checking:
         return '检查中';
       case _SourceRuntimeStatus.parseFailed:
-        return '书享源异常';
+        return '书源异常';
       case _SourceRuntimeStatus.requestFailed:
         return '访问失败';
       case _SourceRuntimeStatus.unknown:
@@ -2107,14 +2107,14 @@ class _SourcePickerSheetState extends State<_SourcePickerSheet> {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: <Widget>[
                   Text(
-                    '切换发现书享源',
+                    '切换发现书源',
                     style: Theme.of(context).textTheme.titleMedium?.copyWith(
                       fontWeight: FontWeight.w700,
                     ),
                   ),
                   const SizedBox(height: 2),
                   Text(
-                    '共 ${widget.sources.length} 个发现书享源',
+                    '共 ${widget.sources.length} 个发现书源',
                     style: Theme.of(context).textTheme.bodySmall?.copyWith(
                       color: Theme.of(context).colorScheme.onSurfaceVariant,
                     ),
@@ -2128,7 +2128,7 @@ class _SourcePickerSheetState extends State<_SourcePickerSheet> {
               onChanged: (_) => setState(() {}),
               decoration: InputDecoration(
                 isDense: true,
-                hintText: '搜索书享源名称或域名',
+                hintText: '搜索书源名称或域名',
                 prefixIcon: const Icon(Icons.search_rounded, size: 18),
                 border: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(12),
@@ -2172,7 +2172,7 @@ class _SourcePickerSheetState extends State<_SourcePickerSheet> {
                   filteredSources.isEmpty
                       ? Center(
                         child: Text(
-                          '没有匹配的书享源',
+                          '没有匹配的书源',
                           style: Theme.of(context).textTheme.bodySmall,
                         ),
                       )
@@ -2446,7 +2446,7 @@ String _sourceStatusLabel(_SourceRuntimeStatus status) {
     case _SourceRuntimeStatus.checking:
       return '检查中';
     case _SourceRuntimeStatus.parseFailed:
-      return '书享源异常';
+      return '书源异常';
     case _SourceRuntimeStatus.requestFailed:
       return '访问失败';
     case _SourceRuntimeStatus.unknown:

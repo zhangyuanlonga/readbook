@@ -112,7 +112,7 @@ class ReaderSourceSwitchCoordinator {
     final normalizedDetailUrl = (detailUrl ?? '').trim();
     if (normalizedSourceId.isEmpty || normalizedDetailUrl.isEmpty) {
       return const ReaderSwitchSourceRequestValidationResult.blocked(
-        message: '缺少当前书享源信息，暂时无法换源。',
+        message: '缺少当前书源信息，暂时无法换源。',
       );
     }
     return ReaderSwitchSourceRequestValidationResult.ready(

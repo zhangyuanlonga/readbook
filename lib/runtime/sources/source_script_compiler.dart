@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 
 import 'package:html/dom.dart' as dom;
@@ -142,6 +143,7 @@ class SourceScriptCompiler {
         );
         return _decodeContent(result, fallbackSourceId: ctx.source.id);
       },
+      dispose: runner.dispose,
     );
   }
 
@@ -372,15 +374,61 @@ $command
 }
 
 class _SourceScriptRunner {
-  const _SourceScriptRunner(this._normalizedSource);
+  _SourceScriptRunner(this._normalizedSource);
 
   final String _normalizedSource;
+  JsRuntimeAdapter? _runtime;
+  Future<void> _runQueue = Future<void>.value();
+  bool _bootstrapsInstalled = false;
 
   Future<Object?> run({
     required String methodName,
     required SourceRuntimeContext ctx,
     required List<Object?> args,
   }) async {
+    final completer = Completer<Object?>();
+    _runQueue = _runQueue.catchError((_) {}).then((_) async {
+      final runtime = await _ensureRuntime();
+      final htmlHandleStore = _HtmlHandleStore();
+      _registerBridges(runtime, ctx, htmlHandleStore);
+
+      try {
+        final result = await runtime.runSnippet('''
+const __ctx = globalThis.__createSourceCtx(${jsonEncode(_sourceInfoToMap(ctx.source))});
+globalThis.ctx = __ctx;
+const __args = ${jsonEncode(args)};
+const __fn = globalThis.__sourceDefinition?.['$methodName'];
+if (typeof __fn !== 'function') {
+  return null;
+}
+try {
+  return await __fn.apply(globalThis.__sourceDefinition, [__ctx, ...__args]);
+} catch (error) {
+  if (error && typeof error === 'object' && 'message' in error) {
+    throw String(error.message || error);
+  }
+  throw String(error);
+}
+''');
+
+        if (result.isError) {
+          throw SourceScriptCompileException(result.output);
+        }
+
+        completer.complete(_decodeDynamic(result.output));
+      } catch (error, stackTrace) {
+        completer.completeError(error, stackTrace);
+      }
+    });
+    return completer.future;
+  }
+
+  Future<JsRuntimeAdapter> _ensureRuntime() async {
+    final existing = _runtime;
+    if (existing != null) {
+      return existing;
+    }
+
     final runtime = createJsRuntimeAdapter();
     if (!runtime.isSupported) {
       throw SourceScriptCompileException(
@@ -388,8 +436,26 @@ class _SourceScriptRunner {
       );
     }
 
-    final htmlHandleStore = _HtmlHandleStore();
+    _runtime = runtime;
+    if (!_bootstrapsInstalled) {
+      await runtime.installBootstrap(
+        _sourceRuntimeBootstrap,
+        sourceUrl: 'source_debugger_bootstrap.js',
+      );
+      await runtime.installBootstrap(
+        _normalizedSource,
+        sourceUrl: 'pasted_source.js',
+      );
+      _bootstrapsInstalled = true;
+    }
+    return runtime;
+  }
 
+  void _registerBridges(
+    JsRuntimeAdapter runtime,
+    SourceRuntimeContext ctx,
+    _HtmlHandleStore htmlHandleStore,
+  ) {
     runtime.registerBridge('__ctx_log', (dynamic args) {
       final payload = _asMap(args);
       ctx.log(payload['message']?.toString() ?? '');
@@ -913,43 +979,6 @@ class _SourceScriptRunner {
       final payload = _asMap(args);
       return ctx.crypto.timestamp(unit: payload['unit']?.toString() ?? 'ms');
     });
-
-    try {
-      await runtime.installBootstrap(
-        _sourceRuntimeBootstrap,
-        sourceUrl: 'source_debugger_bootstrap.js',
-      );
-      await runtime.installBootstrap(
-        _normalizedSource,
-        sourceUrl: 'pasted_source.js',
-      );
-
-      final result = await runtime.runSnippet('''
-const __ctx = globalThis.__createSourceCtx(${jsonEncode(_sourceInfoToMap(ctx.source))});
-globalThis.ctx = __ctx;
-const __args = ${jsonEncode(args)};
-const __fn = globalThis.__sourceDefinition?.['$methodName'];
-if (typeof __fn !== 'function') {
-  return null;
-}
-try {
-  return await __fn.apply(globalThis.__sourceDefinition, [__ctx, ...__args]);
-} catch (error) {
-  if (error && typeof error === 'object' && 'message' in error) {
-    throw String(error.message || error);
-  }
-  throw String(error);
-}
-''');
-
-      if (result.isError) {
-        throw SourceScriptCompileException(result.output);
-      }
-
-      return _decodeDynamic(result.output);
-    } finally {
-      runtime.dispose();
-    }
   }
 
   Future<void> runVoid({
@@ -958,6 +987,12 @@ try {
     required List<Object?> args,
   }) async {
     await run(methodName: methodName, ctx: ctx, args: args);
+  }
+
+  void dispose() {
+    _runtime?.dispose();
+    _runtime = null;
+    _bootstrapsInstalled = false;
   }
 }
 

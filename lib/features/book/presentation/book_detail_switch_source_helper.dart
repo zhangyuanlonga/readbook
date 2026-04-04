@@ -248,6 +248,7 @@ class BookDetailSwitchSourceHelper {
         keyword: keyword,
         pageSize: 16,
         contentMode: scope.contentMode,
+        scenario: SearchPlanScenario.switchSource,
         sourceIds: requestScopedSourceIds,
         cancellationToken: cancellationToken,
         onProgress: (progress) {
@@ -297,7 +298,7 @@ class BookDetailSwitchSourceHelper {
         sourceCount: report.sourceCount,
         processedSourceCount: report.processedSourceCount,
         candidates: candidates,
-        errorText: candidates.isEmpty ? '没有检索到可切换书享源，请稍后重试。' : null,
+        errorText: candidates.isEmpty ? '没有检索到可切换书源，请稍后重试。' : null,
         scoreRankingEnabled: scoreRankingEnabled,
       );
     } on AppException catch (error) {
@@ -310,7 +311,7 @@ class BookDetailSwitchSourceHelper {
             requestScopedSourceIds == null ? 0 : requestScopedSourceIds.length,
         processedSourceCount: 0,
         candidates: const <SwitchSourceCandidate>[],
-        errorText: '查找可切换书享源失败：${error.briefMessage}',
+        errorText: '查找可切换书源失败：${error.briefMessage}',
         scoreRankingEnabled: scoreRankingEnabled,
       );
     } catch (_) {
@@ -323,7 +324,7 @@ class BookDetailSwitchSourceHelper {
             requestScopedSourceIds == null ? 0 : requestScopedSourceIds.length,
         processedSourceCount: 0,
         candidates: const <SwitchSourceCandidate>[],
-        errorText: '查找可切换书享源失败，请稍后重试。',
+        errorText: '查找可切换书源失败，请稍后重试。',
         scoreRankingEnabled: scoreRankingEnabled,
       );
     }

@@ -68,6 +68,25 @@
 - `chapters` 负责“拿到章节列表”
 - `content` 负责“拿到章节正文”
 
+这里需要额外强调一条当前宿主约束：
+
+- `search` 应当只负责“返回搜索结果”
+- 不应在搜索阶段主动补抓 `detail / chapters / content`
+- 如果站点搜索接口本身已经返回了完整卡片信息，可以直接放进 `Book`
+- 但不要因为想补字段而在 `search()` 里顺手追加详情页、目录页或正文页请求
+
+原因很直接：
+
+- 搜索阶段会被大量源并发执行
+- 额外请求会把运行成本按源数放大
+- 这会明显放大 JS 执行、browser/challenge 和宿主稳定性压力
+
+推荐实践：
+
+- 搜索阶段只返回最小可用 `Book[]`
+- 用户进入详情页后再执行 `detail()`
+- 用户进入阅读页后再执行 `chapters()` 和 `content()`
+
 `ctx` 本质上是所有宿主能力的总入口：
 
 ```js
@@ -1836,7 +1855,7 @@ await ctx.browser.waitForText({
 返回值：
 
 ```js
-Promise<Array<any>>
+Promise<Record<string, string>>
 ```
 
 适用场景：
@@ -1854,6 +1873,8 @@ const cookies = await ctx.browser.getCookies();
 
 - 这适合在你明确需要查看浏览器侧 cookie 时使用
 - 如果只是规则内部读取 cookie，也可以优先尝试 `ctx.cookie.*`
+- 当前 `browser.open(...)` / `browser.challenge(...)` / `browser.eval(...)` 完成后，浏览器侧可见 cookie 会同步回当前源 session
+- 如果后续只是普通 `ctx.http.request(...)`，通常优先读取 `ctx.cookie.getForUrl(...)` 会更贴近实际发请求时的携带结果
 
 #### 8.4.7 `ctx.browser.getCurrentUrl()`
 
@@ -1977,8 +1998,9 @@ ctx.cookie.set('custom_token', 'abc');
 
 说明：
 
-- `clearDomain(domain)` 当前更适合理解为“清理当前源持有的 cookie 集合”
-- 不要把它理解成完整的浏览器级域名精确清理器
+- `ctx.cookie.*` 操作的是“当前源 session 里的 cookie 视图”，不是浏览器全局 cookie 仓库
+- 浏览器流程成功写入的 cookie 会回灌到当前源 session，所以后续 `ctx.http.request(...)` 会按目标 URL 自动带上匹配的 cookie
+- `clearDomain(domain)` 现在会按域名清理当前源 session 中匹配的 cookie，但仍不等于浏览器级精细删除器
 
 #### 8.5.1 `ctx.cookie.get(name)`
 
@@ -2068,7 +2090,8 @@ const allCookies = ctx.cookie.getForUrl('https://example.com');
 
 注意：
 
-- 当前仍然基于当前源 cookie 集合，不是完整浏览器 cookie 容器
+- 当前会按目标 URL 过滤当前源 session 中可匹配的 cookie
+- 它仍然不是浏览器全局 cookie 容器，也不会替代浏览器开发者工具级别的完整观察视角
 
 #### 8.5.4 `ctx.cookie.set(name, value)`
 
@@ -2159,7 +2182,7 @@ ctx.cookie.clearDomain('example.com');
 
 注意：
 
-- 当前更适合理解为“按当前源 cookie 集合清理”
+- 当前会按域名清理当前源 session 中匹配的 cookie
 - 不要把它理解成完整浏览器级精细删除器
 
 ### 8.6 `ctx.cache`

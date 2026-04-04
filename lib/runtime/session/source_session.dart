@@ -1,3 +1,25 @@
+const String sessionCancellationHandleKey = '__session_cancellation_handle__';
+
+class SessionCancellationHandle {
+  const SessionCancellationHandle({required bool Function() isCancelled})
+    : _isCancelled = isCancelled;
+
+  final bool Function() _isCancelled;
+
+  bool get isCancelled => _isCancelled();
+}
+
+class SessionTaskCancelledException implements Exception {
+  const SessionTaskCancelledException([
+    this.message = 'Session-bound task was cancelled.',
+  ]);
+
+  final String message;
+
+  @override
+  String toString() => 'SessionTaskCancelledException: $message';
+}
+
 class SourceCookie {
   const SourceCookie({
     required this.name,
@@ -99,6 +121,11 @@ class SourceSession {
   final Map<String, Object?> _values;
   final List<SourceCookie> _cookieEntries;
   final Map<String, String> _defaultHeaders;
+
+  SessionCancellationHandle? get cancellationHandle =>
+      get<SessionCancellationHandle>(sessionCancellationHandleKey);
+
+  bool get isCancelled => cancellationHandle?.isCancelled ?? false;
 
   T? get<T>(String key) {
     final value = _values[key];

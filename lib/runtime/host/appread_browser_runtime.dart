@@ -9,6 +9,9 @@ import '../browser/browser_runtime.dart';
 import '../session/source_session.dart';
 
 class AppReadBrowserRuntime implements BrowserRuntime {
+  static const String _allowInteractiveChallengeSessionKey =
+      '__allow_interactive_challenge__';
+
   AppReadBrowserRuntime({
     WebViewExecutor? webViewExecutor,
     InteractiveVerificationBrowserExecutor? interactiveExecutor,
@@ -33,6 +36,7 @@ class AppReadBrowserRuntime implements BrowserRuntime {
     SourceSession? session,
   }) async {
     await _runExclusive(() async {
+      _throwIfCancelled(session);
       await _syncSessionCookiesToBrowser(request.uri, session);
       final response = await _webViewExecutor.load(
         request: WebViewRequestPayload(
@@ -42,7 +46,9 @@ class AppReadBrowserRuntime implements BrowserRuntime {
           timeout: request.timeout,
         ),
       );
+      _throwIfCancelled(session);
       await _syncBrowserCookiesToSession(response.finalUrl, session);
+      _throwIfCancelled(session);
       _persistSnapshot(session, response);
     });
   }
@@ -52,7 +58,12 @@ class AppReadBrowserRuntime implements BrowserRuntime {
     BrowserChallengeRequest request, {
     SourceSession? session,
   }) async {
+    _throwIfCancelled(session);
+    if (session?.get<bool>(_allowInteractiveChallengeSessionKey) == false) {
+      throw StateError('Interactive browser challenge is disabled.');
+    }
     await _runExclusive(() async {
+      _throwIfCancelled(session);
       await _syncSessionCookiesToBrowser(request.uri, session);
       final response = await _interactiveExecutor.open(
         request: WebViewRequestPayload(
@@ -65,7 +76,9 @@ class AppReadBrowserRuntime implements BrowserRuntime {
         title: request.reason,
         refetchAfterSuccess: true,
       );
+      _throwIfCancelled(session);
       await _syncBrowserCookiesToSession(response.finalUrl, session);
+      _throwIfCancelled(session);
       _persistSnapshot(session, response);
     });
   }
@@ -76,6 +89,7 @@ class AppReadBrowserRuntime implements BrowserRuntime {
     SourceSession? session,
   }) async {
     return _runExclusive(() async {
+      _throwIfCancelled(session);
       await _syncSessionCookiesToBrowser(request.uri, session);
       final response = await _webViewExecutor.load(
         request: WebViewRequestPayload(
@@ -86,10 +100,18 @@ class AppReadBrowserRuntime implements BrowserRuntime {
           webJs: request.script,
         ),
       );
+      _throwIfCancelled(session);
       await _syncBrowserCookiesToSession(response.finalUrl, session);
+      _throwIfCancelled(session);
       _persistSnapshot(session, response);
       return response.scriptResult;
     });
+  }
+
+  void _throwIfCancelled(SourceSession? session) {
+    if (session?.isCancelled ?? false) {
+      throw const SessionTaskCancelledException();
+    }
   }
 
   Future<T> _runExclusive<T>(Future<T> Function() action) {

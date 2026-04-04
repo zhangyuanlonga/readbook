@@ -286,7 +286,7 @@ class _SourcePageState extends State<SourcePage> {
           },
           textInputAction: TextInputAction.search,
           decoration: InputDecoration(
-            hintText: '搜索书享源',
+            hintText: '搜索书源',
             isDense: true,
             prefixIcon: const Icon(Icons.search_rounded, size: 20),
             suffixIcon:
@@ -338,7 +338,6 @@ class _SourcePageState extends State<SourcePage> {
     required int totalCount,
     required int visibleCount,
   }) {
-    final colorScheme = Theme.of(context).colorScheme;
     final chips = <Widget>[
       _buildSummaryChip(context, '$visibleCount / $totalCount'),
     ];
@@ -358,27 +357,14 @@ class _SourcePageState extends State<SourcePage> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Row(
-          children: [
-            Text(
-              '书享源列表',
-              style: Theme.of(
-                context,
-              ).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w700),
+        if (_searchQuery.trim().isNotEmpty || _selectedGroupKey != null)
+          Align(
+            alignment: Alignment.centerRight,
+            child: TextButton(
+              onPressed: _clearFilters,
+              child: const Text('清空筛选'),
             ),
-            const Spacer(),
-            if (_searchQuery.trim().isNotEmpty || _selectedGroupKey != null)
-              TextButton(onPressed: _clearFilters, child: const Text('清空筛选'))
-            else
-              Text(
-                '仅支持 JS 书享源',
-                style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                  color: colorScheme.onSurfaceVariant,
-                ),
-              ),
-          ],
-        ),
-        const SizedBox(height: 8),
+          ),
         Wrap(spacing: 8, runSpacing: 8, children: chips),
       ],
     );
@@ -415,14 +401,14 @@ class _SourcePageState extends State<SourcePage> {
             const Icon(Icons.javascript_rounded, size: 28),
             const SizedBox(height: 12),
             Text(
-              '还没有书享源',
+              '还没有书源',
               style: Theme.of(
                 context,
               ).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w700),
             ),
             const SizedBox(height: 6),
             Text(
-              '在右上角“更多”里新增书享源，或等待导入入口接入后再导入。',
+              '在右上角“更多”里新增书源，或等待导入入口接入后再导入。',
               textAlign: TextAlign.center,
               style: Theme.of(context).textTheme.bodySmall,
             ),
@@ -769,7 +755,7 @@ class _SourcePageState extends State<SourcePage> {
       );
     } catch (error) {
       if (mounted) {
-        _showMessage('更新书享源状态失败：$error');
+        _showMessage('更新书源状态失败：$error');
       }
     } finally {
       if (mounted) {
@@ -785,7 +771,7 @@ class _SourcePageState extends State<SourcePage> {
       context: context,
       builder: (context) {
         return AlertDialog(
-          title: const Text('删除书享源'),
+          title: const Text('删除书源'),
           content: Text('确认删除「${source.name}」吗？'),
           actions: [
             TextButton(
@@ -810,11 +796,11 @@ class _SourcePageState extends State<SourcePage> {
     try {
       await _sourceRuntimeFacade.deleteScriptSource(source.id);
       if (mounted) {
-        _showMessage('书享源已删除。');
+        _showMessage('书源已删除。');
       }
     } catch (error) {
       if (mounted) {
-        _showMessage('删除书享源失败：$error');
+        _showMessage('删除书源失败：$error');
       }
     } finally {
       if (mounted) {

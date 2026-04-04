@@ -705,7 +705,7 @@ return content;
     return Scaffold(
       appBar: AppBar(
         title: Text(
-          widget.title?.trim().isNotEmpty == true ? widget.title! : '书享源调试',
+          widget.title?.trim().isNotEmpty == true ? widget.title! : '书源调试',
         ),
         actions: [
           TextButton.icon(

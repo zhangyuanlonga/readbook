@@ -48,7 +48,7 @@ class SearchProgressCard extends StatelessWidget {
                   Expanded(
                     child: Text(
                       report == null
-                          ? '正在搜索书享源...'
+                          ? '正在搜索书源...'
                           : '$processedCount/$sourceCount 源 · $bookCount 本',
                       style: theme.textTheme.bodySmall?.copyWith(
                         fontWeight: FontWeight.w600,

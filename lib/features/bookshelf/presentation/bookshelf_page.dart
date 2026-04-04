@@ -3903,7 +3903,7 @@ class _BookshelfPageState extends State<BookshelfPage>
         return;
       }
       _openReaderFallbackForSourceSwitch(book);
-      _showMessage('当前书享源可能不可用，可在阅读页直接换源。');
+      _showMessage('当前书源可能不可用，可在阅读页直接换源。');
     } catch (_) {
       if (!mounted) {
         return;

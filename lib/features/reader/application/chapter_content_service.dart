@@ -61,17 +61,9 @@ class ChapterContentResult {
 class ChapterContentService {
   ChapterContentService({
     AppDatabase? database,
-    Object? sourceRepository,
     SourceRuntimeFacade? sourceRuntimeFacade,
-    Object? httpClient,
-    Object? webViewExecutor,
-    Object? interactiveVerificationExecutor,
-    Object? ruleEngine,
     ContentTextCleaner? cleaner,
-    Object? replaceRegexExecutor,
     AppLogger? logger,
-    Object? urlTemplateResolver,
-    Object? responseProcessor,
   }) : _database = database ?? AppDatabase.instance,
        _sourceRuntimeFacade =
            sourceRuntimeFacade ?? SourceRuntimeFacade.instance,
@@ -173,7 +165,7 @@ class ChapterContentService {
             : await facade.ensureRegisteredScriptSourceById(sourceId);
     if (facade == null || registered == null) {
       throw UnknownSourceException(
-        briefMessage: '未找到书享源：$sourceId',
+        briefMessage: '未找到书源：$sourceId',
         sourceId: sourceId,
         stage: ErrorStage.content,
       );
@@ -232,7 +224,7 @@ class ChapterContentService {
     final normalizedContent = _cleaner.clean(content.content.trim());
     if (normalizedContent.isEmpty) {
       throw RuleMatchEmptyException(
-        briefMessage: '正文解析为空，请检查书享源配置。',
+        briefMessage: '正文解析为空，请检查书源配置。',
         stage: ErrorStage.content,
         sourceId: sourceId,
       );

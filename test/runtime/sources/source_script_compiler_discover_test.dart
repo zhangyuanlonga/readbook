@@ -5,10 +5,12 @@ import 'package:flutter_appread/runtime/html/html_runtime.dart';
 import 'package:flutter_appread/runtime/http/challenge_detector.dart';
 import 'package:flutter_appread/runtime/http/http_models.dart';
 import 'package:flutter_appread/runtime/http/request_engine.dart';
+import 'package:flutter_appread/runtime/sources/source_registry.dart';
 import 'package:flutter_appread/runtime/session/source_session.dart';
 import 'package:flutter_appread/runtime/sources/source_contract.dart';
 import 'package:flutter_appread/runtime/sources/source_manifest.dart';
 import 'package:flutter_appread/runtime/sources/source_result_models.dart';
+import 'package:flutter_appread/src/js_runtime.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter_appread/runtime/sources/source_script_compiler.dart';
 
@@ -72,6 +74,43 @@ void main() {
       expect(chapters[0].isVolume, isTrue);
       expect(chapters[1].isVolume, isFalse);
       expect(chapters[2].isVolume, isFalse);
+    });
+  });
+
+  group('SourceScriptCompiler runtime reuse', () {
+    late _FakeReusableJsRuntimeAdapterFactory factory;
+
+    setUp(() {
+      factory = _FakeReusableJsRuntimeAdapterFactory();
+      debugJsRuntimeAdapterFactory = factory.create;
+    });
+
+    tearDown(() {
+      debugJsRuntimeAdapterFactory = null;
+    });
+
+    test('reuses runtime for repeated search calls on same definition', () async {
+      const compiler = SourceScriptCompiler();
+      final definition = await compiler.compile(_sourceWithImplicitDiscover);
+
+      await definition.search(_buildRuntimeContext(), '凡人');
+      await definition.search(_buildRuntimeContext(), '凡人');
+
+      expect(factory.createdCount, 2);
+      expect(factory.disposedCount, 1);
+    });
+
+    test('disposes reused runtime when source is removed from registry', () async {
+      const compiler = SourceScriptCompiler();
+      final definition = await compiler.compile(_sourceWithImplicitDiscover);
+      final registry = SourceRegistry();
+      registry.upsert('test_source', definition);
+
+      await definition.search(_buildRuntimeContext(), '凡人');
+      expect(factory.createdCount, 2);
+
+      registry.remove('test_source');
+      expect(factory.disposedCount, 2);
     });
   });
 }
@@ -216,5 +255,87 @@ class _FakeRequestEngine implements RequestEngine {
   @override
   ChallengeDetectionResult detectChallenge(RuntimeHttpResponse response) {
     return const ChallengeDetectionResult(isChallenge: false);
+  }
+}
+
+class _FakeReusableJsRuntimeAdapterFactory {
+  int createdCount = 0;
+  int disposedCount = 0;
+
+  JsRuntimeAdapter create() {
+    createdCount += 1;
+    return _FakeReusableJsRuntimeAdapter(
+      onDispose: () {
+        disposedCount += 1;
+      },
+    );
+  }
+}
+
+class _FakeReusableJsRuntimeAdapter implements JsRuntimeAdapter {
+  _FakeReusableJsRuntimeAdapter({required this.onDispose});
+
+  final void Function() onDispose;
+  String _installedSource = '';
+
+  @override
+  bool get isSupported => true;
+
+  @override
+  String? get unsupportedReason => null;
+
+  @override
+  Future<void> installBootstrap(String source, {String? sourceUrl}) async {
+    if (sourceUrl == 'pasted_source.js') {
+      _installedSource = source;
+    }
+  }
+
+  @override
+  Future<void> installPlaygroundBootstrap() async {}
+
+  @override
+  void registerBridge(String channelName, JsBridgeHandler handler) {}
+
+  @override
+  Future<JsExecutionResult> runSnippet(String script) async {
+    if (script.contains('hasSearch:')) {
+      return JsExecutionResult(
+        output:
+            '{"meta":{"name":"测试源","group":"测试","author":"tester","description":""},"hasInit":false,"hasDiscoverCategories":${_installedSource.contains('discoverCategories')},'
+            '"hasDiscoverBooks":${_installedSource.contains('discoverBooks')},'
+            '"hasSearch":${_installedSource.contains('search(ctx, keyword)') || _installedSource.contains('search(ctx,keyword)')},'
+            '"hasDetail":${_installedSource.contains('detail(ctx, book)') || _installedSource.contains('detail(ctx,book)')},'
+            '"hasChapters":${_installedSource.contains('chapters(ctx, book)') || _installedSource.contains('chapters(ctx,book)')},'
+            '"hasContent":${_installedSource.contains('content(ctx, book, chapter)') || _installedSource.contains('content(ctx,book,chapter)')}}',
+        isError: false,
+      );
+    }
+
+    if (script.contains("__sourceDefinition?.['search']")) {
+      return const JsExecutionResult(output: '[]', isError: false);
+    }
+    if (script.contains("__sourceDefinition?.['chapters']")) {
+      return const JsExecutionResult(output: '[]', isError: false);
+    }
+    if (script.contains("__sourceDefinition?.['detail']")) {
+      return const JsExecutionResult(
+        output: '{"title":"测试书","author":"","detailUrl":"https://book","tocUrl":"","extra":{},"debug":{}}',
+        isError: false,
+      );
+    }
+    if (script.contains("__sourceDefinition?.['content']")) {
+      return const JsExecutionResult(
+        output: '{"title":"第一章","content":"正文"}',
+        isError: false,
+      );
+    }
+
+    return const JsExecutionResult(output: 'null', isError: false);
+  }
+
+  @override
+  void dispose() {
+    onDispose();
   }
 }

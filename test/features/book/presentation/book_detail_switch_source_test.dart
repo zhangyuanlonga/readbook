@@ -185,6 +185,7 @@ class _FakeSearchService extends SearchService {
     SearchCancellationToken? cancellationToken,
     SearchProgressCallback? onProgress,
     SearchContentMode contentMode = SearchContentMode.novel,
+    SearchPlanScenario scenario = SearchPlanScenario.globalSearch,
     List<String>? sourceIds,
     bool aggregateByTitleAuthor = false,
   }) async {

@@ -24,6 +24,8 @@
   书源列表性能、Android 发布和移动端后端集成。
 - `docs/script_sources/README.md`
   脚本源运行时文档入口，包含作者手册、规范、运行时 API、架构和模板。
+- `docs/script_sources/search-runtime-redesign.md`
+  搜索、换源和自动换源的脚本源运行时重构方案。
 
 ## 使用建议
 

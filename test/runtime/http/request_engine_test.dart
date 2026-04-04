@@ -110,4 +110,27 @@ void main() {
     expect(thirdRequestCookieHeader, isNot(contains('sid=abc456')));
     expect(session.cookies['sid'], isNull);
   });
+
+  test('does not send request when session is cancelled', () async {
+    var requestCalled = false;
+    final client = MockClient((http.Request request) async {
+      requestCalled = true;
+      return http.Response('ok', 200);
+    });
+    final engine = HttpPackageRequestEngine(client: client);
+    final session = SourceSession(sourceId: 'test_source');
+    session.set(
+      sessionCancellationHandleKey,
+      SessionCancellationHandle(isCancelled: () => true),
+    );
+
+    await expectLater(
+      engine.request(
+        RuntimeHttpRequest(uri: Uri.parse('https://example.com/search')),
+        session: session,
+      ),
+      throwsA(isA<SessionTaskCancelledException>()),
+    );
+    expect(requestCalled, isFalse);
+  });
 }

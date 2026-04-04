@@ -26,18 +26,9 @@ class BookDetailLoadResult {
 }
 
 class BookDetailService {
-  BookDetailService({
-    Object? sourceRepository,
-    SourceRuntimeFacade? sourceRuntimeFacade,
-    Object? httpClient,
-    Object? webViewExecutor,
-    Object? interactiveVerificationExecutor,
-    Object? logger,
-    Object? ruleEngine,
-    Object? urlTemplateResolver,
-    Object? responseProcessor,
-  }) : _sourceRuntimeFacade =
-           sourceRuntimeFacade ?? SourceRuntimeFacade.instance;
+  BookDetailService({SourceRuntimeFacade? sourceRuntimeFacade})
+    : _sourceRuntimeFacade =
+          sourceRuntimeFacade ?? SourceRuntimeFacade.instance;
 
   final SourceRuntimeFacade? _sourceRuntimeFacade;
 
@@ -191,7 +182,7 @@ class BookDetailService {
             : await facade.ensureRegisteredScriptSourceById(sourceId);
     if (facade == null || registered == null) {
       throw UnknownSourceException(
-        briefMessage: '未找到书享源：$sourceId',
+        briefMessage: '未找到书源：$sourceId',
         sourceId: sourceId,
         stage: ErrorStage.detail,
       );

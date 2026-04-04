@@ -6,6 +6,7 @@ import 'package:flutter_appread/domain/repositories/script_source_repository.dar
 import 'package:flutter_appread/features/search/application/search_hit_cache_service.dart';
 import 'package:flutter_appread/features/search/application/search_service.dart';
 import 'package:flutter_appread/features/source/application/source_runtime_facade.dart';
+import 'package:flutter_appread/runtime/session/source_session.dart';
 import 'package:flutter_appread/runtime/sources/source_contract.dart';
 import 'package:flutter_appread/runtime/sources/source_manifest.dart';
 import 'package:flutter_appread/runtime/sources/source_registry.dart';
@@ -132,6 +133,8 @@ class _FakeRuntimeFacade extends SourceRuntimeFacade {
   Future<List<runtime_models.Book>> search({
     required String sourceId,
     required String keyword,
+    bool allowInteractiveChallenge = true,
+    SessionCancellationHandle? cancellationHandle,
   }) async {
     return booksBySourceId[sourceId] ?? const <runtime_models.Book>[];
   }

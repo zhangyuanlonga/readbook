@@ -629,6 +629,7 @@ class RuntimeSourceDefinition {
     this.init,
     this.discoverCategories,
     this.discoverBooks,
+    this.dispose,
   });
 
   final SourceManifest manifest;
@@ -639,6 +640,7 @@ class RuntimeSourceDefinition {
   final SourceDetailHandler detail;
   final SourceChaptersHandler chapters;
   final SourceContentHandler content;
+  final void Function()? dispose;
 }
 
 const String _debugTraceSessionKey = '__debug_traces';

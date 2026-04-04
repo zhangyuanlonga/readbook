@@ -131,7 +131,7 @@ void main() {
       } on AppException catch (error) {
         expect(error.code, ErrorCode.unknownSource);
         expect(error.stage, ErrorStage.detail);
-        expect(error.briefMessage, contains('未找到书享源'));
+        expect(error.briefMessage, contains('未找到书源'));
       }
     });
   });

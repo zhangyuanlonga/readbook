@@ -176,6 +176,64 @@ void main() {
     expect(sharedCall.isSecure, isTrue);
     expect(sharedCall.isHttpOnly, isTrue);
   });
+
+  test('rejects interactive challenge when session disallows it', () async {
+    final session = SourceSession(sourceId: 'source_auto_switch');
+    session.set('__allow_interactive_challenge__', false);
+    final response = WebViewResponsePayload(
+      statusCode: 200,
+      body: '<html>ok</html>',
+      finalUrl: 'https://example.com/challenge',
+    );
+    final runtime = AppReadBrowserRuntime(
+      webViewExecutor: _FakeWebViewExecutor(response),
+      interactiveExecutor: _FakeInteractiveExecutor(response),
+      cookieSynchronizer: _FakeBrowserCookieSynchronizer(
+        browserCookies: const [],
+      ),
+      defaultStage: ErrorStage.search,
+    );
+
+    await expectLater(
+      runtime.challenge(
+        BrowserChallengeRequest(
+          uri: Uri.parse('https://example.com/challenge'),
+          reason: 'captcha',
+        ),
+        session: session,
+      ),
+      throwsA(isA<StateError>()),
+    );
+  });
+
+  test('rejects browser open when session is cancelled', () async {
+    final session = SourceSession(sourceId: 'source_cancelled');
+    session.set(
+      sessionCancellationHandleKey,
+      SessionCancellationHandle(isCancelled: () => true),
+    );
+    final response = WebViewResponsePayload(
+      statusCode: 200,
+      body: '<html>ok</html>',
+      finalUrl: 'https://example.com/open',
+    );
+    final runtime = AppReadBrowserRuntime(
+      webViewExecutor: _FakeWebViewExecutor(response),
+      interactiveExecutor: _FakeInteractiveExecutor(response),
+      cookieSynchronizer: _FakeBrowserCookieSynchronizer(
+        browserCookies: const [],
+      ),
+      defaultStage: ErrorStage.search,
+    );
+
+    await expectLater(
+      runtime.open(
+        BrowserOpenRequest(uri: Uri.parse('https://example.com/open')),
+        session: session,
+      ),
+      throwsA(isA<SessionTaskCancelledException>()),
+    );
+  });
 }
 
 class _FakeWebViewExecutor extends WebViewExecutor {

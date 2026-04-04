@@ -163,7 +163,7 @@ class _ScriptSourceEditorPageState extends State<ScriptSourceEditorPage> {
         setState(() {
           _isLoading = false;
         });
-        _showTransientMessage('未找到要编辑的书享源。');
+        _showTransientMessage('未找到要编辑的书源。');
         return;
       }
       _source = source;
@@ -181,7 +181,7 @@ class _ScriptSourceEditorPageState extends State<ScriptSourceEditorPage> {
       setState(() {
         _isLoading = false;
       });
-      _showTransientMessage('加载书享源失败：$error');
+      _showTransientMessage('加载书源失败：$error');
     }
   }
 
@@ -223,7 +223,7 @@ class _ScriptSourceEditorPageState extends State<ScriptSourceEditorPage> {
       setState(() {
         _isDirty = false;
       });
-      context.pop(_source == null ? '书享源已新增。' : '书享源已保存。');
+      context.pop(_source == null ? '书源已新增。' : '书源已保存。');
     } catch (error) {
       if (!mounted) {
         return;
@@ -265,7 +265,7 @@ class _ScriptSourceEditorPageState extends State<ScriptSourceEditorPage> {
     setState(() {
       _isDirty = true;
     });
-    _showTransientMessage('已格式化书享源。');
+    _showTransientMessage('已格式化书源脚本。');
   }
 
   Future<bool> _confirmDiscardIfNeeded() async {
@@ -277,7 +277,7 @@ class _ScriptSourceEditorPageState extends State<ScriptSourceEditorPage> {
       builder: (dialogContext) {
         return AlertDialog(
           title: const Text('放弃未保存内容？'),
-          content: const Text('当前书享源内容还没有保存，离开后本次修改将丢失。'),
+          content: const Text('当前书源内容还没有保存，离开后本次修改将丢失。'),
           actions: [
             TextButton(
               onPressed: () => Navigator.of(dialogContext).pop(false),
@@ -303,7 +303,7 @@ class _ScriptSourceEditorPageState extends State<ScriptSourceEditorPage> {
         builder:
             (_) => ScriptSourceDebugPage(
               sourceCode: _controller.fullText,
-              title: _isEditingExisting ? '书享源调试' : '新建书享源调试',
+              title: _isEditingExisting ? '书源调试' : '新建书源调试',
             ),
       ),
     );
@@ -410,7 +410,7 @@ class _ScriptSourceEditorPageState extends State<ScriptSourceEditorPage> {
             ),
             const SizedBox(height: 14),
             Text(
-              '正在加载书享源',
+              '正在加载书源',
               style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                 color: _palette.textMuted,
                 fontWeight: FontWeight.w500,
@@ -477,7 +477,7 @@ class _ScriptSourceEditorPageState extends State<ScriptSourceEditorPage> {
 
   Widget _buildEditorToolbar(BuildContext context) {
     final subtitle =
-        _isDirty ? '未保存更改' : (_isEditingExisting ? '编辑书享源' : '新增书享源');
+        _isDirty ? '未保存更改' : (_isEditingExisting ? '编辑书源' : '新增书源');
 
     return ColoredBox(
       color: _palette.tabBackground,
@@ -817,7 +817,7 @@ List<Issue> analyzeScriptSourceDraftIssues(String sourceCode) {
   final issues = <Issue>[];
   if (trimmed.isEmpty) {
     return const <Issue>[
-      Issue(line: 0, message: '书享源内容不能为空。', type: IssueType.error),
+      Issue(line: 0, message: '书源内容不能为空。', type: IssueType.error),
     ];
   }
   if (trimmed.startsWith('{') || trimmed.startsWith('[')) {
@@ -825,7 +825,7 @@ List<Issue> analyzeScriptSourceDraftIssues(String sourceCode) {
       Issue(
         line: 0,
         message:
-            '检测到你粘贴的内容更像 JSON 配置，不是书享源脚本。当前版本只支持书享源；如果要编写书享源，请使用 `export default { meta, ... }`。',
+            '检测到你粘贴的内容更像 JSON 配置，不是书源脚本。当前版本只支持脚本书源；如果要编写书源，请使用 `export default { meta, ... }`。',
         type: IssueType.error,
       ),
     ];
@@ -840,7 +840,7 @@ List<Issue> analyzeScriptSourceDraftIssues(String sourceCode) {
       Issue(
         line: 0,
         message:
-            '书享源导出格式不支持。请使用 `export default { meta, ... }` 或 `globalThis.__sourceDefinition = { meta, ... }`。',
+            '书源导出格式不支持。请使用 `export default { meta, ... }` 或 `globalThis.__sourceDefinition = { meta, ... }`。',
         type: IssueType.error,
       ),
     ];
@@ -851,7 +851,7 @@ List<Issue> analyzeScriptSourceDraftIssues(String sourceCode) {
     issues.add(
       Issue(
         line: exportLine,
-        message: '书享源缺少 `meta` 对象。请至少提供 `meta.name`。',
+        message: '书源缺少 `meta` 对象。请至少提供 `meta.name`。',
         type: IssueType.error,
       ),
     );
@@ -865,7 +865,7 @@ List<Issue> analyzeScriptSourceDraftIssues(String sourceCode) {
     issues.add(
       Issue(
         line: metaLine ?? exportLine,
-        message: '书享源缺少 `meta.name`，无法识别名称。',
+        message: '书源缺少 `meta.name`，无法识别名称。',
         type: IssueType.error,
       ),
     );
@@ -933,24 +933,24 @@ String formatScriptSourceDraft(String sourceCode) {
 String toFriendlyScriptEditorError(Object error) {
   final raw = error.toString().trim();
   if (raw.isEmpty) {
-    return '保存失败，请检查书享源格式后重试。';
+    return '保存失败，请检查书源格式后重试。';
   }
 
   if (error is SourceScriptCompileException) {
-    if (raw.contains('无法读取书享源导出的 meta')) {
-      return '无法识别书享源格式。请确认内容使用 `export default` 导出，并包含 `meta.name`。当前版本不再支持 JSON 书享源配置导入。';
+    if (raw.contains('无法读取书源导出的 meta')) {
+      return '无法识别书源格式。请确认内容使用 `export default` 导出，并包含 `meta.name`。当前版本不再支持 JSON 书源配置导入。';
     }
     if (raw.contains('当前仅支持以')) {
-      return '书享源导出格式不支持。请使用 `export default { meta, ... }` 或 `globalThis.__sourceDefinition = { meta, ... }`。';
+      return '书源导出格式不支持。请使用 `export default { meta, ... }` 或 `globalThis.__sourceDefinition = { meta, ... }`。';
     }
-    if (raw.contains('书享源缺少必须方法')) {
-      return '书享源缺少必须方法。至少需要实现 `search`、`detail`、`chapters`、`content`。';
+    if (raw.contains('书源缺少必须方法')) {
+      return '书源缺少必须方法。至少需要实现 `search`、`detail`、`chapters`、`content`。';
     }
     return raw.replaceFirst('SourceScriptCompileException: ', '');
   }
 
   if (raw.contains('Script source code cannot be empty')) {
-    return '书享源内容不能为空。';
+    return '书源内容不能为空。';
   }
 
   return raw;

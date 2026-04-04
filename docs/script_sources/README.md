@@ -26,6 +26,8 @@
 
 ## 开发文档
 
+- [脚本源搜索与换源运行时重构方案](./search-runtime-redesign.md)
+  用于推进搜索页、换源页和自动换源从“固定并发”演进到“资源预算调度”的专题设计文档。
 - [第二阶段：Browser / Cookie / Cache 设计说明](./stage-two-browser-sources.md)
   只在你需要理解浏览器能力的设计取舍时阅读，不是入门必读。
 - [脚本源调试工作台任务拆分](./debug-workbench-task-plan.md)
