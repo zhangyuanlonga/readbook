@@ -3,6 +3,7 @@ import 'dart:typed_data';
 
 import 'package:charset/charset.dart' as charset;
 import 'package:http/http.dart' as http;
+import 'package:http_parser/http_parser.dart';
 
 import '../session/source_session.dart';
 import 'challenge_detector.dart';
@@ -43,6 +44,7 @@ class HttpPackageRequestEngine implements RequestEngine {
     RuntimeHttpRequest request, {
     SourceSession? session,
   }) async {
+    final uri = request.resolvedUri;
     final headers = <String, String>{
       ..._defaultHeaders,
       ...?session?.defaultHeaders,
@@ -53,17 +55,16 @@ class HttpPackageRequestEngine implements RequestEngine {
       headers.putIfAbsent('referer', () => referer);
     }
 
-    if (session?.cookieHeader case final String cookieHeader) {
+    if (session?.cookieHeaderForUri(uri) case final String cookieHeader) {
       headers.putIfAbsent('cookie', () => cookieHeader);
     }
 
-    final uri = request.resolvedUri;
     final response = await _send(
       uri,
       request,
       headers,
     ).timeout(request.timeout);
-    _captureCookies(session, response);
+    _captureCookies(session, response, uri);
 
     final bytes = Uint8List.fromList(response.bodyBytes);
     final text = _decodeText(bytes, request.charset);
@@ -257,25 +258,142 @@ class HttpPackageRequestEngine implements RequestEngine {
     }
   }
 
-  void _captureCookies(SourceSession? session, http.Response response) {
+  void _captureCookies(
+    SourceSession? session,
+    http.Response response,
+    Uri requestUri,
+  ) {
     final rawSetCookie = response.headers['set-cookie'];
     if (session == null || rawSetCookie == null || rawSetCookie.isEmpty) {
       return;
     }
 
-    for (final segment in rawSetCookie.split(',')) {
-      final firstPair = segment.split(';').first.trim();
-      final separatorIndex = firstPair.indexOf('=');
-      if (separatorIndex <= 0) {
+    final responseUri = response.request?.url ?? requestUri;
+    for (final segment in _splitSetCookieHeader(rawSetCookie)) {
+      final parsed = _parseSetCookieSegment(segment, responseUri);
+      if (parsed == null) {
+        continue;
+      }
+      session.setCookieEntry(parsed);
+    }
+  }
+
+  List<String> _splitSetCookieHeader(String rawSetCookie) {
+    return rawSetCookie
+        .split(RegExp(r',(?=\s*[^=;,\s]+\s*=)'))
+        .map((String segment) => segment.trim())
+        .where((String segment) => segment.isNotEmpty)
+        .toList(growable: false);
+  }
+
+  SourceCookie? _parseSetCookieSegment(String segment, Uri responseUri) {
+    final parts = segment.split(';');
+    if (parts.isEmpty) {
+      return null;
+    }
+
+    final firstPair = parts.first.trim();
+    final separatorIndex = firstPair.indexOf('=');
+    if (separatorIndex <= 0) {
+      return null;
+    }
+
+    final name = firstPair.substring(0, separatorIndex).trim();
+    final value = firstPair.substring(separatorIndex + 1).trim();
+    if (name.isEmpty) {
+      return null;
+    }
+
+    String? domain;
+    String? path;
+    DateTime? expiresAt;
+    int? maxAge;
+    bool? isSecure;
+    bool? isHttpOnly;
+
+    for (final attribute in parts.skip(1)) {
+      final normalized = attribute.trim();
+      if (normalized.isEmpty) {
         continue;
       }
 
-      final name = firstPair.substring(0, separatorIndex).trim();
-      final value = firstPair.substring(separatorIndex + 1).trim();
-      if (name.isEmpty) {
-        continue;
+      final attributeSeparator = normalized.indexOf('=');
+      final attributeName =
+          attributeSeparator == -1
+              ? normalized.toLowerCase()
+              : normalized
+                  .substring(0, attributeSeparator)
+                  .trim()
+                  .toLowerCase();
+      final attributeValue =
+          attributeSeparator == -1
+              ? ''
+              : normalized.substring(attributeSeparator + 1).trim();
+
+      switch (attributeName) {
+        case 'domain':
+          if (attributeValue.isNotEmpty) {
+            domain = attributeValue;
+          }
+          break;
+        case 'path':
+          if (attributeValue.isNotEmpty) {
+            path = attributeValue;
+          }
+          break;
+        case 'expires':
+          if (attributeValue.isNotEmpty) {
+            expiresAt = _tryParseExpires(attributeValue);
+          }
+          break;
+        case 'max-age':
+          maxAge = int.tryParse(attributeValue);
+          break;
+        case 'secure':
+          isSecure = true;
+          break;
+        case 'httponly':
+          isHttpOnly = true;
+          break;
+        default:
+          break;
       }
-      session.setCookie(name, value);
     }
+
+    final resolvedExpiresAt =
+        maxAge == null
+            ? expiresAt
+            : DateTime.now().toUtc().add(Duration(seconds: maxAge));
+
+    return SourceCookie(
+      name: name,
+      value: value,
+      domain: domain ?? responseUri.host,
+      path: path ?? _defaultCookiePath(responseUri),
+      expiresAt: resolvedExpiresAt,
+      isSecure: isSecure,
+      isHttpOnly: isHttpOnly,
+      hostOnly: domain == null || domain.trim().isEmpty,
+    );
+  }
+
+  DateTime? _tryParseExpires(String value) {
+    try {
+      return parseHttpDate(value);
+    } catch (_) {
+      return null;
+    }
+  }
+
+  String _defaultCookiePath(Uri uri) {
+    final requestPath = uri.path.trim();
+    if (requestPath.isEmpty || !requestPath.startsWith('/')) {
+      return '/';
+    }
+    final lastSlashIndex = requestPath.lastIndexOf('/');
+    if (lastSlashIndex <= 0) {
+      return '/';
+    }
+    return requestPath.substring(0, lastSlashIndex);
   }
 }

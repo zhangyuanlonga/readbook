@@ -68,420 +68,230 @@ function createContent(partial = {}) {
   };
 }
 
-function absoluteUrl(ctx, url) {
+function absoluteUrl(url) {
   return ctx.utils.absoluteUrl(SOURCE_HOST, url || '');
 }
 
-function cleanText(ctx, value) {
+async function requestText(
+  ctx,
+  url,
+  {
+    method = 'GET',
+    headers = {},
+    query = {},
+    body,
+    bodyType = 'auto',
+    referer = SOURCE_HOST,
+  } = {},
+) {
+  return await ctx.http.request({
+    url,
+    method,
+    headers: {
+      ...DEFAULT_HEADERS,
+      referer,
+      ...headers,
+    },
+    query,
+    body,
+    bodyType,
+    timeoutMs: REQUEST_TIMEOUT,
+    responseType: 'text',
+  });
+}
+
+function cleanText(value) {
   return ctx.utils.normalizeText(value || '');
 }
 
-function normalizeMultiline(ctx, value) {
-  return String(value == null ? '' : value)
-    .replace(/\r\n?/g, '\n')
-    .replace(/\u00a0/g, ' ')
-    .replace(/[ \t]+\n/g, '\n')
-    .replace(/\n{3,}/g, '\n\n')
-    .split('\n')
-    .map((line) => cleanText(ctx, line))
-    .filter(Boolean)
-    .join('\n\n')
-    .trim();
+function textOf(node, selector) {
+  return cleanText(ctx.html.text(node?.querySelector(selector)));
 }
 
-async function requestText(ctx, url, options = {}) {
-  return await ctx.http.request({
-    url,
-    method: 'GET',
-    responseType: 'text',
-    timeoutMs: REQUEST_TIMEOUT,
-    headers: {
-      ...DEFAULT_HEADERS,
-      Referer: SOURCE_HOST,
-      ...(options.headers || {}),
-    },
-    ...options,
-  });
+function attrOf(node, selector, attr) {
+  return cleanText(node?.querySelector(selector)?.getAttribute(attr));
 }
 
-function textOf(ctx, node, selector) {
-  return cleanText(ctx, ctx.html.text(node?.querySelector(selector)));
-}
-
-function attrOf(ctx, node, selector, attr) {
-  return cleanText(ctx, node?.querySelector(selector)?.getAttribute(attr));
-}
-
-function parseOg(ctx, doc, name) {
+function metaContent(doc, property) {
   return cleanText(
-    ctx,
-    doc.querySelector(`meta[property="og:${name}"]`)?.getAttribute('content'),
+    doc
+      ?.querySelector(`meta[property="${property}"]`)
+      ?.getAttribute('content'),
   );
 }
 
-function decodeHtml(ctx, value) {
-  const text = cleanText(ctx, value);
-  if (!text) {
-    return '';
-  }
-  const doc = ctx.html.parse(`<div>${text}</div>`);
-  return cleanText(ctx, ctx.html.text(doc.querySelector('div')));
+function isVerificationPage(html) {
+  return cleanText(html).includes('请输入验证码') &&
+    cleanText(html).includes('modal-code');
 }
 
-function parseListItems(ctx, doc, fallbackCategory = '') {
+function extractVerificationCode(html) {
+  const match = String(html || '').match(
+    /class=["']modal-code["'][^>]*>\s*([^<\s]+)\s*</i,
+  );
+  return cleanText(match?.[1] || '');
+}
+
+function extractBookTextHtml(html) {
+  const match = String(html || '').match(
+    /<div id=["']booktxt["'][^>]*>([\s\S]*?)<\/div>/i,
+  );
+  return match?.[1] || '';
+}
+
+function parseBookCards(ctx, doc, fallback = {}) {
   const items = doc.querySelectorAll('.item');
 
   return ctx.html
-    .collect(items, (item) => {
-      const title =
-        textOf(ctx, item, 'dl > dt > a') ||
-        textOf(ctx, item, 'a:nth-of-type(1)');
+    .collect(items, (item, index) => {
+      const title = textOf(item, 'dt > a') || textOf(item, 'a[title]');
       const detailUrl = absoluteUrl(
-        ctx,
-        attrOf(ctx, item, 'dl > dt > a', 'href') ||
-          attrOf(ctx, item, 'a:nth-of-type(1)', 'href'),
+        attrOf(item, 'dt > a', 'href') || attrOf(item, 'a[title]', 'href'),
       );
-
-      return createBook({
-        title,
-        type: 'novel',
-        author:
-          textOf(ctx, item, '.btm a') ||
-          textOf(ctx, item, 'a:nth-of-type(2)'),
-        cover: absoluteUrl(
-          ctx,
-          attrOf(ctx, item, 'img', 'data-original') ||
-            attrOf(ctx, item, 'img', 'src'),
-        ),
-        intro: decodeHtml(ctx, textOf(ctx, item, 'dl > dd') || textOf(ctx, item, 'dd')),
-        category: fallbackCategory,
-        wordCount: textOf(ctx, item, '.btm em.orange'),
-        updateTime: textOf(ctx, item, '.btm em.blue'),
-        detailUrl,
-        tocUrl: detailUrl,
-      });
-    })
-    .filter((book) => book.title && book.detailUrl);
-}
-
-function dedupeBooks(books) {
-  const seen = new Set();
-  const result = [];
-
-  for (const book of books) {
-    const key = `${book.detailUrl}::${book.title}`;
-    if (!book.detailUrl || seen.has(key)) {
-      continue;
-    }
-    seen.add(key);
-    result.push(book);
-  }
-
-  return result;
-}
-
-function extractCaptchaCode(ctx, html) {
-  const doc = ctx.html.parse(html || '');
-  return textOf(ctx, doc, '.modal-code');
-}
-
-function isCaptchaHtml(ctx, html) {
-  const doc = ctx.html.parse(html || '');
-  const code = textOf(ctx, doc, '.modal-code');
-  const hasInput = !!doc.querySelector('input[name="verifycode"]');
-  const hasForm = !!doc.querySelector('form');
-  return !!code && hasInput && hasForm;
-}
-
-function looksLikeCfChallenge(html) {
-  const text = String(html || '').toLowerCase();
-  return (
-    text.includes('cf-browser-verification') ||
-    text.includes('challenge-platform') ||
-    text.includes('__cf_chl') ||
-    text.includes('just a moment') ||
-    text.includes('checking your browser') ||
-    text.includes('cloudflare')
-  );
-}
-
-async function waitBrowserHtmlReady(ctx, check, timeoutMs = 20000) {
-  const startedAt = Date.now();
-  let html = '';
-
-  while (Date.now() - startedAt < timeoutMs) {
-    await ctx.utils.sleep(500);
-    html = await ctx.browser.getHtml();
-    if (html && check(html)) {
-      return html;
-    }
-  }
-
-  return html;
-}
-
-async function submitCaptchaSearch(ctx, keyword, searchUrl, captchaCode) {
-  const submitUrl = `${SOURCE_HOST}/ss?searchkey=${ctx.utils.encodeUriComponent(keyword)}`;
-  const response = await ctx.http.request({
-    url: submitUrl,
-    method: 'POST',
-    responseType: 'text',
-    timeoutMs: REQUEST_TIMEOUT,
-    bodyType: 'form',
-    headers: {
-      ...DEFAULT_HEADERS,
-      Referer: searchUrl,
-    },
-    body: {
-      verifycode: captchaCode,
-    },
-  });
-
-  return response.text || '';
-}
-
-async function searchWithBrowser(ctx, keyword, searchUrl) {
-  await ctx.browser.open({
-    url: searchUrl,
-    timeoutMs: REQUEST_TIMEOUT,
-  });
-
-  let html = await waitBrowserHtmlReady(
-    ctx,
-    (value) => !looksLikeCfChallenge(value),
-    25000,
-  );
-
-  if (looksLikeCfChallenge(html)) {
-    throw '浏览器打开搜索页后，仍停留在 CF 验证页。';
-  }
-
-  let doc = ctx.html.parse(html || '');
-  let books = parseListItems(ctx, doc);
-  if (books.length > 0) {
-    return books;
-  }
-
-  if (isCaptchaHtml(ctx, html)) {
-    const code = extractCaptchaCode(ctx, html);
-    ctx.log(`search browser page shows captcha, submit via http, code=${code}`);
-    html = await submitCaptchaSearch(ctx, keyword, searchUrl, code);
-    doc = ctx.html.parse(html || '');
-    books = parseListItems(ctx, doc);
-    if (books.length > 0) {
-      return books;
-    }
-    if (isCaptchaHtml(ctx, html)) {
-      throw `验证码已提交，但页面仍停留在验证码页：${code}`;
-    }
-  }
-
-  return books;
-}
-
-async function performSearch(ctx, keyword) {
-  const searchUrl = `${SOURCE_HOST}/ss/?searchkey=${ctx.utils.encodeUriComponent(keyword)}`;
-
-  const response = await requestText(ctx, searchUrl, {
-    headers: {
-      Referer: SOURCE_HOST,
-    },
-  });
-
-  const html = response.text || '';
-  const doc = ctx.html.parse(html);
-  const books = parseListItems(ctx, doc);
-
-  if (books.length > 0) {
-    return books;
-  }
-
-  if (ctx.http.isChallenge(response) || looksLikeCfChallenge(html)) {
-    ctx.log('search hit cf challenge, switch to browser');
-    return await searchWithBrowser(ctx, keyword, searchUrl);
-  }
-
-  if (isCaptchaHtml(ctx, html)) {
-    const code = extractCaptchaCode(ctx, html);
-    ctx.log(`search hit captcha page, submit via http, code=${code}`);
-    const submittedHtml = await submitCaptchaSearch(
-      ctx,
-      keyword,
-      searchUrl,
-      code,
-    );
-    const submittedDoc = ctx.html.parse(submittedHtml || '');
-    return parseListItems(ctx, submittedDoc);
-  }
-
-  return [];
-}
-
-function resolveCategoryTemplate(ctx, href) {
-  const absolute = absoluteUrl(ctx, href);
-  if (!absolute) {
-    return '';
-  }
-  return absolute.replace(/_(\d+)\.html$/i, '_{{page}}.html');
-}
-
-async function fetchCategoryPage(ctx, url) {
-  const response = await requestText(ctx, url, {
-    headers: {
-      Referer: SOURCE_HOST,
-    },
-  });
-
-  const doc = ctx.html.parse(response.text || '');
-  const heading =
-    textOf(ctx, doc, '#hotcontent .rank h2') ||
-    textOf(ctx, doc, '#newscontent .r h2');
-
-  const books = parseListItems(ctx, doc, heading);
-  return {
-    heading,
-    books,
-  };
-}
-
-function parseDiscoverCategories(ctx, doc) {
-  const nodes = doc.querySelectorAll('.nav a');
-
-  return ctx.html
-    .collect(nodes, (node) => {
-      const href = cleanText(ctx, node.getAttribute('href'));
-      if (!/^\/class\//.test(href)) {
+      if (!title || !detailUrl) {
         return null;
       }
 
-      return createDiscoverCategory({
-        title: cleanText(ctx, ctx.html.text(node)),
-        url: resolveCategoryTemplate(ctx, href),
-        style: {
-          layoutFlexGrow: 1,
-          layoutFlexBasisPercent: 0.33,
-        },
-        extra: {
-          firstPageUrl: absoluteUrl(ctx, href),
-        },
-      });
-    })
-    .filter(Boolean);
-}
-
-function extractDirectoryHtml(html) {
-  const match = String(html || '').match(
-    /<dt>\s*目录章节[\s\S]*?<\/dt>([\s\S]*?)<\/dl>/i,
-  );
-  return match ? match[1] : '';
-}
-
-function parseChapterList(ctx, html) {
-  const fragmentHtml = extractDirectoryHtml(html);
-  const targetDoc = ctx.html.parse(
-    fragmentHtml ? `<div>${fragmentHtml}</div>` : html || '',
-  );
-  const links = targetDoc.querySelectorAll('a[rel="chapter"]');
-
-  return ctx.html
-    .collect(links, (link, index) => {
-      const title =
-        cleanText(ctx, ctx.html.text(link.querySelector('dd'))) ||
-        cleanText(ctx, ctx.html.text(link));
-      const href = cleanText(ctx, link.getAttribute('href'));
-
-      return createChapter({
+      return createBook({
         title,
-        url: absoluteUrl(ctx, href),
+        author: textOf(item, '.btm > a'),
+        cover: absoluteUrl(attrOf(item, 'img', 'data-original')),
+        intro: textOf(item, 'dd'),
+        category: fallback.category || '',
+        wordCount: textOf(item, '.btm > em.orange'),
+        updateTime: textOf(item, '.btm > em.blue'),
+        latestChapter: '',
+        detailUrl,
+        tocUrl: detailUrl,
         extra: {
-          index,
+          ...fallback.extra,
+          rawListIndex: index,
         },
       });
     })
-    .filter((chapter) => chapter.title && chapter.url);
-}
-
-function chapterBaseKey(url) {
-  const absolute = String(url || '').split('?')[0].split('#')[0];
-  const match = absolute.match(/^(.*\/\d+)(?:_\d+)?\.html$/i);
-  return match ? match[1] : absolute;
-}
-
-function parseNextPageUrl(ctx, doc) {
-  return absoluteUrl(
-    ctx,
-    attrOf(ctx, doc, '#next_url', 'href') ||
-      attrOf(ctx, doc, 'a[rel="next"]', 'href'),
-  );
-}
-
-function cleanupContent(ctx, value) {
-  return normalizeMultiline(
-    ctx,
-    String(value || '')
-      .replace(/^第.+?（\d+\/\d+）/, '')
-      .replace(/^第.+?章[^\n]*/, '')
-      .replace(/本章未完，点击下一页继续阅读。?/g, ''),
-  );
-}
-
-async function fetchPagedContent(ctx, url, visited = new Set(), baseKey = '') {
-  const currentUrl = absoluteUrl(ctx, url);
-  if (!currentUrl || visited.has(currentUrl)) {
-    return {
-      content: '',
-      nextUrl: null,
-    };
-  }
-
-  visited.add(currentUrl);
-
-  const response = await requestText(ctx, currentUrl, {
-    headers: {
-      Referer: currentUrl,
-    },
-  });
-  const doc = ctx.html.parse(response.text || '');
-
-  const paragraphs = doc
-    .querySelectorAll('#booktxt > p')
-    .map((node) => cleanText(ctx, ctx.html.text(node)))
     .filter(Boolean);
+}
 
-  let content = paragraphs.join('\n\n');
-  if (!content) {
-    content = cleanText(ctx, ctx.html.text(doc.querySelector('#booktxt')));
+async function searchWithVerification(ctx, keyword) {
+  const url = `${SOURCE_HOST}/ss/?searchkey=${ctx.utils.encodeUriComponent(keyword)}`;
+
+  let response = await requestText(ctx, url, { referer: SOURCE_HOST });
+  if (!isVerificationPage(response.text || '')) {
+    return response;
   }
-  content = cleanupContent(ctx, content);
 
-  const nextUrl = parseNextPageUrl(ctx, doc);
-  const nextBaseKey = chapterBaseKey(nextUrl);
+  for (let attempt = 0; attempt < 2; attempt += 1) {
+    const code = extractVerificationCode(response.text || '');
+    if (!code) {
+      break;
+    }
 
-  if (!nextUrl || !baseKey || nextBaseKey !== baseKey || visited.has(nextUrl)) {
+    response = await requestText(ctx, url, {
+      method: 'POST',
+      referer: url,
+      bodyType: 'form',
+      body: {
+        verifycode: code,
+      },
+    });
+
+    if (!isVerificationPage(response.text || '')) {
+      return response;
+    }
+  }
+
+  return response;
+}
+
+function extractBookId(url) {
+  const match = String(url || '').match(/\/(\d+)\/?(?:[#?].*)?$/);
+  return cleanText(match?.[1] || '');
+}
+
+function buildChapterSeriesKey(url) {
+  const match = String(url || '').match(/^(.*?\/\d+)(?:_\d+)?\.html(?:[#?].*)?$/);
+  return cleanText(match?.[1] || '');
+}
+
+async function fetchPagedContent(ctx, url, chapterTitle, visited = new Set()) {
+  const targetUrl = absoluteUrl(url);
+  if (!targetUrl || visited.has(targetUrl)) {
+    return { content: '', nextUrl: null };
+  }
+  visited.add(targetUrl);
+
+  const response = await requestText(ctx, targetUrl, { referer: targetUrl });
+  const doc = ctx.html.parse(response.text || '');
+  const contentNode = doc.querySelector('#booktxt');
+
+  let text = ctx.html
+    .collect(contentNode?.querySelectorAll('p') || [], (node) => ctx.html.text(node))
+    .map((value) => cleanText(value))
+    .filter(Boolean)
+    .join('\n\n');
+
+  if (!text) {
+    text = cleanText(ctx.utils.htmlFormat(extractBookTextHtml(response.text || '')));
+  }
+
+  const nextHref = cleanText(attrOf(doc, '#next_url', 'href'));
+  const nextLabel = textOf(doc, '#next_url');
+  const nextUrl = absoluteUrl(nextHref);
+  const currentSeriesKey = buildChapterSeriesKey(targetUrl);
+  const nextSeriesKey = buildChapterSeriesKey(nextUrl);
+
+  if (
+    nextUrl &&
+    nextLabel.includes('下一页') &&
+    currentSeriesKey &&
+    currentSeriesKey === nextSeriesKey &&
+    !visited.has(nextUrl)
+  ) {
+    const nextResult = await fetchPagedContent(ctx, nextUrl, chapterTitle, visited);
     return {
-      content,
-      nextUrl: null,
+      content: [text, nextResult.content].filter(Boolean).join('\n\n'),
+      nextUrl: nextResult.nextUrl,
     };
   }
-
-  const nextResult = await fetchPagedContent(ctx, nextUrl, visited, baseKey);
 
   return {
-    content: [content, nextResult.content].filter(Boolean).join('\n\n'),
-    nextUrl: nextResult.nextUrl,
+    content: text,
+    nextUrl: nextUrl || null,
   };
+}
+
+function categoryPageUrl(category, page) {
+  const template = cleanText(category?.extra?.pageTemplate || '');
+  if (template) {
+    return template.replace('{{page}}', String(page));
+  }
+
+  const baseUrl = cleanText(category?.url || '');
+  if (!baseUrl) {
+    return '';
+  }
+
+  if (page <= 1) {
+    return baseUrl;
+  }
+
+  if (/_\d+\.html$/.test(baseUrl)) {
+    return baseUrl.replace(/_(\d+)\.html$/, `_${page}.html`);
+  }
+
+  return '';
 }
 
 export default {
   meta: {
-    name: '69书吧',
-    group: '默认分组',
+    name: '🌐 69书吧',
+    group: '网页',
     author: 'converted',
-    description: '从 Legado 规则转换的 JS 书源，包含搜索验证码处理。',
+    description: '从阅读 3.0 规则迁移的 69 书吧脚本源。',
     domains: ['www.69hao.com', '69hao.com'],
     homepage: SOURCE_HOST,
     enabled: true,
-    capabilities: ['discover', 'search', 'detail', 'chapters', 'content'],
+    capabilities: ['search', 'detail', 'chapters', 'content', 'discover'],
     rateLimits: {
       'www.69hao.com': {
         minIntervalMs: 1000,
@@ -494,94 +304,166 @@ export default {
 
   async discoverCategories(ctx) {
     const response = await requestText(ctx, SOURCE_HOST, {
-      headers: {
-        Referer: SOURCE_HOST,
-      },
+      referer: SOURCE_HOST,
     });
     const doc = ctx.html.parse(response.text || '');
-    return parseDiscoverCategories(ctx, doc);
+
+    const categories = [
+      createDiscoverCategory({
+        title: '全部分类',
+        url: SOURCE_HOST,
+        style: {
+          layoutFlexGrow: 1,
+          layoutFlexBasisPercent: 100,
+        },
+      }),
+    ];
+
+    const navLinks = doc.querySelectorAll('.nav a');
+    const seen = new Set([SOURCE_HOST]);
+
+    const parsed = ctx.html.collect(navLinks, (node) => {
+      const title = cleanText(ctx.html.text(node));
+      const href = absoluteUrl(node.getAttribute('href') || '');
+      if (!title || !href || seen.has(href)) {
+        return null;
+      }
+
+      const isCategoryPage = href.includes('/class/');
+      const isHotPage = href.includes('/rank/allvisit/');
+      if (!isCategoryPage && !isHotPage) {
+        return null;
+      }
+      seen.add(href);
+
+      return createDiscoverCategory({
+        title,
+        url: href,
+        style: {
+          layoutFlexGrow: 1,
+          layoutFlexBasisPercent: 33.3,
+        },
+        extra: {
+          pageTemplate: isCategoryPage
+            ? href.replace(/_(\d+)\.html$/, '_{{page}}.html')
+            : '',
+        },
+      });
+    }).filter(Boolean);
+
+    return [...categories, ...parsed];
   },
 
   async discoverBooks(ctx, category, page, pageSize) {
-    const currentPage = Math.max(1, Number(page || 1));
-    const urlTemplate = category.url || category.extra?.firstPageUrl || SOURCE_HOST;
-    const pageUrl = String(urlTemplate).includes('{{page}}')
-      ? String(urlTemplate).replace(/\{\{page\}\}/g, String(currentPage))
-      : urlTemplate;
-
-    const result = await fetchCategoryPage(ctx, pageUrl);
-    const books = result.books;
-
-    if (!pageSize || books.length <= Number(pageSize)) {
-      return books;
+    const url = categoryPageUrl(category, page);
+    if (!url) {
+      return [];
     }
 
-    return books.slice(0, Number(pageSize));
+    const response = await requestText(ctx, url, { referer: SOURCE_HOST });
+    const doc = ctx.html.parse(response.text || '');
+
+    return parseBookCards(ctx, doc, {
+      category: category.title === '全部分类' ? '' : category.title,
+      extra: {
+        discoverCategoryTitle: category.title,
+        discoverPage: page,
+        discoverPageSize: pageSize,
+      },
+    });
   },
 
   async search(ctx, keyword) {
-    return await performSearch(ctx, keyword);
+    ctx.cookie.clearDomain('www.69hao.com');
+    ctx.cookie.clearDomain('69hao.com');
+
+    const response = await searchWithVerification(ctx, keyword);
+    const doc = ctx.html.parse(response.text || '');
+    return parseBookCards(ctx, doc, {
+      extra: {
+        keyword,
+      },
+    });
   },
 
   async detail(ctx, book) {
-    const response = await requestText(ctx, book.detailUrl, {
-      headers: {
-        Referer: book.detailUrl || SOURCE_HOST,
-      },
+    const detailUrl = absoluteUrl(book.detailUrl);
+    const response = await requestText(ctx, detailUrl, {
+      referer: SOURCE_HOST,
     });
-
     const doc = ctx.html.parse(response.text || '');
 
-    const title = parseOg(ctx, doc, 'novel:book_name') || book.title;
-    const author = parseOg(ctx, doc, 'novel:author') || book.author;
-    const category = parseOg(ctx, doc, 'novel:category') || book.category;
-    const status = parseOg(ctx, doc, 'novel:status') || book.status;
-    const updateTime = parseOg(ctx, doc, 'novel:update_time') || book.updateTime;
+    const title = metaContent(doc, 'og:novel:book_name') || cleanText(book.title);
+    const author = metaContent(doc, 'og:novel:author') || cleanText(book.author);
+    const category = metaContent(doc, 'og:novel:category') || cleanText(book.category);
+    const status = metaContent(doc, 'og:novel:status') || textOf(doc, '#info p:nth-child(3)');
+    const intro = metaContent(doc, 'og:description') || cleanText(ctx.html.text(doc.querySelector('#intro')));
+    const cover = metaContent(doc, 'og:image') || absoluteUrl(attrOf(doc, '#fmimg img', 'data-original'));
     const latestChapter =
-      parseOg(ctx, doc, 'novel:latest_chapter_name') || book.latestChapter;
-    const cover = absoluteUrl(ctx, parseOg(ctx, doc, 'image') || book.cover);
-    const intro =
-      parseOg(ctx, doc, 'description') ||
-      decodeHtml(ctx, ctx.html.text(doc.querySelector('#intro'))) ||
-      book.intro;
-    const detailUrl =
-      absoluteUrl(ctx, parseOg(ctx, doc, 'novel:read_url') || book.detailUrl);
+      metaContent(doc, 'og:novel:latest_chapter_name') ||
+      textOf(doc, '#info p:nth-child(4) a');
+    const updateTime =
+      metaContent(doc, 'og:novel:update_time') ||
+      cleanText(textOf(doc, '#info p:nth-child(5)').replace(/^最后更新：/, ''));
 
     return createBook({
       ...book,
-      type: 'novel',
       title,
       author,
       cover,
       intro,
-      status,
+      status: cleanText(String(status).replace(/^状态：/, '')),
       category,
+      wordCount: book.wordCount || '',
       updateTime,
       latestChapter,
       detailUrl,
-      tocUrl: detailUrl,
+      tocUrl: absoluteUrl(metaContent(doc, 'og:novel:read_url') || detailUrl),
+      extra: {
+        ...book.extra,
+        bookId: extractBookId(detailUrl),
+      },
     });
   },
 
   async chapters(ctx, book) {
-    const tocUrl = book.tocUrl || book.detailUrl;
+    const tocUrl = absoluteUrl(book.tocUrl || book.detailUrl);
     const response = await requestText(ctx, tocUrl, {
-      headers: {
-        Referer: book.detailUrl || SOURCE_HOST,
-      },
+      referer: tocUrl,
     });
+    const doc = ctx.html.parse(response.text || '');
+    const chapterNodes = doc.querySelectorAll('#list a[rel="chapter"]');
 
-    return parseChapterList(ctx, response.text || '');
+    return ctx.html
+      .collect(chapterNodes, (node, index) => {
+        const title = cleanText(ctx.html.text(node));
+        const url = absoluteUrl(node.getAttribute('href') || '');
+        if (!title || !url) {
+          return null;
+        }
+
+        return createChapter({
+          title,
+          url,
+          extra: {
+            index,
+          },
+        });
+      })
+      .filter(Boolean);
   },
 
   async content(ctx, book, chapter) {
-    const baseKey = chapterBaseKey(chapter.url);
-    const result = await fetchPagedContent(ctx, chapter.url, new Set(), baseKey);
+    const result = await fetchPagedContent(ctx, chapter.url, chapter.title);
 
     return createContent({
       title: chapter.title,
       content: result.content,
       nextUrl: result.nextUrl,
+      extra: {
+        ...chapter.extra,
+        bookId: book.extra?.bookId || extractBookId(book.detailUrl),
+      },
     });
   },
 };

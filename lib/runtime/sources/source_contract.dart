@@ -217,10 +217,18 @@ class SourceCookieContext {
   }
 
   Object? getForUrl(String url, [String? name]) {
-    if (name == null || name.isEmpty) {
-      return _session.cookies;
+    final uri = Uri.tryParse(url);
+    if (uri == null || uri.host.trim().isEmpty) {
+      if (name == null || name.isEmpty) {
+        return _session.cookies;
+      }
+      return _session.cookies[name];
     }
-    return _session.cookies[name];
+
+    if (name == null || name.isEmpty) {
+      return _session.cookiesForUri(uri);
+    }
+    return _session.cookieValueForUri(uri, name);
   }
 
   void set(String name, String value) {
@@ -232,10 +240,7 @@ class SourceCookieContext {
   }
 
   void clearDomain(String domain) {
-    final names = _session.cookies.keys.toList(growable: false);
-    for (final name in names) {
-      _session.removeCookie(name);
-    }
+    _session.clearCookiesForDomain(domain);
   }
 }
 
