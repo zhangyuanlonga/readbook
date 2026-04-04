@@ -623,6 +623,37 @@ class ReaderPreferencesService {
     );
   }
 
+  Future<void> deleteProgress(String bookId) async {
+    final normalizedBookId = bookId.trim();
+    if (normalizedBookId.isEmpty) {
+      return;
+    }
+
+    final prefs = await _preferencesFuture;
+    await prefs.remove('$_progressPrefix$normalizedBookId');
+  }
+
+  Future<void> migrateProgress({
+    required String previousBookId,
+    required ReadingProgress nextProgress,
+    bool removePrevious = true,
+  }) async {
+    final normalizedPreviousBookId = previousBookId.trim();
+    if (normalizedPreviousBookId.isEmpty) {
+      await saveProgress(nextProgress);
+      return;
+    }
+
+    final prefs = await _preferencesFuture;
+    await prefs.setString(
+      '$_progressPrefix${nextProgress.bookId}',
+      jsonEncode(nextProgress.toJson()),
+    );
+    if (removePrevious && normalizedPreviousBookId != nextProgress.bookId) {
+      await prefs.remove('$_progressPrefix$normalizedPreviousBookId');
+    }
+  }
+
   Future<ReaderTocSnapshot?> loadTocSnapshot({
     required String sourceId,
     required String detailUrl,

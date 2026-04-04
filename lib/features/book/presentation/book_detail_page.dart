@@ -26,7 +26,9 @@ import '../../reader/application/local/local_book_index_service.dart';
 import '../../reader/application/local/local_reader_identity.dart';
 import '../../reader/application/local/local_book_storage_service.dart';
 import '../../reader/application/local_content_provider.dart';
+import '../../reader/application/reader_preferences_service.dart';
 import '../../reader/application/reader_system_settings_service.dart';
+import '../../reader/application/reading_record_service.dart';
 import '../../reader/application/source_content_provider.dart';
 import '../../reader/application/source_switch_score_service.dart';
 import '../../reader/application/switch_source_shared.dart';
@@ -102,6 +104,9 @@ class _BookDetailPageState extends State<BookDetailPage> {
       ReaderSystemSettingsService();
   final LocalBookStorageService _localBookStorageService =
       LocalBookStorageService();
+  final ReaderPreferencesService _readerPreferencesService =
+      ReaderPreferencesService();
+  final ReadingRecordService _readingRecordService = ReadingRecordService();
 
   @override
   void initState() {
@@ -513,7 +518,7 @@ class _BookDetailPageState extends State<BookDetailPage> {
     final sourceLabel = _resolveCurrentSourceDisplayName();
     final enabled = !(_isLoading || _isSwitchingSource || _isMissingParams);
     return BookDetailActionEntryCard(
-      title: '切换书享源',
+      title: '切换书源',
       subtitle: sourceLabel,
       buttonLabel: _isSwitchingSource ? '切换中' : '去换源',
       onPressed: enabled ? _handleSwitchSource : null,
@@ -598,7 +603,7 @@ class _BookDetailPageState extends State<BookDetailPage> {
     if (sourceId.isNotEmpty) {
       return sourceId;
     }
-    return '当前书享源未知';
+    return '当前书源未知';
   }
 
   String _normalizeText(String text) {
@@ -932,7 +937,7 @@ class _BookDetailPageState extends State<BookDetailPage> {
         currentSourceId.isEmpty ||
         currentDetailUrl == null ||
         currentDetailUrl.isEmpty) {
-      _showMessage('缺少当前书享源信息，暂时无法换源。');
+      _showMessage('缺少当前书源信息，暂时无法换源。');
       return;
     }
 
@@ -976,14 +981,14 @@ class _BookDetailPageState extends State<BookDetailPage> {
         currentSourceId: currentSourceId,
       );
       if (scope.sourceIds.isEmpty && !scope.allowUnscopedSearch) {
-        _showMessage('暂无可切换的同类型书享源。');
+        _showMessage('暂无可切换的同类型书源。');
         return;
       }
     } on AppException catch (error) {
-      _showMessage('查找可切换书享源失败：${error.briefMessage}');
+      _showMessage('查找可切换书源失败：${error.briefMessage}');
       return;
     } catch (_) {
-      _showMessage('查找可切换书享源失败，请稍后重试。');
+      _showMessage('查找可切换书源失败，请稍后重试。');
       return;
     }
 
@@ -1055,16 +1060,16 @@ class _BookDetailPageState extends State<BookDetailPage> {
           _showMessage('已换源，但书架同步失败，请稍后重试。');
           break;
         case _DetailSwitchSourceApplyResult.failed:
-          _showMessage('切换书享源失败，已保留当前书享源。');
+          _showMessage('切换书源失败，已保留当前书源。');
           break;
       }
     } on AppException catch (error) {
       if (mounted) {
-        _showMessage('查找可切换书享源失败：${error.briefMessage}');
+        _showMessage('查找可切换书源失败：${error.briefMessage}');
       }
     } catch (_) {
       if (mounted) {
-        _showMessage('切换书享源失败，请稍后重试。');
+        _showMessage('切换书源失败，请稍后重试。');
       }
     }
   }
@@ -1103,6 +1108,9 @@ class _BookDetailPageState extends State<BookDetailPage> {
     final previousErrorText = _errorText;
     final previousTocWarning = _tocWarningText;
     final previousInBookshelf = _isInBookshelf;
+    final previousReadableChapter = _firstReadableChapter(
+      previousResult?.chapters,
+    );
 
     setState(() {
       _activeSourceId = candidate.book.sourceId.trim();
@@ -1117,6 +1125,10 @@ class _BookDetailPageState extends State<BookDetailPage> {
         previousSourceId: previousSourceId,
         previousDetailUrl: previousDetailUrl,
         previousInBookshelf: previousInBookshelf,
+      );
+      await _syncReadingStateAfterSwitch(
+        previousBookId: previousBookId,
+        previousReadableChapter: previousReadableChapter,
       );
       if (mounted) {
         setState(() {
@@ -1199,6 +1211,90 @@ class _BookDetailPageState extends State<BookDetailPage> {
       _scheduleBookshelfStateRefresh(result);
       return true;
     }
+  }
+
+  Future<void> _syncReadingStateAfterSwitch({
+    required String previousBookId,
+    required Chapter? previousReadableChapter,
+  }) async {
+    final result = _result;
+    final sourceId = (_activeSourceId ?? '').trim();
+    final detailUrl = (_activeDetailUrl ?? '').trim();
+    final nextBookId = _activeBookId.trim();
+    if (result == null ||
+        previousBookId.trim().isEmpty ||
+        nextBookId.isEmpty ||
+        previousBookId.trim() == nextBookId ||
+        sourceId.isEmpty ||
+        detailUrl.isEmpty) {
+      return;
+    }
+
+    final fallbackChapter =
+        _firstReadableChapter(result.chapters) ??
+        Chapter(
+          id: '',
+          bookId: nextBookId,
+          title: result.detail.latestChapter,
+          chapterUrl: '',
+          index: 0,
+        );
+
+    final chapter = previousReadableChapter ?? fallbackChapter;
+    final normalizedChapterUrl = chapter.chapterUrl.trim();
+    final normalizedChapterId = chapter.id.trim();
+    final chapterTitle =
+        chapter.title.trim().isEmpty
+            ? result.detail.title
+            : chapter.title.trim();
+    final chapterIndex = chapter.index;
+
+    if (normalizedChapterUrl.isNotEmpty && normalizedChapterId.isNotEmpty) {
+      try {
+        await _readerPreferencesService.migrateProgress(
+          previousBookId: previousBookId,
+          nextProgress: ReadingProgress(
+            bookId: nextBookId,
+            sourceId: sourceId,
+            detailUrl: detailUrl,
+            chapterId: normalizedChapterId,
+            chapterUrl: normalizedChapterUrl,
+            chapterTitle: chapterTitle,
+            chapterIndex: chapterIndex,
+            updatedAt: DateTime.now(),
+            chapterPositionRatio: 0,
+          ),
+        );
+      } catch (_) {
+        // Keep source switch success even if progress migration fails.
+      }
+    }
+
+    try {
+      await _readingRecordService.reassignBookIdentity(
+        previousBookId: previousBookId,
+        nextBookId: nextBookId,
+        nextSourceId: sourceId,
+        nextDetailUrl: detailUrl,
+        nextBookTitle: result.detail.title,
+        nextBookAuthor: result.detail.author,
+        nextCoverUrl: result.detail.coverUrl,
+      );
+    } catch (_) {
+      // Keep source switch success even if reading record migration fails.
+    }
+  }
+
+  Chapter? _firstReadableChapter(List<Chapter>? chapters) {
+    if (chapters == null) {
+      return null;
+    }
+    for (final chapter in chapters) {
+      if (!chapter.isVolume && chapter.chapterUrl.trim().isNotEmpty) {
+        return chapter;
+      }
+    }
+    return null;
   }
 
   void _openChapter(Chapter chapter) {
@@ -1768,12 +1864,12 @@ class _BookDetailPageState extends State<BookDetailPage> {
     }
 
     return switch (error.code) {
-      ErrorCode.network => '网络请求失败，请检查网络或更换书享源后重试。',
-      ErrorCode.validation => '书享源配置不完整，暂时无法加载详情。',
-      ErrorCode.ruleParse => '书享源脚本语法错误，无法解析详情。',
-      ErrorCode.ruleMatchEmpty => '未获取到有效内容，请更换书享源或稍后重试。',
+      ErrorCode.network => '网络请求失败，请检查网络或更换书源后重试。',
+      ErrorCode.validation => '书源配置不完整，暂时无法加载详情。',
+      ErrorCode.ruleParse => '书源脚本语法错误，无法解析详情。',
+      ErrorCode.ruleMatchEmpty => '未获取到有效内容，请更换书源或稍后重试。',
       ErrorCode.decode => '响应解析失败，可能是编码或格式不兼容。',
-      ErrorCode.unknownSource => '书享源不存在或已被删除。',
+      ErrorCode.unknownSource => '书源不存在或已被删除。',
       ErrorCode.unknown => '加载失败，请稍后重试。',
     };
   }
@@ -1799,11 +1895,11 @@ class _BookDetailPageState extends State<BookDetailPage> {
 
     return switch (error.code) {
       ErrorCode.network => '目录加载失败（网络异常），已展示详情。可稍后刷新目录重试。',
-      ErrorCode.validation => '书享源配置不完整，目录暂不可用。',
-      ErrorCode.ruleParse => '书享源脚本语法错误，目录暂不可用。',
+      ErrorCode.validation => '书源配置不完整，目录暂不可用。',
+      ErrorCode.ruleParse => '书源脚本语法错误，目录暂不可用。',
       ErrorCode.ruleMatchEmpty => '未获取到目录内容，目录暂为空。',
       ErrorCode.decode => '目录解析失败，目录暂不可用。',
-      ErrorCode.unknownSource => '书享源不存在，目录暂不可用。',
+      ErrorCode.unknownSource => '书源不存在，目录暂不可用。',
       ErrorCode.unknown => '目录加载失败，目录暂不可用。',
     };
   }

@@ -1778,7 +1778,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
                             child: CircularProgressIndicator(strokeWidth: 2),
                           )
                           : const Icon(Icons.swap_horiz_rounded),
-                  label: Text(_isSwitchSourceLoading ? '换源中...' : '切换书享源'),
+                  label: Text(_isSwitchSourceLoading ? '换源中...' : '切换书源'),
                 ),
             ],
           ),
@@ -5584,14 +5584,14 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
     try {
       scope = await _buildSwitchSourceScope(currentSourceId: currentSourceId);
       if (scope.sourceIds.isEmpty) {
-        _showMessage('暂无可切换的同类型书享源。');
+        _showMessage('暂无可切换的同类型书源。');
         return;
       }
     } on AppException catch (error) {
-      _showMessage('查找可切换书享源失败：${error.briefMessage}');
+      _showMessage('查找可切换书源失败：${error.briefMessage}');
       return;
     } catch (_) {
-      _showMessage('查找可切换书享源失败，请稍后重试。');
+      _showMessage('查找可切换书源失败，请稍后重试。');
       return;
     }
 
@@ -5694,6 +5694,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
             scope.isMangaType
                 ? SearchContentMode.manga
                 : SearchContentMode.novel,
+        scenario: SearchPlanScenario.switchSource,
         sourceIds: scope.sourceIds,
         cancellationToken: cancellationToken,
         onProgress: (progress) {
@@ -5744,7 +5745,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
         sourceCount: report.sourceCount,
         processedSourceCount: report.processedSourceCount,
         candidates: candidates,
-        errorText: candidates.isEmpty ? '没有检索到可切换书享源，请稍后重试。' : null,
+        errorText: candidates.isEmpty ? '没有检索到可切换书源，请稍后重试。' : null,
         scoreRankingEnabled: scoreRankingEnabled,
       );
     } on AppException catch (error) {
@@ -5756,7 +5757,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
         sourceCount: scope.sourceIds.length,
         processedSourceCount: 0,
         candidates: const <SwitchSourceCandidate>[],
-        errorText: '查找可切换书享源失败：${error.briefMessage}',
+        errorText: '查找可切换书源失败：${error.briefMessage}',
         scoreRankingEnabled: scoreRankingEnabled,
       );
     } catch (_) {
@@ -5768,7 +5769,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
         sourceCount: scope.sourceIds.length,
         processedSourceCount: 0,
         candidates: const <SwitchSourceCandidate>[],
-        errorText: '查找可切换书享源失败，请稍后重试。',
+        errorText: '查找可切换书源失败，请稍后重试。',
         scoreRankingEnabled: scoreRankingEnabled,
       );
     }
@@ -6069,6 +6070,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
             scope.isMangaType
                 ? SearchContentMode.manga
                 : SearchContentMode.novel,
+        scenario: SearchPlanScenario.autoSwitchSource,
         sourceIds: scope.sourceIds,
       );
 
@@ -6101,7 +6103,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
         );
         if (switched) {
           if (mounted) {
-            _showMessage('检测到当前书享源异常，已自动切换到 ${candidate.sourceName}。');
+            _showMessage('检测到当前书源异常，已自动切换到 ${candidate.sourceName}。');
           }
           return true;
         }
@@ -6151,6 +6153,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
     });
 
     try {
+      _commitReadingRecordSession();
       final detailProvider = _requireContentProvider(
         sourceId: candidate.book.sourceId,
         stage: ErrorStage.detail,
@@ -6182,7 +6185,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
       final chapters = detailResult.chapters;
       if (_chapterNavigation.readableChapters(chapters).isEmpty) {
         if (showResultMessage) {
-          _showMessage('目标书享源暂无可读章节，无法切换。');
+          _showMessage('目标书源暂无可读章节，无法切换。');
         }
         return false;
       }
@@ -6211,7 +6214,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
         );
         if (!shouldContinue) {
           if (showResultMessage) {
-            _showMessage('已取消切换：目标书享源章节较少。');
+            _showMessage('已取消切换：目标书源章节较少。');
           }
           return false;
         }
@@ -6246,6 +6249,10 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
         snapshot: snapshot,
         candidate: candidate,
         showResultMessage: showResultMessage,
+      );
+      await _syncReadingStateAfterSourceSwitch(
+        snapshot: snapshot,
+        candidate: candidate,
       );
 
       if (showResultMessage) {
@@ -6342,6 +6349,67 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
     }
   }
 
+  Future<void> _syncReadingStateAfterSourceSwitch({
+    required _ReaderSourceSnapshot snapshot,
+    required SwitchSourceCandidate candidate,
+  }) async {
+    if (snapshot.bookId.trim().isEmpty ||
+        snapshot.bookId.trim() == _activeBookId.trim()) {
+      return;
+    }
+
+    final sourceId = (_sourceId ?? '').trim();
+    final detailUrl = (_detailUrl ?? '').trim();
+    final chapterUrl = (_chapterUrl ?? '').trim();
+    final chapterTitle = (_chapterTitle ?? '').trim();
+    final currentIndex = _currentIndex;
+    if (sourceId.isEmpty ||
+        detailUrl.isEmpty ||
+        chapterUrl.isEmpty ||
+        chapterTitle.isEmpty ||
+        currentIndex == null) {
+      return;
+    }
+
+    try {
+      final logicalPosition = _currentLogicalPosition();
+      await _preferencesService.migrateProgress(
+        previousBookId: snapshot.bookId,
+        nextProgress: ReadingProgress(
+          bookId: _activeBookId,
+          sourceId: sourceId,
+          detailUrl: _normalizeLocalDetailUrlForProgress(detailUrl),
+          chapterId: _chapterId,
+          chapterUrl: _normalizeLocalChapterUrlForProgress(chapterUrl),
+          chapterTitle: chapterTitle,
+          chapterIndex: currentIndex,
+          updatedAt: DateTime.now(),
+          chapterPositionRatio: _currentScrollRatio(),
+          logicalPosition: logicalPosition,
+        ),
+      );
+    } catch (_) {
+      // Keep source switch success even if progress migration fails.
+    }
+
+    try {
+      await _readingRecordService.reassignBookIdentity(
+        previousBookId: snapshot.bookId,
+        nextBookId: _activeBookId,
+        nextSourceId: sourceId,
+        nextDetailUrl: detailUrl,
+        nextBookTitle: _bookTitle,
+        nextBookAuthor: _bookAuthor,
+        nextCoverUrl: _bookCoverUrl,
+      );
+    } catch (_) {
+      // Keep source switch success even if reading record migration fails.
+    }
+
+    _bootstrapProgress = null;
+    _maybeStartReadingRecordSession(initialRatio: _currentScrollRatio());
+  }
+
   Future<bool> _confirmSwitchSourceCoverage({
     required String sourceName,
     required int currentChapterCount,
@@ -6354,15 +6422,15 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
         targetChapterCount + _kSwitchSourceLagTolerance < currentChapterCount;
     final reasonText =
         isBehindCurrentReading
-            ? '该书享源目录无法覆盖你当前阅读章节。'
+            ? '该书源目录无法覆盖你当前阅读章节。'
             : shouldWarnByTotal
-            ? '该书享源目录明显少于当前书享源，可能更新较慢。'
-            : '该书享源章节数量存在明显差异。';
+            ? '该书源目录明显少于当前书源，可能更新较慢。'
+            : '该书源章节数量存在明显差异。';
     final detailText =
         StringBuffer()
-          ..writeln('当前书享源：$currentChapterCount 章')
+          ..writeln('当前书源：$currentChapterCount 章')
           ..writeln('当前阅读：第 $currentReadingChapterNo 章')
-          ..writeln('目标书享源：$targetChapterCount 章');
+          ..writeln('目标书源：$targetChapterCount 章');
 
     final confirmed = await showDialog<bool>(
       context: context,
@@ -6536,7 +6604,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
                                     tooltip:
                                         _isSwitchSourceLoading
                                             ? '换源中...'
-                                            : '切换书享源',
+                                            : '切换书源',
                                     onPressed:
                                         _isSwitchSourceLoading
                                             ? null
@@ -7107,21 +7175,21 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
 
     return switch (error.code) {
       ErrorCode.network when message.contains('状态码：403') =>
-        '章节被源站拦截（403），请在书享源配置 Referer/Origin/User-Agent 后重试。',
+        '章节被源站拦截（403），请在书源配置 Referer/Origin/User-Agent 后重试。',
       ErrorCode.network when message.contains('状态码：404') =>
         '章节地址已失效（404），请刷新目录后重试。',
-      ErrorCode.network when message.contains('超时') => '请求超时，请稍后重试或切换书享源。',
-      ErrorCode.network => '网络请求失败，请检查网络或更换书享源。',
+      ErrorCode.network when message.contains('超时') => '请求超时，请稍后重试或切换书源。',
+      ErrorCode.network => '网络请求失败，请检查网络或更换书源。',
       ErrorCode.validation
           when message.contains('正文') && message.contains('缺少') =>
-        '书享源缺少正文解析配置，无法读取该章节。',
-      ErrorCode.validation => '书享源配置不完整，无法继续阅读。',
-      ErrorCode.ruleParse => '书享源脚本语法错误，正文解析失败。',
+        '书源缺少正文解析配置，无法读取该章节。',
+      ErrorCode.validation => '书源配置不完整，无法继续阅读。',
+      ErrorCode.ruleParse => '书源脚本语法错误，正文解析失败。',
       ErrorCode.ruleMatchEmpty when message.contains('解析为空') =>
         '正文解析未命中，当前章节暂无可读内容。',
-      ErrorCode.ruleMatchEmpty => '当前章节没有可读取内容，请切换章节或书享源。',
+      ErrorCode.ruleMatchEmpty => '当前章节没有可读取内容，请切换章节或书源。',
       ErrorCode.decode => '正文解析失败，可能是编码或数据格式不兼容。',
-      ErrorCode.unknownSource => '书享源不存在或已被删除。',
+      ErrorCode.unknownSource => '书源不存在或已被删除。',
       ErrorCode.unknown => '加载失败，请稍后重试。',
     };
   }
@@ -8772,7 +8840,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
         detailUrl == null ||
         sourceId.isEmpty ||
         detailUrl.isEmpty) {
-      _showMessage('缺少书享源参数，无法操作书架。');
+      _showMessage('缺少书源参数，无法操作书架。');
       return;
     }
 
@@ -9907,8 +9975,8 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
         context: context,
         builder: (dialogContext) {
           return AlertDialog(
-            title: const Text('当前书享源不可用'),
-            content: const Text('该书享源可能已被删除或停用，是否现在切换到其他书享源？'),
+            title: const Text('当前书源不可用'),
+            content: const Text('该书源可能已被删除或停用，是否现在切换到其他书源？'),
             actions: [
               TextButton(
                 onPressed: () => Navigator.of(dialogContext).pop(false),

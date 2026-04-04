@@ -154,6 +154,46 @@ void main() {
       expect(restored.logicalPosition!.blockIndex, 4);
     });
 
+    test('migrates reading progress to a new book identity', () async {
+      final service = ReaderPreferencesService();
+      final progress = ReadingProgress(
+        bookId: 'book_old',
+        sourceId: 'src_old',
+        detailUrl: 'https://example.com/book/old',
+        chapterId: 'chapter_1',
+        chapterUrl: 'https://example.com/book/old/chapter/1',
+        chapterTitle: '第一章',
+        chapterIndex: 0,
+        updatedAt: DateTime.parse('2026-02-12T12:00:00.000Z'),
+        chapterPositionRatio: 0.63,
+      );
+
+      await service.saveProgress(progress);
+      await service.migrateProgress(
+        previousBookId: 'book_old',
+        nextProgress: ReadingProgress(
+          bookId: 'book_new',
+          sourceId: 'src_new',
+          detailUrl: 'https://example.com/book/new',
+          chapterId: 'chapter_2',
+          chapterUrl: 'https://example.com/book/new/chapter/2',
+          chapterTitle: '第二章',
+          chapterIndex: 1,
+          updatedAt: DateTime.parse('2026-02-12T13:00:00.000Z'),
+          chapterPositionRatio: 0.22,
+        ),
+      );
+
+      final oldProgress = await service.loadProgress('book_old');
+      final newProgress = await service.loadProgress('book_new');
+
+      expect(oldProgress, isNull);
+      expect(newProgress, isNotNull);
+      expect(newProgress!.sourceId, 'src_new');
+      expect(newProgress.chapterTitle, '第二章');
+      expect(newProgress.chapterIndex, 1);
+    });
+
     test('loads legacy progress payload without position ratio', () async {
       SharedPreferences.setMockInitialValues({
         'reader.progress.book_legacy':

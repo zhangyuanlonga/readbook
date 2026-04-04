@@ -347,6 +347,100 @@ class ReadingRecordService {
     return DeletedReadingRecordSessionSnapshot(session: session);
   }
 
+  Future<void> reassignBookIdentity({
+    required String previousBookId,
+    required String nextBookId,
+    required String nextSourceId,
+    required String nextDetailUrl,
+    required String nextBookTitle,
+    String? nextBookAuthor,
+    String? nextCoverUrl,
+  }) async {
+    final normalizedPreviousBookId = previousBookId.trim();
+    final normalizedNextBookId = nextBookId.trim();
+    final normalizedNextSourceId = nextSourceId.trim();
+    final normalizedNextDetailUrl = nextDetailUrl.trim();
+    final normalizedNextTitle = nextBookTitle.trim();
+    if (normalizedPreviousBookId.isEmpty ||
+        normalizedNextBookId.isEmpty ||
+        normalizedNextSourceId.isEmpty ||
+        normalizedNextDetailUrl.isEmpty ||
+        normalizedNextTitle.isEmpty ||
+        normalizedPreviousBookId == normalizedNextBookId) {
+      return;
+    }
+
+    final sourceSessions = await _database.listReadingRecordSessionsByBookId(
+      normalizedPreviousBookId,
+    );
+    final sourceRecord = await _database.getReadingRecordByBookId(
+      normalizedPreviousBookId,
+    );
+    final sourceDays = await _database.listReadingRecordDaysByBookId(
+      normalizedPreviousBookId,
+    );
+    if (sourceSessions.isEmpty && sourceRecord == null && sourceDays.isEmpty) {
+      return;
+    }
+
+    final normalizedNextAuthor = _normalizeOptionalText(nextBookAuthor);
+    final normalizedNextCoverUrl = _normalizeOptionalText(nextCoverUrl);
+    final firstSession = sourceSessions.isEmpty ? null : sourceSessions.first;
+    final lastSession = sourceSessions.isEmpty ? null : sourceSessions.last;
+
+    await _database.transaction(() async {
+      for (final session in sourceSessions) {
+        await _database.updateReadingRecordSession(
+          ReadingRecordSession(
+            id: session.id,
+            bookId: normalizedNextBookId,
+            sourceId: normalizedNextSourceId,
+            detailUrl: normalizedNextDetailUrl,
+            bookTitle: normalizedNextTitle,
+            bookAuthor: normalizedNextAuthor ?? session.bookAuthor,
+            coverUrl: normalizedNextCoverUrl ?? session.coverUrl,
+            chapterId: session.chapterId,
+            chapterTitle: session.chapterTitle,
+            chapterIndex: session.chapterIndex,
+            chapterUrl: session.chapterUrl,
+            startAt: session.startAt,
+            endAt: session.endAt,
+            durationMillis: session.durationMillis,
+            readChars: session.readChars,
+            startPositionRatio: session.startPositionRatio,
+            endPositionRatio: session.endPositionRatio,
+          ),
+        );
+      }
+
+      await _database.deleteReadingRecordByBookId(normalizedPreviousBookId);
+      await _database.deleteReadingRecordDaysByBookId(normalizedPreviousBookId);
+
+      final targetIdentity = ReadingRecord(
+        bookId: normalizedNextBookId,
+        sourceId: normalizedNextSourceId,
+        detailUrl: normalizedNextDetailUrl,
+        bookTitle: normalizedNextTitle,
+        bookAuthor:
+            normalizedNextAuthor ??
+            sourceRecord?.bookAuthor ??
+            firstSession?.bookAuthor,
+        coverUrl:
+            normalizedNextCoverUrl ??
+            sourceRecord?.coverUrl ??
+            firstSession?.coverUrl,
+        lastReadAt:
+            sourceRecord?.lastReadAt ?? lastSession?.endAt ?? DateTime.now(),
+      );
+
+      await _rebuildAggregatesForBook(
+        normalizedNextBookId,
+        identityRecord: targetIdentity,
+        fallbackLocationRecord: sourceRecord,
+      );
+    });
+  }
+
   Future<void> restoreDeletedSession(
     DeletedReadingRecordSessionSnapshot snapshot,
   ) async {
@@ -703,5 +797,10 @@ class ReadingRecordService {
       score += 1;
     }
     return score;
+  }
+
+  String? _normalizeOptionalText(String? value) {
+    final normalized = (value ?? '').trim();
+    return normalized.isEmpty ? null : normalized;
   }
 }

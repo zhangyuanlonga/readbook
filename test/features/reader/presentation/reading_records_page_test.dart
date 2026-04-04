@@ -33,9 +33,7 @@ void main() {
       systemSettingsService = ReaderSystemSettingsService();
     });
 
-    testWidgets('在小屏设备上保持空热力图面板足够宽', (
-      tester,
-    ) async {
+    testWidgets('在小屏设备上保持空热力图面板足够宽', (tester) async {
       await tester.binding.setSurfaceSize(const Size(390, 844));
       addTearDown(() => tester.binding.setSurfaceSize(null));
 
@@ -61,9 +59,7 @@ void main() {
       expect(tester.getSize(card).width, greaterThan(300));
     });
 
-    testWidgets('在手机和平板尺寸下渲染时不出现布局异常', (
-      tester,
-    ) async {
+    testWidgets('在手机和平板尺寸下渲染时不出现布局异常', (tester) async {
       addTearDown(() => tester.binding.setSurfaceSize(null));
       addTearDown(tester.view.resetDevicePixelRatio);
       for (final item in const <_ViewportCase>[
@@ -95,6 +91,101 @@ void main() {
         );
       }
     });
+
+    testWidgets('热力图指标菜单展示真实语义名称', (tester) async {
+      readingRecordService = _FakeReadingRecordService(
+        dailyRecords: <ReadingRecordDay>[
+          ReadingRecordDay(
+            bookId: 'book_1',
+            dateKey: '2026-04-04',
+            bookTitle: '测试书',
+            readMillis: const Duration(minutes: 30).inMilliseconds,
+            firstReadAt: DateTime.parse('2026-04-04T10:00:00.000Z'),
+            lastReadAt: DateTime.parse('2026-04-04T10:30:00.000Z'),
+          ),
+        ],
+        sessions: <ReadingRecordSession>[
+          ReadingRecordSession(
+            id: 1,
+            bookId: 'book_1',
+            sourceId: 'source_1',
+            detailUrl: 'https://example.com/book/1',
+            bookTitle: '测试书',
+            chapterTitle: '第一章',
+            startAt: DateTime.parse('2026-04-04T10:00:00.000Z'),
+            endAt: DateTime.parse('2026-04-04T10:30:00.000Z'),
+            durationMillis: const Duration(minutes: 30).inMilliseconds,
+          ),
+        ],
+      );
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: ReadingRecordsPage(
+            readingRecordService: readingRecordService,
+            preferencesService: preferencesService,
+            readerSystemSettingsService: systemSettingsService,
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.byTooltip('热力图'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('按时长').first);
+      await tester.pumpAndSettle();
+
+      expect(find.text('按会话数'), findsOneWidget);
+      expect(find.text('按作品数'), findsOneWidget);
+    });
+
+    testWidgets('时间线展示真实会话而不是临时合并结果', (tester) async {
+      readingRecordService = _FakeReadingRecordService(
+        sessions: <ReadingRecordSession>[
+          ReadingRecordSession(
+            id: 1,
+            bookId: 'book_1',
+            sourceId: 'source_1',
+            detailUrl: 'https://example.com/book/1',
+            bookTitle: '测试书',
+            chapterTitle: '第一章',
+            startAt: DateTime.parse('2026-04-04T10:00:00.000Z'),
+            endAt: DateTime.parse('2026-04-04T10:10:00.000Z'),
+            durationMillis: const Duration(minutes: 10).inMilliseconds,
+          ),
+          ReadingRecordSession(
+            id: 2,
+            bookId: 'book_1',
+            sourceId: 'source_1',
+            detailUrl: 'https://example.com/book/1',
+            bookTitle: '测试书',
+            chapterTitle: '第二章',
+            startAt: DateTime.parse('2026-04-04T10:15:00.000Z'),
+            endAt: DateTime.parse('2026-04-04T10:25:00.000Z'),
+            durationMillis: const Duration(minutes: 10).inMilliseconds,
+          ),
+        ],
+      );
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: ReadingRecordsPage(
+            readingRecordService: readingRecordService,
+            preferencesService: preferencesService,
+            readerSystemSettingsService: systemSettingsService,
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.byTooltip('切换视图'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byTooltip('切换视图'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('第一章'), findsOneWidget);
+      expect(find.text('第二章'), findsOneWidget);
+    });
   });
 }
 
@@ -111,23 +202,28 @@ class _ViewportCase {
 }
 
 class _FakeReadingRecordService extends ReadingRecordService {
-  _FakeReadingRecordService()
-    : super(database: AppDatabase(executor: NativeDatabase.memory()));
+  _FakeReadingRecordService({
+    this.latestRecords = const <ReadingRecord>[],
+    this.dailyRecords = const <ReadingRecordDay>[],
+    this.sessions = const <ReadingRecordSession>[],
+  }) : super(database: AppDatabase(executor: NativeDatabase.memory()));
+
+  final List<ReadingRecord> latestRecords;
+  final List<ReadingRecordDay> dailyRecords;
+  final List<ReadingRecordSession> sessions;
 
   @override
   Stream<List<ReadingRecord>> watchLatestRecords({String query = ''}) {
-    return Stream<List<ReadingRecord>>.value(const <ReadingRecord>[]);
+    return Stream<List<ReadingRecord>>.value(latestRecords);
   }
 
   @override
   Stream<List<ReadingRecordDay>> watchDailyRecords({String query = ''}) {
-    return Stream<List<ReadingRecordDay>>.value(const <ReadingRecordDay>[]);
+    return Stream<List<ReadingRecordDay>>.value(dailyRecords);
   }
 
   @override
   Stream<List<ReadingRecordSession>> watchSessions({String query = ''}) {
-    return Stream<List<ReadingRecordSession>>.value(
-      const <ReadingRecordSession>[],
-    );
+    return Stream<List<ReadingRecordSession>>.value(sessions);
   }
 }

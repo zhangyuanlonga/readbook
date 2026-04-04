@@ -13,13 +13,14 @@ import '../../../domain/entities/reading_record_day.dart';
 import '../../../domain/entities/reading_record_session.dart';
 import '../../book/presentation/book_detail_route.dart';
 import '../application/reader_preferences_service.dart';
+import '../application/reading_records_query_service.dart';
 import '../application/reading_record_service.dart';
 import '../application/reader_system_settings_service.dart';
 import 'reader_route.dart';
 
 enum _ReadingRecordsView { latest, daily, timeline }
 
-enum _HeatmapMetricMode { duration, count }
+enum _HeatmapMetricMode { duration, sessionCount, workCount }
 
 enum _HeatmapRangeMode { threeMonths, sixMonths, oneYear, all }
 
@@ -44,6 +45,8 @@ class ReadingRecordsPage extends StatefulWidget {
 class _ReadingRecordsPageState extends State<ReadingRecordsPage> {
   final TextEditingController _searchController = TextEditingController();
   late final ReadingRecordService _readingRecordService;
+  final ReadingRecordsQueryService _readingRecordsQueryService =
+      const ReadingRecordsQueryService();
   late final ReaderPreferencesService _preferencesService;
   late final ReaderSystemSettingsService _readerSystemSettingsService;
   late final Stream<bool> _readRecordEnabledStream;
@@ -334,18 +337,29 @@ class _ReadingRecordsPageState extends State<ReadingRecordsPage> {
                   stream: _readingRecordService.watchDailyRecords(
                     query: _searchKeyword,
                   ),
-                  builder: (context, snapshot) {
+                  builder: (context, dailySnapshot) {
                     final dailyRecords =
-                        snapshot.data ?? const <ReadingRecordDay>[];
-                    return SingleChildScrollView(
-                      child: SizedBox(
-                        width: double.infinity,
-                        child: _buildHeatmapCard(
-                          dailyRecords,
-                          inSheet: true,
-                          sheetSetState: sheetSetState,
-                        ),
+                        dailySnapshot.data ?? const <ReadingRecordDay>[];
+                    return StreamBuilder<List<ReadingRecordSession>>(
+                      stream: _readingRecordService.watchSessions(
+                        query: _searchKeyword,
                       ),
+                      builder: (context, sessionSnapshot) {
+                        final sessions =
+                            sessionSnapshot.data ??
+                            const <ReadingRecordSession>[];
+                        return SingleChildScrollView(
+                          child: SizedBox(
+                            width: double.infinity,
+                            child: _buildHeatmapCard(
+                              dailyRecords,
+                              sessions: sessions,
+                              inSheet: true,
+                              sheetSetState: sheetSetState,
+                            ),
+                          ),
+                        );
+                      },
                     );
                   },
                 ),
@@ -636,15 +650,15 @@ class _ReadingRecordsPageState extends State<ReadingRecordsPage> {
                           final sessions =
                               sessionSnapshot.data ??
                               const <ReadingRecordSession>[];
-                          final filteredLatest = _filterLatestRecords(
-                            latestRecords,
-                          );
-                          final filteredDays = _filterDailyRecords(
-                            dailyRecords,
-                          );
-                          final filteredSessions = _mergeTimelineSessions(
-                            _filterSessions(sessions),
-                          );
+                          final queryView = _readingRecordsQueryService
+                              .buildQueryView(
+                                latestRecords: latestRecords,
+                                dailyRecords: dailyRecords,
+                                sessions: sessions,
+                                selectedDateKey: _selectedDateKey,
+                                searchKeyword: _searchKeyword,
+                                viewLabel: _viewLabel,
+                              );
 
                           return ListView(
                             padding: EdgeInsets.fromLTRB(
@@ -656,18 +670,13 @@ class _ReadingRecordsPageState extends State<ReadingRecordsPage> {
                             children: [
                               _buildControlsCard(),
                               const SizedBox(height: 8),
-                              _buildSummaryCard(
-                                latestRecords: latestRecords,
-                                filteredLatestRecords: filteredLatest,
-                                filteredDailyRecords: filteredDays,
-                                filteredSessions: filteredSessions,
-                              ),
+                              _buildSummaryCard(summary: queryView.summary),
                               const SizedBox(height: 12),
                               _buildActiveSection(
-                                latestRecords: filteredLatest,
-                                dailyRecords: filteredDays,
+                                latestRecords: queryView.filteredLatestRecords,
+                                dailyRecords: queryView.filteredDailyRecords,
                                 allLatestRecords: latestRecords,
-                                sessions: filteredSessions,
+                                sessions: queryView.filteredSessions,
                               ),
                             ],
                           );
@@ -807,6 +816,7 @@ class _ReadingRecordsPageState extends State<ReadingRecordsPage> {
 
   Widget _buildHeatmapCard(
     List<ReadingRecordDay> allDays, {
+    required List<ReadingRecordSession> sessions,
     bool inSheet = false,
     StateSetter? sheetSetState,
   }) {
@@ -814,7 +824,10 @@ class _ReadingRecordsPageState extends State<ReadingRecordsPage> {
       return _buildEmptyCard('还没有可以展示的阅读热力图。');
     }
 
-    final statsByDate = _buildHeatmapStats(allDays);
+    final statsByDate = _readingRecordsQueryService.buildHeatmapStats(
+      allDays,
+      sessions: sessions,
+    );
     final today = _stripDate(DateTime.now());
     final firstDate = statsByDate.keys
         .map(DateTime.parse)
@@ -846,7 +859,9 @@ class _ReadingRecordsPageState extends State<ReadingRecordsPage> {
       final value =
           _heatmapMode == _HeatmapMetricMode.duration
               ? item.readMillis
-              : item.bookCount;
+              : _heatmapMode == _HeatmapMetricMode.sessionCount
+              ? item.sessionCount
+              : item.workCount;
       return math.max(current, value);
     });
 
@@ -905,8 +920,12 @@ class _ReadingRecordsPageState extends State<ReadingRecordsPage> {
                     child: Text('按时长'),
                   ),
                   PopupMenuItem(
-                    value: _HeatmapMetricMode.count,
-                    child: Text('按次数'),
+                    value: _HeatmapMetricMode.sessionCount,
+                    child: Text('按会话数'),
+                  ),
+                  PopupMenuItem(
+                    value: _HeatmapMetricMode.workCount,
+                    child: Text('按作品数'),
                   ),
                 ],
                 onSelected: (value) {
@@ -1083,7 +1102,8 @@ class _ReadingRecordsPageState extends State<ReadingRecordsPage> {
   String get _heatmapModeLabel {
     return switch (_heatmapMode) {
       _HeatmapMetricMode.duration => '按时长',
-      _HeatmapMetricMode.count => '按次数',
+      _HeatmapMetricMode.sessionCount => '按会话数',
+      _HeatmapMetricMode.workCount => '按作品数',
     };
   }
 
@@ -1205,7 +1225,7 @@ class _ReadingRecordsPageState extends State<ReadingRecordsPage> {
 
   Widget _buildHeatmapCell({
     required DateTime day,
-    required _DailyHeatmapStat? stats,
+    required DailyHeatmapStat? stats,
     required int maxValue,
     StateSetter? sheetSetState,
   }) {
@@ -1215,7 +1235,9 @@ class _ReadingRecordsPageState extends State<ReadingRecordsPage> {
             ? 0
             : _heatmapMode == _HeatmapMetricMode.duration
             ? stats.readMillis
-            : stats.bookCount;
+            : _heatmapMode == _HeatmapMetricMode.sessionCount
+            ? stats.sessionCount
+            : stats.workCount;
     final normalized = maxValue <= 0 ? 0.0 : (value / maxValue).clamp(0.0, 1.0);
     final isSelected = _selectedDateKey == dateKey;
     final colorScheme = Theme.of(context).colorScheme;
@@ -1227,7 +1249,7 @@ class _ReadingRecordsPageState extends State<ReadingRecordsPage> {
     final tooltip =
         stats == null
             ? '$dateKey\n无阅读记录'
-            : '$dateKey\n${stats.bookCount} 本 · ${_formatDuration(stats.readMillis)}';
+            : '$dateKey\n${stats.workCount} 本 · ${stats.sessionCount} 段 · ${_formatDuration(stats.readMillis)}';
 
     return Tooltip(
       message: tooltip,
@@ -1256,54 +1278,7 @@ class _ReadingRecordsPageState extends State<ReadingRecordsPage> {
     );
   }
 
-  Widget _buildSummaryCard({
-    required List<ReadingRecord> latestRecords,
-    required List<ReadingRecord> filteredLatestRecords,
-    required List<ReadingRecordDay> filteredDailyRecords,
-    required List<ReadingRecordSession> filteredSessions,
-  }) {
-    final selectedDateKey = _selectedDateKey;
-    final recordsForSummary =
-        selectedDateKey == null ? latestRecords : filteredLatestRecords;
-    final totalBooks =
-        selectedDateKey == null
-            ? recordsForSummary.length
-            : filteredDailyRecords.map((item) => item.bookId).toSet().length;
-    final totalReadMillis =
-        selectedDateKey == null
-            ? recordsForSummary.fold<int>(
-              0,
-              (sum, item) => sum + item.totalReadMillis,
-            )
-            : filteredDailyRecords.fold<int>(
-              0,
-              (sum, item) => sum + item.readMillis,
-            );
-    final totalReadChars =
-        selectedDateKey == null
-            ? recordsForSummary.fold<int>(
-              0,
-              (sum, item) => sum + item.totalReadChars,
-            )
-            : filteredDailyRecords.fold<int>(
-              0,
-              (sum, item) => sum + item.readChars,
-            );
-    final sessionCount = filteredSessions.length;
-    final chapterCount =
-        filteredSessions
-            .map(_chapterDimensionKey)
-            .whereType<String>()
-            .toSet()
-            .length;
-    final title = selectedDateKey == null ? '累计阅读成就' : '$selectedDateKey 阅读概览';
-    final subtitle =
-        selectedDateKey == null
-            ? (_searchKeyword.isEmpty
-                ? '当前查看：$_viewLabel'
-                : '当前查看：$_viewLabel · 搜索“$_searchKeyword”')
-            : '当前查看：$_viewLabel · 已按日期过滤';
-
+  Widget _buildSummaryCard({required ReadingRecordsSummary summary}) {
     return Container(
       decoration: BoxDecoration(
         gradient: LinearGradient(
@@ -1337,13 +1312,13 @@ class _ReadingRecordsPageState extends State<ReadingRecordsPage> {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        title,
+                        summary.title,
                         style: Theme.of(context).textTheme.titleMedium
                             ?.copyWith(fontWeight: FontWeight.w700),
                       ),
                       const SizedBox(height: 6),
                       Text(
-                        subtitle,
+                        summary.subtitle,
                         style: Theme.of(context).textTheme.bodySmall?.copyWith(
                           color: Theme.of(context).colorScheme.onSurfaceVariant,
                           height: 1.35,
@@ -1352,9 +1327,9 @@ class _ReadingRecordsPageState extends State<ReadingRecordsPage> {
                     ],
                   ),
                 ),
-                if (recordsForSummary.isNotEmpty) ...[
+                if (summary.coverRecords.isNotEmpty) ...[
                   const SizedBox(width: 12),
-                  _buildSummaryCoverStack(recordsForSummary),
+                  _buildSummaryCoverStack(summary.coverRecords),
                 ],
               ],
             ),
@@ -1378,40 +1353,40 @@ class _ReadingRecordsPageState extends State<ReadingRecordsPage> {
                       width: tileWidth,
                       child: _buildMetricTile(
                         icon: Icons.menu_book_rounded,
-                        label: selectedDateKey == null ? '记录书籍' : '当日书籍',
-                        value: '$totalBooks 本',
+                        label: _selectedDateKey == null ? '记录书籍' : '当日书籍',
+                        value: '${summary.totalBooks} 本',
                       ),
                     ),
                     SizedBox(
                       width: tileWidth,
                       child: _buildMetricTile(
                         icon: Icons.auto_stories_rounded,
-                        label: selectedDateKey == null ? '累计时长' : '当日时长',
-                        value: _formatDuration(totalReadMillis),
+                        label: _selectedDateKey == null ? '累计时长' : '当日时长',
+                        value: _formatDuration(summary.totalReadMillis),
                       ),
                     ),
                     SizedBox(
                       width: tileWidth,
                       child: _buildMetricTile(
                         icon: Icons.text_fields_rounded,
-                        label: selectedDateKey == null ? '累计字数' : '当日字数',
-                        value: _formatReadChars(totalReadChars),
+                        label: _selectedDateKey == null ? '累计字数' : '当日字数',
+                        value: _formatReadChars(summary.totalReadChars),
                       ),
                     ),
                     SizedBox(
                       width: tileWidth,
                       child: _buildMetricTile(
                         icon: Icons.timeline_rounded,
-                        label: selectedDateKey == null ? '阅读会话' : '当日会话',
-                        value: '$sessionCount 段',
+                        label: _selectedDateKey == null ? '阅读会话' : '当日会话',
+                        value: '${summary.sessionCount} 段',
                       ),
                     ),
                     SizedBox(
                       width: tileWidth,
                       child: _buildMetricTile(
                         icon: Icons.bookmarks_outlined,
-                        label: selectedDateKey == null ? '触达章节' : '当日章节',
-                        value: '$chapterCount 章',
+                        label: _selectedDateKey == null ? '触达章节' : '当日章节',
+                        value: '${summary.chapterCount} 章',
                       ),
                     ),
                   ],
@@ -2184,122 +2159,6 @@ class _ReadingRecordsPageState extends State<ReadingRecordsPage> {
     );
   }
 
-  List<ReadingRecord> _filterLatestRecords(List<ReadingRecord> latestRecords) {
-    final selectedDateKey = _selectedDateKey;
-    if (selectedDateKey == null) {
-      return latestRecords;
-    }
-    return latestRecords
-        .where((item) => _dateKeyFor(item.lastReadAt) == selectedDateKey)
-        .toList(growable: false);
-  }
-
-  List<ReadingRecordDay> _filterDailyRecords(List<ReadingRecordDay> allDays) {
-    final selectedDateKey = _selectedDateKey;
-    if (selectedDateKey == null) {
-      return allDays;
-    }
-    return allDays
-        .where((item) => item.dateKey == selectedDateKey)
-        .toList(growable: false);
-  }
-
-  List<ReadingRecordSession> _filterSessions(
-    List<ReadingRecordSession> sessions,
-  ) {
-    final selectedDateKey = _selectedDateKey;
-    if (selectedDateKey == null) {
-      return sessions;
-    }
-    return sessions
-        .where((item) => _dateKeyFor(item.endAt) == selectedDateKey)
-        .toList(growable: false);
-  }
-
-  List<ReadingRecordSession> _mergeTimelineSessions(
-    List<ReadingRecordSession> sessions,
-  ) {
-    if (sessions.length <= 1) {
-      return sessions;
-    }
-
-    final sorted = List<ReadingRecordSession>.from(sessions)
-      ..sort((a, b) => a.startAt.compareTo(b.startAt));
-    final merged = <ReadingRecordSession>[];
-    const gapLimit = Duration(minutes: 20);
-
-    for (final session in sorted) {
-      if (merged.isEmpty) {
-        merged.add(session);
-        continue;
-      }
-
-      final last = merged.last;
-      final sameBook = last.bookId == session.bookId;
-      final sameDate = _dateKeyFor(last.endAt) == _dateKeyFor(session.endAt);
-      final closeEnough =
-          session.startAt.difference(last.endAt) <= gapLimit &&
-          !session.startAt.isBefore(last.endAt);
-
-      if (!sameBook || !sameDate || !closeEnough) {
-        merged.add(session);
-        continue;
-      }
-
-      merged[merged.length - 1] = ReadingRecordSession(
-        id: last.id,
-        bookId: last.bookId,
-        sourceId: last.sourceId,
-        detailUrl: last.detailUrl,
-        bookTitle: last.bookTitle,
-        bookAuthor: last.bookAuthor,
-        coverUrl: last.coverUrl,
-        chapterId: session.chapterId ?? last.chapterId,
-        chapterTitle: session.chapterTitle ?? last.chapterTitle,
-        chapterIndex: session.chapterIndex ?? last.chapterIndex,
-        chapterUrl: session.chapterUrl ?? last.chapterUrl,
-        startAt: last.startAt,
-        endAt: session.endAt.isAfter(last.endAt) ? session.endAt : last.endAt,
-        durationMillis:
-            (last.durationMillis < 0 ? 0 : last.durationMillis) +
-            (session.durationMillis < 0 ? 0 : session.durationMillis),
-        readChars:
-            (last.readChars < 0 ? 0 : last.readChars) +
-            (session.readChars < 0 ? 0 : session.readChars),
-        startPositionRatio: last.startPositionRatio,
-        endPositionRatio: session.endPositionRatio,
-      );
-    }
-
-    return merged.reversed.toList(growable: false);
-  }
-
-  String? _chapterDimensionKey(ReadingRecordSession session) {
-    final chapterIndex = session.chapterIndex;
-    if (chapterIndex != null && chapterIndex >= 0) {
-      return '${session.bookId}#$chapterIndex';
-    }
-    final chapterTitle = session.chapterTitle?.trim();
-    if (chapterTitle != null && chapterTitle.isNotEmpty) {
-      return '${session.bookId}@$chapterTitle';
-    }
-    return null;
-  }
-
-  Map<String, _DailyHeatmapStat> _buildHeatmapStats(
-    List<ReadingRecordDay> allDays,
-  ) {
-    final result = <String, _DailyHeatmapStat>{};
-    for (final item in allDays) {
-      final current = result[item.dateKey];
-      result[item.dateKey] = _DailyHeatmapStat(
-        bookCount: (current?.bookCount ?? 0) + 1,
-        readMillis: (current?.readMillis ?? 0) + item.readMillis,
-      );
-    }
-    return result;
-  }
-
   DateTime _resolveHeatmapStartDate({
     required DateTime firstDate,
     required DateTime today,
@@ -2443,13 +2302,6 @@ class _DeleteConfirmResult {
 
   final bool confirmed;
   final bool skipConfirmForThisPage;
-}
-
-class _DailyHeatmapStat {
-  const _DailyHeatmapStat({required this.bookCount, required this.readMillis});
-
-  final int bookCount;
-  final int readMillis;
 }
 
 class _WeekdayLabel extends StatelessWidget {
