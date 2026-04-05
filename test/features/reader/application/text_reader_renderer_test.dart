@@ -1,6 +1,6 @@
-import 'package:flutter_appread/domain/entities/reader_settings.dart';
-import 'package:flutter_appread/features/reader/application/reader_session_state.dart';
-import 'package:flutter_appread/features/reader/application/text_reader_renderer.dart';
+import 'package:shuxiang_reading_next/domain/entities/reader_settings.dart';
+import 'package:shuxiang_reading_next/features/reader/application/reader_session_state.dart';
+import 'package:shuxiang_reading_next/features/reader/application/text_reader_renderer.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {

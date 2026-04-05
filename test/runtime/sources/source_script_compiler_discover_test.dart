@@ -1,18 +1,18 @@
-import 'package:flutter_appread/runtime/browser/browser_runtime.dart';
-import 'package:flutter_appread/runtime/cache/cache_manager.dart';
-import 'package:flutter_appread/runtime/crypto/source_crypto.dart';
-import 'package:flutter_appread/runtime/html/html_runtime.dart';
-import 'package:flutter_appread/runtime/http/challenge_detector.dart';
-import 'package:flutter_appread/runtime/http/http_models.dart';
-import 'package:flutter_appread/runtime/http/request_engine.dart';
-import 'package:flutter_appread/runtime/sources/source_registry.dart';
-import 'package:flutter_appread/runtime/session/source_session.dart';
-import 'package:flutter_appread/runtime/sources/source_contract.dart';
-import 'package:flutter_appread/runtime/sources/source_manifest.dart';
-import 'package:flutter_appread/runtime/sources/source_result_models.dart';
-import 'package:flutter_appread/src/js_runtime.dart';
+import 'package:shuxiang_reading_next/runtime/browser/browser_runtime.dart';
+import 'package:shuxiang_reading_next/runtime/cache/cache_manager.dart';
+import 'package:shuxiang_reading_next/runtime/crypto/source_crypto.dart';
+import 'package:shuxiang_reading_next/runtime/html/html_runtime.dart';
+import 'package:shuxiang_reading_next/runtime/http/challenge_detector.dart';
+import 'package:shuxiang_reading_next/runtime/http/http_models.dart';
+import 'package:shuxiang_reading_next/runtime/http/request_engine.dart';
+import 'package:shuxiang_reading_next/runtime/sources/source_registry.dart';
+import 'package:shuxiang_reading_next/runtime/session/source_session.dart';
+import 'package:shuxiang_reading_next/runtime/sources/source_contract.dart';
+import 'package:shuxiang_reading_next/runtime/sources/source_manifest.dart';
+import 'package:shuxiang_reading_next/runtime/sources/source_result_models.dart';
+import 'package:shuxiang_reading_next/src/js_runtime.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:flutter_appread/runtime/sources/source_script_compiler.dart';
+import 'package:shuxiang_reading_next/runtime/sources/source_script_compiler.dart';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();

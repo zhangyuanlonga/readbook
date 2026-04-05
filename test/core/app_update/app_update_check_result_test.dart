@@ -1,4 +1,4 @@
-import 'package:flutter_appread/core/app_update/app_update_check_result.dart';
+import 'package:shuxiang_reading_next/core/app_update/app_update_check_result.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {

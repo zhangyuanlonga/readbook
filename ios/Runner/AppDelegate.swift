@@ -6,12 +6,12 @@ import UniformTypeIdentifiers
 
 @main
 @objc class AppDelegate: FlutterAppDelegate {
-  private let sourceImportChannelName = "com.jiangyan.shuxiangread/source_import_intent"
+  private let sourceImportChannelName = "com.jiangyan.shuxiangread.next/source_import_intent"
   private let methodGetInitialImportPayload = "getInitialImportPayload"
   private let methodOnImportPayload = "onImportPayload"
   private let methodCacheExternalFileFromUri = "cacheExternalFileFromUri"
-  private let readerVolumeKeyChannelName = "com.jiangyan.shuxiangread/reader_volume_keys"
-  private let readerVolumeKeyEventChannelName = "com.jiangyan.shuxiangread/reader_volume_keys/events"
+  private let readerVolumeKeyChannelName = "com.jiangyan.shuxiangread.next/reader_volume_keys"
+  private let readerVolumeKeyEventChannelName = "com.jiangyan.shuxiangread.next/reader_volume_keys/events"
   private let methodSetInterceptVolumeKeys = "setInterceptVolumeKeys"
   private let defaultPayloadLabel = "外部导入"
   private let payloadTypeLocalBook = "localBook"

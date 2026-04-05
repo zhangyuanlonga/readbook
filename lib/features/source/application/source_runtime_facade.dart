@@ -7,6 +7,7 @@ import '../../../domain/repositories/script_source_repository.dart';
 import '../../../runtime/session/source_session.dart';
 import '../../../runtime/sources/source_registry.dart';
 import '../../../runtime/sources/source_result_models.dart' as runtime_models;
+import 'source_site_cluster_service.dart';
 import 'script_source_runtime_service.dart';
 
 class ScriptSourceReloadFailure {
@@ -34,14 +35,18 @@ class SourceRuntimeFacade {
   SourceRuntimeFacade({
     required ScriptSourceRepository scriptSourceRepository,
     ScriptSourceRuntimeService? scriptRuntimeService,
+    SourceSiteClusterService? siteClusterService,
     Uuid? uuid,
   }) : _scriptSourceRepository = scriptSourceRepository,
        _scriptRuntimeService =
            scriptRuntimeService ?? ScriptSourceRuntimeService(),
+       _siteClusterService =
+           siteClusterService ?? const SourceSiteClusterService(),
        _uuid = uuid ?? const Uuid();
 
   final ScriptSourceRepository _scriptSourceRepository;
   final ScriptSourceRuntimeService _scriptRuntimeService;
+  final SourceSiteClusterService _siteClusterService;
   final Uuid _uuid;
 
   Future<List<ScriptSource>> listScriptSources() {
@@ -76,6 +81,10 @@ class SourceRuntimeFacade {
 
     final now = DateTime.now();
     final manifest = registered.definition.manifest;
+    final siteMeta = _siteClusterService.resolve(
+      homepage: manifest.homepage,
+      domains: manifest.domains,
+    );
     final nextSource = ScriptSource(
       id: persistedId,
       name: manifest.name,
@@ -85,6 +94,9 @@ class SourceRuntimeFacade {
           manifest.description.trim().isEmpty
               ? null
               : manifest.description.trim(),
+      primaryHost: siteMeta.primaryHost,
+      registrableDomain: siteMeta.registrableDomain,
+      clusterKey: siteMeta.clusterKey,
       sourceCode: normalizedCode,
       enabled: enabled,
       createdAt: existing?.createdAt ?? now,

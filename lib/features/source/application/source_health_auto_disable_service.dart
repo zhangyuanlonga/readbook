@@ -65,9 +65,25 @@ class SourceHealthAutoDisableService {
     _disablingSourceIds.add(normalizedSourceId);
     final reason = _policyService.buildAutoDisableReason(snapshot);
     try {
+      _logger.warn(
+        'Source auto-disable scheduled',
+        context: <String, Object?>{
+          'sourceId': normalizedSourceId,
+          'sourceName': sourceName,
+          'trigger': trigger,
+          'reason': reason,
+        },
+      );
       await _sourceRuntimeFacade.setScriptSourceEnabled(
         id: normalizedSourceId,
         enabled: false,
+      );
+      _sourceHealthService.upsert(
+        snapshot.copyWith(
+          enabled: false,
+          lastAutoDisableAt: DateTime.now(),
+          lastAutoDisableReason: reason,
+        ),
       );
       _logger.warn(
         'Source auto-disabled',

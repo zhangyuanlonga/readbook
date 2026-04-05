@@ -171,7 +171,7 @@ class CoverImageDiskCache {
 
     final baseDir = await _resolveBaseDir();
     final directory = Directory(
-      p.join(baseDir.path, 'flutter_appread', 'covers'),
+      p.join(baseDir.path, 'shuxiang_reading_next', 'covers'),
     );
     if (!await directory.exists()) {
       await directory.create(recursive: true);

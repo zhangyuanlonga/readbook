@@ -1,13 +1,13 @@
 import 'package:drift/native.dart';
-import 'package:flutter_appread/data/datasources/local/app_database.dart';
-import 'package:flutter_appread/data/repositories/script_source_repository_impl.dart';
-import 'package:flutter_appread/domain/entities/script_source.dart';
-import 'package:flutter_appread/features/source/application/script_source_runtime_service.dart';
-import 'package:flutter_appread/features/source/application/source_runtime_facade.dart';
-import 'package:flutter_appread/runtime/sources/source_contract.dart';
-import 'package:flutter_appread/runtime/sources/source_manifest.dart';
-import 'package:flutter_appread/runtime/sources/source_registry.dart';
-import 'package:flutter_appread/runtime/sources/source_result_models.dart'
+import 'package:shuxiang_reading_next/data/datasources/local/app_database.dart';
+import 'package:shuxiang_reading_next/data/repositories/script_source_repository_impl.dart';
+import 'package:shuxiang_reading_next/domain/entities/script_source.dart';
+import 'package:shuxiang_reading_next/features/source/application/script_source_runtime_service.dart';
+import 'package:shuxiang_reading_next/features/source/application/source_runtime_facade.dart';
+import 'package:shuxiang_reading_next/runtime/sources/source_contract.dart';
+import 'package:shuxiang_reading_next/runtime/sources/source_manifest.dart';
+import 'package:shuxiang_reading_next/runtime/sources/source_registry.dart';
+import 'package:shuxiang_reading_next/runtime/sources/source_result_models.dart'
     as runtime_models;
 import 'package:flutter_test/flutter_test.dart';
 

@@ -1,6 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
 
-import 'package:flutter_appread/runtime/session/source_session.dart';
+import 'package:shuxiang_reading_next/runtime/session/source_session.dart';
 
 void main() {
   test('filters cookies by domain and path for a request URL', () {

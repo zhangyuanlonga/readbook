@@ -1,4 +1,4 @@
-import 'package:flutter_appread/features/discover/application/discover_preferences_service.dart';
+import 'package:shuxiang_reading_next/features/discover/application/discover_preferences_service.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 

@@ -1,10 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
-import 'package:flutter_appread/app/layout/app_layout.dart';
-import 'package:flutter_appread/app/layout/app_spacing.dart';
-import 'package:flutter_appread/app/shell_navigation_provider.dart';
-import 'package:flutter_appread/app/shell_scaffold.dart';
+import 'package:shuxiang_reading_next/app/layout/app_layout.dart';
+import 'package:shuxiang_reading_next/app/layout/app_spacing.dart';
+import 'package:shuxiang_reading_next/app/shell_navigation_provider.dart';
+import 'package:shuxiang_reading_next/app/shell_scaffold.dart';
 import '../../test_utils/adaptive_test_harness.dart';
 
 void main() {

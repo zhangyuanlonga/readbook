@@ -1,6 +1,6 @@
-import 'package:flutter_appread/features/source/application/source_health_persistence_service.dart';
-import 'package:flutter_appread/domain/entities/source_health.dart';
-import 'package:flutter_appread/features/source/application/source_health_service.dart';
+import 'package:shuxiang_reading_next/features/source/application/source_health_persistence_service.dart';
+import 'package:shuxiang_reading_next/domain/entities/source_health.dart';
+import 'package:shuxiang_reading_next/features/source/application/source_health_service.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 

@@ -1,7 +1,7 @@
-import 'package:flutter_appread/core/errors/app_exception.dart';
-import 'package:flutter_appread/core/errors/error_codes.dart';
-import 'package:flutter_appread/core/errors/error_stage.dart';
-import 'package:flutter_appread/core/logging/source_log_store.dart';
+import 'package:shuxiang_reading_next/core/errors/app_exception.dart';
+import 'package:shuxiang_reading_next/core/errors/error_codes.dart';
+import 'package:shuxiang_reading_next/core/errors/error_stage.dart';
+import 'package:shuxiang_reading_next/core/logging/source_log_store.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {

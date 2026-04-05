@@ -1,11 +1,16 @@
 PODS:
   - battery_plus (1.0.0):
     - Flutter
+  - charset_converter (0.0.1):
+    - Flutter
   - device_info_plus (0.0.1):
     - Flutter
   - file_selector_ios (0.0.1):
     - Flutter
   - Flutter (1.0.0)
+  - flutter_charset_detector_ios (0.0.1):
+    - Flutter
+    - UniversalDetector2 (= 2.0.1)
   - flutter_inappwebview_ios (0.0.1):
     - Flutter
     - flutter_inappwebview_ios/Core (= 0.0.1)
@@ -25,14 +30,17 @@ PODS:
   - sqlite3_flutter_libs (0.0.1):
     - Flutter
     - FlutterMacOS
+  - UniversalDetector2 (2.0.1)
   - url_launcher_ios (0.0.1):
     - Flutter
 
 DEPENDENCIES:
   - battery_plus (from `.symlinks/plugins/battery_plus/ios`)
+  - charset_converter (from `.symlinks/plugins/charset_converter/ios`)
   - device_info_plus (from `.symlinks/plugins/device_info_plus/ios`)
   - file_selector_ios (from `.symlinks/plugins/file_selector_ios/ios`)
   - Flutter (from `Flutter`)
+  - flutter_charset_detector_ios (from `.symlinks/plugins/flutter_charset_detector_ios/ios`)
   - flutter_inappwebview_ios (from `.symlinks/plugins/flutter_inappwebview_ios/ios`)
   - flutter_js (from `.symlinks/plugins/flutter_js/ios`)
   - image_picker_ios (from `.symlinks/plugins/image_picker_ios/ios`)
@@ -42,15 +50,23 @@ DEPENDENCIES:
   - sqlite3_flutter_libs (from `.symlinks/plugins/sqlite3_flutter_libs/darwin`)
   - url_launcher_ios (from `.symlinks/plugins/url_launcher_ios/ios`)
 
+SPEC REPOS:
+  trunk:
+    - UniversalDetector2
+
 EXTERNAL SOURCES:
   battery_plus:
     :path: ".symlinks/plugins/battery_plus/ios"
+  charset_converter:
+    :path: ".symlinks/plugins/charset_converter/ios"
   device_info_plus:
     :path: ".symlinks/plugins/device_info_plus/ios"
   file_selector_ios:
     :path: ".symlinks/plugins/file_selector_ios/ios"
   Flutter:
     :path: Flutter
+  flutter_charset_detector_ios:
+    :path: ".symlinks/plugins/flutter_charset_detector_ios/ios"
   flutter_inappwebview_ios:
     :path: ".symlinks/plugins/flutter_inappwebview_ios/ios"
   flutter_js:
@@ -70,9 +86,11 @@ EXTERNAL SOURCES:
 
 SPEC CHECKSUMS:
   battery_plus: b42253f6d2dde71712f8c36fef456d99121c5977
+  charset_converter: 82bc1d2e3c70dcb51bf769e9772e3ae5b2571695
   device_info_plus: 71ffc6ab7634ade6267c7a93088ed7e4f74e5896
   file_selector_ios: ec57ec07954363dd730b642e765e58f199bb621a
   Flutter: cabc95a1d2626b1b06e7179b784ebcf0c0cde467
+  flutter_charset_detector_ios: 44497a50ef93045686b1900df36a1556c8d8fe54
   flutter_inappwebview_ios: e2843d446f4acf6fb86ca7f8499f392049e2f2c2
   flutter_js: 867813c1830e1d9b2c5d547cdb6f61801e2f2145
   image_picker_ios: e0ece4aa2a75771a7de3fa735d26d90817041326
@@ -80,6 +98,7 @@ SPEC CHECKSUMS:
   package_info_plus: af8e2ca6888548050f16fa2f1938db7b5a5df499
   shared_preferences_foundation: 7036424c3d8ec98dfe75ff1667cb0cd531ec82bb
   sqlite3_flutter_libs: dee77ac8f88a0f0f762ac16e58ded77a82866993
+  UniversalDetector2: 7c9ffd935cf050eeb19edf7e90f6febe3743a1af
   url_launcher_ios: 7a95fa5b60cc718a708b8f2966718e93db0cef1b
 
 PODFILE CHECKSUM: f8c2dcdfb50bb67645580d28a6bf814fca30bdec

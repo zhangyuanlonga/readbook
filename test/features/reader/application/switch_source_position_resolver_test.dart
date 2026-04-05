@@ -1,5 +1,5 @@
-import 'package:flutter_appread/domain/entities/chapter.dart';
-import 'package:flutter_appread/features/reader/application/switch_source_position_resolver.dart';
+import 'package:shuxiang_reading_next/domain/entities/chapter.dart';
+import 'package:shuxiang_reading_next/features/reader/application/switch_source_position_resolver.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {

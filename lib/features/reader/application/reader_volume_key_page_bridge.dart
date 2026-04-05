@@ -22,10 +22,10 @@ class ReaderVolumeKeyPageBridge {
       ReaderVolumeKeyPageBridge._();
 
   static const MethodChannel _methodChannel = MethodChannel(
-    'com.jiangyan.shuxiangread/reader_volume_keys',
+    'com.jiangyan.shuxiangread.next/reader_volume_keys',
   );
   static const EventChannel _eventChannel = EventChannel(
-    'com.jiangyan.shuxiangread/reader_volume_keys/events',
+    'com.jiangyan.shuxiangread.next/reader_volume_keys/events',
   );
 
   Stream<ReaderVolumeKeyEvent>? _events;

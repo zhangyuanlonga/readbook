@@ -1,10 +1,10 @@
 import 'dart:async';
 
-import 'package:flutter_appread/features/source/application/source_runtime_task_gate_service.dart';
-import 'package:flutter_appread/runtime/sources/source_contract.dart';
-import 'package:flutter_appread/runtime/sources/source_manifest.dart';
-import 'package:flutter_appread/runtime/sources/source_registry.dart';
-import 'package:flutter_appread/runtime/sources/source_result_models.dart'
+import 'package:shuxiang_reading_next/features/source/application/source_runtime_task_gate_service.dart';
+import 'package:shuxiang_reading_next/runtime/sources/source_contract.dart';
+import 'package:shuxiang_reading_next/runtime/sources/source_manifest.dart';
+import 'package:shuxiang_reading_next/runtime/sources/source_registry.dart';
+import 'package:shuxiang_reading_next/runtime/sources/source_result_models.dart'
     as runtime_models;
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';

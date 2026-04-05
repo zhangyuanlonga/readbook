@@ -1,5 +1,5 @@
-import 'package:flutter_appread/features/reader/application/reader_logical_position.dart';
-import 'package:flutter_appread/features/reader/application/reader_session_state.dart';
+import 'package:shuxiang_reading_next/features/reader/application/reader_logical_position.dart';
+import 'package:shuxiang_reading_next/features/reader/application/reader_session_state.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {

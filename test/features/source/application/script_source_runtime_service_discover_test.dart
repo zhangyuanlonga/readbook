@@ -1,12 +1,12 @@
 import 'dart:convert';
 import 'dart:io';
 
-import 'package:flutter_appread/features/source/application/script_source_runtime_service.dart';
-import 'package:flutter_appread/runtime/browser/browser_runtime.dart';
-import 'package:flutter_appread/runtime/http/challenge_detector.dart';
-import 'package:flutter_appread/runtime/http/http_models.dart';
-import 'package:flutter_appread/runtime/http/request_engine.dart';
-import 'package:flutter_appread/runtime/session/source_session.dart';
+import 'package:shuxiang_reading_next/features/source/application/script_source_runtime_service.dart';
+import 'package:shuxiang_reading_next/runtime/browser/browser_runtime.dart';
+import 'package:shuxiang_reading_next/runtime/http/challenge_detector.dart';
+import 'package:shuxiang_reading_next/runtime/http/http_models.dart';
+import 'package:shuxiang_reading_next/runtime/http/request_engine.dart';
+import 'package:shuxiang_reading_next/runtime/session/source_session.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {

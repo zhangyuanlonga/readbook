@@ -2775,7 +2775,7 @@ class _BookshelfPageState extends State<BookshelfPage>
 
     final baseDir = await getApplicationSupportDirectory();
     final coverDir = Directory(
-      p.join(baseDir.path, 'flutter_appread', 'custom_covers'),
+      p.join(baseDir.path, 'shuxiang_reading_next', 'custom_covers'),
     );
     if (!await coverDir.exists()) {
       await coverDir.create(recursive: true);

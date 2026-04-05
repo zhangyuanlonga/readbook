@@ -110,7 +110,7 @@ class SearchFailureExportService {
         .toList(growable: false);
 
     final payload = <String, dynamic>{
-      'schema': 'flutter_appread.search_failures.v3',
+      'schema': 'shuxiang_reading_next.search_failures.v3',
       'exportedAt': now.toIso8601String(),
       'keyword': report.keyword,
       'contentMode': contentMode.name,

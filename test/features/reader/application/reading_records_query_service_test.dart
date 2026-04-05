@@ -1,7 +1,7 @@
-import 'package:flutter_appread/domain/entities/reading_record.dart';
-import 'package:flutter_appread/domain/entities/reading_record_day.dart';
-import 'package:flutter_appread/domain/entities/reading_record_session.dart';
-import 'package:flutter_appread/features/reader/application/reading_records_query_service.dart';
+import 'package:shuxiang_reading_next/domain/entities/reading_record.dart';
+import 'package:shuxiang_reading_next/domain/entities/reading_record_day.dart';
+import 'package:shuxiang_reading_next/domain/entities/reading_record_session.dart';
+import 'package:shuxiang_reading_next/features/reader/application/reading_records_query_service.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {

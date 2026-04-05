@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
-import 'package:flutter_appread/features/book/presentation/widgets/book_detail_primary_actions.dart';
+import 'package:shuxiang_reading_next/features/book/presentation/widgets/book_detail_primary_actions.dart';
 
 void main() {
   testWidgets('uses short copy and hides icons on very narrow width', (

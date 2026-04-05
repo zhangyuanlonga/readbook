@@ -1,10 +1,10 @@
-import 'package:flutter_appread/domain/entities/book.dart';
-import 'package:flutter_appread/features/reader/application/reader_source_switch_coordinator.dart';
-import 'package:flutter_appread/features/reader/application/switch_source_shared.dart';
-import 'package:flutter_appread/runtime/sources/source_contract.dart';
-import 'package:flutter_appread/runtime/sources/source_manifest.dart';
-import 'package:flutter_appread/runtime/sources/source_registry.dart';
-import 'package:flutter_appread/runtime/sources/source_result_models.dart'
+import 'package:shuxiang_reading_next/domain/entities/book.dart';
+import 'package:shuxiang_reading_next/features/reader/application/reader_source_switch_coordinator.dart';
+import 'package:shuxiang_reading_next/features/reader/application/switch_source_shared.dart';
+import 'package:shuxiang_reading_next/runtime/sources/source_contract.dart';
+import 'package:shuxiang_reading_next/runtime/sources/source_manifest.dart';
+import 'package:shuxiang_reading_next/runtime/sources/source_registry.dart';
+import 'package:shuxiang_reading_next/runtime/sources/source_result_models.dart'
     as runtime_models;
 import 'package:flutter_test/flutter_test.dart';
 

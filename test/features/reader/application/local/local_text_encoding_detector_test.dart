@@ -1,6 +1,6 @@
 import 'dart:convert';
 
-import 'package:flutter_appread/features/reader/application/local/local_text_encoding_detector.dart';
+import 'package:shuxiang_reading_next/features/reader/application/local/local_text_encoding_detector.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {

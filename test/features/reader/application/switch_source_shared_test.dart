@@ -1,7 +1,7 @@
-import 'package:flutter_appread/domain/entities/book.dart';
-import 'package:flutter_appread/domain/entities/source_health.dart';
-import 'package:flutter_appread/features/reader/application/source_switch_score_service.dart';
-import 'package:flutter_appread/features/reader/application/switch_source_shared.dart';
+import 'package:shuxiang_reading_next/domain/entities/book.dart';
+import 'package:shuxiang_reading_next/domain/entities/source_health.dart';
+import 'package:shuxiang_reading_next/features/reader/application/source_switch_score_service.dart';
+import 'package:shuxiang_reading_next/features/reader/application/switch_source_shared.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
@@ -53,11 +53,9 @@ void main() {
         ),
       },
       scoreRankingEnabled: true,
-      buildBookScoreKey: ({
-        required String sourceId,
-        required String title,
-        String? author,
-      }) => '$sourceId:$title:${author ?? ''}',
+      buildBookScoreKey:
+          ({required String sourceId, required String title, String? author}) =>
+              '$sourceId:$title:${author ?? ''}',
       lagTolerance: 20,
       hitCountCap: 12,
       hitCountWeight: 3,
@@ -66,5 +64,7 @@ void main() {
 
     expect(candidates.first.sourceName, '健康源');
     expect(candidates.last.sourceName, '高风险源');
+    expect(candidates.first.healthLevel, SourceHealthLevel.healthy);
+    expect(candidates.last.healthLevel, SourceHealthLevel.risky);
   });
 }

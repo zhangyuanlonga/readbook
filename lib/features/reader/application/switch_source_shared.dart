@@ -15,6 +15,7 @@ class SwitchSourceCandidate {
   const SwitchSourceCandidate({
     required this.book,
     required this.sourceName,
+    required this.healthLevel,
     required this.baseScore,
     required this.hitCount,
     required this.sourceScore,
@@ -27,6 +28,7 @@ class SwitchSourceCandidate {
 
   final Book book;
   final String sourceName;
+  final SourceHealthLevel? healthLevel;
   final int baseScore;
   final int hitCount;
   final int sourceScore;
@@ -40,10 +42,14 @@ class SwitchSourceCandidate {
     int? score,
     int? sourceScore,
     int? bookScore,
+    SourceHealthLevel? healthLevel,
+    bool keepHealthLevel = true,
   }) {
     return SwitchSourceCandidate(
       book: book,
       sourceName: sourceName,
+      healthLevel:
+          keepHealthLevel ? (healthLevel ?? this.healthLevel) : healthLevel,
       baseScore: baseScore,
       hitCount: hitCount,
       sourceScore: sourceScore ?? this.sourceScore,
@@ -328,6 +334,7 @@ List<SwitchSourceCandidate> buildSwitchSourceCandidates({
     final candidate = SwitchSourceCandidate(
       book: book,
       sourceName: sourceNames[book.sourceId] ?? book.sourceId,
+      healthLevel: sourceHealthBySourceId[book.sourceId]?.level,
       baseScore: baseScore,
       hitCount: hitCount,
       sourceScore: sourceScore,
@@ -375,6 +382,7 @@ SwitchSourceCandidate rebuildSwitchSourceCandidateScore(
     sourceHealthBySourceId[candidate.book.sourceId],
   );
   return candidate.copyWith(
+    healthLevel: sourceHealthBySourceId[candidate.book.sourceId]?.level,
     sourceScore: sourceScore,
     bookScore: bookScore,
     score: composeSwitchSourceCandidateScore(

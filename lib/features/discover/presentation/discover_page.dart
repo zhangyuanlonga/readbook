@@ -8,6 +8,7 @@ import 'package:go_router/go_router.dart';
 import '../../../app/layout/app_layout.dart';
 import '../../../app/layout/app_spacing.dart';
 import '../../../app/widgets/disk_cached_cover_image.dart';
+import '../../../app/widgets/runtime_feedback_card.dart';
 import '../../../app/widgets/text_cover_placeholder.dart';
 import '../../../core/errors/app_exception.dart';
 import '../../../domain/entities/book.dart';
@@ -1064,26 +1065,10 @@ class _DiscoverPageState extends State<DiscoverPage>
   }
 
   Widget _buildLoadingCard(BuildContext context, {required String message}) {
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Row(
-          children: <Widget>[
-            const SizedBox(
-              width: 18,
-              height: 18,
-              child: CircularProgressIndicator(strokeWidth: 2),
-            ),
-            const SizedBox(width: 10),
-            Expanded(
-              child: Text(
-                message,
-                style: Theme.of(context).textTheme.bodyMedium,
-              ),
-            ),
-          ],
-        ),
-      ),
+    return RuntimeFeedbackCard(
+      title: '正在加载',
+      message: message,
+      tone: RuntimeFeedbackTone.loading,
     );
   }
 
@@ -1093,47 +1078,25 @@ class _DiscoverPageState extends State<DiscoverPage>
     required VoidCallback onRetry,
     String actionLabel = '重试',
   }) {
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: <Widget>[
-            Row(
-              children: <Widget>[
-                Icon(
-                  Icons.error_outline_rounded,
-                  color: Theme.of(context).colorScheme.error,
-                ),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: Text(
-                    message,
-                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                      color: Theme.of(context).colorScheme.error,
-                    ),
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 10),
-            FilledButton.tonalIcon(
-              onPressed: onRetry,
-              icon: const Icon(Icons.refresh_rounded),
-              label: Text(actionLabel),
-            ),
-          ],
+    return RuntimeFeedbackCard(
+      title: '加载失败',
+      message: message,
+      tone: RuntimeFeedbackTone.error,
+      actions: [
+        FilledButton.tonalIcon(
+          onPressed: onRetry,
+          icon: const Icon(Icons.refresh_rounded),
+          label: Text(actionLabel),
         ),
-      ),
+      ],
     );
   }
 
   Widget _buildInfoCard(BuildContext context, {required String message}) {
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Text(message, style: Theme.of(context).textTheme.bodyMedium),
-      ),
+    return RuntimeFeedbackCard(
+      title: '提示',
+      message: message,
+      tone: RuntimeFeedbackTone.info,
     );
   }
 

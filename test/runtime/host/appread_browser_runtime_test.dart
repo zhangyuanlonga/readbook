@@ -3,12 +3,12 @@ import 'dart:async';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter_inappwebview/flutter_inappwebview.dart';
 
-import 'package:flutter_appread/core/errors/error_stage.dart';
-import 'package:flutter_appread/core/webview/interactive_verification_browser_executor.dart';
-import 'package:flutter_appread/core/webview/webview_executor.dart';
-import 'package:flutter_appread/runtime/browser/browser_runtime.dart';
-import 'package:flutter_appread/runtime/host/appread_browser_runtime.dart';
-import 'package:flutter_appread/runtime/session/source_session.dart';
+import 'package:shuxiang_reading_next/core/errors/error_stage.dart';
+import 'package:shuxiang_reading_next/core/webview/interactive_verification_browser_executor.dart';
+import 'package:shuxiang_reading_next/core/webview/webview_executor.dart';
+import 'package:shuxiang_reading_next/runtime/browser/browser_runtime.dart';
+import 'package:shuxiang_reading_next/runtime/host/appread_browser_runtime.dart';
+import 'package:shuxiang_reading_next/runtime/session/source_session.dart';
 
 void main() {
   test('syncs cookies between session and browser runtime on open', () async {

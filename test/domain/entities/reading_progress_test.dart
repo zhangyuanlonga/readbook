@@ -1,5 +1,5 @@
-import 'package:flutter_appread/domain/entities/reading_progress.dart';
-import 'package:flutter_appread/domain/entities/reader_logical_position.dart';
+import 'package:shuxiang_reading_next/domain/entities/reading_progress.dart';
+import 'package:shuxiang_reading_next/domain/entities/reader_logical_position.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {

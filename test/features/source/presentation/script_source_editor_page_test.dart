@@ -1,6 +1,6 @@
-import 'package:flutter_appread/features/source/presentation/script_source_editor_page.dart';
-import 'package:flutter_appread/runtime/sources/source_script_compiler.dart';
-import 'package:flutter_appread/runtime/sources/source_script_template.dart';
+import 'package:shuxiang_reading_next/features/source/presentation/script_source_editor_page.dart';
+import 'package:shuxiang_reading_next/runtime/sources/source_script_compiler.dart';
+import 'package:shuxiang_reading_next/runtime/sources/source_script_template.dart';
 import 'package:flutter_test/flutter_test.dart';
 import '../../../test_utils/adaptive_test_harness.dart';
 

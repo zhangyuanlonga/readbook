@@ -1,5 +1,5 @@
-import 'package:flutter_appread/domain/entities/source_health.dart';
-import 'package:flutter_appread/features/source/application/source_health_snapshot_resolver.dart';
+import 'package:shuxiang_reading_next/domain/entities/source_health.dart';
+import 'package:shuxiang_reading_next/features/source/application/source_health_snapshot_resolver.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {

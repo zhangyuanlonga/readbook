@@ -2,9 +2,9 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
 
-import 'package:flutter_appread/runtime/http/http_models.dart';
-import 'package:flutter_appread/runtime/http/request_engine.dart';
-import 'package:flutter_appread/runtime/session/source_session.dart';
+import 'package:shuxiang_reading_next/runtime/http/http_models.dart';
+import 'package:shuxiang_reading_next/runtime/http/request_engine.dart';
+import 'package:shuxiang_reading_next/runtime/session/source_session.dart';
 
 void main() {
   test('captures multiple cookies from a collapsed set-cookie header', () async {

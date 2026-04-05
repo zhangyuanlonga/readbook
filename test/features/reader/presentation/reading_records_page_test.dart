@@ -1,14 +1,14 @@
 import 'package:drift/drift.dart' show driftRuntimeOptions;
 import 'package:drift/native.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter_appread/data/datasources/local/app_database.dart';
-import 'package:flutter_appread/domain/entities/reading_record.dart';
-import 'package:flutter_appread/domain/entities/reading_record_day.dart';
-import 'package:flutter_appread/domain/entities/reading_record_session.dart';
-import 'package:flutter_appread/features/reader/application/reader_preferences_service.dart';
-import 'package:flutter_appread/features/reader/application/reader_system_settings_service.dart';
-import 'package:flutter_appread/features/reader/application/reading_record_service.dart';
-import 'package:flutter_appread/features/reader/presentation/reading_records_page.dart';
+import 'package:shuxiang_reading_next/data/datasources/local/app_database.dart';
+import 'package:shuxiang_reading_next/domain/entities/reading_record.dart';
+import 'package:shuxiang_reading_next/domain/entities/reading_record_day.dart';
+import 'package:shuxiang_reading_next/domain/entities/reading_record_session.dart';
+import 'package:shuxiang_reading_next/features/reader/application/reader_preferences_service.dart';
+import 'package:shuxiang_reading_next/features/reader/application/reader_system_settings_service.dart';
+import 'package:shuxiang_reading_next/features/reader/application/reading_record_service.dart';
+import 'package:shuxiang_reading_next/features/reader/presentation/reading_records_page.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 

@@ -1,4 +1,4 @@
-import 'package:flutter_appread/features/reader/presentation/reader_route.dart';
+import 'package:shuxiang_reading_next/features/reader/presentation/reader_route.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {

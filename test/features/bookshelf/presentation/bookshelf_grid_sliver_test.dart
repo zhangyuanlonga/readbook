@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
-import 'package:flutter_appread/features/bookshelf/presentation/widgets/bookshelf_grid_sliver.dart';
+import 'package:shuxiang_reading_next/features/bookshelf/presentation/widgets/bookshelf_grid_sliver.dart';
 
 void main() {
   testWidgets(

@@ -1,16 +1,16 @@
 import 'dart:io';
 
 import 'package:drift/native.dart';
-import 'package:flutter_appread/core/errors/error_codes.dart';
-import 'package:flutter_appread/core/errors/error_stage.dart';
-import 'package:flutter_appread/core/errors/app_exception.dart';
-import 'package:flutter_appread/data/datasources/local/app_database.dart';
-import 'package:flutter_appread/data/repositories/local_book_repository_impl.dart';
-import 'package:flutter_appread/domain/entities/local_book.dart';
-import 'package:flutter_appread/features/reader/application/reader_system_settings_service.dart';
-import 'package:flutter_appread/features/reader/application/local/local_book_index_service.dart';
-import 'package:flutter_appread/features/reader/application/local/local_book_parser.dart';
-import 'package:flutter_appread/features/reader/application/local/local_book_storage_service.dart';
+import 'package:shuxiang_reading_next/core/errors/error_codes.dart';
+import 'package:shuxiang_reading_next/core/errors/error_stage.dart';
+import 'package:shuxiang_reading_next/core/errors/app_exception.dart';
+import 'package:shuxiang_reading_next/data/datasources/local/app_database.dart';
+import 'package:shuxiang_reading_next/data/repositories/local_book_repository_impl.dart';
+import 'package:shuxiang_reading_next/domain/entities/local_book.dart';
+import 'package:shuxiang_reading_next/features/reader/application/reader_system_settings_service.dart';
+import 'package:shuxiang_reading_next/features/reader/application/local/local_book_index_service.dart';
+import 'package:shuxiang_reading_next/features/reader/application/local/local_book_parser.dart';
+import 'package:shuxiang_reading_next/features/reader/application/local/local_book_storage_service.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 

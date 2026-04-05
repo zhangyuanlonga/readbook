@@ -1,4 +1,4 @@
-import 'package:flutter_appread/features/search/application/search_service.dart';
+import 'package:shuxiang_reading_next/features/search/application/search_service.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {

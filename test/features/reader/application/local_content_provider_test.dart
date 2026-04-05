@@ -1,8 +1,8 @@
-import 'package:flutter_appread/domain/entities/local_chapter.dart';
-import 'package:flutter_appread/domain/entities/reader_document.dart';
-import 'package:flutter_appread/features/reader/application/local/local_chapter_content_service.dart';
-import 'package:flutter_appread/features/reader/application/local/local_reader_identity.dart';
-import 'package:flutter_appread/features/reader/application/local_content_provider.dart';
+import 'package:shuxiang_reading_next/domain/entities/local_chapter.dart';
+import 'package:shuxiang_reading_next/domain/entities/reader_document.dart';
+import 'package:shuxiang_reading_next/features/reader/application/local/local_chapter_content_service.dart';
+import 'package:shuxiang_reading_next/features/reader/application/local/local_reader_identity.dart';
+import 'package:shuxiang_reading_next/features/reader/application/local_content_provider.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 

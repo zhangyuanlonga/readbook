@@ -1,9 +1,9 @@
-import 'package:flutter_appread/core/errors/app_exception.dart';
-import 'package:flutter_appread/core/errors/error_codes.dart';
-import 'package:flutter_appread/core/errors/error_stage.dart';
-import 'package:flutter_appread/features/source/application/source_health_reason_classifier.dart';
-import 'package:flutter_appread/runtime/session/source_session.dart';
-import 'package:flutter_appread/domain/entities/source_health.dart';
+import 'package:shuxiang_reading_next/core/errors/app_exception.dart';
+import 'package:shuxiang_reading_next/core/errors/error_codes.dart';
+import 'package:shuxiang_reading_next/core/errors/error_stage.dart';
+import 'package:shuxiang_reading_next/features/source/application/source_health_reason_classifier.dart';
+import 'package:shuxiang_reading_next/runtime/session/source_session.dart';
+import 'package:shuxiang_reading_next/domain/entities/source_health.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {

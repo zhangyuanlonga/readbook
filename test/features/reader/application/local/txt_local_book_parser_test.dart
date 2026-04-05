@@ -1,8 +1,8 @@
 import 'dart:io';
 
 import 'package:charset/charset.dart';
-import 'package:flutter_appread/domain/entities/local_book.dart';
-import 'package:flutter_appread/features/reader/application/local/txt_local_book_parser.dart';
+import 'package:shuxiang_reading_next/domain/entities/local_book.dart';
+import 'package:shuxiang_reading_next/features/reader/application/local/txt_local_book_parser.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 

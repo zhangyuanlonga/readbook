@@ -1,7 +1,7 @@
-import 'package:flutter_appread/domain/entities/bookmark.dart';
-import 'package:flutter_appread/domain/entities/chapter.dart';
-import 'package:flutter_appread/domain/entities/reader_document.dart';
-import 'package:flutter_appread/features/reader/application/reader_jump_facade.dart';
+import 'package:shuxiang_reading_next/domain/entities/bookmark.dart';
+import 'package:shuxiang_reading_next/domain/entities/chapter.dart';
+import 'package:shuxiang_reading_next/domain/entities/reader_document.dart';
+import 'package:shuxiang_reading_next/features/reader/application/reader_jump_facade.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {

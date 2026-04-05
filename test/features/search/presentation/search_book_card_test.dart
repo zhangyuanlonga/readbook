@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
-import 'package:flutter_appread/domain/entities/book.dart';
-import 'package:flutter_appread/features/search/presentation/widgets/search_book_card.dart';
+import 'package:shuxiang_reading_next/domain/entities/book.dart';
+import 'package:shuxiang_reading_next/features/search/presentation/widgets/search_book_card.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {

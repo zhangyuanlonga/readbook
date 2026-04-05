@@ -1,9 +1,9 @@
-import 'package:flutter_appread/domain/entities/book_detail.dart';
-import 'package:flutter_appread/domain/entities/chapter.dart';
-import 'package:flutter_appread/features/book/application/book_detail_service.dart';
-import 'package:flutter_appread/features/bookshelf/application/local_book_import_service.dart';
-import 'package:flutter_appread/features/reader/application/chapter_content_service.dart';
-import 'package:flutter_appread/features/reader/application/source_content_provider.dart';
+import 'package:shuxiang_reading_next/domain/entities/book_detail.dart';
+import 'package:shuxiang_reading_next/domain/entities/chapter.dart';
+import 'package:shuxiang_reading_next/features/book/application/book_detail_service.dart';
+import 'package:shuxiang_reading_next/features/bookshelf/application/local_book_import_service.dart';
+import 'package:shuxiang_reading_next/features/reader/application/chapter_content_service.dart';
+import 'package:shuxiang_reading_next/features/reader/application/source_content_provider.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 

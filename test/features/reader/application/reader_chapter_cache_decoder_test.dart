@@ -1,4 +1,4 @@
-import 'package:flutter_appread/features/reader/application/reader_chapter_cache_decoder.dart';
+import 'package:shuxiang_reading_next/features/reader/application/reader_chapter_cache_decoder.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {

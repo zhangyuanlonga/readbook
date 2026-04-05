@@ -203,7 +203,7 @@ class _AboutPageState extends State<AboutPage> {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(
-                          '书享阅读 · AppRead',
+                          '书享阅读 Next · AppRead',
                           style: theme.textTheme.titleMedium?.copyWith(
                             fontWeight: FontWeight.w800,
                           ),

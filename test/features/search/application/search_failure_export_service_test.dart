@@ -1,15 +1,15 @@
 import 'dart:convert';
 import 'dart:io';
 
-import 'package:flutter_appread/core/errors/app_exception.dart';
-import 'package:flutter_appread/core/errors/error_codes.dart';
-import 'package:flutter_appread/core/errors/error_stage.dart';
-import 'package:flutter_appread/features/search/application/search_failure_export_service.dart';
-import 'package:flutter_appread/features/search/application/search_service.dart';
-import 'package:flutter_appread/runtime/sources/source_contract.dart';
-import 'package:flutter_appread/runtime/sources/source_manifest.dart';
-import 'package:flutter_appread/runtime/sources/source_registry.dart';
-import 'package:flutter_appread/runtime/sources/source_result_models.dart'
+import 'package:shuxiang_reading_next/core/errors/app_exception.dart';
+import 'package:shuxiang_reading_next/core/errors/error_codes.dart';
+import 'package:shuxiang_reading_next/core/errors/error_stage.dart';
+import 'package:shuxiang_reading_next/features/search/application/search_failure_export_service.dart';
+import 'package:shuxiang_reading_next/features/search/application/search_service.dart';
+import 'package:shuxiang_reading_next/runtime/sources/source_contract.dart';
+import 'package:shuxiang_reading_next/runtime/sources/source_manifest.dart';
+import 'package:shuxiang_reading_next/runtime/sources/source_registry.dart';
+import 'package:shuxiang_reading_next/runtime/sources/source_result_models.dart'
     as runtime_models;
 import 'package:flutter_test/flutter_test.dart';
 
@@ -87,7 +87,7 @@ void main() {
       expect(File(result.filePath).existsSync(), isTrue);
 
       final payload = jsonDecode(File(result.filePath).readAsStringSync());
-      expect(payload['schema'], 'flutter_appread.search_failures.v3');
+      expect(payload['schema'], 'shuxiang_reading_next.search_failures.v3');
       expect(payload['keyword'], '剑来');
       expect(payload['contentMode'], 'novel');
       expect(payload['summary']['failedSourceCount'], 1);

@@ -1,8 +1,8 @@
 import 'dart:convert';
 import 'dart:io';
 
-import 'package:flutter_appread/core/errors/error_codes.dart';
-import 'package:flutter_appread/core/network/api_client.dart';
+import 'package:shuxiang_reading_next/core/errors/error_codes.dart';
+import 'package:shuxiang_reading_next/core/network/api_client.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {

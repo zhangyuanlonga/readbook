@@ -2,10 +2,10 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:archive/archive.dart';
-import 'package:flutter_appread/domain/entities/local_book.dart';
-import 'package:flutter_appread/domain/entities/local_chapter.dart';
-import 'package:flutter_appread/domain/entities/reader_document.dart';
-import 'package:flutter_appread/features/reader/application/local/epub_local_book_parser.dart';
+import 'package:shuxiang_reading_next/domain/entities/local_book.dart';
+import 'package:shuxiang_reading_next/domain/entities/local_chapter.dart';
+import 'package:shuxiang_reading_next/domain/entities/reader_document.dart';
+import 'package:shuxiang_reading_next/features/reader/application/local/epub_local_book_parser.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {

@@ -1,8 +1,8 @@
 import 'package:drift/native.dart';
-import 'package:flutter_appread/data/datasources/local/app_database.dart';
-import 'package:flutter_appread/domain/entities/local_book.dart';
-import 'package:flutter_appread/domain/entities/local_chapter.dart';
-import 'package:flutter_appread/domain/entities/reader_document.dart';
+import 'package:shuxiang_reading_next/data/datasources/local/app_database.dart';
+import 'package:shuxiang_reading_next/domain/entities/local_book.dart';
+import 'package:shuxiang_reading_next/domain/entities/local_chapter.dart';
+import 'package:shuxiang_reading_next/domain/entities/reader_document.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {

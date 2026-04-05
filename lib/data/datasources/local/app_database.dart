@@ -202,6 +202,9 @@ class StoredScriptSources extends Table {
   TextColumn get group => text().nullable()();
   TextColumn get author => text().nullable()();
   TextColumn get description => text().nullable()();
+  TextColumn get primaryHost => text().nullable()();
+  TextColumn get registrableDomain => text().nullable()();
+  TextColumn get clusterKey => text().nullable()();
   TextColumn get sourceCode => text()();
   BoolColumn get enabled => boolean().withDefault(const Constant(true))();
   DateTimeColumn get createdAt => dateTime().withDefault(currentDateAndTime)();
@@ -271,7 +274,7 @@ class AppDatabase extends _$AppDatabase {
   static final AppDatabase instance = AppDatabase();
 
   @override
-  int get schemaVersion => 18;
+  int get schemaVersion => 19;
 
   @override
   MigrationStrategy get migration {
@@ -367,6 +370,38 @@ class AppDatabase extends _$AppDatabase {
                 () => migrator.addColumn(
                   storedReadingRecordSessions,
                   storedReadingRecordSessions.readChars,
+                ),
+          );
+        }
+        if (from < 19) {
+          await _addColumnIfMissing(
+            migrator: migrator,
+            tableName: storedScriptSources.tableName,
+            columnName: 'primary_host',
+            addColumn:
+                () => migrator.addColumn(
+                  storedScriptSources,
+                  storedScriptSources.primaryHost,
+                ),
+          );
+          await _addColumnIfMissing(
+            migrator: migrator,
+            tableName: storedScriptSources.tableName,
+            columnName: 'registrable_domain',
+            addColumn:
+                () => migrator.addColumn(
+                  storedScriptSources,
+                  storedScriptSources.registrableDomain,
+                ),
+          );
+          await _addColumnIfMissing(
+            migrator: migrator,
+            tableName: storedScriptSources.tableName,
+            columnName: 'cluster_key',
+            addColumn:
+                () => migrator.addColumn(
+                  storedScriptSources,
+                  storedScriptSources.clusterKey,
                 ),
           );
         }
@@ -584,6 +619,9 @@ class AppDatabase extends _$AppDatabase {
         group: Value(source.group),
         author: Value(source.author),
         description: Value(source.description),
+        primaryHost: Value(source.primaryHost),
+        registrableDomain: Value(source.registrableDomain),
+        clusterKey: Value(source.clusterKey),
         sourceCode: Value(source.sourceCode),
         enabled: Value(source.enabled),
         createdAt: Value(source.createdAt),
@@ -1971,6 +2009,9 @@ class AppDatabase extends _$AppDatabase {
       group: _nullableString(row.group),
       author: _nullableString(row.author),
       description: _nullableString(row.description),
+      primaryHost: _nullableString(row.primaryHost),
+      registrableDomain: _nullableString(row.registrableDomain),
+      clusterKey: _nullableString(row.clusterKey),
       sourceCode: row.sourceCode,
       enabled: row.enabled,
       createdAt: row.createdAt,
@@ -2032,12 +2073,14 @@ QueryExecutor _openConnection() {
             ? Directory.systemTemp
             : await getApplicationSupportDirectory();
 
-    final databaseDir = Directory(p.join(baseDir.path, 'flutter_appread'));
+    final databaseDir = Directory(
+      p.join(baseDir.path, 'shuxiang_reading_next'),
+    );
     if (!await databaseDir.exists()) {
       await databaseDir.create(recursive: true);
     }
 
-    final file = File(p.join(databaseDir.path, 'appread_sources.db'));
+    final file = File(p.join(databaseDir.path, 'shuxiang_reading_next.db'));
     return NativeDatabase.createInBackground(file);
   });
 }

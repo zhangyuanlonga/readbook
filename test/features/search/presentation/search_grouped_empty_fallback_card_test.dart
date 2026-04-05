@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:flutter_appread/features/search/presentation/widgets/search_grouped_empty_fallback_card.dart';
+import 'package:shuxiang_reading_next/features/search/presentation/widgets/search_grouped_empty_fallback_card.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {

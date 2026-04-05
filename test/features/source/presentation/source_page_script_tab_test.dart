@@ -1,17 +1,17 @@
 import 'package:drift/native.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter_appread/data/datasources/local/app_database.dart';
-import 'package:flutter_appread/data/repositories/script_source_repository_impl.dart';
-import 'package:flutter_appread/domain/entities/source_health.dart';
-import 'package:flutter_appread/features/source/application/source_health_service.dart';
-import 'package:flutter_appread/features/source/application/script_source_runtime_service.dart';
-import 'package:flutter_appread/features/source/application/source_runtime_facade.dart';
-import 'package:flutter_appread/features/source/presentation/source_page.dart';
-import 'package:flutter_appread/runtime/sources/source_script_template.dart';
-import 'package:flutter_appread/runtime/sources/source_contract.dart';
-import 'package:flutter_appread/runtime/sources/source_manifest.dart';
-import 'package:flutter_appread/runtime/sources/source_registry.dart';
-import 'package:flutter_appread/runtime/sources/source_result_models.dart'
+import 'package:shuxiang_reading_next/data/datasources/local/app_database.dart';
+import 'package:shuxiang_reading_next/data/repositories/script_source_repository_impl.dart';
+import 'package:shuxiang_reading_next/domain/entities/source_health.dart';
+import 'package:shuxiang_reading_next/features/source/application/source_health_service.dart';
+import 'package:shuxiang_reading_next/features/source/application/script_source_runtime_service.dart';
+import 'package:shuxiang_reading_next/features/source/application/source_runtime_facade.dart';
+import 'package:shuxiang_reading_next/features/source/presentation/source_page.dart';
+import 'package:shuxiang_reading_next/runtime/sources/source_script_template.dart';
+import 'package:shuxiang_reading_next/runtime/sources/source_contract.dart';
+import 'package:shuxiang_reading_next/runtime/sources/source_manifest.dart';
+import 'package:shuxiang_reading_next/runtime/sources/source_registry.dart';
+import 'package:shuxiang_reading_next/runtime/sources/source_result_models.dart'
     as runtime_models;
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -61,6 +61,9 @@ void main() {
       final items = await scriptRepository.getAll();
       expect(items, hasLength(1));
       expect(items.first.name, '临时脚本源');
+      expect(items.first.primaryHost, 'debug.local');
+      expect(items.first.registrableDomain, 'debug.local');
+      expect(items.first.clusterKey, 'debug.local');
 
       await sourceHealthService.persistNow();
       await tester.pumpWidget(const SizedBox.shrink());
@@ -81,6 +84,7 @@ void main() {
           consecutiveFailures: 2,
           browserRiskCount: 2,
           lastFailureReason: 'browser challenge failed',
+          lastAutoDisableReason: '连续失败次数过高，已自动停用。',
           cooldownUntil: DateTime.now().add(const Duration(minutes: 3)),
         ),
       );
@@ -103,6 +107,7 @@ void main() {
         find.textContaining('失败: browser challenge failed'),
         findsOneWidget,
       );
+      expect(find.textContaining('自动停用:'), findsOneWidget);
       expect(find.textContaining('冷却中'), findsOneWidget);
 
       await sourceHealthService.persistNow();
@@ -192,6 +197,71 @@ void main() {
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 10));
     });
+
+    testWidgets('supports website clustered display mode', (tester) async {
+      await facade.saveScriptSource(sourceCode: sourceScriptTemplateV1);
+      await facade.saveScriptSource(
+        sourceCode: sourceScriptTemplateV1,
+        id: 'source_duplicate',
+      );
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: SourcePage(
+            sourceRuntimeFacade: facade,
+            sourceHealthService: sourceHealthService,
+            bootstrapOnInit: false,
+            enableRouterNavigation: false,
+          ),
+        ),
+      );
+      await tester.pump(const Duration(milliseconds: 200));
+      await tester.pump(const Duration(milliseconds: 400));
+
+      await tester.tap(find.text('按网站聚合'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('debug.local'), findsOneWidget);
+      expect(find.textContaining('2 个源'), findsOneWidget);
+      expect(find.textContaining('推荐保留：临时脚本源'), findsOneWidget);
+
+      await sourceHealthService.persistNow();
+      await tester.pumpWidget(const SizedBox.shrink());
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 10));
+    });
+
+    testWidgets('asks confirmation before enabling auto disable', (
+      tester,
+    ) async {
+      await facade.saveScriptSource(sourceCode: sourceScriptTemplateV1);
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: SourcePage(
+            sourceRuntimeFacade: facade,
+            sourceHealthService: sourceHealthService,
+            bootstrapOnInit: false,
+            enableRouterNavigation: false,
+          ),
+        ),
+      );
+      await tester.pump(const Duration(milliseconds: 200));
+      await tester.pump(const Duration(milliseconds: 400));
+
+      await tester.tap(find.byTooltip('更多'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('自动停用高风险源'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('开启自动停用'), findsOneWidget);
+      expect(find.textContaining('不会自动删除书源'), findsOneWidget);
+
+      await sourceHealthService.persistNow();
+      await tester.pumpWidget(const SizedBox.shrink());
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 10));
+    });
   });
 }
 
@@ -208,6 +278,8 @@ class _FakeScriptSourceRuntimeService extends ScriptSourceRuntimeService {
         group: '调试',
         author: 'you',
         description: '直接在调试器里粘贴的书源脚本。',
+        domains: <String>['debug.local'],
+        homepage: 'https://debug.local',
       ),
       search: _noopRuntimeSearch,
       detail: _noopRuntimeDetail,

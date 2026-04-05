@@ -6385,6 +6385,40 @@ class $StoredScriptSourcesTable extends StoredScriptSources
     type: DriftSqlType.string,
     requiredDuringInsert: false,
   );
+  static const VerificationMeta _primaryHostMeta = const VerificationMeta(
+    'primaryHost',
+  );
+  @override
+  late final GeneratedColumn<String> primaryHost = GeneratedColumn<String>(
+    'primary_host',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _registrableDomainMeta = const VerificationMeta(
+    'registrableDomain',
+  );
+  @override
+  late final GeneratedColumn<String> registrableDomain =
+      GeneratedColumn<String>(
+        'registrable_domain',
+        aliasedName,
+        true,
+        type: DriftSqlType.string,
+        requiredDuringInsert: false,
+      );
+  static const VerificationMeta _clusterKeyMeta = const VerificationMeta(
+    'clusterKey',
+  );
+  @override
+  late final GeneratedColumn<String> clusterKey = GeneratedColumn<String>(
+    'cluster_key',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
   static const VerificationMeta _sourceCodeMeta = const VerificationMeta(
     'sourceCode',
   );
@@ -6442,6 +6476,9 @@ class $StoredScriptSourcesTable extends StoredScriptSources
     group,
     author,
     description,
+    primaryHost,
+    registrableDomain,
+    clusterKey,
     sourceCode,
     enabled,
     createdAt,
@@ -6491,6 +6528,30 @@ class $StoredScriptSourcesTable extends StoredScriptSources
           data['description']!,
           _descriptionMeta,
         ),
+      );
+    }
+    if (data.containsKey('primary_host')) {
+      context.handle(
+        _primaryHostMeta,
+        primaryHost.isAcceptableOrUnknown(
+          data['primary_host']!,
+          _primaryHostMeta,
+        ),
+      );
+    }
+    if (data.containsKey('registrable_domain')) {
+      context.handle(
+        _registrableDomainMeta,
+        registrableDomain.isAcceptableOrUnknown(
+          data['registrable_domain']!,
+          _registrableDomainMeta,
+        ),
+      );
+    }
+    if (data.containsKey('cluster_key')) {
+      context.handle(
+        _clusterKeyMeta,
+        clusterKey.isAcceptableOrUnknown(data['cluster_key']!, _clusterKeyMeta),
       );
     }
     if (data.containsKey('source_code')) {
@@ -6550,6 +6611,18 @@ class $StoredScriptSourcesTable extends StoredScriptSources
         DriftSqlType.string,
         data['${effectivePrefix}description'],
       ),
+      primaryHost: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}primary_host'],
+      ),
+      registrableDomain: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}registrable_domain'],
+      ),
+      clusterKey: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}cluster_key'],
+      ),
       sourceCode:
           attachedDatabase.typeMapping.read(
             DriftSqlType.string,
@@ -6586,6 +6659,9 @@ class StoredScriptSource extends DataClass
   final String? group;
   final String? author;
   final String? description;
+  final String? primaryHost;
+  final String? registrableDomain;
+  final String? clusterKey;
   final String sourceCode;
   final bool enabled;
   final DateTime createdAt;
@@ -6596,6 +6672,9 @@ class StoredScriptSource extends DataClass
     this.group,
     this.author,
     this.description,
+    this.primaryHost,
+    this.registrableDomain,
+    this.clusterKey,
     required this.sourceCode,
     required this.enabled,
     required this.createdAt,
@@ -6614,6 +6693,15 @@ class StoredScriptSource extends DataClass
     }
     if (!nullToAbsent || description != null) {
       map['description'] = Variable<String>(description);
+    }
+    if (!nullToAbsent || primaryHost != null) {
+      map['primary_host'] = Variable<String>(primaryHost);
+    }
+    if (!nullToAbsent || registrableDomain != null) {
+      map['registrable_domain'] = Variable<String>(registrableDomain);
+    }
+    if (!nullToAbsent || clusterKey != null) {
+      map['cluster_key'] = Variable<String>(clusterKey);
     }
     map['source_code'] = Variable<String>(sourceCode);
     map['enabled'] = Variable<bool>(enabled);
@@ -6634,6 +6722,18 @@ class StoredScriptSource extends DataClass
           description == null && nullToAbsent
               ? const Value.absent()
               : Value(description),
+      primaryHost:
+          primaryHost == null && nullToAbsent
+              ? const Value.absent()
+              : Value(primaryHost),
+      registrableDomain:
+          registrableDomain == null && nullToAbsent
+              ? const Value.absent()
+              : Value(registrableDomain),
+      clusterKey:
+          clusterKey == null && nullToAbsent
+              ? const Value.absent()
+              : Value(clusterKey),
       sourceCode: Value(sourceCode),
       enabled: Value(enabled),
       createdAt: Value(createdAt),
@@ -6652,6 +6752,11 @@ class StoredScriptSource extends DataClass
       group: serializer.fromJson<String?>(json['group']),
       author: serializer.fromJson<String?>(json['author']),
       description: serializer.fromJson<String?>(json['description']),
+      primaryHost: serializer.fromJson<String?>(json['primaryHost']),
+      registrableDomain: serializer.fromJson<String?>(
+        json['registrableDomain'],
+      ),
+      clusterKey: serializer.fromJson<String?>(json['clusterKey']),
       sourceCode: serializer.fromJson<String>(json['sourceCode']),
       enabled: serializer.fromJson<bool>(json['enabled']),
       createdAt: serializer.fromJson<DateTime>(json['createdAt']),
@@ -6667,6 +6772,9 @@ class StoredScriptSource extends DataClass
       'group': serializer.toJson<String?>(group),
       'author': serializer.toJson<String?>(author),
       'description': serializer.toJson<String?>(description),
+      'primaryHost': serializer.toJson<String?>(primaryHost),
+      'registrableDomain': serializer.toJson<String?>(registrableDomain),
+      'clusterKey': serializer.toJson<String?>(clusterKey),
       'sourceCode': serializer.toJson<String>(sourceCode),
       'enabled': serializer.toJson<bool>(enabled),
       'createdAt': serializer.toJson<DateTime>(createdAt),
@@ -6680,6 +6788,9 @@ class StoredScriptSource extends DataClass
     Value<String?> group = const Value.absent(),
     Value<String?> author = const Value.absent(),
     Value<String?> description = const Value.absent(),
+    Value<String?> primaryHost = const Value.absent(),
+    Value<String?> registrableDomain = const Value.absent(),
+    Value<String?> clusterKey = const Value.absent(),
     String? sourceCode,
     bool? enabled,
     DateTime? createdAt,
@@ -6690,6 +6801,12 @@ class StoredScriptSource extends DataClass
     group: group.present ? group.value : this.group,
     author: author.present ? author.value : this.author,
     description: description.present ? description.value : this.description,
+    primaryHost: primaryHost.present ? primaryHost.value : this.primaryHost,
+    registrableDomain:
+        registrableDomain.present
+            ? registrableDomain.value
+            : this.registrableDomain,
+    clusterKey: clusterKey.present ? clusterKey.value : this.clusterKey,
     sourceCode: sourceCode ?? this.sourceCode,
     enabled: enabled ?? this.enabled,
     createdAt: createdAt ?? this.createdAt,
@@ -6703,6 +6820,14 @@ class StoredScriptSource extends DataClass
       author: data.author.present ? data.author.value : this.author,
       description:
           data.description.present ? data.description.value : this.description,
+      primaryHost:
+          data.primaryHost.present ? data.primaryHost.value : this.primaryHost,
+      registrableDomain:
+          data.registrableDomain.present
+              ? data.registrableDomain.value
+              : this.registrableDomain,
+      clusterKey:
+          data.clusterKey.present ? data.clusterKey.value : this.clusterKey,
       sourceCode:
           data.sourceCode.present ? data.sourceCode.value : this.sourceCode,
       enabled: data.enabled.present ? data.enabled.value : this.enabled,
@@ -6719,6 +6844,9 @@ class StoredScriptSource extends DataClass
           ..write('group: $group, ')
           ..write('author: $author, ')
           ..write('description: $description, ')
+          ..write('primaryHost: $primaryHost, ')
+          ..write('registrableDomain: $registrableDomain, ')
+          ..write('clusterKey: $clusterKey, ')
           ..write('sourceCode: $sourceCode, ')
           ..write('enabled: $enabled, ')
           ..write('createdAt: $createdAt, ')
@@ -6734,6 +6862,9 @@ class StoredScriptSource extends DataClass
     group,
     author,
     description,
+    primaryHost,
+    registrableDomain,
+    clusterKey,
     sourceCode,
     enabled,
     createdAt,
@@ -6748,6 +6879,9 @@ class StoredScriptSource extends DataClass
           other.group == this.group &&
           other.author == this.author &&
           other.description == this.description &&
+          other.primaryHost == this.primaryHost &&
+          other.registrableDomain == this.registrableDomain &&
+          other.clusterKey == this.clusterKey &&
           other.sourceCode == this.sourceCode &&
           other.enabled == this.enabled &&
           other.createdAt == this.createdAt &&
@@ -6760,6 +6894,9 @@ class StoredScriptSourcesCompanion extends UpdateCompanion<StoredScriptSource> {
   final Value<String?> group;
   final Value<String?> author;
   final Value<String?> description;
+  final Value<String?> primaryHost;
+  final Value<String?> registrableDomain;
+  final Value<String?> clusterKey;
   final Value<String> sourceCode;
   final Value<bool> enabled;
   final Value<DateTime> createdAt;
@@ -6771,6 +6908,9 @@ class StoredScriptSourcesCompanion extends UpdateCompanion<StoredScriptSource> {
     this.group = const Value.absent(),
     this.author = const Value.absent(),
     this.description = const Value.absent(),
+    this.primaryHost = const Value.absent(),
+    this.registrableDomain = const Value.absent(),
+    this.clusterKey = const Value.absent(),
     this.sourceCode = const Value.absent(),
     this.enabled = const Value.absent(),
     this.createdAt = const Value.absent(),
@@ -6783,6 +6923,9 @@ class StoredScriptSourcesCompanion extends UpdateCompanion<StoredScriptSource> {
     this.group = const Value.absent(),
     this.author = const Value.absent(),
     this.description = const Value.absent(),
+    this.primaryHost = const Value.absent(),
+    this.registrableDomain = const Value.absent(),
+    this.clusterKey = const Value.absent(),
     required String sourceCode,
     this.enabled = const Value.absent(),
     this.createdAt = const Value.absent(),
@@ -6797,6 +6940,9 @@ class StoredScriptSourcesCompanion extends UpdateCompanion<StoredScriptSource> {
     Expression<String>? group,
     Expression<String>? author,
     Expression<String>? description,
+    Expression<String>? primaryHost,
+    Expression<String>? registrableDomain,
+    Expression<String>? clusterKey,
     Expression<String>? sourceCode,
     Expression<bool>? enabled,
     Expression<DateTime>? createdAt,
@@ -6809,6 +6955,9 @@ class StoredScriptSourcesCompanion extends UpdateCompanion<StoredScriptSource> {
       if (group != null) 'group': group,
       if (author != null) 'author': author,
       if (description != null) 'description': description,
+      if (primaryHost != null) 'primary_host': primaryHost,
+      if (registrableDomain != null) 'registrable_domain': registrableDomain,
+      if (clusterKey != null) 'cluster_key': clusterKey,
       if (sourceCode != null) 'source_code': sourceCode,
       if (enabled != null) 'enabled': enabled,
       if (createdAt != null) 'created_at': createdAt,
@@ -6823,6 +6972,9 @@ class StoredScriptSourcesCompanion extends UpdateCompanion<StoredScriptSource> {
     Value<String?>? group,
     Value<String?>? author,
     Value<String?>? description,
+    Value<String?>? primaryHost,
+    Value<String?>? registrableDomain,
+    Value<String?>? clusterKey,
     Value<String>? sourceCode,
     Value<bool>? enabled,
     Value<DateTime>? createdAt,
@@ -6835,6 +6987,9 @@ class StoredScriptSourcesCompanion extends UpdateCompanion<StoredScriptSource> {
       group: group ?? this.group,
       author: author ?? this.author,
       description: description ?? this.description,
+      primaryHost: primaryHost ?? this.primaryHost,
+      registrableDomain: registrableDomain ?? this.registrableDomain,
+      clusterKey: clusterKey ?? this.clusterKey,
       sourceCode: sourceCode ?? this.sourceCode,
       enabled: enabled ?? this.enabled,
       createdAt: createdAt ?? this.createdAt,
@@ -6860,6 +7015,15 @@ class StoredScriptSourcesCompanion extends UpdateCompanion<StoredScriptSource> {
     }
     if (description.present) {
       map['description'] = Variable<String>(description.value);
+    }
+    if (primaryHost.present) {
+      map['primary_host'] = Variable<String>(primaryHost.value);
+    }
+    if (registrableDomain.present) {
+      map['registrable_domain'] = Variable<String>(registrableDomain.value);
+    }
+    if (clusterKey.present) {
+      map['cluster_key'] = Variable<String>(clusterKey.value);
     }
     if (sourceCode.present) {
       map['source_code'] = Variable<String>(sourceCode.value);
@@ -6887,6 +7051,9 @@ class StoredScriptSourcesCompanion extends UpdateCompanion<StoredScriptSource> {
           ..write('group: $group, ')
           ..write('author: $author, ')
           ..write('description: $description, ')
+          ..write('primaryHost: $primaryHost, ')
+          ..write('registrableDomain: $registrableDomain, ')
+          ..write('clusterKey: $clusterKey, ')
           ..write('sourceCode: $sourceCode, ')
           ..write('enabled: $enabled, ')
           ..write('createdAt: $createdAt, ')
@@ -10013,6 +10180,9 @@ typedef $$StoredScriptSourcesTableCreateCompanionBuilder =
       Value<String?> group,
       Value<String?> author,
       Value<String?> description,
+      Value<String?> primaryHost,
+      Value<String?> registrableDomain,
+      Value<String?> clusterKey,
       required String sourceCode,
       Value<bool> enabled,
       Value<DateTime> createdAt,
@@ -10026,6 +10196,9 @@ typedef $$StoredScriptSourcesTableUpdateCompanionBuilder =
       Value<String?> group,
       Value<String?> author,
       Value<String?> description,
+      Value<String?> primaryHost,
+      Value<String?> registrableDomain,
+      Value<String?> clusterKey,
       Value<String> sourceCode,
       Value<bool> enabled,
       Value<DateTime> createdAt,
@@ -10064,6 +10237,21 @@ class $$StoredScriptSourcesTableFilterComposer
 
   ColumnFilters<String> get description => $composableBuilder(
     column: $table.description,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get primaryHost => $composableBuilder(
+    column: $table.primaryHost,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get registrableDomain => $composableBuilder(
+    column: $table.registrableDomain,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get clusterKey => $composableBuilder(
+    column: $table.clusterKey,
     builder: (column) => ColumnFilters(column),
   );
 
@@ -10122,6 +10310,21 @@ class $$StoredScriptSourcesTableOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
+  ColumnOrderings<String> get primaryHost => $composableBuilder(
+    column: $table.primaryHost,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get registrableDomain => $composableBuilder(
+    column: $table.registrableDomain,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get clusterKey => $composableBuilder(
+    column: $table.clusterKey,
+    builder: (column) => ColumnOrderings(column),
+  );
+
   ColumnOrderings<String> get sourceCode => $composableBuilder(
     column: $table.sourceCode,
     builder: (column) => ColumnOrderings(column),
@@ -10166,6 +10369,21 @@ class $$StoredScriptSourcesTableAnnotationComposer
 
   GeneratedColumn<String> get description => $composableBuilder(
     column: $table.description,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get primaryHost => $composableBuilder(
+    column: $table.primaryHost,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get registrableDomain => $composableBuilder(
+    column: $table.registrableDomain,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get clusterKey => $composableBuilder(
+    column: $table.clusterKey,
     builder: (column) => column,
   );
 
@@ -10235,6 +10453,9 @@ class $$StoredScriptSourcesTableTableManager
                 Value<String?> group = const Value.absent(),
                 Value<String?> author = const Value.absent(),
                 Value<String?> description = const Value.absent(),
+                Value<String?> primaryHost = const Value.absent(),
+                Value<String?> registrableDomain = const Value.absent(),
+                Value<String?> clusterKey = const Value.absent(),
                 Value<String> sourceCode = const Value.absent(),
                 Value<bool> enabled = const Value.absent(),
                 Value<DateTime> createdAt = const Value.absent(),
@@ -10246,6 +10467,9 @@ class $$StoredScriptSourcesTableTableManager
                 group: group,
                 author: author,
                 description: description,
+                primaryHost: primaryHost,
+                registrableDomain: registrableDomain,
+                clusterKey: clusterKey,
                 sourceCode: sourceCode,
                 enabled: enabled,
                 createdAt: createdAt,
@@ -10259,6 +10483,9 @@ class $$StoredScriptSourcesTableTableManager
                 Value<String?> group = const Value.absent(),
                 Value<String?> author = const Value.absent(),
                 Value<String?> description = const Value.absent(),
+                Value<String?> primaryHost = const Value.absent(),
+                Value<String?> registrableDomain = const Value.absent(),
+                Value<String?> clusterKey = const Value.absent(),
                 required String sourceCode,
                 Value<bool> enabled = const Value.absent(),
                 Value<DateTime> createdAt = const Value.absent(),
@@ -10270,6 +10497,9 @@ class $$StoredScriptSourcesTableTableManager
                 group: group,
                 author: author,
                 description: description,
+                primaryHost: primaryHost,
+                registrableDomain: registrableDomain,
+                clusterKey: clusterKey,
                 sourceCode: sourceCode,
                 enabled: enabled,
                 createdAt: createdAt,

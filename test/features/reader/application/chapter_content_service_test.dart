@@ -1,27 +1,37 @@
 import 'package:drift/native.dart';
-import 'package:flutter_appread/core/errors/app_exception.dart';
-import 'package:flutter_appread/core/errors/error_codes.dart';
-import 'package:flutter_appread/core/errors/error_stage.dart';
-import 'package:flutter_appread/data/datasources/local/app_database.dart';
-import 'package:flutter_appread/domain/entities/script_source.dart';
-import 'package:flutter_appread/domain/repositories/script_source_repository.dart';
-import 'package:flutter_appread/features/reader/application/chapter_content_service.dart';
-import 'package:flutter_appread/features/source/application/source_runtime_facade.dart';
-import 'package:flutter_appread/runtime/sources/source_contract.dart';
-import 'package:flutter_appread/runtime/sources/source_manifest.dart';
-import 'package:flutter_appread/runtime/sources/source_registry.dart';
-import 'package:flutter_appread/runtime/sources/source_result_models.dart'
+import 'package:shuxiang_reading_next/core/errors/app_exception.dart';
+import 'package:shuxiang_reading_next/core/errors/error_codes.dart';
+import 'package:shuxiang_reading_next/core/errors/error_stage.dart';
+import 'package:shuxiang_reading_next/data/datasources/local/app_database.dart';
+import 'package:shuxiang_reading_next/domain/entities/script_source.dart';
+import 'package:shuxiang_reading_next/domain/repositories/script_source_repository.dart';
+import 'package:shuxiang_reading_next/features/reader/application/chapter_content_service.dart';
+import 'package:shuxiang_reading_next/features/source/application/source_health_service.dart';
+import 'package:shuxiang_reading_next/features/source/application/source_runtime_facade.dart';
+import 'package:shuxiang_reading_next/runtime/sources/source_contract.dart';
+import 'package:shuxiang_reading_next/runtime/sources/source_manifest.dart';
+import 'package:shuxiang_reading_next/runtime/sources/source_registry.dart';
+import 'package:shuxiang_reading_next/runtime/sources/source_result_models.dart'
     as runtime_models;
 import 'package:flutter_test/flutter_test.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 void main() {
+  TestWidgetsFlutterBinding.ensureInitialized();
+
   group('ChapterContentService', () {
+    setUp(() {
+      SharedPreferences.setMockInitialValues(<String, Object>{});
+    });
+
     test('loads text content from runtime and caches it', () async {
       final database = AppDatabase(executor: NativeDatabase.memory());
       addTearDown(database.close);
+      final healthService = SourceHealthService();
 
       final service = ChapterContentService(
         database: database,
+        sourceHealthService: healthService,
         sourceRuntimeFacade: _FakeRuntimeFacade(
           sources: <RegisteredSource>[
             _buildRegisteredSource(id: 'source_1', name: '脚本源'),
@@ -47,6 +57,8 @@ void main() {
       expect(first.displayChapterTitle, '章节标题');
       expect(first.document.isPureImageDocument, isFalse);
       expect(first.document.paragraphs, <String>['正文内容']);
+      final snapshot = healthService.snapshotFor('source_1');
+      expect(snapshot.totalSuccesses, 1);
 
       final second = await service.load(
         sourceId: 'source_1',
@@ -148,9 +160,11 @@ void main() {
     test('throws unknown source when runtime source is missing', () async {
       final database = AppDatabase(executor: NativeDatabase.memory());
       addTearDown(database.close);
+      final healthService = SourceHealthService();
 
       final service = ChapterContentService(
         database: database,
+        sourceHealthService: healthService,
         sourceRuntimeFacade: _FakeRuntimeFacade(
           sources: const <RegisteredSource>[],
         ),
@@ -164,6 +178,8 @@ void main() {
               .having((error) => error.stage, 'stage', ErrorStage.content),
         ),
       );
+      final snapshot = healthService.snapshotFor('missing');
+      expect(snapshot.totalFailures, 1);
     });
   });
 }

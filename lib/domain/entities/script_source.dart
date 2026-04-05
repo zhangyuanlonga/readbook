@@ -9,6 +9,9 @@ class ScriptSource {
     this.group,
     this.author,
     this.description,
+    this.primaryHost,
+    this.registrableDomain,
+    this.clusterKey,
   });
 
   final String id;
@@ -20,6 +23,9 @@ class ScriptSource {
   final String? group;
   final String? author;
   final String? description;
+  final String? primaryHost;
+  final String? registrableDomain;
+  final String? clusterKey;
 
   ScriptSource copyWith({
     String? id,
@@ -34,6 +40,12 @@ class ScriptSource {
     bool clearAuthor = false,
     String? description,
     bool clearDescription = false,
+    String? primaryHost,
+    bool clearPrimaryHost = false,
+    String? registrableDomain,
+    bool clearRegistrableDomain = false,
+    String? clusterKey,
+    bool clearClusterKey = false,
   }) {
     return ScriptSource(
       id: id ?? this.id,
@@ -45,6 +57,12 @@ class ScriptSource {
       group: clearGroup ? null : (group ?? this.group),
       author: clearAuthor ? null : (author ?? this.author),
       description: clearDescription ? null : (description ?? this.description),
+      primaryHost: clearPrimaryHost ? null : (primaryHost ?? this.primaryHost),
+      registrableDomain:
+          clearRegistrableDomain
+              ? null
+              : (registrableDomain ?? this.registrableDomain),
+      clusterKey: clearClusterKey ? null : (clusterKey ?? this.clusterKey),
     );
   }
 
@@ -59,6 +77,9 @@ class ScriptSource {
       'group': group,
       'author': author,
       'description': description,
+      'primaryHost': primaryHost,
+      'registrableDomain': registrableDomain,
+      'clusterKey': clusterKey,
     };
   }
 
@@ -73,6 +94,9 @@ class ScriptSource {
       group: _optionalString(json['group']),
       author: _optionalString(json['author']),
       description: _optionalString(json['description']),
+      primaryHost: _optionalString(json['primaryHost']),
+      registrableDomain: _optionalString(json['registrableDomain']),
+      clusterKey: _optionalString(json['clusterKey']),
     );
   }
 

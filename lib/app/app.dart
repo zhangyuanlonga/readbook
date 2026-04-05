@@ -38,7 +38,7 @@ class App extends ConsumerWidget {
     final darkScheme = buildAppDarkColorScheme(seedColor);
 
     return MaterialApp.router(
-      title: '书享阅读',
+      title: '书享阅读 Next',
       theme: AppTheme.build(lightScheme),
       darkTheme: AppTheme.build(darkScheme),
       themeMode: themeMode,

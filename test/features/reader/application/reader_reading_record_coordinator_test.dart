@@ -1,5 +1,5 @@
-import 'package:flutter_appread/features/reader/application/reader_reading_record_coordinator.dart';
-import 'package:flutter_appread/features/reader/application/reading_record_metrics.dart';
+import 'package:shuxiang_reading_next/features/reader/application/reader_reading_record_coordinator.dart';
+import 'package:shuxiang_reading_next/features/reader/application/reading_record_metrics.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {

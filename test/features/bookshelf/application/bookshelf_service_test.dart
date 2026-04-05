@@ -1,5 +1,5 @@
-import 'package:flutter_appread/domain/entities/bookshelf_book.dart';
-import 'package:flutter_appread/features/bookshelf/application/bookshelf_service.dart';
+import 'package:shuxiang_reading_next/domain/entities/bookshelf_book.dart';
+import 'package:shuxiang_reading_next/features/bookshelf/application/bookshelf_service.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 

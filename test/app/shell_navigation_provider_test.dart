@@ -1,4 +1,4 @@
-import 'package:flutter_appread/app/shell_navigation_provider.dart';
+import 'package:shuxiang_reading_next/app/shell_navigation_provider.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';

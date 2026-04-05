@@ -3,6 +3,8 @@ import '../../../domain/entities/source_health.dart';
 class SourceHealthActionPolicyService {
   const SourceHealthActionPolicyService();
 
+  static const Duration _recentFailureWindow = Duration(hours: 12);
+
   bool shouldSuggestDisable(SourceHealthSnapshot snapshot) {
     return snapshot.level == SourceHealthLevel.unavailable ||
         snapshot.consecutiveFailures >= 2 ||
@@ -10,11 +12,21 @@ class SourceHealthActionPolicyService {
   }
 
   bool shouldAutoDisable(SourceHealthSnapshot snapshot) {
-    return snapshot.consecutiveFailures >= 2 &&
-        (snapshot.level == SourceHealthLevel.unavailable ||
-            snapshot.browserRiskCount >= 2 ||
-            snapshot.timeoutCount >= 2 ||
-            snapshot.totalFailures >= 4);
+    final lastFailureAt = snapshot.lastFailureAt;
+    if (!snapshot.enabled || lastFailureAt == null) {
+      return false;
+    }
+    if (DateTime.now().difference(lastFailureAt) > _recentFailureWindow) {
+      return false;
+    }
+    if (snapshot.consecutiveFailures < 2) {
+      return false;
+    }
+    return (snapshot.level == SourceHealthLevel.unavailable &&
+            snapshot.totalFailures >= 3) ||
+        (snapshot.browserRiskCount >= 2 && snapshot.totalFailures >= 3) ||
+        (snapshot.timeoutCount >= 2 && snapshot.totalFailures >= 3) ||
+        snapshot.consecutiveFailures >= 3;
   }
 
   String buildAutoDisableReason(SourceHealthSnapshot snapshot) {

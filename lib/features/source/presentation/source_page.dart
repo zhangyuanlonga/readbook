@@ -5,6 +5,7 @@ import 'package:go_router/go_router.dart';
 
 import '../../../app/layout/app_layout.dart';
 import '../../../app/layout/app_spacing.dart';
+import '../../../app/widgets/source_health_badge.dart';
 import '../../../domain/entities/script_source.dart';
 import '../../../domain/entities/source_health.dart';
 import '../application/source_health_action_policy_service.dart';
@@ -15,6 +16,8 @@ import '../application/source_runtime_facade.dart';
 import 'script_source_debug_page.dart';
 
 enum _ScriptSourceSortOption { updatedDesc, nameAsc, nameDesc }
+
+enum _SourceListDisplayMode { flat, websiteClustered }
 
 enum _SourcePageMenuAction {
   create,
@@ -60,6 +63,18 @@ class _SourceSuggestionAction {
   final VoidCallback? onTap;
 }
 
+class _SourceWebsiteCluster {
+  const _SourceWebsiteCluster({
+    required this.key,
+    required this.title,
+    required this.sources,
+  });
+
+  final String key;
+  final String title;
+  final List<ScriptSource> sources;
+}
+
 class SourcePage extends StatefulWidget {
   const SourcePage({
     super.key,
@@ -95,7 +110,9 @@ class _SourcePageState extends State<SourcePage> {
   String _searchQuery = '';
   String? _selectedGroupKey;
   _ScriptSourceSortOption _sortOption = _ScriptSourceSortOption.updatedDesc;
+  _SourceListDisplayMode _displayMode = _SourceListDisplayMode.flat;
   final Set<String> _selectedBatchSourceIds = <String>{};
+  final Set<String> _expandedClusterKeys = <String>{};
   bool _autoDisableHighRiskSourcesEnabled = false;
 
   final Set<String> _changingEnabledScriptSourceIds = <String>{};
@@ -327,18 +344,34 @@ class _SourcePageState extends State<SourcePage> {
               visibleCount: visibleSources.length,
             ),
             const SizedBox(height: 12),
+            _buildDisplayModeSelector(context),
+            const SizedBox(height: 12),
             if (!hasAnySource)
               _buildEmptyStateCard(context)
             else if (visibleSources.isEmpty && hasFilter)
               _buildNoResultCard(context)
             else
-              ...visibleSources.map(
-                (source) => _buildSourceTile(context, source),
-              ),
+              ..._buildSourceListContent(context, visibleSources),
           ],
         ),
       ),
     );
+  }
+
+  List<Widget> _buildSourceListContent(
+    BuildContext context,
+    List<ScriptSource> visibleSources,
+  ) {
+    if (_displayMode == _SourceListDisplayMode.flat) {
+      return visibleSources
+          .map((source) => _buildSourceTile(context, source))
+          .toList(growable: false);
+    }
+
+    final clusters = _buildSourceClusters(visibleSources);
+    return clusters
+        .map((cluster) => _buildClusterCard(context, cluster))
+        .toList(growable: false);
   }
 
   Widget _buildSearchField(BuildContext context) {
@@ -432,6 +465,12 @@ class _SourcePageState extends State<SourcePage> {
         _buildSummaryChip(context, '已选：${_selectedBatchSourceIds.length}'),
       );
     }
+    chips.add(
+      _buildSummaryChip(
+        context,
+        _displayMode == _SourceListDisplayMode.flat ? '普通列表' : '按网站聚合',
+      ),
+    );
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -480,6 +519,33 @@ class _SourcePageState extends State<SourcePage> {
           fontWeight: FontWeight.w600,
         ),
       ),
+    );
+  }
+
+  Widget _buildDisplayModeSelector(BuildContext context) {
+    return SegmentedButton<_SourceListDisplayMode>(
+      segments: const <ButtonSegment<_SourceListDisplayMode>>[
+        ButtonSegment<_SourceListDisplayMode>(
+          value: _SourceListDisplayMode.flat,
+          icon: Icon(Icons.view_stream_rounded),
+          label: Text('普通列表'),
+        ),
+        ButtonSegment<_SourceListDisplayMode>(
+          value: _SourceListDisplayMode.websiteClustered,
+          icon: Icon(Icons.account_tree_rounded),
+          label: Text('按网站聚合'),
+        ),
+      ],
+      selected: <_SourceListDisplayMode>{_displayMode},
+      onSelectionChanged: (selection) {
+        final next = selection.firstOrNull;
+        if (next == null || next == _displayMode || !mounted) {
+          return;
+        }
+        setState(() {
+          _displayMode = next;
+        });
+      },
     );
   }
 
@@ -532,15 +598,16 @@ class _SourcePageState extends State<SourcePage> {
     required ScriptSource source,
     required SourceHealthSnapshot snapshot,
   }) {
-    return _suggestedActionsForSnapshot(source, snapshot)
-        .map(
-          (suggestion) => _buildSuggestionChip(
-            context,
-            suggestion.label,
-            onTap: suggestion.onTap,
-          ),
-        )
-        .toList(growable: false);
+    return List<Widget>.of(
+      _suggestedActionsForSnapshot(source, snapshot).map(
+        (suggestion) => _buildSuggestionChip(
+          context,
+          suggestion.label,
+          onTap: suggestion.onTap,
+        ),
+      ),
+      growable: false,
+    );
   }
 
   List<_SourceSuggestionAction> _suggestedActionsForSnapshot(
@@ -577,44 +644,7 @@ class _SourcePageState extends State<SourcePage> {
     BuildContext context,
     SourceHealthSnapshot snapshot,
   ) {
-    final colorScheme = Theme.of(context).colorScheme;
-    final (label, background, foreground) = switch (snapshot.level) {
-      SourceHealthLevel.healthy => (
-        '正常',
-        colorScheme.primaryContainer,
-        colorScheme.onPrimaryContainer,
-      ),
-      SourceHealthLevel.warning => (
-        '注意',
-        colorScheme.tertiaryContainer,
-        colorScheme.onTertiaryContainer,
-      ),
-      SourceHealthLevel.risky => (
-        '高风险',
-        colorScheme.errorContainer,
-        colorScheme.onErrorContainer,
-      ),
-      SourceHealthLevel.unavailable => (
-        '不可用',
-        colorScheme.error,
-        colorScheme.onError,
-      ),
-    };
-
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-      decoration: BoxDecoration(
-        color: background,
-        borderRadius: BorderRadius.circular(999),
-      ),
-      child: Text(
-        label,
-        style: Theme.of(context).textTheme.labelSmall?.copyWith(
-          color: foreground,
-          fontWeight: FontWeight.w700,
-        ),
-      ),
-    );
+    return SourceHealthBadge(level: snapshot.level);
   }
 
   Widget _buildEmptyStateCard(BuildContext context) {
@@ -671,7 +701,149 @@ class _SourcePageState extends State<SourcePage> {
     );
   }
 
-  Widget _buildSourceTile(BuildContext context, ScriptSource source) {
+  List<_SourceWebsiteCluster> _buildSourceClusters(List<ScriptSource> sources) {
+    final clustersByKey = <String, List<ScriptSource>>{};
+    for (final source in sources) {
+      final key = _clusterKeyOf(source);
+      clustersByKey.putIfAbsent(key, () => <ScriptSource>[]).add(source);
+    }
+
+    final clusters = clustersByKey.entries
+        .map(
+          (entry) => _SourceWebsiteCluster(
+            key: entry.key,
+            title: _clusterTitleOf(entry.value.first),
+            sources: entry.value..sort(_compareScriptSource),
+          ),
+        )
+        .toList(growable: false);
+    clusters.sort((a, b) {
+      final sizeCompare = b.sources.length.compareTo(a.sources.length);
+      if (sizeCompare != 0) {
+        return sizeCompare;
+      }
+      return a.title.toLowerCase().compareTo(b.title.toLowerCase());
+    });
+    return clusters;
+  }
+
+  Widget _buildClusterCard(
+    BuildContext context,
+    _SourceWebsiteCluster cluster,
+  ) {
+    final recommended = _recommendedSourceOf(cluster.sources);
+    final healthSummary = _clusterHealthSummary(cluster.sources);
+    final isExpanded = _expandedClusterKeys.contains(cluster.key);
+    final secondaryText = <String>[
+      '${cluster.sources.length} 个源',
+      if (healthSummary.isNotEmpty) healthSummary,
+    ].join(' · ');
+
+    return Card(
+      margin: const EdgeInsets.only(bottom: 10),
+      shape: _buildOutlinedCardShape(context),
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        cluster.title,
+                        style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                          fontWeight: FontWeight.w800,
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        secondaryText,
+                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                          color: Theme.of(context).colorScheme.onSurfaceVariant,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                IconButton(
+                  tooltip: isExpanded ? '收起' : '展开',
+                  onPressed: () => _toggleClusterExpanded(cluster.key),
+                  icon: Icon(
+                    isExpanded
+                        ? Icons.keyboard_arrow_up_rounded
+                        : Icons.keyboard_arrow_down_rounded,
+                  ),
+                ),
+              ],
+            ),
+            if (recommended != null) ...[
+              const SizedBox(height: 8),
+              Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: [
+                  _buildSummaryChip(context, '推荐保留：${recommended.name}'),
+                  if ((recommended.registrableDomain ?? '').isNotEmpty)
+                    _buildSummaryChip(
+                      context,
+                      '主域：${recommended.registrableDomain!}',
+                    ),
+                ],
+              ),
+            ],
+            const SizedBox(height: 10),
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: [
+                FilledButton.tonal(
+                  onPressed:
+                      recommended == null
+                          ? null
+                          : () => unawaited(
+                            _disableClusterOthers(
+                              cluster.sources,
+                              keepSourceId: recommended.id,
+                            ),
+                          ),
+                  child: const Text('停用其余源'),
+                ),
+                OutlinedButton(
+                  onPressed: () => _toggleClusterExpanded(cluster.key),
+                  child: Text(isExpanded ? '收起组内源' : '查看组内源'),
+                ),
+              ],
+            ),
+            if (isExpanded) ...[
+              const SizedBox(height: 12),
+              const Divider(height: 1),
+              const SizedBox(height: 8),
+              ...cluster.sources.map(
+                (source) => _buildSourceTile(
+                  context,
+                  source,
+                  compact: true,
+                  highlightRecommended: recommended?.id == source.id,
+                ),
+              ),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildSourceTile(
+    BuildContext context,
+    ScriptSource source, {
+    bool compact = false,
+    bool highlightRecommended = false,
+  }) {
     final isChangingEnabled = _changingEnabledScriptSourceIds.contains(
       source.id,
     );
@@ -683,6 +855,8 @@ class _SourcePageState extends State<SourcePage> {
       enabled: source.enabled,
     );
     final subtitleParts = <String>[
+      if ((source.registrableDomain ?? '').isNotEmpty)
+        source.registrableDomain!.trim(),
       if (source.group?.trim().isNotEmpty == true)
         source.group!.trim()
       else
@@ -691,10 +865,16 @@ class _SourcePageState extends State<SourcePage> {
     ];
 
     return Card(
-      margin: const EdgeInsets.only(bottom: 8),
+      margin: EdgeInsets.only(bottom: compact ? 6 : 8),
       shape: _buildOutlinedCardShape(context),
+      color:
+          highlightRecommended
+              ? Theme.of(
+                context,
+              ).colorScheme.secondaryContainer.withValues(alpha: 0.28)
+              : null,
       child: Padding(
-        padding: const EdgeInsets.fromLTRB(14, 8, 10, 8),
+        padding: EdgeInsets.fromLTRB(14, compact ? 6 : 8, 10, compact ? 6 : 8),
         child: Row(
           children: [
             Expanded(
@@ -724,9 +904,24 @@ class _SourcePageState extends State<SourcePage> {
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                         style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                          fontWeight: FontWeight.w700,
+                          fontWeight:
+                              highlightRecommended
+                                  ? FontWeight.w800
+                                  : FontWeight.w700,
                         ),
                       ),
+                      if (highlightRecommended) ...[
+                        const SizedBox(height: 4),
+                        Text(
+                          '推荐保留源',
+                          style: Theme.of(
+                            context,
+                          ).textTheme.labelSmall?.copyWith(
+                            color: Theme.of(context).colorScheme.secondary,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                      ],
                       const SizedBox(height: 4),
                       Text(
                         subtitleParts.join(' · '),
@@ -754,6 +949,14 @@ class _SourcePageState extends State<SourcePage> {
                             _buildInfoChip(
                               context,
                               '失败: ${healthSnapshot.lastFailureReason!.trim()}',
+                            ),
+                          if (healthSnapshot.lastAutoDisableReason
+                                  ?.trim()
+                                  .isNotEmpty ==
+                              true)
+                            _buildInfoChip(
+                              context,
+                              '自动停用: ${healthSnapshot.lastAutoDisableReason!.trim()}',
                             ),
                           ..._buildSuggestedActionChips(
                             context,
@@ -973,6 +1176,124 @@ class _SourcePageState extends State<SourcePage> {
     return groupKey;
   }
 
+  String _clusterKeyOf(ScriptSource source) {
+    final clusterKey = source.clusterKey?.trim();
+    if (clusterKey != null && clusterKey.isNotEmpty) {
+      return clusterKey.toLowerCase();
+    }
+    return '__unknown__:${source.id}';
+  }
+
+  String _clusterTitleOf(ScriptSource source) {
+    final domain = source.registrableDomain?.trim();
+    if (domain != null && domain.isNotEmpty) {
+      return domain;
+    }
+    final host = source.primaryHost?.trim();
+    if (host != null && host.isNotEmpty) {
+      return host;
+    }
+    return '未识别站点';
+  }
+
+  int _compareScriptSource(ScriptSource a, ScriptSource b) {
+    final healthCompare = _healthRankOf(a).compareTo(_healthRankOf(b));
+    if (healthCompare != 0) {
+      return healthCompare;
+    }
+    final enabledCompare = (b.enabled ? 1 : 0).compareTo(a.enabled ? 1 : 0);
+    if (enabledCompare != 0) {
+      return enabledCompare;
+    }
+    final updatedCompare = b.updatedAt.compareTo(a.updatedAt);
+    if (updatedCompare != 0) {
+      return updatedCompare;
+    }
+    return a.name.toLowerCase().compareTo(b.name.toLowerCase());
+  }
+
+  int _healthRankOf(ScriptSource source) {
+    final snapshot = _sourceHealthService.snapshotFor(
+      source.id,
+      enabled: source.enabled,
+    );
+    return switch (snapshot.level) {
+      SourceHealthLevel.healthy => 0,
+      SourceHealthLevel.warning => 1,
+      SourceHealthLevel.risky => 2,
+      SourceHealthLevel.unavailable => 3,
+    };
+  }
+
+  String _clusterHealthSummary(List<ScriptSource> sources) {
+    var healthy = 0;
+    var warning = 0;
+    var risky = 0;
+    var unavailable = 0;
+    for (final source in sources) {
+      final level =
+          _sourceHealthService
+              .snapshotFor(source.id, enabled: source.enabled)
+              .level;
+      switch (level) {
+        case SourceHealthLevel.healthy:
+          healthy += 1;
+          break;
+        case SourceHealthLevel.warning:
+          warning += 1;
+          break;
+        case SourceHealthLevel.risky:
+          risky += 1;
+          break;
+        case SourceHealthLevel.unavailable:
+          unavailable += 1;
+          break;
+      }
+    }
+    final parts = <String>[
+      if (healthy > 0) '$healthy 正常',
+      if (warning > 0) '$warning 注意',
+      if (risky > 0) '$risky 高风险',
+      if (unavailable > 0) '$unavailable 不可用',
+    ];
+    return parts.join(' / ');
+  }
+
+  ScriptSource? _recommendedSourceOf(List<ScriptSource> sources) {
+    if (sources.isEmpty) {
+      return null;
+    }
+    final sorted = List<ScriptSource>.of(sources)..sort(_compareScriptSource);
+    return sorted.first;
+  }
+
+  void _toggleClusterExpanded(String clusterKey) {
+    setState(() {
+      if (!_expandedClusterKeys.add(clusterKey)) {
+        _expandedClusterKeys.remove(clusterKey);
+      }
+    });
+  }
+
+  Future<void> _disableClusterOthers(
+    List<ScriptSource> sources, {
+    required String keepSourceId,
+  }) async {
+    final targets = sources
+        .where((source) => source.id != keepSourceId && source.enabled)
+        .toList(growable: false);
+    for (final source in targets) {
+      await _sourceRuntimeFacade.setScriptSourceEnabled(
+        id: source.id,
+        enabled: false,
+      );
+    }
+    if (!mounted) {
+      return;
+    }
+    _showMessage('已停用 ${targets.length} 个同站重复源。');
+  }
+
   String _sortLabel(_ScriptSourceSortOption option) {
     return switch (option) {
       _ScriptSourceSortOption.updatedDesc => '最近更新',
@@ -1013,6 +1334,32 @@ class _SourcePageState extends State<SourcePage> {
 
   Future<void> _toggleAutoDisableHighRiskSources() async {
     final next = !_autoDisableHighRiskSourcesEnabled;
+    if (next) {
+      final confirmed = await showDialog<bool>(
+        context: context,
+        builder: (context) {
+          return AlertDialog(
+            title: const Text('开启自动停用'),
+            content: const Text(
+              '开启后，系统只会在近期连续失败且高风险特征明显时自动停用书源，不会自动删除书源。你仍然可以在书源页重新启用。',
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.of(context).pop(false),
+                child: const Text('取消'),
+              ),
+              FilledButton(
+                onPressed: () => Navigator.of(context).pop(true),
+                child: const Text('开启'),
+              ),
+            ],
+          );
+        },
+      );
+      if (confirmed != true) {
+        return;
+      }
+    }
     await _settingsService.saveAutoDisableHighRiskSourcesEnabled(next);
     if (!mounted) {
       return;

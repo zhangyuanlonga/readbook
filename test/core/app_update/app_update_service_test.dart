@@ -1,6 +1,6 @@
-import 'package:flutter_appread/core/app_update/app_update_service.dart';
-import 'package:flutter_appread/core/device/device_identity_service.dart';
-import 'package:flutter_appread/core/network/api_client.dart';
+import 'package:shuxiang_reading_next/core/app_update/app_update_service.dart';
+import 'package:shuxiang_reading_next/core/device/device_identity_service.dart';
+import 'package:shuxiang_reading_next/core/network/api_client.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 

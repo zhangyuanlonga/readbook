@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../app/layout/app_spacing.dart';
+import 'source_health_badge.dart';
 import '../../features/reader/application/switch_source_shared.dart';
 
 Future<SwitchSourceCandidate?> showSwitchSourceCandidateSheet({
@@ -125,6 +126,7 @@ Future<SwitchSourceCandidate?> showSwitchSourceCandidateSheet({
                                 (author == null || author.isEmpty)
                                     ? candidate.sourceName
                                     : '${candidate.sourceName} · $author';
+                            final healthLevel = candidate.healthLevel;
 
                             return ListTile(
                               contentPadding: EdgeInsets.zero,
@@ -143,6 +145,13 @@ Future<SwitchSourceCandidate?> showSwitchSourceCandidateSheet({
                                     maxLines: 1,
                                     overflow: TextOverflow.ellipsis,
                                   ),
+                                  if (healthLevel != null) ...[
+                                    const SizedBox(height: 4),
+                                    SourceHealthBadge(
+                                      level: healthLevel,
+                                      compact: true,
+                                    ),
+                                  ],
                                   const SizedBox(height: 2),
                                   Text(
                                     '最新：${candidate.latestChapterLabel}',

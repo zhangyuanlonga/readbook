@@ -16,6 +16,8 @@ class SourceHealthSnapshot {
     this.lastFailureAt,
     this.lastFailureReason,
     this.lastFailureKind,
+    this.lastAutoDisableAt,
+    this.lastAutoDisableReason,
     this.userDisabled = false,
     this.userScoreAdjustment = 0,
   });
@@ -36,6 +38,8 @@ class SourceHealthSnapshot {
   final DateTime? lastFailureAt;
   final String? lastFailureReason;
   final SourceHealthFailureKind? lastFailureKind;
+  final DateTime? lastAutoDisableAt;
+  final String? lastAutoDisableReason;
   final bool userDisabled;
   final int userScoreAdjustment;
 
@@ -64,6 +68,8 @@ class SourceHealthSnapshot {
     Object? lastFailureAt = _sentinel,
     Object? lastFailureReason = _sentinel,
     Object? lastFailureKind = _sentinel,
+    Object? lastAutoDisableAt = _sentinel,
+    Object? lastAutoDisableReason = _sentinel,
     bool? userDisabled,
     int? userScoreAdjustment,
   }) {
@@ -105,6 +111,14 @@ class SourceHealthSnapshot {
           identical(lastFailureKind, _sentinel)
               ? this.lastFailureKind
               : lastFailureKind as SourceHealthFailureKind?,
+      lastAutoDisableAt:
+          identical(lastAutoDisableAt, _sentinel)
+              ? this.lastAutoDisableAt
+              : lastAutoDisableAt as DateTime?,
+      lastAutoDisableReason:
+          identical(lastAutoDisableReason, _sentinel)
+              ? this.lastAutoDisableReason
+              : lastAutoDisableReason as String?,
       userDisabled: userDisabled ?? this.userDisabled,
       userScoreAdjustment: userScoreAdjustment ?? this.userScoreAdjustment,
     );
@@ -128,6 +142,8 @@ class SourceHealthSnapshot {
       'lastFailureAt': lastFailureAt?.toIso8601String(),
       'lastFailureReason': lastFailureReason,
       'lastFailureKind': lastFailureKind?.name,
+      'lastAutoDisableAt': lastAutoDisableAt?.toIso8601String(),
+      'lastAutoDisableReason': lastAutoDisableReason,
       'userDisabled': userDisabled,
       'userScoreAdjustment': userScoreAdjustment,
     };
@@ -153,6 +169,8 @@ class SourceHealthSnapshot {
       lastFailureAt: _parseDateTime(json['lastFailureAt']),
       lastFailureReason: _asNullableString(json['lastFailureReason']),
       lastFailureKind: _parseFailureKind(json['lastFailureKind']),
+      lastAutoDisableAt: _parseDateTime(json['lastAutoDisableAt']),
+      lastAutoDisableReason: _asNullableString(json['lastAutoDisableReason']),
       userDisabled: json['userDisabled'] == true,
       userScoreAdjustment: _asInt(json['userScoreAdjustment']),
     );
@@ -211,12 +229,7 @@ class SourceHealthSnapshot {
   }
 }
 
-enum SourceHealthLevel {
-  healthy,
-  warning,
-  risky,
-  unavailable,
-}
+enum SourceHealthLevel { healthy, warning, risky, unavailable }
 
 enum SourceHealthFailureKind {
   network,

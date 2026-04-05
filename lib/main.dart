@@ -1,4 +1,4 @@
-import 'package:flutter_appread/app/bootstrap.dart';
+import 'package:shuxiang_reading_next/app/bootstrap.dart';
 
 Future<void> main() async {
   await bootstrap();
