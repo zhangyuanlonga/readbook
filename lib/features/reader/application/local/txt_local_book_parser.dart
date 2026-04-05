@@ -59,7 +59,7 @@ class TxtLocalBookParser implements LocalBookParser {
       );
     }
 
-    final decoded = _decodeBookText(book, bytes);
+    final decoded = await _decodeBookText(book, bytes);
     final text = decoded.text;
     if (text.trim().isEmpty) {
       throw AppException(
@@ -722,7 +722,10 @@ class TxtLocalBookParser implements LocalBookParser {
         .toList(growable: false);
   }
 
-  _DecodedBookText _decodeBookText(LocalBook book, List<int> bytes) {
+  Future<_DecodedBookText> _decodeBookText(
+    LocalBook book,
+    List<int> bytes,
+  ) async {
     final bomInfo = _detectBom(bytes);
     final bomLength = bomInfo.length;
     final contentBytes =
@@ -779,13 +782,40 @@ class TxtLocalBookParser implements LocalBookParser {
     }
 
     if (best != null) {
+      final mobileDecoded = await const LocalTextEncodingDetector()
+          .decodeBestEffortAsync(
+            bytes,
+            preferredCharset: book.charset,
+            hintedCharset: hintedCharset,
+            candidateCharsets: candidateCharsets,
+          );
+      final mobileScore = _scoreDecodedText(
+        mobileDecoded.text,
+        enabledRules: _builtInChapterPatterns,
+        charsetName: mobileDecoded.charsetName,
+        hintedCharset: hintedCharset,
+      );
+      if (mobileDecoded.text.trim().isNotEmpty && mobileScore >= bestScore) {
+        return _DecodedBookText(
+          text: mobileDecoded.text,
+          charsetName: mobileDecoded.charsetName,
+          bomLength: mobileDecoded.bomLength,
+        );
+      }
       return best;
     }
 
+    final decoded = await const LocalTextEncodingDetector()
+        .decodeBestEffortAsync(
+          bytes,
+          preferredCharset: book.charset,
+          hintedCharset: hintedCharset,
+          candidateCharsets: candidateCharsets,
+        );
     return _DecodedBookText(
-      text: utf8.decode(contentBytes, allowMalformed: true),
-      charsetName: 'utf-8',
-      bomLength: bomLength,
+      text: decoded.text,
+      charsetName: decoded.charsetName,
+      bomLength: decoded.bomLength,
     );
   }
 

@@ -72,6 +72,17 @@ class BookDetailPage extends StatefulWidget {
 }
 
 class _BookDetailPageState extends State<BookDetailPage> {
+  static const List<_LocalCharsetOption> _kLocalCharsetOptions =
+      <_LocalCharsetOption>[
+        _LocalCharsetOption(label: '自动', charset: null),
+        _LocalCharsetOption(label: 'UTF-8', charset: 'utf-8'),
+        _LocalCharsetOption(label: 'UTF-16LE', charset: 'utf-16le'),
+        _LocalCharsetOption(label: 'UTF-16BE', charset: 'utf-16be'),
+        _LocalCharsetOption(label: 'GBK', charset: 'gbk'),
+        _LocalCharsetOption(label: 'GB18030', charset: 'gb18030'),
+        _LocalCharsetOption(label: 'Big5', charset: 'big5'),
+      ];
+
   late final SourceContentProvider _sourceContentProvider;
   late final ContentProviderRegistry _contentProviderRegistry;
   late final BookshelfService _bookshelfService;
@@ -88,6 +99,7 @@ class _BookDetailPageState extends State<BookDetailPage> {
   bool _isInBookshelf = false;
   bool _showLocalAdvancedOptions = false;
   int _bookshelfStateSyncToken = 0;
+  int _detailLoadRequestToken = 0;
   SearchCancellationToken? _activeSwitchSourceCancellationToken;
   String? _errorText;
   String? _tocWarningText;
@@ -149,6 +161,7 @@ class _BookDetailPageState extends State<BookDetailPage> {
 
   @override
   void dispose() {
+    _detailLoadRequestToken += 1;
     _cancelActiveSwitchSourceSearch();
     _localIndexEventSubscription?.cancel();
     super.dispose();
@@ -1341,6 +1354,7 @@ class _BookDetailPageState extends State<BookDetailPage> {
     if (!mounted || _isMissingParams) {
       return false;
     }
+    final requestToken = ++_detailLoadRequestToken;
 
     final shouldShowLoading = !backgroundRefresh || _result == null;
     setState(() {
@@ -1369,7 +1383,7 @@ class _BookDetailPageState extends State<BookDetailPage> {
         forceRefresh: forceRefresh,
       );
 
-      if (!mounted) {
+      if (!_isActiveDetailLoadRequest(requestToken)) {
         return false;
       }
 
@@ -1382,11 +1396,14 @@ class _BookDetailPageState extends State<BookDetailPage> {
         _displayTitle = result.detail.title.trim();
       });
 
-      await _syncLocalBookMeta();
+      await _syncLocalBookMeta(loadRequestToken: requestToken);
+      if (!_isActiveDetailLoadRequest(requestToken)) {
+        return false;
+      }
       _scheduleBookshelfStateRefresh(result);
       return true;
     } on AppException catch (error) {
-      if (!mounted) {
+      if (!_isActiveDetailLoadRequest(requestToken)) {
         return false;
       }
       if (_result != null) {
@@ -1402,7 +1419,7 @@ class _BookDetailPageState extends State<BookDetailPage> {
       });
       return false;
     } catch (_) {
-      if (!mounted) {
+      if (!_isActiveDetailLoadRequest(requestToken)) {
         return false;
       }
       if (_result != null) {
@@ -1418,7 +1435,7 @@ class _BookDetailPageState extends State<BookDetailPage> {
       });
       return false;
     } finally {
-      if (mounted && shouldShowLoading) {
+      if (_isActiveDetailLoadRequest(requestToken) && shouldShowLoading) {
         setState(() {
           _isLoading = false;
         });
@@ -1426,9 +1443,15 @@ class _BookDetailPageState extends State<BookDetailPage> {
     }
   }
 
-  Future<void> _syncLocalBookMeta() async {
+  Future<void> _syncLocalBookMeta({int? loadRequestToken}) async {
+    if (loadRequestToken != null &&
+        !_isActiveDetailLoadRequest(loadRequestToken)) {
+      return;
+    }
     if (!_isLocalContent) {
-      if (!mounted) {
+      if (!mounted ||
+          (loadRequestToken != null &&
+              !_isActiveDetailLoadRequest(loadRequestToken))) {
         _localBookMeta = null;
         return;
       }
@@ -1441,7 +1464,9 @@ class _BookDetailPageState extends State<BookDetailPage> {
     final localBook = await AppDatabase.instance.getLocalBookById(
       _activeBookId,
     );
-    if (!mounted) {
+    if (!mounted ||
+        (loadRequestToken != null &&
+            !_isActiveDetailLoadRequest(loadRequestToken))) {
       _localBookMeta = localBook;
       return;
     }
@@ -1451,6 +1476,10 @@ class _BookDetailPageState extends State<BookDetailPage> {
         _showLocalAdvancedOptions = false;
       }
     });
+  }
+
+  bool _isActiveDetailLoadRequest(int requestToken) {
+    return mounted && requestToken == _detailLoadRequestToken;
   }
 
   Future<void> _handleLocalIndexEvent(LocalBookIndexEvent event) async {
@@ -1699,6 +1728,14 @@ class _BookDetailPageState extends State<BookDetailPage> {
                       icon: const Icon(Icons.refresh, size: 18),
                       label: const Text('重新索引'),
                     ),
+                    OutlinedButton.icon(
+                      onPressed:
+                          _isLoading
+                              ? null
+                              : () => _showLocalCharsetSheet(localBook),
+                      icon: const Icon(Icons.translate_rounded, size: 18),
+                      label: const Text('修正编码'),
+                    ),
                     TextButton.icon(
                       onPressed:
                           () => _copyLocalDiagnostics(
@@ -1874,6 +1911,137 @@ class _BookDetailPageState extends State<BookDetailPage> {
       return;
     }
     _showMessage('已复制本地图书诊断信息。');
+  }
+
+  Future<void> _showLocalCharsetSheet(LocalBook book) async {
+    if (!_isLocalTxtContent || _isLoading || !mounted) {
+      return;
+    }
+
+    final selected = await showModalBottomSheet<_LocalCharsetOption>(
+      context: context,
+      useSafeArea: true,
+      showDragHandle: true,
+      builder: (context) {
+        return SafeArea(
+          child: ListView(
+            shrinkWrap: true,
+            children: [
+              for (final option in _kLocalCharsetOptions)
+                ListTile(
+                  leading: Icon(
+                    option.charset == null
+                        ? Icons.auto_fix_high_rounded
+                        : Icons.text_fields_rounded,
+                  ),
+                  title: Text(option.label),
+                  subtitle: Text(
+                    option.charset == null ? '恢复自动识别' : option.charset!,
+                  ),
+                  onTap: () => Navigator.of(context).pop(option),
+                ),
+            ],
+          ),
+        );
+      },
+    );
+    if (!mounted || selected == null) {
+      return;
+    }
+    await _applyLocalCharset(book, preferredCharset: selected.charset);
+  }
+
+  Future<void> _applyLocalCharset(
+    LocalBook book, {
+    required String? preferredCharset,
+  }) async {
+    final sourcePath = book.sourcePath?.trim() ?? '';
+    if (sourcePath.isEmpty) {
+      _showMessage('当前没有可用原文件路径，无法修正编码。');
+      return;
+    }
+    final sourceFile = File(sourcePath);
+    if (!await sourceFile.exists()) {
+      _showMessage('原文件不存在，无法修正编码。');
+      return;
+    }
+
+    final normalizedPreferredCharset = preferredCharset?.trim().toLowerCase();
+
+    setState(() {
+      _isLoading = true;
+    });
+
+    try {
+      final targetPath = await _localBookStorageService.resolveStoragePath(
+        book.storagePath,
+      );
+      final storageResult = await _localBookStorageService.copyIntoStorage(
+        sourceFile: sourceFile,
+        targetFile: File(targetPath),
+        format: book.format,
+        sourcePath: sourcePath,
+        bookId: book.id,
+        preferredCharset: normalizedPreferredCharset,
+      );
+      final sourceStat = await sourceFile.stat();
+      final now = DateTime.now();
+      final updatedBook = book.copyWith(
+        charset: storageResult.normalizedCharset,
+        clearCharset: storageResult.normalizedCharset == null,
+        fileSize: storageResult.storageStat.size,
+        sourceFileSize: sourceStat.size,
+        sourceFileLastModifiedMs: sourceStat.modified.millisecondsSinceEpoch,
+        storageFileLastModifiedMs:
+            storageResult.storageStat.modified.millisecondsSinceEpoch,
+        indexStatus: LocalBookIndexStatus.pending,
+        chapterCount: 0,
+        updatedAt: now,
+        clearLastError: true,
+      );
+
+      await AppDatabase.instance.upsertLocalBook(updatedBook);
+      await AppDatabase.instance.replaceLocalChapters(
+        bookId: updatedBook.id,
+        chapters: const [],
+      );
+      await AppDatabase.instance.updateLocalBookIndexState(
+        bookId: updatedBook.id,
+        status: LocalBookIndexStatus.pending,
+        chapterCount: 0,
+        clearLastError: true,
+      );
+
+      await LocalBookIndexService(
+        storageService: _localBookStorageService,
+      ).ensureIndexed(bookId: updatedBook.id, force: true);
+
+      if (!mounted) {
+        return;
+      }
+      final feedback =
+          normalizedPreferredCharset == null
+              ? '已恢复自动识别并重新索引。'
+              : '已按 ${normalizedPreferredCharset.toUpperCase()} 重建并重新索引。';
+      _showMessage(feedback);
+      await _load(forceRefresh: true);
+    } on AppException catch (error) {
+      if (!mounted) {
+        return;
+      }
+      _showMessage(_toUserReadableError(error));
+    } catch (error) {
+      if (!mounted) {
+        return;
+      }
+      _showMessage('修正编码失败：$error');
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+        });
+      }
+    }
   }
 
   Future<void> _copyLocalDiagnosticsFromError() async {
@@ -2156,6 +2324,13 @@ class _LocalBookDiagnosticsSnapshot {
   final bool sourceFileChanged;
   final bool globalSplitLongChapterEnabled;
   final bool splitSettingNeedsReindex;
+}
+
+class _LocalCharsetOption {
+  const _LocalCharsetOption({required this.label, required this.charset});
+
+  final String label;
+  final String? charset;
 }
 
 enum _DetailSwitchSourceApplyResult {

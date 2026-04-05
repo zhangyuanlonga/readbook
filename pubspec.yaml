@@ -49,6 +49,8 @@ dependencies:
   sqlite3_flutter_libs: ^0.5.26
   file_selector: ^1.0.4
   charset: ^2.0.1
+  flutter_charset_detector: ^2.0.0
+  charset_converter: ^2.3.0
   url_launcher: ^6.3.1
   crypto: ^3.0.6
   pointycastle: ^3.9.1

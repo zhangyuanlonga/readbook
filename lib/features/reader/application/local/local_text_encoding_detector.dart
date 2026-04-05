@@ -1,6 +1,10 @@
 import 'dart:convert';
 
 import 'package:charset/charset.dart';
+import 'package:charset_converter/charset_converter.dart';
+import 'package:flutter/foundation.dart';
+import 'package:flutter/services.dart';
+import 'package:flutter_charset_detector/flutter_charset_detector.dart';
 
 class LocalTextDecodeResult {
   const LocalTextDecodeResult({
@@ -178,6 +182,60 @@ class LocalTextEncodingDetector {
     );
   }
 
+  Future<LocalTextDecodeResult> decodeBestEffortAsync(
+    List<int> bytes, {
+    String? preferredCharset,
+    String? hintedCharset,
+    Iterable<String>? candidateCharsets,
+    bool htmlAware = false,
+  }) async {
+    if (bytes.isEmpty) {
+      return const LocalTextDecodeResult(
+        text: '',
+        charsetName: 'utf-8',
+        bomLength: 0,
+        fallbackUsed: true,
+      );
+    }
+
+    final bom = _detectBom(bytes);
+    final contentBytes =
+        bom.length > 0 ? bytes.sublist(bom.length) : List<int>.from(bytes);
+
+    final normalizedPreferred = normalizeCharsetName(preferredCharset);
+    if (normalizedPreferred != null) {
+      final preferredDecoded = await _tryDecodeWithPlatformConverter(
+        charsetName: normalizedPreferred,
+        bytes: contentBytes,
+      );
+      if (preferredDecoded != null && preferredDecoded.trim().isNotEmpty) {
+        return LocalTextDecodeResult(
+          text: preferredDecoded,
+          charsetName: normalizedPreferred,
+          bomLength: bom.length,
+        );
+      }
+    }
+
+    final mobileDecoded = await _tryAutoDecodeOnMobile(contentBytes);
+    if (mobileDecoded != null) {
+      return LocalTextDecodeResult(
+        text: mobileDecoded.string,
+        charsetName: mobileDecoded.charset,
+        bomLength: bom.length,
+      );
+    }
+
+    final fallback = decodeBestEffort(
+      bytes,
+      preferredCharset: preferredCharset,
+      hintedCharset: hintedCharset,
+      candidateCharsets: candidateCharsets,
+      htmlAware: htmlAware,
+    );
+    return fallback;
+  }
+
   LocalTextDecodeResult? decodeSampleBestEffort(
     List<int> bytes, {
     String? preferredCharset,
@@ -210,6 +268,62 @@ class LocalTextEncodingDetector {
       return null;
     }
     return decoded;
+  }
+
+  Future<LocalTextDecodeResult?> decodeSampleBestEffortAsync(
+    List<int> bytes, {
+    String? preferredCharset,
+    String? hintedCharset,
+    Iterable<String>? candidateCharsets,
+    bool htmlAware = false,
+  }) async {
+    if (bytes.isEmpty) {
+      return null;
+    }
+
+    final bom = _detectBom(bytes);
+    final strictUtf8 = _tryDecodeUtf8Sample(bytes, bom: bom);
+    if (strictUtf8 != null && strictUtf8.trim().isNotEmpty) {
+      return LocalTextDecodeResult(
+        text: strictUtf8,
+        charsetName: 'utf-8',
+        bomLength: bom.length,
+      );
+    }
+
+    final contentBytes =
+        bom.length > 0 ? bytes.sublist(bom.length) : List<int>.from(bytes);
+    final normalizedPreferred = normalizeCharsetName(preferredCharset);
+    if (normalizedPreferred != null) {
+      final preferredDecoded = await _tryDecodeWithPlatformConverter(
+        charsetName: normalizedPreferred,
+        bytes: contentBytes,
+      );
+      if (preferredDecoded != null && preferredDecoded.trim().isNotEmpty) {
+        return LocalTextDecodeResult(
+          text: preferredDecoded,
+          charsetName: normalizedPreferred,
+          bomLength: bom.length,
+        );
+      }
+    }
+
+    final mobileDecoded = await _tryAutoDecodeOnMobile(contentBytes);
+    if (mobileDecoded != null && mobileDecoded.string.trim().isNotEmpty) {
+      return LocalTextDecodeResult(
+        text: mobileDecoded.string,
+        charsetName: mobileDecoded.charset,
+        bomLength: bom.length,
+      );
+    }
+
+    return decodeSampleBestEffort(
+      bytes,
+      preferredCharset: preferredCharset,
+      hintedCharset: hintedCharset,
+      candidateCharsets: candidateCharsets,
+      htmlAware: htmlAware,
+    );
   }
 
   _BomInfo _detectBom(List<int> bytes) {
@@ -467,6 +581,60 @@ class LocalTextEncodingDetector {
     }
     return score;
   }
+
+  bool get _shouldUseMobileDetector {
+    if (kIsWeb) {
+      return false;
+    }
+    return defaultTargetPlatform == TargetPlatform.android ||
+        defaultTargetPlatform == TargetPlatform.iOS;
+  }
+
+  Future<_MobileAutoDecodeResult?> _tryAutoDecodeOnMobile(
+    List<int> bytes,
+  ) async {
+    if (!_shouldUseMobileDetector || bytes.isEmpty) {
+      return null;
+    }
+    try {
+      final result = await CharsetDetector.autoDecode(
+        Uint8List.fromList(bytes),
+      );
+      final charset = normalizeCharsetName(result.charset);
+      final text = result.string.trim();
+      if (charset == null || text.isEmpty) {
+        return null;
+      }
+      return _MobileAutoDecodeResult(charset: charset, string: result.string);
+    } on MissingPluginException {
+      return null;
+    } on PlatformException {
+      return null;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  Future<String?> _tryDecodeWithPlatformConverter({
+    required String charsetName,
+    required List<int> bytes,
+  }) async {
+    if (!_shouldUseMobileDetector || bytes.isEmpty) {
+      return null;
+    }
+    try {
+      if (!await CharsetConverter.checkAvailability(charsetName)) {
+        return null;
+      }
+      return CharsetConverter.decode(charsetName, Uint8List.fromList(bytes));
+    } on MissingPluginException {
+      return null;
+    } on PlatformException {
+      return null;
+    } catch (_) {
+      return null;
+    }
+  }
 }
 
 class _BomInfo {
@@ -474,4 +642,11 @@ class _BomInfo {
 
   final int length;
   final String? charsetName;
+}
+
+class _MobileAutoDecodeResult {
+  const _MobileAutoDecodeResult({required this.charset, required this.string});
+
+  final String charset;
+  final String string;
 }

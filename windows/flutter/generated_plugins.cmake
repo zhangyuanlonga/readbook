@@ -4,6 +4,7 @@
 
 list(APPEND FLUTTER_PLUGIN_LIST
   battery_plus
+  charset_converter
   file_selector_windows
   flutter_inappwebview_windows
   flutter_js

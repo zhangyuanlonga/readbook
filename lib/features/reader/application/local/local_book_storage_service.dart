@@ -107,6 +107,7 @@ class LocalBookStorageService {
     required LocalBookFormat format,
     required String sourcePath,
     required String bookId,
+    String? preferredCharset,
   }) async {
     if (await targetFile.exists()) {
       await targetFile.delete();
@@ -133,6 +134,20 @@ class LocalBookStorageService {
       );
     }
 
+    final normalizedPreferredCharset =
+        LocalTextEncodingDetector.normalizeCharsetName(preferredCharset);
+    if (normalizedPreferredCharset != null) {
+      await _ensureParentDir(targetFile);
+      await sourceFile.copy(targetFile.path);
+      final copiedStat = await targetFile.stat();
+      return LocalBookStorageWriteResult(
+        storageStat: copiedStat,
+        normalizedCharset: normalizedPreferredCharset,
+        originalCharset: normalizedPreferredCharset,
+        convertedToUtf8: false,
+      );
+    }
+
     final sample = await _detectEncodingFromSample(sourceFile);
     if (fileLength >= _largeTxtRawCopyThresholdBytes && sample != null) {
       await _ensureParentDir(targetFile);
@@ -148,7 +163,7 @@ class LocalBookStorageService {
 
     final bytes = await sourceFile.readAsBytes();
     try {
-      final decoded = _textEncodingDetector.decodeBestEffort(bytes);
+      final decoded = await _textEncodingDetector.decodeBestEffortAsync(bytes);
       await _ensureParentDir(targetFile);
       final canKeepOriginalBytes =
           decoded.charsetName == 'utf-8' &&
@@ -216,7 +231,7 @@ class LocalBookStorageService {
     if (sampleBytes.isEmpty) {
       return null;
     }
-    return _textEncodingDetector.decodeSampleBestEffort(
+    return _textEncodingDetector.decodeSampleBestEffortAsync(
       sampleBytes,
       htmlAware: false,
     );
@@ -267,6 +282,7 @@ class LocalBookStorageService {
             format: book.format,
             sourcePath: normalizedSourcePath,
             bookId: book.id,
+            preferredCharset: null,
           );
           shouldReindex = true;
           storageRestored = !storageExists;

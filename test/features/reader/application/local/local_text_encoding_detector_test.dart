@@ -32,6 +32,38 @@ void main() {
       expect(decoded!.charsetName, 'utf-16le');
       expect(decoded.text, contains('正文内容'));
     });
+
+    test(
+      'decodeSampleBestEffortAsync falls back without plugin in tests',
+      () async {
+        const sampleText = '第1章 开始\n正文内容。';
+        final raw = utf8.encode(sampleText);
+
+        final decoded = await detector.decodeSampleBestEffortAsync(raw);
+
+        expect(decoded, isNotNull);
+        expect(decoded!.text, contains('正文内容'));
+      },
+    );
+
+    test(
+      'decodeBestEffortAsync respects preferred charset fallback path',
+      () async {
+        final bytes = _encodeUtf16(
+          '第1章 开始\n正文内容。',
+          littleEndian: true,
+          withBom: true,
+        );
+
+        final decoded = await detector.decodeBestEffortAsync(
+          bytes,
+          preferredCharset: 'utf-16le',
+        );
+
+        expect(decoded.charsetName, 'utf-16le');
+        expect(decoded.text, contains('正文内容'));
+      },
+    );
   });
 }
 
