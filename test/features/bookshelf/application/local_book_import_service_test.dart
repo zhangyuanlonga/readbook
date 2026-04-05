@@ -262,33 +262,30 @@ void main() {
       );
     });
 
-    test(
-      'uses system setting for local txt split long chapter default',
-      () async {
-        final sourceFile = File('${tempDir.path}/system_split.txt');
-        await sourceFile.writeAsString('第一章\n内容');
+    test('always enables local txt split long chapter by default', () async {
+      final sourceFile = File('${tempDir.path}/system_split.txt');
+      await sourceFile.writeAsString('第一章\n内容');
 
-        final prefs = await SharedPreferences.getInstance();
-        final systemSettingsService = ReaderSystemSettingsService(
-          preferences: prefs,
-        );
-        await systemSettingsService.saveLocalTxtSplitLongChapterEnabled(false);
+      final prefs = await SharedPreferences.getInstance();
+      final systemSettingsService = ReaderSystemSettingsService(
+        preferences: prefs,
+      );
+      await systemSettingsService.saveLocalTxtSplitLongChapterEnabled(false);
 
-        final service = LocalBookImportService(
-          localBookRepository: LocalBookRepositoryImpl(database),
-          bookshelfService: BookshelfService(preferences: prefs),
-          readerSystemSettingsService: systemSettingsService,
-          localBookStorageService: storageService,
-        );
+      final service = LocalBookImportService(
+        localBookRepository: LocalBookRepositoryImpl(database),
+        bookshelfService: BookshelfService(preferences: prefs),
+        readerSystemSettingsService: systemSettingsService,
+        localBookStorageService: storageService,
+      );
 
-        final result = await service.importFromFile(filePath: sourceFile.path);
-        expect(result.localBook.splitLongChapter, isFalse);
+      final result = await service.importFromFile(filePath: sourceFile.path);
+      expect(result.localBook.splitLongChapter, isTrue);
 
-        final stored = await database.getLocalBookById(result.localBook.id);
-        expect(stored, isNotNull);
-        expect(stored!.splitLongChapter, isFalse);
-      },
-    );
+      final stored = await database.getLocalBookById(result.localBook.id);
+      expect(stored, isNotNull);
+      expect(stored!.splitLongChapter, isTrue);
+    });
 
     test('returns after persistence when waitForIndexing is false', () async {
       final sourceFile = File('${tempDir.path}/async_import.txt');

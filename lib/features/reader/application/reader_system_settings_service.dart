@@ -11,50 +11,34 @@ class ReaderSystemSettingsService {
 
   final Future<SharedPreferences> _preferencesFuture;
 
-  static final StreamController<bool> _readRecordEnabledController =
-      StreamController<bool>.broadcast();
-
   static const String _autoSwitchSourceOnFailureKey =
       'reader.system.autoSwitchSourceOnFailure';
   static const String _readRecordEnabledKey = 'reader.system.readRecordEnabled';
   static const String _localTxtSplitLongChapterEnabledKey =
       'reader.system.localTxtSplitLongChapterEnabled';
 
-  Future<bool> loadAutoSwitchSourceOnFailureEnabled() async {
-    final prefs = await _preferencesFuture;
-    return prefs.getBool(_autoSwitchSourceOnFailureKey) ?? true;
-  }
+  Future<bool> loadAutoSwitchSourceOnFailureEnabled() async => true;
 
   Future<void> saveAutoSwitchSourceOnFailureEnabled(bool enabled) async {
     final prefs = await _preferencesFuture;
-    await prefs.setBool(_autoSwitchSourceOnFailureKey, enabled);
+    await prefs.remove(_autoSwitchSourceOnFailureKey);
   }
 
-  Future<bool> loadReadRecordEnabled() async {
-    final prefs = await _preferencesFuture;
-    return prefs.getBool(_readRecordEnabledKey) ?? true;
-  }
+  Future<bool> loadReadRecordEnabled() async => true;
 
-  Future<bool> loadLocalTxtSplitLongChapterEnabled() async {
-    final prefs = await _preferencesFuture;
-    return prefs.getBool(_localTxtSplitLongChapterEnabledKey) ?? true;
-  }
+  Future<bool> loadLocalTxtSplitLongChapterEnabled() async => true;
 
   Stream<bool> watchReadRecordEnabled() {
-    return (() async* {
-      yield await loadReadRecordEnabled();
-      yield* _readRecordEnabledController.stream.distinct();
-    }()).asBroadcastStream();
+    return Stream<bool>.value(true).asBroadcastStream();
   }
 
   Future<void> saveReadRecordEnabled(bool enabled) async {
     final prefs = await _preferencesFuture;
-    await prefs.setBool(_readRecordEnabledKey, enabled);
-    _readRecordEnabledController.add(enabled);
+    await prefs.remove(_readRecordEnabledKey);
   }
 
   Future<void> saveLocalTxtSplitLongChapterEnabled(bool enabled) async {
     final prefs = await _preferencesFuture;
-    await prefs.setBool(_localTxtSplitLongChapterEnabledKey, enabled);
+    await prefs.remove(_localTxtSplitLongChapterEnabledKey);
   }
 }

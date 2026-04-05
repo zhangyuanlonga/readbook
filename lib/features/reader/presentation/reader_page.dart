@@ -10391,9 +10391,6 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
     final isMangaChapter = _chapterImageUrls.isNotEmpty;
     var availableCustomFonts = List<ReaderCustomFontEntry>.from(_customFonts);
     var startAutoReadAfterApply = false;
-    var draftAutoSwitchSourceOnFailureEnabled =
-        _autoSwitchSourceOnFailureEnabled;
-    var isSavingAutoSwitchSourceOnFailure = false;
     var isPersistingDraft = false;
     Timer? persistDraftTimer;
 
@@ -12929,66 +12926,10 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
                   ),
                 ];
 
-                Future<void> updateAutoSwitchSourceOnFailure(
-                  bool enabled,
-                ) async {
-                  if (isSavingAutoSwitchSourceOnFailure) {
-                    return;
-                  }
-
-                  setModalState(() {
-                    draftAutoSwitchSourceOnFailureEnabled = enabled;
-                    isSavingAutoSwitchSourceOnFailure = true;
-                  });
-                  if (mounted) {
-                    setState(() {
-                      _autoSwitchSourceOnFailureEnabled = enabled;
-                    });
-                  } else {
-                    _autoSwitchSourceOnFailureEnabled = enabled;
-                  }
-
-                  try {
-                    await _systemSettingsService
-                        .saveAutoSwitchSourceOnFailureEnabled(enabled);
-                  } catch (_) {
-                    if (!mounted) {
-                      return;
-                    }
-                    setModalState(() {
-                      draftAutoSwitchSourceOnFailureEnabled = !enabled;
-                    });
-                    setState(() {
-                      _autoSwitchSourceOnFailureEnabled = !enabled;
-                    });
-                    _showMessage('保存阅读容错失败，请重试。');
-                  } finally {
-                    if (mounted) {
-                      setModalState(() {
-                        isSavingAutoSwitchSourceOnFailure = false;
-                      });
-                    } else {
-                      isSavingAutoSwitchSourceOnFailure = false;
-                    }
-                  }
-                }
-
                 final quickToggleCard = buildSettingsSectionCard(
                   icon: Icons.toggle_on_rounded,
                   title: '快捷开关',
                   children: [
-                    buildCompactToggleRow(
-                      label: '自动换源',
-                      value: draftAutoSwitchSourceOnFailureEnabled,
-                      isSaving: isSavingAutoSwitchSourceOnFailure,
-                      onChanged:
-                          isSavingAutoSwitchSourceOnFailure
-                              ? null
-                              : (value) => unawaited(
-                                updateAutoSwitchSourceOnFailure(value),
-                              ),
-                    ),
-                    buildSectionDivider(),
                     buildCompactToggleRow(
                       label: '文字两端对齐',
                       value: draft.textFullJustifyEnabled,
@@ -13058,11 +12999,6 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
                     value: infoBarValue(),
                   ),
                   buildSettingsOverviewChip(
-                    icon: Icons.swap_horiz_rounded,
-                    label: '自动换源',
-                    value: draftAutoSwitchSourceOnFailureEnabled ? '已开启' : '关闭',
-                  ),
-                  buildSettingsOverviewChip(
                     icon: Icons.volume_up_outlined,
                     label: '音量键翻页',
                     value: draft.volumeKeyPageEnabled ? '已开启' : '关闭',
@@ -13090,7 +13026,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
                         : <Widget>[
                           buildSettingsGroupHeader(
                             title: '高级设置',
-                            subtitle: '低频行为与辅助项，包含信息栏、容错、按键和自动阅读。',
+                            subtitle: '低频行为与辅助项，包含信息栏、按键和自动阅读。',
                             chips: advancedOverviewChips,
                           ),
                           quickToggleCard,

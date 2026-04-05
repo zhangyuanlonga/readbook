@@ -8,7 +8,6 @@ import '../../../app/layout/app_spacing.dart';
 import '../../../domain/entities/reader_settings.dart';
 import '../../bookshelf/application/bookshelf_system_settings_service.dart';
 import '../../reader/application/reader_preferences_service.dart';
-import '../../reader/application/reader_system_settings_service.dart';
 import '../../search/application/search_system_settings_service.dart';
 
 class SystemSettingsPage extends StatelessWidget {
@@ -66,7 +65,7 @@ class SystemSettingsPage extends StatelessWidget {
                                   ),
                                   SizedBox(width: 12),
                                   Expanded(
-                                    child: _ReaderAutoSwitchSettingPanel(),
+                                    child: _SearchConcurrencySettingPanel(),
                                   ),
                                 ],
                               ),
@@ -74,22 +73,9 @@ class SystemSettingsPage extends StatelessWidget {
                               Row(
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
-                                  Expanded(
-                                    child:
-                                        _LocalTxtSplitLongChapterSettingPanel(),
-                                  ),
-                                  SizedBox(width: 12),
-                                  Expanded(
-                                    child: _SearchAggregationSettingPanel(),
-                                  ),
+                                  Expanded(child: _ReaderSettingsResetPanel()),
                                 ],
                               ),
-                              SizedBox(height: 12),
-                              _SearchConcurrencySettingPanel(),
-                              SizedBox(height: 12),
-                              _ReadingRecordSettingPanel(),
-                              SizedBox(height: 12),
-                              _ReaderSettingsResetPanel(),
                             ],
                           );
                         }
@@ -98,15 +84,7 @@ class SystemSettingsPage extends StatelessWidget {
                           children: [
                             _BookshelfAutoRefreshSettingPanel(),
                             SizedBox(height: 12),
-                            _ReaderAutoSwitchSettingPanel(),
-                            SizedBox(height: 12),
-                            _LocalTxtSplitLongChapterSettingPanel(),
-                            SizedBox(height: 12),
-                            _SearchAggregationSettingPanel(),
-                            SizedBox(height: 12),
                             _SearchConcurrencySettingPanel(),
-                            SizedBox(height: 12),
-                            _ReadingRecordSettingPanel(),
                             SizedBox(height: 12),
                             _ReaderSettingsResetPanel(),
                           ],
@@ -194,23 +172,8 @@ class SystemSettingsPage extends StatelessWidget {
               children: [
                 _buildMetaChip(
                   context,
-                  icon: Icons.auto_fix_high_rounded,
-                  label: '阅读容错',
-                ),
-                _buildMetaChip(
-                  context,
                   icon: Icons.sync_rounded,
                   label: '书架刷新',
-                ),
-                _buildMetaChip(
-                  context,
-                  icon: Icons.auto_awesome_mosaic_rounded,
-                  label: '搜索聚合',
-                ),
-                _buildMetaChip(
-                  context,
-                  icon: Icons.history_rounded,
-                  label: '阅读记录',
                 ),
                 _buildMetaChip(
                   context,
@@ -690,108 +653,6 @@ class _ReaderSettingsResetPanelState extends State<_ReaderSettingsResetPanel> {
   }
 }
 
-class _ReaderAutoSwitchSettingPanel extends StatefulWidget {
-  const _ReaderAutoSwitchSettingPanel();
-
-  @override
-  State<_ReaderAutoSwitchSettingPanel> createState() =>
-      _ReaderAutoSwitchSettingPanelState();
-}
-
-class _ReaderAutoSwitchSettingPanelState
-    extends State<_ReaderAutoSwitchSettingPanel> {
-  final ReaderSystemSettingsService _systemSettingsService =
-      ReaderSystemSettingsService();
-
-  bool _isLoading = true;
-  bool _isSaving = false;
-  bool _enabled = false;
-  String? _errorText;
-
-  @override
-  void initState() {
-    super.initState();
-    _loadSetting();
-  }
-
-  Future<void> _loadSetting() async {
-    try {
-      final enabled =
-          await _systemSettingsService.loadAutoSwitchSourceOnFailureEnabled();
-      if (!mounted) {
-        return;
-      }
-      setState(() {
-        _enabled = enabled;
-        _errorText = null;
-      });
-    } catch (_) {
-      if (!mounted) {
-        return;
-      }
-      setState(() {
-        _errorText = '读取自动换源开关失败，请稍后重试。';
-      });
-    } finally {
-      if (mounted) {
-        setState(() {
-          _isLoading = false;
-        });
-      }
-    }
-  }
-
-  Future<void> _toggle(bool enabled) async {
-    if (_isSaving) {
-      return;
-    }
-
-    final previous = _enabled;
-    setState(() {
-      _enabled = enabled;
-      _isSaving = true;
-      _errorText = null;
-    });
-
-    try {
-      await _systemSettingsService.saveAutoSwitchSourceOnFailureEnabled(
-        enabled,
-      );
-    } catch (_) {
-      if (!mounted) {
-        return;
-      }
-      setState(() {
-        _enabled = previous;
-        _errorText = '保存自动换源开关失败，请稍后重试。';
-      });
-    } finally {
-      if (mounted) {
-        setState(() {
-          _isSaving = false;
-        });
-      }
-    }
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return _buildCompactSettingCard(
-      context,
-      icon: Icons.swap_horiz_rounded,
-      title: '阅读容错',
-      description: '正文加载失败时自动尝试候选来源。',
-      stateDescription: _enabled ? '失败时自动补位。' : '仅支持手动切换来源。',
-      stateLabel: _enabled ? '已开启' : '已关闭',
-      value: _enabled,
-      isLoading: _isLoading,
-      isSaving: _isSaving,
-      onChanged: _isLoading || _isSaving ? null : _toggle,
-      errorText: _errorText,
-    );
-  }
-}
-
 class _BookshelfAutoRefreshSettingPanel extends StatefulWidget {
   const _BookshelfAutoRefreshSettingPanel();
 
@@ -883,106 +744,6 @@ class _BookshelfAutoRefreshSettingPanelState
       description: '重新切回书架时自动刷新列表与阅读进度。',
       stateDescription: _enabled ? '切回书架后会自动刷新。' : '仅手动下拉或操作后刷新。',
       stateLabel: _enabled ? '默认开启' : '已关闭',
-      value: _enabled,
-      isLoading: _isLoading,
-      isSaving: _isSaving,
-      onChanged: _isLoading || _isSaving ? null : _toggle,
-      errorText: _errorText,
-    );
-  }
-}
-
-class _SearchAggregationSettingPanel extends StatefulWidget {
-  const _SearchAggregationSettingPanel();
-
-  @override
-  State<_SearchAggregationSettingPanel> createState() =>
-      _SearchAggregationSettingPanelState();
-}
-
-class _SearchAggregationSettingPanelState
-    extends State<_SearchAggregationSettingPanel> {
-  final SearchSystemSettingsService _settingsService =
-      SearchSystemSettingsService();
-
-  bool _isLoading = true;
-  bool _isSaving = false;
-  bool _enabled = true;
-  String? _errorText;
-
-  @override
-  void initState() {
-    super.initState();
-    _loadSetting();
-  }
-
-  Future<void> _loadSetting() async {
-    try {
-      final enabled =
-          await _settingsService.loadAggregateByTitleAuthorEnabled();
-      if (!mounted) {
-        return;
-      }
-      setState(() {
-        _enabled = enabled;
-        _errorText = null;
-      });
-    } catch (_) {
-      if (!mounted) {
-        return;
-      }
-      setState(() {
-        _errorText = '读取搜索聚合开关失败，请稍后重试。';
-      });
-    } finally {
-      if (mounted) {
-        setState(() {
-          _isLoading = false;
-        });
-      }
-    }
-  }
-
-  Future<void> _toggle(bool enabled) async {
-    if (_isSaving) {
-      return;
-    }
-
-    final previous = _enabled;
-    setState(() {
-      _enabled = enabled;
-      _isSaving = true;
-      _errorText = null;
-    });
-
-    try {
-      await _settingsService.saveAggregateByTitleAuthorEnabled(enabled);
-    } catch (_) {
-      if (!mounted) {
-        return;
-      }
-      setState(() {
-        _enabled = previous;
-        _errorText = '保存搜索聚合开关失败，请稍后重试。';
-      });
-    } finally {
-      if (mounted) {
-        setState(() {
-          _isSaving = false;
-        });
-      }
-    }
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return _buildCompactSettingCard(
-      context,
-      icon: Icons.merge_type_rounded,
-      title: '搜索聚合',
-      description: '按书名与作者合并多源命中结果。',
-      stateDescription: _enabled ? '多源命中时自动合并展示。' : '按原始结果逐条展示。',
-      stateLabel: _enabled ? '聚合中' : '原始列表',
       value: _enabled,
       isLoading: _isLoading,
       isSaving: _isSaving,
@@ -1211,205 +972,6 @@ class _SearchConcurrencySettingPanelState
           ],
         ],
       ),
-    );
-  }
-}
-
-class _LocalTxtSplitLongChapterSettingPanel extends StatefulWidget {
-  const _LocalTxtSplitLongChapterSettingPanel();
-
-  @override
-  State<_LocalTxtSplitLongChapterSettingPanel> createState() =>
-      _LocalTxtSplitLongChapterSettingPanelState();
-}
-
-class _LocalTxtSplitLongChapterSettingPanelState
-    extends State<_LocalTxtSplitLongChapterSettingPanel> {
-  final ReaderSystemSettingsService _systemSettingsService =
-      ReaderSystemSettingsService();
-
-  bool _isLoading = true;
-  bool _isSaving = false;
-  bool _enabled = true;
-  String? _errorText;
-
-  @override
-  void initState() {
-    super.initState();
-    _loadSetting();
-  }
-
-  Future<void> _loadSetting() async {
-    try {
-      final enabled =
-          await _systemSettingsService.loadLocalTxtSplitLongChapterEnabled();
-      if (!mounted) {
-        return;
-      }
-      setState(() {
-        _enabled = enabled;
-        _errorText = null;
-      });
-    } catch (_) {
-      if (!mounted) {
-        return;
-      }
-      setState(() {
-        _errorText = '读取长章节拆分开关失败，请稍后重试。';
-      });
-    } finally {
-      if (mounted) {
-        setState(() {
-          _isLoading = false;
-        });
-      }
-    }
-  }
-
-  Future<void> _toggle(bool enabled) async {
-    if (_isSaving) {
-      return;
-    }
-
-    final previous = _enabled;
-    setState(() {
-      _enabled = enabled;
-      _isSaving = true;
-      _errorText = null;
-    });
-
-    try {
-      await _systemSettingsService.saveLocalTxtSplitLongChapterEnabled(enabled);
-    } catch (_) {
-      if (!mounted) {
-        return;
-      }
-      setState(() {
-        _enabled = previous;
-        _errorText = '保存长章节拆分开关失败，请稍后重试。';
-      });
-    } finally {
-      if (mounted) {
-        setState(() {
-          _isSaving = false;
-        });
-      }
-    }
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return _buildCompactSettingCard(
-      context,
-      icon: Icons.splitscreen_outlined,
-      title: '本地 TXT 长章节拆分',
-      description: 'TXT 自动分章时，超长章节自动拆成多章。',
-      stateDescription: _enabled ? '新导入或重新索引时默认开启。' : '保留原大章节，不自动拆分。',
-      stateLabel: _enabled ? '默认开启' : '默认关闭',
-      value: _enabled,
-      isLoading: _isLoading,
-      isSaving: _isSaving,
-      onChanged: _isLoading || _isSaving ? null : _toggle,
-      errorText: _errorText,
-    );
-  }
-}
-
-class _ReadingRecordSettingPanel extends StatefulWidget {
-  const _ReadingRecordSettingPanel();
-
-  @override
-  State<_ReadingRecordSettingPanel> createState() =>
-      _ReadingRecordSettingPanelState();
-}
-
-class _ReadingRecordSettingPanelState
-    extends State<_ReadingRecordSettingPanel> {
-  final ReaderSystemSettingsService _systemSettingsService =
-      ReaderSystemSettingsService();
-
-  bool _isLoading = true;
-  bool _isSaving = false;
-  bool _enabled = true;
-  String? _errorText;
-
-  @override
-  void initState() {
-    super.initState();
-    _loadSetting();
-  }
-
-  Future<void> _loadSetting() async {
-    try {
-      final enabled = await _systemSettingsService.loadReadRecordEnabled();
-      if (!mounted) {
-        return;
-      }
-      setState(() {
-        _enabled = enabled;
-        _errorText = null;
-      });
-    } catch (_) {
-      if (!mounted) {
-        return;
-      }
-      setState(() {
-        _errorText = '读取阅读记录开关失败，请稍后重试。';
-      });
-    } finally {
-      if (mounted) {
-        setState(() {
-          _isLoading = false;
-        });
-      }
-    }
-  }
-
-  Future<void> _toggle(bool enabled) async {
-    if (_isSaving) {
-      return;
-    }
-
-    final previous = _enabled;
-    setState(() {
-      _enabled = enabled;
-      _isSaving = true;
-      _errorText = null;
-    });
-
-    try {
-      await _systemSettingsService.saveReadRecordEnabled(enabled);
-    } catch (_) {
-      if (!mounted) {
-        return;
-      }
-      setState(() {
-        _enabled = previous;
-        _errorText = '保存阅读记录开关失败，请稍后重试。';
-      });
-    } finally {
-      if (mounted) {
-        setState(() {
-          _isSaving = false;
-        });
-      }
-    }
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return _buildCompactSettingCard(
-      context,
-      icon: Icons.history_rounded,
-      title: '阅读记录',
-      description: '记录阅读时长、按天汇总和时间线会话。',
-      stateDescription: _enabled ? '阅读时自动累计记录。' : '不再新增阅读记录，已有记录仍保留。',
-      stateLabel: _enabled ? '记录中' : '已关闭',
-      value: _enabled,
-      isLoading: _isLoading,
-      isSaving: _isSaving,
-      onChanged: _isLoading || _isSaving ? null : _toggle,
-      errorText: _errorText,
     );
   }
 }

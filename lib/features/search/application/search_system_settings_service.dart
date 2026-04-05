@@ -26,14 +26,11 @@ class SearchSystemSettingsService {
           defaultTargetPlatform == TargetPlatform.windows ||
           defaultTargetPlatform == TargetPlatform.linux);
 
-  Future<bool> loadAggregateByTitleAuthorEnabled() async {
-    final prefs = await _preferencesFuture;
-    return prefs.getBool(_aggregateByTitleAuthorEnabledKey) ?? true;
-  }
+  Future<bool> loadAggregateByTitleAuthorEnabled() async => true;
 
   Future<void> saveAggregateByTitleAuthorEnabled(bool enabled) async {
     final prefs = await _preferencesFuture;
-    await prefs.setBool(_aggregateByTitleAuthorEnabledKey, enabled);
+    await prefs.remove(_aggregateByTitleAuthorEnabledKey);
   }
 
   Future<bool> loadSearchDebugLogEnabled() async {

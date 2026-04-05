@@ -8,7 +8,7 @@ void main() {
       SharedPreferences.setMockInitialValues({});
     });
 
-    test('loads true by default and persists aggregation toggle', () async {
+    test('always keeps aggregation enabled', () async {
       final service = SearchSystemSettingsService();
 
       final defaultValue = await service.loadAggregateByTitleAuthorEnabled();
@@ -16,7 +16,7 @@ void main() {
 
       await service.saveAggregateByTitleAuthorEnabled(false);
       final disabledValue = await service.loadAggregateByTitleAuthorEnabled();
-      expect(disabledValue, isFalse);
+      expect(disabledValue, isTrue);
 
       await service.saveAggregateByTitleAuthorEnabled(true);
       final enabledValue = await service.loadAggregateByTitleAuthorEnabled();
