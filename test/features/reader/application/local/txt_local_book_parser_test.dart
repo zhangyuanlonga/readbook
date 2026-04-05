@@ -198,6 +198,51 @@ $chapter2
       expect(result.chapters.last.endOffset, isNotNull);
     });
 
+    test(
+      'indexes large utf-16le text through unified streaming path',
+      () async {
+        final file = File('${tempDir.path}/large_utf16le_book.txt');
+        final chapter1 = List.filled(180000, '内容一').join();
+        final chapter2 = List.filled(180000, '内容二').join();
+        final rawBytes = _encodeUtf16(
+          '''
+第1章 开始
+$chapter1
+
+第2章 继续
+$chapter2
+''',
+          littleEndian: true,
+          withBom: true,
+        );
+        expect(rawBytes.length, greaterThan(1024 * 1024));
+        await file.writeAsBytes(rawBytes, flush: true);
+
+        final now = DateTime.parse('2026-02-23T12:00:00.000Z');
+        final result = await parser.parse(
+          LocalBook(
+            id: 'local_txt_large_utf16le',
+            title: '大文件 UTF16LE 测试',
+            format: LocalBookFormat.txt,
+            storagePath: file.path,
+            splitLongChapter: false,
+            fileSize: await file.length(),
+            createdAt: now,
+            updatedAt: now,
+          ),
+        );
+
+        expect(result.charset, 'utf-16le');
+        expect(result.chapters, hasLength(2));
+        expect(result.chapters.first.title, '第1章 开始');
+        expect(result.chapters.first.startOffset, isNotNull);
+        expect(result.chapters.first.endOffset, isNotNull);
+        expect(result.chapters.first.content, isEmpty);
+        expect(result.chapters.last.startOffset, isNotNull);
+        expect(result.chapters.last.endOffset, isNotNull);
+      },
+    );
+
     test('detects gbk text without rewriting original bytes', () async {
       final file = File('${tempDir.path}/gbk_book.txt');
       final gbk = Charset.getByName('gbk');

@@ -11,6 +11,7 @@ import '../../../app/layout/app_layout.dart';
 import '../../../app/layout/app_spacing.dart';
 import '../../../app/widgets/switch_source_candidate_sheet.dart';
 import '../../../app/widgets/disk_cached_cover_image.dart';
+import '../../../app/widgets/runtime_feedback_card.dart';
 import '../../../app/widgets/text_cover_placeholder.dart';
 
 import '../../../core/errors/app_exception.dart';
@@ -229,55 +230,32 @@ class _BookDetailPageState extends State<BookDetailPage> {
                             child: LinearProgressIndicator(minHeight: 2),
                           ),
                         if (_isMissingParams)
-                          BookDetailStateCard(
-                            child: Text(
-                              '缺少 sourceId/detailUrl，无法加载详情。请从搜索结果进入。bookId=${widget.bookId}',
-                            ),
+                          RuntimeFeedbackCard(
+                            title: '参数不完整',
+                            message:
+                                '缺少 sourceId/detailUrl，无法加载详情。请从搜索结果进入。bookId=${widget.bookId}',
+                            tone: RuntimeFeedbackTone.warning,
                           )
                         else if (_errorText != null && _result == null)
-                          BookDetailStateCard(
-                            color: colorScheme.errorContainer,
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text(
-                                  '加载失败',
-                                  style: TextStyle(
-                                    color: colorScheme.onErrorContainer,
-                                    fontWeight: FontWeight.w600,
+                          RuntimeFeedbackCard(
+                            title: '加载失败',
+                            message: _errorText!,
+                            tone: RuntimeFeedbackTone.error,
+                            actions: [
+                              FilledButton.tonal(
+                                onPressed: () => _load(forceRefresh: true),
+                                child: const Text('重试'),
+                              ),
+                              if (_isLocalContent)
+                                OutlinedButton.icon(
+                                  onPressed: _copyLocalDiagnosticsFromError,
+                                  icon: const Icon(
+                                    Icons.copy_rounded,
+                                    size: 16,
                                   ),
+                                  label: const Text('复制诊断信息'),
                                 ),
-                                const SizedBox(height: 8),
-                                Text(
-                                  _errorText!,
-                                  style: TextStyle(
-                                    color: colorScheme.onErrorContainer,
-                                  ),
-                                ),
-                                const SizedBox(height: 10),
-                                Wrap(
-                                  spacing: 8,
-                                  runSpacing: 8,
-                                  children: [
-                                    FilledButton.tonal(
-                                      onPressed:
-                                          () => _load(forceRefresh: true),
-                                      child: const Text('重试'),
-                                    ),
-                                    if (_isLocalContent)
-                                      OutlinedButton.icon(
-                                        onPressed:
-                                            _copyLocalDiagnosticsFromError,
-                                        icon: const Icon(
-                                          Icons.copy_rounded,
-                                          size: 16,
-                                        ),
-                                        label: const Text('复制诊断信息'),
-                                      ),
-                                  ],
-                                ),
-                              ],
-                            ),
+                            ],
                           )
                         else if (_result != null) ...[
                           _buildDetailCard(_result!),
