@@ -308,6 +308,16 @@ class SearchService {
       cancellationToken: cancellationToken,
       onExecute: (source) async {
         final startAt = DateTime.now();
+        _logger.info(
+          'Search source started',
+          context: <String, Object?>{
+            'sourceId': source.sourceId,
+            'sourceName': source.sourceName,
+            'profile': source.profile.name,
+            'keyword': normalizedKeyword,
+            'allowInteractiveChallenge': plan.allowInteractiveChallenge,
+          },
+        );
 
         try {
           final report = await _runner.run(

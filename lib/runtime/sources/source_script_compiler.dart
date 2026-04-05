@@ -11,6 +11,7 @@ import '../html/html_runtime.dart';
 import '../http/http_models.dart';
 import '../http/request_engine.dart';
 import '../session/source_session.dart';
+import '../../features/source/application/source_runtime_diagnostics_service.dart';
 import 'source_contract.dart';
 import 'source_manifest.dart';
 import 'source_result_models.dart';
@@ -26,6 +27,16 @@ class SourceScriptCompileException implements Exception {
 
 class SourceScriptCompiler {
   const SourceScriptCompiler();
+
+  static final Map<String, _SharedSourceScriptRunnerEntry> _sharedRunners =
+      <String, _SharedSourceScriptRunnerEntry>{};
+
+  static void debugResetSharedRunners() {
+    for (final entry in _sharedRunners.values) {
+      entry.runner.dispose();
+    }
+    _sharedRunners.clear();
+  }
 
   Future<RuntimeSourceDefinition> compile(String sourceCode) async {
     final normalizedSource = _normalizeSourceCode(sourceCode);
@@ -63,7 +74,7 @@ class SourceScriptCompiler {
       );
     }
 
-    final runner = _SourceScriptRunner(normalizedSource);
+    final runner = _acquireRunner(normalizedSource);
 
     return RuntimeSourceDefinition(
       manifest: manifest,
@@ -143,8 +154,38 @@ class SourceScriptCompiler {
         );
         return _decodeContent(result, fallbackSourceId: ctx.source.id);
       },
-      dispose: runner.dispose,
+      dispose: () => _releaseRunner(normalizedSource, runner),
     );
+  }
+
+  _SourceScriptRunner _acquireRunner(String normalizedSource) {
+    final existing = _sharedRunners[normalizedSource];
+    if (existing != null) {
+      existing.refCount += 1;
+      return existing.runner;
+    }
+
+    final runner = _SourceScriptRunner(normalizedSource);
+    _sharedRunners[normalizedSource] = _SharedSourceScriptRunnerEntry(
+      runner: runner,
+    );
+    return runner;
+  }
+
+  void _releaseRunner(String normalizedSource, _SourceScriptRunner runner) {
+    final existing = _sharedRunners[normalizedSource];
+    if (existing == null || !identical(existing.runner, runner)) {
+      runner.dispose();
+      return;
+    }
+
+    existing.refCount -= 1;
+    if (existing.refCount > 0) {
+      return;
+    }
+
+    _sharedRunners.remove(normalizedSource);
+    runner.dispose();
   }
 
   Future<_SourceInspection> _inspectSource(String normalizedSource) async {
@@ -377,6 +418,8 @@ class _SourceScriptRunner {
   _SourceScriptRunner(this._normalizedSource);
 
   final String _normalizedSource;
+  final SourceRuntimeDiagnosticsService _diagnosticsService =
+      SourceRuntimeDiagnosticsService.instance;
   JsRuntimeAdapter? _runtime;
   Future<void> _runQueue = Future<void>.value();
   bool _bootstrapsInstalled = false;
@@ -391,6 +434,16 @@ class _SourceScriptRunner {
       final runtime = await _ensureRuntime();
       final htmlHandleStore = _HtmlHandleStore();
       _registerBridges(runtime, ctx, htmlHandleStore);
+      final marker = await _diagnosticsService.markInvocationStarted(
+        sourceId: ctx.source.id,
+        sourceName: ctx.source.name,
+        methodName: methodName,
+        runtimeChain: 'source_script',
+        metadata: <String, Object?>{
+          'sourceGroup': ctx.source.group,
+          'argSummary': _buildArgSummary(methodName: methodName, args: args),
+        },
+      );
 
       try {
         final result = await runtime.runSnippet('''
@@ -418,9 +471,45 @@ try {
         completer.complete(_decodeDynamic(result.output));
       } catch (error, stackTrace) {
         completer.completeError(error, stackTrace);
+      } finally {
+        await _diagnosticsService.markInvocationFinished(marker.invocationId);
       }
     });
     return completer.future;
+  }
+
+  String _buildArgSummary({
+    required String methodName,
+    required List<Object?> args,
+  }) {
+    if (args.isEmpty) {
+      return methodName;
+    }
+    final firstArg = args.first;
+    if (firstArg is String) {
+      final normalized = firstArg.replaceAll(RegExp(r'\s+'), ' ').trim();
+      if (normalized.isEmpty) {
+        return methodName;
+      }
+      if (normalized.length <= 80) {
+        return '$methodName:$normalized';
+      }
+      return '$methodName:${normalized.substring(0, 80)}...';
+    }
+    if (firstArg is Map<String, Object?>) {
+      final title = firstArg['title']?.toString().trim();
+      final url = firstArg['detailUrl']?.toString().trim();
+      final chapterUrl = firstArg['url']?.toString().trim();
+      final parts = <String>[
+        if (title != null && title.isNotEmpty) 'title=$title',
+        if (url != null && url.isNotEmpty) 'detailUrl=$url',
+        if (chapterUrl != null && chapterUrl.isNotEmpty) 'url=$chapterUrl',
+      ];
+      if (parts.isNotEmpty) {
+        return '$methodName:${parts.join(',')}';
+      }
+    }
+    return methodName;
   }
 
   Future<JsRuntimeAdapter> _ensureRuntime() async {
@@ -994,6 +1083,13 @@ try {
     _runtime = null;
     _bootstrapsInstalled = false;
   }
+}
+
+class _SharedSourceScriptRunnerEntry {
+  _SharedSourceScriptRunnerEntry({required this.runner});
+
+  final _SourceScriptRunner runner;
+  int refCount = 1;
 }
 
 class _SourceInspection {

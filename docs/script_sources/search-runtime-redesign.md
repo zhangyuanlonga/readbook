@@ -1,6 +1,6 @@
 # 脚本源搜索运行时重构方案
 
-更新时间：2026-04-04
+更新时间：2026-04-05
 
 当前说明：
 
@@ -749,8 +749,8 @@ class SearchRunCancellation {
 2. [x] 再做阶段 B：拆 `Runner / Assembler / Planner`
 3. [x] 再做阶段 C：把搜索、换源、自动换源分成三套计划
 4. [x] 再做阶段 D + E：引入画像和预算调度
-5. [ ] 再做阶段 F + G：把取消、JS、browser 资源真正控住
-6. [ ] 最后做阶段 H + I：运行时复用、动态画像、熔断
+5. [x] 再做阶段 F + G：把取消、JS、browser 资源真正控住
+6. [x] 最后做阶段 H + I：运行时复用、动态画像、熔断
 
 ## 19. 当前最优起步批次
 
@@ -758,7 +758,7 @@ class SearchRunCancellation {
 
 - [x] 阶段 A 全部完成
 - [x] 阶段 B 全部完成
-- [ ] 阶段 C 先完成 `globalSearch` 和 `switchSource`
+- [x] 阶段 C 先完成 `globalSearch` 和 `switchSource`
 
 这批做完后再进入：
 
@@ -767,7 +767,7 @@ class SearchRunCancellation {
 
 原因：
 
-- [ ] 风险最低
-- [ ] 改动边界清晰
-- [ ] 能先止住搜索阶段职责膨胀
-- [ ] 后续预算调度器接入时不需要推翻前面代码
+- [x] 风险最低
+- [x] 改动边界清晰
+- [x] 能先止住搜索阶段职责膨胀
+- [x] 后续预算调度器接入时不需要推翻前面代码

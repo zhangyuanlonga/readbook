@@ -26,6 +26,8 @@
   脚本源运行时文档入口，包含作者手册、规范、运行时 API、架构和模板。
 - `docs/script_sources/search-runtime-redesign.md`
   搜索、换源和自动换源的脚本源运行时重构方案。
+- `docs/script_sources/source-health-system-plan.md`
+  源健康系统规划，覆盖搜索、换源、书源列表、源检测和停用策略。
 
 ## 使用建议
 

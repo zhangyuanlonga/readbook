@@ -12,10 +12,13 @@ import 'package:shuxiang_reading_next/runtime/sources/source_manifest.dart';
 import 'package:shuxiang_reading_next/runtime/sources/source_result_models.dart';
 import 'package:shuxiang_reading_next/src/js_runtime.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:shuxiang_reading_next/runtime/sources/source_script_compiler.dart';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
+  SharedPreferences.setMockInitialValues(<String, Object>{});
+  SourceScriptCompiler.debugResetSharedRunners();
 
   group('SourceScriptCompiler discover capability', () {
     const compiler = SourceScriptCompiler();
@@ -83,10 +86,12 @@ void main() {
     setUp(() {
       factory = _FakeReusableJsRuntimeAdapterFactory();
       debugJsRuntimeAdapterFactory = factory.create;
+      SourceScriptCompiler.debugResetSharedRunners();
     });
 
     tearDown(() {
       debugJsRuntimeAdapterFactory = null;
+      SourceScriptCompiler.debugResetSharedRunners();
     });
 
     test('reuses runtime for repeated search calls on same definition', () async {
@@ -98,6 +103,9 @@ void main() {
 
       expect(factory.createdCount, 2);
       expect(factory.disposedCount, 1);
+
+      definition.dispose?.call();
+      expect(factory.disposedCount, 2);
     });
 
     test('disposes reused runtime when source is removed from registry', () async {
@@ -111,6 +119,24 @@ void main() {
 
       registry.remove('test_source');
       expect(factory.disposedCount, 2);
+    });
+
+    test('reuses runtime across identical compiled definitions', () async {
+      const compiler = SourceScriptCompiler();
+      final definitionA = await compiler.compile(_sourceWithImplicitDiscover);
+      final definitionB = await compiler.compile(_sourceWithImplicitDiscover);
+
+      await definitionA.search(_buildRuntimeContext(), '凡人');
+      await definitionB.search(_buildRuntimeContext(), '作者');
+
+      expect(factory.createdCount, 3);
+      expect(factory.disposedCount, 2);
+
+      definitionA.dispose?.call();
+      expect(factory.disposedCount, 2);
+
+      definitionB.dispose?.call();
+      expect(factory.disposedCount, 3);
     });
   });
 }

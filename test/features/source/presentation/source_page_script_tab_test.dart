@@ -198,7 +198,9 @@ void main() {
       await tester.pump(const Duration(milliseconds: 10));
     });
 
-    testWidgets('supports website clustered display mode', (tester) async {
+    testWidgets('shows duplicate website source hints in single list', (
+      tester,
+    ) async {
       await facade.saveScriptSource(sourceCode: sourceScriptTemplateV1);
       await facade.saveScriptSource(
         sourceCode: sourceScriptTemplateV1,
@@ -218,12 +220,63 @@ void main() {
       await tester.pump(const Duration(milliseconds: 200));
       await tester.pump(const Duration(milliseconds: 400));
 
-      await tester.tap(find.text('按网站聚合'));
+      expect(find.textContaining('站点: debug.local'), findsWidgets);
+      expect(find.textContaining('同站 2 个'), findsWidgets);
+      expect(find.text('推荐保留'), findsWidgets);
+
+      await sourceHealthService.persistNow();
+      await tester.pumpWidget(const SizedBox.shrink());
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 10));
+    });
+
+    testWidgets('filters duplicate sources from group menu', (tester) async {
+      await facade.saveScriptSource(sourceCode: sourceScriptTemplateV1);
+      await facade.saveScriptSource(
+        sourceCode: sourceScriptTemplateV1,
+        id: 'source_duplicate',
+      );
+      await facade.saveScriptSource(
+        sourceCode: '''
+export default {
+  meta: {
+    name: '单独站点源',
+    group: '调试',
+    author: 'you',
+    description: '',
+    homepage: 'https://solo.example.com',
+    domains: ['solo.example.com'],
+    capabilities: ['search', 'detail', 'chapters', 'content'],
+  },
+  async search(ctx, keyword) { return []; },
+  async detail(ctx, book) { return book; },
+  async chapters(ctx, book) { return []; },
+  async content(ctx, book, chapter) { return { title: chapter.title || '', content: '' }; },
+};
+''',
+        id: 'source_solo',
+      );
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: SourcePage(
+            sourceRuntimeFacade: facade,
+            sourceHealthService: sourceHealthService,
+            bootstrapOnInit: false,
+            enableRouterNavigation: false,
+          ),
+        ),
+      );
+      await tester.pump(const Duration(milliseconds: 200));
+      await tester.pump(const Duration(milliseconds: 400));
+
+      await tester.tap(find.byTooltip('分组'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('重复源'));
       await tester.pumpAndSettle();
 
-      expect(find.text('debug.local'), findsOneWidget);
-      expect(find.textContaining('2 个源'), findsOneWidget);
-      expect(find.textContaining('推荐保留：临时脚本源'), findsOneWidget);
+      expect(find.textContaining('站点: debug.local'), findsWidgets);
+      expect(find.textContaining('站点: solo.example.com'), findsNothing);
 
       await sourceHealthService.persistNow();
       await tester.pumpWidget(const SizedBox.shrink());

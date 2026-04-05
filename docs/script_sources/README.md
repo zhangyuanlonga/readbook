@@ -32,6 +32,8 @@
   用于推进搜索、换源、书源列表、源检测和停用策略统一到同一套“源健康状态”体系。
 - [脚本源非搜索链路运行时梳理](./non-search-runtime-unification-plan.md)
   用于统一梳理详情页、目录、正文、发现页当前是否已完成脚本源接入，以及还缺哪些运行时治理能力。
+- [书源列表网站聚合与重复源清理方案](./source-website-cluster-plan.md)
+  用于推进“同站书源聚合、重复源清理、推荐主源、搜索调度联动”的完整设计，不替代现有 `group` 分组。
 - [第二阶段：Browser / Cookie / Cache 设计说明](./stage-two-browser-sources.md)
   只在你需要理解浏览器能力的设计取舍时阅读，不是入门必读。
 - [脚本源调试工作台任务拆分](./debug-workbench-task-plan.md)

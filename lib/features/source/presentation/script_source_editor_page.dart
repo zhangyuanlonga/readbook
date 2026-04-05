@@ -3,6 +3,7 @@ import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 import 'package:flutter/scheduler.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_code_editor/flutter_code_editor.dart';
 import 'package:flutter_highlight/themes/vs.dart';
 import 'package:flutter_highlight/themes/vs2015.dart';
@@ -28,6 +29,13 @@ class ScriptSourceEditorPage extends StatefulWidget {
 
   @override
   State<ScriptSourceEditorPage> createState() => _ScriptSourceEditorPageState();
+}
+
+enum _EditorToolbarMenuAction {
+  format,
+  search,
+  toggleAppearance,
+  debug,
 }
 
 class _ScriptSourceEditorPageState extends State<ScriptSourceEditorPage> {
@@ -60,14 +68,6 @@ class _ScriptSourceEditorPageState extends State<ScriptSourceEditorPage> {
     };
   }
 
-  String get _editorFileName {
-    final baseName = (_source?.name ?? '').trim();
-    if (baseName.isEmpty) {
-      return 'untitled.js';
-    }
-    return baseName.endsWith('.js') ? baseName : '$baseName.js';
-  }
-
   Map<String, TextStyle> get _editorThemeStyles {
     final root =
         _palette.highlightTheme['root'] ??
@@ -79,6 +79,18 @@ class _ScriptSourceEditorPageState extends State<ScriptSourceEditorPage> {
         backgroundColor: _palette.panelBackground,
       ),
     };
+  }
+
+  SystemUiOverlayStyle get _systemOverlayStyle {
+    final base =
+        _appearance == _EditorAppearance.night
+            ? SystemUiOverlayStyle.light
+            : SystemUiOverlayStyle.dark;
+    return base.copyWith(
+      statusBarColor: Colors.transparent,
+      systemNavigationBarColor: Colors.transparent,
+      systemNavigationBarDividerColor: Colors.transparent,
+    );
   }
 
   @override
@@ -344,48 +356,26 @@ class _ScriptSourceEditorPageState extends State<ScriptSourceEditorPage> {
         }
         context.go('/source');
       },
-      child: Scaffold(
-        body: ColoredBox(
-          color: _palette.shellBackground,
-          child: SafeArea(
-            child: Column(
-              children: [
-                if (_isLoading) const LinearProgressIndicator(minHeight: 2),
-                Expanded(
-                  child: Padding(
-                    padding: const EdgeInsets.fromLTRB(12, 10, 12, 12),
-                    child: DecoratedBox(
-                      decoration: BoxDecoration(
-                        color: _palette.panelBackground,
-                        borderRadius: BorderRadius.circular(16),
-                        border: Border.all(color: _palette.border),
-                        boxShadow: [
-                          BoxShadow(
-                            color: _palette.shadowColor,
-                            blurRadius: 22,
-                            offset: Offset(0, 10),
-                          ),
-                        ],
-                      ),
-                      child: ClipRRect(
-                        borderRadius: BorderRadius.circular(16),
-                        child: Column(
-                          children: [
-                            _buildEditorToolbar(context),
-                            _buildIssueBanner(context),
-                            Expanded(
-                              child:
-                                  _isLoading || !_isEditorMounted
-                                      ? _buildEditorLoadingState(context)
-                                      : _buildCodeEditor(context),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ),
+      child: AnnotatedRegion<SystemUiOverlayStyle>(
+        value: _systemOverlayStyle,
+        child: Scaffold(
+          body: ColoredBox(
+            color: _palette.shellBackground,
+            child: SafeArea(
+              bottom: false,
+              child: Column(
+                children: [
+                  if (_isLoading) const LinearProgressIndicator(minHeight: 2),
+                  _buildEditorToolbar(context),
+                  _buildIssueBanner(context),
+                  Expanded(
+                    child:
+                        _isLoading || !_isEditorMounted
+                            ? _buildEditorLoadingState(context)
+                            : _buildCodeEditor(context),
                   ),
-                ),
-              ],
+                ],
+              ),
             ),
           ),
         ),
@@ -451,7 +441,11 @@ class _ScriptSourceEditorPageState extends State<ScriptSourceEditorPage> {
             wrap: false,
             background: _palette.panelBackground,
             cursorColor: _palette.accent,
-            padding: const EdgeInsets.only(top: 14, bottom: 20, right: 24),
+            padding: EdgeInsets.only(
+              top: 12,
+              right: 18,
+              bottom: 18,
+            ),
             textStyle: TextStyle(
               color: _palette.textPrimary,
               fontFamily: 'Menlo, Consolas, "Courier New", monospace',
@@ -476,164 +470,171 @@ class _ScriptSourceEditorPageState extends State<ScriptSourceEditorPage> {
   }
 
   Widget _buildEditorToolbar(BuildContext context) {
-    final subtitle =
-        _isDirty ? '未保存更改' : (_isEditingExisting ? '编辑书源' : '新增书源');
-
     return ColoredBox(
       color: _palette.tabBackground,
-      child: Padding(
-        padding: const EdgeInsets.fromLTRB(10, 10, 10, 10),
-        child: Row(
-          children: [
-            IconButton(
-              tooltip: '返回',
-              onPressed: () => unawaited(_handleBackPressed()),
-              icon: Icon(
-                Icons.arrow_back_ios_new_rounded,
-                color: _palette.textPrimary,
-                size: 18,
-              ),
-            ),
-            const SizedBox(width: 4),
-            const _EditorDot(color: Color(0xFFFF5F56)),
-            const SizedBox(width: 6),
-            const _EditorDot(color: Color(0xFFFFBD2E)),
-            const SizedBox(width: 6),
-            const _EditorDot(color: Color(0xFF27C93F)),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Row(
-                children: [
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          return Padding(
+            padding: const EdgeInsets.fromLTRB(8, 6, 8, 6),
+            child: Row(
+              children: [
+                IconButton(
+                  tooltip: '返回',
+                  onPressed: () => unawaited(_handleBackPressed()),
+                  visualDensity: VisualDensity.compact,
+                  constraints: const BoxConstraints.tightFor(
+                    width: 36,
+                    height: 36,
+                  ),
+                  padding: EdgeInsets.zero,
+                  icon: Icon(
+                    Icons.arrow_back_ios_new_rounded,
+                    color: _palette.textPrimary,
+                    size: 16,
+                  ),
+                ),
+                const Spacer(),
+                if (_isDirty)
                   Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 12,
-                      vertical: 7,
-                    ),
+                    width: 7,
+                    height: 7,
+                    margin: const EdgeInsets.only(right: 10),
                     decoration: BoxDecoration(
-                      color: _palette.panelBackground,
-                      borderRadius: BorderRadius.circular(10),
-                      border: Border.all(color: _palette.border),
-                    ),
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Icon(
-                          Icons.javascript_rounded,
-                          size: 16,
-                          color: _palette.accent,
-                        ),
-                        const SizedBox(width: 8),
-                        Text(
-                          _editorFileName,
-                          style: Theme.of(
-                            context,
-                          ).textTheme.labelLarge?.copyWith(
-                            color: _palette.textPrimary,
-                            fontWeight: FontWeight.w600,
-                          ),
-                        ),
-                        if (_isDirty) ...[
-                          const SizedBox(width: 8),
-                          Container(
-                            width: 7,
-                            height: 7,
-                            decoration: BoxDecoration(
-                              color: _palette.accent,
-                              shape: BoxShape.circle,
-                            ),
-                          ),
-                        ],
-                      ],
+                      color: _palette.accent,
+                      shape: BoxShape.circle,
                     ),
                   ),
-                  const SizedBox(width: 10),
-                  Flexible(
-                    child: Text(
-                      subtitle,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                        color: _palette.textMuted,
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-                  ),
-                ],
-              ),
+                const SizedBox(width: 6),
+                ..._buildToolbarActions(context),
+              ],
             ),
-            const SizedBox(width: 8),
-            IconButton.filledTonal(
-              tooltip: '格式化',
-              style: IconButton.styleFrom(
-                backgroundColor: _palette.statusBackground,
-                foregroundColor: _palette.textPrimary,
-              ),
-              onPressed: _isLoading || _isSaving ? null : _formatSourceCode,
-              icon: const Icon(Icons.auto_fix_high_rounded, size: 18),
-            ),
-            const SizedBox(width: 8),
-            IconButton.filledTonal(
-              tooltip: '查找',
-              style: IconButton.styleFrom(
-                backgroundColor: _palette.statusBackground,
-                foregroundColor: _palette.textPrimary,
-              ),
-              onPressed: _isLoading ? null : _controller.showSearch,
-              icon: const Icon(Icons.search_rounded, size: 18),
-            ),
-            IconButton.filledTonal(
-              tooltip:
-                  _appearance == _EditorAppearance.night ? '切换到日间' : '切换到夜间',
-              style: IconButton.styleFrom(
-                backgroundColor: _palette.statusBackground,
-                foregroundColor: _palette.textPrimary,
-              ),
-              onPressed: () {
-                setState(() {
-                  _appearance =
-                      _appearance == _EditorAppearance.night
-                          ? _EditorAppearance.day
-                          : _EditorAppearance.night;
-                });
-              },
-              icon: Icon(
-                _appearance == _EditorAppearance.night
-                    ? Icons.light_mode_outlined
-                    : Icons.dark_mode_outlined,
-                size: 18,
-              ),
-            ),
-            const SizedBox(width: 8),
-            IconButton.filledTonal(
-              tooltip: '调试',
-              style: IconButton.styleFrom(
-                backgroundColor: _palette.toolbarSecondaryBackground,
-                foregroundColor: _palette.toolbarSecondaryForeground,
-              ),
-              onPressed: _isLoading || _isSaving ? null : _openDebugPage,
-              icon: const Icon(Icons.bug_report_outlined, size: 18),
-            ),
-            const SizedBox(width: 8),
-            IconButton.filled(
-              tooltip: _isSaving ? '保存中' : '保存',
-              style: IconButton.styleFrom(
-                backgroundColor: _palette.accent,
-                foregroundColor: _palette.onAccent,
-              ),
-              onPressed: _isLoading || _isSaving ? null : _save,
-              icon:
-                  _isSaving
-                      ? const SizedBox(
-                        width: 16,
-                        height: 16,
-                        child: CircularProgressIndicator(strokeWidth: 2),
-                      )
-                      : const Icon(Icons.save_outlined, size: 18),
-            ),
-          ],
-        ),
+          );
+        },
       ),
     );
+  }
+
+  List<Widget> _buildToolbarActions(BuildContext context) {
+    final actions = <Widget>[
+      _buildToolbarButton(
+        tooltip: '调试',
+        onPressed: _isLoading || _isSaving ? null : _openDebugPage,
+        icon: const Icon(Icons.bug_report_outlined, size: 18),
+        backgroundColor: _palette.toolbarSecondaryBackground,
+        foregroundColor: _palette.toolbarSecondaryForeground,
+      ),
+      const SizedBox(width: 6),
+      IconButton.filled(
+        tooltip: _isSaving ? '保存中' : '保存',
+        style: IconButton.styleFrom(
+          backgroundColor: _palette.accent,
+          foregroundColor: _palette.onAccent,
+          visualDensity: VisualDensity.compact,
+          minimumSize: const Size(38, 38),
+          padding: const EdgeInsets.all(8),
+          tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+        ),
+        onPressed: _isLoading || _isSaving ? null : _save,
+        icon:
+            _isSaving
+                ? const SizedBox(
+                  width: 16,
+                  height: 16,
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                )
+                : const Icon(Icons.save_outlined, size: 18),
+      ),
+      const SizedBox(width: 6),
+      PopupMenuButton<_EditorToolbarMenuAction>(
+        tooltip: '更多工具',
+        enabled: !_isLoading,
+        onSelected: _handleToolbarMenuAction,
+        itemBuilder: (context) => [
+          const PopupMenuItem(
+            value: _EditorToolbarMenuAction.search,
+            child: Text('查找'),
+          ),
+          const PopupMenuItem(
+            value: _EditorToolbarMenuAction.format,
+            child: Text('格式化'),
+          ),
+          PopupMenuItem(
+            value: _EditorToolbarMenuAction.toggleAppearance,
+            child: Text(
+              _appearance == _EditorAppearance.night ? '切换到日间' : '切换到夜间',
+            ),
+          ),
+          const PopupMenuItem(
+            value: _EditorToolbarMenuAction.debug,
+            child: Text('调试'),
+          ),
+        ],
+        child: Container(
+          width: 38,
+          height: 38,
+          decoration: BoxDecoration(
+            color: _palette.statusBackground,
+            borderRadius: BorderRadius.circular(19),
+            border: Border.all(color: _palette.border),
+          ),
+          alignment: Alignment.center,
+          child: Icon(
+            Icons.more_vert_rounded,
+            size: 18,
+            color: _palette.textPrimary,
+          ),
+        ),
+      ),
+    ];
+    return actions;
+  }
+
+  Widget _buildToolbarButton({
+    required String tooltip,
+    required VoidCallback? onPressed,
+    required Widget icon,
+    Color? backgroundColor,
+    Color? foregroundColor,
+  }) {
+    return IconButton.filledTonal(
+      tooltip: tooltip,
+      style: IconButton.styleFrom(
+        backgroundColor: backgroundColor ?? _palette.statusBackground,
+        foregroundColor: foregroundColor ?? _palette.textPrimary,
+        visualDensity: VisualDensity.compact,
+        minimumSize: const Size(38, 38),
+        padding: const EdgeInsets.all(8),
+        tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+      ),
+      onPressed: onPressed,
+      icon: icon,
+    );
+  }
+
+  void _toggleAppearance() {
+    setState(() {
+      _appearance =
+          _appearance == _EditorAppearance.night
+              ? _EditorAppearance.day
+              : _EditorAppearance.night;
+    });
+  }
+
+  void _handleToolbarMenuAction(_EditorToolbarMenuAction action) {
+    switch (action) {
+      case _EditorToolbarMenuAction.search:
+        _controller.showSearch();
+        break;
+      case _EditorToolbarMenuAction.format:
+        unawaited(_formatSourceCode());
+        break;
+      case _EditorToolbarMenuAction.toggleAppearance:
+        _toggleAppearance();
+        break;
+      case _EditorToolbarMenuAction.debug:
+        unawaited(_openDebugPage());
+        break;
+    }
   }
 
   Widget _buildIssueBanner(BuildContext context) {
@@ -696,21 +697,6 @@ class _ScriptSourceEditorPageState extends State<ScriptSourceEditorPage> {
   }
 }
 
-class _EditorDot extends StatelessWidget {
-  const _EditorDot({required this.color});
-
-  final Color color;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      width: 10,
-      height: 10,
-      decoration: BoxDecoration(color: color, shape: BoxShape.circle),
-    );
-  }
-}
-
 class _ScriptSourceEditorAnalyzer extends AbstractAnalyzer {
   const _ScriptSourceEditorAnalyzer();
 
@@ -747,26 +733,26 @@ class _EditorPalette {
   });
 
   static const _EditorPalette night = _EditorPalette(
-    shellBackground: Color(0xFF11151C),
-    panelBackground: Color(0xFF0C1117),
-    tabBackground: Color(0xFF151C25),
-    border: Color(0xFF253040),
+    shellBackground: Color(0xFF0C1117),
+    panelBackground: Color(0xFF070A0E),
+    tabBackground: Color(0xFF0C1117),
+    border: Color(0xFF1A2430),
     accent: Color(0xFF53A7FF),
     onAccent: Color(0xFF03111F),
     textPrimary: Color(0xFFE6EDF3),
-    textMuted: Color(0xFF8B98A9),
+    textMuted: Color(0xFF7D8999),
     selectionColor: Color(0x4D2F81F7),
-    statusBackground: Color(0xFF111A24),
-    toolbarSecondaryBackground: Color(0xFF1B2633),
+    statusBackground: Color(0xFF111821),
+    toolbarSecondaryBackground: Color(0xFF17202B),
     toolbarSecondaryForeground: Color(0xFFE6EDF3),
-    appBarBackground: Color(0xFF11151C),
+    appBarBackground: Color(0xFF05070A),
     appBarForeground: Color(0xFFE6EDF3),
-    shadowColor: Color(0x55000000),
+    shadowColor: Color(0x00000000),
     highlightTheme: vs2015Theme,
   );
 
   static const _EditorPalette day = _EditorPalette(
-    shellBackground: Color(0xFFF4F6FA),
+    shellBackground: Color(0xFFECEFF5),
     panelBackground: Color(0xFFFFFFFF),
     tabBackground: Color(0xFFECEFF5),
     border: Color(0xFFD8DEE8),
@@ -775,12 +761,12 @@ class _EditorPalette {
     textPrimary: Color(0xFF1F2329),
     textMuted: Color(0xFF667085),
     selectionColor: Color(0x332F81F7),
-    statusBackground: Color(0xFFF6F8FC),
-    toolbarSecondaryBackground: Color(0xFFE8EEF7),
-    toolbarSecondaryForeground: Color(0xFF1F2329),
+    statusBackground: Color(0xFFF2F5FA),
+    toolbarSecondaryBackground: Color(0xFFE3EBF7),
+    toolbarSecondaryForeground: Color(0xFF163B6D),
     appBarBackground: Color(0xFFF4F6FA),
     appBarForeground: Color(0xFF1F2329),
-    shadowColor: Color(0x180E1726),
+    shadowColor: Color(0x00000000),
     highlightTheme: vsTheme,
   );
 

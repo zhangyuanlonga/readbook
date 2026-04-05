@@ -17,8 +17,6 @@ import 'script_source_debug_page.dart';
 
 enum _ScriptSourceSortOption { updatedDesc, nameAsc, nameDesc }
 
-enum _SourceListDisplayMode { flat, websiteClustered }
-
 enum _SourcePageMenuAction {
   create,
   importLocal,
@@ -63,16 +61,20 @@ class _SourceSuggestionAction {
   final VoidCallback? onTap;
 }
 
-class _SourceWebsiteCluster {
-  const _SourceWebsiteCluster({
+class _SourceWebsiteClusterSummary {
+  const _SourceWebsiteClusterSummary({
     required this.key,
     required this.title,
-    required this.sources,
+    required this.sourceCount,
+    required this.healthSummary,
+    required this.recommendedSourceId,
   });
 
   final String key;
   final String title;
-  final List<ScriptSource> sources;
+  final int sourceCount;
+  final String healthSummary;
+  final String? recommendedSourceId;
 }
 
 class SourcePage extends StatefulWidget {
@@ -97,6 +99,7 @@ class SourcePage extends StatefulWidget {
 
 class _SourcePageState extends State<SourcePage> {
   static const String _ungroupedGroupKey = '__ungrouped__';
+  static const String _duplicateGroupKey = '__duplicate__';
 
   late final SourceRuntimeFacade _sourceRuntimeFacade;
   late final SourceCheckService _sourceCheckService;
@@ -110,9 +113,7 @@ class _SourcePageState extends State<SourcePage> {
   String _searchQuery = '';
   String? _selectedGroupKey;
   _ScriptSourceSortOption _sortOption = _ScriptSourceSortOption.updatedDesc;
-  _SourceListDisplayMode _displayMode = _SourceListDisplayMode.flat;
   final Set<String> _selectedBatchSourceIds = <String>{};
-  final Set<String> _expandedClusterKeys = <String>{};
   bool _autoDisableHighRiskSourcesEnabled = false;
 
   final Set<String> _changingEnabledScriptSourceIds = <String>{};
@@ -165,6 +166,11 @@ class _SourcePageState extends State<SourcePage> {
           _lastRawSources = rawSources;
           final visibleSources = _resolveVisibleSources(rawSources);
           _lastVisibleSources = visibleSources;
+          final clusterSummaries = _buildClusterSummaries(visibleSources);
+          final filteredVisibleSources = _applyClusterFilter(
+            visibleSources,
+            clusterSummaries,
+          );
           final availableGroups = _collectGroupKeys(rawSources);
 
           if (_selectedGroupKey != null &&
@@ -239,6 +245,14 @@ class _SourcePageState extends State<SourcePage> {
                         child: Text('全部'),
                       ),
                     ];
+                    if (_hasDuplicateSources(rawSources)) {
+                      items.add(
+                        const PopupMenuItem<String?>(
+                          value: _duplicateGroupKey,
+                          child: Text('重复源'),
+                        ),
+                      );
+                    }
                     if (_hasUngrouped(rawSources)) {
                       items.add(
                         const PopupMenuItem<String?>(
@@ -296,7 +310,8 @@ class _SourcePageState extends State<SourcePage> {
                 context,
                 snapshot: snapshot,
                 rawSources: rawSources,
-                visibleSources: visibleSources,
+                visibleSources: filteredVisibleSources,
+                clusterSummaries: clusterSummaries,
               ),
             ),
           );
@@ -310,6 +325,7 @@ class _SourcePageState extends State<SourcePage> {
     required AsyncSnapshot<List<ScriptSource>> snapshot,
     required List<ScriptSource> rawSources,
     required List<ScriptSource> visibleSources,
+    required Map<String, _SourceWebsiteClusterSummary> clusterSummaries,
   }) {
     final horizontal = AppSpacing.pageHorizontal(context);
     final bottomSafe = MediaQuery.viewPaddingOf(context).bottom;
@@ -344,14 +360,16 @@ class _SourcePageState extends State<SourcePage> {
               visibleCount: visibleSources.length,
             ),
             const SizedBox(height: 12),
-            _buildDisplayModeSelector(context),
-            const SizedBox(height: 12),
             if (!hasAnySource)
               _buildEmptyStateCard(context)
             else if (visibleSources.isEmpty && hasFilter)
               _buildNoResultCard(context)
             else
-              ..._buildSourceListContent(context, visibleSources),
+              ..._buildSourceListContent(
+                context,
+                visibleSources,
+                clusterSummaries: clusterSummaries,
+              ),
           ],
         ),
       ),
@@ -360,17 +378,17 @@ class _SourcePageState extends State<SourcePage> {
 
   List<Widget> _buildSourceListContent(
     BuildContext context,
-    List<ScriptSource> visibleSources,
-  ) {
-    if (_displayMode == _SourceListDisplayMode.flat) {
-      return visibleSources
-          .map((source) => _buildSourceTile(context, source))
-          .toList(growable: false);
-    }
-
-    final clusters = _buildSourceClusters(visibleSources);
-    return clusters
-        .map((cluster) => _buildClusterCard(context, cluster))
+    List<ScriptSource> visibleSources, {
+    required Map<String, _SourceWebsiteClusterSummary> clusterSummaries,
+  }) {
+    return visibleSources
+        .map(
+          (source) => _buildSourceTile(
+            context,
+            source,
+            clusterSummary: clusterSummaries[_clusterKeyOf(source)],
+          ),
+        )
         .toList(growable: false);
   }
 
@@ -465,12 +483,6 @@ class _SourcePageState extends State<SourcePage> {
         _buildSummaryChip(context, '已选：${_selectedBatchSourceIds.length}'),
       );
     }
-    chips.add(
-      _buildSummaryChip(
-        context,
-        _displayMode == _SourceListDisplayMode.flat ? '普通列表' : '按网站聚合',
-      ),
-    );
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -519,33 +531,6 @@ class _SourcePageState extends State<SourcePage> {
           fontWeight: FontWeight.w600,
         ),
       ),
-    );
-  }
-
-  Widget _buildDisplayModeSelector(BuildContext context) {
-    return SegmentedButton<_SourceListDisplayMode>(
-      segments: const <ButtonSegment<_SourceListDisplayMode>>[
-        ButtonSegment<_SourceListDisplayMode>(
-          value: _SourceListDisplayMode.flat,
-          icon: Icon(Icons.view_stream_rounded),
-          label: Text('普通列表'),
-        ),
-        ButtonSegment<_SourceListDisplayMode>(
-          value: _SourceListDisplayMode.websiteClustered,
-          icon: Icon(Icons.account_tree_rounded),
-          label: Text('按网站聚合'),
-        ),
-      ],
-      selected: <_SourceListDisplayMode>{_displayMode},
-      onSelectionChanged: (selection) {
-        final next = selection.firstOrNull;
-        if (next == null || next == _displayMode || !mounted) {
-          return;
-        }
-        setState(() {
-          _displayMode = next;
-        });
-      },
     );
   }
 
@@ -701,148 +686,12 @@ class _SourcePageState extends State<SourcePage> {
     );
   }
 
-  List<_SourceWebsiteCluster> _buildSourceClusters(List<ScriptSource> sources) {
-    final clustersByKey = <String, List<ScriptSource>>{};
-    for (final source in sources) {
-      final key = _clusterKeyOf(source);
-      clustersByKey.putIfAbsent(key, () => <ScriptSource>[]).add(source);
-    }
-
-    final clusters = clustersByKey.entries
-        .map(
-          (entry) => _SourceWebsiteCluster(
-            key: entry.key,
-            title: _clusterTitleOf(entry.value.first),
-            sources: entry.value..sort(_compareScriptSource),
-          ),
-        )
-        .toList(growable: false);
-    clusters.sort((a, b) {
-      final sizeCompare = b.sources.length.compareTo(a.sources.length);
-      if (sizeCompare != 0) {
-        return sizeCompare;
-      }
-      return a.title.toLowerCase().compareTo(b.title.toLowerCase());
-    });
-    return clusters;
-  }
-
-  Widget _buildClusterCard(
-    BuildContext context,
-    _SourceWebsiteCluster cluster,
-  ) {
-    final recommended = _recommendedSourceOf(cluster.sources);
-    final healthSummary = _clusterHealthSummary(cluster.sources);
-    final isExpanded = _expandedClusterKeys.contains(cluster.key);
-    final secondaryText = <String>[
-      '${cluster.sources.length} 个源',
-      if (healthSummary.isNotEmpty) healthSummary,
-    ].join(' · ');
-
-    return Card(
-      margin: const EdgeInsets.only(bottom: 10),
-      shape: _buildOutlinedCardShape(context),
-      child: Padding(
-        padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        cluster.title,
-                        style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                          fontWeight: FontWeight.w800,
-                        ),
-                      ),
-                      const SizedBox(height: 4),
-                      Text(
-                        secondaryText,
-                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                          color: Theme.of(context).colorScheme.onSurfaceVariant,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-                IconButton(
-                  tooltip: isExpanded ? '收起' : '展开',
-                  onPressed: () => _toggleClusterExpanded(cluster.key),
-                  icon: Icon(
-                    isExpanded
-                        ? Icons.keyboard_arrow_up_rounded
-                        : Icons.keyboard_arrow_down_rounded,
-                  ),
-                ),
-              ],
-            ),
-            if (recommended != null) ...[
-              const SizedBox(height: 8),
-              Wrap(
-                spacing: 8,
-                runSpacing: 8,
-                children: [
-                  _buildSummaryChip(context, '推荐保留：${recommended.name}'),
-                  if ((recommended.registrableDomain ?? '').isNotEmpty)
-                    _buildSummaryChip(
-                      context,
-                      '主域：${recommended.registrableDomain!}',
-                    ),
-                ],
-              ),
-            ],
-            const SizedBox(height: 10),
-            Wrap(
-              spacing: 8,
-              runSpacing: 8,
-              children: [
-                FilledButton.tonal(
-                  onPressed:
-                      recommended == null
-                          ? null
-                          : () => unawaited(
-                            _disableClusterOthers(
-                              cluster.sources,
-                              keepSourceId: recommended.id,
-                            ),
-                          ),
-                  child: const Text('停用其余源'),
-                ),
-                OutlinedButton(
-                  onPressed: () => _toggleClusterExpanded(cluster.key),
-                  child: Text(isExpanded ? '收起组内源' : '查看组内源'),
-                ),
-              ],
-            ),
-            if (isExpanded) ...[
-              const SizedBox(height: 12),
-              const Divider(height: 1),
-              const SizedBox(height: 8),
-              ...cluster.sources.map(
-                (source) => _buildSourceTile(
-                  context,
-                  source,
-                  compact: true,
-                  highlightRecommended: recommended?.id == source.id,
-                ),
-              ),
-            ],
-          ],
-        ),
-      ),
-    );
-  }
-
   Widget _buildSourceTile(
     BuildContext context,
     ScriptSource source, {
     bool compact = false,
     bool highlightRecommended = false,
+    _SourceWebsiteClusterSummary? clusterSummary,
   }) {
     final isChangingEnabled = _changingEnabledScriptSourceIds.contains(
       source.id,
@@ -936,6 +785,31 @@ class _SourcePageState extends State<SourcePage> {
                         spacing: 6,
                         runSpacing: 6,
                         children: [
+                          if ((source.registrableDomain ?? '').isNotEmpty)
+                            _buildInfoChip(
+                              context,
+                              '站点: ${source.registrableDomain!.trim()}',
+                            ),
+                          if (clusterSummary != null &&
+                              clusterSummary.sourceCount >= 2)
+                            _buildInfoChip(
+                              context,
+                              '同站 ${clusterSummary.sourceCount} 个',
+                            ),
+                          if (clusterSummary != null &&
+                              clusterSummary.recommendedSourceId == source.id)
+                            _buildSuggestionChip(context, '推荐保留'),
+                          if (clusterSummary != null &&
+                              clusterSummary.sourceCount >= 2 &&
+                              clusterSummary.recommendedSourceId == source.id)
+                            _buildSuggestionChip(
+                              context,
+                              '停用同站其余源',
+                              onTap:
+                                  () => unawaited(
+                                    _disableClusterOthersBySource(source),
+                                  ),
+                            ),
                           _buildHealthBadge(context, healthSnapshot),
                           if (healthSnapshot.coolingDown)
                             _buildInfoChip(
@@ -1100,7 +974,8 @@ class _SourcePageState extends State<SourcePage> {
         sources.where((source) {
           if (_selectedGroupKey != null) {
             final sourceGroupKey = _groupKeyOf(source);
-            if (sourceGroupKey != _selectedGroupKey) {
+            if (_selectedGroupKey != _duplicateGroupKey &&
+                sourceGroupKey != _selectedGroupKey) {
               return false;
             }
           }
@@ -1147,6 +1022,12 @@ class _SourcePageState extends State<SourcePage> {
     return sources.any((source) => _groupKeyOf(source) == _ungroupedGroupKey);
   }
 
+  bool _hasDuplicateSources(List<ScriptSource> sources) {
+    return _buildClusterSummaries(sources).values.any(
+      (summary) => summary.sourceCount >= 2,
+    );
+  }
+
   bool _isCurrentGroupSelectionAvailable({
     required String? selectedGroupKey,
     required List<String> availableGroups,
@@ -1157,6 +1038,9 @@ class _SourcePageState extends State<SourcePage> {
     }
     if (selectedGroupKey == _ungroupedGroupKey) {
       return _hasUngrouped(sources);
+    }
+    if (selectedGroupKey == _duplicateGroupKey) {
+      return _hasDuplicateSources(sources);
     }
     return availableGroups.contains(selectedGroupKey);
   }
@@ -1169,6 +1053,9 @@ class _SourcePageState extends State<SourcePage> {
   String _groupLabel(String? groupKey) {
     if (groupKey == null) {
       return '全部';
+    }
+    if (groupKey == _duplicateGroupKey) {
+      return '重复源';
     }
     if (groupKey == _ungroupedGroupKey) {
       return '未分组';
@@ -1194,6 +1081,46 @@ class _SourcePageState extends State<SourcePage> {
       return host;
     }
     return '未识别站点';
+  }
+
+  Map<String, _SourceWebsiteClusterSummary> _buildClusterSummaries(
+    List<ScriptSource> sources,
+  ) {
+    final groups = <String, List<ScriptSource>>{};
+    for (final source in sources) {
+      groups
+          .putIfAbsent(_clusterKeyOf(source), () => <ScriptSource>[])
+          .add(source);
+    }
+
+    final summaries = <String, _SourceWebsiteClusterSummary>{};
+    for (final entry in groups.entries) {
+      final clusterSources = entry.value..sort(_compareScriptSource);
+      summaries[entry.key] = _SourceWebsiteClusterSummary(
+        key: entry.key,
+        title: _clusterTitleOf(clusterSources.first),
+        sourceCount: clusterSources.length,
+        healthSummary: _clusterHealthSummary(clusterSources),
+        recommendedSourceId: _recommendedSourceOf(clusterSources)?.id,
+      );
+    }
+    return summaries;
+  }
+
+  List<ScriptSource> _applyClusterFilter(
+    List<ScriptSource> sources,
+    Map<String, _SourceWebsiteClusterSummary> summaries,
+  ) {
+    if (_selectedGroupKey != _duplicateGroupKey) {
+      return sources;
+    }
+    return sources
+        .where((source) {
+          final summary = summaries[_clusterKeyOf(source)];
+          final count = summary?.sourceCount ?? 1;
+          return count >= 2;
+        })
+        .toList(growable: false);
   }
 
   int _compareScriptSource(ScriptSource a, ScriptSource b) {
@@ -1267,20 +1194,15 @@ class _SourcePageState extends State<SourcePage> {
     return sorted.first;
   }
 
-  void _toggleClusterExpanded(String clusterKey) {
-    setState(() {
-      if (!_expandedClusterKeys.add(clusterKey)) {
-        _expandedClusterKeys.remove(clusterKey);
-      }
-    });
-  }
-
-  Future<void> _disableClusterOthers(
-    List<ScriptSource> sources, {
-    required String keepSourceId,
-  }) async {
-    final targets = sources
-        .where((source) => source.id != keepSourceId && source.enabled)
+  Future<void> _disableClusterOthersBySource(ScriptSource source) async {
+    final clusterKey = _clusterKeyOf(source);
+    final clusterSources = _lastVisibleSources
+        .where((item) => _clusterKeyOf(item) == clusterKey)
+        .toList(growable: false);
+    final recommended = _recommendedSourceOf(clusterSources);
+    final keepSourceId = recommended?.id ?? source.id;
+    final targets = clusterSources
+        .where((item) => item.id != keepSourceId && item.enabled)
         .toList(growable: false);
     for (final source in targets) {
       await _sourceRuntimeFacade.setScriptSourceEnabled(
