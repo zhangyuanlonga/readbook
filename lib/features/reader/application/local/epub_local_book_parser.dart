@@ -1,3 +1,4 @@
+import 'dart:collection';
 import 'dart:convert';
 import 'dart:io';
 
@@ -19,7 +20,9 @@ class EpubLocalBookParser implements LocalBookParser {
   const EpubLocalBookParser({
     LocalTextEncodingDetector textEncodingDetector =
         const LocalTextEncodingDetector(),
-  }) : _textEncodingDetector = textEncodingDetector;
+    EpubArchiveDecoder archiveDecoder = const EpubArchiveDecoder(),
+  }) : _textEncodingDetector = textEncodingDetector,
+       _archiveDecoder = archiveDecoder;
 
   static const List<String> _supportedExtensions = <String>[
     '.xhtml',
@@ -34,6 +37,7 @@ class EpubLocalBookParser implements LocalBookParser {
     '.gif',
     '.webp',
     '.bmp',
+    '.svg',
   };
 
   static const List<String> _htmlCharsetCandidates = <String>[
@@ -51,6 +55,10 @@ class EpubLocalBookParser implements LocalBookParser {
   ];
 
   final LocalTextEncodingDetector _textEncodingDetector;
+  final EpubArchiveDecoder _archiveDecoder;
+  static final LinkedHashMap<String, _LoadedEpubArchive> _archiveCache =
+      LinkedHashMap<String, _LoadedEpubArchive>();
+  static const int _maxArchiveCacheEntries = 4;
 
   @override
   bool supports(LocalBookFormat format) {
@@ -59,53 +67,20 @@ class EpubLocalBookParser implements LocalBookParser {
 
   @override
   Future<LocalParsedBook> parse(LocalBook book) async {
-    final file = File(book.storagePath);
-    if (!await file.exists()) {
-      throw AppException(
-        code: ErrorCode.validation,
-        stage: ErrorStage.content,
-        briefMessage: '本地文件不存在：${book.storagePath}',
-      );
-    }
-
-    final bytes = await file.readAsBytes();
-    if (bytes.isEmpty) {
-      throw AppException(
-        code: ErrorCode.ruleMatchEmpty,
-        stage: ErrorStage.content,
-        briefMessage: 'EPUB 文件为空，无法建立章节索引。',
-      );
-    }
-
-    Archive archive;
-    try {
-      archive = ZipDecoder().decodeBytes(bytes, verify: false);
-    } catch (error) {
-      throw AppException(
-        code: ErrorCode.decode,
-        stage: ErrorStage.content,
-        briefMessage: 'EPUB 解压失败：$error',
-      );
-    }
-
-    final archiveFileIndex = <String, ArchiveFile>{
-      for (final entry in archive.files.where((item) => item.isFile))
-        _normalizeArchivePath(entry.name): entry,
-    };
-    final packageDocument = _loadPackageDocument(archiveFileIndex);
+    final loadedArchive = await _loadArchive(book);
     final chapterCandidates = _resolveChapterCandidates(
-      archive: archive,
-      archiveFileIndex: archiveFileIndex,
-      packageDocument: packageDocument,
+      archive: loadedArchive.archive,
+      archiveFileIndex: loadedArchive.archiveFileIndex,
+      packageDocument: loadedArchive.packageDocument,
     );
     final assetDir = await _prepareAssetDirectory(book);
     final metadata = _extractMetadata(
-      archiveFileIndex,
-      packageDocument: packageDocument,
+      loadedArchive.archiveFileIndex,
+      packageDocument: loadedArchive.packageDocument,
     );
     final coverPath = await _materializeCoverPath(
       metadata: metadata,
-      archiveFileIndex: archiveFileIndex,
+      archiveFileIndex: loadedArchive.archiveFileIndex,
       assetRootDir: assetDir,
     );
 
@@ -119,27 +94,26 @@ class EpubLocalBookParser implements LocalBookParser {
       }
 
       final document = html_parser.parse(html);
-      final normalizedPreview = _normalizeText(
-        document.body?.text ?? document.outerHtml,
+      final normalizedEntryPath = _normalizeArchivePath(entry.name);
+      final preview = _buildChapterCandidatePreview(
+        document: document,
+        entryPath: normalizedEntryPath,
+        index: index + 1,
       );
-      final hasInlineImages = document
-          .querySelectorAll('*')
-          .any(
-            (element) =>
-                (element.localName ?? '').toLowerCase() == 'img' ||
-                (element.localName ?? '').toLowerCase() == 'image',
-          );
-      if (normalizedPreview.length < 20 && !hasInlineImages) {
+      if (preview.category != _EpubDocumentCategory.body) {
+        continue;
+      }
+      if (!preview.hasReadableSignal) {
         continue;
       }
 
-      final title = _resolveTitle(document.outerHtml, entry.name, index + 1);
       chapters.add(
         LocalParsedChapter(
-          title: title,
+          title: preview.title,
           content: '',
           imageUrls: const <String>[],
           sourceRef: _normalizeArchivePath(entry.name),
+          document: preview.document,
         ),
       );
       index += 1;
@@ -173,40 +147,11 @@ class EpubLocalBookParser implements LocalBookParser {
       );
     }
 
-    final file = File(book.storagePath);
-    if (!await file.exists()) {
-      throw AppException(
-        code: ErrorCode.validation,
-        stage: ErrorStage.content,
-        briefMessage: '本地文件不存在：${book.storagePath}',
-      );
-    }
-
-    final bytes = await file.readAsBytes();
-    if (bytes.isEmpty) {
-      throw AppException(
-        code: ErrorCode.ruleMatchEmpty,
-        stage: ErrorStage.content,
-        briefMessage: 'EPUB 文件为空，无法读取章节内容。',
-      );
-    }
-
-    Archive archive;
-    try {
-      archive = ZipDecoder().decodeBytes(bytes, verify: false);
-    } catch (error) {
-      throw AppException(
-        code: ErrorCode.decode,
-        stage: ErrorStage.content,
-        briefMessage: 'EPUB 解压失败：$error',
-      );
-    }
-
-    final archiveFileIndex = <String, ArchiveFile>{
-      for (final entry in archive.files.where((item) => item.isFile))
-        _normalizeArchivePath(entry.name): entry,
-    };
-    final archiveEntry = _findArchiveFile(archiveFileIndex, sourceRef);
+    final loadedArchive = await _loadArchive(book);
+    final archiveEntry = _findArchiveFile(
+      loadedArchive.archiveFileIndex,
+      sourceRef,
+    );
     if (archiveEntry == null) {
       throw AppException(
         code: ErrorCode.ruleMatchEmpty,
@@ -221,7 +166,7 @@ class EpubLocalBookParser implements LocalBookParser {
       book: book,
       documentHtml: html,
       chapterEntryName: archiveEntry.name,
-      archiveFileIndex: archiveFileIndex,
+      archiveFileIndex: loadedArchive.archiveFileIndex,
       assetRootDir: assetDir,
     );
     final normalized = _normalizeText(extraction.content);
@@ -232,11 +177,16 @@ class EpubLocalBookParser implements LocalBookParser {
         briefMessage: 'EPUB 章节内容为空，请重新索引后重试。',
       );
     }
+    final structuredDocument = _withFallbackChapterTitle(
+      extraction.document,
+      chapterTitle: chapter.title,
+    );
     return LocalParsedChapter(
       title: chapter.title,
-      content: normalized,
-      imageUrls: extraction.imageUrls,
+      content: structuredDocument.compatibilityContent,
+      imageUrls: structuredDocument.imageUrls,
       sourceRef: sourceRef,
+      document: structuredDocument,
     );
   }
 
@@ -290,6 +240,61 @@ class EpubLocalBookParser implements LocalBookParser {
       author: author,
       coverArchivePath: coverArchivePath,
     );
+  }
+
+  Future<_LoadedEpubArchive> _loadArchive(LocalBook book) async {
+    final file = File(book.storagePath);
+    if (!await file.exists()) {
+      throw AppException(
+        code: ErrorCode.validation,
+        stage: ErrorStage.content,
+        briefMessage: '本地文件不存在：${book.storagePath}',
+      );
+    }
+
+    final stat = await file.stat();
+    final cacheKey =
+        '${book.storagePath}::${stat.size}::${stat.modified.millisecondsSinceEpoch}';
+    final cached = _archiveCache.remove(cacheKey);
+    if (cached != null) {
+      _archiveCache[cacheKey] = cached;
+      return cached;
+    }
+
+    final bytes = await file.readAsBytes();
+    if (bytes.isEmpty) {
+      throw AppException(
+        code: ErrorCode.ruleMatchEmpty,
+        stage: ErrorStage.content,
+        briefMessage: 'EPUB 文件为空，无法建立章节索引。',
+      );
+    }
+
+    Archive archive;
+    try {
+      archive = _archiveDecoder.decodeBytes(bytes);
+    } catch (error) {
+      throw AppException(
+        code: ErrorCode.decode,
+        stage: ErrorStage.content,
+        briefMessage: 'EPUB 解压失败：$error',
+      );
+    }
+
+    final archiveFileIndex = <String, ArchiveFile>{
+      for (final entry in archive.files.where((item) => item.isFile))
+        _normalizeArchivePath(entry.name): entry,
+    };
+    final loaded = _LoadedEpubArchive(
+      archive: archive,
+      archiveFileIndex: archiveFileIndex,
+      packageDocument: _loadPackageDocument(archiveFileIndex),
+    );
+    _archiveCache[cacheKey] = loaded;
+    while (_archiveCache.length > _maxArchiveCacheEntries) {
+      _archiveCache.remove(_archiveCache.keys.first);
+    }
+    return loaded;
   }
 
   _EpubPackageDocument? _loadPackageDocument(
@@ -681,6 +686,231 @@ class EpubLocalBookParser implements LocalBookParser {
     return null;
   }
 
+  _EpubChapterCandidatePreview _buildChapterCandidatePreview({
+    required dom.Document document,
+    required String entryPath,
+    required int index,
+  }) {
+    final normalizedText = _normalizeText(
+      document.body?.text ??
+          document.documentElement?.text ??
+          document.outerHtml,
+    );
+    final hasInlineImages = document
+        .querySelectorAll('*')
+        .any(
+          (element) => _isImageElement((element.localName ?? '').toLowerCase()),
+        );
+    final title = _resolveDocumentTitle(
+      document: document,
+      entryName: entryPath,
+      index: index,
+    );
+    final category = _classifyDocumentCategory(
+      document: document,
+      entryPath: entryPath,
+      title: title,
+      normalizedText: normalizedText,
+      hasInlineImages: hasInlineImages,
+    );
+    return _EpubChapterCandidatePreview(
+      category: category,
+      title: title,
+      normalizedText: normalizedText,
+      hasInlineImages: hasInlineImages,
+      document: _buildPreviewDocument(
+        title: title,
+        previewText: normalizedText,
+      ),
+    );
+  }
+
+  ReaderDocument _buildPreviewDocument({
+    required String title,
+    required String previewText,
+  }) {
+    final normalizedTitle = _normalizeInlineText(title);
+    final withoutDuplicateTitle = _stripDuplicateLeadingTitle(
+      previewText,
+      normalizedTitle,
+    );
+    final excerpt = _buildPreviewExcerpt(withoutDuplicateTitle);
+    if (normalizedTitle.isEmpty && excerpt.isEmpty) {
+      return ReaderDocument(blocks: const <ReaderBlock>[]);
+    }
+    return ReaderDocument.fromContent(
+      content: excerpt,
+      title: normalizedTitle.isEmpty ? null : normalizedTitle,
+      includeTitleBlock: normalizedTitle.isNotEmpty,
+    );
+  }
+
+  String _buildPreviewExcerpt(String value) {
+    final normalized = _normalizeText(value);
+    if (normalized.isEmpty) {
+      return '';
+    }
+    if (normalized.length <= 280) {
+      return normalized;
+    }
+    return '${normalized.substring(0, 280).trim()}...';
+  }
+
+  String _stripDuplicateLeadingTitle(String previewText, String title) {
+    final normalizedPreview = _normalizeText(previewText);
+    if (normalizedPreview.isEmpty || title.isEmpty) {
+      return normalizedPreview;
+    }
+    if (normalizedPreview == title) {
+      return '';
+    }
+    if (normalizedPreview.startsWith('$title\n')) {
+      return normalizedPreview.substring(title.length).trimLeft();
+    }
+    if (normalizedPreview.startsWith('$title ')) {
+      return normalizedPreview.substring(title.length).trimLeft();
+    }
+    return normalizedPreview;
+  }
+
+  _EpubDocumentCategory _classifyDocumentCategory({
+    required dom.Document document,
+    required String entryPath,
+    required String title,
+    required String normalizedText,
+    required bool hasInlineImages,
+  }) {
+    if (_isNavigationDocument(entryPath: entryPath, properties: '')) {
+      return _EpubDocumentCategory.navigation;
+    }
+
+    if (_isNavigationLikeDocument(
+      document: document,
+      entryPath: entryPath,
+      normalizedText: normalizedText,
+    )) {
+      return _EpubDocumentCategory.navigation;
+    }
+
+    if (_isCoverLikeDocument(
+      document: document,
+      entryPath: entryPath,
+      title: title,
+      normalizedText: normalizedText,
+      hasInlineImages: hasInlineImages,
+    )) {
+      return _EpubDocumentCategory.cover;
+    }
+
+    if (_isMetadataLikeDocument(
+      entryPath: entryPath,
+      title: title,
+      normalizedText: normalizedText,
+      hasInlineImages: hasInlineImages,
+    )) {
+      return _EpubDocumentCategory.metadata;
+    }
+
+    if (normalizedText.isEmpty && !hasInlineImages) {
+      return _EpubDocumentCategory.resource;
+    }
+
+    return _EpubDocumentCategory.body;
+  }
+
+  bool _isNavigationLikeDocument({
+    required dom.Document document,
+    required String entryPath,
+    required String normalizedText,
+  }) {
+    final lowerEntryPath = entryPath.toLowerCase();
+    if (lowerEntryPath.contains('/toc') || lowerEntryPath.contains('/nav')) {
+      return true;
+    }
+
+    final navElements = document.querySelectorAll('nav');
+    if (navElements.isNotEmpty) {
+      return true;
+    }
+
+    final lowerText = normalizedText.toLowerCase();
+    final hasTocKeyword =
+        lowerText.contains('table of contents') ||
+        lowerText.contains('contents') ||
+        normalizedText.contains('目录');
+    if (!hasTocKeyword) {
+      return false;
+    }
+
+    final anchorCount = document.querySelectorAll('a[href]').length;
+    return anchorCount >= 2;
+  }
+
+  bool _isCoverLikeDocument({
+    required dom.Document document,
+    required String entryPath,
+    required String title,
+    required String normalizedText,
+    required bool hasInlineImages,
+  }) {
+    final lowerEntryPath = entryPath.toLowerCase();
+    final lowerTitle = title.toLowerCase();
+    final hasCoverHint =
+        lowerEntryPath.contains('cover') ||
+        lowerEntryPath.contains('titlepage') ||
+        lowerEntryPath.contains('title_page') ||
+        entryPath.contains('封面') ||
+        entryPath.contains('扉页') ||
+        lowerTitle.contains('cover') ||
+        title.contains('封面');
+    if (!hasCoverHint) {
+      return false;
+    }
+
+    final nonEmptyBodyChildren =
+        (document.body ?? document.documentElement)?.children
+            .where(
+              (element) =>
+                  _normalizeInlineText(element.text).isNotEmpty ||
+                  _isImageElement((element.localName ?? '').toLowerCase()),
+            )
+            .length ??
+        0;
+    return hasInlineImages &&
+        normalizedText.length <= 48 &&
+        nonEmptyBodyChildren <= 3;
+  }
+
+  bool _isMetadataLikeDocument({
+    required String entryPath,
+    required String title,
+    required String normalizedText,
+    required bool hasInlineImages,
+  }) {
+    if (hasInlineImages) {
+      return false;
+    }
+
+    final path = entryPath.toLowerCase();
+    final lowerTitle = title.toLowerCase();
+    final hasMetadataHint =
+        path.contains('copyright') ||
+        path.contains('colophon') ||
+        path.contains('imprint') ||
+        path.contains('license') ||
+        path.contains('rights') ||
+        title.contains('版权') ||
+        title.contains('版权页') ||
+        lowerTitle.contains('copyright') ||
+        lowerTitle.contains('colophon') ||
+        lowerTitle.contains('imprint');
+    if (!hasMetadataHint) {
+      return false;
+    }
+
+    return normalizedText.length <= 400;
+  }
+
   String? _resolveArchivePathRelativeTo({
     required String baseEntryPath,
     required String? rawSource,
@@ -743,6 +973,10 @@ class EpubLocalBookParser implements LocalBookParser {
       return true;
     }
     return mediaType == 'application/xhtml+xml' || mediaType == 'text/html';
+  }
+
+  bool _isImageElement(String tagName) {
+    return tagName == 'img' || tagName == 'image';
   }
 
   bool _isNavigationDocument({
@@ -824,20 +1058,36 @@ class EpubLocalBookParser implements LocalBookParser {
     final document = html_parser.parse(documentHtml);
     final root = document.body ?? document.documentElement;
     if (root == null) {
-      return const _EpubChapterExtraction(content: '', imageUrls: <String>[]);
+      return _EpubChapterExtraction(
+        content: '',
+        imageUrls: const <String>[],
+        document: ReaderDocument(blocks: const <ReaderBlock>[]),
+      );
     }
 
-    final output = <String>[];
-    final seen = <String>{};
-    final blocks = <String>[];
+    final imageUrls = <String>[];
+    final blocks = <ReaderBlock>[];
     var buffer = StringBuffer();
 
     void flushBuffer() {
       final normalized = _normalizeInlineText(buffer.toString());
       if (normalized.isNotEmpty) {
-        blocks.add(normalized);
+        blocks.add(ReaderTextBlock(text: normalized));
       }
       buffer = StringBuffer();
+    }
+
+    Future<void> addImage(Map<String, String> attributes) async {
+      final imageUrl = await _resolveMaterializedImageUrl(
+        attributes: attributes,
+        chapterEntryName: chapterEntryName,
+        archiveFileIndex: archiveFileIndex,
+        assetRootDir: assetRootDir,
+      );
+      if (imageUrl != null && imageUrl.isNotEmpty) {
+        imageUrls.add(imageUrl);
+        blocks.add(ReaderImageBlock(imageUrl: imageUrl));
+      }
     }
 
     Future<void> walk(dom.Node node) async {
@@ -850,27 +1100,59 @@ class EpubLocalBookParser implements LocalBookParser {
       }
 
       final tagName = (node.localName ?? '').toLowerCase();
+      if (_isHeadingElement(tagName)) {
+        flushBuffer();
+        final headingText = _normalizeInlineText(node.text);
+        if (headingText.isNotEmpty) {
+          blocks.add(
+            ReaderTitleBlock(text: headingText, level: _headingLevel(tagName)),
+          );
+        }
+        return;
+      }
+      if (tagName == 'blockquote') {
+        flushBuffer();
+        final quoteText = _normalizeInlineText(node.text);
+        if (quoteText.isNotEmpty) {
+          blocks.add(ReaderQuoteBlock(text: quoteText));
+        }
+        return;
+      }
+      if (_isFootnoteElement(node)) {
+        flushBuffer();
+        final footnoteText = _normalizeInlineText(node.text);
+        if (footnoteText.isNotEmpty) {
+          blocks.add(ReaderFootnoteBlock(text: footnoteText));
+        }
+        return;
+      }
+      if (tagName == 'figcaption' || tagName == 'caption') {
+        flushBuffer();
+        final captionText = _normalizeInlineText(node.text);
+        if (captionText.isNotEmpty) {
+          blocks.add(ReaderCaptionBlock(text: captionText));
+        }
+        return;
+      }
       if (tagName == 'img' || tagName == 'image') {
         flushBuffer();
-        final imageUrl = await _resolveMaterializedImageUrl(
-          attributes: node.attributes.map(
-            (key, value) => MapEntry(key.toString(), value),
-          ),
-          chapterEntryName: chapterEntryName,
-          archiveFileIndex: archiveFileIndex,
-          assetRootDir: assetRootDir,
+        await addImage(
+          node.attributes.map((key, value) => MapEntry(key.toString(), value)),
         );
-        if (imageUrl != null && imageUrl.isNotEmpty) {
-          if (seen.add(imageUrl)) {
-            output.add(imageUrl);
-          }
-          blocks.add(ReaderDocument.inlineImageParagraph(imageUrl));
-        }
         return;
       }
 
       if (tagName == 'br') {
         buffer.write('\n');
+        return;
+      }
+
+      if (tagName == 'li') {
+        flushBuffer();
+        final listItemText = _normalizeInlineText(node.text);
+        if (listItemText.isNotEmpty) {
+          blocks.add(ReaderListItemBlock(text: listItemText));
+        }
         return;
       }
 
@@ -891,9 +1173,30 @@ class EpubLocalBookParser implements LocalBookParser {
     }
     flushBuffer();
 
+    final readerDocument = ReaderDocument(blocks: blocks);
     return _EpubChapterExtraction(
-      content: blocks.join('\n\n'),
-      imageUrls: output,
+      content: readerDocument.compatibilityContent,
+      imageUrls: readerDocument.imageUrls,
+      document: readerDocument,
+    );
+  }
+
+  ReaderDocument _withFallbackChapterTitle(
+    ReaderDocument document, {
+    required String chapterTitle,
+  }) {
+    if (document.blocks.any((block) => block is ReaderTitleBlock)) {
+      return document;
+    }
+    final normalizedTitle = _normalizeInlineText(chapterTitle);
+    if (normalizedTitle.isEmpty) {
+      return document;
+    }
+    return ReaderDocument(
+      blocks: <ReaderBlock>[
+        ReaderTitleBlock(text: normalizedTitle),
+        ...document.blocks,
+      ],
     );
   }
 
@@ -931,6 +1234,60 @@ class EpubLocalBookParser implements LocalBookParser {
       'th',
       'ul',
     }.contains(tagName);
+  }
+
+  bool _isFootnoteElement(dom.Element element) {
+    final tagName = (element.localName ?? '').toLowerCase();
+    final epubType =
+        _readAttribute(
+          element,
+          keys: const <String>{'epub:type', 'type'},
+        )?.toLowerCase() ??
+        '';
+    final role =
+        _readAttribute(element, keys: const <String>{'role'})?.toLowerCase() ??
+        '';
+    final className =
+        _readAttribute(element, keys: const <String>{'class'})?.toLowerCase() ??
+        '';
+    final id =
+        _readAttribute(element, keys: const <String>{'id'})?.toLowerCase() ??
+        '';
+    final signal = '$epubType $role $className $id';
+    final hasFootnoteSignal =
+        signal.contains('footnote') ||
+        signal.contains('endnote') ||
+        signal.contains('doc-footnote');
+    if (!hasFootnoteSignal) {
+      return false;
+    }
+    return tagName == 'aside' ||
+        tagName == 'section' ||
+        tagName == 'div' ||
+        tagName == 'li' ||
+        tagName == 'p' ||
+        tagName == 'footer';
+  }
+
+  bool _isHeadingElement(String tagName) {
+    return const {'h1', 'h2', 'h3', 'h4', 'h5', 'h6'}.contains(tagName);
+  }
+
+  int _headingLevel(String tagName) {
+    switch (tagName) {
+      case 'h1':
+        return 1;
+      case 'h2':
+        return 2;
+      case 'h3':
+        return 3;
+      case 'h4':
+        return 4;
+      case 'h5':
+        return 5;
+      default:
+        return 6;
+    }
   }
 
   Future<String?> _resolveMaterializedImageUrl({
@@ -1081,8 +1438,11 @@ class EpubLocalBookParser implements LocalBookParser {
     return const <int>[];
   }
 
-  String _resolveTitle(String html, String entryName, int index) {
-    final document = html_parser.parse(html);
+  String _resolveDocumentTitle({
+    required dom.Document document,
+    required String entryName,
+    required int index,
+  }) {
     final titleCandidate =
         document.querySelector('h1')?.text ??
         document.querySelector('h2')?.text ??
@@ -1122,14 +1482,59 @@ class EpubLocalBookParser implements LocalBookParser {
   }
 }
 
+class EpubArchiveDecoder {
+  const EpubArchiveDecoder();
+
+  Archive decodeBytes(List<int> bytes) {
+    return ZipDecoder().decodeBytes(bytes, verify: false);
+  }
+}
+
+class _LoadedEpubArchive {
+  const _LoadedEpubArchive({
+    required this.archive,
+    required this.archiveFileIndex,
+    required this.packageDocument,
+  });
+
+  final Archive archive;
+  final Map<String, ArchiveFile> archiveFileIndex;
+  final _EpubPackageDocument? packageDocument;
+}
+
 class _EpubChapterExtraction {
   const _EpubChapterExtraction({
     required this.content,
     required this.imageUrls,
+    required this.document,
   });
 
   final String content;
   final List<String> imageUrls;
+  final ReaderDocument document;
+}
+
+enum _EpubDocumentCategory { body, navigation, cover, metadata, resource }
+
+class _EpubChapterCandidatePreview {
+  const _EpubChapterCandidatePreview({
+    required this.category,
+    required this.title,
+    required this.normalizedText,
+    required this.hasInlineImages,
+    required this.document,
+  });
+
+  final _EpubDocumentCategory category;
+  final String title;
+  final String normalizedText;
+  final bool hasInlineImages;
+  final ReaderDocument document;
+
+  bool get hasReadableSignal =>
+      title.trim().isNotEmpty ||
+      normalizedText.trim().isNotEmpty ||
+      hasInlineImages;
 }
 
 class _EpubMetadata {

@@ -1,5 +1,6 @@
 import '../entities/local_book.dart';
 import '../entities/local_chapter.dart';
+import '../entities/reader_document.dart';
 
 abstract class LocalBookRepository {
   Future<void> upsertBook(LocalBook book);
@@ -33,6 +34,7 @@ abstract class LocalBookRepository {
     required String chapterId,
     required String content,
     List<String> imageUrls = const <String>[],
+    ReaderDocument? document,
   });
 
   Future<void> deleteBook(String bookId);

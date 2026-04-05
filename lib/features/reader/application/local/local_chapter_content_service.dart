@@ -68,16 +68,7 @@ class LocalChapterContentService {
     if (refreshedBook != null) {
       book = refreshedBook;
     }
-
-    if (_needsReindex(book)) {
-      await _indexService.ensureIndexed(bookId: normalizedBookId);
-      final refreshed = await _localBookRepository.getBookById(
-        normalizedBookId,
-      );
-      if (refreshed != null) {
-        book = refreshed;
-      }
-    }
+    _ensureBookReadyForReading(book);
 
     final chapter = await _resolveChapter(
       book: book,
@@ -114,16 +105,61 @@ class LocalChapterContentService {
       chapterId: chapter.id,
       content: hydrated.content,
       imageUrls: hydrated.imageUrls,
+      document: hydrated.document,
     );
     return chapter.copyWith(
       content: hydrated.content,
       imageUrls: hydrated.imageUrls,
+      document: hydrated.document,
     );
   }
 
   bool _needsReindex(LocalBook book) {
     return book.indexStatus != LocalBookIndexStatus.ready ||
         book.chapterCount <= 0;
+  }
+
+  void _ensureBookReadyForReading(LocalBook book) {
+    if (!_needsReindex(book)) {
+      return;
+    }
+
+    switch (book.indexStatus) {
+      case LocalBookIndexStatus.pending:
+        throw AppException(
+          code: ErrorCode.validation,
+          stage: ErrorStage.content,
+          briefMessage: '本地图书目录尚未建立完成，请稍后重试。',
+        );
+      case LocalBookIndexStatus.indexing:
+        throw AppException(
+          code: ErrorCode.validation,
+          stage: ErrorStage.content,
+          briefMessage: '本地图书正在建立目录，请稍后重试。',
+        );
+      case LocalBookIndexStatus.stale:
+        throw AppException(
+          code: ErrorCode.validation,
+          stage: ErrorStage.content,
+          briefMessage: '本地图书目录已过期，请先重新索引。',
+        );
+      case LocalBookIndexStatus.failed:
+        final lastError = book.lastError?.trim();
+        throw AppException(
+          code: ErrorCode.validation,
+          stage: ErrorStage.content,
+          briefMessage:
+              (lastError != null && lastError.isNotEmpty)
+                  ? '本地图书索引失败：$lastError'
+                  : '本地图书索引失败，请先重新索引。',
+        );
+      case LocalBookIndexStatus.ready:
+        throw AppException(
+          code: ErrorCode.ruleMatchEmpty,
+          stage: ErrorStage.content,
+          briefMessage: '未解析到可读章节，请重新索引后重试。',
+        );
+    }
   }
 
   Future<LocalChapter?> _resolveChapter({

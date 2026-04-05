@@ -98,4 +98,41 @@ void main() {
     expect(result.imageUrls, hasLength(2));
     expect(result.document.isPureImageDocument, isTrue);
   });
+
+  test('prefers structured local chapter document when available', () async {
+    final fakeService = _FakeLocalChapterContentService(
+      LocalChapter(
+        id: 'chapter_3',
+        bookId: 'book_1',
+        chapterIndex: 2,
+        title: '第三章',
+        content: '兼容文本',
+        imageUrls: const <String>['file:///tmp/p3.jpg'],
+        createdAt: now,
+        updatedAt: now,
+        document: ReaderDocument(
+          blocks: const <ReaderBlock>[
+            ReaderTitleBlock(text: '第三章', level: 1),
+            ReaderTextBlock(text: '结构化正文'),
+            ReaderImageBlock(imageUrl: 'file:///tmp/p3.jpg'),
+          ],
+        ),
+      ),
+    );
+    final provider = LocalContentProvider(chapterContentService: fakeService);
+
+    final result = await provider.loadChapterContent(
+      sourceId: LocalReaderIdentity.localSourceId,
+      bookId: 'book_1',
+      chapterUrl: LocalReaderIdentity.buildChapterUrl('chapter_3'),
+      chapterId: 'chapter_3',
+      chapterIndex: 2,
+    );
+
+    expect(result.document.blocks.first, isA<ReaderTitleBlock>());
+    expect(result.document.blocks[1], isA<ReaderTextBlock>());
+    expect(result.document.blocks.last, isA<ReaderImageBlock>());
+    expect(result.content, contains('第三章'));
+    expect(result.content, contains('结构化正文'));
+  });
 }

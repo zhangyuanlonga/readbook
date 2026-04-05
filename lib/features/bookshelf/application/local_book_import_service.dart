@@ -57,7 +57,8 @@ class LocalBookImportService {
     Future<Directory> Function()? supportDirectoryProvider,
   }) : this._(
          localBookRepository:
-             localBookRepository ?? LocalBookRepositoryImpl(AppDatabase.instance),
+             localBookRepository ??
+             LocalBookRepositoryImpl(AppDatabase.instance),
          bookshelfService: bookshelfService ?? BookshelfService(),
          readerSystemSettingsService:
              readerSystemSettingsService ?? ReaderSystemSettingsService(),
@@ -222,11 +223,29 @@ class LocalBookImportService {
     try {
       await _localBookIndexService.ensureIndexed(bookId: bookId);
     } catch (error) {
+      if (_shouldIgnoreWarmUpError(error)) {
+        return;
+      }
       _logger.warn(
         'Warm up local book index failed',
         context: {'bookId': bookId, 'error': error.toString()},
       );
     }
+  }
+
+  bool _shouldIgnoreWarmUpError(Object error) {
+    if (error is AppException) {
+      final message = error.briefMessage.trim();
+      if (message.contains('本地书籍文件已失效') || message.contains('未找到本地书籍')) {
+        return true;
+      }
+    }
+
+    final text = error.toString();
+    if (text.contains("Can't re-open a database after closing it")) {
+      return true;
+    }
+    return false;
   }
 
   Future<_PreparedImportedBook> _prepareImportedBook({

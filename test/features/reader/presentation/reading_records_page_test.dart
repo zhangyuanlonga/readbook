@@ -203,18 +203,16 @@ class _ViewportCase {
 
 class _FakeReadingRecordService extends ReadingRecordService {
   _FakeReadingRecordService({
-    this.latestRecords = const <ReadingRecord>[],
     this.dailyRecords = const <ReadingRecordDay>[],
     this.sessions = const <ReadingRecordSession>[],
   }) : super(database: AppDatabase(executor: NativeDatabase.memory()));
 
-  final List<ReadingRecord> latestRecords;
   final List<ReadingRecordDay> dailyRecords;
   final List<ReadingRecordSession> sessions;
 
   @override
   Stream<List<ReadingRecord>> watchLatestRecords({String query = ''}) {
-    return Stream<List<ReadingRecord>>.value(latestRecords);
+    return Stream<List<ReadingRecord>>.value(const <ReadingRecord>[]);
   }
 
   @override

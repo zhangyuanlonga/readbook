@@ -198,9 +198,11 @@ class _LocalLibraryPageState extends State<LocalLibraryPage> {
 
     if (successCount > 0) {
       if (failureCount > 0) {
-        _showMessage('已导入 $successCount 本书，失败 $failureCount 本。');
+        _showMessage(
+          '已导入 $successCount 本书并加入书架，失败 $failureCount 本。后台会继续解析成功导入的图书。',
+        );
       } else {
-        _showMessage('已导入 $successCount 本书。');
+        _showMessage('已导入 $successCount 本书并加入书架。后台会继续解析。');
       }
       _returnToBookshelf();
       return;
@@ -222,7 +224,7 @@ class _LocalLibraryPageState extends State<LocalLibraryPage> {
     return _localBookImportService.importFromFile(
       filePath: path,
       displayName: item.title,
-      waitForIndexing: true,
+      waitForIndexing: false,
       onProgress: (progress) => _handleImportProgress(item, progress),
     );
   }
@@ -289,7 +291,7 @@ class _LocalLibraryPageState extends State<LocalLibraryPage> {
         return await _localBookImportService.importFromFile(
           filePath: finalized.path,
           displayName: '$safeBase$extension',
-          waitForIndexing: true,
+          waitForIndexing: false,
           onProgress: (progress) => _handleImportProgress(item, progress),
         );
       } finally {
@@ -685,7 +687,7 @@ class _LocalLibraryPageState extends State<LocalLibraryPage> {
           ),
           const SizedBox(height: 6),
           Text(
-            '先选择本地图书，确认后再导入；批量导入会等待解析完成，再返回书架列表。',
+            '先选择本地图书，确认后再导入；文件入库后会立即返回，目录解析在后台继续进行。',
             style: Theme.of(context).textTheme.bodySmall?.copyWith(
               color: colorScheme.onSurfaceVariant,
             ),
@@ -798,7 +800,7 @@ class _LocalLibraryPageState extends State<LocalLibraryPage> {
           ),
           const SizedBox(height: 8),
           Text(
-            '每本书完成入库后会继续解析目录，只有解析完成才算本次导入完成。',
+            '导入成功表示已加入书架；目录解析会在后台继续，稍后会自动变为可读状态。',
             style: Theme.of(context).textTheme.bodySmall?.copyWith(
               color: colorScheme.onSurfaceVariant,
             ),

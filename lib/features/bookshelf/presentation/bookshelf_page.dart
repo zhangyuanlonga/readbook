@@ -12,13 +12,16 @@ import '../../../app/widgets/text_cover_placeholder.dart';
 import '../../../core/errors/app_exception.dart';
 import '../../../core/media/image_selection_service.dart';
 import '../../../data/datasources/local/app_database.dart';
+import '../../../data/repositories/local_book_repository_impl.dart';
 import '../../../domain/entities/bookshelf_book.dart';
+import '../../../domain/entities/local_book.dart';
 import '../../../domain/entities/reading_progress.dart';
 import '../../../domain/entities/reading_record.dart';
 import '../application/bookshelf_service.dart';
 import '../application/bookshelf_system_settings_service.dart';
 import '../application/local_book_import_service.dart';
 import '../../reader/application/reader_preferences_service.dart';
+import '../../reader/application/local/local_book_index_service.dart';
 import '../../reader/presentation/reader_route.dart';
 import '../../book/application/book_detail_service.dart';
 import '../../book/presentation/book_detail_route.dart';
@@ -33,6 +36,7 @@ import 'widgets/bookshelf_page_sections.dart';
 enum _BookshelfSheetAction {
   read,
   detail,
+  repairLocal,
   select,
   tag,
   moveGroup,
@@ -69,10 +73,14 @@ class _BookshelfPageState extends State<BookshelfPage>
       BookshelfSystemSettingsService();
   final ReaderPreferencesService _readerPreferencesService =
       ReaderPreferencesService();
+  final LocalBookIndexService _localBookIndexService = LocalBookIndexService();
   final BookDetailService _bookDetailService = BookDetailService();
   final ImageSelectionService _imageSelectionService = ImageSelectionService();
   final LocalBookImportService _localBookImportService =
       LocalBookImportService();
+  final LocalBookRepositoryImpl _localBookRepository = LocalBookRepositoryImpl(
+    AppDatabase.instance,
+  );
   final AnnouncementService _announcementService = AnnouncementService();
   final AnnouncementReadStateService _announcementReadStateService =
       AnnouncementReadStateService();
@@ -84,6 +92,7 @@ class _BookshelfPageState extends State<BookshelfPage>
       const <String, ReadingProgress>{};
   Map<String, String> _latestCachedChapterByBookKey = const <String, String>{};
   Map<String, int> _sourceTypeBySourceId = const <String, int>{};
+  Map<String, LocalBook> _localBooksById = const <String, LocalBook>{};
   Map<String, List<String>> _bookTagsByKey = const <String, List<String>>{};
   List<String> _tagOrder = const <String>[];
   List<_BookshelfFilter> _baseFilterOrder = _kDefaultBaseFilters;
@@ -100,6 +109,7 @@ class _BookshelfPageState extends State<BookshelfPage>
   bool _isConsumingExternalImportPayloads = false;
   bool _isSelectionMode = false;
   bool _isBatchDeleting = false;
+  final Set<String> _repairingLocalBookIds = <String>{};
   final Set<String> _selectedBookKeys = <String>{};
   int _loadTicket = 0;
   bool _hasActiveAnnouncement = false;
@@ -1950,6 +1960,14 @@ class _BookshelfPageState extends State<BookshelfPage>
     }
     final bookKey = _bookKey(book);
     final progress = _progressByBookKey[bookKey];
+    final localBook =
+        book.sourceId == _kLocalBookSourceId
+            ? _localBooksById[book.bookId.trim()]
+            : null;
+    final localStatusText =
+        localBook == null ? null : _localBookStatusActionText(localBook);
+    final canRepairLocalBook =
+        localBook != null && _canRepairLocalBookFromShelf(localBook);
     final latestChapter = _toSingleLineText(
       _latestCachedChapterByBookKey[bookKey] ?? book.latestChapter ?? '',
     );
@@ -2028,6 +2046,23 @@ class _BookshelfPageState extends State<BookshelfPage>
                                   color: colorScheme.onSurfaceVariant,
                                 ),
                               ),
+                              if (localStatusText != null) ...[
+                                const SizedBox(height: 4),
+                                Text(
+                                  localStatusText,
+                                  maxLines: 2,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: Theme.of(
+                                    sheetContext,
+                                  ).textTheme.bodySmall?.copyWith(
+                                    color: _localStatusTextColor(
+                                      colorScheme,
+                                      localBook,
+                                    ),
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                ),
+                              ],
                               if (progress != null) ...[
                                 const SizedBox(height: 6),
                                 Row(
@@ -2104,6 +2139,19 @@ class _BookshelfPageState extends State<BookshelfPage>
               const SizedBox(height: 12),
               Row(
                 children: [
+                  if (canRepairLocalBook) ...[
+                    Expanded(
+                      child: _BookSheetActionButton(
+                        icon: Icons.refresh_rounded,
+                        label: '重建目录',
+                        onTap:
+                            () => Navigator.of(
+                              sheetContext,
+                            ).pop(_BookshelfSheetAction.repairLocal),
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                  ],
                   Expanded(
                     child: _BookSheetActionButton(
                       icon: Icons.drive_file_move_rounded,
@@ -2161,6 +2209,11 @@ class _BookshelfPageState extends State<BookshelfPage>
       case _BookshelfSheetAction.detail:
         _openBookDetail(book);
         break;
+      case _BookshelfSheetAction.repairLocal:
+        if (localBook != null) {
+          await _repairLocalBookFromShelf(book, localBook);
+        }
+        break;
       case _BookshelfSheetAction.select:
         _enterSelectionMode(book);
         break;
@@ -2177,6 +2230,36 @@ class _BookshelfPageState extends State<BookshelfPage>
         await _confirmAndRemoveBook(book);
         break;
     }
+  }
+
+  bool _canRepairLocalBookFromShelf(LocalBook localBook) {
+    return localBook.indexStatus == LocalBookIndexStatus.pending ||
+        localBook.indexStatus == LocalBookIndexStatus.indexing ||
+        localBook.indexStatus == LocalBookIndexStatus.stale ||
+        localBook.indexStatus == LocalBookIndexStatus.failed;
+  }
+
+  String? _localBookStatusActionText(LocalBook localBook) {
+    return switch (localBook.indexStatus) {
+      LocalBookIndexStatus.pending => '状态: 待建立目录，可在此直接触发解析',
+      LocalBookIndexStatus.indexing => '状态: 正在解析，可继续等待或重新打开详情查看进度',
+      LocalBookIndexStatus.stale => '状态: 目录需重建，建议先重建再阅读',
+      LocalBookIndexStatus.failed =>
+        localBook.lastError?.trim().isNotEmpty == true
+            ? '状态: 解析失败，${_toSingleLineText(localBook.lastError!)}'
+            : '状态: 解析失败，建议先重建目录',
+      _ => null,
+    };
+  }
+
+  Color _localStatusTextColor(ColorScheme colorScheme, LocalBook? localBook) {
+    return switch (localBook?.indexStatus) {
+      LocalBookIndexStatus.failed => colorScheme.error,
+      LocalBookIndexStatus.stale => colorScheme.primary,
+      LocalBookIndexStatus.pending => colorScheme.primary,
+      LocalBookIndexStatus.indexing => colorScheme.tertiary,
+      _ => colorScheme.onSurfaceVariant,
+    };
   }
 
   Future<void> _showBookTagSheet(BookshelfBook book) async {
@@ -3083,15 +3166,15 @@ class _BookshelfPageState extends State<BookshelfPage>
   Widget _buildSourceBadge(BookshelfBook book, {bool compact = false}) {
     final colorScheme = Theme.of(context).colorScheme;
     final isLocal = book.sourceId == _kLocalBookSourceId;
-    final label = isLocal ? '本地' : '在线';
-    final background =
+    final localBook = isLocal ? _localBooksById[book.bookId.trim()] : null;
+    final (label, background, foreground) =
         isLocal
-            ? colorScheme.secondaryContainer.withValues(alpha: 0.94)
-            : colorScheme.primaryContainer.withValues(alpha: 0.94);
-    final foreground =
-        isLocal
-            ? colorScheme.onSecondaryContainer
-            : colorScheme.onPrimaryContainer;
+            ? _localSourceBadgePresentation(colorScheme, localBook)
+            : (
+              '在线',
+              colorScheme.primaryContainer.withValues(alpha: 0.94),
+              colorScheme.onPrimaryContainer,
+            );
     final borderRadius = compact ? 6.0 : 7.0;
     final horizontalPadding = compact ? 8.0 : 10.0;
     final minWidth = compact ? 30.0 : 36.0;
@@ -3121,6 +3204,40 @@ class _BookshelfPageState extends State<BookshelfPage>
         ),
       ),
     );
+  }
+
+  (String, Color, Color) _localSourceBadgePresentation(
+    ColorScheme colorScheme,
+    LocalBook? localBook,
+  ) {
+    final status = localBook?.indexStatus;
+    return switch (status) {
+      LocalBookIndexStatus.pending => (
+        '待建立',
+        colorScheme.secondaryContainer.withValues(alpha: 0.94),
+        colorScheme.onSecondaryContainer,
+      ),
+      LocalBookIndexStatus.indexing => (
+        '解析中',
+        colorScheme.tertiaryContainer.withValues(alpha: 0.94),
+        colorScheme.onTertiaryContainer,
+      ),
+      LocalBookIndexStatus.stale => (
+        '需重建',
+        colorScheme.secondaryContainer.withValues(alpha: 0.94),
+        colorScheme.onSecondaryContainer,
+      ),
+      LocalBookIndexStatus.failed => (
+        '失败',
+        colorScheme.errorContainer.withValues(alpha: 0.94),
+        colorScheme.onErrorContainer,
+      ),
+      _ => (
+        '本地',
+        colorScheme.secondaryContainer.withValues(alpha: 0.94),
+        colorScheme.onSecondaryContainer,
+      ),
+    };
   }
 
   Future<void> _loadBookshelf({bool force = false}) {
@@ -3234,6 +3351,7 @@ class _BookshelfPageState extends State<BookshelfPage>
     required int ticket,
   }) async {
     final sourceTypeFuture = _loadSourceTypeMap();
+    final localBooksFuture = _loadLocalBookMap(books);
     final rawTagMapFuture = _bookshelfService.getTagMap();
     final tagOrderFuture = _bookshelfService.getTagOrder();
     final baseFilterOrderNamesFuture = _bookshelfService.getBaseFilterOrder();
@@ -3241,6 +3359,7 @@ class _BookshelfPageState extends State<BookshelfPage>
     try {
       await Future.wait<dynamic>([
         sourceTypeFuture,
+        localBooksFuture,
         rawTagMapFuture,
         tagOrderFuture,
         baseFilterOrderNamesFuture,
@@ -3254,6 +3373,7 @@ class _BookshelfPageState extends State<BookshelfPage>
     }
 
     final sourceTypeMap = await sourceTypeFuture;
+    final localBooksById = await localBooksFuture;
     final rawTagMap = await rawTagMapFuture;
     final tagOrder = await tagOrderFuture;
     final baseFilterOrderNames = await baseFilterOrderNamesFuture;
@@ -3277,6 +3397,7 @@ class _BookshelfPageState extends State<BookshelfPage>
 
     setState(() {
       _sourceTypeBySourceId = sourceTypeMap;
+      _localBooksById = localBooksById;
       _bookTagsByKey = tagMap;
       _tagOrder = _normalizeTags(tagOrder);
       _baseFilterOrder = baseFilterOrderNames
@@ -3293,6 +3414,30 @@ class _BookshelfPageState extends State<BookshelfPage>
       _ensureFilterStillValid();
     });
     _syncSelectionWithBooks();
+  }
+
+  Future<Map<String, LocalBook>> _loadLocalBookMap(
+    List<BookshelfBook> books,
+  ) async {
+    final localBookIds =
+        books
+            .where((book) => book.sourceId == _kLocalBookSourceId)
+            .map((book) => book.bookId.trim())
+            .where((bookId) => bookId.isNotEmpty)
+            .toSet();
+    if (localBookIds.isEmpty) {
+      return const <String, LocalBook>{};
+    }
+
+    try {
+      final localBooks = await _localBookRepository.getAllBooks();
+      return <String, LocalBook>{
+        for (final book in localBooks)
+          if (localBookIds.contains(book.id)) book.id: book,
+      };
+    } catch (_) {
+      return const <String, LocalBook>{};
+    }
   }
 
   Future<void> _loadLatestCachedChapterMap(
@@ -3839,6 +3984,16 @@ class _BookshelfPageState extends State<BookshelfPage>
     });
 
     try {
+      final localBook =
+          book.sourceId == _kLocalBookSourceId
+              ? _localBooksById[book.bookId.trim()]
+              : null;
+      if (localBook != null &&
+          localBook.indexStatus != LocalBookIndexStatus.ready) {
+        _handleNonReadyLocalBookOpen(book, localBook);
+        return;
+      }
+
       ReadingProgress? latestProgress;
       final bookKey = _bookKey(book);
       try {
@@ -3914,6 +4069,76 @@ class _BookshelfPageState extends State<BookshelfPage>
       if (mounted) {
         setState(() {
           _openingBookId = null;
+        });
+      }
+    }
+  }
+
+  void _handleNonReadyLocalBookOpen(BookshelfBook book, LocalBook localBook) {
+    switch (localBook.indexStatus) {
+      case LocalBookIndexStatus.pending:
+        _openBookDetail(book);
+        _showMessage('这本本地图书正在等待建立目录，请稍后再试或在详情页重建。');
+        return;
+      case LocalBookIndexStatus.indexing:
+        _openBookDetail(book);
+        _showMessage('这本本地图书正在解析中，详情页会自动刷新。');
+        return;
+      case LocalBookIndexStatus.stale:
+        _openBookDetail(book);
+        _showMessage('检测到本地图书目录已过期，请先重建目录再阅读。');
+        return;
+      case LocalBookIndexStatus.failed:
+        _openBookDetail(book);
+        _showMessage('本地图书目录解析失败，请先重建目录再阅读。');
+        return;
+      case LocalBookIndexStatus.ready:
+        return;
+    }
+  }
+
+  Future<void> _repairLocalBookFromShelf(
+    BookshelfBook book,
+    LocalBook localBook,
+  ) async {
+    final normalizedBookId = book.bookId.trim();
+    if (normalizedBookId.isEmpty ||
+        _repairingLocalBookIds.contains(normalizedBookId)) {
+      return;
+    }
+
+    setState(() {
+      _repairingLocalBookIds.add(normalizedBookId);
+    });
+
+    try {
+      await _localBookIndexService.ensureIndexed(
+        bookId: normalizedBookId,
+        force:
+            localBook.indexStatus == LocalBookIndexStatus.stale ||
+            localBook.indexStatus == LocalBookIndexStatus.failed,
+      );
+      await _loadBookshelf(force: true);
+      if (!mounted) {
+        return;
+      }
+      _showMessage('《${_toSingleLineText(book.title)}》目录已更新，可以继续阅读了。');
+    } on AppException catch (error) {
+      if (!mounted) {
+        return;
+      }
+      _showMessage(error.briefMessage);
+      _openBookDetail(book);
+    } catch (_) {
+      if (!mounted) {
+        return;
+      }
+      _showMessage('重建目录失败，请稍后重试。');
+      _openBookDetail(book);
+    } finally {
+      if (mounted) {
+        setState(() {
+          _repairingLocalBookIds.remove(normalizedBookId);
         });
       }
     }

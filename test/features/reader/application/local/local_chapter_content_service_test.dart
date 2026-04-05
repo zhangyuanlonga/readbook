@@ -4,9 +4,12 @@ import 'dart:convert';
 import 'package:archive/archive.dart';
 import 'package:charset/charset.dart';
 import 'package:drift/native.dart';
+import 'package:flutter_appread/core/errors/app_exception.dart';
 import 'package:flutter_appread/data/datasources/local/app_database.dart';
 import 'package:flutter_appread/data/repositories/local_book_repository_impl.dart';
 import 'package:flutter_appread/domain/entities/local_book.dart';
+import 'package:flutter_appread/domain/entities/local_chapter.dart';
+import 'package:flutter_appread/domain/entities/reader_document.dart';
 import 'package:flutter_appread/features/reader/application/local/local_book_parser.dart';
 import 'package:flutter_appread/features/reader/application/local/local_book_index_service.dart';
 import 'package:flutter_appread/features/reader/application/local/local_chapter_content_service.dart';
@@ -226,13 +229,127 @@ void main() {
       );
       expect(chapter.content, contains('第一章正文。'));
       expect(chapter.imageUrls, isNotEmpty);
+      expect(chapter.document, isNotNull);
+      expect(
+        chapter.document!.blocks.whereType<ReaderImageBlock>(),
+        isNotEmpty,
+      );
 
       final persisted = await repository.getChapterById(metas.first.id);
       expect(persisted, isNotNull);
       expect(persisted!.content, contains('第一章正文。'));
       expect(persisted.imageUrls, isNotEmpty);
+      expect(persisted.document, isNotNull);
+    });
+
+    test('does not auto index while local book is still pending', () async {
+      final file = File('${tempDir.path}/pending_book.txt');
+      await file.writeAsString('第1章 开始\n第一章内容。');
+
+      final now = DateTime.parse('2026-03-21T12:00:00.000Z');
+      final pendingBook = LocalBook(
+        id: 'local_pending_1',
+        title: '待建立目录测试',
+        format: LocalBookFormat.txt,
+        storagePath: file.path,
+        fileSize: await file.length(),
+        indexStatus: LocalBookIndexStatus.pending,
+        createdAt: now,
+        updatedAt: now,
+      );
+      await repository.upsertBook(pendingBook);
+
+      final fakeIndexService = _TrackingLocalBookIndexService(
+        localBookRepository: repository,
+        storageService: storageService,
+        refreshedBook: pendingBook,
+      );
+      contentService = LocalChapterContentService(
+        localBookRepository: repository,
+        indexService: fakeIndexService,
+        storageService: storageService,
+      );
+
+      await expectLater(
+        () => contentService.load(bookId: 'local_pending_1', chapterIndex: 0),
+        throwsA(
+          isA<AppException>().having(
+            (error) => error.briefMessage,
+            'briefMessage',
+            contains('目录尚未建立完成'),
+          ),
+        ),
+      );
+      expect(fakeIndexService.ensureIndexedCallCount, 0);
+    });
+
+    test('prompts reindex when local book index is stale', () async {
+      final file = File('${tempDir.path}/stale_book.txt');
+      await file.writeAsString('第1章 开始\n第一章内容。');
+
+      final now = DateTime.parse('2026-03-21T12:00:00.000Z');
+      final staleBook = LocalBook(
+        id: 'local_stale_1',
+        title: '需重建目录测试',
+        format: LocalBookFormat.txt,
+        storagePath: file.path,
+        fileSize: await file.length(),
+        indexStatus: LocalBookIndexStatus.stale,
+        chapterCount: 2,
+        createdAt: now,
+        updatedAt: now,
+      );
+      await repository.upsertBook(staleBook);
+
+      final fakeIndexService = _TrackingLocalBookIndexService(
+        localBookRepository: repository,
+        storageService: storageService,
+        refreshedBook: staleBook,
+      );
+      contentService = LocalChapterContentService(
+        localBookRepository: repository,
+        indexService: fakeIndexService,
+        storageService: storageService,
+      );
+
+      await expectLater(
+        () => contentService.load(bookId: 'local_stale_1', chapterIndex: 0),
+        throwsA(
+          isA<AppException>().having(
+            (error) => error.briefMessage,
+            'briefMessage',
+            contains('目录已过期'),
+          ),
+        ),
+      );
+      expect(fakeIndexService.ensureIndexedCallCount, 0);
     });
   });
+}
+
+class _TrackingLocalBookIndexService extends LocalBookIndexService {
+  _TrackingLocalBookIndexService({
+    required super.localBookRepository,
+    required super.storageService,
+    this.refreshedBook,
+  });
+
+  final LocalBook? refreshedBook;
+  int ensureIndexedCallCount = 0;
+
+  @override
+  Future<List<LocalChapter>> ensureIndexed({
+    required String bookId,
+    bool force = false,
+  }) async {
+    ensureIndexedCallCount += 1;
+    return const <LocalChapter>[];
+  }
+
+  @override
+  Future<LocalBook?> refreshBookState({required String bookId}) async {
+    return refreshedBook;
+  }
 }
 
 List<int> _encodeUtf16(

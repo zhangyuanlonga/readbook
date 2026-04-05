@@ -1,5 +1,6 @@
 import '../../domain/entities/local_book.dart';
 import '../../domain/entities/local_chapter.dart';
+import '../../domain/entities/reader_document.dart';
 import '../../domain/repositories/local_book_repository.dart';
 import '../../data/datasources/local/app_database.dart';
 
@@ -42,10 +43,12 @@ class LocalBookRepositoryImpl implements LocalBookRepository {
     required String chapterId,
     required String content,
     List<String> imageUrls = const <String>[],
+    ReaderDocument? document,
   }) => _database.updateLocalChapterContent(
     chapterId: chapterId,
     content: content,
     imageUrls: imageUrls,
+    document: document,
   );
 
   @override

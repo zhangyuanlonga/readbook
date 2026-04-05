@@ -12,6 +12,22 @@ abstract class ReaderBlock {
         return ReaderTextBlock(
           text: ReaderDocument.requiredString(json, 'text'),
         );
+      case ReaderListItemBlock.typeName:
+        return ReaderListItemBlock(
+          text: ReaderDocument.requiredString(json, 'text'),
+        );
+      case ReaderQuoteBlock.typeName:
+        return ReaderQuoteBlock(
+          text: ReaderDocument.requiredString(json, 'text'),
+        );
+      case ReaderCaptionBlock.typeName:
+        return ReaderCaptionBlock(
+          text: ReaderDocument.requiredString(json, 'text'),
+        );
+      case ReaderFootnoteBlock.typeName:
+        return ReaderFootnoteBlock(
+          text: ReaderDocument.requiredString(json, 'text'),
+        );
       case ReaderImageBlock.typeName:
         return ReaderImageBlock(
           imageUrl: ReaderDocument.requiredString(json, 'imageUrl'),
@@ -30,6 +46,70 @@ class ReaderTextBlock extends ReaderBlock {
   const ReaderTextBlock({required this.text});
 
   static const String typeName = 'text';
+
+  final String text;
+
+  @override
+  String get type => typeName;
+
+  @override
+  Map<String, dynamic> toJson() {
+    return {'type': type, 'text': text};
+  }
+}
+
+class ReaderListItemBlock extends ReaderBlock {
+  const ReaderListItemBlock({required this.text});
+
+  static const String typeName = 'list_item';
+
+  final String text;
+
+  @override
+  String get type => typeName;
+
+  @override
+  Map<String, dynamic> toJson() {
+    return {'type': type, 'text': text};
+  }
+}
+
+class ReaderQuoteBlock extends ReaderBlock {
+  const ReaderQuoteBlock({required this.text});
+
+  static const String typeName = 'quote';
+
+  final String text;
+
+  @override
+  String get type => typeName;
+
+  @override
+  Map<String, dynamic> toJson() {
+    return {'type': type, 'text': text};
+  }
+}
+
+class ReaderCaptionBlock extends ReaderBlock {
+  const ReaderCaptionBlock({required this.text});
+
+  static const String typeName = 'caption';
+
+  final String text;
+
+  @override
+  String get type => typeName;
+
+  @override
+  Map<String, dynamic> toJson() {
+    return {'type': type, 'text': text};
+  }
+}
+
+class ReaderFootnoteBlock extends ReaderBlock {
+  const ReaderFootnoteBlock({required this.text});
+
+  static const String typeName = 'footnote';
 
   final String text;
 
@@ -121,6 +201,10 @@ class ReaderDocument {
         final inlineImageUrl = tryParseInlineImageParagraph(paragraph);
         if (inlineImageUrl != null) {
           blocks.add(ReaderImageBlock(imageUrl: inlineImageUrl));
+        } else if (paragraph.startsWith('• ')) {
+          blocks.add(ReaderListItemBlock(text: paragraph.substring(2).trim()));
+        } else if (paragraph.startsWith('> ')) {
+          blocks.add(ReaderQuoteBlock(text: paragraph.substring(2).trim()));
         } else {
           blocks.add(ReaderTextBlock(text: paragraph));
         }
@@ -147,7 +231,13 @@ class ReaderDocument {
   bool get hasImageBlocks => blocks.any((block) => block is ReaderImageBlock);
 
   bool get hasTextBlocks => blocks.any(
-    (block) => block is ReaderTextBlock || block is ReaderTitleBlock,
+    (block) =>
+        block is ReaderTextBlock ||
+        block is ReaderTitleBlock ||
+        block is ReaderListItemBlock ||
+        block is ReaderQuoteBlock ||
+        block is ReaderCaptionBlock ||
+        block is ReaderFootnoteBlock,
   );
 
   bool get isPureImageDocument =>
@@ -166,6 +256,18 @@ class ReaderDocument {
           if (block is ReaderTextBlock) {
             return block.text;
           }
+          if (block is ReaderListItemBlock) {
+            return '• ${block.text}';
+          }
+          if (block is ReaderQuoteBlock) {
+            return block.text;
+          }
+          if (block is ReaderCaptionBlock) {
+            return block.text;
+          }
+          if (block is ReaderFootnoteBlock) {
+            return '注: ${block.text}';
+          }
           if (block is ReaderTitleBlock) {
             return block.text;
           }
@@ -182,9 +284,13 @@ class ReaderDocument {
 
   String get debugSummary {
     final textCount = blocks.whereType<ReaderTextBlock>().length;
+    final listCount = blocks.whereType<ReaderListItemBlock>().length;
+    final quoteCount = blocks.whereType<ReaderQuoteBlock>().length;
+    final captionCount = blocks.whereType<ReaderCaptionBlock>().length;
+    final footnoteCount = blocks.whereType<ReaderFootnoteBlock>().length;
     final imageCount = blocks.whereType<ReaderImageBlock>().length;
     final titleCount = blocks.whereType<ReaderTitleBlock>().length;
-    return 'ReaderDocument(blocks=${blocks.length}, titles=$titleCount, texts=$textCount, images=$imageCount, pureImage=$isPureImageDocument)';
+    return 'ReaderDocument(blocks=${blocks.length}, titles=$titleCount, texts=$textCount, lists=$listCount, quotes=$quoteCount, captions=$captionCount, footnotes=$footnoteCount, images=$imageCount, pureImage=$isPureImageDocument)';
   }
 
   Map<String, dynamic> toJson() {
@@ -213,6 +319,18 @@ class ReaderDocument {
 
   static bool _isMeaningfulBlock(ReaderBlock block) {
     if (block is ReaderTextBlock) {
+      return block.text.trim().isNotEmpty;
+    }
+    if (block is ReaderListItemBlock) {
+      return block.text.trim().isNotEmpty;
+    }
+    if (block is ReaderQuoteBlock) {
+      return block.text.trim().isNotEmpty;
+    }
+    if (block is ReaderCaptionBlock) {
+      return block.text.trim().isNotEmpty;
+    }
+    if (block is ReaderFootnoteBlock) {
       return block.text.trim().isNotEmpty;
     }
     if (block is ReaderTitleBlock) {

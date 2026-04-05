@@ -146,6 +146,7 @@ class LocalContentProvider extends ContentProvider {
       content: chapter.content,
       fromCache: true,
       imageUrls: chapter.imageUrls,
+      document: chapter.document,
     );
   }
 

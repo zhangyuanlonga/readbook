@@ -20,6 +20,7 @@ import '../../../data/datasources/local/app_database.dart';
 import '../../../domain/entities/bookshelf_book.dart';
 import '../../../domain/entities/chapter.dart';
 import '../../../domain/entities/local_book.dart';
+import '../../../domain/entities/reading_progress.dart';
 import '../../bookshelf/application/bookshelf_service.dart';
 import '../../reader/application/content_provider.dart';
 import '../../reader/application/local/local_book_index_service.dart';
@@ -267,6 +268,13 @@ class _BookDetailPageState extends State<BookDetailPage> {
                           )
                         else if (_result != null) ...[
                           _buildDetailCard(_result!),
+                          if (_isLocalContent &&
+                              _localBookMeta != null &&
+                              _localBookMeta!.indexStatus !=
+                                  LocalBookIndexStatus.ready) ...[
+                            const SizedBox(height: 12),
+                            _buildLocalIndexStatusCard(_localBookMeta!),
+                          ],
                           if (_canSwitchSource) ...[
                             const SizedBox(height: 12),
                             _buildSwitchSourceEntryCard(),
@@ -1235,7 +1243,7 @@ class _BookDetailPageState extends State<BookDetailPage> {
         Chapter(
           id: '',
           bookId: nextBookId,
-          title: result.detail.latestChapter,
+          title: result.detail.title,
           chapterUrl: '',
           index: 0,
         );
@@ -1475,6 +1483,98 @@ class _BookDetailPageState extends State<BookDetailPage> {
     }
 
     return _buildLocalDiagnosticsPanel();
+  }
+
+  Widget _buildLocalIndexStatusCard(LocalBook localBook) {
+    final colorScheme = Theme.of(context).colorScheme;
+    final (title, message, background, foreground, icon) = switch (localBook
+        .indexStatus) {
+      LocalBookIndexStatus.pending => (
+        '本地图书待建立目录',
+        '这本书已加入书架，目录解析将在后台继续进行。',
+        colorScheme.secondaryContainer,
+        colorScheme.onSecondaryContainer,
+        Icons.schedule_rounded,
+      ),
+      LocalBookIndexStatus.indexing => (
+        '本地图书正在解析',
+        '目录和章节正在后台建立，完成后会自动刷新。',
+        colorScheme.tertiaryContainer,
+        colorScheme.onTertiaryContainer,
+        Icons.autorenew_rounded,
+      ),
+      LocalBookIndexStatus.stale => (
+        '本地图书需要重建目录',
+        '检测到文件或索引状态变化，建议重新索引后再阅读。',
+        colorScheme.secondaryContainer,
+        colorScheme.onSecondaryContainer,
+        Icons.refresh_rounded,
+      ),
+      LocalBookIndexStatus.failed => (
+        '本地图书目录解析失败',
+        localBook.lastError?.trim().isNotEmpty == true
+            ? localBook.lastError!.trim()
+            : '建议先重新索引；如果仍失败，再尝试重新导入。',
+        colorScheme.errorContainer,
+        colorScheme.onErrorContainer,
+        Icons.error_outline_rounded,
+      ),
+      _ => (
+        '本地图书已就绪',
+        '当前目录和章节索引可用。',
+        colorScheme.secondaryContainer,
+        colorScheme.onSecondaryContainer,
+        Icons.check_circle_outline_rounded,
+      ),
+    };
+
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: background,
+        borderRadius: BorderRadius.circular(16),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(icon, color: foreground, size: 20),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  title,
+                  style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                    color: foreground,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  message,
+                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                    color: foreground,
+                    height: 1.35,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          if (localBook.indexStatus == LocalBookIndexStatus.failed ||
+              localBook.indexStatus == LocalBookIndexStatus.stale)
+            Padding(
+              padding: const EdgeInsets.only(left: 8),
+              child: TextButton.icon(
+                onPressed: _isLoading ? null : () => _load(forceRefresh: true),
+                icon: Icon(Icons.refresh_rounded, color: foreground, size: 16),
+                label: Text('重建', style: TextStyle(color: foreground)),
+              ),
+            ),
+        ],
+      ),
+    );
   }
 
   bool _hasLocalRepairIssue(LocalBook localBook) {

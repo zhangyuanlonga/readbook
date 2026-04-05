@@ -146,6 +146,18 @@ class ReaderLogicalPosition {
     if (block is ReaderTextBlock) {
       return block.text.isEmpty ? 1 : block.text.length;
     }
+    if (block is ReaderListItemBlock) {
+      return block.text.isEmpty ? 1 : block.text.length;
+    }
+    if (block is ReaderQuoteBlock) {
+      return block.text.isEmpty ? 1 : block.text.length;
+    }
+    if (block is ReaderCaptionBlock) {
+      return block.text.isEmpty ? 1 : block.text.length;
+    }
+    if (block is ReaderFootnoteBlock) {
+      return block.text.isEmpty ? 1 : block.text.length;
+    }
     if (block is ReaderTitleBlock) {
       return block.text.isEmpty ? 1 : block.text.length;
     }

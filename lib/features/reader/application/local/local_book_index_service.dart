@@ -429,6 +429,7 @@ class LocalBookIndexService {
             updatedAt: now,
             startOffset: chapter.startOffset,
             endOffset: chapter.endOffset,
+            document: chapter.document,
           );
         })
         .toList(growable: false);

@@ -1,4 +1,5 @@
 import '../../../../domain/entities/local_book.dart';
+import '../../../../domain/entities/reader_document.dart';
 
 class LocalParsedChapter {
   const LocalParsedChapter({
@@ -8,6 +9,7 @@ class LocalParsedChapter {
     this.sourceRef,
     this.startOffset,
     this.endOffset,
+    this.document,
   });
 
   final String title;
@@ -16,6 +18,7 @@ class LocalParsedChapter {
   final String? sourceRef;
   final int? startOffset;
   final int? endOffset;
+  final ReaderDocument? document;
 }
 
 class LocalParsedBook {

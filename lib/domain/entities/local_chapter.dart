@@ -1,3 +1,5 @@
+import 'reader_document.dart';
+
 class LocalChapter {
   const LocalChapter({
     required this.id,
@@ -11,6 +13,7 @@ class LocalChapter {
     required this.updatedAt,
     this.startOffset,
     this.endOffset,
+    this.document,
   });
 
   final String id;
@@ -24,6 +27,7 @@ class LocalChapter {
   final DateTime updatedAt;
   final int? startOffset;
   final int? endOffset;
+  final ReaderDocument? document;
 
   LocalChapter copyWith({
     String? id,
@@ -40,6 +44,8 @@ class LocalChapter {
     bool clearStartOffset = false,
     int? endOffset,
     bool clearEndOffset = false,
+    ReaderDocument? document,
+    bool clearDocument = false,
   }) {
     return LocalChapter(
       id: id ?? this.id,
@@ -53,6 +59,7 @@ class LocalChapter {
       updatedAt: updatedAt ?? this.updatedAt,
       startOffset: clearStartOffset ? null : (startOffset ?? this.startOffset),
       endOffset: clearEndOffset ? null : (endOffset ?? this.endOffset),
+      document: clearDocument ? null : (document ?? this.document),
     );
   }
 
@@ -69,6 +76,7 @@ class LocalChapter {
       'updatedAt': updatedAt.toIso8601String(),
       'startOffset': startOffset,
       'endOffset': endOffset,
+      'document': document?.toJson(),
     };
   }
 
@@ -85,7 +93,17 @@ class LocalChapter {
       updatedAt: _requiredDateTime(json, 'updatedAt'),
       startOffset: _optionalInt(json['startOffset']),
       endOffset: _optionalInt(json['endOffset']),
+      document: _optionalDocument(json['document']),
     );
+  }
+
+  static ReaderDocument? _optionalDocument(Object? value) {
+    if (value is Map) {
+      return ReaderDocument.fromJson(
+        value.map((key, value) => MapEntry(key.toString(), value)),
+      );
+    }
+    return null;
   }
 
   static String _requiredString(Map<String, dynamic> json, String key) {

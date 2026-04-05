@@ -178,6 +178,40 @@ class LocalTextEncodingDetector {
     );
   }
 
+  LocalTextDecodeResult? decodeSampleBestEffort(
+    List<int> bytes, {
+    String? preferredCharset,
+    String? hintedCharset,
+    Iterable<String>? candidateCharsets,
+    bool htmlAware = false,
+  }) {
+    if (bytes.isEmpty) {
+      return null;
+    }
+
+    final bom = _detectBom(bytes);
+    final strictUtf8 = _tryDecodeUtf8Sample(bytes, bom: bom);
+    if (strictUtf8 != null && strictUtf8.trim().isNotEmpty) {
+      return LocalTextDecodeResult(
+        text: strictUtf8,
+        charsetName: 'utf-8',
+        bomLength: bom.length,
+      );
+    }
+
+    final decoded = decodeBestEffort(
+      bytes,
+      preferredCharset: preferredCharset,
+      hintedCharset: hintedCharset,
+      candidateCharsets: candidateCharsets,
+      htmlAware: htmlAware,
+    );
+    if (decoded.text.trim().isEmpty) {
+      return null;
+    }
+    return decoded;
+  }
+
   _BomInfo _detectBom(List<int> bytes) {
     if (bytes.length >= 3 &&
         bytes[0] == 0xEF &&
@@ -192,6 +226,37 @@ class LocalTextEncodingDetector {
       return const _BomInfo(length: 2, charsetName: 'utf-16le');
     }
     return const _BomInfo(length: 0, charsetName: null);
+  }
+
+  String? _tryDecodeUtf8Sample(List<int> bytes, {required _BomInfo bom}) {
+    if (bom.charsetName != null && bom.charsetName != 'utf-8') {
+      return null;
+    }
+
+    final contentBytes =
+        bom.length > 0 ? bytes.sublist(bom.length) : List<int>.from(bytes);
+    for (
+      var truncatedTailBytes = 0;
+      truncatedTailBytes <= 3 && truncatedTailBytes < contentBytes.length;
+      truncatedTailBytes += 1
+    ) {
+      final candidateLength = contentBytes.length - truncatedTailBytes;
+      if (candidateLength <= 0) {
+        break;
+      }
+      try {
+        final decoded = utf8.decode(
+          contentBytes.sublist(0, candidateLength),
+          allowMalformed: false,
+        );
+        if (decoded.trim().isNotEmpty) {
+          return decoded;
+        }
+      } on FormatException {
+        continue;
+      }
+    }
+    return null;
   }
 
   String? _detectUtf16ZeroPattern(List<int> bytes) {

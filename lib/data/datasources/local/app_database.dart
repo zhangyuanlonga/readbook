@@ -9,6 +9,7 @@ import 'package:path_provider/path_provider.dart';
 import '../../../domain/entities/bookmark.dart';
 import '../../../domain/entities/local_book.dart';
 import '../../../domain/entities/local_chapter.dart';
+import '../../../domain/entities/reader_document.dart';
 import '../../../domain/entities/reading_record.dart';
 import '../../../domain/entities/reading_record_day.dart';
 import '../../../domain/entities/reading_record_session.dart';
@@ -69,6 +70,7 @@ class StoredLocalChapters extends Table {
   TextColumn get title => text()();
   TextColumn get content => text()();
   TextColumn get imageUrlsJson => text().withDefault(const Constant('[]'))();
+  TextColumn get documentJson => text().nullable()();
   TextColumn get sourceRef => text().nullable()();
   IntColumn get startOffset => integer().nullable()();
   IntColumn get endOffset => integer().nullable()();
@@ -269,7 +271,7 @@ class AppDatabase extends _$AppDatabase {
   static final AppDatabase instance = AppDatabase();
 
   @override
-  int get schemaVersion => 17;
+  int get schemaVersion => 18;
 
   @override
   MigrationStrategy get migration {
@@ -437,6 +439,18 @@ class AppDatabase extends _$AppDatabase {
                 () => migrator.addColumn(
                   storedLocalChapters,
                   storedLocalChapters.sourceRef,
+                ),
+          );
+        }
+        if (from < 18) {
+          await _addColumnIfMissing(
+            migrator: migrator,
+            tableName: storedLocalChapters.tableName,
+            columnName: 'document_json',
+            addColumn:
+                () => migrator.addColumn(
+                  storedLocalChapters,
+                  storedLocalChapters.documentJson,
                 ),
           );
         }
@@ -1158,7 +1172,9 @@ class AppDatabase extends _$AppDatabase {
             final normalizedTitle = chapter.title.trim();
             final normalizedContent = chapter.content.trim();
             final hasImages = chapter.imageUrls.isNotEmpty;
-            final hasSourceRef = (chapter.sourceRef?.trim().isNotEmpty ?? false);
+            final hasDocument = chapter.document != null;
+            final hasSourceRef =
+                (chapter.sourceRef?.trim().isNotEmpty ?? false);
             final hasExternalRange =
                 chapter.startOffset != null &&
                 chapter.endOffset != null &&
@@ -1168,6 +1184,7 @@ class AppDatabase extends _$AppDatabase {
                 (normalizedContent.isNotEmpty ||
                     hasExternalRange ||
                     hasImages ||
+                    hasDocument ||
                     hasSourceRef);
           })
           .toList(growable: false);
@@ -1187,6 +1204,11 @@ class AppDatabase extends _$AppDatabase {
                 title: Value(normalizedTitle),
                 content: Value(chapter.content),
                 imageUrlsJson: Value(jsonEncode(chapter.imageUrls)),
+                documentJson: Value(
+                  chapter.document == null
+                      ? null
+                      : jsonEncode(chapter.document!.toJson()),
+                ),
                 sourceRef: Value(chapter.sourceRef),
                 startOffset: Value(chapter.startOffset),
                 endOffset: Value(chapter.endOffset),
@@ -1238,6 +1260,7 @@ class AppDatabase extends _$AppDatabase {
             storedLocalChapters.chapterIndex,
             storedLocalChapters.title,
             storedLocalChapters.imageUrlsJson,
+            storedLocalChapters.documentJson,
             storedLocalChapters.sourceRef,
             storedLocalChapters.startOffset,
             storedLocalChapters.endOffset,
@@ -1259,6 +1282,9 @@ class AppDatabase extends _$AppDatabase {
             content: '',
             imageUrls: _decodeStringList(
               row.read(storedLocalChapters.imageUrlsJson),
+            ),
+            document: _decodeReaderDocument(
+              row.read(storedLocalChapters.documentJson),
             ),
             sourceRef: row.read(storedLocalChapters.sourceRef),
             createdAt: row.read(storedLocalChapters.createdAt)!,
@@ -1314,6 +1340,7 @@ class AppDatabase extends _$AppDatabase {
     required String chapterId,
     required String content,
     List<String> imageUrls = const <String>[],
+    ReaderDocument? document,
   }) async {
     final normalizedChapterId = chapterId.trim();
     if (normalizedChapterId.isEmpty) {
@@ -1324,6 +1351,9 @@ class AppDatabase extends _$AppDatabase {
       StoredLocalChaptersCompanion(
         content: Value(content),
         imageUrlsJson: Value(jsonEncode(imageUrls)),
+        documentJson: Value(
+          document == null ? null : jsonEncode(document.toJson()),
+        ),
         updatedAt: Value(DateTime.now()),
       ),
     );
@@ -1832,12 +1862,31 @@ class AppDatabase extends _$AppDatabase {
       title: row.title,
       content: row.content,
       imageUrls: _decodeStringList(row.imageUrlsJson),
+      document: _decodeReaderDocument(row.documentJson),
       sourceRef: row.sourceRef,
       createdAt: row.createdAt,
       updatedAt: row.updatedAt,
       startOffset: row.startOffset,
       endOffset: row.endOffset,
     );
+  }
+
+  ReaderDocument? _decodeReaderDocument(String? raw) {
+    final normalized = raw?.trim() ?? '';
+    if (normalized.isEmpty) {
+      return null;
+    }
+    try {
+      final decoded = jsonDecode(normalized);
+      if (decoded is! Map) {
+        return null;
+      }
+      return ReaderDocument.fromJson(
+        decoded.map((key, value) => MapEntry(key.toString(), value)),
+      );
+    } catch (_) {
+      return null;
+    }
   }
 
   Bookmark _mapRowToBookmark(StoredBookmark row) {

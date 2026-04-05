@@ -1,5 +1,6 @@
 import 'dart:convert';
 import 'dart:io';
+import 'dart:typed_data';
 
 import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
@@ -50,6 +51,8 @@ class LocalBookStorageService {
   final LocalTextEncodingDetector _textEncodingDetector;
   final AppLogger _logger;
   final Future<Directory> Function() _supportDirectoryProvider;
+  static const int _largeTxtRawCopyThresholdBytes = 1024 * 1024;
+  static const int _encodingSampleBytes = 24000;
 
   String buildStoredStoragePath({
     required String bookId,
@@ -119,8 +122,8 @@ class LocalBookStorageService {
       return LocalBookStorageWriteResult(storageStat: copiedStat);
     }
 
-    final bytes = await sourceFile.readAsBytes();
-    if (bytes.isEmpty) {
+    final fileLength = await sourceFile.length();
+    if (fileLength == 0) {
       await targetFile.writeAsBytes(const <int>[], flush: true);
       final emptyStat = await targetFile.stat();
       return LocalBookStorageWriteResult(
@@ -130,14 +133,41 @@ class LocalBookStorageService {
       );
     }
 
+    final sample = await _detectEncodingFromSample(sourceFile);
+    if (fileLength >= _largeTxtRawCopyThresholdBytes && sample != null) {
+      await _ensureParentDir(targetFile);
+      await sourceFile.copy(targetFile.path);
+      final copiedStat = await targetFile.stat();
+      return LocalBookStorageWriteResult(
+        storageStat: copiedStat,
+        normalizedCharset: sample.charsetName,
+        originalCharset: sample.charsetName,
+        convertedToUtf8: false,
+      );
+    }
+
+    final bytes = await sourceFile.readAsBytes();
     try {
       final decoded = _textEncodingDetector.decodeBestEffort(bytes);
+      await _ensureParentDir(targetFile);
+      final canKeepOriginalBytes =
+          decoded.charsetName == 'utf-8' &&
+          decoded.bomLength == 0 &&
+          !decoded.fallbackUsed &&
+          !decoded.text.startsWith('\uFEFF');
+      if (canKeepOriginalBytes) {
+        await sourceFile.copy(targetFile.path);
+        final copiedStat = await targetFile.stat();
+        return LocalBookStorageWriteResult(
+          storageStat: copiedStat,
+          normalizedCharset: 'utf-8',
+          originalCharset: decoded.charsetName,
+          convertedToUtf8: false,
+        );
+      }
+
       final normalizedText = decoded.text.replaceFirst('\uFEFF', '');
       final normalizedBytes = utf8.encode(normalizedText);
-      final parentDir = targetFile.parent;
-      if (!await parentDir.exists()) {
-        await parentDir.create(recursive: true);
-      }
       await targetFile.writeAsBytes(normalizedBytes, flush: true);
       final normalizedStat = await targetFile.stat();
       return LocalBookStorageWriteResult(
@@ -159,13 +189,43 @@ class LocalBookStorageService {
           'error': error.toString(),
         },
       );
-      final parentDir = targetFile.parent;
-      if (!await parentDir.exists()) {
-        await parentDir.create(recursive: true);
-      }
+      await _ensureParentDir(targetFile);
       await sourceFile.copy(targetFile.path);
       final copiedStat = await targetFile.stat();
       return LocalBookStorageWriteResult(storageStat: copiedStat);
+    }
+  }
+
+  Future<List<int>> _readEncodingSample(File file) async {
+    final fileLength = await file.length();
+    if (fileLength == 0) {
+      return const <int>[];
+    }
+    final sampleLength =
+        fileLength < _encodingSampleBytes ? fileLength : _encodingSampleBytes;
+    if (sampleLength <= 0) {
+      return const <int>[];
+    }
+    final builder = BytesBuilder(copy: false);
+    await file.openRead(0, sampleLength).forEach(builder.add);
+    return builder.takeBytes();
+  }
+
+  Future<LocalTextDecodeResult?> _detectEncodingFromSample(File file) async {
+    final sampleBytes = await _readEncodingSample(file);
+    if (sampleBytes.isEmpty) {
+      return null;
+    }
+    return _textEncodingDetector.decodeSampleBestEffort(
+      sampleBytes,
+      htmlAware: false,
+    );
+  }
+
+  Future<void> _ensureParentDir(File target) async {
+    final parentDir = target.parent;
+    if (!await parentDir.exists()) {
+      await parentDir.create(recursive: true);
     }
   }
 

@@ -4339,6 +4339,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
               ReaderRenderTextKind.listItem => rawText,
               ReaderRenderTextKind.quote => rawText,
               ReaderRenderTextKind.caption => rawText,
+              ReaderRenderTextKind.footnote => rawText,
               ReaderRenderTextKind.title => rawText,
             };
 
@@ -5469,6 +5470,11 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
         color: colors.meta,
         height: 1.45,
       ),
+      ReaderRenderTextKind.footnote => base.copyWith(
+        fontSize: (base.fontSize ?? 18) * 0.86,
+        color: colors.meta,
+        height: 1.48,
+      ),
       ReaderRenderTextKind.title => base.copyWith(
         fontSize: (base.fontSize ?? 20) * _titleScaleForLevel(item.level),
         fontWeight: FontWeight.w800,
@@ -5501,6 +5507,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
         14.0,
       ),
       ReaderRenderTextKind.caption => _settings.paragraphSpacing * 0.6,
+      ReaderRenderTextKind.footnote => _settings.paragraphSpacing * 0.55,
       ReaderRenderTextKind.title => max(_settings.paragraphSpacing, 18.0),
     };
   }
@@ -5511,6 +5518,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
       ReaderRenderTextKind.listItem => TextAlign.start,
       ReaderRenderTextKind.quote => TextAlign.start,
       ReaderRenderTextKind.caption => TextAlign.center,
+      ReaderRenderTextKind.footnote => TextAlign.start,
       ReaderRenderTextKind.paragraph => _paragraphTextAlign(_settings),
     };
   }
@@ -5521,6 +5529,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
       ReaderRenderTextKind.listItem => '• ${item.text}',
       ReaderRenderTextKind.quote => item.text,
       ReaderRenderTextKind.caption => item.text,
+      ReaderRenderTextKind.footnote => '注: ${item.text}',
       ReaderRenderTextKind.title => item.text,
     };
   }
@@ -5531,6 +5540,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
       ReaderRenderTextKind.listItem => 0,
       ReaderRenderTextKind.quote => 0,
       ReaderRenderTextKind.caption => 0,
+      ReaderRenderTextKind.footnote => 0,
       ReaderRenderTextKind.title => 0,
     };
   }

@@ -93,8 +93,7 @@ class TxtLocalBookParser implements LocalBookParser {
   }
 
   bool _canUseStreamingIndex(LocalBook book, int fileLength) {
-    return fileLength >= _streamingIndexThresholdBytes &&
-        _normalizeCharsetName(book.charset) == 'utf-8';
+    return fileLength >= _streamingIndexThresholdBytes;
   }
 
   Future<LocalParsedBook?> _parseWithStreamingIndex(
@@ -118,14 +117,8 @@ class TxtLocalBookParser implements LocalBookParser {
     }
 
     final bomInfo = _detectBom(rawSample);
-    if (bomInfo.charsetName != null && bomInfo.charsetName != 'utf-8') {
-      return null;
-    }
-    final sampleText = utf8.decode(
-      rawSample.sublist(bomInfo.length),
-      allowMalformed: true,
-    );
-    if (sampleText.trim().isEmpty) {
+    final sampleText = _decodeUtf8SamplePrefix(rawSample, bomInfo: bomInfo);
+    if (sampleText == null) {
       return null;
     }
 
@@ -148,6 +141,45 @@ class TxtLocalBookParser implements LocalBookParser {
       return null;
     }
     return LocalParsedBook(chapters: chapters, charset: 'utf-8');
+  }
+
+  String? _decodeUtf8SamplePrefix(
+    List<int> rawSample, {
+    required _BomInfo bomInfo,
+  }) {
+    if (bomInfo.charsetName != null && bomInfo.charsetName != 'utf-8') {
+      return null;
+    }
+
+    final normalizedCharset = _normalizeCharsetName(bomInfo.charsetName);
+    if (normalizedCharset == 'utf-8') {
+      final decoded = utf8.decode(rawSample.sublist(bomInfo.length));
+      return decoded.trim().isEmpty ? null : decoded;
+    }
+
+    final contentBytes = rawSample.sublist(bomInfo.length);
+    for (
+      var truncatedTailBytes = 0;
+      truncatedTailBytes <= 3 && truncatedTailBytes < contentBytes.length;
+      truncatedTailBytes += 1
+    ) {
+      final candidateLength = contentBytes.length - truncatedTailBytes;
+      if (candidateLength <= 0) {
+        break;
+      }
+      try {
+        final decoded = utf8.decode(
+          contentBytes.sublist(0, candidateLength),
+          allowMalformed: false,
+        );
+        if (decoded.trim().isNotEmpty) {
+          return decoded;
+        }
+      } on FormatException {
+        continue;
+      }
+    }
+    return null;
   }
 
   Future<List<LocalParsedChapter>> _splitByFixedLengthStreaming(

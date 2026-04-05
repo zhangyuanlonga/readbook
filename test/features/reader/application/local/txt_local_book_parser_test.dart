@@ -163,6 +163,41 @@ $longContent
       expect(result.chapters.first.title, '第1章 长章节(1)');
     });
 
+    test('indexes large utf-8 text without preset charset', () async {
+      final file = File('${tempDir.path}/large_utf8_book.txt');
+      final chapter1 = List.filled(350000, '内容一').join();
+      final chapter2 = List.filled(350000, '内容二').join();
+      await file.writeAsString('''
+第1章 开始
+$chapter1
+
+第2章 继续
+$chapter2
+''');
+
+      final now = DateTime.parse('2026-02-23T12:00:00.000Z');
+      final result = await parser.parse(
+        LocalBook(
+          id: 'local_txt_large_utf8',
+          title: '大文件 UTF8 测试',
+          format: LocalBookFormat.txt,
+          storagePath: file.path,
+          splitLongChapter: false,
+          fileSize: await file.length(),
+          createdAt: now,
+          updatedAt: now,
+        ),
+      );
+
+      expect(result.charset, 'utf-8');
+      expect(result.chapters, hasLength(2));
+      expect(result.chapters.first.startOffset, isNotNull);
+      expect(result.chapters.first.endOffset, isNotNull);
+      expect(result.chapters.first.content, isEmpty);
+      expect(result.chapters.last.startOffset, isNotNull);
+      expect(result.chapters.last.endOffset, isNotNull);
+    });
+
     test('detects gbk text without rewriting original bytes', () async {
       final file = File('${tempDir.path}/gbk_book.txt');
       final gbk = Charset.getByName('gbk');

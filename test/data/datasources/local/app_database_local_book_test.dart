@@ -2,6 +2,7 @@ import 'package:drift/native.dart';
 import 'package:flutter_appread/data/datasources/local/app_database.dart';
 import 'package:flutter_appread/domain/entities/local_book.dart';
 import 'package:flutter_appread/domain/entities/local_chapter.dart';
+import 'package:flutter_appread/domain/entities/reader_document.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
@@ -116,6 +117,12 @@ void main() {
             updatedAt: now,
             startOffset: 101,
             endOffset: 200,
+            document: ReaderDocument(
+              blocks: const <ReaderBlock>[
+                ReaderTextBlock(text: '第二章内容'),
+                ReaderImageBlock(imageUrl: 'file:///tmp/image_2.png'),
+              ],
+            ),
           ),
         ],
       );
@@ -129,6 +136,8 @@ void main() {
       expect(chapter!.chapterIndex, 1);
       expect(chapter.imageUrls, contains('file:///tmp/image_2.png'));
       expect(chapter.sourceRef, 'OPS/chapter2.xhtml');
+      expect(chapter.document, isNotNull);
+      expect(chapter.document!.blocks.last, isA<ReaderImageBlock>());
 
       final book = await database.getLocalBookById('local_2');
       expect(book, isNotNull);
