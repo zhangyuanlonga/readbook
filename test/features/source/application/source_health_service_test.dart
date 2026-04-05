@@ -91,7 +91,7 @@ void main() {
       expect(snapshot.challengeCount, 0);
       expect(snapshot.timeoutCount, 0);
       expect(snapshot.lastFailureReason, isNull);
-      expect(snapshot.level, SourceHealthLevel.healthy);
+      expect(snapshot.level, SourceHealthLevel.unchecked);
     });
   });
 }

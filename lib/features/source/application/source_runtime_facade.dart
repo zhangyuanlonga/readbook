@@ -7,8 +7,10 @@ import '../../../domain/repositories/script_source_repository.dart';
 import '../../../runtime/session/source_session.dart';
 import '../../../runtime/sources/source_registry.dart';
 import '../../../runtime/sources/source_result_models.dart' as runtime_models;
+import '../../../domain/entities/source_health.dart';
 import 'source_site_cluster_service.dart';
 import 'script_source_runtime_service.dart';
+import 'source_health_service.dart';
 
 class ScriptSourceReloadFailure {
   const ScriptSourceReloadFailure({required this.source, required this.error});
@@ -36,17 +38,20 @@ class SourceRuntimeFacade {
     required ScriptSourceRepository scriptSourceRepository,
     ScriptSourceRuntimeService? scriptRuntimeService,
     SourceSiteClusterService? siteClusterService,
+    SourceHealthService? sourceHealthService,
     Uuid? uuid,
   }) : _scriptSourceRepository = scriptSourceRepository,
        _scriptRuntimeService =
            scriptRuntimeService ?? ScriptSourceRuntimeService(),
        _siteClusterService =
            siteClusterService ?? const SourceSiteClusterService(),
+       _sourceHealthService = sourceHealthService ?? SourceHealthService.instance,
        _uuid = uuid ?? const Uuid();
 
   final ScriptSourceRepository _scriptSourceRepository;
   final ScriptSourceRuntimeService _scriptRuntimeService;
   final SourceSiteClusterService _siteClusterService;
+  final SourceHealthService _sourceHealthService;
   final Uuid _uuid;
 
   Future<List<ScriptSource>> listScriptSources() {
@@ -85,15 +90,22 @@ class SourceRuntimeFacade {
       homepage: manifest.homepage,
       domains: manifest.domains,
     );
+    final resolvedName = _resolvePersistedName(
+      sourceCode: normalizedCode,
+      manifestName: manifest.name,
+    );
     final nextSource = ScriptSource(
       id: persistedId,
-      name: manifest.name,
+      name: resolvedName,
       group: manifest.group.trim().isEmpty ? null : manifest.group.trim(),
       author: manifest.author.trim().isEmpty ? null : manifest.author.trim(),
       description:
           manifest.description.trim().isEmpty
               ? null
               : manifest.description.trim(),
+      checkKeyword: manifest.checkKeyword?.trim().isEmpty ?? true
+          ? null
+          : manifest.checkKeyword!.trim(),
       primaryHost: siteMeta.primaryHost,
       registrableDomain: siteMeta.registrableDomain,
       clusterKey: siteMeta.clusterKey,
@@ -104,10 +116,79 @@ class SourceRuntimeFacade {
     );
     await _scriptSourceRepository.upsert(nextSource);
 
+    if (existing == null) {
+      _sourceHealthService.upsert(
+        SourceHealthSnapshot(
+          sourceId: persistedId,
+          level: SourceHealthLevel.unchecked,
+          enabled: enabled,
+        ),
+      );
+    }
+
     if (!enabled) {
       _scriptRuntimeService.removeRegisteredSource(persistedId);
     }
     return nextSource;
+  }
+
+  String _resolvePersistedName({
+    required String sourceCode,
+    required String manifestName,
+  }) {
+    final normalizedManifestName = manifestName.trim();
+    final rawName = _extractLiteralMetaField(sourceCode, 'name');
+    if (rawName == null) {
+      return normalizedManifestName;
+    }
+
+    final normalizedRawName = rawName.trim();
+    if (normalizedRawName.isEmpty) {
+      return normalizedManifestName;
+    }
+
+    if (normalizedManifestName.isEmpty) {
+      return normalizedRawName;
+    }
+
+    if (_containsSuspiciousReplacement(normalizedManifestName) &&
+        !_containsSuspiciousReplacement(normalizedRawName)) {
+      return normalizedRawName;
+    }
+
+    return normalizedRawName;
+  }
+
+  String? _extractLiteralMetaField(String sourceCode, String fieldName) {
+    final metaMatch = RegExp(
+      r'\bmeta\s*:\s*\{([\s\S]*?)\n\s*\}',
+      multiLine: true,
+    ).firstMatch(sourceCode);
+    final block = metaMatch?.group(1);
+    if (block == null || block.trim().isEmpty) {
+      return null;
+    }
+
+    final pattern = RegExp(
+      "\\b$fieldName\\s*:\\s*(['\"])((?:\\\\.|(?!\\1)[\\s\\S])*)\\1",
+      multiLine: true,
+    );
+    final match = pattern.firstMatch(block);
+    final rawValue = match?.group(2);
+    if (rawValue == null) {
+      return null;
+    }
+
+    return rawValue
+        .replaceAll(r"\'", "'")
+        .replaceAll(r'\"', '"')
+        .replaceAll(r'\n', '\n')
+        .replaceAll(r'\r', '\r')
+        .replaceAll(r'\t', '\t');
+  }
+
+  bool _containsSuspiciousReplacement(String value) {
+    return value.contains('\uFFFD');
   }
 
   Future<void> setScriptSourceEnabled({

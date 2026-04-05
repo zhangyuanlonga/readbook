@@ -403,6 +403,7 @@ int _switchSourceHealthScore(SourceHealthSnapshot? snapshot) {
     return 0;
   }
   return switch (snapshot.level) {
+    SourceHealthLevel.unchecked => 0,
     SourceHealthLevel.healthy => 18,
     SourceHealthLevel.warning => 4,
     SourceHealthLevel.risky => -18,

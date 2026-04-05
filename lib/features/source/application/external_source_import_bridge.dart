@@ -4,7 +4,7 @@ import 'dart:collection';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 
-enum ExternalImportPayloadType { localBook }
+enum ExternalImportPayloadType { localBook, scriptSource }
 
 class IncomingExternalImportPayload {
   const IncomingExternalImportPayload.localBook({
@@ -12,6 +12,12 @@ class IncomingExternalImportPayload {
     required this.label,
     this.mimeType,
   }) : type = ExternalImportPayloadType.localBook;
+
+  const IncomingExternalImportPayload.scriptSource({
+    required this.uri,
+    required this.label,
+    this.mimeType,
+  }) : type = ExternalImportPayloadType.scriptSource;
 
   final ExternalImportPayloadType type;
   final String label;
@@ -102,7 +108,8 @@ class ExternalImportBridge {
   Future<CachedExternalImportFile?> cacheExternalFileFromUri(
     IncomingExternalImportPayload payload,
   ) async {
-    if (payload.type != ExternalImportPayloadType.localBook ||
+    if ((payload.type != ExternalImportPayloadType.localBook &&
+            payload.type != ExternalImportPayloadType.scriptSource) ||
         payload.uri.trim().isEmpty) {
       return null;
     }
@@ -180,6 +187,22 @@ class ExternalImportBridge {
               ? mimeTypeRaw.trim()
               : null;
       return IncomingExternalImportPayload.localBook(
+        uri: uriRaw,
+        label: label,
+        mimeType: mimeType,
+      );
+    }
+    if (typeRaw == 'scriptsource') {
+      final uriRaw = raw['uri']?.toString().trim() ?? '';
+      if (uriRaw.isEmpty) {
+        return null;
+      }
+      final mimeTypeRaw = raw['mimeType'];
+      final mimeType =
+          mimeTypeRaw is String && mimeTypeRaw.trim().isNotEmpty
+              ? mimeTypeRaw.trim()
+              : null;
+      return IncomingExternalImportPayload.scriptSource(
         uri: uriRaw,
         label: label,
         mimeType: mimeType,

@@ -9,6 +9,7 @@ class ScriptSource {
     this.group,
     this.author,
     this.description,
+    this.checkKeyword,
     this.primaryHost,
     this.registrableDomain,
     this.clusterKey,
@@ -23,6 +24,7 @@ class ScriptSource {
   final String? group;
   final String? author;
   final String? description;
+  final String? checkKeyword;
   final String? primaryHost;
   final String? registrableDomain;
   final String? clusterKey;
@@ -40,6 +42,8 @@ class ScriptSource {
     bool clearAuthor = false,
     String? description,
     bool clearDescription = false,
+    String? checkKeyword,
+    bool clearCheckKeyword = false,
     String? primaryHost,
     bool clearPrimaryHost = false,
     String? registrableDomain,
@@ -57,6 +61,8 @@ class ScriptSource {
       group: clearGroup ? null : (group ?? this.group),
       author: clearAuthor ? null : (author ?? this.author),
       description: clearDescription ? null : (description ?? this.description),
+      checkKeyword:
+          clearCheckKeyword ? null : (checkKeyword ?? this.checkKeyword),
       primaryHost: clearPrimaryHost ? null : (primaryHost ?? this.primaryHost),
       registrableDomain:
           clearRegistrableDomain
@@ -77,6 +83,7 @@ class ScriptSource {
       'group': group,
       'author': author,
       'description': description,
+      'checkKeyword': checkKeyword,
       'primaryHost': primaryHost,
       'registrableDomain': registrableDomain,
       'clusterKey': clusterKey,
@@ -94,6 +101,7 @@ class ScriptSource {
       group: _optionalString(json['group']),
       author: _optionalString(json['author']),
       description: _optionalString(json['description']),
+      checkKeyword: _optionalString(json['checkKeyword']),
       primaryHost: _optionalString(json['primaryHost']),
       registrableDomain: _optionalString(json['registrableDomain']),
       clusterKey: _optionalString(json['clusterKey']),

@@ -5,6 +5,7 @@ import '../../../runtime/sources/source_result_models.dart' as runtime_models;
 import 'source_health_auto_disable_service.dart';
 import 'source_health_reason_classifier.dart';
 import 'source_health_service.dart';
+import 'source_health_snapshot_resolver.dart';
 import 'source_runtime_facade.dart';
 
 enum SourceCheckLevel { searchOnly, searchAndDetail, fullReadPath }
@@ -17,6 +18,7 @@ class SourceCheckResult {
   const SourceCheckResult({
     required this.sourceId,
     required this.sourceName,
+    required this.usedKeyword,
     required this.status,
     required this.checkedLevel,
     required this.duration,
@@ -29,6 +31,7 @@ class SourceCheckResult {
 
   final String sourceId;
   final String sourceName;
+  final String usedKeyword;
   final SourceCheckStatus status;
   final SourceCheckLevel checkedLevel;
   final Duration duration;
@@ -38,6 +41,9 @@ class SourceCheckResult {
   final bool canAutoDisable;
   final bool canBatchDelete;
 }
+
+typedef SourceBatchCheckProgressCallback =
+    void Function(SourceCheckResult result, int completedCount, int totalCount);
 
 class SourceCheckService {
   SourceCheckService({
@@ -58,6 +64,17 @@ class SourceCheckService {
   final SourceHealthService _sourceHealthService;
   final SourceHealthReasonClassifier _reasonClassifier;
   final SourceHealthAutoDisableService _autoDisableService;
+  static const String defaultCheckKeyword = '凡人修仙传';
+
+  static SourceHealthStep _healthStepForCheckStep(SourceCheckStep step) {
+    return switch (step) {
+      SourceCheckStep.none => SourceHealthStep.search,
+      SourceCheckStep.search => SourceHealthStep.search,
+      SourceCheckStep.detail => SourceHealthStep.detail,
+      SourceCheckStep.chapters => SourceHealthStep.chapters,
+      SourceCheckStep.content => SourceHealthStep.content,
+    };
+  }
 
   Future<SourceCheckResult> checkSource({
     required String sourceId,
@@ -73,6 +90,10 @@ class SourceCheckService {
       return _failureResult(
         sourceId: sourceId,
         sourceName: sourceId,
+        usedKeyword: _resolveCheckKeyword(
+          keyword,
+          manifestKeyword: null,
+        ),
         checkedLevel: level,
         stepReached: SourceCheckStep.none,
         message: '书源不存在或已禁用。',
@@ -84,11 +105,16 @@ class SourceCheckService {
     final sourceName = registered.runtime.name;
     final needsBrowser = _looksLikeBrowserCapable(registered);
     final snapshot = _sourceHealthService.snapshotFor(sourceId);
+    final effectiveKeyword = _resolveCheckKeyword(
+      keyword,
+      manifestKeyword: registered.definition.manifest.checkKeyword,
+    );
 
     if (skipCooldown && snapshot.coolingDown) {
       return _skippedResult(
         sourceId: sourceId,
         sourceName: sourceName,
+        usedKeyword: effectiveKeyword,
         checkedLevel: level,
         startedAt: startedAt,
         message: '源处于冷却中，已跳过本次检测。',
@@ -97,16 +123,32 @@ class SourceCheckService {
       );
     }
 
+    var attemptedStep = SourceCheckStep.search;
+
     try {
       final books = await _sourceRuntimeFacade.search(
         sourceId: sourceId,
-        keyword: keyword,
+        keyword: effectiveKeyword,
         allowInteractiveChallenge: allowInteractiveChallenge,
       );
+      _sourceHealthService.markSearchSuccess(
+        sourceId: sourceId,
+        latencyMs: DateTime.now().difference(startedAt).inMilliseconds,
+      );
+      if (needsBrowser) {
+        _sourceHealthService.markBrowserRiskObserved(sourceId: sourceId);
+      }
       if (books.isEmpty) {
+        _recordStepFailure(
+          sourceId: sourceId,
+          stepReached: SourceCheckStep.search,
+          message: '搜索无结果。',
+          failureKind: SourceHealthFailureKind.emptyResult,
+        );
         final result = _failureResult(
           sourceId: sourceId,
           sourceName: sourceName,
+          usedKeyword: effectiveKeyword,
           checkedLevel: level,
           stepReached: SourceCheckStep.search,
           message: '搜索无结果。',
@@ -125,6 +167,7 @@ class SourceCheckService {
         return _successResult(
           sourceId: sourceId,
           sourceName: sourceName,
+          usedKeyword: effectiveKeyword,
           checkedLevel: level,
           stepReached: stepReached,
           startedAt: startedAt,
@@ -132,16 +175,19 @@ class SourceCheckService {
         );
       }
 
+      attemptedStep = SourceCheckStep.detail;
       workingBook = await _sourceRuntimeFacade.detail(
         sourceId: sourceId,
         book: workingBook,
       );
+      _sourceHealthService.markDetailSuccess(sourceId: sourceId);
       stepReached = SourceCheckStep.detail;
 
       if (level == SourceCheckLevel.searchAndDetail) {
         return _successResult(
           sourceId: sourceId,
           sourceName: sourceName,
+          usedKeyword: effectiveKeyword,
           checkedLevel: level,
           stepReached: stepReached,
           startedAt: startedAt,
@@ -149,10 +195,12 @@ class SourceCheckService {
         );
       }
 
+      attemptedStep = SourceCheckStep.chapters;
       final chapters = await _sourceRuntimeFacade.chapters(
         sourceId: sourceId,
         book: workingBook,
       );
+      _sourceHealthService.markChaptersSuccess(sourceId: sourceId);
       stepReached = SourceCheckStep.chapters;
       final contentChapter = chapters.firstWhere(
         (chapter) => !chapter.isVolume,
@@ -160,9 +208,16 @@ class SourceCheckService {
             () => const runtime_models.Chapter(title: '', url: '', index: 0),
       );
       if (contentChapter.url.trim().isEmpty) {
+        _recordStepFailure(
+          sourceId: sourceId,
+          stepReached: stepReached,
+          message: '目录无可读章节。',
+          failureKind: SourceHealthFailureKind.emptyResult,
+        );
         final result = _failureResult(
           sourceId: sourceId,
           sourceName: sourceName,
+          usedKeyword: effectiveKeyword,
           checkedLevel: level,
           stepReached: stepReached,
           message: '目录无可读章节。',
@@ -174,6 +229,7 @@ class SourceCheckService {
         return result;
       }
 
+      attemptedStep = SourceCheckStep.content;
       final content = await _sourceRuntimeFacade.content(
         sourceId: sourceId,
         book: workingBook,
@@ -181,9 +237,16 @@ class SourceCheckService {
       );
       stepReached = SourceCheckStep.content;
       if (content.content.trim().isEmpty && content.images.isEmpty) {
+        _recordStepFailure(
+          sourceId: sourceId,
+          stepReached: stepReached,
+          message: '正文为空。',
+          failureKind: SourceHealthFailureKind.emptyResult,
+        );
         final result = _failureResult(
           sourceId: sourceId,
           sourceName: sourceName,
+          usedKeyword: effectiveKeyword,
           checkedLevel: level,
           stepReached: stepReached,
           message: '正文为空。',
@@ -195,20 +258,31 @@ class SourceCheckService {
         return result;
       }
 
+      _sourceHealthService.markContentSuccess(sourceId: sourceId);
+
       return _successResult(
         sourceId: sourceId,
         sourceName: sourceName,
+        usedKeyword: effectiveKeyword,
         checkedLevel: level,
         stepReached: stepReached,
         startedAt: startedAt,
         needsBrowser: needsBrowser,
       );
     } on AppException catch (error) {
+      _recordStepFailure(
+        sourceId: sourceId,
+        stepReached: attemptedStep,
+        message: error.briefMessage,
+        failureKind: _reasonClassifier.classify(appException: error),
+        error: error,
+      );
       final result = _failureResult(
         sourceId: sourceId,
         sourceName: sourceName,
+        usedKeyword: effectiveKeyword,
         checkedLevel: level,
-        stepReached: SourceCheckStep.none,
+        stepReached: attemptedStep,
         message: error.briefMessage,
         failureKind: _reasonClassifier.classify(appException: error),
         startedAt: startedAt,
@@ -217,11 +291,19 @@ class SourceCheckService {
       await _evaluateAutoDisable(sourceId: sourceId, sourceName: sourceName);
       return result;
     } catch (error) {
+      _recordStepFailure(
+        sourceId: sourceId,
+        stepReached: attemptedStep,
+        message: error.toString(),
+        failureKind: _reasonClassifier.classify(error: error),
+        error: error,
+      );
       final result = _failureResult(
         sourceId: sourceId,
         sourceName: sourceName,
+        usedKeyword: effectiveKeyword,
         checkedLevel: level,
-        stepReached: SourceCheckStep.none,
+        stepReached: attemptedStep,
         message: error.toString(),
         failureKind: _reasonClassifier.classify(error: error),
         startedAt: startedAt,
@@ -238,18 +320,21 @@ class SourceCheckService {
     SourceCheckLevel level = SourceCheckLevel.searchOnly,
     bool allowInteractiveChallenge = false,
     bool skipCooldown = false,
+    SourceBatchCheckProgressCallback? onProgress,
   }) async {
     final results = <SourceCheckResult>[];
-    for (final sourceId in sourceIds) {
-      results.add(
-        await checkSource(
-          sourceId: sourceId,
-          keyword: keyword,
-          level: level,
-          allowInteractiveChallenge: allowInteractiveChallenge,
-          skipCooldown: skipCooldown,
-        ),
+    final sourceIdList = sourceIds.toList(growable: false);
+    final totalCount = sourceIdList.length;
+    for (final sourceId in sourceIdList) {
+      final result = await checkSource(
+        sourceId: sourceId,
+        keyword: keyword,
+        level: level,
+        allowInteractiveChallenge: allowInteractiveChallenge,
+        skipCooldown: skipCooldown,
       );
+      results.add(result);
+      onProgress?.call(result, results.length, totalCount);
     }
     return results;
   }
@@ -257,20 +342,18 @@ class SourceCheckService {
   SourceCheckResult _successResult({
     required String sourceId,
     required String sourceName,
+    required String usedKeyword,
     required SourceCheckLevel checkedLevel,
     required SourceCheckStep stepReached,
     required DateTime startedAt,
     required bool needsBrowser,
   }) {
-    _sourceHealthService.markSearchSuccess(
-      sourceId: sourceId,
-      latencyMs: DateTime.now().difference(startedAt).inMilliseconds,
-    );
     final status =
         needsBrowser ? SourceCheckStatus.warning : SourceCheckStatus.healthy;
     return SourceCheckResult(
       sourceId: sourceId,
       sourceName: sourceName,
+      usedKeyword: usedKeyword,
       status: status,
       checkedLevel: checkedLevel,
       duration: DateTime.now().difference(startedAt),
@@ -285,6 +368,7 @@ class SourceCheckService {
   SourceCheckResult _failureResult({
     required String sourceId,
     required String sourceName,
+    required String usedKeyword,
     required SourceCheckLevel checkedLevel,
     required SourceCheckStep stepReached,
     required String message,
@@ -292,16 +376,10 @@ class SourceCheckService {
     required DateTime startedAt,
     bool needsBrowser = false,
   }) {
-    _sourceHealthService.markSearchFailure(
-      sourceId: sourceId,
-      message: message,
-      markCooldown:
-          failureKind == SourceHealthFailureKind.browserChallenge ||
-          failureKind == SourceHealthFailureKind.timeout,
-    );
     return SourceCheckResult(
       sourceId: sourceId,
       sourceName: sourceName,
+      usedKeyword: usedKeyword,
       status: SourceCheckStatus.failed,
       checkedLevel: checkedLevel,
       duration: DateTime.now().difference(startedAt),
@@ -313,9 +391,67 @@ class SourceCheckService {
     );
   }
 
+  void _recordStepFailure({
+    required String sourceId,
+    required SourceCheckStep stepReached,
+    required String message,
+    required SourceHealthFailureKind failureKind,
+    Object? error,
+  }) {
+    final markCooldown =
+        failureKind == SourceHealthFailureKind.browserChallenge ||
+        failureKind == SourceHealthFailureKind.timeout;
+    final step = _healthStepForCheckStep(stepReached);
+    switch (step) {
+      case SourceHealthStep.search:
+        _sourceHealthService.markSearchFailure(
+          sourceId: sourceId,
+          message: message,
+          error: error,
+          markCooldown: markCooldown,
+        );
+        break;
+      case SourceHealthStep.detail:
+        _sourceHealthService.markDetailFailure(
+          sourceId: sourceId,
+          message: message,
+          error: error,
+          markCooldown: markCooldown,
+        );
+        break;
+      case SourceHealthStep.chapters:
+        _sourceHealthService.markChaptersFailure(
+          sourceId: sourceId,
+          message: message,
+          error: error,
+          markCooldown: markCooldown,
+        );
+        break;
+      case SourceHealthStep.content:
+        _sourceHealthService.markContentFailure(
+          sourceId: sourceId,
+          message: message,
+          error: error,
+          markCooldown: markCooldown,
+        );
+        break;
+      case SourceHealthStep.discoverCategories:
+      case SourceHealthStep.discoverBooks:
+      case SourceHealthStep.check:
+        _sourceHealthService.markSearchFailure(
+          sourceId: sourceId,
+          message: message,
+          error: error,
+          markCooldown: markCooldown,
+        );
+        break;
+    }
+  }
+
   SourceCheckResult _skippedResult({
     required String sourceId,
     required String sourceName,
+    required String usedKeyword,
     required SourceCheckLevel checkedLevel,
     required DateTime startedAt,
     required String message,
@@ -325,6 +461,7 @@ class SourceCheckService {
     return SourceCheckResult(
       sourceId: sourceId,
       sourceName: sourceName,
+      usedKeyword: usedKeyword,
       status: SourceCheckStatus.skipped,
       checkedLevel: checkedLevel,
       duration: DateTime.now().difference(startedAt),
@@ -345,6 +482,28 @@ class SourceCheckService {
     return capabilities.contains('browser') ||
         capabilities.contains('webview') ||
         capabilities.contains('challenge');
+  }
+
+  static String resolveCheckKeyword(
+    String keyword, {
+    required String? manifestKeyword,
+  }) {
+    return _resolveCheckKeyword(keyword, manifestKeyword: manifestKeyword);
+  }
+
+  static String _resolveCheckKeyword(
+    String keyword, {
+    required String? manifestKeyword,
+  }) {
+    final normalizedInput = keyword.trim();
+    if (normalizedInput.isNotEmpty) {
+      return normalizedInput;
+    }
+    final normalizedManifest = manifestKeyword?.trim() ?? '';
+    if (normalizedManifest.isNotEmpty) {
+      return normalizedManifest;
+    }
+    return defaultCheckKeyword;
   }
 
   Future<void> _evaluateAutoDisable({

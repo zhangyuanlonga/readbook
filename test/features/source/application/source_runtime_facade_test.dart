@@ -2,7 +2,9 @@ import 'package:drift/native.dart';
 import 'package:shuxiang_reading_next/data/datasources/local/app_database.dart';
 import 'package:shuxiang_reading_next/data/repositories/script_source_repository_impl.dart';
 import 'package:shuxiang_reading_next/domain/entities/script_source.dart';
+import 'package:shuxiang_reading_next/domain/entities/source_health.dart';
 import 'package:shuxiang_reading_next/features/source/application/script_source_runtime_service.dart';
+import 'package:shuxiang_reading_next/features/source/application/source_health_service.dart';
 import 'package:shuxiang_reading_next/features/source/application/source_runtime_facade.dart';
 import 'package:shuxiang_reading_next/runtime/sources/source_contract.dart';
 import 'package:shuxiang_reading_next/runtime/sources/source_manifest.dart';
@@ -10,21 +12,28 @@ import 'package:shuxiang_reading_next/runtime/sources/source_registry.dart';
 import 'package:shuxiang_reading_next/runtime/sources/source_result_models.dart'
     as runtime_models;
 import 'package:flutter_test/flutter_test.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 void main() {
+  TestWidgetsFlutterBinding.ensureInitialized();
+
   group('SourceRuntimeFacade', () {
     late AppDatabase database;
     late ScriptSourceRepositoryImpl repository;
     late _FakeScriptSourceRuntimeService runtimeService;
     late SourceRuntimeFacade facade;
+    late SourceHealthService healthService;
 
     setUp(() {
+      SharedPreferences.setMockInitialValues(<String, Object>{});
       database = AppDatabase(executor: NativeDatabase.memory());
       repository = ScriptSourceRepositoryImpl(database);
       runtimeService = _FakeScriptSourceRuntimeService();
+      healthService = SourceHealthService();
       facade = SourceRuntimeFacade(
         scriptSourceRepository: repository,
         scriptRuntimeService: runtimeService,
+        sourceHealthService: healthService,
       );
     });
 
@@ -39,8 +48,13 @@ void main() {
 
       expect(saved.name, '脚本源一');
       expect(saved.group, '分组A');
+      expect(saved.checkKeyword, '凡人修仙传');
       expect(saved.enabled, isTrue);
       expect(runtimeService.sourceById(saved.id), isNotNull);
+      expect(
+        healthService.snapshotFor(saved.id).level,
+        SourceHealthLevel.unchecked,
+      );
     });
 
     test('reloads only enabled script sources by default', () async {
@@ -86,6 +100,15 @@ void main() {
       await facade.setScriptSourceEnabled(id: saved.id, enabled: true);
       expect(runtimeService.sourceById(saved.id), isNotNull);
     });
+
+    test('prefers literal meta.name from source code when saving', () async {
+      final saved = await facade.saveScriptSource(
+        sourceCode: _buildSourceCode(name: '🌐 69书吧'),
+      );
+
+      expect(saved.name, '🌐 69书吧');
+      expect(runtimeService.sourceById(saved.id)?.runtime.name, isNotNull);
+    });
   });
 }
 
@@ -102,6 +125,7 @@ class _FakeScriptSourceRuntimeService extends ScriptSourceRuntimeService {
     final group = _extractField(sourceCode, 'group') ?? '未分组';
     final author = _extractField(sourceCode, 'author') ?? 'unknown';
     final description = _extractField(sourceCode, 'description') ?? '';
+    final checkKeyword = _extractField(sourceCode, 'checkKeyword');
 
     final definition = RuntimeSourceDefinition(
       manifest: SourceManifest(
@@ -109,6 +133,7 @@ class _FakeScriptSourceRuntimeService extends ScriptSourceRuntimeService {
         group: group,
         author: author,
         description: description,
+        checkKeyword: checkKeyword,
         enabled: true,
         capabilities: const <String>{'search', 'detail', 'chapters', 'content'},
       ),
@@ -139,6 +164,7 @@ String _buildSourceCode({
   String group = '默认分组',
   String author = 'tester',
   String description = 'desc',
+  String checkKeyword = '凡人修仙传',
 }) {
   return """
 export default {
@@ -147,6 +173,7 @@ export default {
     group: '$group',
     author: '$author',
     description: '$description',
+    checkKeyword: '$checkKeyword',
   },
   async search(ctx, keyword) { return []; },
   async detail(ctx, book) { return book; },

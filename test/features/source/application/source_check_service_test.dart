@@ -122,12 +122,165 @@ void main() {
       expect(result.status, SourceCheckStatus.skipped);
       expect(result.message, contains('冷却中'));
     });
+
+    test('searchAndDetail updates detail-related health progress', () async {
+      const detailBook = runtime_models.Book(
+        title: '凡人修仙传',
+        author: '忘语',
+        detailUrl: 'https://example.com/book/1',
+      );
+      final runtimeFacade = _FakeRuntimeFacade(
+        sources: <RegisteredSource>[
+          _buildRegisteredSource(id: 's1', name: '源1'),
+        ],
+        booksBySourceId: <String, List<runtime_models.Book>>{
+          's1': const <runtime_models.Book>[
+            runtime_models.Book(
+              title: '凡人修仙传',
+              author: '忘语',
+              detailUrl: 'https://example.com/book/1',
+            ),
+          ],
+        },
+        detailBySourceId: const <String, runtime_models.Book>{
+          's1': detailBook,
+        },
+      );
+      final healthService = SourceHealthService();
+      final service = SourceCheckService(
+        sourceRuntimeFacade: runtimeFacade,
+        sourceHealthService: healthService,
+      );
+
+      final result = await service.checkSource(
+        sourceId: 's1',
+        keyword: '凡人修仙传',
+        level: SourceCheckLevel.searchAndDetail,
+      );
+
+      final snapshot = healthService.snapshotFor('s1');
+      expect(result.stepReached, SourceCheckStep.detail);
+      expect(snapshot.totalSuccesses, 2);
+      expect(snapshot.lastSuccessAt, isNotNull);
+      expect(snapshot.level, SourceHealthLevel.healthy);
+    });
+
+    test('fullReadPath updates chapters and content health progress', () async {
+      const detailBook = runtime_models.Book(
+        title: '凡人修仙传',
+        author: '忘语',
+        detailUrl: 'https://example.com/book/1',
+      );
+      const readableChapter = runtime_models.Chapter(
+        title: '第一章',
+        url: 'https://example.com/book/1/ch1',
+        index: 0,
+      );
+      final runtimeFacade = _FakeRuntimeFacade(
+        sources: <RegisteredSource>[
+          _buildRegisteredSource(id: 's1', name: '源1'),
+        ],
+        booksBySourceId: <String, List<runtime_models.Book>>{
+          's1': const <runtime_models.Book>[
+            runtime_models.Book(
+              title: '凡人修仙传',
+              author: '忘语',
+              detailUrl: 'https://example.com/book/1',
+            ),
+          ],
+        },
+        detailBySourceId: const <String, runtime_models.Book>{
+          's1': detailBook,
+        },
+        chaptersBySourceId: const <String, List<runtime_models.Chapter>>{
+          's1': <runtime_models.Chapter>[readableChapter],
+        },
+        contentBySourceId: const <String, runtime_models.Content>{
+          's1': runtime_models.Content(title: '第一章', content: '正文内容'),
+        },
+      );
+      final healthService = SourceHealthService();
+      final service = SourceCheckService(
+        sourceRuntimeFacade: runtimeFacade,
+        sourceHealthService: healthService,
+      );
+
+      final result = await service.checkSource(
+        sourceId: 's1',
+        keyword: '凡人修仙传',
+        level: SourceCheckLevel.fullReadPath,
+      );
+
+      final snapshot = healthService.snapshotFor('s1');
+      expect(result.status, SourceCheckStatus.healthy);
+      expect(result.stepReached, SourceCheckStep.content);
+      expect(snapshot.totalSuccesses, 4);
+      expect(snapshot.level, SourceHealthLevel.healthy);
+    });
+
+    test('browser-capable successful check marks source as warning', () async {
+      final runtimeFacade = _FakeRuntimeFacade(
+        sources: <RegisteredSource>[
+          _buildRegisteredSource(
+            id: 's1',
+            name: '源1',
+            capabilities: const <String>{'search', 'detail', 'chapters', 'content', 'browser'},
+          ),
+        ],
+        booksBySourceId: <String, List<runtime_models.Book>>{
+          's1': const <runtime_models.Book>[
+            runtime_models.Book(
+              title: '凡人修仙传',
+              author: '忘语',
+              detailUrl: 'https://example.com/book/1',
+            ),
+          ],
+        },
+      );
+      final healthService = SourceHealthService();
+      final service = SourceCheckService(
+        sourceRuntimeFacade: runtimeFacade,
+        sourceHealthService: healthService,
+      );
+
+      final result = await service.checkSource(
+        sourceId: 's1',
+        keyword: '凡人修仙传',
+      );
+
+      final snapshot = healthService.snapshotFor('s1');
+      expect(result.status, SourceCheckStatus.warning);
+      expect(snapshot.level, SourceHealthLevel.warning);
+      expect(snapshot.challengeCount, 1);
+    });
+
+    test('resolveCheckKeyword prefers input then manifest then fallback', () {
+      expect(
+        SourceCheckService.resolveCheckKeyword(
+          '斗破苍穹',
+          manifestKeyword: '凡人修仙传',
+        ),
+        '斗破苍穹',
+      );
+      expect(
+        SourceCheckService.resolveCheckKeyword(
+          '',
+          manifestKeyword: '凡人修仙传',
+        ),
+        '凡人修仙传',
+      );
+      expect(
+        SourceCheckService.resolveCheckKeyword('', manifestKeyword: null),
+        SourceCheckService.defaultCheckKeyword,
+      );
+    });
   });
 }
 
 RegisteredSource _buildRegisteredSource({
   required String id,
   required String name,
+  Set<String> capabilities = const <String>{'search', 'detail', 'chapters', 'content'},
 }) {
   return RegisteredSource(
     runtime: SourceRuntimeInfo(
@@ -142,6 +295,7 @@ RegisteredSource _buildRegisteredSource({
         group: '测试',
         author: 'tester',
         description: '',
+        capabilities: capabilities,
       ),
       search: (_, __) async => const <runtime_models.Book>[],
       detail: (_, book) async => book,
@@ -157,10 +311,16 @@ class _FakeRuntimeFacade extends SourceRuntimeFacade {
   _FakeRuntimeFacade({
     required this.sources,
     this.booksBySourceId = const <String, List<runtime_models.Book>>{},
+    this.detailBySourceId = const <String, runtime_models.Book>{},
+    this.chaptersBySourceId = const <String, List<runtime_models.Chapter>>{},
+    this.contentBySourceId = const <String, runtime_models.Content>{},
   }) : super(scriptSourceRepository: _FakeScriptSourceRepository());
 
   final List<RegisteredSource> sources;
   final Map<String, List<runtime_models.Book>> booksBySourceId;
+  final Map<String, runtime_models.Book> detailBySourceId;
+  final Map<String, List<runtime_models.Chapter>> chaptersBySourceId;
+  final Map<String, runtime_models.Content> contentBySourceId;
 
   @override
   Future<RegisteredSource?> ensureRegisteredScriptSourceById(
@@ -182,6 +342,32 @@ class _FakeRuntimeFacade extends SourceRuntimeFacade {
     SessionCancellationHandle? cancellationHandle,
   }) async {
     return booksBySourceId[sourceId] ?? const <runtime_models.Book>[];
+  }
+
+  @override
+  Future<runtime_models.Book> detail({
+    required String sourceId,
+    required runtime_models.Book book,
+  }) async {
+    return detailBySourceId[sourceId] ?? book;
+  }
+
+  @override
+  Future<List<runtime_models.Chapter>> chapters({
+    required String sourceId,
+    required runtime_models.Book book,
+  }) async {
+    return chaptersBySourceId[sourceId] ?? const <runtime_models.Chapter>[];
+  }
+
+  @override
+  Future<runtime_models.Content> content({
+    required String sourceId,
+    required runtime_models.Book book,
+    required runtime_models.Chapter chapter,
+  }) async {
+    return contentBySourceId[sourceId] ??
+        runtime_models.Content(title: chapter.title, content: '');
   }
 }
 

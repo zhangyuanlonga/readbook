@@ -1,17 +1,19 @@
 import 'dart:async';
+import 'dart:io';
 
+import 'package:dio/dio.dart';
+import 'package:file_selector/file_selector.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../app/layout/app_layout.dart';
 import '../../../app/layout/app_spacing.dart';
-import '../../../app/widgets/source_health_badge.dart';
 import '../../../domain/entities/script_source.dart';
 import '../../../domain/entities/source_health.dart';
+import '../application/external_source_import_bridge.dart';
 import '../application/source_health_action_policy_service.dart';
 import '../application/source_check_service.dart';
 import '../application/source_health_service.dart';
-import '../application/source_health_system_settings_service.dart';
 import '../application/source_runtime_facade.dart';
 import 'script_source_debug_page.dart';
 
@@ -21,8 +23,8 @@ enum _SourcePageMenuAction {
   create,
   importLocal,
   importNetwork,
+  importPaste,
   batchCheck,
-  toggleAutoDisable,
 }
 
 enum _SourceItemMenuAction { debug, check, delete }
@@ -53,6 +55,43 @@ class _BatchCheckRequest {
   final SourceCheckLevel level;
   final _BatchCheckScope scope;
 }
+
+class _BatchCheckProgressState {
+  const _BatchCheckProgressState({
+    required this.completedCount,
+    required this.totalCount,
+    required this.results,
+    this.currentSourceName,
+    this.finished = false,
+  });
+
+  final int completedCount;
+  final int totalCount;
+  final List<SourceCheckResult> results;
+  final String? currentSourceName;
+  final bool finished;
+
+  _BatchCheckProgressState copyWith({
+    int? completedCount,
+    int? totalCount,
+    List<SourceCheckResult>? results,
+    Object? currentSourceName = _batchCheckSentinel,
+    bool? finished,
+  }) {
+    return _BatchCheckProgressState(
+      completedCount: completedCount ?? this.completedCount,
+      totalCount: totalCount ?? this.totalCount,
+      results: results ?? this.results,
+      currentSourceName:
+          identical(currentSourceName, _batchCheckSentinel)
+              ? this.currentSourceName
+              : currentSourceName as String?,
+      finished: finished ?? this.finished,
+    );
+  }
+}
+
+const Object _batchCheckSentinel = Object();
 
 class _SourceSuggestionAction {
   const _SourceSuggestionAction({required this.label, this.onTap});
@@ -100,11 +139,23 @@ class SourcePage extends StatefulWidget {
 class _SourcePageState extends State<SourcePage> {
   static const String _ungroupedGroupKey = '__ungrouped__';
   static const String _duplicateGroupKey = '__duplicate__';
+  static const XTypeGroup _scriptSourceFileTypeGroup = XTypeGroup(
+    label: 'Script Sources',
+    extensions: <String>['js', 'mjs', 'txt'],
+    mimeTypes: <String>[
+      'text/javascript',
+      'application/javascript',
+      'text/plain',
+    ],
+    uniformTypeIdentifiers: <String>[
+      'com.netscape.javascript-source',
+      'public.plain-text',
+    ],
+  );
 
   late final SourceRuntimeFacade _sourceRuntimeFacade;
   late final SourceCheckService _sourceCheckService;
   late final SourceHealthService _sourceHealthService;
-  late final SourceHealthSystemSettingsService _settingsService;
   late final SourceHealthActionPolicyService _policyService;
   late final TextEditingController _searchController;
   List<ScriptSource> _lastRawSources = const <ScriptSource>[];
@@ -114,10 +165,11 @@ class _SourcePageState extends State<SourcePage> {
   String? _selectedGroupKey;
   _ScriptSourceSortOption _sortOption = _ScriptSourceSortOption.updatedDesc;
   final Set<String> _selectedBatchSourceIds = <String>{};
-  bool _autoDisableHighRiskSourcesEnabled = false;
-
   final Set<String> _changingEnabledScriptSourceIds = <String>{};
   final Set<String> _deletingScriptSourceIds = <String>{};
+  final Dio _importDio = Dio();
+  StreamSubscription<IncomingExternalImportPayload>? _incomingImportSub;
+  bool _isConsumingExternalImportPayloads = false;
 
   @override
   void initState() {
@@ -127,17 +179,30 @@ class _SourcePageState extends State<SourcePage> {
     _sourceCheckService = widget.sourceCheckService ?? SourceCheckService();
     _sourceHealthService =
         widget.sourceHealthService ?? SourceHealthService.instance;
-    _settingsService = SourceHealthSystemSettingsService();
     _policyService = const SourceHealthActionPolicyService();
     _searchController = TextEditingController();
+    _incomingImportSub = ExternalImportBridge.instance.payloadStream.listen((
+      payload,
+    ) {
+      if (payload.type != ExternalImportPayloadType.scriptSource) {
+        return;
+      }
+      unawaited(_consumePendingExternalImportPayloads());
+    });
     if (widget.bootstrapOnInit) {
       unawaited(_reloadScriptSourcesSilently());
     }
-    unawaited(_loadHealthSettings());
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) {
+        return;
+      }
+      unawaited(_consumePendingExternalImportPayloads());
+    });
   }
 
   @override
   void dispose() {
+    _incomingImportSub?.cancel();
     _searchController.dispose();
     super.dispose();
   }
@@ -292,13 +357,12 @@ class _SourcePageState extends State<SourcePage> {
                           child: Text('网络导入'),
                         ),
                         PopupMenuItem(
+                          value: _SourcePageMenuAction.importPaste,
+                          child: Text('粘贴导入'),
+                        ),
+                        PopupMenuItem(
                           value: _SourcePageMenuAction.batchCheck,
                           child: Text('批量检测'),
-                        ),
-                        CheckedPopupMenuItem(
-                          value: _SourcePageMenuAction.toggleAutoDisable,
-                          checked: _autoDisableHighRiskSourcesEnabled,
-                          child: Text('自动停用高风险源'),
                         ),
                       ],
                 ),
@@ -625,13 +689,6 @@ class _SourcePageState extends State<SourcePage> {
     return actions;
   }
 
-  Widget _buildHealthBadge(
-    BuildContext context,
-    SourceHealthSnapshot snapshot,
-  ) {
-    return SourceHealthBadge(level: snapshot.level);
-  }
-
   Widget _buildEmptyStateCard(BuildContext context) {
     return Card(
       shape: _buildOutlinedCardShape(context),
@@ -639,8 +696,6 @@ class _SourcePageState extends State<SourcePage> {
         padding: const EdgeInsets.fromLTRB(20, 24, 20, 24),
         child: Column(
           children: [
-            const Icon(Icons.javascript_rounded, size: 28),
-            const SizedBox(height: 12),
             Text(
               '还没有书源',
               style: Theme.of(
@@ -649,7 +704,7 @@ class _SourcePageState extends State<SourcePage> {
             ),
             const SizedBox(height: 6),
             Text(
-              '在右上角“更多”里新增书源，或等待导入入口接入后再导入。',
+              '可以新建脚本，或直接导入现成书源。',
               textAlign: TextAlign.center,
               style: Theme.of(context).textTheme.bodySmall,
             ),
@@ -676,7 +731,7 @@ class _SourcePageState extends State<SourcePage> {
             ),
             const SizedBox(height: 6),
             Text(
-              '试试修改关键词、切换分组，或清空当前筛选。',
+              '改关键词、切换分组，或清空筛选后再试。',
               textAlign: TextAlign.center,
               style: Theme.of(context).textTheme.bodySmall,
             ),
@@ -723,8 +778,9 @@ class _SourcePageState extends State<SourcePage> {
               ).colorScheme.secondaryContainer.withValues(alpha: 0.28)
               : null,
       child: Padding(
-        padding: EdgeInsets.fromLTRB(14, compact ? 6 : 8, 10, compact ? 6 : 8),
+        padding: EdgeInsets.fromLTRB(14, compact ? 6 : 8, 8, compact ? 6 : 8),
         child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Expanded(
               child: InkWell(
@@ -785,11 +841,6 @@ class _SourcePageState extends State<SourcePage> {
                         spacing: 6,
                         runSpacing: 6,
                         children: [
-                          if ((source.registrableDomain ?? '').isNotEmpty)
-                            _buildInfoChip(
-                              context,
-                              '站点: ${source.registrableDomain!.trim()}',
-                            ),
                           if (clusterSummary != null &&
                               clusterSummary.sourceCount >= 2)
                             _buildInfoChip(
@@ -810,7 +861,6 @@ class _SourcePageState extends State<SourcePage> {
                                     _disableClusterOthersBySource(source),
                                   ),
                             ),
-                          _buildHealthBadge(context, healthSnapshot),
                           if (healthSnapshot.coolingDown)
                             _buildInfoChip(
                               context,
@@ -844,26 +894,60 @@ class _SourcePageState extends State<SourcePage> {
                 ),
               ),
             ),
-            const SizedBox(width: 8),
-            if (_selectedBatchSourceIds.isNotEmpty || isSelected)
-              Checkbox(
+            const SizedBox(width: 10),
+            _buildSourceActionRail(
+              context,
+              source: source,
+              busy: busy,
+              isChangingEnabled: isChangingEnabled,
+              isDeleting: isDeleting,
+              isSelected: isSelected,
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildSourceActionRail(
+    BuildContext context, {
+    required ScriptSource source,
+    required bool busy,
+    required bool isChangingEnabled,
+    required bool isDeleting,
+    required bool isSelected,
+  }) {
+    return ConstrainedBox(
+      constraints: const BoxConstraints(minWidth: 84, maxWidth: 92),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.end,
+        children: [
+          if (_selectedBatchSourceIds.isNotEmpty || isSelected)
+            Padding(
+              padding: const EdgeInsets.only(bottom: 4),
+              child: Checkbox(
                 value: isSelected,
+                visualDensity: VisualDensity.compact,
                 onChanged:
                     busy ? null : (_) => _toggleSelectedSource(source.id),
               ),
-            SizedBox(
-              width: 56,
-              child:
-                  isChangingEnabled
-                      ? const Center(
-                        child: SizedBox(
-                          width: 18,
-                          height: 18,
-                          child: CircularProgressIndicator(strokeWidth: 2),
-                        ),
-                      )
-                      : Switch.adaptive(
+            ),
+          SizedBox(
+            width: 48,
+            child:
+                isChangingEnabled
+                    ? const Center(
+                      child: SizedBox(
+                        width: 16,
+                        height: 16,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      ),
+                    )
+                    : Transform.scale(
+                      scale: 0.88,
+                      child: Switch.adaptive(
                         value: source.enabled,
+                        materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
                         onChanged:
                             busy
                                 ? null
@@ -871,50 +955,113 @@ class _SourcePageState extends State<SourcePage> {
                                   _setScriptSourceEnabled(source, value),
                                 ),
                       ),
-            ),
-            IconButton(
-              tooltip: '编辑',
-              onPressed:
-                  busy
-                      ? null
-                      : () => unawaited(
-                        _openScriptSourceEditorPage(source: source),
+                    ),
+          ),
+          const SizedBox(height: 2),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.end,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              IconButton(
+                tooltip: '编辑',
+                visualDensity: VisualDensity.compact,
+                iconSize: 18,
+                padding: const EdgeInsets.all(6),
+                constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
+                onPressed:
+                    busy
+                        ? null
+                        : () => unawaited(
+                          _openScriptSourceEditorPage(source: source),
+                        ),
+                icon: const Icon(Icons.edit_outlined),
+              ),
+              PopupMenuButton<_SourceItemMenuAction>(
+                tooltip: '更多',
+                iconSize: 18,
+                padding: const EdgeInsets.all(6),
+                constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
+                icon: _buildSourceMenuIcon(
+                  context,
+                  snapshot: _sourceHealthService.snapshotFor(
+                    source.id,
+                    enabled: source.enabled,
+                  ),
+                ),
+                enabled: !busy,
+                onSelected:
+                    (action) => _handleSourceItemMenuAction(source, action),
+                itemBuilder:
+                    (context) => const [
+                      PopupMenuItem(
+                        value: _SourceItemMenuAction.debug,
+                        child: Text('调试'),
                       ),
-              icon: const Icon(Icons.edit_outlined),
+                      PopupMenuItem(
+                        value: _SourceItemMenuAction.check,
+                        child: Text('检测'),
+                      ),
+                      PopupMenuItem(
+                        value: _SourceItemMenuAction.delete,
+                        child: Text('删除'),
+                      ),
+                    ],
+              ),
+            ],
+          ),
+          if (isDeleting)
+            const Padding(
+              padding: EdgeInsets.only(top: 4, right: 8),
+              child: SizedBox(
+                width: 16,
+                height: 16,
+                child: CircularProgressIndicator(strokeWidth: 2),
+              ),
             ),
-            PopupMenuButton<_SourceItemMenuAction>(
-              tooltip: '更多',
-              icon: const Icon(Icons.more_vert_rounded),
-              enabled: !busy,
-              onSelected:
-                  (action) => _handleSourceItemMenuAction(source, action),
-              itemBuilder:
-                  (context) => const [
-                    PopupMenuItem(
-                      value: _SourceItemMenuAction.debug,
-                      child: Text('调试'),
-                    ),
-                    PopupMenuItem(
-                      value: _SourceItemMenuAction.check,
-                      child: Text('检测'),
-                    ),
-                    PopupMenuItem(
-                      value: _SourceItemMenuAction.delete,
-                      child: Text('删除'),
-                    ),
-                  ],
-            ),
-            if (isDeleting)
-              const Padding(
-                padding: EdgeInsets.only(left: 4),
-                child: SizedBox(
-                  width: 18,
-                  height: 18,
-                  child: CircularProgressIndicator(strokeWidth: 2),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildSourceMenuIcon(
+    BuildContext context, {
+    required SourceHealthSnapshot snapshot,
+  }) {
+    final dotColor = switch (snapshot.level) {
+      SourceHealthLevel.unchecked => Theme.of(context).colorScheme.outline,
+      SourceHealthLevel.healthy => const Color(0xFF35C759),
+      SourceHealthLevel.warning => const Color(0xFFFFB020),
+      SourceHealthLevel.risky => const Color(0xFFFF6B6B),
+      SourceHealthLevel.unavailable => Theme.of(context).colorScheme.error,
+    };
+
+    return SizedBox(
+      width: 22,
+      height: 22,
+      child: Stack(
+        clipBehavior: Clip.none,
+        children: [
+          const Align(
+            alignment: Alignment.center,
+            child: Icon(Icons.more_vert_rounded, size: 18),
+          ),
+          Positioned(
+            right: 1,
+            top: 1,
+            child: Container(
+              width: 7,
+              height: 7,
+              decoration: BoxDecoration(
+                color: dotColor,
+                shape: BoxShape.circle,
+                border: Border.all(
+                  color: Theme.of(context).colorScheme.surface,
+                  width: 1.2,
                 ),
               ),
-          ],
-        ),
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -937,16 +1084,16 @@ class _SourcePageState extends State<SourcePage> {
         unawaited(_openScriptSourceEditorPage());
         break;
       case _SourcePageMenuAction.importLocal:
-        _showMessage('本地导入入口还未接入这一版列表页。');
+        unawaited(_importLocalScriptSources());
         break;
       case _SourcePageMenuAction.importNetwork:
-        _showMessage('网络导入入口还未接入这一版列表页。');
+        unawaited(_importNetworkScriptSource());
+        break;
+      case _SourcePageMenuAction.importPaste:
+        unawaited(_openPasteImportPage());
         break;
       case _SourcePageMenuAction.batchCheck:
         unawaited(_runBatchCheck());
-        break;
-      case _SourcePageMenuAction.toggleAutoDisable:
-        unawaited(_toggleAutoDisableHighRiskSources());
         break;
     }
   }
@@ -1146,13 +1293,15 @@ class _SourcePageState extends State<SourcePage> {
     );
     return switch (snapshot.level) {
       SourceHealthLevel.healthy => 0,
-      SourceHealthLevel.warning => 1,
-      SourceHealthLevel.risky => 2,
-      SourceHealthLevel.unavailable => 3,
+      SourceHealthLevel.unchecked => 1,
+      SourceHealthLevel.warning => 2,
+      SourceHealthLevel.risky => 3,
+      SourceHealthLevel.unavailable => 4,
     };
   }
 
   String _clusterHealthSummary(List<ScriptSource> sources) {
+    var unchecked = 0;
     var healthy = 0;
     var warning = 0;
     var risky = 0;
@@ -1163,6 +1312,9 @@ class _SourcePageState extends State<SourcePage> {
               .snapshotFor(source.id, enabled: source.enabled)
               .level;
       switch (level) {
+        case SourceHealthLevel.unchecked:
+          unchecked += 1;
+          break;
         case SourceHealthLevel.healthy:
           healthy += 1;
           break;
@@ -1178,6 +1330,7 @@ class _SourcePageState extends State<SourcePage> {
       }
     }
     final parts = <String>[
+      if (unchecked > 0) '$unchecked 未检测',
       if (healthy > 0) '$healthy 正常',
       if (warning > 0) '$warning 注意',
       if (risky > 0) '$risky 高风险',
@@ -1241,57 +1394,6 @@ class _SourcePageState extends State<SourcePage> {
     });
   }
 
-  Future<void> _loadHealthSettings() async {
-    try {
-      final enabled =
-          await _settingsService.loadAutoDisableHighRiskSourcesEnabled();
-      if (!mounted) {
-        return;
-      }
-      setState(() {
-        _autoDisableHighRiskSourcesEnabled = enabled;
-      });
-    } catch (_) {}
-  }
-
-  Future<void> _toggleAutoDisableHighRiskSources() async {
-    final next = !_autoDisableHighRiskSourcesEnabled;
-    if (next) {
-      final confirmed = await showDialog<bool>(
-        context: context,
-        builder: (context) {
-          return AlertDialog(
-            title: const Text('开启自动停用'),
-            content: const Text(
-              '开启后，系统只会在近期连续失败且高风险特征明显时自动停用书源，不会自动删除书源。你仍然可以在书源页重新启用。',
-            ),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.of(context).pop(false),
-                child: const Text('取消'),
-              ),
-              FilledButton(
-                onPressed: () => Navigator.of(context).pop(true),
-                child: const Text('开启'),
-              ),
-            ],
-          );
-        },
-      );
-      if (confirmed != true) {
-        return;
-      }
-    }
-    await _settingsService.saveAutoDisableHighRiskSourcesEnabled(next);
-    if (!mounted) {
-      return;
-    }
-    setState(() {
-      _autoDisableHighRiskSourcesEnabled = next;
-    });
-    _showMessage(next ? '已开启自动停用高风险源。' : '已关闭自动停用高风险源。');
-  }
-
   Future<void> _reloadScriptSourcesSilently() async {
     try {
       await _sourceRuntimeFacade.reloadScriptSources();
@@ -1316,6 +1418,14 @@ class _SourcePageState extends State<SourcePage> {
     _showMessage(result);
   }
 
+  Future<void> _openPasteImportPage() async {
+    final result = await context.push<String>('/source/paste-import');
+    if (!mounted || result == null || result.trim().isEmpty) {
+      return;
+    }
+    _showMessage(result);
+  }
+
   Future<void> _openDebugPage(ScriptSource source) async {
     await Navigator.of(context).push(
       MaterialPageRoute<void>(
@@ -1326,6 +1436,180 @@ class _SourcePageState extends State<SourcePage> {
             ),
       ),
     );
+  }
+
+  Future<void> _importLocalScriptSources() async {
+    final files = await openFiles(
+      acceptedTypeGroups: const <XTypeGroup>[_scriptSourceFileTypeGroup],
+      confirmButtonText: '选择书源脚本',
+    );
+    if (!mounted || files.isEmpty) {
+      return;
+    }
+
+    var successCount = 0;
+    var failureCount = 0;
+    String? lastError;
+
+    for (final file in files) {
+      try {
+        final contents = await file.readAsString();
+        await _sourceRuntimeFacade.saveScriptSource(sourceCode: contents);
+        successCount += 1;
+      } catch (error) {
+        failureCount += 1;
+        lastError = _toFriendlyImportError(error);
+      }
+    }
+
+    if (!mounted) {
+      return;
+    }
+
+    if (successCount > 0) {
+      if (failureCount > 0) {
+        _showMessage('已导入 $successCount 个书源，失败 $failureCount 个。');
+      } else {
+        _showMessage('已导入 $successCount 个书源。');
+      }
+      return;
+    }
+
+    _showMessage(lastError ?? '导入失败，请重试。');
+  }
+
+  Future<void> _importNetworkScriptSource() async {
+    final url = await _promptImportUrl();
+    if (url == null || !mounted) {
+      return;
+    }
+
+    try {
+      final response = await _importDio.get<String>(
+        url,
+        options: Options(responseType: ResponseType.plain),
+      );
+      final contents = (response.data ?? '').trim();
+      if (contents.isEmpty) {
+        _showMessage('网络导入失败：返回内容为空。');
+        return;
+      }
+      await _sourceRuntimeFacade.saveScriptSource(sourceCode: contents);
+      if (!mounted) {
+        return;
+      }
+      _showMessage('网络书源导入成功。');
+    } catch (error) {
+      if (!mounted) {
+        return;
+      }
+      _showMessage('网络导入失败：${_toFriendlyImportError(error)}');
+    }
+  }
+
+  Future<String?> _promptImportUrl() async {
+    final controller = TextEditingController();
+    final result = await showDialog<String>(
+      context: context,
+      builder: (context) {
+        return AlertDialog(
+          title: const Text('网络导入书源'),
+          content: TextField(
+            controller: controller,
+            autofocus: true,
+            keyboardType: TextInputType.url,
+            decoration: const InputDecoration(
+              labelText: '书源 URL',
+              hintText: 'https://example.com/source.js',
+              border: OutlineInputBorder(),
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(),
+              child: const Text('取消'),
+            ),
+            FilledButton(
+              onPressed: () {
+                final url = controller.text.trim();
+                final uri = Uri.tryParse(url);
+                if (uri == null ||
+                    !uri.hasScheme ||
+                    (uri.scheme != 'http' && uri.scheme != 'https')) {
+                  return;
+                }
+                Navigator.of(context).pop(url);
+              },
+              child: const Text('导入'),
+            ),
+          ],
+        );
+      },
+    );
+    controller.dispose();
+    return result;
+  }
+
+  Future<void> _consumePendingExternalImportPayloads() async {
+    if (_isConsumingExternalImportPayloads || !mounted) {
+      return;
+    }
+
+    _isConsumingExternalImportPayloads = true;
+    try {
+      while (mounted) {
+        final payload = ExternalImportBridge.instance.consumePendingPayload(
+          type: ExternalImportPayloadType.scriptSource,
+        );
+        if (payload == null) {
+          break;
+        }
+        await _importFromExternalPayload(payload);
+      }
+    } finally {
+      _isConsumingExternalImportPayloads = false;
+    }
+  }
+
+  Future<void> _importFromExternalPayload(
+    IncomingExternalImportPayload payload,
+  ) async {
+    final cached = await ExternalImportBridge.instance.cacheExternalFileFromUri(
+      payload,
+    );
+    if (cached == null) {
+      _showMessage('读取外部书源失败：${payload.label}');
+      return;
+    }
+
+    final tempFile = File(cached.path);
+    try {
+      final extension = cached.label.contains('.')
+          ? cached.label.substring(cached.label.lastIndexOf('.')).toLowerCase()
+          : '';
+      if (extension != '.js' && extension != '.mjs' && extension != '.txt') {
+        _showMessage('暂不支持导入该书源文件：${cached.label}');
+        return;
+      }
+
+      final contents = await tempFile.readAsString();
+      await _sourceRuntimeFacade.saveScriptSource(sourceCode: contents);
+      if (!mounted) {
+        return;
+      }
+      _showMessage('已导入 ${cached.label}');
+    } catch (error) {
+      if (!mounted) {
+        return;
+      }
+      _showMessage('导入失败：${_toFriendlyImportError(error)}');
+    } finally {
+      try {
+        if (await tempFile.exists()) {
+          await tempFile.delete();
+        }
+      } catch (_) {}
+    }
   }
 
   Future<void> _setScriptSourceEnabled(
@@ -1399,7 +1683,7 @@ class _SourcePageState extends State<SourcePage> {
   }
 
   Future<void> _runSingleCheck(ScriptSource source) async {
-    final request = await _promptSingleCheckRequest();
+    final request = await _promptSingleCheckRequest(source);
     if (request == null || !mounted) {
       return;
     }
@@ -1423,6 +1707,8 @@ class _SourcePageState extends State<SourcePage> {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text('状态：${_checkStatusLabel(result.status)}'),
+              const SizedBox(height: 8),
+              Text('关键词：${result.usedKeyword}'),
               const SizedBox(height: 8),
               Text('级别：${_checkLevelLabel(result.checkedLevel)}'),
               const SizedBox(height: 8),
@@ -1455,119 +1741,210 @@ class _SourcePageState extends State<SourcePage> {
       return;
     }
 
-    final results = await _sourceCheckService.checkSources(
-      sourceIds: candidates.map((source) => source.id),
-      keyword: request.keyword,
-      level: request.level,
-      skipCooldown: true,
+    final progress = ValueNotifier<_BatchCheckProgressState>(
+      _BatchCheckProgressState(
+        completedCount: 0,
+        totalCount: candidates.length,
+        results: const <SourceCheckResult>[],
+        currentSourceName: candidates.first.name,
+      ),
     );
-    if (!mounted) {
-      return;
-    }
-    setState(() {});
-    final healthyCount =
-        results
-            .where((result) => result.status == SourceCheckStatus.healthy)
-            .length;
-    final warningCount =
-        results
-            .where((result) => result.status == SourceCheckStatus.warning)
-            .length;
-    final skippedResults = results
-        .where((result) => result.status == SourceCheckStatus.skipped)
-        .toList(growable: false);
-    final failedResults = results
-        .where((result) => result.status == SourceCheckStatus.failed)
-        .toList(growable: false);
-    final warningResults = results
-        .where((result) => result.status == SourceCheckStatus.warning)
-        .toList(growable: false);
-    final healthyResults = results
-        .where((result) => result.status == SourceCheckStatus.healthy)
-        .toList(growable: false);
+    var started = false;
 
     await showModalBottomSheet<void>(
       context: context,
       isScrollControlled: true,
       showDragHandle: true,
+      isDismissible: false,
+      enableDrag: false,
       builder: (context) {
+        if (!started) {
+          started = true;
+          WidgetsBinding.instance.addPostFrameCallback((_) async {
+            final results = await _sourceCheckService.checkSources(
+              sourceIds: candidates.map((source) => source.id),
+              keyword: request.keyword,
+              level: request.level,
+              skipCooldown: true,
+              onProgress: (result, completedCount, totalCount) {
+                progress.value = progress.value.copyWith(
+                  completedCount: completedCount,
+                  totalCount: totalCount,
+                  currentSourceName:
+                      completedCount < candidates.length
+                          ? candidates[completedCount].name
+                          : null,
+                  results: List<SourceCheckResult>.unmodifiable(
+                    <SourceCheckResult>[
+                      ...progress.value.results,
+                      result,
+                    ],
+                  ),
+                );
+                if (mounted) {
+                  setState(() {});
+                }
+              },
+            );
+            progress.value = progress.value.copyWith(
+              finished: true,
+              currentSourceName: null,
+              results: List<SourceCheckResult>.unmodifiable(results),
+            );
+            if (mounted) {
+              setState(() {});
+            }
+          });
+        }
+
         final maxHeight = MediaQuery.of(context).size.height * 0.82;
-        return SafeArea(
-          child: ConstrainedBox(
-            constraints: BoxConstraints(maxHeight: maxHeight),
-            child: Padding(
-              padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    '批量检测结果',
-                    style: Theme.of(context).textTheme.titleMedium,
+        return ValueListenableBuilder<_BatchCheckProgressState>(
+          valueListenable: progress,
+          builder: (context, state, _) {
+            final results = state.results;
+            final healthyCount =
+                results
+                    .where((result) => result.status == SourceCheckStatus.healthy)
+                    .length;
+            final warningCount =
+                results
+                    .where((result) => result.status == SourceCheckStatus.warning)
+                    .length;
+            final skippedResults = results
+                .where((result) => result.status == SourceCheckStatus.skipped)
+                .toList(growable: false);
+            final failedResults = results
+                .where((result) => result.status == SourceCheckStatus.failed)
+                .toList(growable: false);
+            final warningResults = results
+                .where((result) => result.status == SourceCheckStatus.warning)
+                .toList(growable: false);
+            final healthyResults = results
+                .where((result) => result.status == SourceCheckStatus.healthy)
+                .toList(growable: false);
+
+            return SafeArea(
+              child: ConstrainedBox(
+                constraints: BoxConstraints(maxHeight: maxHeight),
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        state.finished ? '批量检测结果' : '批量检测中',
+                        style: Theme.of(context).textTheme.titleMedium,
+                      ),
+                      const SizedBox(height: 12),
+                      Text('范围：${_batchCheckScopeLabel(request.scope)}'),
+                      Text('级别：${_checkLevelLabel(request.level)}'),
+                      Text('进度：${state.completedCount} / ${state.totalCount}'),
+                      if (!state.finished &&
+                          (state.currentSourceName?.trim().isNotEmpty ?? false))
+                        Padding(
+                          padding: const EdgeInsets.only(top: 8),
+                          child: Row(
+                            children: [
+                              const SizedBox(
+                                width: 16,
+                                height: 16,
+                                child: CircularProgressIndicator(strokeWidth: 2),
+                              ),
+                              const SizedBox(width: 10),
+                              Expanded(
+                                child: Text(
+                                  '正在检测：${state.currentSourceName}',
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      const SizedBox(height: 12),
+                      LinearProgressIndicator(
+                        value:
+                            state.totalCount == 0
+                                ? null
+                                : state.completedCount / state.totalCount,
+                      ),
+                      const SizedBox(height: 12),
+                      Text('通过：$healthyCount'),
+                      Text('风险：$warningCount'),
+                      Text('失败：${failedResults.length}'),
+                      Text('跳过：${skippedResults.length}'),
+                      const SizedBox(height: 12),
+                      if (state.finished && failedResults.isNotEmpty)
+                        Wrap(
+                          spacing: 8,
+                          runSpacing: 8,
+                          children: [
+                            FilledButton.tonal(
+                              onPressed: () async {
+                                Navigator.of(context).pop();
+                                await _batchDisableFailedSources(failedResults);
+                              },
+                              child: const Text('批量停用失败源'),
+                            ),
+                            OutlinedButton(
+                              onPressed: () async {
+                                Navigator.of(context).pop();
+                                await _batchDeleteFailedSources(failedResults);
+                              },
+                              child: const Text('批量删除失败源'),
+                            ),
+                          ],
+                        ),
+                      if (state.finished) const SizedBox(height: 12),
+                      Expanded(
+                        child: ListView(
+                          children: [
+                            if (!state.finished && results.isEmpty)
+                              const Padding(
+                                padding: EdgeInsets.only(top: 12),
+                                child: Text('检测进行中，请稍候…'),
+                              ),
+                            _buildBatchResultSection(
+                              context,
+                              title: '失败',
+                              results: failedResults,
+                            ),
+                            _buildBatchResultSection(
+                              context,
+                              title: '风险',
+                              results: warningResults,
+                            ),
+                            _buildBatchResultSection(
+                              context,
+                              title: '跳过',
+                              results: skippedResults,
+                            ),
+                            _buildBatchResultSection(
+                              context,
+                              title: '通过',
+                              results: healthyResults,
+                            ),
+                          ],
+                        ),
+                      ),
+                      if (state.finished)
+                        Align(
+                          alignment: Alignment.centerRight,
+                          child: TextButton(
+                            onPressed: () => Navigator.of(context).pop(),
+                            child: const Text('关闭'),
+                          ),
+                        ),
+                    ],
                   ),
-                  const SizedBox(height: 12),
-                  Text('范围：${_batchCheckScopeLabel(request.scope)}'),
-                  Text('级别：${_checkLevelLabel(request.level)}'),
-                  Text('总数：${results.length}'),
-                  Text('通过：$healthyCount'),
-                  Text('风险：$warningCount'),
-                  Text('失败：${failedResults.length}'),
-                  Text('跳过：${skippedResults.length}'),
-                  const SizedBox(height: 12),
-                  if (failedResults.isNotEmpty)
-                    Wrap(
-                      spacing: 8,
-                      runSpacing: 8,
-                      children: [
-                        FilledButton.tonal(
-                          onPressed: () async {
-                            Navigator.of(context).pop();
-                            await _batchDisableFailedSources(failedResults);
-                          },
-                          child: const Text('批量停用失败源'),
-                        ),
-                        OutlinedButton(
-                          onPressed: () async {
-                            Navigator.of(context).pop();
-                            await _batchDeleteFailedSources(failedResults);
-                          },
-                          child: const Text('批量删除失败源'),
-                        ),
-                      ],
-                    ),
-                  const SizedBox(height: 12),
-                  Expanded(
-                    child: ListView(
-                      children: [
-                        _buildBatchResultSection(
-                          context,
-                          title: '失败',
-                          results: failedResults,
-                        ),
-                        _buildBatchResultSection(
-                          context,
-                          title: '风险',
-                          results: warningResults,
-                        ),
-                        _buildBatchResultSection(
-                          context,
-                          title: '跳过',
-                          results: skippedResults,
-                        ),
-                        _buildBatchResultSection(
-                          context,
-                          title: '通过',
-                          results: healthyResults,
-                        ),
-                      ],
-                    ),
-                  ),
-                ],
+                ),
               ),
-            ),
-          ),
+            );
+          },
         );
       },
     );
+    progress.dispose();
   }
 
   Widget _buildBatchResultSection(
@@ -1592,7 +1969,7 @@ class _SourcePageState extends State<SourcePage> {
             (result) => Padding(
               padding: const EdgeInsets.only(bottom: 8),
               child: Text(
-                '${result.sourceName} · ${_checkStepLabel(result.stepReached)} · ${result.message}',
+                '${result.sourceName} · 关键词 ${result.usedKeyword} · ${_checkStepLabel(result.stepReached)} · ${result.message}',
               ),
             ),
           ),
@@ -1715,10 +2092,12 @@ class _SourcePageState extends State<SourcePage> {
     await _setScriptSourceEnabled(source, false);
   }
 
-  Future<_SingleCheckRequest?> _promptSingleCheckRequest() {
+  Future<_SingleCheckRequest?> _promptSingleCheckRequest(ScriptSource source) {
     return _showCheckRequestDialog<_SingleCheckRequest>(
       title: '单源检测',
-      helperText: '默认建议先执行 searchOnly，确认可用后再做更深检测。',
+      helperText: '默认建议先执行 searchOnly。留空时优先使用该书源的 checkKeyword，未配置则回退到系统默认关键词。',
+      initialKeyword: source.checkKeyword ?? SourceCheckService.defaultCheckKeyword,
+      allowEmptyKeyword: true,
       includeScope: false,
       onSubmit: (keyword, level, _) {
         return _SingleCheckRequest(keyword: keyword, level: level);
@@ -1729,7 +2108,9 @@ class _SourcePageState extends State<SourcePage> {
   Future<_BatchCheckRequest?> _promptBatchCheckRequest() {
     return _showCheckRequestDialog<_BatchCheckRequest>(
       title: '批量检测',
-      helperText: '默认会跳过冷却中的源，避免短时失败被重复放大。',
+      helperText: '默认会跳过冷却中的源。留空时优先使用每个书源自己的 checkKeyword，未配置的源再回退到系统默认关键词。',
+      initialKeyword: '',
+      allowEmptyKeyword: true,
       includeScope: true,
       onSubmit: (keyword, level, scope) {
         return _BatchCheckRequest(keyword: keyword, level: level, scope: scope);
@@ -1740,6 +2121,8 @@ class _SourcePageState extends State<SourcePage> {
   Future<T?> _showCheckRequestDialog<T>({
     required String title,
     required String helperText,
+    required String initialKeyword,
+    required bool allowEmptyKeyword,
     required bool includeScope,
     required T Function(
       String keyword,
@@ -1748,7 +2131,7 @@ class _SourcePageState extends State<SourcePage> {
     )
     onSubmit,
   }) async {
-    final controller = TextEditingController(text: '凡人修仙传');
+    final controller = TextEditingController(text: initialKeyword);
     var selectedLevel = SourceCheckLevel.searchOnly;
     var selectedScope = _BatchCheckScope.enabledSources;
     final result = await showDialog<T>(
@@ -1768,6 +2151,7 @@ class _SourcePageState extends State<SourcePage> {
                     autofocus: true,
                     decoration: const InputDecoration(
                       labelText: '检测关键词',
+                      hintText: '留空时自动使用书源默认检测词',
                       border: OutlineInputBorder(),
                     ),
                   ),
@@ -1831,7 +2215,7 @@ class _SourcePageState extends State<SourcePage> {
                 FilledButton(
                   onPressed: () {
                     final keyword = controller.text.trim();
-                    if (keyword.isEmpty) {
+                    if (!allowEmptyKeyword && keyword.isEmpty) {
                       return;
                     }
                     Navigator.of(
@@ -1875,6 +2259,26 @@ class _SourcePageState extends State<SourcePage> {
       _BatchCheckScope.recentFailedSources => '最近失败源',
       _BatchCheckScope.coolingDownSources => '冷却中源',
     };
+  }
+
+  String _toFriendlyImportError(Object error) {
+    final raw = error.toString().trim();
+    if (raw.isEmpty) {
+      return '导入失败，请检查书源格式后重试。';
+    }
+    if (raw.contains('书源缺少必须方法')) {
+      return '书源缺少必须方法，至少需要实现 search / detail / chapters / content。';
+    }
+    if (raw.contains('无法读取书源导出的 meta')) {
+      return '无法识别书源格式，请确认内容使用 export default 导出，并包含 meta.name。';
+    }
+    if (raw.contains('书源导出格式不支持') || raw.contains('当前仅支持以')) {
+      return '书源导出格式不支持，请使用 export default { meta, ... }。';
+    }
+    if (raw.contains('Script source code cannot be empty')) {
+      return '书源内容不能为空。';
+    }
+    return raw.replaceFirst('SourceScriptCompileException: ', '');
   }
 
   void _toggleSelectedSource(String sourceId) {

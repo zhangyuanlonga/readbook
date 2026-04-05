@@ -202,6 +202,7 @@ class StoredScriptSources extends Table {
   TextColumn get group => text().nullable()();
   TextColumn get author => text().nullable()();
   TextColumn get description => text().nullable()();
+  TextColumn get checkKeyword => text().nullable()();
   TextColumn get primaryHost => text().nullable()();
   TextColumn get registrableDomain => text().nullable()();
   TextColumn get clusterKey => text().nullable()();
@@ -274,7 +275,7 @@ class AppDatabase extends _$AppDatabase {
   static final AppDatabase instance = AppDatabase();
 
   @override
-  int get schemaVersion => 19;
+  int get schemaVersion => 20;
 
   @override
   MigrationStrategy get migration {
@@ -402,6 +403,18 @@ class AppDatabase extends _$AppDatabase {
                 () => migrator.addColumn(
                   storedScriptSources,
                   storedScriptSources.clusterKey,
+                ),
+          );
+        }
+        if (from < 20) {
+          await _addColumnIfMissing(
+            migrator: migrator,
+            tableName: storedScriptSources.tableName,
+            columnName: 'check_keyword',
+            addColumn:
+                () => migrator.addColumn(
+                  storedScriptSources,
+                  storedScriptSources.checkKeyword,
                 ),
           );
         }
@@ -619,6 +632,7 @@ class AppDatabase extends _$AppDatabase {
         group: Value(source.group),
         author: Value(source.author),
         description: Value(source.description),
+        checkKeyword: Value(source.checkKeyword),
         primaryHost: Value(source.primaryHost),
         registrableDomain: Value(source.registrableDomain),
         clusterKey: Value(source.clusterKey),
@@ -2009,6 +2023,7 @@ class AppDatabase extends _$AppDatabase {
       group: _nullableString(row.group),
       author: _nullableString(row.author),
       description: _nullableString(row.description),
+      checkKeyword: _nullableString(row.checkKeyword),
       primaryHost: _nullableString(row.primaryHost),
       registrableDomain: _nullableString(row.registrableDomain),
       clusterKey: _nullableString(row.clusterKey),

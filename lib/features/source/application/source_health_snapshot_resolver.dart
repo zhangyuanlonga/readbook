@@ -41,6 +41,14 @@ class SourceHealthSnapshotResolver {
     );
   }
 
+  SourceHealthSnapshot recordBrowserRiskObservation(
+    SourceHealthSnapshot snapshot,
+  ) {
+    return _resolveLevel(
+      snapshot.copyWith(challengeCount: snapshot.challengeCount + 1),
+    );
+  }
+
   SourceHealthSnapshot recordFailure(
     SourceHealthSnapshot snapshot, {
     required SourceHealthFailureKind failureKind,
@@ -83,8 +91,14 @@ class SourceHealthSnapshotResolver {
     if (snapshot.userDisabled || snapshot.coolingDown) {
       return snapshot.copyWith(level: SourceHealthLevel.unavailable);
     }
+    if (snapshot.totalSuccesses <= 0 && snapshot.totalFailures <= 0) {
+      return snapshot.copyWith(level: SourceHealthLevel.unchecked);
+    }
     if (snapshot.consecutiveFailures >= 2 || snapshot.browserRiskCount >= 2) {
       return snapshot.copyWith(level: SourceHealthLevel.risky);
+    }
+    if (snapshot.challengeCount > 0) {
+      return snapshot.copyWith(level: SourceHealthLevel.warning);
     }
     if (snapshot.totalFailures > 0) {
       return snapshot.copyWith(level: SourceHealthLevel.warning);

@@ -229,7 +229,7 @@ class SourceHealthSnapshot {
   }
 }
 
-enum SourceHealthLevel { healthy, warning, risky, unavailable }
+enum SourceHealthLevel { unchecked, healthy, warning, risky, unavailable }
 
 enum SourceHealthFailureKind {
   network,

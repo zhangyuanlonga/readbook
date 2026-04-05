@@ -3412,6 +3412,7 @@ class _BookshelfPageState extends State<BookshelfPage>
 
       await _loadLatestCachedChapterMap(books, ticket: ticket);
       await _loadProgressMapInBatches(books, ticket: ticket);
+      unawaited(_refreshOnlineBookshelfLatestInfo(books, ticket: ticket));
     } on TimeoutException {
       if (!mounted || ticket != _loadTicket) {
         return;
@@ -3565,6 +3566,91 @@ class _BookshelfPageState extends State<BookshelfPage>
     setState(() {
       _latestCachedChapterByBookKey = latestByBookKey;
     });
+  }
+
+  Future<void> _refreshOnlineBookshelfLatestInfo(
+    List<BookshelfBook> books, {
+    required int ticket,
+  }) async {
+    final onlineBooks = books
+        .where((book) => book.sourceId.trim() != _kLocalBookSourceId)
+        .toList(growable: false);
+    if (onlineBooks.isEmpty) {
+      return;
+    }
+
+    var changed = false;
+    for (final book in onlineBooks) {
+      if (!mounted || ticket != _loadTicket) {
+        return;
+      }
+
+      try {
+        final detailResult = await _bookDetailService
+            .load(
+              sourceId: book.sourceId,
+              bookId: book.bookId,
+              detailUrl: book.detailUrl,
+              fallbackTitle: book.title,
+              fallbackAuthor: book.author,
+              forceRefresh: true,
+            )
+            .timeout(const Duration(seconds: 8));
+
+        final latestChapterTitle =
+            detailResult.chapters
+                .where(
+                  (chapter) =>
+                      !chapter.isVolume && chapter.chapterUrl.trim().isNotEmpty,
+                )
+                .map((chapter) => chapter.title.trim())
+                .where((title) => title.isNotEmpty)
+                .lastOrNull;
+        final normalizedLatestChapter =
+            latestChapterTitle == null || latestChapterTitle.isEmpty
+                ? null
+                : latestChapterTitle;
+        final detailAuthor = detailResult.detail.author?.trim();
+        final normalizedAuthor =
+            detailAuthor == null || detailAuthor.isEmpty ? null : detailAuthor;
+        final detailCoverUrl = detailResult.detail.coverUrl?.trim();
+        final normalizedCoverUrl =
+            detailCoverUrl == null || detailCoverUrl.isEmpty
+                ? null
+                : detailCoverUrl;
+        final currentLatestChapter = book.latestChapter?.trim();
+        final currentAuthor = book.author?.trim();
+        final currentCoverUrl = book.coverUrl?.trim();
+
+        final needsUpdate =
+            normalizedLatestChapter != currentLatestChapter ||
+            normalizedAuthor != currentAuthor ||
+            normalizedCoverUrl != currentCoverUrl;
+        if (!needsUpdate) {
+          continue;
+        }
+
+        await _bookshelfService.upsert(
+          book.copyWith(
+            latestChapter: normalizedLatestChapter,
+            clearLatestChapter: normalizedLatestChapter == null,
+            author: normalizedAuthor,
+            clearAuthor: normalizedAuthor == null,
+            coverUrl: normalizedCoverUrl,
+            clearCoverUrl:
+                normalizedCoverUrl == null || normalizedCoverUrl.isEmpty,
+          ),
+        );
+        changed = true;
+      } catch (_) {
+        // Ignore per-book refresh failures to keep pull-to-refresh lightweight.
+      }
+    }
+
+    if (!changed || !mounted || ticket != _loadTicket) {
+      return;
+    }
+    await _loadBookshelf(force: true);
   }
 
   Future<void> _restoreViewModePreference() async {

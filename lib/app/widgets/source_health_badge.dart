@@ -16,6 +16,11 @@ class SourceHealthBadge extends StatelessWidget {
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
     final (label, background, foreground) = switch (level) {
+      SourceHealthLevel.unchecked => (
+        '未检测',
+        colorScheme.surfaceContainerHighest,
+        colorScheme.onSurfaceVariant,
+      ),
       SourceHealthLevel.healthy => (
         '正常',
         colorScheme.primaryContainer,

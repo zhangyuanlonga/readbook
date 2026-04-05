@@ -696,7 +696,11 @@ class _SystemUiOverlayWrapperState extends State<_SystemUiOverlayWrapper>
       if (!mounted) {
         return;
       }
-      _safeGo('/bookshelf');
+      final target =
+          payload.type == ExternalImportPayloadType.scriptSource
+              ? '/source'
+              : '/bookshelf';
+      _safeGo(target);
     });
   }
 

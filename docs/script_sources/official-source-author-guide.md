@@ -126,6 +126,7 @@ export default {
     group: '默认分组',
     author: 'your_name',
     description: '一个最小可用的示例书源',
+    checkKeyword: '凡人修仙传',
     domains: ['www.example.com'],
     homepage: 'https://www.example.com',
     enabled: true,
@@ -259,6 +260,7 @@ export default {
     group: '默认分组',
     author: 'your_name',
     description: '一个演示 HTML + Challenge 流程的模板书源',
+    checkKeyword: '凡人修仙传',
     domains: ['www.example.com'],
     homepage: SOURCE_HOST,
     enabled: true,
@@ -401,6 +403,7 @@ meta: {
   group: '默认分组',
   author: 'your_name',
   description: '一个示例源',
+  checkKeyword: '凡人修仙传',
   domains: ['www.example.com'],
   homepage: 'https://www.example.com',
   enabled: true,
@@ -419,6 +422,7 @@ meta: {
 - `group`：来源分组，例如“自带”“社区”“自定义”
 - `author`：书源作者名称
 - `description`：简要说明这个源的特点或适用范围
+- `checkKeyword`：书源检测默认关键词，建议填写一个稳定能搜到结果的书名或作者词
 - `domains`：相关域名列表
 - `homepage`：站点首页
 - `enabled`：是否默认启用
@@ -430,6 +434,7 @@ meta: {
 - 不需要手动填写内部 `sourceId`
 - 运行时会自动生成 `ctx.source.id`
 - `meta` 里不要求作者维护内部版本号或 revision
+- `checkKeyword` 会在单源检测/批量检测时被宿主优先使用
 - `rateLimits` 由宿主在 `ctx.http.request(...)` 时自动执行
 
 `rateLimits` 推荐写法：

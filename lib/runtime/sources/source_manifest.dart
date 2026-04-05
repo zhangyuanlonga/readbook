@@ -4,6 +4,7 @@ class SourceManifest {
     required this.group,
     required this.author,
     required this.description,
+    this.checkKeyword,
     this.domains = const <String>[],
     this.homepage,
     this.enabled = true,
@@ -15,6 +16,7 @@ class SourceManifest {
   final String group;
   final String author;
   final String description;
+  final String? checkKeyword;
   final List<String> domains;
   final String? homepage;
   final bool enabled;
@@ -27,6 +29,7 @@ class SourceManifest {
       group: map['group']?.toString() ?? '未分组',
       author: map['author']?.toString() ?? 'unknown',
       description: map['description']?.toString() ?? '',
+      checkKeyword: _optionalString(map['checkKeyword']),
       domains: (map['domains'] as List<dynamic>? ?? const <dynamic>[])
           .map((dynamic value) => value.toString())
           .toList(growable: false),
@@ -44,6 +47,7 @@ class SourceManifest {
     String? group,
     String? author,
     String? description,
+    Object? checkKeyword = _sentinel,
     List<String>? domains,
     Object? homepage = _sentinel,
     bool? enabled,
@@ -55,6 +59,10 @@ class SourceManifest {
       group: group ?? this.group,
       author: author ?? this.author,
       description: description ?? this.description,
+      checkKeyword:
+          identical(checkKeyword, _sentinel)
+              ? this.checkKeyword
+              : checkKeyword as String?,
       domains: domains ?? this.domains,
       homepage:
           identical(homepage, _sentinel) ? this.homepage : homepage as String?,
@@ -79,6 +87,14 @@ class SourceManifest {
     }
     return rateLimits[host];
   }
+}
+
+String? _optionalString(Object? value) {
+  final normalized = value?.toString().trim();
+  if (normalized == null || normalized.isEmpty) {
+    return null;
+  }
+  return normalized;
 }
 
 Set<String> _normalizeCapabilities(Iterable<dynamic> rawValues) {

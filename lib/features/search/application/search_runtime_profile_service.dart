@@ -67,9 +67,10 @@ class _SearchRuntimeProfileService {
     final snapshot = _healthService.snapshotFor(sourceId);
     return switch (snapshot.level) {
       SourceHealthLevel.healthy => 0,
-      SourceHealthLevel.warning => 1,
-      SourceHealthLevel.risky => 2,
-      SourceHealthLevel.unavailable => 3,
+      SourceHealthLevel.unchecked => 1,
+      SourceHealthLevel.warning => 2,
+      SourceHealthLevel.risky => 3,
+      SourceHealthLevel.unavailable => 4,
     };
   }
 

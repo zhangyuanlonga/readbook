@@ -23,6 +23,7 @@ import '../features/reader/presentation/reader_route.dart';
 import '../features/search/presentation/search_page.dart';
 import '../features/source/presentation/source_page.dart';
 import '../features/source/presentation/script_source_editor_page.dart';
+import '../features/source/presentation/script_source_paste_import_page.dart';
 import '../features/reader/presentation/reading_records_page.dart';
 import 'shell_scaffold.dart';
 
@@ -31,6 +32,12 @@ GlobalKey<NavigatorState> get appRootNavigatorKey => globalRootNavigatorKey;
 final GoRouter appRouter = GoRouter(
   navigatorKey: globalRootNavigatorKey,
   initialLocation: '/bookshelf',
+  redirect: (context, state) {
+    if (state.uri.scheme == 'file') {
+      return '/source';
+    }
+    return null;
+  },
   routes: [
     StatefulShellRoute.indexedStack(
       builder: (context, state, navigationShell) {
@@ -138,6 +145,42 @@ final GoRouter appRouter = GoRouter(
             child: ScriptSourceEditorPage(
               scriptSourceId: state.uri.queryParameters['id'],
             ),
+            transitionsBuilder: (
+              context,
+              animation,
+              secondaryAnimation,
+              child,
+            ) {
+              final curvedAnimation = CurvedAnimation(
+                parent: animation,
+                curve: Curves.easeOutCubic,
+                reverseCurve: Curves.easeInCubic,
+              );
+              return FadeTransition(
+                opacity: Tween<double>(
+                  begin: 0.82,
+                  end: 1,
+                ).animate(curvedAnimation),
+                child: SlideTransition(
+                  position: Tween<Offset>(
+                    begin: const Offset(0, 0.02),
+                    end: Offset.zero,
+                  ).animate(curvedAnimation),
+                  child: child,
+                ),
+              );
+            },
+          ),
+    ),
+    GoRoute(
+      path: '/source/paste-import',
+      name: 'script-source-paste-import',
+      pageBuilder:
+          (context, state) => CustomTransitionPage<void>(
+            key: state.pageKey,
+            transitionDuration: const Duration(milliseconds: 220),
+            reverseTransitionDuration: const Duration(milliseconds: 180),
+            child: const ScriptSourcePasteImportPage(),
             transitionsBuilder: (
               context,
               animation,

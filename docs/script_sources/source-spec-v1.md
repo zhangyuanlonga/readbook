@@ -77,6 +77,7 @@ meta: {
   group: '默认分组',
   author: 'source_author',
   description: '示例书源描述',
+  checkKeyword: '凡人修仙传',
   domains: ['www.example.com'],
   homepage: 'https://www.example.com',
   enabled: true,
@@ -97,6 +98,7 @@ meta: {
 - `group`：分组
 - `author`：作者
 - `description`：描述
+- `checkKeyword`：书源检测默认关键词
 - `domains`：相关域名列表
 - `homepage`：站点首页
 - `enabled`：默认是否启用
@@ -108,6 +110,7 @@ meta: {
 - 作者不需要填写内部 `sourceId`
 - 作者不需要在 `meta` 中维护 `revision`
 - 宿主在运行时生成 `ctx.source.id`
+- `checkKeyword` 推荐填写当前站点较稳定、能稳定搜到结果的书名或作者词
 - `rateLimits` 推荐保持对象结构，以便后续继续扩展更多请求控制字段
 
 ---

@@ -1055,6 +1055,7 @@ const List<String> _scriptSourceAutocompleteWords = <String>[
   'group',
   'author',
   'description',
+  'checkKeyword',
   'domains',
   'homepage',
   'enabled',

@@ -6385,6 +6385,17 @@ class $StoredScriptSourcesTable extends StoredScriptSources
     type: DriftSqlType.string,
     requiredDuringInsert: false,
   );
+  static const VerificationMeta _checkKeywordMeta = const VerificationMeta(
+    'checkKeyword',
+  );
+  @override
+  late final GeneratedColumn<String> checkKeyword = GeneratedColumn<String>(
+    'check_keyword',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
   static const VerificationMeta _primaryHostMeta = const VerificationMeta(
     'primaryHost',
   );
@@ -6476,6 +6487,7 @@ class $StoredScriptSourcesTable extends StoredScriptSources
     group,
     author,
     description,
+    checkKeyword,
     primaryHost,
     registrableDomain,
     clusterKey,
@@ -6527,6 +6539,15 @@ class $StoredScriptSourcesTable extends StoredScriptSources
         description.isAcceptableOrUnknown(
           data['description']!,
           _descriptionMeta,
+        ),
+      );
+    }
+    if (data.containsKey('check_keyword')) {
+      context.handle(
+        _checkKeywordMeta,
+        checkKeyword.isAcceptableOrUnknown(
+          data['check_keyword']!,
+          _checkKeywordMeta,
         ),
       );
     }
@@ -6611,6 +6632,10 @@ class $StoredScriptSourcesTable extends StoredScriptSources
         DriftSqlType.string,
         data['${effectivePrefix}description'],
       ),
+      checkKeyword: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}check_keyword'],
+      ),
       primaryHost: attachedDatabase.typeMapping.read(
         DriftSqlType.string,
         data['${effectivePrefix}primary_host'],
@@ -6659,6 +6684,7 @@ class StoredScriptSource extends DataClass
   final String? group;
   final String? author;
   final String? description;
+  final String? checkKeyword;
   final String? primaryHost;
   final String? registrableDomain;
   final String? clusterKey;
@@ -6672,6 +6698,7 @@ class StoredScriptSource extends DataClass
     this.group,
     this.author,
     this.description,
+    this.checkKeyword,
     this.primaryHost,
     this.registrableDomain,
     this.clusterKey,
@@ -6693,6 +6720,9 @@ class StoredScriptSource extends DataClass
     }
     if (!nullToAbsent || description != null) {
       map['description'] = Variable<String>(description);
+    }
+    if (!nullToAbsent || checkKeyword != null) {
+      map['check_keyword'] = Variable<String>(checkKeyword);
     }
     if (!nullToAbsent || primaryHost != null) {
       map['primary_host'] = Variable<String>(primaryHost);
@@ -6722,6 +6752,10 @@ class StoredScriptSource extends DataClass
           description == null && nullToAbsent
               ? const Value.absent()
               : Value(description),
+      checkKeyword:
+          checkKeyword == null && nullToAbsent
+              ? const Value.absent()
+              : Value(checkKeyword),
       primaryHost:
           primaryHost == null && nullToAbsent
               ? const Value.absent()
@@ -6752,6 +6786,7 @@ class StoredScriptSource extends DataClass
       group: serializer.fromJson<String?>(json['group']),
       author: serializer.fromJson<String?>(json['author']),
       description: serializer.fromJson<String?>(json['description']),
+      checkKeyword: serializer.fromJson<String?>(json['checkKeyword']),
       primaryHost: serializer.fromJson<String?>(json['primaryHost']),
       registrableDomain: serializer.fromJson<String?>(
         json['registrableDomain'],
@@ -6772,6 +6807,7 @@ class StoredScriptSource extends DataClass
       'group': serializer.toJson<String?>(group),
       'author': serializer.toJson<String?>(author),
       'description': serializer.toJson<String?>(description),
+      'checkKeyword': serializer.toJson<String?>(checkKeyword),
       'primaryHost': serializer.toJson<String?>(primaryHost),
       'registrableDomain': serializer.toJson<String?>(registrableDomain),
       'clusterKey': serializer.toJson<String?>(clusterKey),
@@ -6788,6 +6824,7 @@ class StoredScriptSource extends DataClass
     Value<String?> group = const Value.absent(),
     Value<String?> author = const Value.absent(),
     Value<String?> description = const Value.absent(),
+    Value<String?> checkKeyword = const Value.absent(),
     Value<String?> primaryHost = const Value.absent(),
     Value<String?> registrableDomain = const Value.absent(),
     Value<String?> clusterKey = const Value.absent(),
@@ -6801,6 +6838,7 @@ class StoredScriptSource extends DataClass
     group: group.present ? group.value : this.group,
     author: author.present ? author.value : this.author,
     description: description.present ? description.value : this.description,
+    checkKeyword: checkKeyword.present ? checkKeyword.value : this.checkKeyword,
     primaryHost: primaryHost.present ? primaryHost.value : this.primaryHost,
     registrableDomain:
         registrableDomain.present
@@ -6820,6 +6858,10 @@ class StoredScriptSource extends DataClass
       author: data.author.present ? data.author.value : this.author,
       description:
           data.description.present ? data.description.value : this.description,
+      checkKeyword:
+          data.checkKeyword.present
+              ? data.checkKeyword.value
+              : this.checkKeyword,
       primaryHost:
           data.primaryHost.present ? data.primaryHost.value : this.primaryHost,
       registrableDomain:
@@ -6844,6 +6886,7 @@ class StoredScriptSource extends DataClass
           ..write('group: $group, ')
           ..write('author: $author, ')
           ..write('description: $description, ')
+          ..write('checkKeyword: $checkKeyword, ')
           ..write('primaryHost: $primaryHost, ')
           ..write('registrableDomain: $registrableDomain, ')
           ..write('clusterKey: $clusterKey, ')
@@ -6862,6 +6905,7 @@ class StoredScriptSource extends DataClass
     group,
     author,
     description,
+    checkKeyword,
     primaryHost,
     registrableDomain,
     clusterKey,
@@ -6879,6 +6923,7 @@ class StoredScriptSource extends DataClass
           other.group == this.group &&
           other.author == this.author &&
           other.description == this.description &&
+          other.checkKeyword == this.checkKeyword &&
           other.primaryHost == this.primaryHost &&
           other.registrableDomain == this.registrableDomain &&
           other.clusterKey == this.clusterKey &&
@@ -6894,6 +6939,7 @@ class StoredScriptSourcesCompanion extends UpdateCompanion<StoredScriptSource> {
   final Value<String?> group;
   final Value<String?> author;
   final Value<String?> description;
+  final Value<String?> checkKeyword;
   final Value<String?> primaryHost;
   final Value<String?> registrableDomain;
   final Value<String?> clusterKey;
@@ -6908,6 +6954,7 @@ class StoredScriptSourcesCompanion extends UpdateCompanion<StoredScriptSource> {
     this.group = const Value.absent(),
     this.author = const Value.absent(),
     this.description = const Value.absent(),
+    this.checkKeyword = const Value.absent(),
     this.primaryHost = const Value.absent(),
     this.registrableDomain = const Value.absent(),
     this.clusterKey = const Value.absent(),
@@ -6923,6 +6970,7 @@ class StoredScriptSourcesCompanion extends UpdateCompanion<StoredScriptSource> {
     this.group = const Value.absent(),
     this.author = const Value.absent(),
     this.description = const Value.absent(),
+    this.checkKeyword = const Value.absent(),
     this.primaryHost = const Value.absent(),
     this.registrableDomain = const Value.absent(),
     this.clusterKey = const Value.absent(),
@@ -6940,6 +6988,7 @@ class StoredScriptSourcesCompanion extends UpdateCompanion<StoredScriptSource> {
     Expression<String>? group,
     Expression<String>? author,
     Expression<String>? description,
+    Expression<String>? checkKeyword,
     Expression<String>? primaryHost,
     Expression<String>? registrableDomain,
     Expression<String>? clusterKey,
@@ -6955,6 +7004,7 @@ class StoredScriptSourcesCompanion extends UpdateCompanion<StoredScriptSource> {
       if (group != null) 'group': group,
       if (author != null) 'author': author,
       if (description != null) 'description': description,
+      if (checkKeyword != null) 'check_keyword': checkKeyword,
       if (primaryHost != null) 'primary_host': primaryHost,
       if (registrableDomain != null) 'registrable_domain': registrableDomain,
       if (clusterKey != null) 'cluster_key': clusterKey,
@@ -6972,6 +7022,7 @@ class StoredScriptSourcesCompanion extends UpdateCompanion<StoredScriptSource> {
     Value<String?>? group,
     Value<String?>? author,
     Value<String?>? description,
+    Value<String?>? checkKeyword,
     Value<String?>? primaryHost,
     Value<String?>? registrableDomain,
     Value<String?>? clusterKey,
@@ -6987,6 +7038,7 @@ class StoredScriptSourcesCompanion extends UpdateCompanion<StoredScriptSource> {
       group: group ?? this.group,
       author: author ?? this.author,
       description: description ?? this.description,
+      checkKeyword: checkKeyword ?? this.checkKeyword,
       primaryHost: primaryHost ?? this.primaryHost,
       registrableDomain: registrableDomain ?? this.registrableDomain,
       clusterKey: clusterKey ?? this.clusterKey,
@@ -7015,6 +7067,9 @@ class StoredScriptSourcesCompanion extends UpdateCompanion<StoredScriptSource> {
     }
     if (description.present) {
       map['description'] = Variable<String>(description.value);
+    }
+    if (checkKeyword.present) {
+      map['check_keyword'] = Variable<String>(checkKeyword.value);
     }
     if (primaryHost.present) {
       map['primary_host'] = Variable<String>(primaryHost.value);
@@ -7051,6 +7106,7 @@ class StoredScriptSourcesCompanion extends UpdateCompanion<StoredScriptSource> {
           ..write('group: $group, ')
           ..write('author: $author, ')
           ..write('description: $description, ')
+          ..write('checkKeyword: $checkKeyword, ')
           ..write('primaryHost: $primaryHost, ')
           ..write('registrableDomain: $registrableDomain, ')
           ..write('clusterKey: $clusterKey, ')
@@ -10180,6 +10236,7 @@ typedef $$StoredScriptSourcesTableCreateCompanionBuilder =
       Value<String?> group,
       Value<String?> author,
       Value<String?> description,
+      Value<String?> checkKeyword,
       Value<String?> primaryHost,
       Value<String?> registrableDomain,
       Value<String?> clusterKey,
@@ -10196,6 +10253,7 @@ typedef $$StoredScriptSourcesTableUpdateCompanionBuilder =
       Value<String?> group,
       Value<String?> author,
       Value<String?> description,
+      Value<String?> checkKeyword,
       Value<String?> primaryHost,
       Value<String?> registrableDomain,
       Value<String?> clusterKey,
@@ -10237,6 +10295,11 @@ class $$StoredScriptSourcesTableFilterComposer
 
   ColumnFilters<String> get description => $composableBuilder(
     column: $table.description,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get checkKeyword => $composableBuilder(
+    column: $table.checkKeyword,
     builder: (column) => ColumnFilters(column),
   );
 
@@ -10310,6 +10373,11 @@ class $$StoredScriptSourcesTableOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
+  ColumnOrderings<String> get checkKeyword => $composableBuilder(
+    column: $table.checkKeyword,
+    builder: (column) => ColumnOrderings(column),
+  );
+
   ColumnOrderings<String> get primaryHost => $composableBuilder(
     column: $table.primaryHost,
     builder: (column) => ColumnOrderings(column),
@@ -10369,6 +10437,11 @@ class $$StoredScriptSourcesTableAnnotationComposer
 
   GeneratedColumn<String> get description => $composableBuilder(
     column: $table.description,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get checkKeyword => $composableBuilder(
+    column: $table.checkKeyword,
     builder: (column) => column,
   );
 
@@ -10453,6 +10526,7 @@ class $$StoredScriptSourcesTableTableManager
                 Value<String?> group = const Value.absent(),
                 Value<String?> author = const Value.absent(),
                 Value<String?> description = const Value.absent(),
+                Value<String?> checkKeyword = const Value.absent(),
                 Value<String?> primaryHost = const Value.absent(),
                 Value<String?> registrableDomain = const Value.absent(),
                 Value<String?> clusterKey = const Value.absent(),
@@ -10467,6 +10541,7 @@ class $$StoredScriptSourcesTableTableManager
                 group: group,
                 author: author,
                 description: description,
+                checkKeyword: checkKeyword,
                 primaryHost: primaryHost,
                 registrableDomain: registrableDomain,
                 clusterKey: clusterKey,
@@ -10483,6 +10558,7 @@ class $$StoredScriptSourcesTableTableManager
                 Value<String?> group = const Value.absent(),
                 Value<String?> author = const Value.absent(),
                 Value<String?> description = const Value.absent(),
+                Value<String?> checkKeyword = const Value.absent(),
                 Value<String?> primaryHost = const Value.absent(),
                 Value<String?> registrableDomain = const Value.absent(),
                 Value<String?> clusterKey = const Value.absent(),
@@ -10497,6 +10573,7 @@ class $$StoredScriptSourcesTableTableManager
                 group: group,
                 author: author,
                 description: description,
+                checkKeyword: checkKeyword,
                 primaryHost: primaryHost,
                 registrableDomain: registrableDomain,
                 clusterKey: clusterKey,

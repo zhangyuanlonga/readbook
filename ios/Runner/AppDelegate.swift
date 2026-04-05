@@ -15,6 +15,7 @@ import UniformTypeIdentifiers
   private let methodSetInterceptVolumeKeys = "setInterceptVolumeKeys"
   private let defaultPayloadLabel = "外部导入"
   private let payloadTypeLocalBook = "localBook"
+  private let payloadTypeScriptSource = "scriptSource"
   private let readerVolumeBaseline: Float = 0.5
 
   private var sourceImportMethodChannel: FlutterMethodChannel?
@@ -28,6 +29,10 @@ import UniformTypeIdentifiers
   private weak var hiddenVolumeSlider: UISlider?
   private var suppressObservedVolumeChange = false
   private var lastObservedOutputVolume = AVAudioSession.sharedInstance().outputVolume
+
+  private func logSourceImport(_ message: String) {
+    NSLog("[SourceImport] %@", message)
+  }
 
   override func application(
     _ application: UIApplication,
@@ -254,6 +259,7 @@ import UniformTypeIdentifiers
 
   private func payloadFromURL(_ url: URL) -> [String: Any]? {
     guard url.isFileURL else {
+      logSourceImport("Ignored non-file url: \(url.absoluteString)")
       return nil
     }
 
@@ -271,6 +277,10 @@ import UniformTypeIdentifiers
       mimeType: mimeType
     )
 
+    logSourceImport(
+      "Resolved external file url=\(url.absoluteString) label=\(label) mime=\(mimeType ?? "nil") payloadType=\(payloadType ?? "nil")"
+    )
+
     switch payloadType {
     case payloadTypeLocalBook:
       return [
@@ -279,7 +289,15 @@ import UniformTypeIdentifiers
         "label": label,
         "mimeType": mimeType ?? "",
       ]
+    case payloadTypeScriptSource:
+      return [
+        "type": payloadTypeScriptSource,
+        "uri": url.absoluteString,
+        "label": label,
+        "mimeType": mimeType ?? "",
+      ]
     default:
+      logSourceImport("Unsupported external file type for url=\(url.absoluteString)")
       return nil
     }
   }
@@ -299,6 +317,12 @@ import UniformTypeIdentifiers
       normalizedMimeType == "text/plain" ||
       normalizedMimeType == "application/octet-stream" {
       return payloadTypeLocalBook
+    }
+    if extensionName == "js" ||
+      extensionName == "mjs" ||
+      normalizedMimeType == "text/javascript" ||
+      normalizedMimeType == "application/javascript" {
+      return payloadTypeScriptSource
     }
     return nil
   }
@@ -324,6 +348,7 @@ import UniformTypeIdentifiers
       let uri = URL(string: rawUri),
       uri.isFileURL
     else {
+      logSourceImport("cacheExternalFileFromUri rejected invalid uri payload=\(arguments)")
       return nil
     }
 
@@ -333,7 +358,12 @@ import UniformTypeIdentifiers
     let rawMimeType = (arguments["mimeType"] as? String)?
       .trimmingCharacters(in: .whitespacesAndNewlines)
     let mimeType = (rawMimeType?.isEmpty == false) ? rawMimeType! : (resolveMimeType(from: uri) ?? "")
-    guard let extensionName = resolveLocalBookExtension(label: label, mimeType: mimeType) else {
+    guard let extensionName = resolveExternalImportExtension(
+      url: uri,
+      label: label,
+      mimeType: mimeType
+    ) else {
+      logSourceImport("Unable to resolve extension for uri=\(uri.absoluteString) label=\(label) mime=\(mimeType)")
       return nil
     }
 
@@ -346,6 +376,7 @@ import UniformTypeIdentifiers
 
     let fileManager = FileManager.default
     guard fileManager.fileExists(atPath: uri.path) else {
+      logSourceImport("External file does not exist at path=\(uri.path)")
       return nil
     }
 
@@ -361,6 +392,7 @@ import UniformTypeIdentifiers
         attributes: nil
       )
     } catch {
+      logSourceImport("Failed to create external import cache directory error=\(error.localizedDescription)")
       return nil
     }
 
@@ -376,11 +408,21 @@ import UniformTypeIdentifiers
         try fileManager.removeItem(at: outputUrl)
       }
       try fileManager.copyItem(at: uri, to: outputUrl)
+      logSourceImport("Copied external import file to cache path=\(outputUrl.path)")
     } catch {
-      return nil
+      logSourceImport("copyItem failed for uri=\(uri.absoluteString), fallback to Data write, error=\(error.localizedDescription)")
+      do {
+        let data = try Data(contentsOf: uri)
+        try data.write(to: outputUrl, options: .atomic)
+        logSourceImport("Wrote external import file via Data fallback path=\(outputUrl.path) bytes=\(data.count)")
+      } catch {
+        logSourceImport("Failed to cache external file uri=\(uri.absoluteString) error=\(error.localizedDescription)")
+        return nil
+      }
     }
 
     let normalizedLabel = label.lowercased().hasSuffix(extensionName) ? label : "\(label)\(extensionName)"
+    logSourceImport("Prepared cached external import label=\(normalizedLabel) path=\(outputUrl.path) mime=\(mimeType)")
     return [
       "path": outputUrl.path,
       "label": normalizedLabel,
@@ -388,20 +430,48 @@ import UniformTypeIdentifiers
     ]
   }
 
-  private func resolveLocalBookExtension(label: String, mimeType: String?) -> String? {
+  private func resolveExternalImportExtension(
+    url: URL,
+    label: String,
+    mimeType: String?
+  ) -> String? {
+    let urlExtension = url.pathExtension
+      .trimmingCharacters(in: .whitespacesAndNewlines)
+      .lowercased()
     let lowerLabel = label.lowercased()
     let normalizedMimeType = mimeType?.lowercased() ?? ""
+    if urlExtension == "txt" {
+      return ".txt"
+    }
+    if urlExtension == "epub" {
+      return ".epub"
+    }
+    if urlExtension == "js" {
+      return ".js"
+    }
+    if urlExtension == "mjs" {
+      return ".mjs"
+    }
     if lowerLabel.hasSuffix(".txt") {
       return ".txt"
     }
     if lowerLabel.hasSuffix(".epub") {
       return ".epub"
     }
+    if lowerLabel.hasSuffix(".js") {
+      return ".js"
+    }
+    if lowerLabel.hasSuffix(".mjs") {
+      return ".mjs"
+    }
     if normalizedMimeType == "application/epub+zip" {
       return ".epub"
     }
     if normalizedMimeType == "text/plain" || normalizedMimeType == "application/octet-stream" {
       return ".txt"
+    }
+    if normalizedMimeType == "text/javascript" || normalizedMimeType == "application/javascript" {
+      return ".js"
     }
     return nil
   }

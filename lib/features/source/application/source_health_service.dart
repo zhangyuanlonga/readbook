@@ -55,7 +55,7 @@ class SourceHealthService {
     if (normalizedSourceId.isEmpty) {
       return SourceHealthSnapshot(
         sourceId: normalizedSourceId,
-        level: SourceHealthLevel.healthy,
+        level: SourceHealthLevel.unchecked,
         enabled: enabled,
       );
     }
@@ -73,14 +73,14 @@ class SourceHealthService {
       return normalized ??
           SourceHealthSnapshot(
             sourceId: normalizedSourceId,
-            level: SourceHealthLevel.healthy,
+            level: SourceHealthLevel.unchecked,
             enabled: enabled,
           );
     }
 
     return SourceHealthSnapshot(
       sourceId: normalizedSourceId,
-      level: SourceHealthLevel.healthy,
+      level: SourceHealthLevel.unchecked,
       enabled: enabled,
     );
   }
@@ -155,6 +155,17 @@ class SourceHealthService {
       enabled: enabled,
       step: SourceHealthStep.discoverBooks,
     );
+  }
+
+  void markBrowserRiskObserved({
+    required String sourceId,
+    bool enabled = true,
+  }) {
+    final normalizedSourceId = sourceId.trim();
+    final current = snapshotFor(normalizedSourceId, enabled: enabled);
+    _snapshots[normalizedSourceId] = _snapshotResolver
+        .recordBrowserRiskObservation(current);
+    _schedulePersist();
   }
 
   void markSearchFailure({

@@ -220,7 +220,6 @@ void main() {
       await tester.pump(const Duration(milliseconds: 200));
       await tester.pump(const Duration(milliseconds: 400));
 
-      expect(find.textContaining('站点: debug.local'), findsWidgets);
       expect(find.textContaining('同站 2 个'), findsWidgets);
       expect(find.text('推荐保留'), findsWidgets);
 
@@ -275,8 +274,7 @@ export default {
       await tester.tap(find.text('重复源'));
       await tester.pumpAndSettle();
 
-      expect(find.textContaining('站点: debug.local'), findsWidgets);
-      expect(find.textContaining('站点: solo.example.com'), findsNothing);
+      expect(find.text('单独站点源'), findsNothing);
 
       await sourceHealthService.persistNow();
       await tester.pumpWidget(const SizedBox.shrink());
@@ -284,37 +282,6 @@ export default {
       await tester.pump(const Duration(milliseconds: 10));
     });
 
-    testWidgets('asks confirmation before enabling auto disable', (
-      tester,
-    ) async {
-      await facade.saveScriptSource(sourceCode: sourceScriptTemplateV1);
-
-      await tester.pumpWidget(
-        MaterialApp(
-          home: SourcePage(
-            sourceRuntimeFacade: facade,
-            sourceHealthService: sourceHealthService,
-            bootstrapOnInit: false,
-            enableRouterNavigation: false,
-          ),
-        ),
-      );
-      await tester.pump(const Duration(milliseconds: 200));
-      await tester.pump(const Duration(milliseconds: 400));
-
-      await tester.tap(find.byTooltip('更多'));
-      await tester.pumpAndSettle();
-      await tester.tap(find.text('自动停用高风险源'));
-      await tester.pumpAndSettle();
-
-      expect(find.text('开启自动停用'), findsOneWidget);
-      expect(find.textContaining('不会自动删除书源'), findsOneWidget);
-
-      await sourceHealthService.persistNow();
-      await tester.pumpWidget(const SizedBox.shrink());
-      await tester.pump();
-      await tester.pump(const Duration(milliseconds: 10));
-    });
   });
 }
 
@@ -325,14 +292,38 @@ class _FakeScriptSourceRuntimeService extends ScriptSourceRuntimeService {
     String? runtimeId,
     String revision = 'scratch',
   }) async {
+    String extractField(String field) {
+      final pattern = RegExp("$field\\s*:\\s*['\\\"]([^'\\\"]+)['\\\"]");
+      return pattern.firstMatch(sourceCode)?.group(1)?.trim() ?? '';
+    }
+
+    List<String> extractDomains() {
+      final match = RegExp(r"domains\s*:\s*\[([^\]]*)\]").firstMatch(sourceCode);
+      final block = match?.group(1) ?? '';
+      return RegExp("['\"]([^'\"]+)['\"]")
+          .allMatches(block)
+          .map((item) => item.group(1)!.trim())
+          .where((item) => item.isNotEmpty)
+          .toList(growable: false);
+    }
+
+    final name = extractField('name');
+    final group = extractField('group');
+    final author = extractField('author');
+    final description = extractField('description');
+    final homepage = extractField('homepage');
+    final checkKeyword = extractField('checkKeyword');
+    final domains = extractDomains();
+
     final definition = RuntimeSourceDefinition(
-      manifest: const SourceManifest(
-        name: '临时脚本源',
-        group: '调试',
-        author: 'you',
-        description: '直接在调试器里粘贴的书源脚本。',
-        domains: <String>['debug.local'],
-        homepage: 'https://debug.local',
+      manifest: SourceManifest(
+        name: name.isEmpty ? '临时脚本源' : name,
+        group: group.isEmpty ? '调试' : group,
+        author: author.isEmpty ? 'you' : author,
+        description: description.isEmpty ? '直接在调试器里粘贴的书源脚本。' : description,
+        checkKeyword: checkKeyword.isEmpty ? null : checkKeyword,
+        domains: domains.isEmpty ? const <String>['debug.local'] : domains,
+        homepage: homepage.isEmpty ? 'https://debug.local' : homepage,
       ),
       search: _noopRuntimeSearch,
       detail: _noopRuntimeDetail,
