@@ -1,6 +1,6 @@
 # 脚本源文档索引
 
-更新时间：2026-04-01
+更新时间：2026-04-05
 
 当前 `flutterreadbook` 运行时只支持脚本源。
 
@@ -28,6 +28,10 @@
 
 - [脚本源搜索与换源运行时重构方案](./search-runtime-redesign.md)
   用于推进搜索页、换源页和自动换源从“固定并发”演进到“资源预算调度”的专题设计文档。
+- [脚本源健康系统规划](./source-health-system-plan.md)
+  用于推进搜索、换源、书源列表、源检测和停用策略统一到同一套“源健康状态”体系。
+- [脚本源非搜索链路运行时梳理](./non-search-runtime-unification-plan.md)
+  用于统一梳理详情页、目录、正文、发现页当前是否已完成脚本源接入，以及还缺哪些运行时治理能力。
 - [第二阶段：Browser / Cookie / Cache 设计说明](./stage-two-browser-sources.md)
   只在你需要理解浏览器能力的设计取舍时阅读，不是入门必读。
 - [脚本源调试工作台任务拆分](./debug-workbench-task-plan.md)

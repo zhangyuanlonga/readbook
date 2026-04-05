@@ -1,6 +1,11 @@
+import 'package:flutter_appread/core/errors/app_exception.dart';
+import 'package:flutter_appread/core/errors/error_codes.dart';
+import 'package:flutter_appread/core/errors/error_stage.dart';
+import 'package:flutter_appread/core/logging/app_logger.dart';
 import 'package:flutter_appread/domain/entities/script_source.dart';
 import 'package:flutter_appread/domain/repositories/script_source_repository.dart';
 import 'package:flutter_appread/features/discover/application/explore_service.dart';
+import 'package:flutter_appread/features/source/application/source_health_service.dart';
 import 'package:flutter_appread/features/source/application/source_runtime_facade.dart';
 import 'package:flutter_appread/runtime/sources/source_contract.dart';
 import 'package:flutter_appread/runtime/sources/source_manifest.dart';
@@ -8,13 +13,21 @@ import 'package:flutter_appread/runtime/sources/source_registry.dart';
 import 'package:flutter_appread/runtime/sources/source_result_models.dart'
     as runtime_models;
 import 'package:flutter_test/flutter_test.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 void main() {
+  TestWidgetsFlutterBinding.ensureInitialized();
+
   group('ExploreService', () {
+    setUp(() {
+      SharedPreferences.setMockInitialValues(<String, Object>{});
+    });
+
     test(
       'loadDiscoverSources keeps enabled runtime discover sources only',
       () async {
         final service = ExploreService(
+          sourceHealthService: SourceHealthService(),
           sourceRuntimeFacade: _FakeRuntimeFacade(
             sources: <RegisteredSource>[
               _buildRegisteredSource(id: 'novel_a', name: '小说源A'),
@@ -82,8 +95,12 @@ void main() {
     );
 
     test('parseCategories reads runtime categories and styles', () async {
+      final healthService = SourceHealthService();
+      final logger = _RecordingLogger();
       final runtimeSource = _buildRegisteredSource(id: 'json', name: '发现源');
       final service = ExploreService(
+        sourceHealthService: healthService,
+        logger: logger,
         sourceRuntimeFacade: _FakeRuntimeFacade(
           sources: <RegisteredSource>[runtimeSource],
           categoriesBySourceId: <String, List<runtime_models.DiscoverCategory>>{
@@ -115,6 +132,8 @@ void main() {
       expect(categories.first.style.layoutFlexBasisPercent, 50);
       expect(categories.last.title, '女频');
       expect(categories.last.isActionable, isTrue);
+      expect(healthService.snapshotFor('json').totalSuccesses, 1);
+      expect(logger.infoLogs, contains('Runtime discover categories success'));
     });
 
     test('parseCategories allows direct discover source input', () async {
@@ -136,8 +155,12 @@ void main() {
     });
 
     test('loadBooks maps runtime discover books into domain books', () async {
+      final healthService = SourceHealthService();
+      final logger = _RecordingLogger();
       final runtimeSource = _buildRegisteredSource(id: 'mapped', name: '发现源');
       final service = ExploreService(
+        sourceHealthService: healthService,
+        logger: logger,
         sourceRuntimeFacade: _FakeRuntimeFacade(
           sources: <RegisteredSource>[runtimeSource],
           categoriesBySourceId: <String, List<runtime_models.DiscoverCategory>>{
@@ -184,8 +207,88 @@ void main() {
       expect(pageResult.books.first.title, '测试书籍');
       expect(pageResult.books.first.sourceId, 'mapped');
       expect(pageResult.books.first.detailUrl, 'https://example.com/book/1');
+      expect(healthService.snapshotFor('mapped').totalSuccesses, 1);
+      expect(logger.infoLogs, contains('Runtime discover books success'));
+    });
+
+    test('parseCategories records failure into health snapshot', () async {
+      final healthService = SourceHealthService();
+      final service = ExploreService(
+        sourceHealthService: healthService,
+        sourceRuntimeFacade: _FakeRuntimeFacade(
+          sources: <RegisteredSource>[
+            _buildRegisteredSource(id: 'broken', name: '坏源'),
+          ],
+          failingCategorySourceIds: const <String>{'broken'},
+        ),
+      );
+
+      final source = (await service.loadDiscoverSources()).first;
+      await expectLater(
+        service.parseCategories(source),
+        throwsA(isA<AppException>()),
+      );
+
+      final snapshot = healthService.snapshotFor('broken');
+      expect(snapshot.totalFailures, 1);
+    });
+
+    test('loadBooks records failure into health snapshot', () async {
+      final healthService = SourceHealthService();
+      final service = ExploreService(
+        sourceHealthService: healthService,
+        sourceRuntimeFacade: _FakeRuntimeFacade(
+          sources: <RegisteredSource>[
+            _buildRegisteredSource(id: 'broken_books', name: '坏书单源'),
+          ],
+          categoriesBySourceId: <String, List<runtime_models.DiscoverCategory>>{
+            'broken_books': const <runtime_models.DiscoverCategory>[
+              runtime_models.DiscoverCategory(
+                title: '推荐',
+                url: '/discover?page={{page}}',
+              ),
+            ],
+          },
+          failingBookSourceIds: const <String>{'broken_books'},
+        ),
+      );
+
+      final source = (await service.loadDiscoverSources()).first;
+      await expectLater(
+        service.loadBooks(
+          source: source,
+          category: const ExploreCategoryItem(
+            title: '推荐',
+            url: '/discover?page={{page}}',
+          ),
+          page: 1,
+        ),
+        throwsA(isA<AppException>()),
+      );
+
+      final snapshot = healthService.snapshotFor('broken_books');
+      expect(snapshot.totalFailures, 1);
     });
   });
+}
+
+class _RecordingLogger implements AppLogger {
+  final List<String> infoLogs = <String>[];
+
+  @override
+  void info(String message, {Map<String, Object?> context = const {}}) {
+    infoLogs.add(message);
+  }
+
+  @override
+  void warn(String message, {Map<String, Object?> context = const {}}) {}
+
+  @override
+  void error(
+    String message, {
+    AppException? exception,
+    Map<String, Object?> context = const {},
+  }) {}
 }
 
 RegisteredSource _buildRegisteredSource({
@@ -248,11 +351,15 @@ class _FakeRuntimeFacade extends SourceRuntimeFacade {
     this.categoriesBySourceId =
         const <String, List<runtime_models.DiscoverCategory>>{},
     this.booksBySourceId = const <String, List<runtime_models.Book>>{},
+    this.failingCategorySourceIds = const <String>{},
+    this.failingBookSourceIds = const <String>{},
   }) : super(scriptSourceRepository: _FakeScriptSourceRepository());
 
   final List<RegisteredSource> sources;
   final Map<String, List<runtime_models.DiscoverCategory>> categoriesBySourceId;
   final Map<String, List<runtime_models.Book>> booksBySourceId;
+  final Set<String> failingCategorySourceIds;
+  final Set<String> failingBookSourceIds;
 
   @override
   List<RegisteredSource> registeredScriptSources({bool enabledOnly = true}) {
@@ -262,6 +369,18 @@ class _FakeRuntimeFacade extends SourceRuntimeFacade {
     return sources
         .where((source) => source.definition.manifest.enabled)
         .toList(growable: false);
+  }
+
+  @override
+  Future<RegisteredSource?> ensureRegisteredScriptSourceById(
+    String sourceId,
+  ) async {
+    for (final source in sources) {
+      if (source.runtime.id == sourceId) {
+        return source;
+      }
+    }
+    return null;
   }
 
   @override
@@ -278,6 +397,13 @@ class _FakeRuntimeFacade extends SourceRuntimeFacade {
   Future<List<runtime_models.DiscoverCategory>> discoverCategories({
     required String sourceId,
   }) async {
+    if (failingCategorySourceIds.contains(sourceId)) {
+      throw AppException(
+        code: ErrorCode.ruleParse,
+        stage: ErrorStage.source,
+        briefMessage: '解析分类失败',
+      );
+    }
     return categoriesBySourceId[sourceId] ??
         const <runtime_models.DiscoverCategory>[];
   }
@@ -289,6 +415,13 @@ class _FakeRuntimeFacade extends SourceRuntimeFacade {
     required int page,
     required int pageSize,
   }) async {
+    if (failingBookSourceIds.contains(sourceId)) {
+      throw AppException(
+        code: ErrorCode.network,
+        stage: ErrorStage.search,
+        briefMessage: '加载书单失败',
+      );
+    }
     return booksBySourceId[sourceId] ?? const <runtime_models.Book>[];
   }
 }

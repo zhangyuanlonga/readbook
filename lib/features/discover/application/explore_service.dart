@@ -1,9 +1,12 @@
 import '../../../core/errors/app_exception.dart';
 import '../../../core/errors/error_codes.dart';
 import '../../../core/errors/error_stage.dart';
+import '../../../core/logging/app_logger.dart';
 import '../../../domain/entities/book.dart';
 import '../../../runtime/sources/source_registry.dart';
 import '../../../runtime/sources/source_result_models.dart' as runtime_models;
+import '../../source/application/source_health_service.dart';
+import '../../source/application/source_runtime_task_gate_service.dart';
 import '../../source/application/source_runtime_facade.dart';
 
 class ExploreCategoryStyle {
@@ -82,11 +85,23 @@ class DiscoverSourceSummary {
 }
 
 class ExploreService {
-  ExploreService({SourceRuntimeFacade? sourceRuntimeFacade})
-    : _sourceRuntimeFacade =
-          sourceRuntimeFacade ?? SourceRuntimeFacade.instance;
+  ExploreService({
+    SourceRuntimeFacade? sourceRuntimeFacade,
+    SourceHealthService? sourceHealthService,
+    SourceRuntimeTaskGateService? taskGateService,
+    AppLogger? logger,
+  }) : _sourceRuntimeFacade =
+           sourceRuntimeFacade ?? SourceRuntimeFacade.instance,
+       _sourceHealthService =
+           sourceHealthService ?? SourceHealthService.instance,
+       _taskGateService =
+           taskGateService ?? SourceRuntimeTaskGateService.instance,
+       _logger = logger ?? AppLogger.instance;
 
   final SourceRuntimeFacade? _sourceRuntimeFacade;
+  final SourceHealthService _sourceHealthService;
+  final SourceRuntimeTaskGateService _taskGateService;
+  final AppLogger _logger;
 
   Future<DiscoverSourceSummary> loadDiscoverSourceSummary() async {
     final sources = await _loadAvailableScriptSources();
@@ -185,6 +200,10 @@ class ExploreService {
   ) async {
     final facade = _sourceRuntimeFacade;
     if (facade == null) {
+      _sourceHealthService.markDiscoverCategoriesFailure(
+        sourceId: source.id,
+        message: '书源运行时不可用。',
+      );
       throw AppException(
         code: ErrorCode.unknownSource,
         stage: ErrorStage.source,
@@ -192,20 +211,87 @@ class ExploreService {
         briefMessage: '书源运行时不可用。',
       );
     }
-    final categories = await facade.discoverCategories(sourceId: source.id);
-    return categories
-        .map(
-          (item) => ExploreCategoryItem(
-            title: item.title.trim().isEmpty ? '未命名分类' : item.title.trim(),
-            url: item.url?.trim(),
-            style: ExploreCategoryStyle(
-              layoutFlexGrow: item.style.layoutFlexGrow,
-              layoutFlexBasisPercent: item.style.layoutFlexBasisPercent,
+    try {
+      final startedAt = DateTime.now();
+      final registered = await _lookupRegisteredSource(source.id);
+      final categories =
+          registered == null
+              ? await facade.discoverCategories(sourceId: source.id)
+              : await _taskGateService
+                  .run<List<runtime_models.DiscoverCategory>>(
+                    source: registered,
+                    taskKind: SourceRuntimeTaskKind.discoverCategories,
+                    action:
+                        () => facade.discoverCategories(sourceId: source.id),
+                  );
+      _sourceHealthService.markDiscoverCategoriesSuccess(sourceId: source.id);
+      _logger.info(
+        'Runtime discover categories success',
+        context: <String, Object?>{
+          'chain': 'discover',
+          'step': 'discoverCategories',
+          'sourceId': source.id,
+          'sourceName': source.name,
+          'categoryCount': categories.length,
+          'durationMs': DateTime.now().difference(startedAt).inMilliseconds,
+        },
+      );
+      return categories
+          .map(
+            (item) => ExploreCategoryItem(
+              title: item.title.trim().isEmpty ? '未命名分类' : item.title.trim(),
+              url: item.url?.trim(),
+              style: ExploreCategoryStyle(
+                layoutFlexGrow: item.style.layoutFlexGrow,
+                layoutFlexBasisPercent: item.style.layoutFlexBasisPercent,
+              ),
+              extra: item.extra,
             ),
-            extra: item.extra,
-          ),
-        )
-        .toList(growable: false);
+          )
+          .toList(growable: false);
+    } on AppException catch (error) {
+      _sourceHealthService.markDiscoverCategoriesFailure(
+        sourceId: source.id,
+        message: error.briefMessage,
+        error: error,
+      );
+      _logger.warn(
+        'Runtime discover categories failed',
+        context: <String, Object?>{
+          'chain': 'discover',
+          'step': 'discoverCategories',
+          'sourceId': source.id,
+          'sourceName': source.name,
+          'code': error.code.name,
+          'stage': error.stage.name,
+          'message': error.briefMessage,
+        },
+      );
+      rethrow;
+    } catch (error) {
+      _sourceHealthService.markDiscoverCategoriesFailure(
+        sourceId: source.id,
+        message: error.toString(),
+        error: error,
+      );
+      _logger.error(
+        'Runtime discover categories crashed',
+        exception: AppException(
+          code: ErrorCode.unknown,
+          stage: ErrorStage.source,
+          sourceId: source.id,
+          briefMessage: error.toString(),
+          cause: error,
+        ),
+        context: <String, Object?>{
+          'chain': 'discover',
+          'step': 'discoverCategories',
+          'sourceId': source.id,
+          'sourceName': source.name,
+        },
+      );
+      rethrow;
+    }
   }
 
   Future<ExploreBookPageResult> _loadRuntimeBooks({
@@ -216,6 +302,10 @@ class ExploreService {
   }) async {
     final facade = _sourceRuntimeFacade;
     if (facade == null) {
+      _sourceHealthService.markDiscoverBooksFailure(
+        sourceId: source.id,
+        message: '书源运行时不可用。',
+      );
       throw AppException(
         code: ErrorCode.unknownSource,
         stage: ErrorStage.search,
@@ -232,22 +322,102 @@ class ExploreService {
       ),
       extra: category.extra,
     );
-    final runtimeBooks = await facade.discoverBooks(
-      sourceId: source.id,
-      category: runtimeCategory,
-      page: page,
-      pageSize: pageSize,
-    );
-    final books = runtimeBooks
-        .map((book) => _mapRuntimeBookToDomain(book, sourceId: source.id))
-        .toList(growable: false);
-    return ExploreBookPageResult(
-      page: page,
-      pageSize: pageSize,
-      books: books,
-      requestUrl: '',
-      hasMore: books.length >= pageSize,
-    );
+    try {
+      final startedAt = DateTime.now();
+      final registered = await _lookupRegisteredSource(source.id);
+      final runtimeBooks =
+          registered == null
+              ? await facade.discoverBooks(
+                sourceId: source.id,
+                category: runtimeCategory,
+                page: page,
+                pageSize: pageSize,
+              )
+              : await _taskGateService.run<List<runtime_models.Book>>(
+                source: registered,
+                taskKind: SourceRuntimeTaskKind.discoverBooks,
+                action:
+                    () => facade.discoverBooks(
+                      sourceId: source.id,
+                      category: runtimeCategory,
+                      page: page,
+                      pageSize: pageSize,
+                    ),
+              );
+      _sourceHealthService.markDiscoverBooksSuccess(sourceId: source.id);
+      _logger.info(
+        'Runtime discover books success',
+        context: <String, Object?>{
+          'chain': 'discover',
+          'step': 'discoverBooks',
+          'sourceId': source.id,
+          'sourceName': source.name,
+          'categoryTitle': category.title,
+          'page': page,
+          'pageSize': pageSize,
+          'bookCount': runtimeBooks.length,
+          'durationMs': DateTime.now().difference(startedAt).inMilliseconds,
+        },
+      );
+      final books = runtimeBooks
+          .map((book) => _mapRuntimeBookToDomain(book, sourceId: source.id))
+          .toList(growable: false);
+      return ExploreBookPageResult(
+        page: page,
+        pageSize: pageSize,
+        books: books,
+        requestUrl: '',
+        hasMore: books.length >= pageSize,
+      );
+    } on AppException catch (error) {
+      _sourceHealthService.markDiscoverBooksFailure(
+        sourceId: source.id,
+        message: error.briefMessage,
+        error: error,
+      );
+      _logger.warn(
+        'Runtime discover books failed',
+        context: <String, Object?>{
+          'chain': 'discover',
+          'step': 'discoverBooks',
+          'sourceId': source.id,
+          'sourceName': source.name,
+          'categoryTitle': category.title,
+          'page': page,
+          'pageSize': pageSize,
+          'code': error.code.name,
+          'stage': error.stage.name,
+          'message': error.briefMessage,
+        },
+      );
+      rethrow;
+    } catch (error) {
+      _sourceHealthService.markDiscoverBooksFailure(
+        sourceId: source.id,
+        message: error.toString(),
+        error: error,
+      );
+      _logger.error(
+        'Runtime discover books crashed',
+        exception: AppException(
+          code: ErrorCode.unknown,
+          stage: ErrorStage.search,
+          sourceId: source.id,
+          briefMessage: error.toString(),
+          cause: error,
+        ),
+        context: <String, Object?>{
+          'chain': 'discover',
+          'step': 'discoverBooks',
+          'sourceId': source.id,
+          'sourceName': source.name,
+          'categoryTitle': category.title,
+          'page': page,
+          'pageSize': pageSize,
+        },
+      );
+      rethrow;
+    }
   }
 
   Book _mapRuntimeBookToDomain(
@@ -290,5 +460,12 @@ class ExploreService {
       return null;
     }
     return normalized;
+  }
+
+  Future<RegisteredSource?> _lookupRegisteredSource(String sourceId) async {
+    final facade = _sourceRuntimeFacade;
+    return facade == null
+        ? null
+        : await facade.ensureRegisteredScriptSourceById(sourceId);
   }
 }

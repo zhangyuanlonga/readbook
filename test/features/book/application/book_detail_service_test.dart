@@ -1,9 +1,11 @@
 import 'package:flutter_appread/core/errors/app_exception.dart';
 import 'package:flutter_appread/core/errors/error_codes.dart';
 import 'package:flutter_appread/core/errors/error_stage.dart';
+import 'package:flutter_appread/core/logging/app_logger.dart';
 import 'package:flutter_appread/domain/entities/script_source.dart';
 import 'package:flutter_appread/domain/repositories/script_source_repository.dart';
 import 'package:flutter_appread/features/book/application/book_detail_service.dart';
+import 'package:flutter_appread/features/source/application/source_health_service.dart';
 import 'package:flutter_appread/features/source/application/source_runtime_facade.dart';
 import 'package:flutter_appread/runtime/sources/source_contract.dart';
 import 'package:flutter_appread/runtime/sources/source_manifest.dart';
@@ -11,10 +13,19 @@ import 'package:flutter_appread/runtime/sources/source_registry.dart';
 import 'package:flutter_appread/runtime/sources/source_result_models.dart'
     as runtime_models;
 import 'package:flutter_test/flutter_test.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 void main() {
+  TestWidgetsFlutterBinding.ensureInitialized();
+
   group('BookDetailService', () {
+    setUp(() {
+      SharedPreferences.setMockInitialValues(<String, Object>{});
+    });
+
     test('loads detail and chapters from runtime facade', () async {
+      final healthService = SourceHealthService();
+      final logger = _RecordingLogger();
       final runtimeFacade = _FakeRuntimeFacade(
         sources: <RegisteredSource>[
           _buildRegisteredSource(id: 'source_1', name: '脚本源'),
@@ -47,7 +58,11 @@ void main() {
           ],
         },
       );
-      final service = BookDetailService(sourceRuntimeFacade: runtimeFacade);
+      final service = BookDetailService(
+        sourceRuntimeFacade: runtimeFacade,
+        sourceHealthService: healthService,
+        logger: logger,
+      );
 
       final result = await service.load(
         sourceId: 'source_1',
@@ -72,6 +87,10 @@ void main() {
       expect(result.sourceName, '脚本源');
       expect(result.tocFromCache, isFalse);
       expect(result.tocError, isNull);
+      final snapshot = healthService.snapshotFor('source_1');
+      expect(snapshot.totalSuccesses, 2);
+      expect(logger.infoLogs, contains('Runtime detail success'));
+      expect(logger.infoLogs, contains('Runtime chapters success'));
     });
 
     test('returns cached detail snapshot on repeated load', () async {
@@ -115,10 +134,12 @@ void main() {
     });
 
     test('throws unknown source when runtime source is missing', () async {
+      final healthService = SourceHealthService();
       final service = BookDetailService(
         sourceRuntimeFacade: _FakeRuntimeFacade(
           sources: const <RegisteredSource>[],
         ),
+        sourceHealthService: healthService,
       );
 
       try {
@@ -132,9 +153,31 @@ void main() {
         expect(error.code, ErrorCode.unknownSource);
         expect(error.stage, ErrorStage.detail);
         expect(error.briefMessage, contains('未找到书源'));
+        final snapshot = healthService.snapshotFor('missing');
+        expect(snapshot.totalFailures, 1);
+        expect(snapshot.lastFailureReason, contains('未找到书源'));
       }
     });
   });
+}
+
+class _RecordingLogger implements AppLogger {
+  final List<String> infoLogs = <String>[];
+
+  @override
+  void info(String message, {Map<String, Object?> context = const {}}) {
+    infoLogs.add(message);
+  }
+
+  @override
+  void warn(String message, {Map<String, Object?> context = const {}}) {}
+
+  @override
+  void error(
+    String message, {
+    AppException? exception,
+    Map<String, Object?> context = const {},
+  }) {}
 }
 
 RegisteredSource _buildRegisteredSource({

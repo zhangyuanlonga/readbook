@@ -245,6 +245,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
   int? _readerBatteryLevel;
   bool _readerBatteryReadFailed = false;
   int _autoReadTaskToken = 0;
+  int _chapterContentRequestToken = 0;
   int _preloadTaskToken = 0;
   bool _isAutoReadRunning = false;
   bool _isAutoReadSessionEnabled = false;
@@ -949,6 +950,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
     _cancelActiveSwitchSourceSearch();
+    _chapterContentRequestToken += 1;
     _commitReadingRecordSession();
     _syncSystemUiVisibility(force: true, visible: true);
     _overlayControlsController.stop();
@@ -8769,9 +8771,10 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
     required String? chapterTitle,
     required int? chapterIndex,
     required double targetRatio,
+    required int requestToken,
     bool commitChapterIdentity = false,
   }) async {
-    if (!mounted) {
+    if (!_isActiveChapterContentRequest(requestToken)) {
       return;
     }
 
@@ -8829,6 +8832,9 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
           maxWidth: _lastPaginationMaxWidth!,
           maxHeight: _lastPaginationMaxHeight!,
         );
+        if (!_isActiveChapterContentRequest(requestToken)) {
+          return;
+        }
         if (pages != null && pages.isNotEmpty) {
           precomputedParagraphs = effectiveParagraphs;
           precomputedPagedPages = pages;
@@ -9072,6 +9078,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
     if (!mounted) {
       return false;
     }
+    final requestToken = ++_chapterContentRequestToken;
 
     double? readingRecordStartRatio;
     final request = _chapterLoadPlanner.resolveLoadRequest(
@@ -9116,7 +9123,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
         chapterIndex: resolvedIndex,
       );
 
-      if (!mounted) {
+      if (!_isActiveChapterContentRequest(requestToken)) {
         return false;
       }
 
@@ -9132,12 +9139,16 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
         chapterTitle: request.chapterTitle,
         chapterIndex: resolvedIndex,
         targetRatio: targetRatio,
+        requestToken: requestToken,
         commitChapterIdentity: commitChapterIdentity,
       );
+      if (!_isActiveChapterContentRequest(requestToken)) {
+        return false;
+      }
       readingRecordStartRatio = targetRatio;
       return true;
     } on AppException catch (error) {
-      if (!mounted) {
+      if (!_isActiveChapterContentRequest(requestToken)) {
         return false;
       }
       final readableError = _toUserReadableError(error);
@@ -9149,7 +9160,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
       final switched = await _tryAutoSwitchSourceOnFailure();
       return switched;
     } catch (_) {
-      if (!mounted) {
+      if (!_isActiveChapterContentRequest(requestToken)) {
         return false;
       }
       const fallbackError = '加载正文失败。';
@@ -9160,8 +9171,8 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
       final switched = await _tryAutoSwitchSourceOnFailure();
       return switched;
     } finally {
-      _clearDelayedLoadingUi();
-      if (mounted) {
+      if (_isActiveChapterContentRequest(requestToken)) {
+        _clearDelayedLoadingUi();
         setState(() {
           _isLoadingContent = false;
         });
@@ -9174,6 +9185,10 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
         _reconcileAutoRead(restart: true);
       }
     }
+  }
+
+  bool _isActiveChapterContentRequest(int requestToken) {
+    return mounted && requestToken == _chapterContentRequestToken;
   }
 
   Future<void> _refreshBookshelfState() async {

@@ -7,7 +7,10 @@ import '../../../core/errors/error_stage.dart';
 import '../../../core/logging/app_logger.dart';
 import '../../../data/datasources/local/app_database.dart';
 import '../../../domain/entities/reader_document.dart';
+import '../../../runtime/sources/source_registry.dart';
 import '../../../runtime/sources/source_result_models.dart' as runtime_models;
+import '../../source/application/source_health_service.dart';
+import '../../source/application/source_runtime_task_gate_service.dart';
 import '../../source/application/source_runtime_facade.dart';
 import 'content_text_cleaner.dart';
 
@@ -62,16 +65,24 @@ class ChapterContentService {
   ChapterContentService({
     AppDatabase? database,
     SourceRuntimeFacade? sourceRuntimeFacade,
+    SourceHealthService? sourceHealthService,
+    SourceRuntimeTaskGateService? taskGateService,
     ContentTextCleaner? cleaner,
     AppLogger? logger,
   }) : _database = database ?? AppDatabase.instance,
        _sourceRuntimeFacade =
            sourceRuntimeFacade ?? SourceRuntimeFacade.instance,
+       _sourceHealthService =
+           sourceHealthService ?? SourceHealthService.instance,
+       _taskGateService =
+           taskGateService ?? SourceRuntimeTaskGateService.instance,
        _cleaner = cleaner ?? const ContentTextCleaner(),
        _logger = logger ?? AppLogger.instance;
 
   final AppDatabase _database;
   final SourceRuntimeFacade? _sourceRuntimeFacade;
+  final SourceHealthService _sourceHealthService;
+  final SourceRuntimeTaskGateService _taskGateService;
   final ContentTextCleaner _cleaner;
   final AppLogger _logger;
 
@@ -104,6 +115,18 @@ class ChapterContentService {
     final cached = _chapterCache[cacheKey];
     if (cached != null) {
       final decoded = _decodeCachedPayload(cached);
+      _logger.info(
+        'Runtime content cache hit',
+        context: <String, Object?>{
+          'chain': 'content',
+          'step': 'content',
+          'sourceId': normalizedSourceId,
+          'bookId': normalizedBookId,
+          'chapterUrl': normalizedChapterUrl,
+          'cacheHit': true,
+          'isImageContent': decoded.imageUrls.isNotEmpty,
+        },
+      );
       return ChapterContentResult(
         content: decoded.content,
         fromCache: true,
@@ -118,6 +141,19 @@ class ChapterContentService {
       if (persistedContent.isNotEmpty) {
         _chapterCache[cacheKey] = persistedContent;
         final decoded = _decodeCachedPayload(persistedContent);
+        _logger.info(
+          'Runtime content cache hit',
+          context: <String, Object?>{
+            'chain': 'content',
+            'step': 'content',
+            'sourceId': normalizedSourceId,
+            'bookId': normalizedBookId,
+            'chapterUrl': normalizedChapterUrl,
+            'cacheHit': true,
+            'cacheSource': 'database',
+            'isImageContent': decoded.imageUrls.isNotEmpty,
+          },
+        );
         return ChapterContentResult(
           content: decoded.content,
           fromCache: true,
@@ -164,6 +200,10 @@ class ChapterContentService {
             ? null
             : await facade.ensureRegisteredScriptSourceById(sourceId);
     if (facade == null || registered == null) {
+      _sourceHealthService.markContentFailure(
+        sourceId: sourceId,
+        message: '未找到书源：$sourceId',
+      );
       throw UnknownSourceException(
         briefMessage: '未找到书源：$sourceId',
         sourceId: sourceId,
@@ -187,23 +227,74 @@ class ChapterContentService {
       sourceId: sourceId,
     );
 
-    final content = await facade.content(
-      sourceId: sourceId,
-      book: runtimeBook,
-      chapter: runtimeChapter,
-    );
-
-    final normalizedImages = content.images
-        .map((item) => item.trim())
-        .where((item) => item.isNotEmpty)
-        .toList(growable: false);
-
-    if (normalizedImages.isNotEmpty) {
-      final payload = _encodeImageCachePayload(
-        normalizedImages,
-        imageHeaders: const <String, String>{},
+    try {
+      final startedAt = DateTime.now();
+      final content = await _taskGateService.run<runtime_models.Content>(
+        source: registered,
+        taskKind: SourceRuntimeTaskKind.content,
+        action:
+            () => facade.content(
+              sourceId: sourceId,
+              book: runtimeBook,
+              chapter: runtimeChapter,
+            ),
       );
-      _chapterCache[cacheKey] = payload;
+
+      final normalizedImages = content.images
+          .map((item) => item.trim())
+          .where((item) => item.isNotEmpty)
+          .toList(growable: false);
+
+      if (normalizedImages.isNotEmpty) {
+        final payload = _encodeImageCachePayload(
+          normalizedImages,
+          imageHeaders: const <String, String>{},
+        );
+        _chapterCache[cacheKey] = payload;
+        await _persistChapterCache(
+          cacheKey: cacheKey,
+          bookId: bookId,
+          sourceId: sourceId,
+          chapterIndex: chapterIndex,
+          chapterTitle: chapterTitle,
+          chapterUrl: chapterUrl,
+          content: payload,
+        );
+        _sourceHealthService.markContentSuccess(sourceId: sourceId);
+        _logger.info(
+          'Runtime content success',
+          context: <String, Object?>{
+            'chain': 'content',
+            'step': 'content',
+            'sourceId': sourceId,
+            'sourceName': registered.runtime.name,
+            'bookId': bookId,
+            'chapterUrl': chapterUrl,
+            'chapterIndex': chapterIndex,
+            'cacheHit': false,
+            'isImageContent': true,
+            'imageCount': normalizedImages.length,
+            'durationMs': DateTime.now().difference(startedAt).inMilliseconds,
+          },
+        );
+        return ChapterContentResult(
+          content: '',
+          fromCache: false,
+          imageUrls: normalizedImages,
+          displayChapterTitle: _normalizeOptionalText(content.title),
+        );
+      }
+
+      final normalizedContent = _cleaner.clean(content.content.trim());
+      if (normalizedContent.isEmpty) {
+        throw RuleMatchEmptyException(
+          briefMessage: '正文解析为空，请检查书源配置。',
+          stage: ErrorStage.content,
+          sourceId: sourceId,
+        );
+      }
+
+      _chapterCache[cacheKey] = normalizedContent;
       await _persistChapterCache(
         cacheKey: cacheKey,
         bookId: bookId,
@@ -211,41 +302,80 @@ class ChapterContentService {
         chapterIndex: chapterIndex,
         chapterTitle: chapterTitle,
         chapterUrl: chapterUrl,
-        content: payload,
+        content: normalizedContent,
       );
+      _sourceHealthService.markContentSuccess(sourceId: sourceId);
+      _logger.info(
+        'Runtime content success',
+        context: <String, Object?>{
+          'chain': 'content',
+          'step': 'content',
+          'sourceId': sourceId,
+          'sourceName': registered.runtime.name,
+          'bookId': bookId,
+          'chapterUrl': chapterUrl,
+          'chapterIndex': chapterIndex,
+          'cacheHit': false,
+          'isImageContent': false,
+          'contentLength': normalizedContent.length,
+          'durationMs': DateTime.now().difference(startedAt).inMilliseconds,
+        },
+      );
+
       return ChapterContentResult(
-        content: '',
+        content: normalizedContent,
         fromCache: false,
-        imageUrls: normalizedImages,
         displayChapterTitle: _normalizeOptionalText(content.title),
       );
-    }
-
-    final normalizedContent = _cleaner.clean(content.content.trim());
-    if (normalizedContent.isEmpty) {
-      throw RuleMatchEmptyException(
-        briefMessage: '正文解析为空，请检查书源配置。',
-        stage: ErrorStage.content,
+    } on AppException catch (error) {
+      _sourceHealthService.markContentFailure(
         sourceId: sourceId,
+        message: error.briefMessage,
+        error: error,
       );
+      _logger.warn(
+        'Runtime content failed',
+        context: <String, Object?>{
+          'chain': 'content',
+          'step': 'content',
+          'sourceId': sourceId,
+          'sourceName': registered.runtime.name,
+          'bookId': bookId,
+          'chapterUrl': chapterUrl,
+          'chapterIndex': chapterIndex,
+          'code': error.code.name,
+          'stage': error.stage.name,
+          'message': error.briefMessage,
+        },
+      );
+      rethrow;
+    } catch (error) {
+      _sourceHealthService.markContentFailure(
+        sourceId: sourceId,
+        message: error.toString(),
+        error: error,
+      );
+      _logger.error(
+        'Runtime content crashed',
+        exception: AppException(
+          code: ErrorCode.unknown,
+          stage: ErrorStage.content,
+          sourceId: sourceId,
+          briefMessage: error.toString(),
+          cause: error,
+        ),
+        context: <String, Object?>{
+          'chain': 'content',
+          'step': 'content',
+          'sourceId': sourceId,
+          'sourceName': registered.runtime.name,
+          'bookId': bookId,
+          'chapterUrl': chapterUrl,
+          'chapterIndex': chapterIndex,
+        },
+      );
+      rethrow;
     }
-
-    _chapterCache[cacheKey] = normalizedContent;
-    await _persistChapterCache(
-      cacheKey: cacheKey,
-      bookId: bookId,
-      sourceId: sourceId,
-      chapterIndex: chapterIndex,
-      chapterTitle: chapterTitle,
-      chapterUrl: chapterUrl,
-      content: normalizedContent,
-    );
-
-    return ChapterContentResult(
-      content: normalizedContent,
-      fromCache: false,
-      displayChapterTitle: _normalizeOptionalText(content.title),
-    );
   }
 
   Future<void> _persistChapterCache({

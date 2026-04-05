@@ -98,15 +98,63 @@ class SourceHealthService {
     bool enabled = true,
     int? latencyMs,
   }) {
-    final normalizedSourceId = sourceId.trim();
-    final current = snapshotFor(normalizedSourceId, enabled: enabled);
-    _snapshots[normalizedSourceId] = _snapshotResolver.recordSuccess(
-      current,
+    _recordSuccess(
+      sourceId: sourceId,
+      enabled: enabled,
       step: SourceHealthStep.search,
-      occurredAt: DateTime.now(),
       latencyMs: latencyMs,
     );
-    _schedulePersist();
+  }
+
+  void markDetailSuccess({
+    required String sourceId,
+    bool enabled = true,
+    int? latencyMs,
+  }) {
+    _recordSuccess(
+      sourceId: sourceId,
+      enabled: enabled,
+      step: SourceHealthStep.detail,
+      latencyMs: latencyMs,
+    );
+  }
+
+  void markChaptersSuccess({required String sourceId, bool enabled = true}) {
+    _recordSuccess(
+      sourceId: sourceId,
+      enabled: enabled,
+      step: SourceHealthStep.chapters,
+    );
+  }
+
+  void markContentSuccess({required String sourceId, bool enabled = true}) {
+    _recordSuccess(
+      sourceId: sourceId,
+      enabled: enabled,
+      step: SourceHealthStep.content,
+    );
+  }
+
+  void markDiscoverCategoriesSuccess({
+    required String sourceId,
+    bool enabled = true,
+  }) {
+    _recordSuccess(
+      sourceId: sourceId,
+      enabled: enabled,
+      step: SourceHealthStep.discoverCategories,
+    );
+  }
+
+  void markDiscoverBooksSuccess({
+    required String sourceId,
+    bool enabled = true,
+  }) {
+    _recordSuccess(
+      sourceId: sourceId,
+      enabled: enabled,
+      step: SourceHealthStep.discoverBooks,
+    );
   }
 
   void markSearchFailure({
@@ -115,6 +163,126 @@ class SourceHealthService {
     bool enabled = true,
     Object? error,
     bool markCooldown = false,
+  }) {
+    _recordFailure(
+      sourceId: sourceId,
+      enabled: enabled,
+      step: SourceHealthStep.search,
+      message: message,
+      error: error,
+      markCooldown: markCooldown,
+    );
+  }
+
+  void markDetailFailure({
+    required String sourceId,
+    required String? message,
+    bool enabled = true,
+    Object? error,
+    bool markCooldown = false,
+  }) {
+    _recordFailure(
+      sourceId: sourceId,
+      enabled: enabled,
+      step: SourceHealthStep.detail,
+      message: message,
+      error: error,
+      markCooldown: markCooldown,
+    );
+  }
+
+  void markChaptersFailure({
+    required String sourceId,
+    required String? message,
+    bool enabled = true,
+    Object? error,
+    bool markCooldown = false,
+  }) {
+    _recordFailure(
+      sourceId: sourceId,
+      enabled: enabled,
+      step: SourceHealthStep.chapters,
+      message: message,
+      error: error,
+      markCooldown: markCooldown,
+    );
+  }
+
+  void markContentFailure({
+    required String sourceId,
+    required String? message,
+    bool enabled = true,
+    Object? error,
+    bool markCooldown = false,
+  }) {
+    _recordFailure(
+      sourceId: sourceId,
+      enabled: enabled,
+      step: SourceHealthStep.content,
+      message: message,
+      error: error,
+      markCooldown: markCooldown,
+    );
+  }
+
+  void markDiscoverCategoriesFailure({
+    required String sourceId,
+    required String? message,
+    bool enabled = true,
+    Object? error,
+    bool markCooldown = false,
+  }) {
+    _recordFailure(
+      sourceId: sourceId,
+      enabled: enabled,
+      step: SourceHealthStep.discoverCategories,
+      message: message,
+      error: error,
+      markCooldown: markCooldown,
+    );
+  }
+
+  void markDiscoverBooksFailure({
+    required String sourceId,
+    required String? message,
+    bool enabled = true,
+    Object? error,
+    bool markCooldown = false,
+  }) {
+    _recordFailure(
+      sourceId: sourceId,
+      enabled: enabled,
+      step: SourceHealthStep.discoverBooks,
+      message: message,
+      error: error,
+      markCooldown: markCooldown,
+    );
+  }
+
+  void _recordSuccess({
+    required String sourceId,
+    required bool enabled,
+    required SourceHealthStep step,
+    int? latencyMs,
+  }) {
+    final normalizedSourceId = sourceId.trim();
+    final current = snapshotFor(normalizedSourceId, enabled: enabled);
+    _snapshots[normalizedSourceId] = _snapshotResolver.recordSuccess(
+      current,
+      step: step,
+      occurredAt: DateTime.now(),
+      latencyMs: latencyMs,
+    );
+    _schedulePersist();
+  }
+
+  void _recordFailure({
+    required String sourceId,
+    required String? message,
+    required bool enabled,
+    required SourceHealthStep step,
+    Object? error,
+    required bool markCooldown,
   }) {
     final normalizedSourceId = sourceId.trim();
     final current = snapshotFor(normalizedSourceId, enabled: enabled);

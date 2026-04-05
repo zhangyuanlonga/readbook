@@ -1,6 +1,14 @@
 import '../../../domain/entities/source_health.dart';
 
-enum SourceHealthStep { search, detail, chapters, content, check }
+enum SourceHealthStep {
+  search,
+  detail,
+  chapters,
+  content,
+  discoverCategories,
+  discoverBooks,
+  check,
+}
 
 class SourceHealthSnapshotResolver {
   const SourceHealthSnapshotResolver();

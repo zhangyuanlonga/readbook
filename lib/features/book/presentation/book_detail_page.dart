@@ -1472,7 +1472,9 @@ class _BookDetailPageState extends State<BookDetailPage> {
     }
     setState(() {
       _localBookMeta = localBook;
-      if (localBook != null && !_hasLocalRepairIssue(localBook)) {
+      if (localBook != null && localBook.format == LocalBookFormat.txt) {
+        _showLocalAdvancedOptions = true;
+      } else if (localBook != null && !_hasLocalRepairIssue(localBook)) {
         _showLocalAdvancedOptions = false;
       }
     });
@@ -1503,11 +1505,6 @@ class _BookDetailPageState extends State<BookDetailPage> {
 
     final localBook = _localBookMeta;
     if (localBook == null) {
-      return null;
-    }
-
-    final hasIssue = _hasLocalRepairIssue(localBook);
-    if (!hasIssue && !_showLocalAdvancedOptions) {
       return null;
     }
 

@@ -4,9 +4,13 @@ import 'dart:collection';
 import '../../../core/errors/app_exception.dart';
 import '../../../core/errors/error_codes.dart';
 import '../../../core/errors/error_stage.dart';
+import '../../../core/logging/app_logger.dart';
 import '../../../domain/entities/book_detail.dart';
 import '../../../domain/entities/chapter.dart';
+import '../../../runtime/sources/source_registry.dart';
 import '../../../runtime/sources/source_result_models.dart' as runtime_models;
+import '../../source/application/source_health_service.dart';
+import '../../source/application/source_runtime_task_gate_service.dart';
 import '../../source/application/source_runtime_facade.dart';
 
 class BookDetailLoadResult {
@@ -26,11 +30,23 @@ class BookDetailLoadResult {
 }
 
 class BookDetailService {
-  BookDetailService({SourceRuntimeFacade? sourceRuntimeFacade})
-    : _sourceRuntimeFacade =
-          sourceRuntimeFacade ?? SourceRuntimeFacade.instance;
+  BookDetailService({
+    SourceRuntimeFacade? sourceRuntimeFacade,
+    SourceHealthService? sourceHealthService,
+    SourceRuntimeTaskGateService? taskGateService,
+    AppLogger? logger,
+  }) : _sourceRuntimeFacade =
+           sourceRuntimeFacade ?? SourceRuntimeFacade.instance,
+       _sourceHealthService =
+           sourceHealthService ?? SourceHealthService.instance,
+       _taskGateService =
+           taskGateService ?? SourceRuntimeTaskGateService.instance,
+       _logger = logger ?? AppLogger.instance;
 
   final SourceRuntimeFacade? _sourceRuntimeFacade;
+  final SourceHealthService _sourceHealthService;
+  final SourceRuntimeTaskGateService _taskGateService;
+  final AppLogger _logger;
 
   static const int _maxDetailCacheEntries = 120;
   static const int _maxTocCacheEntries = 120;
@@ -176,11 +192,16 @@ class BookDetailService {
     required String cacheKey,
   }) async {
     final facade = _sourceRuntimeFacade;
+    var currentStep = ErrorStage.detail;
     final registered =
         facade == null
             ? null
             : await facade.ensureRegisteredScriptSourceById(sourceId);
     if (facade == null || registered == null) {
+      _sourceHealthService.markDetailFailure(
+        sourceId: sourceId,
+        message: '未找到书源：$sourceId',
+      );
       throw UnknownSourceException(
         briefMessage: '未找到书源：$sourceId',
         sourceId: sourceId,
@@ -194,65 +215,153 @@ class BookDetailService {
       detailUrl: detailUrl,
       sourceId: sourceId,
     );
-    final detailed = await facade.detail(sourceId: sourceId, book: runtimeBook);
-    final runtimeChapters = await facade.chapters(
-      sourceId: sourceId,
-      book: detailed,
-    );
-
-    final chapters = runtimeChapters
-        .map(
-          (chapter) => Chapter(
-            id: _buildScriptChapterId(
-              bookId: bookId,
-              chapterUrl: chapter.url,
-              index: chapter.index,
-            ),
-            bookId: bookId,
-            title:
-                chapter.title.trim().isNotEmpty
-                    ? chapter.title.trim()
-                    : chapter.isVolume
-                    ? '未命名分卷'
-                    : '第 ${chapter.index + 1} 章',
-            chapterUrl: chapter.url.trim(),
-            index: chapter.index,
-            isVolume: chapter.isVolume,
-          ),
-        )
-        .toList(growable: false);
-
-    if (chapters.isNotEmpty) {
-      _writeTocCache(cacheKey, chapters);
-    }
-
-    final result = BookDetailLoadResult(
-      detail: BookDetail(
-        id: bookId,
+    try {
+      final detailStartedAt = DateTime.now();
+      final detailed = await _runDetailTask(
+        source: registered,
+        action: () => facade.detail(sourceId: sourceId, book: runtimeBook),
+      );
+      _sourceHealthService.markDetailSuccess(
         sourceId: sourceId,
-        title:
-            detailed.title.trim().isNotEmpty
-                ? detailed.title.trim()
-                : (fallbackTitle ?? '未命名书籍'),
-        detailUrl:
-            detailed.detailUrl.trim().isNotEmpty
-                ? detailed.detailUrl.trim()
-                : detailUrl,
-        author: _normalizeOptionalText(detailed.author),
-        intro: _normalizeOptionalText(detailed.intro),
-        coverUrl: _normalizeOptionalText(detailed.cover),
-        tocUrl:
-            _normalizeOptionalText(detailed.tocUrl) ??
-            _normalizeOptionalText(detailed.extra['tocUrl']?.toString()) ??
-            _normalizeOptionalText(detailed.extra['catalogUrl']?.toString()),
-      ),
-      chapters: chapters,
-      sourceName: registered.runtime.name,
-      tocFromCache: false,
-      tocError: null,
-    );
-    _writeDetailCache(cacheKey, result);
-    return result;
+        latencyMs: DateTime.now().difference(detailStartedAt).inMilliseconds,
+      );
+      _logger.info(
+        'Runtime detail success',
+        context: <String, Object?>{
+          'chain': 'detail',
+          'step': 'detail',
+          'sourceId': sourceId,
+          'sourceName': registered.runtime.name,
+          'bookId': bookId,
+          'detailUrl': detailUrl,
+          'durationMs':
+              DateTime.now().difference(detailStartedAt).inMilliseconds,
+        },
+      );
+      currentStep = ErrorStage.toc;
+      final chaptersStartedAt = DateTime.now();
+      final runtimeChapters = await _runChaptersTask(
+        source: registered,
+        action: () => facade.chapters(sourceId: sourceId, book: detailed),
+      );
+      _sourceHealthService.markChaptersSuccess(sourceId: sourceId);
+      _logger.info(
+        'Runtime chapters success',
+        context: <String, Object?>{
+          'chain': 'detail',
+          'step': 'chapters',
+          'sourceId': sourceId,
+          'sourceName': registered.runtime.name,
+          'bookId': bookId,
+          'detailUrl': detailUrl,
+          'chapterCount': runtimeChapters.length,
+          'durationMs':
+              DateTime.now().difference(chaptersStartedAt).inMilliseconds,
+        },
+      );
+
+      final chapters = runtimeChapters
+          .map(
+            (chapter) => Chapter(
+              id: _buildScriptChapterId(
+                bookId: bookId,
+                chapterUrl: chapter.url,
+                index: chapter.index,
+              ),
+              bookId: bookId,
+              title:
+                  chapter.title.trim().isNotEmpty
+                      ? chapter.title.trim()
+                      : chapter.isVolume
+                      ? '未命名分卷'
+                      : '第 ${chapter.index + 1} 章',
+              chapterUrl: chapter.url.trim(),
+              index: chapter.index,
+              isVolume: chapter.isVolume,
+            ),
+          )
+          .toList(growable: false);
+
+      if (chapters.isNotEmpty) {
+        _writeTocCache(cacheKey, chapters);
+      }
+
+      final result = BookDetailLoadResult(
+        detail: BookDetail(
+          id: bookId,
+          sourceId: sourceId,
+          title:
+              detailed.title.trim().isNotEmpty
+                  ? detailed.title.trim()
+                  : (fallbackTitle ?? '未命名书籍'),
+          detailUrl:
+              detailed.detailUrl.trim().isNotEmpty
+                  ? detailed.detailUrl.trim()
+                  : detailUrl,
+          author: _normalizeOptionalText(detailed.author),
+          intro: _normalizeOptionalText(detailed.intro),
+          coverUrl: _normalizeOptionalText(detailed.cover),
+          tocUrl:
+              _normalizeOptionalText(detailed.tocUrl) ??
+              _normalizeOptionalText(detailed.extra['tocUrl']?.toString()) ??
+              _normalizeOptionalText(detailed.extra['catalogUrl']?.toString()),
+        ),
+        chapters: chapters,
+        sourceName: registered.runtime.name,
+        tocFromCache: false,
+        tocError: null,
+      );
+      _writeDetailCache(cacheKey, result);
+      return result;
+    } on AppException catch (error) {
+      _recordStepFailure(
+        sourceId: sourceId,
+        stage: currentStep,
+        message: error.briefMessage,
+        error: error,
+      );
+      _logger.warn(
+        'Runtime detail chain failed',
+        context: <String, Object?>{
+          'chain': 'detail',
+          'step': currentStep.name,
+          'sourceId': sourceId,
+          'sourceName': registered.runtime.name,
+          'bookId': bookId,
+          'detailUrl': detailUrl,
+          'code': error.code.name,
+          'stage': error.stage.name,
+          'message': error.briefMessage,
+        },
+      );
+      rethrow;
+    } catch (error) {
+      _recordStepFailure(
+        sourceId: sourceId,
+        stage: currentStep,
+        message: error.toString(),
+        error: error,
+      );
+      _logger.error(
+        'Runtime detail chain crashed',
+        exception: AppException(
+          code: ErrorCode.unknown,
+          stage: currentStep,
+          sourceId: sourceId,
+          briefMessage: error.toString(),
+          cause: error,
+        ),
+        context: <String, Object?>{
+          'chain': 'detail',
+          'step': currentStep.name,
+          'sourceId': sourceId,
+          'sourceName': registered.runtime.name,
+          'bookId': bookId,
+          'detailUrl': detailUrl,
+        },
+      );
+      rethrow;
+    }
   }
 
   String _buildScriptChapterId({
@@ -273,6 +382,53 @@ class BookDetailService {
       return null;
     }
     return normalized;
+  }
+
+  Future<runtime_models.Book> _runDetailTask({
+    required RegisteredSource source,
+    required Future<runtime_models.Book> Function() action,
+  }) {
+    return _taskGateService.run<runtime_models.Book>(
+      source: source,
+      taskKind: SourceRuntimeTaskKind.detail,
+      action: action,
+    );
+  }
+
+  Future<List<runtime_models.Chapter>> _runChaptersTask({
+    required RegisteredSource source,
+    required Future<List<runtime_models.Chapter>> Function() action,
+  }) {
+    return _taskGateService.run<List<runtime_models.Chapter>>(
+      source: source,
+      taskKind: SourceRuntimeTaskKind.chapters,
+      action: action,
+    );
+  }
+
+  void _recordStepFailure({
+    required String sourceId,
+    required ErrorStage stage,
+    required String message,
+    Object? error,
+  }) {
+    switch (stage) {
+      case ErrorStage.toc:
+        _sourceHealthService.markChaptersFailure(
+          sourceId: sourceId,
+          message: message,
+          error: error,
+        );
+        break;
+      case ErrorStage.detail:
+      default:
+        _sourceHealthService.markDetailFailure(
+          sourceId: sourceId,
+          message: message,
+          error: error,
+        );
+        break;
+    }
   }
 }
 
