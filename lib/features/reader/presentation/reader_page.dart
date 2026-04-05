@@ -12,6 +12,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_svg/flutter_svg.dart';
 import 'package:go_router/go_router.dart';
 import 'package:image/image.dart' as img;
 import 'package:path/path.dart' as p;
@@ -36,6 +37,7 @@ import '../../../domain/entities/bookshelf_book.dart';
 import '../../../domain/entities/chapter.dart';
 import '../../../domain/entities/reader_document.dart';
 import '../../../domain/entities/reader_settings.dart';
+import '../../../domain/entities/source_health.dart';
 import '../../../domain/entities/reading_progress.dart';
 import '../../../domain/entities/reader_toc_snapshot.dart';
 import '../../../domain/repositories/bookmark_repository.dart';
@@ -44,6 +46,7 @@ import '../../book/application/book_detail_service.dart';
 import '../../book/presentation/book_detail_route.dart';
 import '../../search/application/search_hit_cache_service.dart';
 import '../../search/application/search_service.dart';
+import '../../source/application/source_health_service.dart';
 import '../../source/application/source_runtime_facade.dart';
 import '../application/content_provider.dart';
 import '../application/chapter_content_service.dart';
@@ -55,6 +58,7 @@ import '../application/reader_chapter_cache_decoder.dart';
 import '../application/reader_chapter_load_planner.dart';
 import '../application/reader_chapter_flow.dart';
 import '../application/reader_chapter_navigation.dart';
+import '../application/reader_document_render_model.dart';
 import '../application/reader_font_registry_service.dart';
 import '../application/reader_jump_facade.dart';
 import '../application/reader_jump_planner.dart';
@@ -150,6 +154,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
   final SearchHitCacheService _searchHitCacheService = SearchHitCacheService();
   final SourceSwitchScoreService _switchSourceScoreService =
       SourceSwitchScoreService();
+  final SourceHealthService _sourceHealthService = SourceHealthService.instance;
   final ReaderSourceSwitchCoordinator _sourceSwitchCoordinator =
       const ReaderSourceSwitchCoordinator();
   final ReaderSourceSwitchTargetResolver _sourceSwitchTargetResolver =
@@ -1815,7 +1820,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
   }
 
   Widget _buildStandardReaderList(_ReaderThemeColors colors) {
-    final paragraphs = _paragraphs;
+    final renderItems = _buildCurrentReaderRenderItems();
 
     final bottomInset = _effectiveBottomSafeInset(context);
     final bodyLeft =
@@ -1859,9 +1864,9 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
           bodyRight,
           bodyBottom + 96 + bottomInset,
         ),
-        itemCount: paragraphs.isEmpty ? 1 : paragraphs.length,
+        itemCount: renderItems.isEmpty ? 1 : renderItems.length,
         itemBuilder: (context, index) {
-          if (paragraphs.isEmpty) {
+          if (renderItems.isEmpty) {
             return _buildSelectableParagraphItem(
               paragraph: _content,
               paragraphIndex: 0,
@@ -1869,14 +1874,9 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
               colors: colors,
             );
           }
-
-          final paragraph = paragraphs[index];
-          final isLast = index == paragraphs.length - 1;
-
-          return _buildSelectableParagraphItem(
-            paragraph: paragraph,
-            paragraphIndex: index,
-            isLast: isLast,
+          return _buildSelectableReaderBlockItem(
+            item: renderItems[index],
+            isLast: index == renderItems.length - 1,
             colors: colors,
           );
         },
@@ -1963,26 +1963,36 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
     required bool isActive,
     required _ReaderThemeColors colors,
   }) {
-    final paragraphs =
-        chapter.paragraphs.isEmpty
-            ? <String>[chapter.content]
-            : chapter.paragraphs;
+    final renderItems = buildReaderRenderBlockItems(chapter.document);
     final body = Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        for (var index = 0; index < paragraphs.length; index += 1)
+        if (renderItems.isEmpty)
           isActive
               ? _buildSelectableParagraphItem(
-                paragraph: paragraphs[index],
-                paragraphIndex: index,
-                isLast: index == paragraphs.length - 1,
+                paragraph: chapter.content,
+                paragraphIndex: 0,
+                isLast: true,
                 colors: colors,
               )
               : _buildStaticParagraphItem(
-                paragraph: paragraphs[index],
-                isLast: index == paragraphs.length - 1,
+                paragraph: chapter.content,
+                isLast: true,
                 colors: colors,
-              ),
+              )
+        else
+          for (var index = 0; index < renderItems.length; index += 1)
+            isActive
+                ? _buildSelectableReaderBlockItem(
+                  item: renderItems[index],
+                  isLast: index == renderItems.length - 1,
+                  colors: colors,
+                )
+                : _buildStaticReaderBlockItem(
+                  item: renderItems[index],
+                  isLast: index == renderItems.length - 1,
+                  colors: colors,
+                ),
       ],
     );
 
@@ -2019,6 +2029,140 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
             baseStyle: textStyle,
           ),
           textAlign: _paragraphTextAlign(_settings),
+        ),
+      ),
+    );
+  }
+
+  List<ReaderRenderBlockItem> _buildCurrentReaderRenderItems() {
+    return buildReaderRenderBlockItems(_document);
+  }
+
+  ReaderRenderTextItem? _readerRenderTextItemForParagraphIndex(
+    int paragraphIndex,
+  ) {
+    for (final item in _buildCurrentReaderRenderItems()) {
+      if (item is ReaderRenderTextItem &&
+          item.paragraphIndex == paragraphIndex) {
+        return item;
+      }
+    }
+    return null;
+  }
+
+  Widget _buildStaticReaderBlockItem({
+    required ReaderRenderBlockItem item,
+    required bool isLast,
+    required _ReaderThemeColors colors,
+  }) {
+    if (item is ReaderRenderImageItem) {
+      return _buildInlineImageParagraphItem(
+        imageUrl: item.imageUrl,
+        isLast: isLast,
+        colors: colors,
+      );
+    }
+    if (item is! ReaderRenderTextItem) {
+      return const SizedBox.shrink();
+    }
+
+    final textStyle = _readerBlockTextStyle(item, colors);
+    final displayText = _displayTextForRenderItem(item);
+    final indentLength = _indentLengthForRenderItem(item);
+
+    return RepaintBoundary(
+      child: Padding(
+        padding: EdgeInsets.only(
+          bottom: _readerBlockSpacing(item, isLast: isLast),
+        ),
+        child: Text.rich(
+          _buildParagraphDisplayTextSpan(
+            displayText: displayText,
+            indentLength: indentLength,
+            baseStyle: textStyle,
+          ),
+          textAlign: _textAlignForRenderItem(item),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildSelectableReaderBlockItem({
+    required ReaderRenderBlockItem item,
+    required bool isLast,
+    required _ReaderThemeColors colors,
+  }) {
+    if (item is ReaderRenderImageItem) {
+      return _buildInlineImageParagraphItem(
+        imageUrl: item.imageUrl,
+        isLast: isLast,
+        colors: colors,
+      );
+    }
+    if (item is! ReaderRenderTextItem) {
+      return const SizedBox.shrink();
+    }
+    if (item.kind == ReaderRenderTextKind.paragraph) {
+      return _buildSelectableParagraphItem(
+        paragraph: item.text,
+        paragraphIndex: item.paragraphIndex ?? 0,
+        isLast: isLast,
+        colors: colors,
+      );
+    }
+
+    final textStyle = _readerBlockTextStyle(item, colors);
+    final displayText = _displayTextForRenderItem(item);
+    final indentLength = _indentLengthForRenderItem(item);
+
+    return RepaintBoundary(
+      child: Padding(
+        padding: EdgeInsets.only(
+          bottom: _readerBlockSpacing(item, isLast: isLast),
+        ),
+        child: LayoutBuilder(
+          builder: (context, constraints) {
+            final paragraphIndex = item.paragraphIndex ?? 0;
+            final bookmarkRanges =
+                _bookmarkRangesByParagraph[paragraphIndex] ??
+                const <_BookmarkRange>[];
+            final textSpan =
+                bookmarkRanges.isNotEmpty
+                    ? _buildBookmarkTextSpan(
+                      displayText: displayText,
+                      ranges: bookmarkRanges,
+                      indentLength: indentLength,
+                      baseStyle: textStyle,
+                      colors: colors,
+                    )
+                    : _buildParagraphDisplayTextSpan(
+                      displayText: displayText,
+                      indentLength: indentLength,
+                      baseStyle: textStyle,
+                    );
+
+            return GestureDetector(
+              behavior: HitTestBehavior.translucent,
+              onTapUp: (details) {
+                final handled = _handleBookmarkTap(
+                  paragraphContext: context,
+                  paragraphIndex: paragraphIndex,
+                  paragraphText: item.text,
+                  localPosition: details.localPosition,
+                  maxWidth: constraints.maxWidth,
+                  textStyle: textStyle,
+                );
+                if (handled) {
+                  _suppressNextReaderTap = true;
+                }
+              },
+              child: Text.rich(
+                textSpan,
+                textAlign: _textAlignForRenderItem(item),
+                textDirection: Directionality.of(context),
+              ),
+            );
+          },
         ),
       ),
     );
@@ -3527,6 +3671,14 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
     required int retryNonce,
   }) {
     final uri = Uri.tryParse(requestUrl);
+    if (_isSvgImageUrl(requestUrl)) {
+      return _buildSvgImageWidget(
+        requestUrl: requestUrl,
+        colors: colors,
+        sourceUrl: sourceUrl,
+        retryNonce: retryNonce,
+      );
+    }
     if (requestUrl.startsWith('data:image/')) {
       return _buildDataUriImage(
         dataUri: requestUrl,
@@ -3572,6 +3724,72 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
     );
   }
 
+  bool _isSvgImageUrl(String imageUrl) {
+    if (imageUrl.startsWith('data:image/svg+xml')) {
+      return true;
+    }
+    final uri = Uri.tryParse(imageUrl);
+    final path = uri?.path.toLowerCase() ?? imageUrl.toLowerCase();
+    return path.endsWith('.svg') || path.endsWith('.svgz');
+  }
+
+  Widget _buildSvgImageWidget({
+    required String requestUrl,
+    required _ReaderThemeColors colors,
+    required String sourceUrl,
+    required int retryNonce,
+  }) {
+    final uri = Uri.tryParse(requestUrl);
+    Widget placeholderBuilder(BuildContext context) {
+      return AspectRatio(
+        aspectRatio: 3 / 4,
+        child: Center(
+          child: CircularProgressIndicator(strokeWidth: 2, color: colors.meta),
+        ),
+      );
+    }
+
+    Widget errorBuilder(
+      BuildContext context,
+      Object error,
+      StackTrace stackTrace,
+    ) {
+      return _buildMangaImageError(colors, sourceUrl, retryNonce);
+    }
+
+    try {
+      if (requestUrl.startsWith('data:image/svg+xml')) {
+        final decoded = _decodeDataUriImage(dataUri: requestUrl);
+        if (decoded == null) {
+          throw const FormatException('Invalid SVG data URI');
+        }
+        return SvgPicture.string(
+          decoded.text,
+          fit: BoxFit.fitWidth,
+          placeholderBuilder: placeholderBuilder,
+          errorBuilder: errorBuilder,
+        );
+      }
+      if (uri != null && uri.scheme == 'file') {
+        return SvgPicture.file(
+          File.fromUri(uri),
+          fit: BoxFit.fitWidth,
+          placeholderBuilder: placeholderBuilder,
+          errorBuilder: errorBuilder,
+        );
+      }
+      return SvgPicture.network(
+        requestUrl,
+        headers: _chapterImageHeaders.isEmpty ? null : _chapterImageHeaders,
+        fit: BoxFit.fitWidth,
+        placeholderBuilder: placeholderBuilder,
+        errorBuilder: errorBuilder,
+      );
+    } catch (_) {
+      return _buildMangaImageError(colors, sourceUrl, retryNonce);
+    }
+  }
+
   Widget _buildDataUriImage({
     required String dataUri,
     required _ReaderThemeColors colors,
@@ -3579,14 +3797,12 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
     required int retryNonce,
   }) {
     try {
-      final commaIndex = dataUri.indexOf(',');
-      if (commaIndex <= 0) {
+      final decoded = _decodeDataUriImage(dataUri: dataUri);
+      if (decoded == null) {
         throw const FormatException('Invalid data URI');
       }
-      final encoded = dataUri.substring(commaIndex + 1);
-      final bytes = base64Decode(encoded);
       return Image.memory(
-        bytes,
+        decoded.bytes,
         fit: BoxFit.fitWidth,
         filterQuality: _resolveMangaFilterQuality(),
         errorBuilder: (context, error, stackTrace) {
@@ -3596,6 +3812,26 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
     } catch (_) {
       return _buildMangaImageError(colors, sourceUrl, retryNonce);
     }
+  }
+
+  _DecodedDataUriImage? _decodeDataUriImage({required String dataUri}) {
+    final commaIndex = dataUri.indexOf(',');
+    if (commaIndex <= 0) {
+      return null;
+    }
+    final metadata = dataUri.substring(5, commaIndex);
+    final encoded = dataUri.substring(commaIndex + 1);
+    final isBase64 = metadata.toLowerCase().contains(';base64');
+    final mediaType = metadata.split(';').first.trim().toLowerCase();
+    final bytes =
+        isBase64
+            ? base64Decode(encoded)
+            : Uint8List.fromList(utf8.encode(Uri.decodeComponent(encoded)));
+    return _DecodedDataUriImage(
+      mediaType: mediaType,
+      bytes: bytes,
+      text: utf8.decode(bytes, allowMalformed: true),
+    );
   }
 
   Widget _buildMangaImageError(
@@ -4091,10 +4327,25 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
 
     final paragraph = paragraphs[slice.paragraphIndex];
     final rawText = paragraph.substring(slice.start, slice.end);
+    final renderItem = _readerRenderTextItemForParagraphIndex(
+      slice.paragraphIndex,
+    );
     final displayText =
-        slice.start == 0 ? _applyParagraphIndent(rawText) : rawText;
+        renderItem == null
+            ? (slice.start == 0 ? _applyParagraphIndent(rawText) : rawText)
+            : switch (renderItem.kind) {
+              ReaderRenderTextKind.paragraph =>
+                slice.start == 0 ? _applyParagraphIndent(rawText) : rawText,
+              ReaderRenderTextKind.listItem => rawText,
+              ReaderRenderTextKind.quote => rawText,
+              ReaderRenderTextKind.caption => rawText,
+              ReaderRenderTextKind.title => rawText,
+            };
 
-    final textStyle = _paragraphTextStyle(colors);
+    final textStyle =
+        renderItem == null
+            ? _paragraphTextStyle(colors)
+            : _readerBlockTextStyle(renderItem, colors);
     return LayoutBuilder(
       builder: (context, constraints) {
         final ranges =
@@ -4175,7 +4426,10 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
 
         Widget textWidget = Text.rich(
           textSpan,
-          textAlign: _paragraphTextAlign(_settings),
+          textAlign:
+              renderItem == null
+                  ? _paragraphTextAlign(_settings)
+                  : _textAlignForRenderItem(renderItem),
           textDirection: Directionality.of(context),
         );
 
@@ -5195,6 +5449,92 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
     );
   }
 
+  TextStyle _readerBlockTextStyle(
+    ReaderRenderTextItem item,
+    _ReaderThemeColors colors,
+  ) {
+    final base = _paragraphTextStyle(colors);
+    return switch (item.kind) {
+      ReaderRenderTextKind.paragraph => base,
+      ReaderRenderTextKind.listItem => base.copyWith(
+        height: (base.height ?? 1.7) + 0.05,
+      ),
+      ReaderRenderTextKind.quote => base.copyWith(
+        fontStyle: FontStyle.italic,
+        color: colors.meta,
+        height: (base.height ?? 1.7) + 0.08,
+      ),
+      ReaderRenderTextKind.caption => base.copyWith(
+        fontSize: (base.fontSize ?? 18) * 0.9,
+        color: colors.meta,
+        height: 1.45,
+      ),
+      ReaderRenderTextKind.title => base.copyWith(
+        fontSize: (base.fontSize ?? 20) * _titleScaleForLevel(item.level),
+        fontWeight: FontWeight.w800,
+        height: 1.35,
+      ),
+    };
+  }
+
+  double _titleScaleForLevel(int level) {
+    return switch (level) {
+      <= 1 => 1.34,
+      2 => 1.22,
+      3 => 1.12,
+      _ => 1.04,
+    };
+  }
+
+  double _readerBlockSpacing(
+    ReaderRenderTextItem item, {
+    required bool isLast,
+  }) {
+    if (isLast) {
+      return 0;
+    }
+    return switch (item.kind) {
+      ReaderRenderTextKind.paragraph => _settings.paragraphSpacing,
+      ReaderRenderTextKind.listItem => _settings.paragraphSpacing * 0.7,
+      ReaderRenderTextKind.quote => max(
+        _settings.paragraphSpacing * 0.85,
+        14.0,
+      ),
+      ReaderRenderTextKind.caption => _settings.paragraphSpacing * 0.6,
+      ReaderRenderTextKind.title => max(_settings.paragraphSpacing, 18.0),
+    };
+  }
+
+  TextAlign _textAlignForRenderItem(ReaderRenderTextItem item) {
+    return switch (item.kind) {
+      ReaderRenderTextKind.title => TextAlign.start,
+      ReaderRenderTextKind.listItem => TextAlign.start,
+      ReaderRenderTextKind.quote => TextAlign.start,
+      ReaderRenderTextKind.caption => TextAlign.center,
+      ReaderRenderTextKind.paragraph => _paragraphTextAlign(_settings),
+    };
+  }
+
+  String _displayTextForRenderItem(ReaderRenderTextItem item) {
+    return switch (item.kind) {
+      ReaderRenderTextKind.paragraph => _applyParagraphIndent(item.text),
+      ReaderRenderTextKind.listItem => '• ${item.text}',
+      ReaderRenderTextKind.quote => item.text,
+      ReaderRenderTextKind.caption => item.text,
+      ReaderRenderTextKind.title => item.text,
+    };
+  }
+
+  int _indentLengthForRenderItem(ReaderRenderTextItem item) {
+    return switch (item.kind) {
+      ReaderRenderTextKind.paragraph => _paragraphIndentLength(),
+      ReaderRenderTextKind.listItem => 0,
+      ReaderRenderTextKind.quote => 0,
+      ReaderRenderTextKind.caption => 0,
+      ReaderRenderTextKind.title => 0,
+    };
+  }
+
   Color _effectiveBodyTextColorForSettings(
     _ReaderThemeColors colors,
     ReaderSettings settings,
@@ -5811,6 +6151,9 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
     required SourceSwitchScoreStore scoreStore,
     required bool scoreRankingEnabled,
   }) {
+    final sourceHealthBySourceId = _sourceHealthService.snapshotsFor(
+      books.map((book) => book.sourceId),
+    );
     return buildSwitchSourceCandidates(
       books: books,
       sourceNames: sourceNames,
@@ -5820,6 +6163,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
       targetAuthor: targetAuthor,
       hitCountBySource: hitCountBySource,
       scoreStore: scoreStore,
+      sourceHealthBySourceId: sourceHealthBySourceId,
       scoreRankingEnabled: scoreRankingEnabled,
       buildBookScoreKey: _switchSourceScoreService.buildBookScoreKey,
       lagTolerance: _kSwitchSourceLagTolerance,
@@ -5998,11 +6342,14 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
   SwitchSourceCandidate _rebuildSwitchSourceCandidateScore(
     SwitchSourceCandidate candidate, {
     required SourceSwitchScoreStore scoreStore,
+    Map<String, SourceHealthSnapshot> sourceHealthBySourceId =
+        const <String, SourceHealthSnapshot>{},
     required bool scoreRankingEnabled,
   }) {
     return rebuildSwitchSourceCandidateScore(
       candidate,
       scoreStore: scoreStore,
+      sourceHealthBySourceId: sourceHealthBySourceId,
       scoreRankingEnabled: scoreRankingEnabled,
       buildBookScoreKey: _switchSourceScoreService.buildBookScoreKey,
       hitCountCap: _kSwitchSourceHitCountCap,
@@ -7151,6 +7498,12 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
       if (message.contains('未找到本地书籍')) {
         return '未找到本地书籍，请确认文件是否存在或重新导入。';
       }
+      if (message.contains('目录尚未建立完成') || message.contains('正在建立目录')) {
+        return '本地图书正在解析，请稍后再试。';
+      }
+      if (message.contains('目录已过期')) {
+        return '检测到本地图书目录已过期，请先在详情页重新索引。';
+      }
       if (message.contains('索引失败')) {
         return '本地书籍索引失败，请在详情页重新索引。';
       }
@@ -7297,6 +7650,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
       displayTitle: displayTitle,
       chapterIndex: chapterIndex,
       content: snapshot.result.content,
+      document: snapshot.result.document,
       paragraphs: List<String>.unmodifiable(effectiveParagraphs),
       isCached: snapshot.isCached,
     );
@@ -7344,6 +7698,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
         displayTitle: (_chapterTitle ?? chapter.title).trim(),
         chapterIndex: chapterIndex,
         content: _content,
+        document: _document,
         paragraphs: List<String>.unmodifiable(currentParagraphs),
         isCached: _isCurrentChapterCached,
       );
@@ -7583,6 +7938,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
           displayTitle: (_chapterTitle ?? currentChapter.title).trim(),
           chapterIndex: _currentIndex!,
           content: _content,
+          document: _document,
           paragraphs: List<String>.unmodifiable(effectiveParagraphs),
           isCached: _isCurrentChapterCached,
         ),
@@ -8583,6 +8939,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
                   (_chapterTitle ?? resolvedCurrentChapter.title).trim(),
               chapterIndex: _currentIndex!,
               content: decoded.content,
+              document: _document,
               paragraphs:
                   _paragraphs.isEmpty
                       ? List<String>.unmodifiable(<String>[decoded.content])
@@ -14716,6 +15073,7 @@ class _ContinuousTextChapter {
     required this.displayTitle,
     required this.chapterIndex,
     required this.content,
+    required this.document,
     required this.paragraphs,
     required this.isCached,
   });
@@ -14726,6 +15084,7 @@ class _ContinuousTextChapter {
   final String displayTitle;
   final int chapterIndex;
   final String content;
+  final ReaderDocument document;
   final List<String> paragraphs;
   final bool isCached;
 }
@@ -15357,4 +15716,16 @@ class _SelectionStyle {
   final bool bold;
   final bool underline;
   final bool wavy;
+}
+
+class _DecodedDataUriImage {
+  const _DecodedDataUriImage({
+    required this.mediaType,
+    required this.bytes,
+    required this.text,
+  });
+
+  final String mediaType;
+  final Uint8List bytes;
+  final String text;
 }

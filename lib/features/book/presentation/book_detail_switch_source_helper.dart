@@ -4,10 +4,12 @@ import 'package:flutter/material.dart';
 
 import '../../../core/errors/app_exception.dart';
 import '../../../domain/entities/book.dart';
+import '../../../domain/entities/source_health.dart';
 import '../../reader/application/source_switch_score_service.dart';
 import '../../reader/application/switch_source_shared.dart';
 import '../../search/application/search_hit_cache_service.dart';
 import '../../search/application/search_service.dart';
+import '../../source/application/source_health_service.dart';
 import '../../source/application/source_runtime_facade.dart';
 import '../../../runtime/sources/source_registry.dart';
 
@@ -32,12 +34,14 @@ class BookDetailSwitchSourceHelper {
   }) : _switchSourceSearchService = switchSourceSearchService,
        _searchHitCacheService = searchHitCacheService,
        _switchSourceScoreService = switchSourceScoreService,
+       _sourceHealthService = SourceHealthService.instance,
        _sourceRuntimeFacade =
            sourceRuntimeFacade ?? SourceRuntimeFacade.instance;
 
   final SearchService _switchSourceSearchService;
   final SearchHitCacheService _searchHitCacheService;
   final SourceSwitchScoreService _switchSourceScoreService;
+  final SourceHealthService _sourceHealthService;
   final SourceRuntimeFacade _sourceRuntimeFacade;
 
   static const int _candidateLimit = 24;
@@ -206,6 +210,9 @@ class BookDetailSwitchSourceHelper {
     required SourceSwitchScoreStore scoreStore,
     required bool scoreRankingEnabled,
   }) {
+    final sourceHealthBySourceId = _sourceHealthService.snapshotsFor(
+      books.map((book) => book.sourceId),
+    );
     return buildSwitchSourceCandidates(
       books: books,
       sourceNames: sourceNames,
@@ -215,6 +222,7 @@ class BookDetailSwitchSourceHelper {
       targetAuthor: targetAuthor,
       hitCountBySource: hitCountBySource,
       scoreStore: scoreStore,
+      sourceHealthBySourceId: sourceHealthBySourceId,
       scoreRankingEnabled: scoreRankingEnabled,
       buildBookScoreKey: _switchSourceScoreService.buildBookScoreKey,
       lagTolerance: _lagTolerance,
@@ -380,6 +388,9 @@ class BookDetailSwitchSourceHelper {
             (item) => rebuildCandidateScore(
               item,
               scoreStore: scoreStore,
+              sourceHealthBySourceId: _sourceHealthService.snapshotsFor(
+                current.candidates.map((candidate) => candidate.book.sourceId),
+              ),
               scoreRankingEnabled: scoreRankingEnabled,
             ),
           )
@@ -404,11 +415,14 @@ class BookDetailSwitchSourceHelper {
   SwitchSourceCandidate rebuildCandidateScore(
     SwitchSourceCandidate candidate, {
     required SourceSwitchScoreStore scoreStore,
+    Map<String, SourceHealthSnapshot> sourceHealthBySourceId =
+        const <String, SourceHealthSnapshot>{},
     required bool scoreRankingEnabled,
   }) {
     return rebuildSwitchSourceCandidateScore(
       candidate,
       scoreStore: scoreStore,
+      sourceHealthBySourceId: sourceHealthBySourceId,
       scoreRankingEnabled: scoreRankingEnabled,
       buildBookScoreKey: _switchSourceScoreService.buildBookScoreKey,
       hitCountCap: _hitCountCap,

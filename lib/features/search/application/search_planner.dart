@@ -23,11 +23,19 @@ class _SearchPlanner {
                 .where((source) => sourceIds.contains(source.runtime.id))
                 .toList(growable: false);
     final skippedSourceIds = filteredSources
-        .where((source) => _profileService.isCoolingDown(source.runtime.id))
+        .where(
+          (source) =>
+              _profileService.isCoolingDown(source.runtime.id) ||
+              _profileService.isUnavailable(source.runtime.id),
+        )
         .map((source) => source.runtime.id)
         .toList(growable: false);
     filteredSources = filteredSources
-        .where((source) => !_profileService.isCoolingDown(source.runtime.id))
+        .where(
+          (source) =>
+              !_profileService.isCoolingDown(source.runtime.id) &&
+              !_profileService.isUnavailable(source.runtime.id),
+        )
         .toList(growable: false);
     final allowInteractiveChallenge =
         scenario != SearchPlanScenario.autoSwitchSource;
@@ -47,6 +55,15 @@ class _SearchPlanner {
           ),
         )
         .toList(growable: false);
+    targets.sort((a, b) {
+      final healthDiff =
+          _profileService.healthPriority(a.sourceId)
+              .compareTo(_profileService.healthPriority(b.sourceId));
+      if (healthDiff != 0) {
+        return healthDiff;
+      }
+      return a.sourceName.compareTo(b.sourceName);
+    });
     final profileSummary = <SearchExecutionProfile, int>{};
     for (final target in targets) {
       profileSummary[target.profile] = (profileSummary[target.profile] ?? 0) + 1;

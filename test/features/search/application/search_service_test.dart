@@ -7,6 +7,7 @@ import 'package:flutter_appread/core/logging/app_logger.dart';
 import 'package:flutter_appread/domain/entities/script_source.dart';
 import 'package:flutter_appread/domain/repositories/script_source_repository.dart';
 import 'package:flutter_appread/features/search/application/search_service.dart';
+import 'package:flutter_appread/features/source/application/source_health_auto_disable_service.dart';
 import 'package:flutter_appread/features/source/application/source_runtime_facade.dart';
 import 'package:flutter_appread/runtime/session/source_session.dart';
 import 'package:flutter_appread/runtime/sources/source_contract.dart';
@@ -155,16 +156,21 @@ void main() {
       expect(report.bookSourceHits.values.single, hasLength(2));
     });
 
-    test('reports unknown source when no runtime source is available', () async {
-      final service = SearchService(
-        sourceRuntimeFacade: _FakeRuntimeFacade(sources: const <RegisteredSource>[]),
-      );
+    test(
+      'reports unknown source when no runtime source is available',
+      () async {
+        final service = SearchService(
+          sourceRuntimeFacade: _FakeRuntimeFacade(
+            sources: const <RegisteredSource>[],
+          ),
+        );
 
-      await expectLater(
-        service.search(keyword: '凡人'),
-        throwsA(isA<AppException>()),
-      );
-    });
+        await expectLater(
+          service.search(keyword: '凡人'),
+          throwsA(isA<AppException>()),
+        );
+      },
+    );
 
     test('search stage does not invoke detail chapters or content', () async {
       final runtimeFacade = _FakeRuntimeFacade(
@@ -192,70 +198,80 @@ void main() {
       expect(runtimeFacade.contentCallCount, 0);
     });
 
-    test('auto switch scenario limits sources and disables interactive challenge', () async {
-      final sources = List<RegisteredSource>.generate(
-        12,
-        (index) => _buildRegisteredSource(id: 's$index', name: '源$index'),
-      );
-      final runtimeFacade = _FakeRuntimeFacade(
-        sources: sources,
-        booksBySourceId: <String, List<runtime_models.Book>>{
-          for (final source in sources)
-            source.runtime.id: <runtime_models.Book>[
-              runtime_models.Book(
-                title: '书${source.runtime.id}',
-                author: '作者',
-                detailUrl: 'https://example.com/${source.runtime.id}',
-              ),
-            ],
-        },
-      );
-      final service = SearchService(sourceRuntimeFacade: runtimeFacade);
+    test(
+      'auto switch scenario limits sources and disables interactive challenge',
+      () async {
+        final sources = List<RegisteredSource>.generate(
+          12,
+          (index) => _buildRegisteredSource(id: 's$index', name: '源$index'),
+        );
+        final runtimeFacade = _FakeRuntimeFacade(
+          sources: sources,
+          booksBySourceId: <String, List<runtime_models.Book>>{
+            for (final source in sources)
+              source.runtime.id: <runtime_models.Book>[
+                runtime_models.Book(
+                  title: '书${source.runtime.id}',
+                  author: '作者',
+                  detailUrl: 'https://example.com/${source.runtime.id}',
+                ),
+              ],
+          },
+        );
+        final service = SearchService(sourceRuntimeFacade: runtimeFacade);
 
-      final report = await service.search(
-        keyword: '凡人',
-        scenario: SearchPlanScenario.autoSwitchSource,
-      );
+        final report = await service.search(
+          keyword: '凡人',
+          scenario: SearchPlanScenario.autoSwitchSource,
+        );
 
-      expect(report.sourceCount, 8);
-      expect(runtimeFacade.searchCalls, hasLength(8));
-      expect(
-        runtimeFacade.searchCalls.every((call) => !call.allowInteractiveChallenge),
-        isTrue,
-      );
-    });
+        expect(report.sourceCount, 8);
+        expect(runtimeFacade.searchCalls, hasLength(8));
+        expect(
+          runtimeFacade.searchCalls.every(
+            (call) => !call.allowInteractiveChallenge,
+          ),
+          isTrue,
+        );
+      },
+    );
 
-    test('switch source scenario keeps selected sources and allows interactive challenge', () async {
-      final runtimeFacade = _FakeRuntimeFacade(
-        sources: <RegisteredSource>[
-          _buildRegisteredSource(id: 's1', name: '源1'),
-          _buildRegisteredSource(id: 's2', name: '源2'),
-          _buildRegisteredSource(id: 's3', name: '源3'),
-        ],
-        booksBySourceId: <String, List<runtime_models.Book>>{
-          's1': const <runtime_models.Book>[],
-          's2': const <runtime_models.Book>[],
-          's3': const <runtime_models.Book>[],
-        },
-      );
-      final service = SearchService(sourceRuntimeFacade: runtimeFacade);
+    test(
+      'switch source scenario keeps selected sources and allows interactive challenge',
+      () async {
+        final runtimeFacade = _FakeRuntimeFacade(
+          sources: <RegisteredSource>[
+            _buildRegisteredSource(id: 's1', name: '源1'),
+            _buildRegisteredSource(id: 's2', name: '源2'),
+            _buildRegisteredSource(id: 's3', name: '源3'),
+          ],
+          booksBySourceId: <String, List<runtime_models.Book>>{
+            's1': const <runtime_models.Book>[],
+            's2': const <runtime_models.Book>[],
+            's3': const <runtime_models.Book>[],
+          },
+        );
+        final service = SearchService(sourceRuntimeFacade: runtimeFacade);
 
-      final report = await service.search(
-        keyword: '凡人',
-        scenario: SearchPlanScenario.switchSource,
-        sourceIds: const <String>['s2', 's3'],
-      );
+        final report = await service.search(
+          keyword: '凡人',
+          scenario: SearchPlanScenario.switchSource,
+          sourceIds: const <String>['s2', 's3'],
+        );
 
-      expect(report.sourceCount, 2);
-      expect(
-        runtimeFacade.searchCalls.map((call) => call.sourceId),
-        unorderedEquals(<String>['s2', 's3']),
-      );
-      expect(
-        runtimeFacade.searchCalls.every((call) => call.allowInteractiveChallenge),
-        isTrue,
-      );
-    });
+        expect(report.sourceCount, 2);
+        expect(
+          runtimeFacade.searchCalls.map((call) => call.sourceId),
+          unorderedEquals(<String>['s2', 's3']),
+        );
+        expect(
+          runtimeFacade.searchCalls.every(
+            (call) => call.allowInteractiveChallenge,
+          ),
+          isTrue,
+        );
+      },
+    );
 
     test('search debug logging includes profile summary', () async {
       final logger = _RecordingLogger();
@@ -290,27 +306,17 @@ void main() {
         (entry) => entry.message == 'Search started',
       );
       expect(started.context['profileSummary'], isNotNull);
-      expect(
-        started.context['profileSummary'],
-        containsPair('httpLight', 1),
-      );
+      expect(started.context['profileSummary'], containsPair('httpLight', 1));
       expect(
         started.context['profileSummary'],
         containsPair('browserHeavy', 1),
       );
-      expect(
-        started.context['profileSummary'],
-        containsPair('jsHeavy', 1),
-      );
+      expect(started.context['profileSummary'], containsPair('jsHeavy', 1));
     });
 
     test('budget scheduler does not exceed total budget', () async {
       final controls = _BudgetSearchControls(
-        costsBySourceId: <String, int>{
-          'browser': 3,
-          'http1': 1,
-          'http2': 1,
-        },
+        costsBySourceId: <String, int>{'browser': 3, 'http1': 1, 'http2': 1},
       );
       final runtimeFacade = _FakeRuntimeFacade(
         sources: <RegisteredSource>[
@@ -374,202 +380,202 @@ void main() {
       expect(controls.maxObservedBudget, 3);
     });
 
-    test('macos uses conservative default budget for heavy runtime search', () async {
-      SharedPreferences.setMockInitialValues(<String, Object>{
-        'search.system.maxConcurrentSources': 6,
-      });
-      final controls = _BudgetSearchControls(
-        costsBySourceId: <String, int>{
-          'browser': 3,
-          'http1': 1,
-          'http2': 1,
-        },
-      );
-      final runtimeFacade = _FakeRuntimeFacade(
-        sources: <RegisteredSource>[
-          _buildRegisteredSource(
-            id: 'browser',
-            name: '浏览器源',
-            capabilities: const <String>{'novel', 'browser'},
-          ),
-          _buildRegisteredSource(id: 'http1', name: '轻源1'),
-          _buildRegisteredSource(id: 'http2', name: '轻源2'),
-        ],
-        booksBySourceId: <String, List<runtime_models.Book>>{
-          'browser': const <runtime_models.Book>[
-            runtime_models.Book(
-              title: '浏览器结果',
-              author: '',
-              detailUrl: 'https://example.com/browser',
+    test(
+      'macos uses conservative default budget for heavy runtime search',
+      () async {
+        SharedPreferences.setMockInitialValues(<String, Object>{
+          'search.system.maxConcurrentSources': 6,
+        });
+        final controls = _BudgetSearchControls(
+          costsBySourceId: <String, int>{'browser': 3, 'http1': 1, 'http2': 1},
+        );
+        final runtimeFacade = _FakeRuntimeFacade(
+          sources: <RegisteredSource>[
+            _buildRegisteredSource(
+              id: 'browser',
+              name: '浏览器源',
+              capabilities: const <String>{'novel', 'browser'},
             ),
+            _buildRegisteredSource(id: 'http1', name: '轻源1'),
+            _buildRegisteredSource(id: 'http2', name: '轻源2'),
           ],
-          'http1': const <runtime_models.Book>[
-            runtime_models.Book(
-              title: '轻源1结果',
-              author: '',
-              detailUrl: 'https://example.com/http1',
+          booksBySourceId: <String, List<runtime_models.Book>>{
+            'browser': const <runtime_models.Book>[
+              runtime_models.Book(
+                title: '浏览器结果',
+                author: '',
+                detailUrl: 'https://example.com/browser',
+              ),
+            ],
+            'http1': const <runtime_models.Book>[
+              runtime_models.Book(
+                title: '轻源1结果',
+                author: '',
+                detailUrl: 'https://example.com/http1',
+              ),
+            ],
+            'http2': const <runtime_models.Book>[
+              runtime_models.Book(
+                title: '轻源2结果',
+                author: '',
+                detailUrl: 'https://example.com/http2',
+              ),
+            ],
+          },
+          budgetControls: controls,
+        );
+        final service = SearchService(
+          sourceRuntimeFacade: runtimeFacade,
+          runtimePlatform: SearchRuntimePlatform.macos,
+        );
+
+        final searchFuture = service.search(
+          keyword: '凡人',
+          scenario: SearchPlanScenario.globalSearch,
+        );
+
+        await controls.waitUntilStartedCount(2);
+        expect(controls.maxObservedBudget, 2);
+        expect(runtimeFacade.searchCalls.map((call) => call.sourceId), <String>[
+          'http1',
+          'http2',
+        ]);
+
+        controls.complete('http1');
+        controls.complete('http2');
+        await controls.waitUntilStartedCount(3);
+        expect(runtimeFacade.searchCalls.map((call) => call.sourceId), <String>[
+          'http1',
+          'http2',
+          'browser',
+        ]);
+        controls.complete('browser');
+
+        final report = await searchFuture;
+        expect(report.books, hasLength(3));
+        expect(controls.maxObservedBudget, 3);
+      },
+    );
+
+    test(
+      'android uses higher default budget for mixed runtime search',
+      () async {
+        SharedPreferences.setMockInitialValues(<String, Object>{
+          'search.system.maxConcurrentSources': 6,
+        });
+        final controls = _BudgetSearchControls(
+          costsBySourceId: <String, int>{'browser': 3, 'http1': 1, 'http2': 1},
+        );
+        final runtimeFacade = _FakeRuntimeFacade(
+          sources: <RegisteredSource>[
+            _buildRegisteredSource(
+              id: 'browser',
+              name: '浏览器源',
+              capabilities: const <String>{'novel', 'browser'},
             ),
+            _buildRegisteredSource(id: 'http1', name: '轻源1'),
+            _buildRegisteredSource(id: 'http2', name: '轻源2'),
           ],
-          'http2': const <runtime_models.Book>[
-            runtime_models.Book(
-              title: '轻源2结果',
-              author: '',
-              detailUrl: 'https://example.com/http2',
-            ),
+          booksBySourceId: <String, List<runtime_models.Book>>{
+            'browser': const <runtime_models.Book>[
+              runtime_models.Book(
+                title: '浏览器结果',
+                author: '',
+                detailUrl: 'https://example.com/browser',
+              ),
+            ],
+            'http1': const <runtime_models.Book>[
+              runtime_models.Book(
+                title: '轻源1结果',
+                author: '',
+                detailUrl: 'https://example.com/http1',
+              ),
+            ],
+            'http2': const <runtime_models.Book>[
+              runtime_models.Book(
+                title: '轻源2结果',
+                author: '',
+                detailUrl: 'https://example.com/http2',
+              ),
+            ],
+          },
+          budgetControls: controls,
+        );
+        final service = SearchService(
+          sourceRuntimeFacade: runtimeFacade,
+          runtimePlatform: SearchRuntimePlatform.android,
+        );
+
+        final searchFuture = service.search(
+          keyword: '凡人',
+          scenario: SearchPlanScenario.globalSearch,
+        );
+
+        await controls.waitUntilStartedCount(3);
+        expect(controls.maxObservedBudget, 5);
+        controls.complete('browser');
+        controls.complete('http1');
+        controls.complete('http2');
+
+        final report = await searchFuture;
+        expect(report.books, hasLength(3));
+        expect(controls.maxObservedBudget, 5);
+      },
+    );
+
+    test(
+      'cancelled search does not report in-flight task as failure or launch follow-up task',
+      () async {
+        SharedPreferences.setMockInitialValues(<String, Object>{
+          'search.system.maxConcurrentSources': 1,
+        });
+        final token = SearchCancellationToken();
+        final runtimeFacade = _FakeRuntimeFacade(
+          sources: <RegisteredSource>[
+            _buildRegisteredSource(id: 's1', name: '源1'),
+            _buildRegisteredSource(id: 's2', name: '源2'),
           ],
-        },
-        budgetControls: controls,
-      );
-      final service = SearchService(
-        sourceRuntimeFacade: runtimeFacade,
-        runtimePlatform: SearchRuntimePlatform.macos,
-      );
+          booksBySourceId: <String, List<runtime_models.Book>>{
+            's1': const <runtime_models.Book>[
+              runtime_models.Book(
+                title: '书1',
+                author: '',
+                detailUrl: 'https://example.com/s1',
+              ),
+            ],
+            's2': const <runtime_models.Book>[
+              runtime_models.Book(
+                title: '书2',
+                author: '',
+                detailUrl: 'https://example.com/s2',
+              ),
+            ],
+          },
+          responseDelayBySourceId: <String, Duration>{
+            's1': const Duration(milliseconds: 80),
+          },
+        );
+        final service = SearchService(sourceRuntimeFacade: runtimeFacade);
 
-      final searchFuture = service.search(
-        keyword: '凡人',
-        scenario: SearchPlanScenario.globalSearch,
-      );
+        final searchFuture = service.search(
+          keyword: '凡人',
+          cancellationToken: token,
+        );
 
-      await controls.waitUntilStartedCount(2);
-      expect(controls.maxObservedBudget, 2);
-      expect(
-        runtimeFacade.searchCalls.map((call) => call.sourceId),
-        <String>['http1', 'http2'],
-      );
+        while (runtimeFacade.searchCalls.isEmpty) {
+          await Future<void>.delayed(const Duration(milliseconds: 10));
+        }
+        token.cancel();
 
-      controls.complete('http1');
-      controls.complete('http2');
-      await controls.waitUntilStartedCount(3);
-      expect(
-        runtimeFacade.searchCalls.map((call) => call.sourceId),
-        <String>['http1', 'http2', 'browser'],
-      );
-      controls.complete('browser');
-
-      final report = await searchFuture;
-      expect(report.books, hasLength(3));
-      expect(controls.maxObservedBudget, 3);
-    });
-
-    test('android uses higher default budget for mixed runtime search', () async {
-      SharedPreferences.setMockInitialValues(<String, Object>{
-        'search.system.maxConcurrentSources': 6,
-      });
-      final controls = _BudgetSearchControls(
-        costsBySourceId: <String, int>{
-          'browser': 3,
-          'http1': 1,
-          'http2': 1,
-        },
-      );
-      final runtimeFacade = _FakeRuntimeFacade(
-        sources: <RegisteredSource>[
-          _buildRegisteredSource(
-            id: 'browser',
-            name: '浏览器源',
-            capabilities: const <String>{'novel', 'browser'},
-          ),
-          _buildRegisteredSource(id: 'http1', name: '轻源1'),
-          _buildRegisteredSource(id: 'http2', name: '轻源2'),
-        ],
-        booksBySourceId: <String, List<runtime_models.Book>>{
-          'browser': const <runtime_models.Book>[
-            runtime_models.Book(
-              title: '浏览器结果',
-              author: '',
-              detailUrl: 'https://example.com/browser',
-            ),
-          ],
-          'http1': const <runtime_models.Book>[
-            runtime_models.Book(
-              title: '轻源1结果',
-              author: '',
-              detailUrl: 'https://example.com/http1',
-            ),
-          ],
-          'http2': const <runtime_models.Book>[
-            runtime_models.Book(
-              title: '轻源2结果',
-              author: '',
-              detailUrl: 'https://example.com/http2',
-            ),
-          ],
-        },
-        budgetControls: controls,
-      );
-      final service = SearchService(
-        sourceRuntimeFacade: runtimeFacade,
-        runtimePlatform: SearchRuntimePlatform.android,
-      );
-
-      final searchFuture = service.search(
-        keyword: '凡人',
-        scenario: SearchPlanScenario.globalSearch,
-      );
-
-      await controls.waitUntilStartedCount(3);
-      expect(controls.maxObservedBudget, 5);
-      controls.complete('browser');
-      controls.complete('http1');
-      controls.complete('http2');
-
-      final report = await searchFuture;
-      expect(report.books, hasLength(3));
-      expect(controls.maxObservedBudget, 5);
-    });
-
-    test('cancelled search does not report in-flight task as failure or launch follow-up task', () async {
-      SharedPreferences.setMockInitialValues(<String, Object>{
-        'search.system.maxConcurrentSources': 1,
-      });
-      final token = SearchCancellationToken();
-      final runtimeFacade = _FakeRuntimeFacade(
-        sources: <RegisteredSource>[
-          _buildRegisteredSource(id: 's1', name: '源1'),
-          _buildRegisteredSource(id: 's2', name: '源2'),
-        ],
-        booksBySourceId: <String, List<runtime_models.Book>>{
-          's1': const <runtime_models.Book>[
-            runtime_models.Book(
-              title: '书1',
-              author: '',
-              detailUrl: 'https://example.com/s1',
-            ),
-          ],
-          's2': const <runtime_models.Book>[
-            runtime_models.Book(
-              title: '书2',
-              author: '',
-              detailUrl: 'https://example.com/s2',
-            ),
-          ],
-        },
-        responseDelayBySourceId: <String, Duration>{
-          's1': const Duration(milliseconds: 80),
-        },
-      );
-      final service = SearchService(
-        sourceRuntimeFacade: runtimeFacade,
-      );
-
-      final searchFuture = service.search(
-        keyword: '凡人',
-        cancellationToken: token,
-      );
-
-      while (runtimeFacade.searchCalls.isEmpty) {
-        await Future<void>.delayed(const Duration(milliseconds: 10));
-      }
-      token.cancel();
-
-      final report = await searchFuture;
-      expect(report.failedSourceCount, 0);
-      expect(report.successSourceCount, 0);
-      expect(report.books, isEmpty);
-      expect(runtimeFacade.searchCalls.map((call) => call.sourceId), <String>[
-        's1',
-      ]);
-    });
+        final report = await searchFuture;
+        expect(report.failedSourceCount, 0);
+        expect(report.successSourceCount, 0);
+        expect(report.books, isEmpty);
+        expect(runtimeFacade.searchCalls.map((call) => call.sourceId), <String>[
+          's1',
+        ]);
+      },
+    );
 
     test('cooldown skips source after repeated failures', () async {
       final runtimeFacade = _FakeRuntimeFacade(
@@ -602,10 +608,7 @@ void main() {
       final cooldownLog = logger.warnLogs.lastWhere(
         (entry) => entry.message == 'Search sources skipped by cooldown',
       );
-      expect(
-        cooldownLog.context['sourceIds'],
-        contains('browser_source'),
-      );
+      expect(cooldownLog.context['sourceIds'], contains('browser_source'));
     });
 
     test('failure history escalates browser source profile summary', () async {
@@ -644,6 +647,27 @@ void main() {
         started.context['profileSummary'],
         containsPair('browserHeavy', 1),
       );
+    });
+
+    test('search failure triggers auto disable evaluation', () async {
+      final runtimeFacade = _FakeRuntimeFacade(
+        sources: <RegisteredSource>[
+          _buildRegisteredSource(id: 'browser_source', name: '浏览器源'),
+        ],
+      );
+      runtimeFacade.throwOnSearchForSourceId = 'browser_source';
+      final autoDisableService = _RecordingAutoDisableService();
+      final service = SearchService(
+        sourceRuntimeFacade: runtimeFacade,
+        sourceHealthAutoDisableService: autoDisableService,
+      );
+
+      final report = await service.search(keyword: '凡人');
+
+      expect(report.failedSourceCount, 1);
+      expect(autoDisableService.calls, hasLength(1));
+      expect(autoDisableService.calls.single.sourceId, 'browser_source');
+      expect(autoDisableService.calls.single.trigger, 'search');
     });
   });
 }
@@ -710,7 +734,9 @@ class _FakeRuntimeFacade extends SourceRuntimeFacade {
   }
 
   @override
-  Future<ScriptSourceReloadReport> reloadScriptSources({bool enabledOnly = true}) async {
+  Future<ScriptSourceReloadReport> reloadScriptSources({
+    bool enabledOnly = true,
+  }) async {
     return ScriptSourceReloadReport(
       loaded: registeredScriptSources(enabledOnly: enabledOnly),
       failures: const <ScriptSourceReloadFailure>[],
@@ -801,6 +827,45 @@ class _FakeScriptSourceRepository implements ScriptSourceRepository {
   @override
   Stream<List<ScriptSource>> watchAll() =>
       const Stream<List<ScriptSource>>.empty();
+}
+
+class _RecordingAutoDisableService extends SourceHealthAutoDisableService {
+  _RecordingAutoDisableService()
+    : super(
+        sourceRuntimeFacade: _FakeRuntimeFacade(
+          sources: const <RegisteredSource>[],
+        ),
+      );
+
+  final List<_AutoDisableCall> calls = <_AutoDisableCall>[];
+
+  @override
+  Future<SourceHealthAutoDisableResult> evaluateSource({
+    required String sourceId,
+    String? sourceName,
+    required String trigger,
+  }) async {
+    calls.add(
+      _AutoDisableCall(
+        sourceId: sourceId,
+        sourceName: sourceName,
+        trigger: trigger,
+      ),
+    );
+    return const SourceHealthAutoDisableResult(didDisable: false);
+  }
+}
+
+class _AutoDisableCall {
+  const _AutoDisableCall({
+    required this.sourceId,
+    required this.sourceName,
+    required this.trigger,
+  });
+
+  final String sourceId;
+  final String? sourceName;
+  final String trigger;
 }
 
 class _RecordingLogger implements AppLogger {

@@ -1,18 +1,20 @@
 part of 'search_service.dart';
 
 class _SearchRuntimeProfileService {
-  _SearchRuntimeProfileService();
+  _SearchRuntimeProfileService({required SourceHealthService healthService})
+    : _healthService = healthService;
 
-  static const Duration _cooldownDuration = Duration(minutes: 2);
-  final Map<String, _SourceRuntimeHealth> _healthBySourceId =
-      <String, _SourceRuntimeHealth>{};
+  final SourceHealthService _healthService;
 
   SearchExecutionProfile resolveProfile({
     required RegisteredSource source,
     required SearchPlanScenario scenario,
     required bool allowInteractiveChallenge,
   }) {
-    final health = _healthBySourceId[source.runtime.id];
+    final health = _healthService.snapshotFor(
+      source.runtime.id,
+      enabled: source.definition.manifest.enabled,
+    );
     final capabilities =
         source.definition.manifest.capabilities
             .map((item) => item.trim().toLowerCase())
@@ -34,8 +36,8 @@ class _SearchRuntimeProfileService {
     final isLikelyBrowserHeavy =
         declaresBrowser &&
         (domains.length > 1 || scenario == SearchPlanScenario.globalSearch);
-    final hasBrowserRisk = (health?.browserRiskCount ?? 0) > 0;
-    final hasRepeatedFailures = (health?.totalFailures ?? 0) >= 2;
+    final hasBrowserRisk = health.browserRiskCount > 0;
+    final hasRepeatedFailures = health.totalFailures >= 2;
 
     if (!allowInteractiveChallenge && declaresBrowser) {
       return SearchExecutionProfile.browserHeavy;
@@ -53,30 +55,29 @@ class _SearchRuntimeProfileService {
   }
 
   bool isCoolingDown(String sourceId) {
-    final state = _healthBySourceId[sourceId];
-    if (state == null) {
-      return false;
-    }
-    final cooldownUntil = state.cooldownUntil;
-    if (cooldownUntil == null) {
-      return false;
-    }
-    if (DateTime.now().isAfter(cooldownUntil)) {
-      state.cooldownUntil = null;
-      state.consecutiveFailures = 0;
-      return false;
-    }
-    return true;
+    return _healthService.snapshotFor(sourceId).coolingDown;
   }
 
-  void recordSuccess({required String sourceId}) {
-    final state = _healthBySourceId.putIfAbsent(
-      sourceId,
-      () => _SourceRuntimeHealth(),
+  bool isUnavailable(String sourceId) {
+    return _healthService.snapshotFor(sourceId).level ==
+        SourceHealthLevel.unavailable;
+  }
+
+  int healthPriority(String sourceId) {
+    final snapshot = _healthService.snapshotFor(sourceId);
+    return switch (snapshot.level) {
+      SourceHealthLevel.healthy => 0,
+      SourceHealthLevel.warning => 1,
+      SourceHealthLevel.risky => 2,
+      SourceHealthLevel.unavailable => 3,
+    };
+  }
+
+  void recordSuccess({required String sourceId, int? latencyMs}) {
+    _healthService.markSearchSuccess(
+      sourceId: sourceId,
+      latencyMs: latencyMs,
     );
-    state.consecutiveFailures = 0;
-    state.cooldownUntil = null;
-    state.lastSuccessAt = DateTime.now();
   }
 
   void recordFailure({
@@ -84,37 +85,17 @@ class _SearchRuntimeProfileService {
     required SearchExecutionProfile profile,
     required String message,
     required bool allowInteractiveChallenge,
+    Object? error,
   }) {
-    final state = _healthBySourceId.putIfAbsent(
-      sourceId,
-      () => _SourceRuntimeHealth(),
-    );
-    state.totalFailures += 1;
-    state.consecutiveFailures += 1;
-    state.lastFailureAt = DateTime.now();
-
-    final normalizedMessage = message.toLowerCase();
     final looksLikeBrowserRisk =
         !allowInteractiveChallenge ||
         profile == SearchExecutionProfile.browserCapable ||
-        profile == SearchExecutionProfile.browserHeavy ||
-        normalizedMessage.contains('challenge') ||
-        normalizedMessage.contains('browser') ||
-        normalizedMessage.contains('captcha');
-    if (looksLikeBrowserRisk) {
-      state.browserRiskCount += 1;
-    }
-    if (state.consecutiveFailures >= 2) {
-      state.cooldownUntil = DateTime.now().add(_cooldownDuration);
-    }
+        profile == SearchExecutionProfile.browserHeavy;
+    _healthService.markSearchFailure(
+      sourceId: sourceId,
+      message: message,
+      error: error,
+      markCooldown: looksLikeBrowserRisk,
+    );
   }
-}
-
-class _SourceRuntimeHealth {
-  int totalFailures = 0;
-  int consecutiveFailures = 0;
-  int browserRiskCount = 0;
-  DateTime? cooldownUntil;
-  DateTime? lastFailureAt;
-  DateTime? lastSuccessAt;
 }

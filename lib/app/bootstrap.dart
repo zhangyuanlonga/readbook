@@ -7,6 +7,7 @@ import 'package:image_picker_platform_interface/image_picker_platform_interface.
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'app.dart';
+import '../features/source/application/source_health_service.dart';
 import 'theme/app_theme_provider.dart';
 import 'theme/app_theme_seed_provider.dart';
 
@@ -17,6 +18,7 @@ Future<void> bootstrap() async {
   final prefs = await SharedPreferences.getInstance();
   AppThemeModeNotifier.prime(prefs);
   AppSeedColorNotifier.prime(prefs);
+  await SourceHealthService.instance.hydrate();
   runApp(const ProviderScope(child: App()));
 }
 

@@ -10,9 +10,12 @@ import '../../../core/errors/error_stage.dart';
 import '../../../core/logging/app_logger.dart';
 import '../../../core/network/request_context.dart';
 import '../../../domain/entities/book.dart';
+import '../../../domain/entities/source_health.dart';
 import '../../../runtime/session/source_session.dart';
 import '../../../runtime/sources/source_registry.dart';
 import '../../../runtime/sources/source_result_models.dart' as runtime_models;
+import '../../source/application/source_health_auto_disable_service.dart';
+import '../../source/application/source_health_service.dart';
 import '../../source/application/source_runtime_facade.dart';
 import 'search_hit_cache_service.dart';
 import 'search_system_settings_service.dart';
@@ -84,22 +87,9 @@ enum SearchContentMode { novel, manga }
 
 enum SearchPlanScenario { globalSearch, switchSource, autoSwitchSource }
 
-enum SearchExecutionProfile {
-  httpLight,
-  jsHeavy,
-  browserCapable,
-  browserHeavy,
-}
+enum SearchExecutionProfile { httpLight, jsHeavy, browserCapable, browserHeavy }
 
-enum SearchRuntimePlatform {
-  android,
-  ios,
-  macos,
-  windows,
-  linux,
-  web,
-  unknown,
-}
+enum SearchRuntimePlatform { android, ios, macos, windows, linux, web, unknown }
 
 class SearchCancellationToken {
   bool _cancelled = false;
@@ -152,6 +142,7 @@ class SearchService {
     SearchSystemSettingsService? searchSystemSettingsService,
     int? maxConcurrentSources,
     SearchRuntimePlatform? runtimePlatform,
+    SourceHealthAutoDisableService? sourceHealthAutoDisableService,
   }) : _sourceRuntimeFacade =
            sourceRuntimeFacade ?? SourceRuntimeFacade.instance,
        _logger = logger ?? AppLogger.instance,
@@ -163,7 +154,12 @@ class SearchService {
        _maxConcurrentSources = SearchService._resolveMaxConcurrentSources(
          maxConcurrentSources,
        ),
-       _profileService = _SearchRuntimeProfileService() {
+       _sourceHealthAutoDisableService =
+           sourceHealthAutoDisableService ??
+           SourceHealthAutoDisableService.instance,
+       _profileService = _SearchRuntimeProfileService(
+         healthService: SourceHealthService.instance,
+       ) {
     _planner = _SearchPlanner(
       sourceRuntimeFacade: _sourceRuntimeFacade,
       profileService: _profileService,
@@ -196,6 +192,7 @@ class SearchService {
   final SearchHitCacheService _searchHitCacheService;
   final SearchSystemSettingsService _searchSystemSettingsService;
   final SearchRuntimePlatform _runtimePlatform;
+  final SourceHealthAutoDisableService _sourceHealthAutoDisableService;
   final _SearchRuntimeProfileService _profileService;
   late final _SearchPlanner _planner;
   late final _ScriptSourceSearchRunner _runner;
@@ -341,7 +338,10 @@ class SearchService {
               'durationMs': DateTime.now().difference(startAt).inMilliseconds,
             },
           );
-          _profileService.recordSuccess(sourceId: source.sourceId);
+          _profileService.recordSuccess(
+            sourceId: source.sourceId,
+            latencyMs: DateTime.now().difference(startAt).inMilliseconds,
+          );
         } on AppException catch (error) {
           if (cancellationToken?.isCancelled ?? false) {
             return;
@@ -375,10 +375,16 @@ class SearchService {
             profile: source.profile,
             message: error.briefMessage,
             allowInteractiveChallenge: plan.allowInteractiveChallenge,
+            error: error,
+          );
+          await _sourceHealthAutoDisableService.evaluateSource(
+            sourceId: source.sourceId,
+            sourceName: source.sourceName,
+            trigger: 'search',
           );
         } catch (error, stackTrace) {
-          if (cancellationToken?.isCancelled ?? false ||
-              error is SessionTaskCancelledException) {
+          if (cancellationToken?.isCancelled ??
+              false || error is SessionTaskCancelledException) {
             return;
           }
           final rawDetail = _sanitizeDebugMessage(error.toString());
@@ -417,6 +423,12 @@ class SearchService {
             profile: source.profile,
             message: rawDetail,
             allowInteractiveChallenge: plan.allowInteractiveChallenge,
+            error: error,
+          );
+          await _sourceHealthAutoDisableService.evaluateSource(
+            sourceId: source.sourceId,
+            sourceName: source.sourceName,
+            trigger: 'search',
           );
         }
 
