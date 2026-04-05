@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:io';
 
+import 'package:file_selector/file_selector.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:path/path.dart' as p;
@@ -109,6 +110,7 @@ class _BookshelfPageState extends State<BookshelfPage>
   bool _isConsumingExternalImportPayloads = false;
   bool _isSelectionMode = false;
   bool _isBatchDeleting = false;
+  bool _isImportingLocal = false;
   final Set<String> _repairingLocalBookIds = <String>{};
   final Set<String> _selectedBookKeys = <String>{};
   int _loadTicket = 0;
@@ -230,6 +232,17 @@ class _BookshelfPageState extends State<BookshelfPage>
               )
             else
               const SizedBox.shrink()
+          else if (_isImportingLocal)
+            const Padding(
+              padding: EdgeInsets.only(right: 16),
+              child: Center(
+                child: SizedBox(
+                  width: 18,
+                  height: 18,
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                ),
+              ),
+            )
           else ...[
             _buildAnnouncementAction(),
             IconButton(
@@ -493,28 +506,100 @@ class _BookshelfPageState extends State<BookshelfPage>
   }
 
   Widget _buildEmptyCard() {
-    return BookshelfEmptyCard(onImportLocal: _openLocalLibrary);
+    return BookshelfEmptyCard(onImportLocal: _importLocalBooksFromPicker);
   }
 
   void _handleMoreAction(_BookshelfMoreAction action) {
     switch (action) {
       case _BookshelfMoreAction.importLocal:
-        _openLocalLibrary();
+        unawaited(_importLocalBooksFromPicker());
         break;
     }
   }
 
-  void _openLocalLibrary() {
-    context.push('/local-library').then((_) async {
+  Future<void> _importLocalBooksFromPicker() async {
+    if (_isImportingLocal || _isBatchDeleting) {
+      return;
+    }
+
+    final files = await openFiles(
+      acceptedTypeGroups: const [
+        XTypeGroup(
+          label: 'Book Files',
+          extensions: ['txt', 'epub'],
+          uniformTypeIdentifiers: [
+            'public.plain-text',
+            'org.idpf.epub-container',
+          ],
+        ),
+      ],
+      confirmButtonText: '选择本地图书',
+    );
+
+    if (!mounted || files.isEmpty) {
+      return;
+    }
+
+    setState(() {
+      _isImportingLocal = true;
+    });
+
+    var successCount = 0;
+    var failureCount = 0;
+    String? lastError;
+
+    try {
+      for (final file in files) {
+        final filePath = file.path.trim();
+        if (filePath.isEmpty) {
+          continue;
+        }
+
+        try {
+          final displayName =
+              file.name.trim().isEmpty
+                  ? p.basename(filePath)
+                  : file.name.trim();
+          await _localBookImportService.importFromFile(
+            filePath: filePath,
+            displayName: displayName,
+            waitForIndexing: false,
+          );
+          successCount += 1;
+        } on AppException catch (error) {
+          failureCount += 1;
+          lastError = error.briefMessage;
+        } catch (error) {
+          failureCount += 1;
+          lastError = '导入失败：$error';
+        }
+      }
+
+      await _loadBookshelf(force: true);
+
       if (!mounted) {
         return;
       }
-      final autoRefreshEnabled = await _isAutoRefreshOnTabActiveEnabled();
-      if (!mounted || autoRefreshEnabled) {
+
+      if (successCount > 0) {
+        if (failureCount > 0) {
+          _showMessage(
+            '已导入 $successCount 本书并加入书架，失败 $failureCount 本。后台会继续解析成功导入的图书。',
+          );
+        } else {
+          _showMessage('已导入 $successCount 本书并加入书架。后台会继续解析。');
+        }
         return;
       }
-      unawaited(_loadBookshelf(force: true));
-    });
+
+      _showMessage(lastError ?? '导入失败，请重试。');
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isImportingLocal = false;
+        });
+      }
+    }
   }
 
   Future<void> _consumePendingExternalImportPayloads() async {
@@ -3988,6 +4073,20 @@ class _BookshelfPageState extends State<BookshelfPage>
           book.sourceId == _kLocalBookSourceId
               ? _localBooksById[book.bookId.trim()]
               : null;
+      if (localBook != null &&
+          localBook.format == LocalBookFormat.txt &&
+          localBook.indexStatus != LocalBookIndexStatus.ready) {
+        unawaited(() async {
+          try {
+            await _localBookIndexService.ensureIndexed(bookId: localBook.id);
+          } catch (_) {
+            // Keep reading available even if background indexing fails.
+          }
+        }());
+        _openReaderFallbackForSourceSwitch(book);
+        _showMessage('正文已打开，目录会在后台继续解析。');
+        return;
+      }
       if (localBook != null &&
           localBook.indexStatus != LocalBookIndexStatus.ready) {
         _handleNonReadyLocalBookOpen(book, localBook);

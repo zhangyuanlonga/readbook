@@ -283,6 +283,53 @@ void main() {
       expect(fakeIndexService.ensureIndexedCallCount, 0);
     });
 
+    test(
+      'allows bootstrap reading for pending local txt before index is ready',
+      () async {
+        final file = File('${tempDir.path}/pending_bootstrap_book.txt');
+        await file.writeAsString('''
+第1章 开始
+第一章正文内容。
+
+第2章 继续
+第二章正文内容。
+''');
+
+        final now = DateTime.parse('2026-03-21T12:00:00.000Z');
+        final pendingBook = LocalBook(
+          id: 'local_pending_bootstrap_1',
+          title: '待建立正文直读测试',
+          format: LocalBookFormat.txt,
+          storagePath: file.path,
+          fileSize: await file.length(),
+          indexStatus: LocalBookIndexStatus.pending,
+          createdAt: now,
+          updatedAt: now,
+        );
+        await repository.upsertBook(pendingBook);
+
+        final fakeIndexService = _TrackingLocalBookIndexService(
+          localBookRepository: repository,
+          storageService: storageService,
+          refreshedBook: pendingBook,
+        );
+        contentService = LocalChapterContentService(
+          localBookRepository: repository,
+          indexService: fakeIndexService,
+          storageService: storageService,
+        );
+
+        final chapter = await contentService.load(
+          bookId: 'local_pending_bootstrap_1',
+          chapterId: 'bootstrap',
+        );
+
+        expect(chapter.content, contains('第一章正文内容'));
+        expect(chapter.chapterIndex, 0);
+        expect(fakeIndexService.ensureIndexedCallCount, 0);
+      },
+    );
+
     test('prompts reindex when local book index is stale', () async {
       final file = File('${tempDir.path}/stale_book.txt');
       await file.writeAsString('第1章 开始\n第一章内容。');

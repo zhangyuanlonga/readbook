@@ -25,6 +25,7 @@ void main() {
           detailUrl: 'https://example.com/$sourceId',
         ),
         sourceName: sourceId,
+        healthLevel: null,
         baseScore: score,
         hitCount: 0,
         sourceScore: 0,

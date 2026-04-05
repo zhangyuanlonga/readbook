@@ -582,18 +582,29 @@ class LocalTextEncodingDetector {
     return score;
   }
 
-  bool get _shouldUseMobileDetector {
+  bool get _shouldUsePluginDetector {
+    if (kIsWeb) {
+      return true;
+    }
+    return defaultTargetPlatform == TargetPlatform.android ||
+        defaultTargetPlatform == TargetPlatform.iOS ||
+        defaultTargetPlatform == TargetPlatform.macOS;
+  }
+
+  bool get _shouldUsePlatformConverter {
     if (kIsWeb) {
       return false;
     }
     return defaultTargetPlatform == TargetPlatform.android ||
-        defaultTargetPlatform == TargetPlatform.iOS;
+        defaultTargetPlatform == TargetPlatform.iOS ||
+        defaultTargetPlatform == TargetPlatform.linux ||
+        defaultTargetPlatform == TargetPlatform.windows;
   }
 
   Future<_MobileAutoDecodeResult?> _tryAutoDecodeOnMobile(
     List<int> bytes,
   ) async {
-    if (!_shouldUseMobileDetector || bytes.isEmpty) {
+    if (!_shouldUsePluginDetector || bytes.isEmpty) {
       return null;
     }
     try {
@@ -619,7 +630,7 @@ class LocalTextEncodingDetector {
     required String charsetName,
     required List<int> bytes,
   }) async {
-    if (!_shouldUseMobileDetector || bytes.isEmpty) {
+    if (!_shouldUsePlatformConverter || bytes.isEmpty) {
       return null;
     }
     try {

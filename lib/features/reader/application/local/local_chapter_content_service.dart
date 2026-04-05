@@ -38,6 +38,7 @@ class LocalChapterContentService {
   final LocalBookIndexService _indexService;
   final EpubLocalBookParser _epubParser;
   final LocalBookStorageService _storageService;
+  static const int _txtBootstrapReadBytes = 64 * 1024;
 
   Future<LocalChapter> load({
     required String bookId,
@@ -68,7 +69,14 @@ class LocalChapterContentService {
     if (refreshedBook != null) {
       book = refreshedBook;
     }
-    _ensureBookReadyForReading(book);
+    final allowTxtBootstrap = _shouldAllowTxtBootstrapRead(
+      book: book,
+      chapterId: chapterId,
+      chapterIndex: chapterIndex,
+    );
+    if (!allowTxtBootstrap) {
+      _ensureBookReadyForReading(book);
+    }
 
     final chapter = await _resolveChapter(
       book: book,
@@ -76,6 +84,10 @@ class LocalChapterContentService {
       chapterIndex: chapterIndex,
     );
     if (chapter == null) {
+      if (allowTxtBootstrap) {
+        final readableBook = await _hydrateReadableBook(book);
+        return _loadTxtBootstrapChapter(book: readableBook);
+      }
       throw AppException(
         code: ErrorCode.ruleMatchEmpty,
         stage: ErrorStage.content,
@@ -90,6 +102,12 @@ class LocalChapterContentService {
     final readableBook = await _hydrateReadableBook(book);
 
     if (book.format == LocalBookFormat.txt) {
+      if (allowTxtBootstrap &&
+          (chapter.startOffset == null ||
+              chapter.endOffset == null ||
+              chapter.endOffset! <= chapter.startOffset!)) {
+        return _loadTxtBootstrapChapter(book: readableBook, chapter: chapter);
+      }
       final hydratedContent = await _loadTxtChapterContentByOffsets(
         chapter: chapter,
         book: readableBook,
@@ -117,6 +135,18 @@ class LocalChapterContentService {
   bool _needsReindex(LocalBook book) {
     return book.indexStatus != LocalBookIndexStatus.ready ||
         book.chapterCount <= 0;
+  }
+
+  bool _shouldAllowTxtBootstrapRead({
+    required LocalBook book,
+    required String? chapterId,
+    required int? chapterIndex,
+  }) {
+    if (book.format != LocalBookFormat.txt) {
+      return false;
+    }
+    final normalizedChapterId = (chapterId ?? '').trim().toLowerCase();
+    return normalizedChapterId == 'bootstrap';
   }
 
   void _ensureBookReadyForReading(LocalBook book) {
@@ -298,6 +328,74 @@ class LocalChapterContentService {
         );
       }
       return text;
+    } finally {
+      await handle.close();
+    }
+  }
+
+  Future<LocalChapter> _loadTxtBootstrapChapter({
+    required LocalBook book,
+    LocalChapter? chapter,
+  }) async {
+    final file = File(book.storagePath);
+    if (!await file.exists()) {
+      throw AppException(
+        code: ErrorCode.validation,
+        stage: ErrorStage.content,
+        briefMessage: '本地文件不存在：${book.storagePath}',
+      );
+    }
+
+    final fileLength = await file.length();
+    if (fileLength <= 0) {
+      throw AppException(
+        code: ErrorCode.ruleMatchEmpty,
+        stage: ErrorStage.content,
+        briefMessage: '文本文件为空，无法读取正文。',
+      );
+    }
+
+    var end =
+        fileLength < _txtBootstrapReadBytes
+            ? fileLength
+            : _txtBootstrapReadBytes;
+    final normalizedCharset = _normalizeCharsetName(book.charset);
+    if ((normalizedCharset == 'utf-16' ||
+            normalizedCharset == 'utf-16le' ||
+            normalizedCharset == 'utf-16be') &&
+        end.isOdd) {
+      end -= 1;
+    }
+
+    final handle = await file.open(mode: FileMode.read);
+    try {
+      await handle.setPosition(0);
+      final bytes = await handle.read(end);
+      final content =
+          _decodeBytes(bytes, preferredCharset: book.charset).trim();
+      if (content.isEmpty) {
+        throw AppException(
+          code: ErrorCode.ruleMatchEmpty,
+          stage: ErrorStage.content,
+          briefMessage: '本地章节内容为空，请检查编码或重新导入。',
+        );
+      }
+
+      final now = DateTime.now();
+      return LocalChapter(
+        id: chapter?.id ?? '${book.id}_bootstrap',
+        bookId: book.id,
+        chapterIndex: chapter?.chapterIndex ?? 0,
+        title: chapter?.title ?? '开始阅读',
+        content: content,
+        imageUrls: chapter?.imageUrls ?? const <String>[],
+        sourceRef: chapter?.sourceRef,
+        createdAt: chapter?.createdAt ?? now,
+        updatedAt: now,
+        startOffset: 0,
+        endOffset: end,
+        document: chapter?.document,
+      );
     } finally {
       await handle.close();
     }
