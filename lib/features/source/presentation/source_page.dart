@@ -93,6 +93,144 @@ class _BatchCheckProgressState {
 
 const Object _batchCheckSentinel = Object();
 
+class _CheckRequestDialog<T> extends StatefulWidget {
+  const _CheckRequestDialog({
+    required this.title,
+    required this.helperText,
+    required this.initialKeyword,
+    required this.allowEmptyKeyword,
+    required this.includeScope,
+    required this.levelLabelBuilder,
+    required this.scopeLabelBuilder,
+    required this.onSubmit,
+  });
+
+  final String title;
+  final String helperText;
+  final String initialKeyword;
+  final bool allowEmptyKeyword;
+  final bool includeScope;
+  final String Function(SourceCheckLevel level) levelLabelBuilder;
+  final String Function(_BatchCheckScope scope) scopeLabelBuilder;
+  final T Function(
+    String keyword,
+    SourceCheckLevel level,
+    _BatchCheckScope scope,
+  ) onSubmit;
+
+  @override
+  State<_CheckRequestDialog<T>> createState() => _CheckRequestDialogState<T>();
+}
+
+class _CheckRequestDialogState<T> extends State<_CheckRequestDialog<T>> {
+  late final TextEditingController _controller;
+  SourceCheckLevel _selectedLevel = SourceCheckLevel.searchOnly;
+  _BatchCheckScope _selectedScope = _BatchCheckScope.enabledSources;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = TextEditingController(text: widget.initialKeyword);
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: Text(widget.title),
+      content: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Text(widget.helperText),
+          const SizedBox(height: 12),
+          TextField(
+            controller: _controller,
+            autofocus: true,
+            decoration: const InputDecoration(
+              labelText: '检测关键词',
+              hintText: '留空时自动使用书源默认检测词',
+              border: OutlineInputBorder(),
+            ),
+          ),
+          const SizedBox(height: 12),
+          DropdownButtonFormField<SourceCheckLevel>(
+            initialValue: _selectedLevel,
+            decoration: const InputDecoration(
+              labelText: '检测级别',
+              border: OutlineInputBorder(),
+            ),
+            items: SourceCheckLevel.values
+                .map(
+                  (level) => DropdownMenuItem<SourceCheckLevel>(
+                    value: level,
+                    child: Text(widget.levelLabelBuilder(level)),
+                  ),
+                )
+                .toList(growable: false),
+            onChanged: (value) {
+              if (value == null) {
+                return;
+              }
+              setState(() {
+                _selectedLevel = value;
+              });
+            },
+          ),
+          if (widget.includeScope) ...[
+            const SizedBox(height: 12),
+            DropdownButtonFormField<_BatchCheckScope>(
+              initialValue: _selectedScope,
+              decoration: const InputDecoration(
+                labelText: '检测范围',
+                border: OutlineInputBorder(),
+              ),
+              items: _BatchCheckScope.values
+                  .map(
+                    (scope) => DropdownMenuItem<_BatchCheckScope>(
+                      value: scope,
+                      child: Text(widget.scopeLabelBuilder(scope)),
+                    ),
+                  )
+                  .toList(growable: false),
+              onChanged: (value) {
+                if (value == null) {
+                  return;
+                }
+                setState(() {
+                  _selectedScope = value;
+                });
+              },
+            ),
+          ],
+        ],
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(context).pop(),
+          child: const Text('取消'),
+        ),
+        FilledButton(
+          onPressed: () {
+            final keyword = _controller.text.trim();
+            if (!widget.allowEmptyKeyword && keyword.isEmpty) {
+              return;
+            }
+            Navigator.of(context).pop(
+              widget.onSubmit(keyword, _selectedLevel, _selectedScope),
+            );
+          },
+          child: const Text('开始'),
+        ),
+      ],
+    );
+  }
+}
+
 class _SourceSuggestionAction {
   const _SourceSuggestionAction({required this.label, this.onTap});
 
@@ -2131,107 +2269,21 @@ class _SourcePageState extends State<SourcePage> {
     )
     onSubmit,
   }) async {
-    final controller = TextEditingController(text: initialKeyword);
-    var selectedLevel = SourceCheckLevel.searchOnly;
-    var selectedScope = _BatchCheckScope.enabledSources;
-    final result = await showDialog<T>(
+    return showDialog<T>(
       context: context,
       builder: (context) {
-        return StatefulBuilder(
-          builder: (context, setState) {
-            return AlertDialog(
-              title: Text(title),
-              content: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Text(helperText),
-                  const SizedBox(height: 12),
-                  TextField(
-                    controller: controller,
-                    autofocus: true,
-                    decoration: const InputDecoration(
-                      labelText: '检测关键词',
-                      hintText: '留空时自动使用书源默认检测词',
-                      border: OutlineInputBorder(),
-                    ),
-                  ),
-                  const SizedBox(height: 12),
-                  DropdownButtonFormField<SourceCheckLevel>(
-                    initialValue: selectedLevel,
-                    decoration: const InputDecoration(
-                      labelText: '检测级别',
-                      border: OutlineInputBorder(),
-                    ),
-                    items: SourceCheckLevel.values
-                        .map(
-                          (level) => DropdownMenuItem<SourceCheckLevel>(
-                            value: level,
-                            child: Text(_checkLevelLabel(level)),
-                          ),
-                        )
-                        .toList(growable: false),
-                    onChanged: (value) {
-                      if (value == null) {
-                        return;
-                      }
-                      setState(() {
-                        selectedLevel = value;
-                      });
-                    },
-                  ),
-                  if (includeScope) ...[
-                    const SizedBox(height: 12),
-                    DropdownButtonFormField<_BatchCheckScope>(
-                      initialValue: selectedScope,
-                      decoration: const InputDecoration(
-                        labelText: '检测范围',
-                        border: OutlineInputBorder(),
-                      ),
-                      items: _BatchCheckScope.values
-                          .map(
-                            (scope) => DropdownMenuItem<_BatchCheckScope>(
-                              value: scope,
-                              child: Text(_batchCheckScopeLabel(scope)),
-                            ),
-                          )
-                          .toList(growable: false),
-                      onChanged: (value) {
-                        if (value == null) {
-                          return;
-                        }
-                        setState(() {
-                          selectedScope = value;
-                        });
-                      },
-                    ),
-                  ],
-                ],
-              ),
-              actions: [
-                TextButton(
-                  onPressed: () => Navigator.of(context).pop(),
-                  child: const Text('取消'),
-                ),
-                FilledButton(
-                  onPressed: () {
-                    final keyword = controller.text.trim();
-                    if (!allowEmptyKeyword && keyword.isEmpty) {
-                      return;
-                    }
-                    Navigator.of(
-                      context,
-                    ).pop(onSubmit(keyword, selectedLevel, selectedScope));
-                  },
-                  child: const Text('开始'),
-                ),
-              ],
-            );
-          },
+        return _CheckRequestDialog<T>(
+          title: title,
+          helperText: helperText,
+          initialKeyword: initialKeyword,
+          allowEmptyKeyword: allowEmptyKeyword,
+          includeScope: includeScope,
+          levelLabelBuilder: _checkLevelLabel,
+          scopeLabelBuilder: _batchCheckScopeLabel,
+          onSubmit: onSubmit,
         );
       },
     );
-    controller.dispose();
-    return result;
   }
 
   String _checkStatusLabel(SourceCheckStatus status) {

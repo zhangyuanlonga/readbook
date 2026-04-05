@@ -34,6 +34,8 @@
   用于统一梳理详情页、目录、正文、发现页当前是否已完成脚本源接入，以及还缺哪些运行时治理能力。
 - [书源列表网站聚合与重复源清理方案](./source-website-cluster-plan.md)
   用于推进“同站书源聚合、重复源清理、推荐主源、搜索调度联动”的完整设计，不替代现有 `group` 分组。
+- [搜索首跑与检测首跑不稳定问题梳理](./search-first-run-instability-plan.md)
+  用于专门梳理“脚本源首轮执行偶发闪退 / JSC 崩溃 / 检测路径不稳定”的问题边界、已验证事实和后续修法。
 - [第二阶段：Browser / Cookie / Cache 设计说明](./stage-two-browser-sources.md)
   只在你需要理解浏览器能力的设计取舍时阅读，不是入门必读。
 - [脚本源调试工作台任务拆分](./debug-workbench-task-plan.md)

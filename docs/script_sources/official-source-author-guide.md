@@ -108,10 +108,22 @@ ctx = {
 
 - 方法和 helper 显式接收 `ctx`
 
-简化版写法：
+当前宿主实践建议：
 
-- 运行时同时提供全局 `ctx`
-- 所以你也可以在 helper 里直接写 `ctx.http.request(...)`
+- 不要依赖 helper 中的隐式全局 `ctx`
+- helper 请显式接收 `ctx`
+- 尤其是 `absoluteUrl / cleanText / textOf / attrOf / request...` 这类公共函数，推荐统一写成 `function helper(ctx, ...)`
+
+原因：
+
+- 显式 `ctx` 的作用域最稳定
+- 更容易调试和迁移
+- 也能避免某些 JS 运行时对隐式全局变量解析不一致带来的问题
+
+兼容说明：
+
+- 运行时当前会尽量兜底隐式全局 `ctx/source`
+- 但这属于兼容能力，不是推荐写法
 
 ---
 

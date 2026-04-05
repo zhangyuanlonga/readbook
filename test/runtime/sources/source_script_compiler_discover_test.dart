@@ -80,7 +80,7 @@ void main() {
     });
   });
 
-  group('SourceScriptCompiler runtime reuse', () {
+  group('SourceScriptCompiler runtime isolation', () {
     late _FakeReusableJsRuntimeAdapterFactory factory;
 
     setUp(() {
@@ -121,7 +121,7 @@ void main() {
       expect(factory.disposedCount, 2);
     });
 
-    test('reuses runtime across identical compiled definitions', () async {
+    test('does not reuse runtime across identical compiled definitions', () async {
       const compiler = SourceScriptCompiler();
       final definitionA = await compiler.compile(_sourceWithImplicitDiscover);
       final definitionB = await compiler.compile(_sourceWithImplicitDiscover);
@@ -129,14 +129,30 @@ void main() {
       await definitionA.search(_buildRuntimeContext(), '凡人');
       await definitionB.search(_buildRuntimeContext(), '作者');
 
-      expect(factory.createdCount, 3);
+      expect(factory.createdCount, 4);
       expect(factory.disposedCount, 2);
 
       definitionA.dispose?.call();
-      expect(factory.disposedCount, 2);
+      expect(factory.disposedCount, 3);
 
       definitionB.dispose?.call();
-      expect(factory.disposedCount, 3);
+      expect(factory.disposedCount, 4);
+    });
+
+    test('binds implicit ctx and source variables before invocation', () async {
+      const compiler = SourceScriptCompiler();
+      final definition = await compiler.compile(_sourceWithImplicitDiscover);
+
+      await definition.search(_buildRuntimeContext(), '凡人');
+
+      expect(factory.lastInstalledBootstrapSource, contains('var ctx = undefined;'));
+      expect(factory.lastInstalledBootstrapSource, contains('var source = undefined;'));
+      expect(factory.lastRunSnippet, contains('ctx = __ctx;'));
+      expect(factory.lastRunSnippet, contains('source = __source;'));
+      expect(factory.lastRunSnippet, contains('globalThis.ctx = __ctx;'));
+      expect(factory.lastRunSnippet, contains('globalThis.source = __source;'));
+      expect(factory.lastRunSnippet, contains('ctx = undefined;'));
+      expect(factory.lastRunSnippet, contains('source = undefined;'));
     });
   });
 }
@@ -287,10 +303,20 @@ class _FakeRequestEngine implements RequestEngine {
 class _FakeReusableJsRuntimeAdapterFactory {
   int createdCount = 0;
   int disposedCount = 0;
+  String? lastRunSnippet;
+  String? lastInstalledBootstrapSource;
 
   JsRuntimeAdapter create() {
     createdCount += 1;
     return _FakeReusableJsRuntimeAdapter(
+      onInstallBootstrap: (source, sourceUrl) {
+        if (sourceUrl == 'source_debugger_bootstrap.js') {
+          lastInstalledBootstrapSource = source;
+        }
+      },
+      onRunSnippet: (script) {
+        lastRunSnippet = script;
+      },
       onDispose: () {
         disposedCount += 1;
       },
@@ -299,9 +325,15 @@ class _FakeReusableJsRuntimeAdapterFactory {
 }
 
 class _FakeReusableJsRuntimeAdapter implements JsRuntimeAdapter {
-  _FakeReusableJsRuntimeAdapter({required this.onDispose});
+  _FakeReusableJsRuntimeAdapter({
+    required this.onDispose,
+    required this.onInstallBootstrap,
+    required this.onRunSnippet,
+  });
 
   final void Function() onDispose;
+  final void Function(String source, String? sourceUrl) onInstallBootstrap;
+  final void Function(String script) onRunSnippet;
   String _installedSource = '';
 
   @override
@@ -312,6 +344,7 @@ class _FakeReusableJsRuntimeAdapter implements JsRuntimeAdapter {
 
   @override
   Future<void> installBootstrap(String source, {String? sourceUrl}) async {
+    onInstallBootstrap(source, sourceUrl);
     if (sourceUrl == 'pasted_source.js') {
       _installedSource = source;
     }
@@ -325,6 +358,7 @@ class _FakeReusableJsRuntimeAdapter implements JsRuntimeAdapter {
 
   @override
   Future<JsExecutionResult> runSnippet(String script) async {
+    onRunSnippet(script);
     if (script.contains('hasSearch:')) {
       return JsExecutionResult(
         output:
@@ -338,19 +372,23 @@ class _FakeReusableJsRuntimeAdapter implements JsRuntimeAdapter {
       );
     }
 
-    if (script.contains("__sourceDefinition?.['search']")) {
+    if (script.contains("__source?.['search']") ||
+        script.contains("__sourceDefinition?.['search']")) {
       return const JsExecutionResult(output: '[]', isError: false);
     }
-    if (script.contains("__sourceDefinition?.['chapters']")) {
+    if (script.contains("__source?.['chapters']") ||
+        script.contains("__sourceDefinition?.['chapters']")) {
       return const JsExecutionResult(output: '[]', isError: false);
     }
-    if (script.contains("__sourceDefinition?.['detail']")) {
+    if (script.contains("__source?.['detail']") ||
+        script.contains("__sourceDefinition?.['detail']")) {
       return const JsExecutionResult(
         output: '{"title":"测试书","author":"","detailUrl":"https://book","tocUrl":"","extra":{},"debug":{}}',
         isError: false,
       );
     }
-    if (script.contains("__sourceDefinition?.['content']")) {
+    if (script.contains("__source?.['content']") ||
+        script.contains("__sourceDefinition?.['content']")) {
       return const JsExecutionResult(
         output: '{"title":"第一章","content":"正文"}',
         isError: false,

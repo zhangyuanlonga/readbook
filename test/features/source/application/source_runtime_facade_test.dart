@@ -109,11 +109,55 @@ void main() {
       expect(saved.name, '🌐 69书吧');
       expect(runtimeService.sourceById(saved.id)?.runtime.name, isNotNull);
     });
+
+    test('always uses isolated runtime for detail', () async {
+      final saved = await facade.saveScriptSource(
+        sourceCode: _buildSourceCode(name: '隔离详情源'),
+      );
+      const book = runtime_models.Book(
+        title: '凡人修仙传',
+        author: '忘语',
+        detailUrl: 'https://example.com/book/1',
+      );
+
+      await facade.detail(sourceId: saved.id, book: book);
+      await facade.detail(sourceId: saved.id, book: book);
+
+      expect(runtimeService.isolatedDetailCalls, 2);
+      expect(runtimeService.detailCalls, 0);
+    });
+
+    test('always uses isolated runtime for content', () async {
+      final saved = await facade.saveScriptSource(
+        sourceCode: _buildSourceCode(name: '隔离正文源'),
+      );
+      const book = runtime_models.Book(
+        title: '凡人修仙传',
+        author: '忘语',
+        detailUrl: 'https://example.com/book/1',
+      );
+      const chapter = runtime_models.Chapter(
+        title: '第一章',
+        url: 'https://example.com/book/1/ch1',
+        index: 0,
+      );
+
+      await facade.content(sourceId: saved.id, book: book, chapter: chapter);
+      await facade.content(sourceId: saved.id, book: book, chapter: chapter);
+
+      expect(runtimeService.isolatedContentCalls, 2);
+      expect(runtimeService.contentCalls, 0);
+    });
   });
 }
 
 class _FakeScriptSourceRuntimeService extends ScriptSourceRuntimeService {
   _FakeScriptSourceRuntimeService() : super();
+
+  int detailCalls = 0;
+  int isolatedDetailCalls = 0;
+  int contentCalls = 0;
+  int isolatedContentCalls = 0;
 
   @override
   Future<RegisteredSource> compileAndRegister({
@@ -150,6 +194,46 @@ class _FakeScriptSourceRuntimeService extends ScriptSourceRuntimeService {
       return registry.register(definition, revision: revision);
     }
     return registry.upsert(normalizedRuntimeId, definition, revision: revision);
+  }
+
+  @override
+  Future<runtime_models.Book> detail({
+    required String sourceId,
+    required runtime_models.Book book,
+  }) async {
+    detailCalls += 1;
+    return book;
+  }
+
+  @override
+  Future<runtime_models.Book> detailIsolated({
+    required String sourceId,
+    required String sourceCode,
+    required runtime_models.Book book,
+  }) async {
+    isolatedDetailCalls += 1;
+    return book;
+  }
+
+  @override
+  Future<runtime_models.Content> content({
+    required String sourceId,
+    required runtime_models.Book book,
+    required runtime_models.Chapter chapter,
+  }) async {
+    contentCalls += 1;
+    return runtime_models.Content(title: chapter.title, content: '正文');
+  }
+
+  @override
+  Future<runtime_models.Content> contentIsolated({
+    required String sourceId,
+    required String sourceCode,
+    required runtime_models.Book book,
+    required runtime_models.Chapter chapter,
+  }) async {
+    isolatedContentCalls += 1;
+    return runtime_models.Content(title: chapter.title, content: '正文');
   }
 
   String? _extractField(String sourceCode, String field) {

@@ -52,6 +52,7 @@ export default {
 - `discoverCategories / discoverBooks` 为可选发现方法
 - `search / detail / chapters / content` 为核心方法
 - 规范只约束导出结构、方法签名和返回结果语义，不约束作者内部实现方式
+- helper 函数推荐显式接收 `ctx`，不要依赖隐式全局 `ctx`
 
 `init(ctx, task)` 中 `task` 推荐结构：
 

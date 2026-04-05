@@ -284,9 +284,20 @@ class SourceRuntimeFacade {
     required String keyword,
     bool allowInteractiveChallenge = true,
     SessionCancellationHandle? cancellationHandle,
-  }) {
+  }) async {
+    final normalizedSourceId = sourceId.trim();
+    final source = await _scriptSourceRepository.getById(normalizedSourceId);
+    if (source != null && source.enabled) {
+      return _scriptRuntimeService.searchIsolated(
+        sourceId: normalizedSourceId,
+        sourceCode: source.sourceCode,
+        keyword: keyword,
+        allowInteractiveChallenge: allowInteractiveChallenge,
+        cancellationHandle: cancellationHandle,
+      );
+    }
     return _scriptRuntimeService.search(
-      sourceId: sourceId,
+      sourceId: normalizedSourceId,
       keyword: keyword,
       allowInteractiveChallenge: allowInteractiveChallenge,
       cancellationHandle: cancellationHandle,
@@ -295,8 +306,16 @@ class SourceRuntimeFacade {
 
   Future<List<runtime_models.DiscoverCategory>> discoverCategories({
     required String sourceId,
-  }) {
-    return _scriptRuntimeService.discoverCategories(sourceId: sourceId);
+  }) async {
+    final normalizedSourceId = sourceId.trim();
+    final source = await _scriptSourceRepository.getById(normalizedSourceId);
+    if (source != null && source.enabled) {
+      return _scriptRuntimeService.discoverCategoriesIsolated(
+        sourceId: normalizedSourceId,
+        sourceCode: source.sourceCode,
+      );
+    }
+    return _scriptRuntimeService.discoverCategories(sourceId: normalizedSourceId);
   }
 
   Future<List<runtime_models.Book>> discoverBooks({
@@ -304,9 +323,20 @@ class SourceRuntimeFacade {
     required runtime_models.DiscoverCategory category,
     required int page,
     required int pageSize,
-  }) {
+  }) async {
+    final normalizedSourceId = sourceId.trim();
+    final source = await _scriptSourceRepository.getById(normalizedSourceId);
+    if (source != null && source.enabled) {
+      return _scriptRuntimeService.discoverBooksIsolated(
+        sourceId: normalizedSourceId,
+        sourceCode: source.sourceCode,
+        category: category,
+        page: page,
+        pageSize: pageSize,
+      );
+    }
     return _scriptRuntimeService.discoverBooks(
-      sourceId: sourceId,
+      sourceId: normalizedSourceId,
       category: category,
       page: page,
       pageSize: pageSize,
@@ -316,24 +346,55 @@ class SourceRuntimeFacade {
   Future<runtime_models.Book> detail({
     required String sourceId,
     required runtime_models.Book book,
-  }) {
-    return _scriptRuntimeService.detail(sourceId: sourceId, book: book);
+  }) async {
+    final normalizedSourceId = sourceId.trim();
+    final source = await _scriptSourceRepository.getById(normalizedSourceId);
+    if (source != null && source.enabled) {
+      return _scriptRuntimeService.detailIsolated(
+        sourceId: normalizedSourceId,
+        sourceCode: source.sourceCode,
+        book: book,
+      );
+    }
+    return _scriptRuntimeService.detail(sourceId: normalizedSourceId, book: book);
   }
 
   Future<List<runtime_models.Chapter>> chapters({
     required String sourceId,
     required runtime_models.Book book,
-  }) {
-    return _scriptRuntimeService.chapters(sourceId: sourceId, book: book);
+  }) async {
+    final normalizedSourceId = sourceId.trim();
+    final source = await _scriptSourceRepository.getById(normalizedSourceId);
+    if (source != null && source.enabled) {
+      return _scriptRuntimeService.chaptersIsolated(
+        sourceId: normalizedSourceId,
+        sourceCode: source.sourceCode,
+        book: book,
+      );
+    }
+    return _scriptRuntimeService.chapters(
+      sourceId: normalizedSourceId,
+      book: book,
+    );
   }
 
   Future<runtime_models.Content> content({
     required String sourceId,
     required runtime_models.Book book,
     required runtime_models.Chapter chapter,
-  }) {
+  }) async {
+    final normalizedSourceId = sourceId.trim();
+    final source = await _scriptSourceRepository.getById(normalizedSourceId);
+    if (source != null) {
+      return _scriptRuntimeService.contentIsolated(
+        sourceId: normalizedSourceId,
+        sourceCode: source.sourceCode,
+        book: book,
+        chapter: chapter,
+      );
+    }
     return _scriptRuntimeService.content(
-      sourceId: sourceId,
+      sourceId: normalizedSourceId,
       book: book,
       chapter: chapter,
     );

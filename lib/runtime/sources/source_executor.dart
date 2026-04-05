@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import '../browser/browser_runtime.dart';
 import '../cache/cache_key_builder.dart';
 import '../cache/cache_manager.dart';
@@ -31,6 +33,11 @@ class SourceExecutor {
   final HtmlRuntime _htmlRuntime;
   final BrowserRuntime _browserRuntime;
   final void Function(String message)? _logger;
+  static final _SourceColdStartGate _coldStartGate = _SourceColdStartGate();
+
+  static void debugResetColdStartGate() {
+    _coldStartGate.reset();
+  }
 
   Future<List<DiscoverCategory>> discoverCategories(
     RegisteredSource source,
@@ -50,14 +57,16 @@ class SourceExecutor {
       return cached;
     }
 
-    final task = SourceTask(
-      sourceId: source.runtime.id,
+    final categories = await _runWithColdStartGuard(
+      source: source,
       step: SourceTaskStep.discoverCategories,
+      taskBuilder:
+          () => SourceTask(
+            sourceId: source.runtime.id,
+            step: SourceTaskStep.discoverCategories,
+          ),
+      action: (context) async => await handler(context),
     );
-    final context = _createContext(source);
-    await _runInitIfNeeded(source, context, task);
-
-    final categories = await handler(context);
     _cacheManager.put<List<DiscoverCategory>>(
       key: cacheKey,
       sourceId: source.runtime.id,
@@ -93,17 +102,20 @@ class SourceExecutor {
       return cached;
     }
 
-    final task = SourceTask(
-      sourceId: source.runtime.id,
+    final books = await _runWithColdStartGuard(
+      source: source,
       step: SourceTaskStep.discoverBooks,
-      category: category,
-      page: page,
-      pageSize: pageSize,
+      taskBuilder:
+          () => SourceTask(
+            sourceId: source.runtime.id,
+            step: SourceTaskStep.discoverBooks,
+            category: category,
+            page: page,
+            pageSize: pageSize,
+          ),
+      action:
+          (context) async => await handler(context, category, page, pageSize),
     );
-    final context = _createContext(source);
-    await _runInitIfNeeded(source, context, task);
-
-    final books = await handler(context, category, page, pageSize);
     final normalized = books
         .map(
           (Book book) =>
@@ -133,15 +145,17 @@ class SourceExecutor {
       return cached;
     }
 
-    final task = SourceTask(
-      sourceId: source.runtime.id,
+    final books = await _runWithColdStartGuard(
+      source: source,
       step: SourceTaskStep.search,
-      keyword: keyword,
+      taskBuilder:
+          () => SourceTask(
+            sourceId: source.runtime.id,
+            step: SourceTaskStep.search,
+            keyword: keyword,
+          ),
+      action: (context) async => await source.definition.search(context, keyword),
     );
-    final context = _createContext(source);
-    await _runInitIfNeeded(source, context, task);
-
-    final books = await source.definition.search(context, keyword);
     final normalized = books
         .map(
           (Book book) =>
@@ -170,15 +184,17 @@ class SourceExecutor {
       return cached;
     }
 
-    final task = SourceTask(
-      sourceId: source.runtime.id,
+    final result = await _runWithColdStartGuard(
+      source: source,
       step: SourceTaskStep.detail,
-      book: book,
+      taskBuilder:
+          () => SourceTask(
+            sourceId: source.runtime.id,
+            step: SourceTaskStep.detail,
+            book: book,
+          ),
+      action: (context) async => await source.definition.detail(context, book),
     );
-    final context = _createContext(source);
-    await _runInitIfNeeded(source, context, task);
-
-    final result = await source.definition.detail(context, book);
     final normalized =
         result.sourceId.isEmpty
             ? result.copyWith(sourceId: source.runtime.id)
@@ -203,15 +219,17 @@ class SourceExecutor {
       return cached;
     }
 
-    final task = SourceTask(
-      sourceId: source.runtime.id,
+    final result = await _runWithColdStartGuard(
+      source: source,
       step: SourceTaskStep.chapters,
-      book: book,
+      taskBuilder:
+          () => SourceTask(
+            sourceId: source.runtime.id,
+            step: SourceTaskStep.chapters,
+            book: book,
+          ),
+      action: (context) async => await source.definition.chapters(context, book),
     );
-    final context = _createContext(source);
-    await _runInitIfNeeded(source, context, task);
-
-    final result = await source.definition.chapters(context, book);
     final normalized = result
         .map(
           (Chapter chapter) =>
@@ -245,16 +263,20 @@ class SourceExecutor {
       return cached;
     }
 
-    final task = SourceTask(
-      sourceId: source.runtime.id,
+    final result = await _runWithColdStartGuard(
+      source: source,
       step: SourceTaskStep.content,
-      book: book,
-      chapter: chapter,
+      taskBuilder:
+          () => SourceTask(
+            sourceId: source.runtime.id,
+            step: SourceTaskStep.content,
+            book: book,
+            chapter: chapter,
+          ),
+      action:
+          (context) async =>
+              await source.definition.content(context, book, chapter),
     );
-    final context = _createContext(source);
-    await _runInitIfNeeded(source, context, task);
-
-    final result = await source.definition.content(context, book, chapter);
     final normalized =
         result.sourceId.isEmpty
             ? result.copyWith(sourceId: source.runtime.id)
@@ -279,6 +301,29 @@ class SourceExecutor {
       return;
     }
     await source.definition.init!(context, task);
+  }
+
+  Future<T> _runWithColdStartGuard<T>({
+    required RegisteredSource source,
+    required SourceTaskStep step,
+    required SourceTask Function() taskBuilder,
+    required Future<T> Function(SourceRuntimeContext context) action,
+  }) {
+    final gateKey = '${source.runtime.id}:${step.name}';
+    return _coldStartGate.run(
+      key: gateKey,
+      onColdStart: () {
+        _logger?.call('[${source.runtime.id}] cold-start gate enter ${step.name}');
+      },
+      onWarmRun: () {
+        _logger?.call('[${source.runtime.id}] warm step ${step.name}');
+      },
+      action: () async {
+        final context = _createContext(source);
+        await _runInitIfNeeded(source, context, taskBuilder());
+        return action(context);
+      },
+    );
   }
 
   SourceRuntimeContext _createContext(RegisteredSource source) {
@@ -333,5 +378,40 @@ class SourceExecutor {
       return '${chapter.index}:${Uri.encodeComponent(title)}';
     }
     return 'chapter-${chapter.index}';
+  }
+}
+
+class _SourceColdStartGate {
+  final Set<String> _warmedKeys = <String>{};
+  Future<void> _queue = Future<void>.value();
+
+  Future<T> run<T>({
+    required String key,
+    required Future<T> Function() action,
+    void Function()? onColdStart,
+    void Function()? onWarmRun,
+  }) {
+    if (_warmedKeys.contains(key)) {
+      onWarmRun?.call();
+      return action();
+    }
+
+    final completer = Completer<T>();
+    _queue = _queue.catchError((_) {}).then((_) async {
+      try {
+        onColdStart?.call();
+        final result = await action();
+        _warmedKeys.add(key);
+        completer.complete(result);
+      } catch (error, stackTrace) {
+        completer.completeError(error, stackTrace);
+      }
+    });
+    return completer.future;
+  }
+
+  void reset() {
+    _warmedKeys.clear();
+    _queue = Future<void>.value();
   }
 }

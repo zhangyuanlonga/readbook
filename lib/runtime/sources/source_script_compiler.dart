@@ -28,15 +28,7 @@ class SourceScriptCompileException implements Exception {
 class SourceScriptCompiler {
   const SourceScriptCompiler();
 
-  static final Map<String, _SharedSourceScriptRunnerEntry> _sharedRunners =
-      <String, _SharedSourceScriptRunnerEntry>{};
-
-  static void debugResetSharedRunners() {
-    for (final entry in _sharedRunners.values) {
-      entry.runner.dispose();
-    }
-    _sharedRunners.clear();
-  }
+  static void debugResetSharedRunners() {}
 
   Future<RuntimeSourceDefinition> compile(String sourceCode) async {
     final normalizedSource = _normalizeSourceCode(sourceCode);
@@ -74,7 +66,7 @@ class SourceScriptCompiler {
       );
     }
 
-    final runner = _acquireRunner(normalizedSource);
+    final runner = _SourceScriptRunner(normalizedSource);
 
     return RuntimeSourceDefinition(
       manifest: manifest,
@@ -154,38 +146,8 @@ class SourceScriptCompiler {
         );
         return _decodeContent(result, fallbackSourceId: ctx.source.id);
       },
-      dispose: () => _releaseRunner(normalizedSource, runner),
+      dispose: runner.dispose,
     );
-  }
-
-  _SourceScriptRunner _acquireRunner(String normalizedSource) {
-    final existing = _sharedRunners[normalizedSource];
-    if (existing != null) {
-      existing.refCount += 1;
-      return existing.runner;
-    }
-
-    final runner = _SourceScriptRunner(normalizedSource);
-    _sharedRunners[normalizedSource] = _SharedSourceScriptRunnerEntry(
-      runner: runner,
-    );
-    return runner;
-  }
-
-  void _releaseRunner(String normalizedSource, _SourceScriptRunner runner) {
-    final existing = _sharedRunners[normalizedSource];
-    if (existing == null || !identical(existing.runner, runner)) {
-      runner.dispose();
-      return;
-    }
-
-    existing.refCount -= 1;
-    if (existing.refCount > 0) {
-      return;
-    }
-
-    _sharedRunners.remove(normalizedSource);
-    runner.dispose();
   }
 
   Future<_SourceInspection> _inspectSource(String normalizedSource) async {
@@ -448,19 +410,28 @@ class _SourceScriptRunner {
       try {
         final result = await runtime.runSnippet('''
 const __ctx = globalThis.__createSourceCtx(${jsonEncode(_sourceInfoToMap(ctx.source))});
+const __source = globalThis.__sourceDefinition;
+ctx = __ctx;
+source = __source;
 globalThis.ctx = __ctx;
+globalThis.source = __source;
 const __args = ${jsonEncode(args)};
-const __fn = globalThis.__sourceDefinition?.['$methodName'];
+const __fn = __source?.['$methodName'];
 if (typeof __fn !== 'function') {
   return null;
 }
 try {
-  return await __fn.apply(globalThis.__sourceDefinition, [__ctx, ...__args]);
+  return await __fn.apply(__source, [__ctx, ...__args]);
 } catch (error) {
   if (error && typeof error === 'object' && 'message' in error) {
     throw String(error.message || error);
   }
   throw String(error);
+} finally {
+  ctx = undefined;
+  source = undefined;
+  globalThis.ctx = undefined;
+  globalThis.source = undefined;
 }
 ''');
 
@@ -1085,13 +1056,6 @@ try {
   }
 }
 
-class _SharedSourceScriptRunnerEntry {
-  _SharedSourceScriptRunnerEntry({required this.runner});
-
-  final _SourceScriptRunner runner;
-  int refCount = 1;
-}
-
 class _SourceInspection {
   const _SourceInspection({
     required this.meta,
@@ -1523,7 +1487,11 @@ Map<String, Object?> _chapterToMap(Chapter chapter) {
 }
 
 const String _sourceRuntimeBootstrap = r'''
+var ctx = undefined;
+var source = undefined;
+
 (function() {
+
   function encodePayload(payload) {
     return JSON.stringify(payload === undefined ? {} : payload);
   }
