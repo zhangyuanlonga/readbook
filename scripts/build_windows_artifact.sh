@@ -9,7 +9,7 @@ PROJECT_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
 FLUTTER_CMD="${FLUTTER_CMD:-flutter}"
 BUILD_MODE="${1:-${BUILD_MODE:-release}}" # debug | profile | release
 OUTPUT_DIR="${OUTPUT_DIR:-${PROJECT_ROOT}/build/windows/artifacts}"
-ARTIFACT_NAME="${ARTIFACT_NAME:-书享阅读}"
+ARTIFACT_NAME="${ARTIFACT_NAME:-书享阅读 Next}"
 BUILD_NAME="${BUILD_NAME:-}"
 BUILD_NUMBER="${BUILD_NUMBER:-}"
 SKIP_CLEAN="${SKIP_CLEAN:-0}"
@@ -26,7 +26,7 @@ Arguments:
 Environment variables:
   FLUTTER_CMD  Flutter command path (default: flutter)
   OUTPUT_DIR   Output artifacts folder (default: build/windows/artifacts)
-  ARTIFACT_NAME Final artifact display name prefix (default: 书享阅读)
+  ARTIFACT_NAME Final artifact display name prefix (default: 书享阅读 Next)
   BUILD_NAME   Override Flutter --build-name
   BUILD_NUMBER Override Flutter --build-number
   SKIP_CLEAN   1 to skip flutter clean
