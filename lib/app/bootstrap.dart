@@ -10,6 +10,7 @@ import 'app.dart';
 import '../features/source/application/source_health_service.dart';
 import '../features/source/application/source_runtime_diagnostics_service.dart';
 import '../core/logging/app_logger.dart';
+import 'navigation/app_navigation_style_provider.dart';
 import 'theme/app_theme_provider.dart';
 import 'theme/app_theme_seed_provider.dart';
 
@@ -18,6 +19,8 @@ Future<void> bootstrap() async {
   _configureImagePicker();
   PlatformInAppWebViewController.debugLoggingSettings.enabled = false;
   final prefs = await SharedPreferences.getInstance();
+  AppNavigationStylePreferenceNotifier.prime(prefs);
+  AppNavigationLabelVisibilityNotifier.prime(prefs);
   AppThemeModeNotifier.prime(prefs);
   AppSeedColorNotifier.prime(prefs);
   await SourceRuntimeDiagnosticsService.instance.reportRecoveredInvocations(

@@ -221,7 +221,31 @@ final GoRouter appRouter = GoRouter(
     GoRoute(
       path: '/search',
       name: 'search',
-      builder: (context, state) => const SearchPage(),
+      pageBuilder:
+          (context, state) => CustomTransitionPage<void>(
+            key: state.pageKey,
+            transitionDuration: const Duration(milliseconds: 320),
+            reverseTransitionDuration: const Duration(milliseconds: 220),
+            child: SearchPage(
+              hideTopSearchBar: state.uri.queryParameters['entry'] == 'dock',
+            ),
+            transitionsBuilder: (
+              context,
+              animation,
+              secondaryAnimation,
+              child,
+            ) {
+              final curved = CurvedAnimation(
+                parent: animation,
+                curve: Curves.easeOutCubic,
+                reverseCurve: Curves.easeInCubic,
+              );
+              return FadeTransition(
+                opacity: Tween<double>(begin: 0.2, end: 1).animate(curved),
+                child: child,
+              );
+            },
+          ),
     ),
     GoRoute(
       path: '/local-library',

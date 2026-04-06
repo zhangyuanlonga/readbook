@@ -1,15 +1,18 @@
 import 'dart:async';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../app/layout/app_layout.dart';
 import '../../../app/layout/app_spacing.dart';
+import '../../../app/navigation/app_navigation_style_provider.dart';
 import '../../../app/shell_navigation_provider.dart';
 import '../../../app/theme/app_theme_palette.dart';
 import '../../../app/theme/app_theme_provider.dart';
 import '../../../app/theme/app_theme_seed_provider.dart';
+import '../../../app/widgets/cupertino_dock_navigation_bar.dart';
 
 class AppearancePage extends ConsumerStatefulWidget {
   const AppearancePage({super.key});
@@ -37,11 +40,35 @@ class _AppearancePageState extends ConsumerState<AppearancePage> {
     ),
   ];
 
+  static const List<_NavigationStyleOption> _navigationStyleOptions = [
+    _NavigationStyleOption(
+      preference: AppNavigationStylePreference.followSystem,
+      label: '跟随系统',
+      icon: Icons.settings_suggest_outlined,
+    ),
+    _NavigationStyleOption(
+      preference: AppNavigationStylePreference.standard,
+      label: '标准',
+      icon: Icons.splitscreen_outlined,
+    ),
+    _NavigationStyleOption(
+      preference: AppNavigationStylePreference.cupertinoDock,
+      label: '苹果风格',
+      icon: Icons.dock_outlined,
+    ),
+  ];
+
   @override
   Widget build(BuildContext context) {
     final horizontal = AppSpacing.pageHorizontal(context);
     final selectedThemeMode = ref.watch(appThemeModeProvider);
     final selectedSeedColor = ref.watch(appSeedColorProvider);
+    final selectedNavigationStyle = ref.watch(
+      appNavigationStylePreferenceProvider,
+    );
+    final showNavigationLabels = ref.watch(
+      appNavigationLabelVisibilityProvider,
+    );
     final navigationState = ref.watch(appShellNavigationProvider);
 
     return PopScope<void>(
@@ -73,6 +100,8 @@ class _AppearancePageState extends ConsumerState<AppearancePage> {
                       navigationState,
                       selectedThemeMode: selectedThemeMode,
                       selectedSeedColor: selectedSeedColor,
+                      selectedNavigationStyle: selectedNavigationStyle,
+                      showNavigationLabels: showNavigationLabels,
                     ),
                     const SizedBox(height: 12),
                     _buildSectionCard(
@@ -174,6 +203,80 @@ class _AppearancePageState extends ConsumerState<AppearancePage> {
                     const SizedBox(height: 12),
                     _buildSectionCard(
                       context,
+                      icon: Icons.dock_outlined,
+                      title: '导航样式',
+                      subtitle: '在 Android 和 iOS 手机上切换主导航风格，平板保持侧边栏。',
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          LayoutBuilder(
+                            builder: (context, constraints) {
+                              const spacing = 8.0;
+                              final columns =
+                                  AppLayout.optionGridColumnsForWidth(
+                                    constraints.maxWidth,
+                                  );
+                              final itemWidth =
+                                  (constraints.maxWidth -
+                                      ((columns - 1) * spacing)) /
+                                  columns;
+
+                              return Wrap(
+                                spacing: spacing,
+                                runSpacing: spacing,
+                                children: _navigationStyleOptions
+                                    .map(
+                                      (option) => SizedBox(
+                                        width: itemWidth,
+                                        child: _buildNavigationStyleTile(
+                                          context,
+                                          option: option,
+                                          selectedNavigationStyle:
+                                              selectedNavigationStyle,
+                                          onTap: () {
+                                            if (selectedNavigationStyle ==
+                                                option.preference) {
+                                              return;
+                                            }
+                                            unawaited(
+                                              ref
+                                                  .read(
+                                                    appNavigationStylePreferenceProvider
+                                                        .notifier,
+                                                  )
+                                                  .setPreference(
+                                                    option.preference,
+                                                  ),
+                                            );
+                                          },
+                                        ),
+                                      ),
+                                    )
+                                    .toList(growable: false),
+                              );
+                            },
+                          ),
+                          const SizedBox(height: 12),
+                          _buildNavigationLabelVisibilityTile(
+                            context,
+                            showLabels: showNavigationLabels,
+                            onChanged: (value) {
+                              unawaited(
+                                ref
+                                    .read(
+                                      appNavigationLabelVisibilityProvider
+                                          .notifier,
+                                    )
+                                    .setVisible(value),
+                              );
+                            },
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    _buildSectionCard(
+                      context,
                       icon: Icons.space_dashboard_outlined,
                       title: '底部菜单',
                       subtitle: '控制底部主导航展示项，至少保留一个内容入口。',
@@ -194,8 +297,11 @@ class _AppearancePageState extends ConsumerState<AppearancePage> {
     AppShellNavigationState navigationState, {
     required ThemeMode selectedThemeMode,
     required Color selectedSeedColor,
+    required AppNavigationStylePreference selectedNavigationStyle,
+    required bool showNavigationLabels,
   }) {
-    final colorScheme = Theme.of(context).colorScheme;
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
     final selectedMode = _themeModeOptions.firstWhere(
       (option) => option.mode == selectedThemeMode,
     );
@@ -203,6 +309,11 @@ class _AppearancePageState extends ConsumerState<AppearancePage> {
     final previewTint = appThemeDisplayColor(
       selectedSeedColor,
       brightness: colorScheme.brightness,
+    );
+    final effectiveNavigationStyle = resolveAppNavigationStyle(
+      selectedNavigationStyle,
+      isWeb: kIsWeb,
+      platform: theme.platform,
     );
 
     return Container(
@@ -283,6 +394,20 @@ class _AppearancePageState extends ConsumerState<AppearancePage> {
                   icon: Icons.space_dashboard_outlined,
                   label: '底部菜单 ${navigationState.visibleTabCount}/3',
                 ),
+                _buildPreviewMetaChip(
+                  context,
+                  icon: Icons.dock_outlined,
+                  label: appNavigationStylePreferenceLabel(
+                    selectedNavigationStyle,
+                  ),
+                ),
+                _buildPreviewMetaChip(
+                  context,
+                  icon: Icons.text_fields_outlined,
+                  label: appNavigationLabelVisibilityLabel(
+                    showNavigationLabels,
+                  ),
+                ),
               ],
             ),
             const SizedBox(height: 14),
@@ -306,63 +431,12 @@ class _AppearancePageState extends ConsumerState<AppearancePage> {
                     ),
                   ),
                   const SizedBox(height: 10),
-                  Row(
-                    children: [
-                      for (
-                        var index = 0;
-                        index < visibleDestinations.length;
-                        index++
-                      ) ...[
-                        if (index > 0) const SizedBox(width: 8),
-                        Expanded(
-                          child: Container(
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 8,
-                              vertical: 10,
-                            ),
-                            decoration: BoxDecoration(
-                              color:
-                                  index == 0
-                                      ? previewTint.withValues(alpha: 0.14)
-                                      : colorScheme.surfaceContainerLow,
-                              borderRadius: BorderRadius.circular(12),
-                              border: Border.all(
-                                color:
-                                    index == 0
-                                        ? previewTint.withValues(alpha: 0.28)
-                                        : colorScheme.outlineVariant.withValues(
-                                          alpha: 0.44,
-                                        ),
-                              ),
-                            ),
-                            child: Column(
-                              children: [
-                                Icon(
-                                  visibleDestinations[index].icon,
-                                  size: 18,
-                                  color:
-                                      index == 0
-                                          ? previewTint
-                                          : colorScheme.onSurfaceVariant,
-                                ),
-                                const SizedBox(height: 6),
-                                Text(
-                                  visibleDestinations[index].label,
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
-                                  style: Theme.of(
-                                    context,
-                                  ).textTheme.labelMedium?.copyWith(
-                                    color: colorScheme.onSurface,
-                                    fontWeight: FontWeight.w700,
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                        ),
-                      ],
-                    ],
+                  _buildBottomNavigationPreview(
+                    context,
+                    visibleDestinations,
+                    previewTint: previewTint,
+                    navigationStyle: effectiveNavigationStyle,
+                    showNavigationLabels: showNavigationLabels,
                   ),
                 ],
               ),
@@ -370,6 +444,80 @@ class _AppearancePageState extends ConsumerState<AppearancePage> {
           ],
         ),
       ),
+    );
+  }
+
+  Widget _buildBottomNavigationPreview(
+    BuildContext context,
+    List<AppShellDestination> visibleDestinations, {
+    required Color previewTint,
+    required AppNavigationStyle navigationStyle,
+    required bool showNavigationLabels,
+  }) {
+    final colorScheme = Theme.of(context).colorScheme;
+
+    if (navigationStyle == AppNavigationStyle.cupertinoDock) {
+      return ClipRRect(
+        borderRadius: BorderRadius.circular(18),
+        child: ColoredBox(
+          color: colorScheme.surface.withValues(alpha: 0.12),
+          child: IgnorePointer(
+            child: CupertinoDockNavigationBar(
+              destinations: visibleDestinations,
+              selectedIndex: 0,
+              showLabels: showNavigationLabels,
+              onDestinationSelected: (_) {},
+              onSearchPressed: () {},
+            ),
+          ),
+        ),
+      );
+    }
+
+    return Row(
+      children: [
+        for (var index = 0; index < visibleDestinations.length; index++) ...[
+          if (index > 0) const SizedBox(width: 8),
+          Expanded(
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 10),
+              decoration: BoxDecoration(
+                color:
+                    index == 0
+                        ? previewTint.withValues(alpha: 0.14)
+                        : colorScheme.surfaceContainerLow,
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(
+                  color:
+                      index == 0
+                          ? previewTint.withValues(alpha: 0.28)
+                          : colorScheme.outlineVariant.withValues(alpha: 0.44),
+                ),
+              ),
+              child: Column(
+                children: [
+                  Icon(
+                    visibleDestinations[index].icon,
+                    size: 18,
+                    color:
+                        index == 0 ? previewTint : colorScheme.onSurfaceVariant,
+                  ),
+                  const SizedBox(height: 6),
+                  Text(
+                    visibleDestinations[index].label,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: Theme.of(context).textTheme.labelMedium?.copyWith(
+                      color: colorScheme.onSurface,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ],
+      ],
     );
   }
 
@@ -591,6 +739,111 @@ class _AppearancePageState extends ConsumerState<AppearancePage> {
               Icon(Icons.check_rounded, size: 18, color: colorScheme.primary),
           ],
         ),
+      ),
+    );
+  }
+
+  Widget _buildNavigationStyleTile(
+    BuildContext context, {
+    required _NavigationStyleOption option,
+    required AppNavigationStylePreference selectedNavigationStyle,
+    required VoidCallback onTap,
+  }) {
+    final colorScheme = Theme.of(context).colorScheme;
+    final selected = option.preference == selectedNavigationStyle;
+
+    return InkWell(
+      borderRadius: BorderRadius.circular(12),
+      onTap: onTap,
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 160),
+        curve: Curves.easeOutCubic,
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
+        decoration: BoxDecoration(
+          color:
+              selected
+                  ? colorScheme.secondaryContainer.withValues(alpha: 0.8)
+                  : colorScheme.surface,
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(
+            color:
+                selected
+                    ? colorScheme.primary
+                    : colorScheme.outlineVariant.withValues(alpha: 0.58),
+            width: selected ? 1.4 : 1,
+          ),
+        ),
+        child: Row(
+          children: [
+            Icon(
+              option.icon,
+              size: 18,
+              color:
+                  selected ? colorScheme.primary : colorScheme.onSurfaceVariant,
+            ),
+            const SizedBox(width: 8),
+            Expanded(
+              child: Text(
+                option.label,
+                style: Theme.of(
+                  context,
+                ).textTheme.labelLarge?.copyWith(fontWeight: FontWeight.w700),
+              ),
+            ),
+            Icon(
+              selected ? Icons.check_circle_rounded : Icons.circle_outlined,
+              size: 18,
+              color: selected ? colorScheme.primary : colorScheme.outline,
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildNavigationLabelVisibilityTile(
+    BuildContext context, {
+    required bool showLabels,
+    required ValueChanged<bool> onChanged,
+  }) {
+    final colorScheme = Theme.of(context).colorScheme;
+
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.fromLTRB(12, 10, 12, 10),
+      decoration: BoxDecoration(
+        color: colorScheme.surface,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(
+          color: colorScheme.outlineVariant.withValues(alpha: 0.58),
+        ),
+      ),
+      child: Row(
+        children: [
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  '显示导航文字',
+                  style: Theme.of(
+                    context,
+                  ).textTheme.labelLarge?.copyWith(fontWeight: FontWeight.w700),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  '苹果风格下控制左侧主导航是否显示文字。',
+                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                    color: colorScheme.onSurfaceVariant,
+                    height: 1.35,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(width: 12),
+          Switch.adaptive(value: showLabels, onChanged: onChanged),
+        ],
       ),
     );
   }
@@ -886,6 +1139,18 @@ class _ThemeModeOption {
   });
 
   final ThemeMode mode;
+  final String label;
+  final IconData icon;
+}
+
+class _NavigationStyleOption {
+  const _NavigationStyleOption({
+    required this.preference,
+    required this.label,
+    required this.icon,
+  });
+
+  final AppNavigationStylePreference preference;
   final String label;
   final IconData icon;
 }

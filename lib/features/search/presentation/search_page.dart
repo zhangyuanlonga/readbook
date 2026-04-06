@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../../app/navigation/search_entry_transition.dart';
 import '../../../app/layout/app_layout.dart';
 import '../../../app/layout/app_spacing.dart';
 
@@ -26,7 +27,9 @@ import 'widgets/search_progress_card.dart';
 import 'widgets/search_report_summary.dart';
 
 class SearchPage extends StatefulWidget {
-  const SearchPage({super.key});
+  const SearchPage({super.key, this.hideTopSearchBar = false});
+
+  final bool hideTopSearchBar;
 
   @override
   State<SearchPage> createState() => _SearchPageState();
@@ -135,8 +138,11 @@ class _SearchPageState extends State<SearchPage> {
             tooltip: '返回',
             icon: const Icon(Icons.arrow_back),
           ),
-          titleSpacing: 0,
-          title: _buildSearchBar(context),
+          titleSpacing: widget.hideTopSearchBar ? NavigationToolbar.kMiddleSpacing : 0,
+          title:
+              widget.hideTopSearchBar
+                  ? const Text('搜索')
+                  : _buildSearchBar(context),
         ),
         body: DecoratedBox(
           decoration: BoxDecoration(
@@ -391,72 +397,80 @@ class _SearchPageState extends State<SearchPage> {
 
     return Padding(
       padding: const EdgeInsets.only(right: 12),
-      child: SizedBox(
-        height: 42,
-        child: TextField(
-          controller: _keywordController,
-          focusNode: _searchFocusNode,
-          autofocus: true,
-          textInputAction: TextInputAction.search,
-          textAlignVertical: TextAlignVertical.center,
-          style: theme.textTheme.bodyMedium?.copyWith(
-            fontSize: 14,
-            height: 1.2,
-          ),
-          onSubmitted: (_) => _runSearch(),
-          decoration: InputDecoration(
-            hintText: hintText,
-            hintStyle: theme.textTheme.bodyMedium?.copyWith(
-              fontSize: 14,
-              height: 1.2,
-              color: colorScheme.onSurfaceVariant,
-            ),
-            filled: true,
-            fillColor: colorScheme.surfaceContainerHighest,
-            border: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(14),
-              borderSide: BorderSide.none,
-            ),
-            enabledBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(14),
-              borderSide: BorderSide.none,
-            ),
-            focusedBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(14),
-              borderSide: BorderSide(
-                color: colorScheme.primary.withValues(alpha: 0.45),
-                width: 1.2,
+      child: Hero(
+        tag: kSearchEntryHeroTag,
+        createRectTween:
+            (begin, end) => MaterialRectCenterArcTween(begin: begin, end: end),
+        child: Material(
+          color: Colors.transparent,
+          child: SizedBox(
+            height: 42,
+            child: TextField(
+              controller: _keywordController,
+              focusNode: _searchFocusNode,
+              autofocus: true,
+              textInputAction: TextInputAction.search,
+              textAlignVertical: TextAlignVertical.center,
+              style: theme.textTheme.bodyMedium?.copyWith(
+                fontSize: 14,
+                height: 1.2,
               ),
-            ),
-            prefixIcon: const Icon(Icons.search_rounded, size: 20),
-            prefixIconConstraints: const BoxConstraints(
-              minWidth: 40,
-              minHeight: 40,
-            ),
-            suffixIcon: ValueListenableBuilder<TextEditingValue>(
-              valueListenable: _keywordController,
-              builder: (_, value, __) {
-                if (_isSearching) {
-                  return IconButton(
-                    tooltip: '取消搜索',
-                    onPressed: _runSearch,
-                    icon: const Icon(Icons.stop_circle_outlined, size: 18),
-                  );
-                }
-                if (value.text.isEmpty) {
-                  return const SizedBox.shrink();
-                }
-                return IconButton(
-                  tooltip: '清空输入',
-                  onPressed: () => _keywordController.clear(),
-                  icon: const Icon(Icons.close_rounded, size: 18),
-                );
-              },
-            ),
-            isDense: true,
-            contentPadding: const EdgeInsets.symmetric(
-              horizontal: 8,
-              vertical: 10,
+              onSubmitted: (_) => _runSearch(),
+              decoration: InputDecoration(
+                hintText: hintText,
+                hintStyle: theme.textTheme.bodyMedium?.copyWith(
+                  fontSize: 14,
+                  height: 1.2,
+                  color: colorScheme.onSurfaceVariant,
+                ),
+                filled: true,
+                fillColor: colorScheme.surfaceContainerHighest,
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(14),
+                  borderSide: BorderSide.none,
+                ),
+                enabledBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(14),
+                  borderSide: BorderSide.none,
+                ),
+                focusedBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(14),
+                  borderSide: BorderSide(
+                    color: colorScheme.primary.withValues(alpha: 0.45),
+                    width: 1.2,
+                  ),
+                ),
+                prefixIcon: const Icon(Icons.search_rounded, size: 20),
+                prefixIconConstraints: const BoxConstraints(
+                  minWidth: 40,
+                  minHeight: 40,
+                ),
+                suffixIcon: ValueListenableBuilder<TextEditingValue>(
+                  valueListenable: _keywordController,
+                  builder: (_, value, __) {
+                    if (_isSearching) {
+                      return IconButton(
+                        tooltip: '取消搜索',
+                        onPressed: _runSearch,
+                        icon: const Icon(Icons.stop_circle_outlined, size: 18),
+                      );
+                    }
+                    if (value.text.isEmpty) {
+                      return const SizedBox.shrink();
+                    }
+                    return IconButton(
+                      tooltip: '清空输入',
+                      onPressed: () => _keywordController.clear(),
+                      icon: const Icon(Icons.close_rounded, size: 18),
+                    );
+                  },
+                ),
+                isDense: true,
+                contentPadding: const EdgeInsets.symmetric(
+                  horizontal: 8,
+                  vertical: 10,
+                ),
+              ),
             ),
           ),
         ),

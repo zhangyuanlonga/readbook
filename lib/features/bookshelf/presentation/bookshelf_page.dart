@@ -3,10 +3,12 @@ import 'dart:io';
 
 import 'package:file_selector/file_selector.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
 
+import '../../../app/navigation/app_navigation_style_provider.dart';
 import '../../../app/layout/app_spacing.dart';
 import '../../../app/widgets/disk_cached_cover_image.dart';
 import '../../../app/widgets/text_cover_placeholder.dart';
@@ -65,16 +67,16 @@ class _BookshelfProgressDisplay {
   final bool hasProgress;
 }
 
-class BookshelfPage extends StatefulWidget {
+class BookshelfPage extends ConsumerStatefulWidget {
   const BookshelfPage({super.key, this.prefetchAnnouncementOnInit = true});
 
   final bool prefetchAnnouncementOnInit;
 
   @override
-  State<BookshelfPage> createState() => _BookshelfPageState();
+  ConsumerState<BookshelfPage> createState() => _BookshelfPageState();
 }
 
-class _BookshelfPageState extends State<BookshelfPage>
+class _BookshelfPageState extends ConsumerState<BookshelfPage>
     with AutomaticKeepAliveClientMixin<BookshelfPage> {
   static const List<_BookshelfFilter> _kDefaultBaseFilters = <_BookshelfFilter>[
     _BookshelfFilter.all,
@@ -212,7 +214,15 @@ class _BookshelfPageState extends State<BookshelfPage>
     super.build(context);
     final colorScheme = Theme.of(context).colorScheme;
     final horizontal = AppSpacing.pageHorizontal(context);
-    final bottomSafe = MediaQuery.viewPaddingOf(context).bottom;
+    final bottomSafe = MediaQuery.paddingOf(context).bottom;
+    final platform = Theme.of(context).platform;
+    final effectiveNavigationStyle = resolveAppNavigationStyle(
+      ref.watch(appNavigationStylePreferenceProvider),
+      isWeb: false,
+      platform: platform,
+    );
+    final showTopSearchAction =
+        effectiveNavigationStyle != AppNavigationStyle.cupertinoDock;
     final filteredBooks = _filteredBooks;
     final continueReadingVisible =
         _continueReadingRecord != null && !_isSelectionMode;
@@ -260,11 +270,12 @@ class _BookshelfPageState extends State<BookshelfPage>
             )
           else ...[
             _buildAnnouncementAction(),
-            IconButton(
-              tooltip: '搜索书籍',
-              onPressed: () => context.go('/search'),
-              icon: const Icon(Icons.search_rounded),
-            ),
+            if (showTopSearchAction)
+              IconButton(
+                tooltip: '搜索书籍',
+                onPressed: () => context.go('/search'),
+                icon: const Icon(Icons.search_rounded),
+              ),
             PopupMenuButton<_BookshelfMoreAction>(
               tooltip: '更多功能',
               onSelected: _handleMoreAction,
@@ -343,7 +354,7 @@ class _BookshelfPageState extends State<BookshelfPage>
           Positioned(
             left: horizontal,
             right: horizontal,
-            bottom: 12,
+            bottom: 12 + bottomSafe,
             child: _buildContinueReadingPromptCard(),
           ),
         ],

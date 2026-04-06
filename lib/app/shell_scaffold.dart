@@ -6,7 +6,9 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import 'layout/app_layout.dart';
+import 'navigation/app_navigation_style_provider.dart';
 import 'shell_navigation_provider.dart';
+import 'widgets/cupertino_dock_navigation_bar.dart';
 
 class ShellScaffold extends ConsumerStatefulWidget {
   const ShellScaffold({
@@ -40,15 +42,6 @@ class _ShellScaffoldState extends ConsumerState<ShellScaffold>
   late final Animation<double> _tabSlideCurve;
   late final Animation<double> _tabFadeCurve;
   late final Animation<double> _tabScaleCurve;
-
-  bool get _enableMobileTabSwipe {
-    if (kIsWeb) {
-      return false;
-    }
-
-    return defaultTargetPlatform == TargetPlatform.android ||
-        defaultTargetPlatform == TargetPlatform.iOS;
-  }
 
   @override
   void initState() {
@@ -99,13 +92,26 @@ class _ShellScaffoldState extends ConsumerState<ShellScaffold>
   Widget build(BuildContext context) {
     final disableAnimations =
         MediaQuery.maybeOf(context)?.disableAnimations ?? false;
+    final platform = Theme.of(context).platform;
     final shellChild = RepaintBoundary(
       child: widget.navigationShell ?? widget.child!,
     );
     final useNavigationRail = AppLayout.isMediumUp(context);
-    final enableTabSwipe = _enableMobileTabSwipe && !useNavigationRail;
+    final enableTabSwipe =
+        !kIsWeb && _isMobilePlatform(platform) && !useNavigationRail;
+    final navigationStylePreference = ref.watch(
+      appNavigationStylePreferenceProvider,
+    );
+    final showNavigationLabels = ref.watch(
+      appNavigationLabelVisibilityProvider,
+    );
     final navigationState = ref.watch(appShellNavigationProvider);
     final visibleDestinations = visibleAppShellDestinations(navigationState);
+    final effectiveNavigationStyle = resolveAppNavigationStyle(
+      navigationStylePreference,
+      isWeb: kIsWeb,
+      platform: platform,
+    );
     final currentTab = _locationTab(widget.location);
     final selectedIndex = visibleDestinations.indexWhere(
       (destination) => destination.tab == currentTab,
@@ -198,22 +204,64 @@ class _ShellScaffoldState extends ConsumerState<ShellScaffold>
     }
 
     return Scaffold(
+      extendBody: true,
       body: body,
-      bottomNavigationBar: NavigationBar(
-        height: 64,
+      bottomNavigationBar: _buildMobileBottomNavigationBar(
+        context,
+        destinations: visibleDestinations,
         selectedIndex: effectiveSelectedIndex,
-        onDestinationSelected: (index) {
-          _goToDestination(context, visibleDestinations[index]);
-        },
-        destinations: [
-          for (final destination in visibleDestinations)
-            NavigationDestination(
-              icon: Icon(destination.icon),
-              label: destination.label,
-            ),
-        ],
+        style: effectiveNavigationStyle,
+        showNavigationLabels: showNavigationLabels,
       ),
     );
+  }
+
+  bool _isMobilePlatform(TargetPlatform platform) {
+    return platform == TargetPlatform.android || platform == TargetPlatform.iOS;
+  }
+
+  Widget _buildMobileBottomNavigationBar(
+    BuildContext context, {
+    required List<AppShellDestination> destinations,
+    required int selectedIndex,
+    required AppNavigationStyle style,
+    required bool showNavigationLabels,
+  }) {
+    final colorScheme = Theme.of(context).colorScheme;
+
+    switch (style) {
+      case AppNavigationStyle.standard:
+        return NavigationBar(
+          height: 64,
+          backgroundColor: Colors.transparent,
+          elevation: 0,
+          shadowColor: Colors.transparent,
+          surfaceTintColor: Colors.transparent,
+          indicatorColor: colorScheme.secondaryContainer,
+          selectedIndex: selectedIndex,
+          onDestinationSelected: (index) {
+            _goToDestination(context, destinations[index]);
+          },
+          destinations: [
+            for (final destination in destinations)
+              NavigationDestination(
+                icon: Icon(destination.icon),
+                label: destination.label,
+              ),
+          ],
+        );
+      case AppNavigationStyle.cupertinoDock:
+        return CupertinoDockNavigationBar(
+          destinations: destinations,
+          selectedIndex: selectedIndex,
+          showLabels: showNavigationLabels,
+          onDestinationSelected:
+              (index) => _goToDestination(context, destinations[index]),
+          onSearchPressed: () {
+            context.push('/search?entry=dock');
+          },
+        );
+    }
   }
 
   void _onHorizontalDragEnd(

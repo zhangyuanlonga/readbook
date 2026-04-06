@@ -3,14 +3,14 @@ import 'package:flutter_test/flutter_test.dart';
 
 import 'package:shuxiang_reading_next/app/layout/app_layout.dart';
 import 'package:shuxiang_reading_next/app/layout/app_spacing.dart';
+import 'package:shuxiang_reading_next/app/navigation/app_navigation_style_provider.dart';
 import 'package:shuxiang_reading_next/app/shell_navigation_provider.dart';
 import 'package:shuxiang_reading_next/app/shell_scaffold.dart';
+import 'package:shuxiang_reading_next/app/widgets/cupertino_dock_navigation_bar.dart';
 import '../../test_utils/adaptive_test_harness.dart';
 
 void main() {
-  testWidgets('AppSpacing 在 360、390、430 宽度下使用正确的间距', (
-    tester,
-  ) async {
+  testWidgets('AppSpacing 在 360、390、430 宽度下使用正确的间距', (tester) async {
     final spacing360 = await _readFromContext<double>(
       tester,
       width: 360,
@@ -32,9 +32,7 @@ void main() {
     expect(spacing430, 16);
   });
 
-  testWidgets('AppLayout 能正确识别常见手机宽度', (
-    tester,
-  ) async {
+  testWidgets('AppLayout 能正确识别常见手机宽度', (tester) async {
     final flags360 = await _readFromContext<_LayoutFlags>(
       tester,
       width: 360,
@@ -79,9 +77,7 @@ void main() {
     expect(flags430.isPhone, isTrue);
   });
 
-  testWidgets('AppLayout 按语义化断点划分宽度分档', (
-    tester,
-  ) async {
+  testWidgets('AppLayout 按语义化断点划分宽度分档', (tester) async {
     final bucket320 = await _readFromContext<AppWidthBucket>(
       tester,
       width: 320,
@@ -121,46 +117,41 @@ void main() {
     expect(bucket840, AppWidthBucket.expanded);
   });
 
-  testWidgets(
-    'AppLayout pageContentMaxWidth 在手机上保持原宽，在中大屏上限宽',
-    (tester) async {
-      final width390 = await _readFromContext<double>(
-        tester,
-        width: 390,
-        read:
-            (context) => AppLayout.pageContentMaxWidth(
-              context,
-              maxWidth: AppLayout.mineContentMaxWidth,
-            ),
-      );
-      final width600 = await _readFromContext<double>(
-        tester,
-        width: 600,
-        read:
-            (context) => AppLayout.pageContentMaxWidth(
-              context,
-              maxWidth: AppLayout.mineContentMaxWidth,
-            ),
-      );
-      final width720 = await _readFromContext<double>(
-        tester,
-        width: 720,
-        read:
-            (context) => AppLayout.pageContentMaxWidth(
-              context,
-              maxWidth: AppLayout.mineContentMaxWidth,
-            ),
-      );
+  testWidgets('AppLayout pageContentMaxWidth 在手机上保持原宽，在中大屏上限宽', (tester) async {
+    final width390 = await _readFromContext<double>(
+      tester,
+      width: 390,
+      read:
+          (context) => AppLayout.pageContentMaxWidth(
+            context,
+            maxWidth: AppLayout.mineContentMaxWidth,
+          ),
+    );
+    final width600 = await _readFromContext<double>(
+      tester,
+      width: 600,
+      read:
+          (context) => AppLayout.pageContentMaxWidth(
+            context,
+            maxWidth: AppLayout.mineContentMaxWidth,
+          ),
+    );
+    final width720 = await _readFromContext<double>(
+      tester,
+      width: 720,
+      read:
+          (context) => AppLayout.pageContentMaxWidth(
+            context,
+            maxWidth: AppLayout.mineContentMaxWidth,
+          ),
+    );
 
-      expect(width390, 390);
-      expect(width600, 600);
-      expect(width720, AppLayout.mineContentMaxWidth);
-    },
-  );
+    expect(width390, 390);
+    expect(width600, 600);
+    expect(width720, AppLayout.mineContentMaxWidth);
+  });
 
-  testWidgets('AppLayout aboutPageContentMaxWidth 遵循两段式限宽', (
-    tester,
-  ) async {
+  testWidgets('AppLayout aboutPageContentMaxWidth 遵循两段式限宽', (tester) async {
     final width500 = await _readFromContext<double>(
       tester,
       width: 500,
@@ -188,9 +179,7 @@ void main() {
     expect(width1300, AppLayout.aboutExpandedContentMaxWidth);
   });
 
-  testWidgets('AppLayout optionGridColumnsForWidth 与宽度分档一致', (
-    tester,
-  ) async {
+  testWidgets('AppLayout optionGridColumnsForWidth 与宽度分档一致', (tester) async {
     final columns320 = await _readFromContext<int>(
       tester,
       width: 320,
@@ -248,9 +237,7 @@ void main() {
     expect(columns600, 4);
   });
 
-  testWidgets('AppLayout 将 390dp 以下视为小屏手机', (
-    tester,
-  ) async {
+  testWidgets('AppLayout 将 390dp 以下视为小屏手机', (tester) async {
     final small375 = await _readFromContext<bool>(
       tester,
       width: 375,
@@ -284,36 +271,35 @@ void main() {
     expect(columns600, 3);
   });
 
-  testWidgets(
-    'AppLayout useCondensedPhoneDensityForWidth 只在大号手机区间启用',
-    (tester) async {
-      final dense390 = await _readFromContext<bool>(
-        tester,
-        width: 390,
-        read: (context) => AppLayout.useCondensedPhoneDensityForWidth(390),
-      );
-      final dense430 = await _readFromContext<bool>(
-        tester,
-        width: 430,
-        read: (context) => AppLayout.useCondensedPhoneDensityForWidth(430),
-      );
-      final dense480 = await _readFromContext<bool>(
-        tester,
-        width: 480,
-        read: (context) => AppLayout.useCondensedPhoneDensityForWidth(480),
-      );
-      final dense600 = await _readFromContext<bool>(
-        tester,
-        width: 600,
-        read: (context) => AppLayout.useCondensedPhoneDensityForWidth(600),
-      );
+  testWidgets('AppLayout useCondensedPhoneDensityForWidth 只在大号手机区间启用', (
+    tester,
+  ) async {
+    final dense390 = await _readFromContext<bool>(
+      tester,
+      width: 390,
+      read: (context) => AppLayout.useCondensedPhoneDensityForWidth(390),
+    );
+    final dense430 = await _readFromContext<bool>(
+      tester,
+      width: 430,
+      read: (context) => AppLayout.useCondensedPhoneDensityForWidth(430),
+    );
+    final dense480 = await _readFromContext<bool>(
+      tester,
+      width: 480,
+      read: (context) => AppLayout.useCondensedPhoneDensityForWidth(480),
+    );
+    final dense600 = await _readFromContext<bool>(
+      tester,
+      width: 600,
+      read: (context) => AppLayout.useCondensedPhoneDensityForWidth(600),
+    );
 
-      expect(dense390, isTrue);
-      expect(dense430, isTrue);
-      expect(dense480, isTrue);
-      expect(dense600, isFalse);
-    },
-  );
+    expect(dense390, isTrue);
+    expect(dense430, isTrue);
+    expect(dense480, isTrue);
+    expect(dense600, isFalse);
+  });
 
   testWidgets('AppLayout bookshelfGridColumnsForWidth 按宽度阈值切换列数', (
     tester,
@@ -357,9 +343,7 @@ void main() {
     expect(columns1400, 6);
   });
 
-  testWidgets('AppLayout sheetHeightFactor 按小屏、常规和大号手机切换', (
-    tester,
-  ) async {
+  testWidgets('AppLayout sheetHeightFactor 按小屏、常规和大号手机切换', (tester) async {
     final compact = await _readFromContext<double>(
       tester,
       width: 320,
@@ -411,30 +395,25 @@ void main() {
     expect(large, 0.85);
   });
 
-  testWidgets(
-    'AppLayout clamps text scale 在手机和平板使用不同上限',
-    (tester) async {
-      final phoneScale = await _readFromContext<double>(
-        tester,
-        width: 390,
-        textScaleFactor: 1.5,
-        read: AppLayout.clampedTextScaleFactor,
-      );
-      final tabletScale = await _readFromContext<double>(
-        tester,
-        width: 840,
-        textScaleFactor: 1.5,
-        read: AppLayout.clampedTextScaleFactor,
-      );
+  testWidgets('AppLayout clamps text scale 在手机和平板使用不同上限', (tester) async {
+    final phoneScale = await _readFromContext<double>(
+      tester,
+      width: 390,
+      textScaleFactor: 1.5,
+      read: AppLayout.clampedTextScaleFactor,
+    );
+    final tabletScale = await _readFromContext<double>(
+      tester,
+      width: 840,
+      textScaleFactor: 1.5,
+      read: AppLayout.clampedTextScaleFactor,
+    );
 
-      expect(phoneScale, 1.24);
-      expect(tabletScale, 1.3);
-    },
-  );
+    expect(phoneScale, 1.24);
+    expect(tabletScale, 1.3);
+  });
 
-  testWidgets('ShellScaffold 在手机宽度下保留底部导航栏', (
-    tester,
-  ) async {
+  testWidgets('ShellScaffold 在手机宽度下保留底部导航栏', (tester) async {
     for (final width in <double>[360, 390, 430]) {
       await _pumpShellScaffold(tester, width: width);
 
@@ -451,18 +430,14 @@ void main() {
     }
   });
 
-  testWidgets('ShellScaffold 到达平板断点后切换为侧边栏', (
-    tester,
-  ) async {
+  testWidgets('ShellScaffold 到达平板断点后切换为侧边栏', (tester) async {
     await _pumpShellScaffold(tester, width: AppLayout.railBreakpointWidth);
 
     expect(find.byType(NavigationBar), findsNothing);
     expect(find.byType(NavigationRail), findsOneWidget);
   });
 
-  testWidgets('ShellScaffold 底部导航保持发现页位于中间', (
-    tester,
-  ) async {
+  testWidgets('ShellScaffold 底部导航保持发现页位于中间', (tester) async {
     await tester.pumpWidget(
       AdaptiveTestHarness(
         width: 390,
@@ -508,6 +483,43 @@ void main() {
 
     expect(labels, <String>['书架', '我的']);
     expect(bar.selectedIndex, 0);
+  });
+
+  testWidgets('ShellScaffold 在 iOS 跟随系统时使用苹果风格底栏', (tester) async {
+    await tester.pumpWidget(
+      AdaptiveTestHarness(
+        width: 390,
+        wrapWithMaterialApp: true,
+        child: Theme(
+          data: ThemeData(platform: TargetPlatform.iOS),
+          child: const ShellScaffold(location: '/bookshelf', child: SizedBox()),
+        ),
+      ),
+    );
+    await tester.pump();
+
+    expect(find.byType(CupertinoDockNavigationBar), findsOneWidget);
+    expect(find.byType(NavigationBar), findsNothing);
+  });
+
+  testWidgets('ShellScaffold 在平板宽度下忽略苹果风格设置并继续使用侧边栏', (tester) async {
+    await tester.pumpWidget(
+      AdaptiveTestHarness(
+        width: AppLayout.railBreakpointWidth,
+        wrapWithMaterialApp: true,
+        overrides: [
+          appNavigationStylePreferenceProvider.overrideWith(
+            _CupertinoDockNavigationStyleNotifier.new,
+          ),
+        ],
+        child: const ShellScaffold(location: '/bookshelf', child: SizedBox()),
+      ),
+    );
+    await tester.pump();
+
+    expect(find.byType(NavigationRail), findsOneWidget);
+    expect(find.byType(CupertinoDockNavigationBar), findsNothing);
+    expect(find.byType(NavigationBar), findsNothing);
   });
 }
 
@@ -558,6 +570,14 @@ class _BookshelfMineNavigationNotifier extends AppShellNavigationNotifier {
       showBookshelf: true,
       showDiscover: false,
     );
+  }
+}
+
+class _CupertinoDockNavigationStyleNotifier
+    extends AppNavigationStylePreferenceNotifier {
+  @override
+  AppNavigationStylePreference build() {
+    return AppNavigationStylePreference.cupertinoDock;
   }
 }
 
