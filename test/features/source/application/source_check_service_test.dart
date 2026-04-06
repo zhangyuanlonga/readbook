@@ -3,6 +3,7 @@ import 'package:shuxiang_reading_next/domain/entities/source_health.dart';
 import 'package:shuxiang_reading_next/domain/repositories/script_source_repository.dart';
 import 'package:shuxiang_reading_next/features/source/application/source_check_service.dart';
 import 'package:shuxiang_reading_next/features/source/application/source_health_service.dart';
+import 'package:shuxiang_reading_next/features/source/application/source_runtime_diagnostic_execution_container.dart';
 import 'package:shuxiang_reading_next/features/source/application/source_runtime_facade.dart';
 import 'package:shuxiang_reading_next/runtime/session/source_session.dart';
 import 'package:shuxiang_reading_next/runtime/sources/source_contract.dart';
@@ -82,6 +83,68 @@ void main() {
       expect(results.first.status, SourceCheckStatus.healthy);
       expect(results.last.status, SourceCheckStatus.failed);
       expect(results.last.canBatchDelete, isTrue);
+    });
+
+    test('batch check creates and disposes diagnostic container per source', () async {
+      final diagnosticOne = _FakeDiagnosticExecutionContainer(
+        books: const <runtime_models.Book>[
+          runtime_models.Book(
+            title: '凡人修仙传',
+            author: '忘语',
+            detailUrl: 'https://example.com/book/1',
+          ),
+        ],
+        detailBook: const runtime_models.Book(
+          title: '凡人修仙传',
+          author: '忘语',
+          detailUrl: 'https://example.com/book/1',
+        ),
+        chapterList: const <runtime_models.Chapter>[],
+        contentResult: const runtime_models.Content(title: '', content: ''),
+      );
+      final diagnosticTwo = _FakeDiagnosticExecutionContainer(
+        books: const <runtime_models.Book>[
+          runtime_models.Book(
+            title: '斗破苍穹',
+            author: '天蚕土豆',
+            detailUrl: 'https://example.com/book/2',
+          ),
+        ],
+        detailBook: const runtime_models.Book(
+          title: '斗破苍穹',
+          author: '天蚕土豆',
+          detailUrl: 'https://example.com/book/2',
+        ),
+        chapterList: const <runtime_models.Chapter>[],
+        contentResult: const runtime_models.Content(title: '', content: ''),
+      );
+      final runtimeFacade = _FakeRuntimeFacade(
+        sources: <RegisteredSource>[
+          _buildRegisteredSource(id: 's1', name: '源1'),
+          _buildRegisteredSource(id: 's2', name: '源2'),
+        ],
+        diagnosticContainerBySourceId:
+            <String, SourceRuntimeDiagnosticExecutionContainer>{
+              's1': diagnosticOne,
+              's2': diagnosticTwo,
+            },
+      );
+      final service = SourceCheckService(
+        sourceRuntimeFacade: runtimeFacade,
+        sourceHealthService: SourceHealthService(),
+      );
+
+      final results = await service.checkSources(
+        sourceIds: const <String>['s1', 's2'],
+        keyword: '凡人修仙传',
+      );
+
+      expect(results, hasLength(2));
+      expect(diagnosticOne.searchCalls, 1);
+      expect(diagnosticTwo.searchCalls, 1);
+      expect(diagnosticOne.disposed, isTrue);
+      expect(diagnosticTwo.disposed, isTrue);
+      expect(runtimeFacade.searchCalls, 0);
     });
 
     test('batch check can skip cooling down source', () async {
@@ -218,6 +281,60 @@ void main() {
       expect(snapshot.level, SourceHealthLevel.healthy);
     });
 
+    test('source check prefers diagnostic execution container and disposes it', () async {
+      const detailBook = runtime_models.Book(
+        title: '凡人修仙传',
+        author: '忘语',
+        detailUrl: 'https://example.com/book/1',
+      );
+      const readableChapter = runtime_models.Chapter(
+        title: '第一章',
+        url: 'https://example.com/book/1/ch1',
+        index: 0,
+      );
+      final diagnosticContainer = _FakeDiagnosticExecutionContainer(
+        books: const <runtime_models.Book>[
+          runtime_models.Book(
+            title: '凡人修仙传',
+            author: '忘语',
+            detailUrl: 'https://example.com/book/1',
+          ),
+        ],
+        detailBook: detailBook,
+        chapterList: const <runtime_models.Chapter>[readableChapter],
+        contentResult: const runtime_models.Content(title: '第一章', content: '正文内容'),
+      );
+      final runtimeFacade = _FakeRuntimeFacade(
+        sources: <RegisteredSource>[
+          _buildRegisteredSource(id: 's1', name: '源1'),
+        ],
+        diagnosticContainerBySourceId: <String, SourceRuntimeDiagnosticExecutionContainer>{
+          's1': diagnosticContainer,
+        },
+      );
+      final service = SourceCheckService(
+        sourceRuntimeFacade: runtimeFacade,
+        sourceHealthService: SourceHealthService(),
+      );
+
+      final result = await service.checkSource(
+        sourceId: 's1',
+        keyword: '凡人修仙传',
+        level: SourceCheckLevel.fullReadPath,
+      );
+
+      expect(result.status, SourceCheckStatus.healthy);
+      expect(diagnosticContainer.searchCalls, 1);
+      expect(diagnosticContainer.detailCalls, 1);
+      expect(diagnosticContainer.chaptersCalls, 1);
+      expect(diagnosticContainer.contentCalls, 1);
+      expect(diagnosticContainer.disposed, isTrue);
+      expect(runtimeFacade.searchCalls, 0);
+      expect(runtimeFacade.detailCalls, 0);
+      expect(runtimeFacade.chaptersCalls, 0);
+      expect(runtimeFacade.contentCalls, 0);
+    });
+
     test('browser-capable successful check marks source as warning', () async {
       final runtimeFacade = _FakeRuntimeFacade(
         sources: <RegisteredSource>[
@@ -314,6 +431,8 @@ class _FakeRuntimeFacade extends SourceRuntimeFacade {
     this.detailBySourceId = const <String, runtime_models.Book>{},
     this.chaptersBySourceId = const <String, List<runtime_models.Chapter>>{},
     this.contentBySourceId = const <String, runtime_models.Content>{},
+    this.diagnosticContainerBySourceId =
+        const <String, SourceRuntimeDiagnosticExecutionContainer>{},
   }) : super(scriptSourceRepository: _FakeScriptSourceRepository());
 
   final List<RegisteredSource> sources;
@@ -321,6 +440,12 @@ class _FakeRuntimeFacade extends SourceRuntimeFacade {
   final Map<String, runtime_models.Book> detailBySourceId;
   final Map<String, List<runtime_models.Chapter>> chaptersBySourceId;
   final Map<String, runtime_models.Content> contentBySourceId;
+  final Map<String, SourceRuntimeDiagnosticExecutionContainer>
+  diagnosticContainerBySourceId;
+  int searchCalls = 0;
+  int detailCalls = 0;
+  int chaptersCalls = 0;
+  int contentCalls = 0;
 
   @override
   Future<RegisteredSource?> ensureRegisteredScriptSourceById(
@@ -335,12 +460,19 @@ class _FakeRuntimeFacade extends SourceRuntimeFacade {
   }
 
   @override
+  Future<SourceRuntimeDiagnosticExecutionContainer?>
+  createDiagnosticExecutionContainerById(String sourceId) async {
+    return diagnosticContainerBySourceId[sourceId];
+  }
+
+  @override
   Future<List<runtime_models.Book>> search({
     required String sourceId,
     required String keyword,
     bool allowInteractiveChallenge = true,
     SessionCancellationHandle? cancellationHandle,
   }) async {
+    searchCalls += 1;
     return booksBySourceId[sourceId] ?? const <runtime_models.Book>[];
   }
 
@@ -349,6 +481,7 @@ class _FakeRuntimeFacade extends SourceRuntimeFacade {
     required String sourceId,
     required runtime_models.Book book,
   }) async {
+    detailCalls += 1;
     return detailBySourceId[sourceId] ?? book;
   }
 
@@ -357,6 +490,7 @@ class _FakeRuntimeFacade extends SourceRuntimeFacade {
     required String sourceId,
     required runtime_models.Book book,
   }) async {
+    chaptersCalls += 1;
     return chaptersBySourceId[sourceId] ?? const <runtime_models.Chapter>[];
   }
 
@@ -366,8 +500,67 @@ class _FakeRuntimeFacade extends SourceRuntimeFacade {
     required runtime_models.Book book,
     required runtime_models.Chapter chapter,
   }) async {
+    contentCalls += 1;
     return contentBySourceId[sourceId] ??
         runtime_models.Content(title: chapter.title, content: '');
+  }
+}
+
+class _FakeDiagnosticExecutionContainer
+    implements SourceRuntimeDiagnosticExecutionContainer {
+  _FakeDiagnosticExecutionContainer({
+    required this.books,
+    required this.detailBook,
+    required this.chapterList,
+    required this.contentResult,
+  });
+
+  final List<runtime_models.Book> books;
+  final runtime_models.Book detailBook;
+  final List<runtime_models.Chapter> chapterList;
+  final runtime_models.Content contentResult;
+  int searchCalls = 0;
+  int detailCalls = 0;
+  int chaptersCalls = 0;
+  int contentCalls = 0;
+  bool disposed = false;
+
+  @override
+  String get sourceId => 's1';
+
+  @override
+  String get sourceName => '源1';
+
+  @override
+  Future<List<runtime_models.Book>> search(String keyword) async {
+    searchCalls += 1;
+    return books;
+  }
+
+  @override
+  Future<runtime_models.Book> detail(runtime_models.Book book) async {
+    detailCalls += 1;
+    return detailBook;
+  }
+
+  @override
+  Future<List<runtime_models.Chapter>> chapters(runtime_models.Book book) async {
+    chaptersCalls += 1;
+    return chapterList;
+  }
+
+  @override
+  Future<runtime_models.Content> content(
+    runtime_models.Book book,
+    runtime_models.Chapter chapter,
+  ) async {
+    contentCalls += 1;
+    return contentResult;
+  }
+
+  @override
+  void dispose() {
+    disposed = true;
   }
 }
 

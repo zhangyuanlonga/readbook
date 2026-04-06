@@ -951,6 +951,14 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
     WidgetsBinding.instance.removeObserver(this);
     _cancelActiveSwitchSourceSearch();
     _chapterContentRequestToken += 1;
+    final sourceId = (_sourceId ?? '').trim();
+    if (sourceId.isNotEmpty) {
+      SourceRuntimeFacade.instance.clearReadingFlow(
+        sourceId: sourceId,
+        detailUrl: (_detailUrl ?? '').trim(),
+        title: _bookTitle.trim(),
+      );
+    }
     _commitReadingRecordSession();
     _syncSystemUiVisibility(force: true, visible: true);
     _overlayControlsController.stop();
@@ -6581,6 +6589,14 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
 
       final targetIndex = switchTarget.targetChapterIndex;
       final targetChapter = chapters[targetIndex];
+      final previousSourceId = (_sourceId ?? '').trim();
+      if (previousSourceId.isNotEmpty) {
+        SourceRuntimeFacade.instance.clearReadingFlow(
+          sourceId: previousSourceId,
+          detailUrl: (_detailUrl ?? '').trim(),
+          title: _bookTitle.trim(),
+        );
+      }
 
       setState(() {
         _activeBookId = candidate.book.id.trim();

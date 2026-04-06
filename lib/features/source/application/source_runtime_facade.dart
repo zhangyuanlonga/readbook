@@ -8,9 +8,13 @@ import '../../../runtime/session/source_session.dart';
 import '../../../runtime/sources/source_registry.dart';
 import '../../../runtime/sources/source_result_models.dart' as runtime_models;
 import '../../../domain/entities/source_health.dart';
+import '../../../core/logging/app_logger.dart';
 import 'source_site_cluster_service.dart';
 import 'script_source_runtime_service.dart';
 import 'source_health_service.dart';
+import 'source_runtime_diagnostic_execution_container.dart';
+import 'source_runtime_execution_policy_service.dart';
+import 'source_runtime_warm_state_service.dart';
 
 class ScriptSourceReloadFailure {
   const ScriptSourceReloadFailure({required this.source, required this.error});
@@ -39,6 +43,9 @@ class SourceRuntimeFacade {
     ScriptSourceRuntimeService? scriptRuntimeService,
     SourceSiteClusterService? siteClusterService,
     SourceHealthService? sourceHealthService,
+    SourceRuntimeExecutionPolicyService? executionPolicyService,
+    SourceRuntimeWarmStateService? warmStateService,
+    AppLogger? logger,
     Uuid? uuid,
   }) : _scriptSourceRepository = scriptSourceRepository,
        _scriptRuntimeService =
@@ -46,12 +53,20 @@ class SourceRuntimeFacade {
        _siteClusterService =
            siteClusterService ?? const SourceSiteClusterService(),
        _sourceHealthService = sourceHealthService ?? SourceHealthService.instance,
+       _executionPolicyService =
+           executionPolicyService ?? SourceRuntimeExecutionPolicyService.instance,
+       _warmStateService =
+           warmStateService ?? SourceRuntimeWarmStateService.instance,
+       _logger = logger ?? AppLogger.instance,
        _uuid = uuid ?? const Uuid();
 
   final ScriptSourceRepository _scriptSourceRepository;
   final ScriptSourceRuntimeService _scriptRuntimeService;
   final SourceSiteClusterService _siteClusterService;
   final SourceHealthService _sourceHealthService;
+  final SourceRuntimeExecutionPolicyService _executionPolicyService;
+  final SourceRuntimeWarmStateService _warmStateService;
+  final AppLogger _logger;
   final Uuid _uuid;
 
   Future<List<ScriptSource>> listScriptSources() {
@@ -78,6 +93,7 @@ class SourceRuntimeFacade {
 
     final persistedId = id?.trim().isNotEmpty == true ? id!.trim() : _uuid.v4();
     final existing = await _scriptSourceRepository.getById(persistedId);
+    _warmStateService.clearSource(persistedId);
     final registered = await _scriptRuntimeService.compileAndRegister(
       sourceCode: normalizedCode,
       runtimeId: persistedId,
@@ -201,6 +217,7 @@ class SourceRuntimeFacade {
       return;
     }
     if (!enabled) {
+      _warmStateService.clearSource(id);
       _scriptRuntimeService.removeRegisteredSource(id);
       return;
     }
@@ -212,8 +229,23 @@ class SourceRuntimeFacade {
   }
 
   Future<void> deleteScriptSource(String id) async {
+    _warmStateService.clearSource(id);
     await _scriptSourceRepository.deleteById(id);
     _scriptRuntimeService.removeRegisteredSource(id);
+  }
+
+  void clearReadingFlow({
+    required String sourceId,
+    String detailUrl = '',
+    String tocUrl = '',
+    String title = '',
+  }) {
+    _scriptRuntimeService.clearReadingFlow(
+      sourceId: sourceId,
+      detailUrl: detailUrl,
+      tocUrl: tocUrl,
+      title: title,
+    );
   }
 
   Future<ScriptSourceReloadReport> reloadScriptSources({
@@ -279,6 +311,25 @@ class SourceRuntimeFacade {
     );
   }
 
+  Future<SourceRuntimeDiagnosticExecutionContainer?>
+  createDiagnosticExecutionContainerById(
+    String sourceId,
+  ) async {
+    final normalizedSourceId = sourceId.trim();
+    if (normalizedSourceId.isEmpty) {
+      return null;
+    }
+    final source = await _scriptSourceRepository.getById(normalizedSourceId);
+    if (source == null || !source.enabled) {
+      return null;
+    }
+    return _scriptRuntimeService.createDiagnosticExecutionContainer(
+      sourceId: normalizedSourceId,
+      sourceCode: source.sourceCode,
+      serializeStartup: true,
+    );
+  }
+
   Future<List<runtime_models.Book>> search({
     required String sourceId,
     required String keyword,
@@ -287,20 +338,30 @@ class SourceRuntimeFacade {
   }) async {
     final normalizedSourceId = sourceId.trim();
     final source = await _scriptSourceRepository.getById(normalizedSourceId);
-    if (source != null && source.enabled) {
-      return _scriptRuntimeService.searchIsolated(
-        sourceId: normalizedSourceId,
-        sourceCode: source.sourceCode,
-        keyword: keyword,
-        allowInteractiveChallenge: allowInteractiveChallenge,
-        cancellationHandle: cancellationHandle,
-      );
-    }
-    return _scriptRuntimeService.search(
+    return _runWithExecutionPlan(
       sourceId: normalizedSourceId,
-      keyword: keyword,
-      allowInteractiveChallenge: allowInteractiveChallenge,
-      cancellationHandle: cancellationHandle,
+      source: source,
+      step: SourceRuntimeExecutionStep.search,
+      scene: SourceRuntimeExecutionScene.search,
+      action: (plan) {
+        if (plan.containerKind ==
+            SourceRuntimeExecutionContainerKind.requestIsolated) {
+          return _scriptRuntimeService.searchIsolated(
+            sourceId: normalizedSourceId,
+            sourceCode: source!.sourceCode,
+            keyword: keyword,
+            allowInteractiveChallenge: allowInteractiveChallenge,
+            cancellationHandle: cancellationHandle,
+            serializeStartup: plan.serializeStartup,
+          );
+        }
+        return _scriptRuntimeService.search(
+          sourceId: normalizedSourceId,
+          keyword: keyword,
+          allowInteractiveChallenge: allowInteractiveChallenge,
+          cancellationHandle: cancellationHandle,
+        );
+      },
     );
   }
 
@@ -309,13 +370,25 @@ class SourceRuntimeFacade {
   }) async {
     final normalizedSourceId = sourceId.trim();
     final source = await _scriptSourceRepository.getById(normalizedSourceId);
-    if (source != null && source.enabled) {
-      return _scriptRuntimeService.discoverCategoriesIsolated(
-        sourceId: normalizedSourceId,
-        sourceCode: source.sourceCode,
-      );
-    }
-    return _scriptRuntimeService.discoverCategories(sourceId: normalizedSourceId);
+    return _runWithExecutionPlan(
+      sourceId: normalizedSourceId,
+      source: source,
+      step: SourceRuntimeExecutionStep.discoverCategories,
+      scene: SourceRuntimeExecutionScene.discover,
+      action: (plan) {
+        if (plan.containerKind ==
+            SourceRuntimeExecutionContainerKind.requestIsolated) {
+          return _scriptRuntimeService.discoverCategoriesIsolated(
+            sourceId: normalizedSourceId,
+            sourceCode: source!.sourceCode,
+            serializeStartup: plan.serializeStartup,
+          );
+        }
+        return _scriptRuntimeService.discoverCategories(
+          sourceId: normalizedSourceId,
+        );
+      },
+    );
   }
 
   Future<List<runtime_models.Book>> discoverBooks({
@@ -326,20 +399,30 @@ class SourceRuntimeFacade {
   }) async {
     final normalizedSourceId = sourceId.trim();
     final source = await _scriptSourceRepository.getById(normalizedSourceId);
-    if (source != null && source.enabled) {
-      return _scriptRuntimeService.discoverBooksIsolated(
-        sourceId: normalizedSourceId,
-        sourceCode: source.sourceCode,
-        category: category,
-        page: page,
-        pageSize: pageSize,
-      );
-    }
-    return _scriptRuntimeService.discoverBooks(
+    return _runWithExecutionPlan(
       sourceId: normalizedSourceId,
-      category: category,
-      page: page,
-      pageSize: pageSize,
+      source: source,
+      step: SourceRuntimeExecutionStep.discoverBooks,
+      scene: SourceRuntimeExecutionScene.discover,
+      action: (plan) {
+        if (plan.containerKind ==
+            SourceRuntimeExecutionContainerKind.requestIsolated) {
+          return _scriptRuntimeService.discoverBooksIsolated(
+            sourceId: normalizedSourceId,
+            sourceCode: source!.sourceCode,
+            category: category,
+            page: page,
+            pageSize: pageSize,
+            serializeStartup: plan.serializeStartup,
+          );
+        }
+        return _scriptRuntimeService.discoverBooks(
+          sourceId: normalizedSourceId,
+          category: category,
+          page: page,
+          pageSize: pageSize,
+        );
+      },
     );
   }
 
@@ -349,14 +432,27 @@ class SourceRuntimeFacade {
   }) async {
     final normalizedSourceId = sourceId.trim();
     final source = await _scriptSourceRepository.getById(normalizedSourceId);
-    if (source != null && source.enabled) {
-      return _scriptRuntimeService.detailIsolated(
-        sourceId: normalizedSourceId,
-        sourceCode: source.sourceCode,
-        book: book,
-      );
-    }
-    return _scriptRuntimeService.detail(sourceId: normalizedSourceId, book: book);
+    return _runWithExecutionPlan(
+      sourceId: normalizedSourceId,
+      source: source,
+      step: SourceRuntimeExecutionStep.detail,
+      scene: SourceRuntimeExecutionScene.detail,
+      action: (plan) {
+        if (plan.containerKind ==
+            SourceRuntimeExecutionContainerKind.flowIsolated) {
+          return _scriptRuntimeService.detailIsolated(
+            sourceId: normalizedSourceId,
+            sourceCode: source!.sourceCode,
+            book: book,
+            serializeStartup: plan.serializeStartup,
+          );
+        }
+        return _scriptRuntimeService.detail(
+          sourceId: normalizedSourceId,
+          book: book,
+        );
+      },
+    );
   }
 
   Future<List<runtime_models.Chapter>> chapters({
@@ -365,16 +461,26 @@ class SourceRuntimeFacade {
   }) async {
     final normalizedSourceId = sourceId.trim();
     final source = await _scriptSourceRepository.getById(normalizedSourceId);
-    if (source != null && source.enabled) {
-      return _scriptRuntimeService.chaptersIsolated(
-        sourceId: normalizedSourceId,
-        sourceCode: source.sourceCode,
-        book: book,
-      );
-    }
-    return _scriptRuntimeService.chapters(
+    return _runWithExecutionPlan(
       sourceId: normalizedSourceId,
-      book: book,
+      source: source,
+      step: SourceRuntimeExecutionStep.chapters,
+      scene: SourceRuntimeExecutionScene.reader,
+      action: (plan) {
+        if (plan.containerKind ==
+            SourceRuntimeExecutionContainerKind.flowIsolated) {
+          return _scriptRuntimeService.chaptersIsolated(
+            sourceId: normalizedSourceId,
+            sourceCode: source!.sourceCode,
+            book: book,
+            serializeStartup: plan.serializeStartup,
+          );
+        }
+        return _scriptRuntimeService.chapters(
+          sourceId: normalizedSourceId,
+          book: book,
+        );
+      },
     );
   }
 
@@ -385,18 +491,90 @@ class SourceRuntimeFacade {
   }) async {
     final normalizedSourceId = sourceId.trim();
     final source = await _scriptSourceRepository.getById(normalizedSourceId);
-    if (source != null) {
-      return _scriptRuntimeService.contentIsolated(
+    return _runWithExecutionPlan(
+      sourceId: normalizedSourceId,
+      source: source,
+      step: SourceRuntimeExecutionStep.content,
+      scene: SourceRuntimeExecutionScene.reader,
+      action: (plan) {
+        if (plan.containerKind ==
+            SourceRuntimeExecutionContainerKind.flowIsolated) {
+          return _scriptRuntimeService.contentIsolated(
+            sourceId: normalizedSourceId,
+            sourceCode: source!.sourceCode,
+            book: book,
+            chapter: chapter,
+            serializeStartup: plan.serializeStartup,
+          );
+        }
+        return _scriptRuntimeService.content(
+          sourceId: normalizedSourceId,
+          book: book,
+          chapter: chapter,
+        );
+      },
+    );
+  }
+
+  Future<T> _runWithExecutionPlan<T>({
+    required String sourceId,
+    required ScriptSource? source,
+    required SourceRuntimeExecutionStep step,
+    required SourceRuntimeExecutionScene scene,
+    required Future<T> Function(SourceRuntimeExecutionPlan plan) action,
+  }) async {
+    final normalizedSourceId = sourceId.trim();
+    final stepName = step.name;
+    final warmState = _warmStateService.stateFor(
+      sourceId: normalizedSourceId,
+      step: stepName,
+    );
+    final plan = _executionPolicyService.resolve(
+      source: source,
+      step: step,
+      scene: scene,
+      warmState: warmState,
+    );
+    _logger.info(
+      'Source runtime execution plan',
+      context: <String, Object?>{
+        'sourceId': normalizedSourceId,
+        'sourceName': source?.name,
+        'step': step.name,
+        'scene': scene.name,
+        'containerKind': plan.containerKind.name,
+        'warmState': plan.warmState.name,
+        'serializeStartup': plan.serializeStartup,
+        'markWarmOnSuccess': plan.markWarmOnSuccess,
+      },
+    );
+
+    if (source != null &&
+        source.enabled &&
+        warmState == SourceRuntimeWarmState.cold) {
+      _warmStateService.markWarming(
         sourceId: normalizedSourceId,
-        sourceCode: source.sourceCode,
-        book: book,
-        chapter: chapter,
+        step: stepName,
       );
     }
-    return _scriptRuntimeService.content(
-      sourceId: normalizedSourceId,
-      book: book,
-      chapter: chapter,
-    );
+
+    try {
+      final result = await action(plan);
+      if (source != null && source.enabled && plan.markWarmOnSuccess) {
+        _warmStateService.markWarm(
+          sourceId: normalizedSourceId,
+          step: stepName,
+        );
+      }
+      return result;
+    } catch (_) {
+      if (source != null && source.enabled) {
+        _warmStateService.markUnstable(
+          sourceId: normalizedSourceId,
+          step: stepName,
+        );
+      }
+      rethrow;
+    }
   }
 }

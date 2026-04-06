@@ -165,6 +165,14 @@ class _BookDetailPageState extends State<BookDetailPage> {
     _detailLoadRequestToken += 1;
     _cancelActiveSwitchSourceSearch();
     _localIndexEventSubscription?.cancel();
+    final sourceId = (_activeSourceId ?? '').trim();
+    if (sourceId.isNotEmpty) {
+      SourceRuntimeFacade.instance.clearReadingFlow(
+        sourceId: sourceId,
+        detailUrl: (_activeDetailUrl ?? '').trim(),
+        title: (_displayTitle ?? '').trim(),
+      );
+    }
     super.dispose();
   }
 
@@ -1110,6 +1118,15 @@ class _BookDetailPageState extends State<BookDetailPage> {
     final previousReadableChapter = _firstReadableChapter(
       previousResult?.chapters,
     );
+
+    final normalizedPreviousSourceId = (previousSourceId ?? '').trim();
+    if (normalizedPreviousSourceId.isNotEmpty) {
+      SourceRuntimeFacade.instance.clearReadingFlow(
+        sourceId: normalizedPreviousSourceId,
+        detailUrl: (previousDetailUrl ?? '').trim(),
+        title: (previousTitle ?? '').trim(),
+      );
+    }
 
     setState(() {
       _activeSourceId = candidate.book.sourceId.trim();

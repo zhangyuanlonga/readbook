@@ -1,11 +1,13 @@
 import 'package:drift/native.dart';
 import 'package:shuxiang_reading_next/data/datasources/local/app_database.dart';
 import 'package:shuxiang_reading_next/data/repositories/script_source_repository_impl.dart';
+import 'package:shuxiang_reading_next/core/logging/source_log_store.dart';
 import 'package:shuxiang_reading_next/domain/entities/script_source.dart';
 import 'package:shuxiang_reading_next/domain/entities/source_health.dart';
 import 'package:shuxiang_reading_next/features/source/application/script_source_runtime_service.dart';
 import 'package:shuxiang_reading_next/features/source/application/source_health_service.dart';
 import 'package:shuxiang_reading_next/features/source/application/source_runtime_facade.dart';
+import 'package:shuxiang_reading_next/runtime/session/source_session.dart';
 import 'package:shuxiang_reading_next/runtime/sources/source_contract.dart';
 import 'package:shuxiang_reading_next/runtime/sources/source_manifest.dart';
 import 'package:shuxiang_reading_next/runtime/sources/source_registry.dart';
@@ -26,6 +28,7 @@ void main() {
 
     setUp(() {
       SharedPreferences.setMockInitialValues(<String, Object>{});
+      SourceLogStore.instance.clear();
       database = AppDatabase(executor: NativeDatabase.memory());
       repository = ScriptSourceRepositoryImpl(database);
       runtimeService = _FakeScriptSourceRuntimeService();
@@ -38,6 +41,7 @@ void main() {
     });
 
     tearDown(() async {
+      SourceLogStore.instance.clear();
       await database.close();
     });
 
@@ -147,6 +151,82 @@ void main() {
       expect(runtimeService.detailCalls, 0);
     });
 
+    test('uses request isolated runtime for search', () async {
+      final saved = await facade.saveScriptSource(
+        sourceCode: _buildSourceCode(name: '隔离搜索源'),
+      );
+
+      await facade.search(sourceId: saved.id, keyword: '凡人修仙传');
+      await facade.search(sourceId: saved.id, keyword: '斗破苍穹');
+
+      expect(runtimeService.isolatedSearchCalls, 2);
+      expect(runtimeService.searchCalls, 0);
+      expect(runtimeService.searchSerializeStartupFlags, <bool>[true, true]);
+    });
+
+    test('uses request isolated runtime for discover categories', () async {
+      final saved = await facade.saveScriptSource(
+        sourceCode: _buildSourceCode(name: '隔离发现源'),
+      );
+
+      await facade.discoverCategories(sourceId: saved.id);
+      await facade.discoverCategories(sourceId: saved.id);
+
+      expect(runtimeService.isolatedDiscoverCategoriesCalls, 2);
+      expect(runtimeService.discoverCategoriesCalls, 0);
+      expect(
+        runtimeService.discoverSerializeStartupFlags,
+        <bool>[true, true],
+      );
+    });
+
+    test('relaxes startup serialization for warm detail step', () async {
+      final saved = await facade.saveScriptSource(
+        sourceCode: _buildSourceCode(name: '热态详情源'),
+      );
+      const book = runtime_models.Book(
+        title: '凡人修仙传',
+        author: '忘语',
+        detailUrl: 'https://example.com/book/1',
+      );
+
+      await facade.detail(sourceId: saved.id, book: book);
+      await facade.detail(sourceId: saved.id, book: book);
+
+      expect(runtimeService.detailSerializeStartupFlags, <bool>[true, false]);
+    });
+
+    test('logs runtime execution plan', () async {
+      final saved = await facade.saveScriptSource(
+        sourceCode: _buildSourceCode(name: '日志源'),
+      );
+
+      await facade.search(sourceId: saved.id, keyword: '凡人修仙传');
+
+      final logEntry = SourceLogStore.instance.entries.firstWhere(
+        (entry) => entry.message == 'Source runtime execution plan',
+      );
+      expect(logEntry.details['sourceId'], saved.id);
+      expect(logEntry.details['step'], 'search');
+      expect(logEntry.details['containerKind'], 'requestIsolated');
+      expect(logEntry.details['warmState'], 'cold');
+      expect(logEntry.details['serializeStartup'], true);
+    });
+
+    test('clears warm state after source is disabled and re-enabled', () async {
+      final saved = await facade.saveScriptSource(
+        sourceCode: _buildSourceCode(name: '重置热态源'),
+      );
+
+      await facade.search(sourceId: saved.id, keyword: '凡人修仙传');
+      await facade.search(sourceId: saved.id, keyword: '斗破苍穹');
+      await facade.setScriptSourceEnabled(id: saved.id, enabled: false);
+      await facade.setScriptSourceEnabled(id: saved.id, enabled: true);
+      await facade.search(sourceId: saved.id, keyword: '遮天');
+
+      expect(runtimeService.searchSerializeStartupFlags, <bool>[true, true, true]);
+    });
+
     test('always uses isolated runtime for content', () async {
       final saved = await facade.saveScriptSource(
         sourceCode: _buildSourceCode(name: '隔离正文源'),
@@ -174,8 +254,15 @@ void main() {
 class _FakeScriptSourceRuntimeService extends ScriptSourceRuntimeService {
   _FakeScriptSourceRuntimeService() : super();
 
+  int searchCalls = 0;
+  int isolatedSearchCalls = 0;
+  final List<bool> searchSerializeStartupFlags = <bool>[];
+  int discoverCategoriesCalls = 0;
+  int isolatedDiscoverCategoriesCalls = 0;
+  final List<bool> discoverSerializeStartupFlags = <bool>[];
   int detailCalls = 0;
   int isolatedDetailCalls = 0;
+  final List<bool> detailSerializeStartupFlags = <bool>[];
   int contentCalls = 0;
   int isolatedContentCalls = 0;
 
@@ -218,6 +305,50 @@ class _FakeScriptSourceRuntimeService extends ScriptSourceRuntimeService {
   }
 
   @override
+  Future<List<runtime_models.Book>> search({
+    required String sourceId,
+    required String keyword,
+    bool allowInteractiveChallenge = true,
+    SessionCancellationHandle? cancellationHandle,
+  }) async {
+    searchCalls += 1;
+    return const <runtime_models.Book>[];
+  }
+
+  @override
+  Future<List<runtime_models.Book>> searchIsolated({
+    required String sourceId,
+    required String sourceCode,
+    required String keyword,
+    bool allowInteractiveChallenge = true,
+    SessionCancellationHandle? cancellationHandle,
+    bool serializeStartup = true,
+  }) async {
+    isolatedSearchCalls += 1;
+    searchSerializeStartupFlags.add(serializeStartup);
+    return const <runtime_models.Book>[];
+  }
+
+  @override
+  Future<List<runtime_models.DiscoverCategory>> discoverCategories({
+    required String sourceId,
+  }) async {
+    discoverCategoriesCalls += 1;
+    return const <runtime_models.DiscoverCategory>[];
+  }
+
+  @override
+  Future<List<runtime_models.DiscoverCategory>> discoverCategoriesIsolated({
+    required String sourceId,
+    required String sourceCode,
+    bool serializeStartup = true,
+  }) async {
+    isolatedDiscoverCategoriesCalls += 1;
+    discoverSerializeStartupFlags.add(serializeStartup);
+    return const <runtime_models.DiscoverCategory>[];
+  }
+
+  @override
   Future<runtime_models.Book> detail({
     required String sourceId,
     required runtime_models.Book book,
@@ -231,8 +362,10 @@ class _FakeScriptSourceRuntimeService extends ScriptSourceRuntimeService {
     required String sourceId,
     required String sourceCode,
     required runtime_models.Book book,
+    bool serializeStartup = true,
   }) async {
     isolatedDetailCalls += 1;
+    detailSerializeStartupFlags.add(serializeStartup);
     return book;
   }
 
@@ -252,6 +385,7 @@ class _FakeScriptSourceRuntimeService extends ScriptSourceRuntimeService {
     required String sourceCode,
     required runtime_models.Book book,
     required runtime_models.Chapter chapter,
+    bool serializeStartup = true,
   }) async {
     isolatedContentCalls += 1;
     return runtime_models.Content(title: chapter.title, content: '正文');
@@ -273,6 +407,7 @@ class _FakeScriptSourceRuntimeService extends ScriptSourceRuntimeService {
     return raw == 'true';
   }
 }
+
 
 String _buildSourceCode({
   required String name,

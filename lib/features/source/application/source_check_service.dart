@@ -1,4 +1,5 @@
 import '../../../core/errors/app_exception.dart';
+import '../../../core/logging/app_logger.dart';
 import '../../../domain/entities/source_health.dart';
 import '../../../runtime/sources/source_registry.dart';
 import '../../../runtime/sources/source_result_models.dart' as runtime_models;
@@ -51,6 +52,7 @@ class SourceCheckService {
     SourceHealthService? sourceHealthService,
     SourceHealthReasonClassifier? reasonClassifier,
     SourceHealthAutoDisableService? autoDisableService,
+    AppLogger? logger,
   }) : _sourceRuntimeFacade =
            sourceRuntimeFacade ?? SourceRuntimeFacade.instance,
        _sourceHealthService =
@@ -58,12 +60,14 @@ class SourceCheckService {
        _reasonClassifier =
            reasonClassifier ?? const SourceHealthReasonClassifier(),
        _autoDisableService =
-           autoDisableService ?? SourceHealthAutoDisableService.instance;
+           autoDisableService ?? SourceHealthAutoDisableService.instance,
+       _logger = logger ?? AppLogger.instance;
 
   final SourceRuntimeFacade _sourceRuntimeFacade;
   final SourceHealthService _sourceHealthService;
   final SourceHealthReasonClassifier _reasonClassifier;
   final SourceHealthAutoDisableService _autoDisableService;
+  final AppLogger _logger;
   static const String defaultCheckKeyword = '凡人修仙传';
 
   static SourceHealthStep _healthStepForCheckStep(SourceCheckStep step) {
@@ -124,13 +128,25 @@ class SourceCheckService {
     }
 
     var attemptedStep = SourceCheckStep.search;
+    final diagnosticContainer = await _sourceRuntimeFacade
+        .createDiagnosticExecutionContainerById(sourceId);
 
     try {
-      final books = await _sourceRuntimeFacade.search(
+      _logStepStarted(
         sourceId: sourceId,
+        sourceName: sourceName,
+        level: level,
+        step: SourceCheckStep.search,
         keyword: effectiveKeyword,
-        allowInteractiveChallenge: allowInteractiveChallenge,
       );
+      final books =
+          diagnosticContainer != null
+              ? await diagnosticContainer.search(effectiveKeyword)
+              : await _sourceRuntimeFacade.search(
+                sourceId: sourceId,
+                keyword: effectiveKeyword,
+                allowInteractiveChallenge: allowInteractiveChallenge,
+              );
       _sourceHealthService.markSearchSuccess(
         sourceId: sourceId,
         latencyMs: DateTime.now().difference(startedAt).inMilliseconds,
@@ -176,10 +192,20 @@ class SourceCheckService {
       }
 
       attemptedStep = SourceCheckStep.detail;
-      workingBook = await _sourceRuntimeFacade.detail(
+      _logStepStarted(
         sourceId: sourceId,
-        book: workingBook,
+        sourceName: sourceName,
+        level: level,
+        step: SourceCheckStep.detail,
+        keyword: effectiveKeyword,
       );
+      workingBook =
+          diagnosticContainer != null
+              ? await diagnosticContainer.detail(workingBook)
+              : await _sourceRuntimeFacade.detail(
+                sourceId: sourceId,
+                book: workingBook,
+              );
       _sourceHealthService.markDetailSuccess(sourceId: sourceId);
       stepReached = SourceCheckStep.detail;
 
@@ -196,10 +222,20 @@ class SourceCheckService {
       }
 
       attemptedStep = SourceCheckStep.chapters;
-      final chapters = await _sourceRuntimeFacade.chapters(
+      _logStepStarted(
         sourceId: sourceId,
-        book: workingBook,
+        sourceName: sourceName,
+        level: level,
+        step: SourceCheckStep.chapters,
+        keyword: effectiveKeyword,
       );
+      final chapters =
+          diagnosticContainer != null
+              ? await diagnosticContainer.chapters(workingBook)
+              : await _sourceRuntimeFacade.chapters(
+                sourceId: sourceId,
+                book: workingBook,
+              );
       _sourceHealthService.markChaptersSuccess(sourceId: sourceId);
       stepReached = SourceCheckStep.chapters;
       final contentChapter = chapters.firstWhere(
@@ -230,11 +266,21 @@ class SourceCheckService {
       }
 
       attemptedStep = SourceCheckStep.content;
-      final content = await _sourceRuntimeFacade.content(
+      _logStepStarted(
         sourceId: sourceId,
-        book: workingBook,
-        chapter: contentChapter,
+        sourceName: sourceName,
+        level: level,
+        step: SourceCheckStep.content,
+        keyword: effectiveKeyword,
       );
+      final content =
+          diagnosticContainer != null
+              ? await diagnosticContainer.content(workingBook, contentChapter)
+              : await _sourceRuntimeFacade.content(
+                sourceId: sourceId,
+                book: workingBook,
+                chapter: contentChapter,
+              );
       stepReached = SourceCheckStep.content;
       if (content.content.trim().isEmpty && content.images.isEmpty) {
         _recordStepFailure(
@@ -311,6 +357,8 @@ class SourceCheckService {
       );
       await _evaluateAutoDisable(sourceId: sourceId, sourceName: sourceName);
       return result;
+    } finally {
+      diagnosticContainer?.dispose();
     }
   }
 
@@ -504,6 +552,25 @@ class SourceCheckService {
       return normalizedManifest;
     }
     return defaultCheckKeyword;
+  }
+
+  void _logStepStarted({
+    required String sourceId,
+    required String sourceName,
+    required SourceCheckLevel level,
+    required SourceCheckStep step,
+    required String keyword,
+  }) {
+    _logger.info(
+      'Source check step started',
+      context: <String, Object?>{
+        'sourceId': sourceId,
+        'sourceName': sourceName,
+        'level': level.name,
+        'step': step.name,
+        'keyword': keyword,
+      },
+    );
   }
 
   Future<void> _evaluateAutoDisable({

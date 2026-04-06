@@ -13,6 +13,10 @@ import '../../../runtime/sources/source_registry.dart';
 import '../../../runtime/sources/source_manifest.dart';
 import '../../../runtime/sources/source_result_models.dart' as runtime_models;
 import '../../../runtime/sources/source_script_compiler.dart';
+import '../../../core/logging/app_logger.dart';
+import 'source_runtime_diagnostic_execution_container.dart';
+import 'source_runtime_reading_flow_container_service.dart';
+import 'source_runtime_request_execution_container.dart';
 
 class ScriptSourceRuntimeService {
   ScriptSourceRuntimeService({
@@ -23,13 +27,19 @@ class ScriptSourceRuntimeService {
     RequestEngine? requestEngine,
     SourceScriptCompiler? scriptCompiler,
     SourceFileStore? sourceFileStore,
+    SourceRuntimeReadingFlowContainerService? readingFlowContainerService,
+    AppLogger? logger,
   }) : registry = registry ?? SourceRegistry(),
        sessionManager = sessionManager ?? InMemorySessionManager(),
        cacheManager = cacheManager ?? InMemoryCacheManager(),
        browserRuntime = browserRuntime ?? AppReadBrowserRuntime(),
        requestEngine = requestEngine ?? HttpPackageRequestEngine(),
        scriptCompiler = scriptCompiler ?? const SourceScriptCompiler(),
-       sourceFileStore = sourceFileStore ?? SourceFileStore() {
+       sourceFileStore = sourceFileStore ?? SourceFileStore(),
+       _logger = logger ?? AppLogger.instance,
+       readingFlowContainerService =
+           readingFlowContainerService ??
+           SourceRuntimeReadingFlowContainerService() {
     _persistedLoader = PersistedSourceLoader(
       sourceFileStore: this.sourceFileStore,
       sourceScriptCompiler: this.scriptCompiler,
@@ -49,6 +59,8 @@ class ScriptSourceRuntimeService {
   final RequestEngine requestEngine;
   final SourceScriptCompiler scriptCompiler;
   final SourceFileStore sourceFileStore;
+  final AppLogger _logger;
+  final SourceRuntimeReadingFlowContainerService readingFlowContainerService;
   late final PersistedSourceLoader _persistedLoader;
   late final SourceExecutor _executor;
   static Future<void> _isolatedExecutionQueue = Future<void>.value();
@@ -58,6 +70,7 @@ class ScriptSourceRuntimeService {
   }
 
   void clearRegisteredSources() {
+    readingFlowContainerService.clearAll();
     registry.clear();
   }
 
@@ -67,8 +80,31 @@ class ScriptSourceRuntimeService {
       return;
     }
     registry.remove(normalized);
+    readingFlowContainerService.clearSource(normalized);
     sessionManager.clearSource(normalized);
     cacheManager.invalidateSource(normalized);
+  }
+
+  void clearReadingFlow({
+    required String sourceId,
+    String detailUrl = '',
+    String tocUrl = '',
+    String title = '',
+  }) {
+    final normalizedSourceId = sourceId.trim();
+    if (normalizedSourceId.isEmpty) {
+      return;
+    }
+    readingFlowContainerService.clearFlow(
+      sourceId: normalizedSourceId,
+      book: runtime_models.Book(
+        title: title.trim(),
+        author: '',
+        detailUrl: detailUrl.trim(),
+        tocUrl: tocUrl.trim(),
+        sourceId: normalizedSourceId,
+      ),
+    );
   }
 
   RegisteredSource? sourceById(String sourceId) {
@@ -104,6 +140,49 @@ class ScriptSourceRuntimeService {
 
   Future<List<StoredSourceFile>> listStoredSources() {
     return sourceFileStore.listSourceFiles();
+  }
+
+  Future<SourceRuntimeDiagnosticExecutionContainer>
+  createDiagnosticExecutionContainer({
+    required String sourceId,
+    required String sourceCode,
+    bool serializeStartup = true,
+  }) async {
+    final requestContainer = SourceRuntimeRequestExecutionContainer(
+      sourceId: sourceId,
+      requestEngine: requestEngine,
+      browserRuntime: browserRuntime,
+      onDispose: () {
+        _logger.info(
+          'Source runtime diagnostic container disposed',
+          context: <String, Object?>{
+            'sourceId': sourceId.trim(),
+          },
+        );
+      },
+    );
+    try {
+      final source = await _createIsolatedSource(
+        sourceId: sourceId,
+        sourceCode: sourceCode,
+        serializeStartup: serializeStartup,
+      );
+      _logger.info(
+        'Source runtime diagnostic container created',
+        context: <String, Object?>{
+          'sourceId': sourceId.trim(),
+          'sourceName': source.runtime.name,
+          'serializeStartup': serializeStartup,
+        },
+      );
+      return DefaultSourceRuntimeDiagnosticExecutionContainer(
+        source: source,
+        requestContainer: requestContainer,
+      );
+    } catch (_) {
+      requestContainer.dispose();
+      rethrow;
+    }
   }
 
   Future<PersistedSourceLoadReport> reloadPersistedSources({
@@ -156,28 +235,43 @@ class ScriptSourceRuntimeService {
     required String keyword,
     bool allowInteractiveChallenge = true,
     SessionCancellationHandle? cancellationHandle,
+    bool serializeStartup = true,
   }) async {
-    final isolatedSession = SourceSession(sourceId: sourceId);
-    const key = '__allow_interactive_challenge__';
-    isolatedSession.set(key, allowInteractiveChallenge);
-    if (cancellationHandle != null) {
-      isolatedSession.set(sessionCancellationHandleKey, cancellationHandle);
-    } else {
-      isolatedSession.clear(sessionCancellationHandleKey);
-    }
-    final isolatedCache = InMemoryCacheManager();
-    final isolatedSessionManager = _SingleSessionManager(isolatedSession);
-    final isolatedExecutor = SourceExecutor(
+    final container = SourceRuntimeRequestExecutionContainer(
+      sourceId: sourceId,
       requestEngine: requestEngine,
-      sessionManager: isolatedSessionManager,
-      cacheManager: isolatedCache,
       browserRuntime: browserRuntime,
+      onDispose: () {
+        _logger.info(
+          'Source runtime request container disposed',
+          context: <String, Object?>{
+            'sourceId': sourceId.trim(),
+            'purpose': 'search',
+          },
+        );
+      },
     );
-    return _runIsolated(
+    _logger.info(
+      'Source runtime request container created',
+      context: <String, Object?>{
+        'sourceId': sourceId.trim(),
+        'purpose': 'search',
+        'serializeStartup': serializeStartup,
+      },
+    );
+    const key = '__allow_interactive_challenge__';
+    container.session.set(key, allowInteractiveChallenge);
+    if (cancellationHandle != null) {
+      container.session.set(sessionCancellationHandleKey, cancellationHandle);
+    } else {
+      container.session.clear(sessionCancellationHandleKey);
+    }
+    return _runRequestIsolated(
       sourceId: sourceId,
       sourceCode: sourceCode,
-      executor: isolatedExecutor,
-      action: (source) => isolatedExecutor.search(source, keyword),
+      container: container,
+      serializeStartup: serializeStartup,
+      action: (source) => container.executor.search(source, keyword),
     );
   }
 
@@ -191,12 +285,36 @@ class ScriptSourceRuntimeService {
   Future<List<runtime_models.DiscoverCategory>> discoverCategoriesIsolated({
     required String sourceId,
     required String sourceCode,
+    bool serializeStartup = true,
   }) {
-    return _runIsolated(
+    final container = SourceRuntimeRequestExecutionContainer(
+      sourceId: sourceId,
+      requestEngine: requestEngine,
+      browserRuntime: browserRuntime,
+      onDispose: () {
+        _logger.info(
+          'Source runtime request container disposed',
+          context: <String, Object?>{
+            'sourceId': sourceId.trim(),
+            'purpose': 'discoverCategories',
+          },
+        );
+      },
+    );
+    _logger.info(
+      'Source runtime request container created',
+      context: <String, Object?>{
+        'sourceId': sourceId.trim(),
+        'purpose': 'discoverCategories',
+        'serializeStartup': serializeStartup,
+      },
+    );
+    return _runRequestIsolated(
       sourceId: sourceId,
       sourceCode: sourceCode,
-      executor: _executor,
-      action: (source) => _executor.discoverCategories(source),
+      container: container,
+      serializeStartup: serializeStartup,
+      action: (source) => container.executor.discoverCategories(source),
     );
   }
 
@@ -221,13 +339,37 @@ class ScriptSourceRuntimeService {
     required runtime_models.DiscoverCategory category,
     required int page,
     required int pageSize,
+    bool serializeStartup = true,
   }) {
-    return _runIsolated(
+    final container = SourceRuntimeRequestExecutionContainer(
+      sourceId: sourceId,
+      requestEngine: requestEngine,
+      browserRuntime: browserRuntime,
+      onDispose: () {
+        _logger.info(
+          'Source runtime request container disposed',
+          context: <String, Object?>{
+            'sourceId': sourceId.trim(),
+            'purpose': 'discoverBooks',
+          },
+        );
+      },
+    );
+    _logger.info(
+      'Source runtime request container created',
+      context: <String, Object?>{
+        'sourceId': sourceId.trim(),
+        'purpose': 'discoverBooks',
+        'serializeStartup': serializeStartup,
+      },
+    );
+    return _runRequestIsolated(
       sourceId: sourceId,
       sourceCode: sourceCode,
-      executor: _executor,
+      container: container,
+      serializeStartup: serializeStartup,
       action:
-          (source) => _executor.discoverBooks(
+          (source) => container.executor.discoverBooks(
             source,
             category: category,
             page: page,
@@ -248,12 +390,22 @@ class ScriptSourceRuntimeService {
     required String sourceId,
     required String sourceCode,
     required runtime_models.Book book,
+    bool serializeStartup = true,
   }) {
-    return _runIsolated(
+    return _runReadingFlowIsolated(
       sourceId: sourceId,
       sourceCode: sourceCode,
-      executor: _executor,
-      action: (source) => _executor.detail(source, book),
+      book: book,
+      serializeStartup: serializeStartup,
+      action: (container) async {
+        final result = await container.executor.detail(container.source, book);
+        readingFlowContainerService.rebindFlow(
+          sourceId: sourceId.trim(),
+          fromBook: book,
+          toBook: result,
+        );
+        return result;
+      },
     );
   }
 
@@ -269,12 +421,15 @@ class ScriptSourceRuntimeService {
     required String sourceId,
     required String sourceCode,
     required runtime_models.Book book,
+    bool serializeStartup = true,
   }) {
-    return _runIsolated(
+    return _runReadingFlowIsolated(
       sourceId: sourceId,
       sourceCode: sourceCode,
-      executor: _executor,
-      action: (source) => _executor.chapters(source, book),
+      book: book,
+      serializeStartup: serializeStartup,
+      action:
+          (container) => container.executor.chapters(container.source, book),
     );
   }
 
@@ -292,12 +447,16 @@ class ScriptSourceRuntimeService {
     required String sourceCode,
     required runtime_models.Book book,
     required runtime_models.Chapter chapter,
+    bool serializeStartup = true,
   }) {
-    return _runIsolated(
+    return _runReadingFlowIsolated(
       sourceId: sourceId,
       sourceCode: sourceCode,
-      executor: _executor,
-      action: (source) => _executor.content(source, book, chapter),
+      book: book,
+      serializeStartup: serializeStartup,
+      action:
+          (container) =>
+              container.executor.content(container.source, book, chapter),
     );
   }
 
@@ -315,7 +474,20 @@ class ScriptSourceRuntimeService {
     required String sourceCode,
     required SourceExecutor executor,
     required Future<T> Function(RegisteredSource source) action,
+    bool serializeStartup = true,
   }) async {
+    if (!serializeStartup) {
+      final source = await _createIsolatedSource(
+        sourceId: sourceId,
+        sourceCode: sourceCode,
+        serializeStartup: false,
+      );
+      try {
+        return await action(source);
+      } finally {
+        source.definition.dispose?.call();
+      }
+    }
     final completer = Completer<T>();
     _isolatedExecutionQueue = _isolatedExecutionQueue
         .catchError((_) {})
@@ -340,30 +512,137 @@ class ScriptSourceRuntimeService {
         });
     return completer.future;
   }
-}
-
-class _SingleSessionManager implements SessionManager {
-  const _SingleSessionManager(this._session);
-
-  final SourceSession _session;
-
-  @override
-  Iterable<SourceSession> get activeSessions => <SourceSession>[_session];
-
-  @override
-  SourceSession sessionFor(String sourceId) => _session;
-
-  @override
-  void clearAll() {
-    _session.clear();
-    _session.clearCookies();
+ 
+  Future<T> _runRequestIsolated<T>({
+    required String sourceId,
+    required String sourceCode,
+    required SourceRuntimeRequestExecutionContainer container,
+    required Future<T> Function(RegisteredSource source) action,
+    bool serializeStartup = true,
+  }) async {
+    try {
+      return await _runIsolated(
+        sourceId: sourceId,
+        sourceCode: sourceCode,
+        executor: container.executor,
+        action: action,
+        serializeStartup: serializeStartup,
+      );
+    } finally {
+      container.dispose();
+    }
   }
 
-  @override
-  void clearSource(String sourceId) {
-    if (_session.sourceId != sourceId.trim()) {
-      return;
+  Future<T> _runReadingFlowIsolated<T>({
+    required String sourceId,
+    required String sourceCode,
+    required runtime_models.Book book,
+    required bool serializeStartup,
+    required Future<T> Function(
+      SourceRuntimeReadingFlowExecutionContainer container,
+    )
+    action,
+  }) async {
+    final normalizedSourceId = sourceId.trim();
+    final existing = readingFlowContainerService.get(
+      sourceId: normalizedSourceId,
+      book: book,
+    );
+    final container =
+        existing ??
+        await _createReadingFlowContainer(
+          sourceId: normalizedSourceId,
+          sourceCode: sourceCode,
+          book: book,
+          serializeStartup: serializeStartup,
+        );
+    return action(container);
+  }
+
+  Future<SourceRuntimeReadingFlowExecutionContainer>
+  _createReadingFlowContainer({
+    required String sourceId,
+    required String sourceCode,
+    required runtime_models.Book book,
+    required bool serializeStartup,
+  }) async {
+    final requestContainer = SourceRuntimeRequestExecutionContainer(
+      sourceId: sourceId,
+      requestEngine: requestEngine,
+      browserRuntime: browserRuntime,
+      onDispose: () {
+        _logger.info(
+          'Source runtime request container disposed',
+          context: <String, Object?>{
+            'sourceId': sourceId.trim(),
+            'purpose': 'readingFlow',
+          },
+        );
+      },
+    );
+    final source = await _createIsolatedSource(
+      sourceId: sourceId,
+      sourceCode: sourceCode,
+      serializeStartup: serializeStartup,
+    );
+    _logger.info(
+      'Source runtime request container created',
+      context: <String, Object?>{
+        'sourceId': sourceId.trim(),
+        'purpose': 'readingFlow',
+        'serializeStartup': serializeStartup,
+      },
+    );
+    final container = SourceRuntimeReadingFlowExecutionContainer(
+      sourceId: sourceId,
+      flowKey: readingFlowContainerService.flowKeyOf(
+        sourceId: sourceId,
+        book: book,
+      ),
+      source: source,
+      requestContainer: requestContainer,
+    );
+    return readingFlowContainerService.put(container);
+  }
+
+  Future<RegisteredSource> _createIsolatedSource({
+    required String sourceId,
+    required String sourceCode,
+    bool serializeStartup = true,
+  }) async {
+    if (!serializeStartup) {
+      final definition = await scriptCompiler.compile(sourceCode);
+      return RegisteredSource(
+        runtime: SourceRuntimeInfo(
+          id: sourceId.trim(),
+          name: definition.manifest.name,
+          group: definition.manifest.group,
+          revision: 'isolated:${DateTime.now().millisecondsSinceEpoch}',
+        ),
+        definition: definition,
+      );
     }
-    clearAll();
+    final completer = Completer<RegisteredSource>();
+    _isolatedExecutionQueue = _isolatedExecutionQueue
+        .catchError((_) {})
+        .then((_) async {
+          try {
+            final definition = await scriptCompiler.compile(sourceCode);
+            completer.complete(
+              RegisteredSource(
+                runtime: SourceRuntimeInfo(
+                  id: sourceId.trim(),
+                  name: definition.manifest.name,
+                  group: definition.manifest.group,
+                  revision: 'isolated:${DateTime.now().millisecondsSinceEpoch}',
+                ),
+                definition: definition,
+              ),
+            );
+          } catch (error, stackTrace) {
+            completer.completeError(error, stackTrace);
+          }
+        });
+    return completer.future;
   }
 }
