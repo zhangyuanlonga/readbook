@@ -93,7 +93,7 @@ export default {
     checkKeyword: '凡人修仙传',
     domains: ['debug.local'],
     homepage: 'https://debug.local',
-    enabled: true,
+    // 启用/停用由 App 内部管理，不需要在 meta 里声明 enabled。
     // 实现 discoverCategories / discoverBooks 后，再把 'discover' 加进来。
     capabilities: ['search', 'detail', 'chapters', 'content'],
     rateLimits: {
@@ -297,7 +297,7 @@ export default {
     checkKeyword: '凡人修仙传',
     domains: ['www.example.com'],
     homepage: SOURCE_HOST,
-    enabled: true,
+    // 启用/停用由 App 内部管理，不需要在 meta 里声明 enabled。
     // 如果源同时实现 discoverCategories / discoverBooks，再把 'discover' 加进来。
     capabilities: ['search', 'detail', 'chapters', 'content'],
     rateLimits: {

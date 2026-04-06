@@ -11,10 +11,7 @@ class _SearchRuntimeProfileService {
     required SearchPlanScenario scenario,
     required bool allowInteractiveChallenge,
   }) {
-    final health = _healthService.snapshotFor(
-      source.runtime.id,
-      enabled: source.definition.manifest.enabled,
-    );
+    final health = _healthService.snapshotFor(source.runtime.id);
     final capabilities =
         source.definition.manifest.capabilities
             .map((item) => item.trim().toLowerCase())

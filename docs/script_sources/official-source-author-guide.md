@@ -133,7 +133,7 @@ ctx = {
 
 ```js
 export default {
-  meta: {
+ meta: {
     name: '示例书源',
     group: '默认分组',
     author: 'your_name',
@@ -141,7 +141,6 @@ export default {
     checkKeyword: '凡人修仙传',
     domains: ['www.example.com'],
     homepage: 'https://www.example.com',
-    enabled: true,
     capabilities: ['search', 'detail', 'chapters', 'content'],
     // 如果实现 discoverCategories / discoverBooks，再加上 'discover'
     // capabilities: ['search', 'detail', 'chapters', 'content', 'discover'],
@@ -181,6 +180,12 @@ export default {
 模板参考：
 
 - [source_template_v1.js](../templates/source_template_v1.js)
+
+补充说明：
+
+- 书源是否启用由 App 内部状态管理
+- 作者不要在 `meta` 中填写 `enabled`
+- 导入后参与搜索、发现、阅读链，取决于宿主里的书源启停状态，而不是脚本里的 `meta.enabled`
 
 ### 2.2 helper 怎么写
 
@@ -275,7 +280,6 @@ export default {
     checkKeyword: '凡人修仙传',
     domains: ['www.example.com'],
     homepage: SOURCE_HOST,
-    enabled: true,
     capabilities: ['search', 'detail', 'chapters', 'content'],
   },
 
@@ -418,7 +422,6 @@ meta: {
   checkKeyword: '凡人修仙传',
   domains: ['www.example.com'],
   homepage: 'https://www.example.com',
-  enabled: true,
   capabilities: ['search', 'detail', 'chapters', 'content'],
   rateLimits: {
     'www.example.com': {
@@ -437,7 +440,6 @@ meta: {
 - `checkKeyword`：书源检测默认关键词，建议填写一个稳定能搜到结果的书名或作者词
 - `domains`：相关域名列表
 - `homepage`：站点首页
-- `enabled`：是否默认启用
 - `capabilities`：当前源支持的能力列表
 - `rateLimits`：按域名声明最小请求间隔
 
@@ -446,6 +448,8 @@ meta: {
 - 不需要手动填写内部 `sourceId`
 - 运行时会自动生成 `ctx.source.id`
 - `meta` 里不要求作者维护内部版本号或 revision
+- 不要在 `meta` 中声明 `enabled`
+- 书源启用/停用由 App 内部状态管理
 - `checkKeyword` 会在单源检测/批量检测时被宿主优先使用
 - `rateLimits` 由宿主在 `ctx.http.request(...)` 时自动执行
 

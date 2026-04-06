@@ -110,6 +110,26 @@ void main() {
       expect(runtimeService.sourceById(saved.id)?.runtime.name, isNotNull);
     });
 
+    test('ignores meta.enabled when host source is enabled', () async {
+      final saved = await facade.saveScriptSource(
+        sourceCode: _buildSourceCode(
+          name: '宿主启用源',
+          includeMetaEnabled: true,
+          metaEnabled: false,
+        ),
+        enabled: true,
+      );
+
+      expect(saved.enabled, isTrue);
+      expect(runtimeService.sourceById(saved.id), isNotNull);
+      expect(
+        facade
+            .registeredScriptSources(enabledOnly: true)
+            .map((source) => source.runtime.id),
+        contains(saved.id),
+      );
+    });
+
     test('always uses isolated runtime for detail', () async {
       final saved = await facade.saveScriptSource(
         sourceCode: _buildSourceCode(name: '隔离详情源'),
@@ -170,6 +190,7 @@ class _FakeScriptSourceRuntimeService extends ScriptSourceRuntimeService {
     final author = _extractField(sourceCode, 'author') ?? 'unknown';
     final description = _extractField(sourceCode, 'description') ?? '';
     final checkKeyword = _extractField(sourceCode, 'checkKeyword');
+    final enabled = _extractBoolField(sourceCode, 'enabled') ?? true;
 
     final definition = RuntimeSourceDefinition(
       manifest: SourceManifest(
@@ -178,7 +199,7 @@ class _FakeScriptSourceRuntimeService extends ScriptSourceRuntimeService {
         author: author,
         description: description,
         checkKeyword: checkKeyword,
-        enabled: true,
+        enabled: enabled,
         capabilities: const <String>{'search', 'detail', 'chapters', 'content'},
       ),
       search: (_, __) async => const <runtime_models.Book>[],
@@ -241,6 +262,16 @@ class _FakeScriptSourceRuntimeService extends ScriptSourceRuntimeService {
     final match = pattern.firstMatch(sourceCode);
     return match?.group(1)?.trim();
   }
+
+  bool? _extractBoolField(String sourceCode, String field) {
+    final pattern = RegExp('$field\\s*:\\s*(true|false)');
+    final match = pattern.firstMatch(sourceCode);
+    final raw = match?.group(1);
+    if (raw == null) {
+      return null;
+    }
+    return raw == 'true';
+  }
 }
 
 String _buildSourceCode({
@@ -249,7 +280,11 @@ String _buildSourceCode({
   String author = 'tester',
   String description = 'desc',
   String checkKeyword = '凡人修仙传',
+  bool includeMetaEnabled = false,
+  bool metaEnabled = true,
 }) {
+  final enabledLine =
+      includeMetaEnabled ? "    enabled: $metaEnabled,\n" : '';
   return """
 export default {
   meta: {
@@ -258,7 +293,7 @@ export default {
     author: '$author',
     description: '$description',
     checkKeyword: '$checkKeyword',
-  },
+$enabledLine  },
   async search(ctx, keyword) { return []; },
   async detail(ctx, book) { return book; },
   async chapters(ctx, book) { return []; },

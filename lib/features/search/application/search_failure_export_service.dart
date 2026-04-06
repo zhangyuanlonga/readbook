@@ -83,7 +83,6 @@ class SearchFailureExportService {
                       'description': source.definition.manifest.description,
                       'homepage': source.definition.manifest.homepage,
                       'domains': source.definition.manifest.domains,
-                      'enabled': source.definition.manifest.enabled,
                       'capabilities': source.definition.manifest.capabilities
                           .toList(growable: false),
                     },

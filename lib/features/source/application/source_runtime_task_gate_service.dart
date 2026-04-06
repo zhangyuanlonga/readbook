@@ -79,10 +79,7 @@ class SourceRuntimeTaskGateService {
             .map((item) => item.trim().toLowerCase())
             .where((item) => item.isNotEmpty)
             .toSet();
-    final snapshot = _healthService.snapshotFor(
-      source.runtime.id,
-      enabled: manifest.enabled,
-    );
+    final snapshot = _healthService.snapshotFor(source.runtime.id);
 
     final declaresBrowser =
         capabilities.contains('browser') ||

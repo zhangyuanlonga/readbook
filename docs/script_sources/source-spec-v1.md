@@ -81,7 +81,6 @@ meta: {
   checkKeyword: '凡人修仙传',
   domains: ['www.example.com'],
   homepage: 'https://www.example.com',
-  enabled: true,
   capabilities: ['search', 'detail', 'chapters', 'content'],
   // 源实现 discoverCategories / discoverBooks 后，再额外声明 'discover'
   // capabilities: ['search', 'detail', 'chapters', 'content', 'discover'],
@@ -102,7 +101,6 @@ meta: {
 - `checkKeyword`：书源检测默认关键词
 - `domains`：相关域名列表
 - `homepage`：站点首页
-- `enabled`：默认是否启用
 - `capabilities`：支持的能力列表
 - `rateLimits`：按域名声明最小请求间隔
 
@@ -110,6 +108,8 @@ meta: {
 
 - 作者不需要填写内部 `sourceId`
 - 作者不需要在 `meta` 中维护 `revision`
+- 作者不需要在 `meta` 中声明 `enabled`
+- 书源启用/停用由宿主内部状态管理
 - 宿主在运行时生成 `ctx.source.id`
 - `checkKeyword` 推荐填写当前站点较稳定、能稳定搜到结果的书名或作者词
 - `rateLimits` 推荐保持对象结构，以便后续继续扩展更多请求控制字段

@@ -106,7 +106,7 @@ export default {
     description: '一个演示 API / HTML / 浏览器混合流程的模板书源。',
     domains: ['www.example.com'],
     homepage: SOURCE_HOST,
-    enabled: true,
+    // 启用/停用由 App 内部管理，不需要在 meta 里声明 enabled。
     // 如果源同时实现 discoverCategories / discoverBooks，再把 'discover' 加进来。
     capabilities: ['search', 'detail', 'chapters', 'content'],
     rateLimits: {
