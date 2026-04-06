@@ -18,16 +18,18 @@ class TextCoverPlaceholder extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final resolvedWidth = width.isFinite && width > 0 ? width : 56.0;
+    final resolvedHeight = height.isFinite && height > 0 ? height : 80.0;
     final normalizedTitle = _normalizeText(title);
     final normalizedAuthor = _normalizeText(author);
     final baseColor = _resolveSeedColor(normalizedTitle, normalizedAuthor);
     final textColor = Colors.white.withValues(alpha: 0.96);
-    final showAuthor = normalizedAuthor.isNotEmpty && height >= 82;
-    final compact = height < 82 || width < 56;
+    final showAuthor = normalizedAuthor.isNotEmpty && resolvedHeight >= 82;
+    final compact = resolvedHeight < 82 || resolvedWidth < 56;
     final titleMaxLines =
         compact
             ? 3
-            : height >= 120
+            : resolvedHeight >= 120
             ? 4
             : 3;
     final titleAlign = compact ? TextAlign.center : TextAlign.left;
@@ -37,8 +39,8 @@ class TextCoverPlaceholder extends StatelessWidget {
       height: 1.1,
       fontSize:
           compact
-              ? (width * 0.18).clamp(10.0, 14.0)
-              : (width * 0.16).clamp(11.0, 18.0),
+              ? (resolvedWidth * 0.18).clamp(10.0, 14.0)
+              : (resolvedWidth * 0.16).clamp(11.0, 18.0),
     );
     final authorStyle = Theme.of(context).textTheme.labelSmall?.copyWith(
       color: textColor.withValues(alpha: 0.88),
@@ -48,8 +50,8 @@ class TextCoverPlaceholder extends StatelessWidget {
     );
 
     return Container(
-      width: width,
-      height: height,
+      width: resolvedWidth,
+      height: resolvedHeight,
       decoration: BoxDecoration(
         borderRadius: borderRadius,
         gradient: LinearGradient(
@@ -69,7 +71,7 @@ class TextCoverPlaceholder extends StatelessWidget {
             left: 0,
             right: 0,
             child: Container(
-              height: height * 0.16,
+              height: resolvedHeight * 0.16,
               decoration: BoxDecoration(
                 borderRadius: BorderRadius.only(
                   topLeft: borderRadius.topLeft,
@@ -81,10 +83,10 @@ class TextCoverPlaceholder extends StatelessWidget {
           ),
           Padding(
             padding: EdgeInsets.fromLTRB(
-              width * 0.12,
-              height * 0.12,
-              width * 0.12,
-              height * 0.10,
+              resolvedWidth * 0.12,
+              resolvedHeight * 0.12,
+              resolvedWidth * 0.12,
+              resolvedHeight * 0.10,
             ),
             child: Column(
               crossAxisAlignment:

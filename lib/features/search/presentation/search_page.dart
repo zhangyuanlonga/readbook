@@ -135,7 +135,8 @@ class _SearchPageState extends State<SearchPage> {
             tooltip: '返回',
             icon: const Icon(Icons.arrow_back),
           ),
-          title: const Text('搜索'),
+          titleSpacing: 0,
+          title: _buildSearchBar(context),
         ),
         body: DecoratedBox(
           decoration: BoxDecoration(
@@ -176,15 +177,12 @@ class _SearchPageState extends State<SearchPage> {
                             ),
                             sliver: SliverToBoxAdapter(
                               child: SearchInputCard(
-                                keywordController: _keywordController,
-                                focusNode: _searchFocusNode,
                                 isSearching: _isSearching,
                                 searchContentMode: _searchContentMode,
                                 isPreciseBookMatch: _isPreciseBookMatch,
                                 selectedSourceCount: _selectedSourceIds.length,
                                 availableSourceCount: _availableSourceCount,
                                 isLoadingSourceCount: _isLoadingSourceCount,
-                                onSearch: _runSearch,
                                 onClearResults: _clearResults,
                                 onContentModeChanged: _onContentModeChanged,
                                 onPreciseMatchChanged: _onPreciseMatchChanged,
@@ -383,6 +381,87 @@ class _SearchPageState extends State<SearchPage> {
       return;
     }
     context.go('/bookshelf');
+  }
+
+  Widget _buildSearchBar(BuildContext context) {
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
+    final isMangaMode = _searchContentMode == SearchContentMode.manga;
+    final hintText = isMangaMode ? '输入漫画名或作者' : '输入书名或作者';
+
+    return Padding(
+      padding: const EdgeInsets.only(right: 12),
+      child: SizedBox(
+        height: 42,
+        child: TextField(
+          controller: _keywordController,
+          focusNode: _searchFocusNode,
+          autofocus: true,
+          textInputAction: TextInputAction.search,
+          textAlignVertical: TextAlignVertical.center,
+          style: theme.textTheme.bodyMedium?.copyWith(
+            fontSize: 14,
+            height: 1.2,
+          ),
+          onSubmitted: (_) => _runSearch(),
+          decoration: InputDecoration(
+            hintText: hintText,
+            hintStyle: theme.textTheme.bodyMedium?.copyWith(
+              fontSize: 14,
+              height: 1.2,
+              color: colorScheme.onSurfaceVariant,
+            ),
+            filled: true,
+            fillColor: colorScheme.surfaceContainerHighest,
+            border: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(14),
+              borderSide: BorderSide.none,
+            ),
+            enabledBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(14),
+              borderSide: BorderSide.none,
+            ),
+            focusedBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(14),
+              borderSide: BorderSide(
+                color: colorScheme.primary.withValues(alpha: 0.45),
+                width: 1.2,
+              ),
+            ),
+            prefixIcon: const Icon(Icons.search_rounded, size: 20),
+            prefixIconConstraints: const BoxConstraints(
+              minWidth: 40,
+              minHeight: 40,
+            ),
+            suffixIcon: ValueListenableBuilder<TextEditingValue>(
+              valueListenable: _keywordController,
+              builder: (_, value, __) {
+                if (_isSearching) {
+                  return IconButton(
+                    tooltip: '取消搜索',
+                    onPressed: _runSearch,
+                    icon: const Icon(Icons.stop_circle_outlined, size: 18),
+                  );
+                }
+                if (value.text.isEmpty) {
+                  return const SizedBox.shrink();
+                }
+                return IconButton(
+                  tooltip: '清空输入',
+                  onPressed: () => _keywordController.clear(),
+                  icon: const Icon(Icons.close_rounded, size: 18),
+                );
+              },
+            ),
+            isDense: true,
+            contentPadding: const EdgeInsets.symmetric(
+              horizontal: 8,
+              vertical: 10,
+            ),
+          ),
+        ),
+      ),
+    );
   }
 
   // ── Callbacks for SearchInputCard ──
@@ -1272,6 +1351,14 @@ class _ScriptSourceFilterSheet extends StatefulWidget {
 class _ScriptSourceFilterSheetState extends State<_ScriptSourceFilterSheet> {
   late final Set<String> _allIds;
   late Set<String> _draftSelectedIds;
+  final TextEditingController _filterController = TextEditingController();
+  String _filterKeyword = '';
+
+  @override
+  void dispose() {
+    _filterController.dispose();
+    super.dispose();
+  }
 
   @override
   void initState() {
@@ -1289,12 +1376,19 @@ class _ScriptSourceFilterSheetState extends State<_ScriptSourceFilterSheet> {
   bool get _allSelected =>
       _allIds.isNotEmpty && _draftSelectedIds.length == _allIds.length;
 
-  Set<String> _resultSelection() {
-    if (_allIds.isEmpty) {
-      return <String>{};
+  List<_ScriptSourceFilterItem> get _visibleItems {
+    final keyword = _filterKeyword.trim().toLowerCase();
+    if (keyword.isEmpty) {
+      return widget.items;
     }
-    if (_draftSelectedIds.isEmpty ||
-        _draftSelectedIds.length == _allIds.length) {
+    return widget.items.where((item) {
+      final group = item.group?.trim().toLowerCase() ?? '';
+      return item.name.toLowerCase().contains(keyword) || group.contains(keyword);
+    }).toList(growable: false);
+  }
+
+  Set<String> _resultSelection() {
+    if (_allIds.isEmpty || _draftSelectedIds.length == _allIds.length) {
       return <String>{};
     }
     return Set<String>.of(_draftSelectedIds);
@@ -1322,7 +1416,6 @@ class _ScriptSourceFilterSheetState extends State<_ScriptSourceFilterSheet> {
                 ],
               ),
             ),
-            const Divider(height: 1),
             if (widget.items.isEmpty)
               Expanded(
                 child: Center(
@@ -1331,46 +1424,126 @@ class _ScriptSourceFilterSheetState extends State<_ScriptSourceFilterSheet> {
               )
             else
               Expanded(
-                child: ListView(
+                child: Column(
                   children: [
-                    CheckboxListTile(
-                      value: _allSelected,
-                      title: Text('全部书源 (${widget.items.length})'),
-                      controlAffinity: ListTileControlAffinity.leading,
-                      onChanged: (value) {
-                        if (value == true) {
-                          setState(() {
-                            _draftSelectedIds = <String>{..._allIds};
-                          });
-                        }
-                      },
-                    ),
-                    const Divider(height: 1),
-                    ...widget.items.map((item) {
-                      final selected = _draftSelectedIds.contains(item.id);
-                      return CheckboxListTile(
-                        value: selected,
-                        title: Text(item.name),
-                        subtitle:
-                            item.group == null || item.group!.trim().isEmpty
-                                ? null
-                                : Text(item.group!),
-                        controlAffinity: ListTileControlAffinity.leading,
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
+                      child: TextField(
+                        controller: _filterController,
                         onChanged: (value) {
                           setState(() {
-                            if (value == true) {
-                              _draftSelectedIds.add(item.id);
-                            } else {
-                              _draftSelectedIds.remove(item.id);
-                            }
+                            _filterKeyword = value;
                           });
                         },
-                      );
-                    }),
+                        decoration: InputDecoration(
+                          hintText: '筛选书源名称或分组',
+                          prefixIcon: const Icon(Icons.search_rounded, size: 18),
+                          suffixIcon:
+                              _filterKeyword.isEmpty
+                                  ? null
+                                  : IconButton(
+                                    tooltip: '清空筛选',
+                                    onPressed: () {
+                                      _filterController.clear();
+                                      setState(() {
+                                        _filterKeyword = '';
+                                      });
+                                    },
+                                    icon: const Icon(Icons.close_rounded, size: 18),
+                                  ),
+                          isDense: true,
+                          border: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                        ),
+                      ),
+                    ),
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+                      child: Row(
+                        children: [
+                          Text(
+                            _draftSelectedIds.isEmpty
+                                ? '当前未勾选，应用后将恢复全部书源'
+                                : '已选 ${_draftSelectedIds.length} / ${widget.items.length}',
+                            style: theme.textTheme.bodySmall,
+                          ),
+                          const Spacer(),
+                          Opacity(
+                            opacity: _draftSelectedIds.isNotEmpty ? 1 : 0.45,
+                            child: TextButton(
+                              onPressed:
+                                  _draftSelectedIds.isNotEmpty
+                                      ? () {
+                                        setState(() {
+                                          _draftSelectedIds.clear();
+                                        });
+                                      }
+                                      : null,
+                              child: const Text('清空勾选'),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    Expanded(
+                      child:
+                          _visibleItems.isEmpty
+                              ? Center(
+                                child: Text(
+                                  '没有匹配的书源',
+                                  style: theme.textTheme.bodyMedium,
+                                ),
+                              )
+                              : ListView(
+                                children: [
+                                  CheckboxListTile(
+                                    value: _allSelected,
+                                    title: Text('全部书源 (${widget.items.length})'),
+                                    subtitle:
+                                        _draftSelectedIds.isEmpty
+                                            ? const Text('不指定时默认搜索全部书源')
+                                            : null,
+                                    controlAffinity:
+                                        ListTileControlAffinity.leading,
+                                    onChanged: (value) {
+                                      setState(() {
+                                        if (value == true) {
+                                          _draftSelectedIds = <String>{..._allIds};
+                                        } else {
+                                          _draftSelectedIds.clear();
+                                        }
+                                      });
+                                    },
+                                  ),
+                                  ..._visibleItems.map((item) {
+                                    final selected = _draftSelectedIds.contains(item.id);
+                                    return CheckboxListTile(
+                                      value: selected,
+                                      title: Text(item.name),
+                                      subtitle:
+                                          item.group == null || item.group!.trim().isEmpty
+                                              ? null
+                                              : Text(item.group!),
+                                      controlAffinity:
+                                          ListTileControlAffinity.leading,
+                                      onChanged: (value) {
+                                        setState(() {
+                                          if (value == true) {
+                                            _draftSelectedIds.add(item.id);
+                                          } else {
+                                            _draftSelectedIds.remove(item.id);
+                                          }
+                                        });
+                                      },
+                                    );
+                                  }),
+                                ],
+                              ),
+                    ),
                   ],
                 ),
               ),
-            const Divider(height: 1),
             Padding(
               padding: const EdgeInsets.fromLTRB(16, 10, 16, 12),
               child: Row(
@@ -1385,6 +1558,12 @@ class _ScriptSourceFilterSheetState extends State<_ScriptSourceFilterSheet> {
                   Expanded(
                     child: FilledButton(
                       onPressed: () {
+                        if (_draftSelectedIds.isEmpty) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(content: Text('请至少勾选一个书源')),
+                          );
+                          return;
+                        }
                         Navigator.of(context).pop(_resultSelection());
                       },
                       child: const Text('应用筛选'),
