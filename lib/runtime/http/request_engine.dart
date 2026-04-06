@@ -389,7 +389,22 @@ class HttpPackageRequestEngine implements RequestEngine {
     try {
       return HttpDate.parse(value);
     } catch (_) {
-      return null;
+      final normalized = value
+          .trim()
+          .replaceFirstMapped(
+            RegExp(
+              r'^([A-Za-z]{3},\s*\d{1,2})-([A-Za-z]{3})-(\d{2,4}\s+\d{2}:\d{2}:\d{2}\s+GMT)$',
+            ),
+            (match) => '${match.group(1)} ${match.group(2)} ${match.group(3)}',
+          );
+      if (normalized == value.trim()) {
+        return null;
+      }
+      try {
+        return HttpDate.parse(normalized);
+      } catch (_) {
+        return null;
+      }
     }
   }
 

@@ -111,6 +111,38 @@ void main() {
     expect(session.cookies['sid'], isNull);
   });
 
+  test('accepts expires dates with hyphen separated month format', () async {
+    String? secondRequestCookieHeader;
+    var requestCount = 0;
+    final client = MockClient((http.Request request) async {
+      requestCount += 1;
+      if (requestCount == 1) {
+        return http.Response(
+          'ok',
+          200,
+          headers: <String, String>{
+            'set-cookie':
+                'sid=abc456; Expires=Wed, 21-Oct-2037 07:28:00 GMT; Path=/books',
+          },
+        );
+      }
+      secondRequestCookieHeader = request.headers['cookie'];
+      return http.Response('ok', 200);
+    });
+
+    final engine = HttpPackageRequestEngine(client: client);
+    final session = SourceSession(sourceId: 'test_source');
+    final request = RuntimeHttpRequest(
+      uri: Uri.parse('https://example.com/books/list'),
+    );
+
+    await engine.request(request, session: session);
+    await engine.request(request, session: session);
+
+    expect(session.cookies['sid'], 'abc456');
+    expect(secondRequestCookieHeader, contains('sid=abc456'));
+  });
+
   test('does not send request when session is cancelled', () async {
     var requestCalled = false;
     final client = MockClient((http.Request request) async {

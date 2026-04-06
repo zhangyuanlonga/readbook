@@ -7,6 +7,7 @@ import 'source_health_auto_disable_service.dart';
 import 'source_health_reason_classifier.dart';
 import 'source_health_service.dart';
 import 'source_health_snapshot_resolver.dart';
+import 'source_runtime_diagnostic_execution_container.dart';
 import 'source_runtime_facade.dart';
 
 enum SourceCheckLevel { searchOnly, searchAndDetail, fullReadPath }
@@ -128,10 +129,11 @@ class SourceCheckService {
     }
 
     var attemptedStep = SourceCheckStep.search;
-    final diagnosticContainer = await _sourceRuntimeFacade
-        .createDiagnosticExecutionContainerById(sourceId);
+    SourceRuntimeDiagnosticExecutionContainer? diagnosticContainer;
 
     try {
+      diagnosticContainer = await _sourceRuntimeFacade
+          .createDiagnosticExecutionContainerById(sourceId);
       _logStepStarted(
         sourceId: sourceId,
         sourceName: sourceName,

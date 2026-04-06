@@ -1,5 +1,11 @@
+import 'dart:async';
+import 'dart:io';
+
 import 'package:uuid/uuid.dart';
 
+import '../../../core/errors/app_exception.dart';
+import '../../../core/errors/error_codes.dart';
+import '../../../core/errors/error_stage.dart';
 import '../../../data/datasources/local/app_database.dart';
 import '../../../data/repositories/script_source_repository_impl.dart';
 import '../../../domain/entities/script_source.dart';
@@ -323,11 +329,20 @@ class SourceRuntimeFacade {
     if (source == null || !source.enabled) {
       return null;
     }
-    return _scriptRuntimeService.createDiagnosticExecutionContainer(
-      sourceId: normalizedSourceId,
-      sourceCode: source.sourceCode,
-      serializeStartup: true,
-    );
+    try {
+      return await _scriptRuntimeService.createDiagnosticExecutionContainer(
+        sourceId: normalizedSourceId,
+        sourceCode: source.sourceCode,
+        serializeStartup: true,
+      );
+    } catch (error, stackTrace) {
+      throw _normalizeRuntimeException(
+        sourceId: normalizedSourceId,
+        step: SourceRuntimeExecutionStep.search,
+        error: error,
+        stackTrace: stackTrace,
+      );
+    }
   }
 
   Future<List<runtime_models.Book>> search({
@@ -567,14 +582,80 @@ class SourceRuntimeFacade {
         );
       }
       return result;
-    } catch (_) {
+    } catch (error, stackTrace) {
       if (source != null && source.enabled) {
         _warmStateService.markUnstable(
           sourceId: normalizedSourceId,
           step: stepName,
         );
       }
-      rethrow;
+      throw _normalizeRuntimeException(
+        sourceId: normalizedSourceId,
+        step: step,
+        error: error,
+        stackTrace: stackTrace,
+      );
     }
+  }
+
+  AppException _normalizeRuntimeException({
+    required String sourceId,
+    required SourceRuntimeExecutionStep step,
+    required Object error,
+    required StackTrace stackTrace,
+  }) {
+    final stage = _errorStageForStep(step);
+    if (error is AppException) {
+      return error.copyWith(
+        sourceId: error.sourceId?.trim().isNotEmpty == true
+            ? error.sourceId
+            : sourceId,
+        stage: error.stage == ErrorStage.unknown ? stage : error.stage,
+        stackTrace: error.stackTrace ?? stackTrace,
+      );
+    }
+
+    final message = error.toString().trim();
+    if (error is TimeoutException ||
+        error is HttpException ||
+        error is SocketException) {
+      return NetworkException(
+        briefMessage: message.isEmpty ? '网络请求失败。' : message,
+        sourceId: sourceId,
+        stage: stage,
+        cause: error,
+        stackTrace: stackTrace,
+      );
+    }
+
+    if (error is FormatException) {
+      return DecodeException(
+        briefMessage: message.isEmpty ? '响应解析失败。' : message,
+        sourceId: sourceId,
+        stage: stage,
+        cause: error,
+        stackTrace: stackTrace,
+      );
+    }
+
+    return AppException(
+      code: ErrorCode.unknown,
+      briefMessage: message.isEmpty ? '脚本源执行失败。' : message,
+      sourceId: sourceId,
+      stage: stage,
+      cause: error,
+      stackTrace: stackTrace,
+    );
+  }
+
+  ErrorStage _errorStageForStep(SourceRuntimeExecutionStep step) {
+    return switch (step) {
+      SourceRuntimeExecutionStep.search => ErrorStage.search,
+      SourceRuntimeExecutionStep.discoverCategories => ErrorStage.source,
+      SourceRuntimeExecutionStep.discoverBooks => ErrorStage.source,
+      SourceRuntimeExecutionStep.detail => ErrorStage.detail,
+      SourceRuntimeExecutionStep.chapters => ErrorStage.toc,
+      SourceRuntimeExecutionStep.content => ErrorStage.content,
+    };
   }
 }

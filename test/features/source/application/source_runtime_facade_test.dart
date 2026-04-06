@@ -1,3 +1,7 @@
+import 'dart:io';
+
+import 'package:shuxiang_reading_next/core/errors/app_exception.dart';
+import 'package:shuxiang_reading_next/core/errors/error_stage.dart';
 import 'package:drift/native.dart';
 import 'package:shuxiang_reading_next/data/datasources/local/app_database.dart';
 import 'package:shuxiang_reading_next/data/repositories/script_source_repository_impl.dart';
@@ -248,6 +252,24 @@ void main() {
       expect(runtimeService.isolatedContentCalls, 2);
       expect(runtimeService.contentCalls, 0);
     });
+
+    test('wraps runtime HttpException as AppException', () async {
+      runtimeService.searchError = const HttpException(
+        'Invalid HTTP date Mon, 06-Apr-2026 09:35:27 GMT',
+      );
+      final saved = await facade.saveScriptSource(
+        sourceCode: _buildSourceCode(name: '异常源'),
+      );
+
+      await expectLater(
+        facade.search(sourceId: saved.id, keyword: '凡人修仙传'),
+        throwsA(
+          isA<NetworkException>()
+              .having((error) => error.sourceId, 'sourceId', saved.id)
+              .having((error) => error.stage, 'stage', ErrorStage.search),
+        ),
+      );
+    });
   });
 }
 
@@ -257,6 +279,7 @@ class _FakeScriptSourceRuntimeService extends ScriptSourceRuntimeService {
   int searchCalls = 0;
   int isolatedSearchCalls = 0;
   final List<bool> searchSerializeStartupFlags = <bool>[];
+  Object? searchError;
   int discoverCategoriesCalls = 0;
   int isolatedDiscoverCategoriesCalls = 0;
   final List<bool> discoverSerializeStartupFlags = <bool>[];
@@ -326,6 +349,9 @@ class _FakeScriptSourceRuntimeService extends ScriptSourceRuntimeService {
   }) async {
     isolatedSearchCalls += 1;
     searchSerializeStartupFlags.add(serializeStartup);
+    if (searchError != null) {
+      throw searchError!;
+    }
     return const <runtime_models.Book>[];
   }
 
