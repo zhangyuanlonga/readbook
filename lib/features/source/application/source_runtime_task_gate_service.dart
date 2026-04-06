@@ -107,7 +107,10 @@ class SourceRuntimeTaskGateService {
   int _resolveBudget() {
     final platformBudget = switch (_runtimePlatform) {
       SourceRuntimeTaskGatePlatform.android => 4,
-      SourceRuntimeTaskGatePlatform.ios => 2,
+      // flutter_js / JavaScriptCore still shows native instability on iOS when
+      // discover/detail/reader chains overlap. Keep runtime work fully
+      // serialized there until the underlying crash is eliminated.
+      SourceRuntimeTaskGatePlatform.ios => 1,
       SourceRuntimeTaskGatePlatform.macos => 2,
       SourceRuntimeTaskGatePlatform.windows => 3,
       SourceRuntimeTaskGatePlatform.linux => 3,

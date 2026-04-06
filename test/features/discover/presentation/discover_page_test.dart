@@ -7,6 +7,7 @@ import 'package:shuxiang_reading_next/domain/repositories/script_source_reposito
 import 'package:shuxiang_reading_next/features/discover/application/discover_preferences_service.dart';
 import 'package:shuxiang_reading_next/features/discover/application/explore_service.dart';
 import 'package:shuxiang_reading_next/features/discover/presentation/discover_page.dart';
+import 'package:shuxiang_reading_next/features/source/application/source_health_service.dart';
 import 'package:shuxiang_reading_next/features/source/application/source_runtime_facade.dart';
 import 'package:shuxiang_reading_next/runtime/sources/source_contract.dart';
 import 'package:shuxiang_reading_next/runtime/sources/source_manifest.dart';
@@ -17,8 +18,10 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 void main() {
-  setUp(() {
+  setUp(() async {
     SharedPreferences.setMockInitialValues(<String, Object>{});
+    SourceHealthService.instance.clear();
+    await SourceHealthService.instance.persistNow();
   });
 
   testWidgets('shows discover source summary when no discover-capable source', (
@@ -43,7 +46,7 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.textContaining('当前已启用：1，支持发现：0'), findsOneWidget);
-    expect(find.text('暂无支持发现的已启用源脚本'), findsOneWidget);
+    expect(find.text('暂无支持发现的已启用书源'), findsOneWidget);
   });
 
   testWidgets('loads first discover category and renders books', (
@@ -441,6 +444,7 @@ void _registerDiscoverPageTearDown(WidgetTester tester) {
     await tester.pump();
     await tester.pump();
     await tester.binding.setSurfaceSize(null);
+    await SourceHealthService.instance.persistNow();
   });
 }
 

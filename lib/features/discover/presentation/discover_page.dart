@@ -11,10 +11,12 @@ import '../../../app/widgets/disk_cached_cover_image.dart';
 import '../../../app/widgets/runtime_feedback_card.dart';
 import '../../../app/widgets/text_cover_placeholder.dart';
 import '../../../core/errors/app_exception.dart';
+import '../../../domain/entities/source_health.dart';
 import '../../../domain/entities/book.dart';
 import '../../book/presentation/book_detail_route.dart';
 import '../application/discover_preferences_service.dart';
 import '../application/explore_service.dart';
+import '../../source/application/source_health_service.dart';
 
 enum _SourceRuntimeStatus {
   unknown,
@@ -45,7 +47,6 @@ class _DiscoverPageState extends State<DiscoverPage>
     with AutomaticKeepAliveClientMixin<DiscoverPage> {
   static const int _bookPageSize = 24;
   static const int _compactCategoryPreviewCount = 8;
-  static const int _backgroundProbeBatchLimit = 60;
   static const Set<PointerDeviceKind> _dragDevices = <PointerDeviceKind>{
     PointerDeviceKind.touch,
     PointerDeviceKind.mouse,
@@ -57,6 +58,7 @@ class _DiscoverPageState extends State<DiscoverPage>
 
   late final ExploreService _exploreService;
   late final DiscoverPreferencesService _discoverPreferencesService;
+  final SourceHealthService _sourceHealthService = SourceHealthService.instance;
   final ScrollController _booksScrollController = ScrollController();
   Timer? _sourceRefreshDebounce;
 
@@ -66,17 +68,14 @@ class _DiscoverPageState extends State<DiscoverPage>
   bool _isLoadingMore = false;
   int _enabledSourceCount = 0;
   int _discoverCapableCount = 0;
-  int _sourceProbeToken = 0;
 
   List<DiscoverSource> _discoverSources = const <DiscoverSource>[];
   DiscoverSource? _selectedSource;
   List<ExploreCategoryItem> _categories = const <ExploreCategoryItem>[];
   int _selectedCategoryIndex = -1;
   List<Book> _books = const <Book>[];
-  final Set<String> _probingSourceIds = <String>{};
-  final Set<String> _verifiedSourceIds = <String>{};
-  final Map<String, String> _sourceParseErrorById = <String, String>{};
-  final Map<String, String> _sourceBookErrorById = <String, String>{};
+  Map<String, SourceHealthSnapshot> _sourceHealthById =
+      const <String, SourceHealthSnapshot>{};
 
   int _nextPage = 1;
   bool _hasMore = false;
@@ -89,6 +88,17 @@ class _DiscoverPageState extends State<DiscoverPage>
   int _bookRequestToken = 0;
   String? _rememberedSourceId;
   bool _isSwitchingSource = false;
+
+  bool get _isDiscoverLoading {
+    return _isLoadingSources ||
+        _isLoadingCategories ||
+        _isLoadingBooks ||
+        _isLoadingMore;
+  }
+
+  bool get _isDiscoverBusy {
+    return _isDiscoverLoading || _isSwitchingSource;
+  }
 
   ExploreCategoryItem? get _selectedCategory {
     if (_selectedCategoryIndex < 0 ||
@@ -309,7 +319,7 @@ class _DiscoverPageState extends State<DiscoverPage>
                 TextButton.icon(
                   key: const Key('discover_source_switch_button'),
                   onPressed:
-                      _isLoadingSources || _discoverSources.isEmpty
+                      _isDiscoverBusy || _discoverSources.isEmpty
                           ? null
                           : _showSourcePicker,
                   icon: const Icon(Icons.tune_rounded),
@@ -1219,10 +1229,10 @@ class _DiscoverPageState extends State<DiscoverPage>
 
       final selected = _findSourceById(loadedSources, previousSourceId);
       setState(() {
-        _syncSourceRuntimeCache(loadedSources);
         _enabledSourceCount = summary.enabledSourceCount;
         _discoverCapableCount = summary.discoverCapableCount;
         _discoverSources = loadedSources;
+        _sourceHealthById = _captureSourceHealth(loadedSources);
         _selectedSource = selected;
         _isLoadingSources = false;
         _categories = const <ExploreCategoryItem>[];
@@ -1240,114 +1250,39 @@ class _DiscoverPageState extends State<DiscoverPage>
           preserveCurrentCategory: false,
         );
       }
-
-      unawaited(
-        _probeSourceCompatibilityInBackground(
-          _buildInitialProbeSources(
-            sources: loadedSources,
-            selectedSourceId: selected?.id,
-          ),
-        ),
-      );
     } catch (error) {
       if (!mounted || requestToken != _sourceRequestToken) {
         return;
       }
       setState(() {
-        _probingSourceIds.clear();
-        _verifiedSourceIds.clear();
-        _sourceParseErrorById.clear();
-        _sourceBookErrorById.clear();
         _enabledSourceCount = 0;
         _discoverCapableCount = 0;
+        _sourceHealthById = const <String, SourceHealthSnapshot>{};
         _isLoadingSources = false;
         _sourceErrorText = _toReadableError(error, fallback: '加载发现书源失败');
       });
     }
   }
 
-  void _syncSourceRuntimeCache(List<DiscoverSource> sources) {
-    final sourceIdSet = sources.map((item) => item.id).toSet();
-    _probingSourceIds.removeWhere((id) => !sourceIdSet.contains(id));
-    _verifiedSourceIds.removeWhere((id) => !sourceIdSet.contains(id));
-    _sourceParseErrorById.removeWhere((id, _) => !sourceIdSet.contains(id));
-    _sourceBookErrorById.removeWhere((id, _) => !sourceIdSet.contains(id));
-  }
-
-  List<DiscoverSource> _buildInitialProbeSources({
-    required List<DiscoverSource> sources,
-    required String? selectedSourceId,
-  }) {
-    if (sources.isEmpty) {
-      return const <DiscoverSource>[];
-    }
-
-    final output = <DiscoverSource>[];
-    if (selectedSourceId != null && selectedSourceId.isNotEmpty) {
-      for (final source in sources) {
-        if (source.id == selectedSourceId) {
-          output.add(source);
-          break;
-        }
-      }
-    }
-
-    for (final source in sources) {
-      if (output.length >= _backgroundProbeBatchLimit) {
-        break;
-      }
-      if (output.any((item) => item.id == source.id)) {
-        continue;
-      }
-      output.add(source);
-    }
-    return output;
-  }
-
-  Future<void> _probeSourceCompatibilityInBackground(
+  Map<String, SourceHealthSnapshot> _captureSourceHealth(
     List<DiscoverSource> sources,
-  ) async {
-    if (sources.isEmpty || !mounted) {
+  ) {
+    final snapshots = <String, SourceHealthSnapshot>{};
+    for (final source in sources) {
+      snapshots[source.id] = _sourceHealthService.snapshotFor(source.id);
+    }
+    return Map<String, SourceHealthSnapshot>.unmodifiable(snapshots);
+  }
+
+  void _refreshSourceHealth(String sourceId) {
+    final normalized = sourceId.trim();
+    if (normalized.isEmpty) {
       return;
     }
-
-    final token = ++_sourceProbeToken;
-    setState(() {
-      _probingSourceIds.addAll(sources.map((item) => item.id));
-    });
-
-    for (final source in sources) {
-      if (!mounted || token != _sourceProbeToken) {
-        return;
-      }
-
-      String? parseError;
-      try {
-        final categories = await _exploreService.parseCategories(
-          source,
-          evaluateScript: false,
-        );
-        if (!categories.any((item) => item.isActionable)) {
-          parseError = '发现分类均不可点击。';
-        }
-      } catch (error) {
-        parseError = _toReadableError(error, fallback: '发现分类解析失败');
-      }
-
-      if (!mounted || token != _sourceProbeToken) {
-        return;
-      }
-
-      setState(() {
-        _probingSourceIds.remove(source.id);
-        _verifiedSourceIds.add(source.id);
-        if (parseError == null || parseError.isEmpty) {
-          _sourceParseErrorById.remove(source.id);
-        } else {
-          _sourceParseErrorById[source.id] = parseError;
-        }
-      });
-    }
+    _sourceHealthById = <String, SourceHealthSnapshot>{
+      ..._sourceHealthById,
+      normalized: _sourceHealthService.snapshotFor(normalized),
+    };
   }
 
   Future<void> _reloadCurrentSource() async {
@@ -1396,8 +1331,7 @@ class _DiscoverPageState extends State<DiscoverPage>
 
       setState(() {
         _isLoadingCategories = false;
-        _verifiedSourceIds.add(source.id);
-        _sourceParseErrorById.remove(source.id);
+        _refreshSourceHealth(source.id);
         _categories = parsedCategories;
         _selectedCategoryIndex = nextCategoryIndex;
       });
@@ -1413,10 +1347,9 @@ class _DiscoverPageState extends State<DiscoverPage>
       }
       setState(() {
         _isLoadingCategories = false;
-        _verifiedSourceIds.add(source.id);
         final message = _toReadableError(error, fallback: '解析发现分类失败');
         _sourceErrorText = message;
-        _sourceParseErrorById[source.id] = message;
+        _refreshSourceHealth(source.id);
       });
     }
   }
@@ -1468,7 +1401,7 @@ class _DiscoverPageState extends State<DiscoverPage>
         _hasMore = result.hasMore && result.books.isNotEmpty;
         _isLoadingBooks = false;
         _isLoadingMore = false;
-        _sourceBookErrorById.remove(source.id);
+        _refreshSourceHealth(source.id);
       });
     } catch (error) {
       if (!mounted || requestToken != _bookRequestToken) {
@@ -1483,7 +1416,7 @@ class _DiscoverPageState extends State<DiscoverPage>
           _books = const <Book>[];
         }
         _bookErrorText = message;
-        _sourceBookErrorById[source.id] = message;
+        _refreshSourceHealth(source.id);
       });
     }
   }
@@ -1558,7 +1491,7 @@ class _DiscoverPageState extends State<DiscoverPage>
   }
 
   Future<void> _showSourcePicker() async {
-    if (_discoverSources.isEmpty) {
+    if (_discoverSources.isEmpty || _isDiscoverBusy) {
       return;
     }
 
@@ -1571,9 +1504,7 @@ class _DiscoverPageState extends State<DiscoverPage>
           (context) => _SourcePickerSheet(
             sources: _discoverSources,
             selectedSourceId: _selectedSource?.id,
-            checkingSourceIds: _probingSourceIds,
-            parseErrorBySourceId: _sourceParseErrorById,
-            bookErrorBySourceId: _sourceBookErrorById,
+            healthBySourceId: _sourceHealthById,
           ),
     );
     if (!mounted || selected == null || selected.id == _selectedSource?.id) {
@@ -1615,7 +1546,7 @@ class _DiscoverPageState extends State<DiscoverPage>
     required Future<void> Function() action,
     required String fallback,
   }) async {
-    if (_isSwitchingSource || !mounted) {
+    if (_isSwitchingSource || _isDiscoverLoading || !mounted) {
       return;
     }
     _isSwitchingSource = true;
@@ -1635,7 +1566,7 @@ class _DiscoverPageState extends State<DiscoverPage>
   }
 
   Future<void> _switchSourceByOffset(int offset) async {
-    if (_isLoadingSources || _isLoadingCategories) {
+    if (_isDiscoverLoading) {
       return;
     }
 
@@ -1666,7 +1597,7 @@ class _DiscoverPageState extends State<DiscoverPage>
         continue;
       }
       final candidate = sources[candidateIndex];
-      if (_sourceParseErrorById.containsKey(candidate.id)) {
+      if (_resolveSourceStatus(candidate.id) == _SourceRuntimeStatus.parseFailed) {
         continue;
       }
       await _loadCategoriesForSource(candidate, preserveCurrentCategory: false);
@@ -1696,7 +1627,7 @@ class _DiscoverPageState extends State<DiscoverPage>
   }
 
   Future<void> _switchToNextHealthySourceInternal() async {
-    if (_isLoadingSources || _isLoadingCategories) {
+    if (_isDiscoverLoading) {
       return;
     }
 
@@ -1716,7 +1647,7 @@ class _DiscoverPageState extends State<DiscoverPage>
         continue;
       }
       final candidate = sources[index];
-      if (_sourceParseErrorById.containsKey(candidate.id)) {
+      if (_resolveSourceStatus(candidate.id) == _SourceRuntimeStatus.parseFailed) {
         continue;
       }
       await _loadCategoriesForSource(candidate, preserveCurrentCategory: false);
@@ -1742,35 +1673,33 @@ class _DiscoverPageState extends State<DiscoverPage>
     if (sourceId == null || sourceId.isEmpty) {
       return _SourceRuntimeStatus.unknown;
     }
-    if (_probingSourceIds.contains(sourceId)) {
+    if (sourceId == _selectedSource?.id &&
+        (_isLoadingCategories || _isLoadingBooks || _isLoadingMore)) {
       return _SourceRuntimeStatus.checking;
     }
-    if (_sourceParseErrorById.containsKey(sourceId)) {
-      return _SourceRuntimeStatus.parseFailed;
-    }
-    if (_sourceBookErrorById.containsKey(sourceId)) {
-      return _SourceRuntimeStatus.requestFailed;
-    }
-    if (!_verifiedSourceIds.contains(sourceId)) {
+    final snapshot = _sourceHealthById[sourceId];
+    if (snapshot == null) {
       return _SourceRuntimeStatus.unknown;
     }
-    return _SourceRuntimeStatus.ready;
+    return _sourceRuntimeStatusFromHealth(snapshot);
   }
 
   String? _sourceStatusDetail(String? sourceId) {
     if (sourceId == null || sourceId.isEmpty) {
       return null;
     }
-    final parseError = _sourceParseErrorById[sourceId];
-    if (parseError != null && parseError.isNotEmpty) {
-      return parseError;
+    final status = _resolveSourceStatus(sourceId);
+    if (status == _SourceRuntimeStatus.ready ||
+        status == _SourceRuntimeStatus.checking ||
+        status == _SourceRuntimeStatus.unknown) {
+      return null;
     }
-
-    final bookError = _sourceBookErrorById[sourceId];
-    if (bookError != null && bookError.isNotEmpty) {
-      return bookError;
+    final snapshot = _sourceHealthById[sourceId];
+    if (snapshot == null) {
+      return null;
     }
-    return null;
+    final detail = snapshot.lastFailureReason?.trim();
+    return detail == null || detail.isEmpty ? null : detail;
   }
 
   Widget _buildSourceStatusPill(
@@ -1974,16 +1903,12 @@ class _SourcePickerSheet extends StatefulWidget {
   const _SourcePickerSheet({
     required this.sources,
     required this.selectedSourceId,
-    required this.checkingSourceIds,
-    required this.parseErrorBySourceId,
-    required this.bookErrorBySourceId,
+    required this.healthBySourceId,
   });
 
   final List<DiscoverSource> sources;
   final String? selectedSourceId;
-  final Set<String> checkingSourceIds;
-  final Map<String, String> parseErrorBySourceId;
-  final Map<String, String> bookErrorBySourceId;
+  final Map<String, SourceHealthSnapshot> healthBySourceId;
 
   @override
   State<_SourcePickerSheet> createState() => _SourcePickerSheetState();
@@ -2014,16 +1939,10 @@ class _SourcePickerSheetState extends State<_SourcePickerSheet> {
 
     result.sort((left, right) {
       final leftStatus = _resolveSourceRuntimeStatus(
-        sourceId: left.id,
-        checkingSourceIds: widget.checkingSourceIds,
-        parseErrorBySourceId: widget.parseErrorBySourceId,
-        bookErrorBySourceId: widget.bookErrorBySourceId,
+        snapshot: widget.healthBySourceId[left.id],
       );
       final rightStatus = _resolveSourceRuntimeStatus(
-        sourceId: right.id,
-        checkingSourceIds: widget.checkingSourceIds,
-        parseErrorBySourceId: widget.parseErrorBySourceId,
-        bookErrorBySourceId: widget.bookErrorBySourceId,
+        snapshot: widget.healthBySourceId[right.id],
       );
       final statusCompare = _sourceStatusRank(
         leftStatus,
@@ -2141,92 +2060,135 @@ class _SourcePickerSheetState extends State<_SourcePickerSheet> {
                       )
                       : ListView.separated(
                         itemCount: filteredSources.length,
-                        separatorBuilder: (_, __) => const Divider(height: 1),
+                        separatorBuilder: (_, __) => const SizedBox(height: 10),
                         itemBuilder: (context, index) {
                           final source = filteredSources[index];
                           final selected = source.id == widget.selectedSourceId;
                           final status = _resolveSourceRuntimeStatus(
-                            sourceId: source.id,
-                            checkingSourceIds: widget.checkingSourceIds,
-                            parseErrorBySourceId: widget.parseErrorBySourceId,
-                            bookErrorBySourceId: widget.bookErrorBySourceId,
+                            snapshot: widget.healthBySourceId[source.id],
                           );
                           final statusColor = _sourceStatusColor(
                             context,
                             status,
                           );
-                          return ListTile(
-                            onTap: () => Navigator.of(context).pop(source),
-                            selected: selected,
-                            selectedTileColor: Theme.of(context)
-                                .colorScheme
-                                .secondaryContainer
-                                .withValues(alpha: 0.5),
-                            title: Row(
-                              children: <Widget>[
-                                Expanded(
-                                  child: Text(
-                                    source.name,
-                                    maxLines: 1,
-                                    overflow: TextOverflow.ellipsis,
-                                    style:
-                                        selected
-                                            ? Theme.of(
-                                              context,
-                                            ).textTheme.bodyLarge?.copyWith(
-                                              fontWeight: FontWeight.w700,
-                                            )
-                                            : null,
-                                  ),
-                                ),
-                                const SizedBox(width: 8),
-                                _buildSourceTypePill(context, source),
-                                const SizedBox(width: 6),
-                                DecoratedBox(
-                                  decoration: BoxDecoration(
-                                    color: statusColor.withValues(alpha: 0.14),
-                                    borderRadius: BorderRadius.circular(999),
-                                  ),
-                                  child: Padding(
-                                    padding: const EdgeInsets.symmetric(
-                                      horizontal: 7,
-                                      vertical: 3,
-                                    ),
-                                    child: Row(
-                                      mainAxisSize: MainAxisSize.min,
-                                      children: <Widget>[
-                                        Icon(
-                                          _sourceStatusIcon(status),
-                                          size: 12,
-                                          color: statusColor,
-                                        ),
-                                        const SizedBox(width: 3),
-                                        Text(
-                                          _sourceStatusLabel(status),
-                                          style: Theme.of(context)
-                                              .textTheme
-                                              .labelSmall
-                                              ?.copyWith(color: statusColor),
-                                        ),
-                                      ],
-                                    ),
-                                  ),
-                                ),
-                              ],
-                            ),
-                            subtitle: Text(
-                              _buildSourceSummary(source),
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                            ),
-                            trailing:
+                          final colorScheme = Theme.of(context).colorScheme;
+                          final summary = _buildSourceSummary(source);
+                          final statusHint = _buildSourceStatusHint(status);
+
+                          return Material(
+                            color:
                                 selected
-                                    ? Icon(
-                                      Icons.check_circle_rounded,
-                                      color:
-                                          Theme.of(context).colorScheme.primary,
+                                    ? colorScheme.secondaryContainer.withValues(
+                                      alpha: 0.42,
                                     )
-                                    : null,
+                                    : colorScheme.surfaceContainerLowest,
+                            borderRadius: BorderRadius.circular(16),
+                            child: InkWell(
+                              borderRadius: BorderRadius.circular(16),
+                              onTap: () => Navigator.of(context).pop(source),
+                              child: Padding(
+                                padding: const EdgeInsets.fromLTRB(
+                                  14,
+                                  12,
+                                  14,
+                                  12,
+                                ),
+                                child: Row(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: <Widget>[
+                                    Expanded(
+                                      child: Column(
+                                        crossAxisAlignment:
+                                            CrossAxisAlignment.start,
+                                        children: <Widget>[
+                                          Row(
+                                            children: <Widget>[
+                                              Expanded(
+                                                child: Text(
+                                                  source.name,
+                                                  maxLines: 1,
+                                                  overflow:
+                                                      TextOverflow.ellipsis,
+                                                  style: Theme.of(context)
+                                                      .textTheme
+                                                      .titleSmall
+                                                      ?.copyWith(
+                                                        fontWeight:
+                                                            FontWeight.w700,
+                                                      ),
+                                                ),
+                                              ),
+                                              if (selected) ...[
+                                                const SizedBox(width: 8),
+                                                _DiscoverSourceTag(
+                                                  label: '当前源',
+                                                  background:
+                                                      colorScheme.primary,
+                                                  foreground:
+                                                      colorScheme.onPrimary,
+                                                ),
+                                              ],
+                                            ],
+                                          ),
+                                          const SizedBox(height: 8),
+                                          Wrap(
+                                            spacing: 6,
+                                            runSpacing: 6,
+                                            children: <Widget>[
+                                              _buildSourceTypePill(
+                                                context,
+                                                source,
+                                              ),
+                                              _DiscoverSourceStatusTag(
+                                                label: _sourceStatusLabel(
+                                                  status,
+                                                ),
+                                                color: statusColor,
+                                                icon: _sourceStatusIcon(status),
+                                              ),
+                                            ],
+                                          ),
+                                          const SizedBox(height: 8),
+                                          Text(
+                                            statusHint,
+                                            maxLines: 1,
+                                            overflow: TextOverflow.ellipsis,
+                                            style: Theme.of(
+                                              context,
+                                            ).textTheme.bodyMedium?.copyWith(
+                                              color: statusColor,
+                                              fontWeight: FontWeight.w600,
+                                            ),
+                                          ),
+                                          const SizedBox(height: 4),
+                                          Text(
+                                            summary,
+                                            maxLines: 1,
+                                            overflow: TextOverflow.ellipsis,
+                                            style: Theme.of(
+                                              context,
+                                            ).textTheme.bodySmall?.copyWith(
+                                              color:
+                                                  colorScheme.onSurfaceVariant,
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                    const SizedBox(width: 8),
+                                    Icon(
+                                      selected
+                                          ? Icons.check_circle_rounded
+                                          : Icons.chevron_right_rounded,
+                                      color:
+                                          selected
+                                              ? colorScheme.primary
+                                              : colorScheme.onSurfaceVariant,
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ),
                           );
                         },
                       ),
@@ -2344,6 +2306,16 @@ class _SourcePickerSheetState extends State<_SourcePickerSheet> {
     return '$group · $host';
   }
 
+  String _buildSourceStatusHint(_SourceRuntimeStatus status) {
+    return switch (status) {
+      _SourceRuntimeStatus.ready => '发现能力可用，适合直接切换',
+      _SourceRuntimeStatus.checking => '正在验证分类与书籍列表',
+      _SourceRuntimeStatus.requestFailed => '最近访问失败，切换后可能需要重试',
+      _SourceRuntimeStatus.parseFailed => '书源结构异常，切换后可能不稳定',
+      _SourceRuntimeStatus.unknown => '尚未验证，建议切换后观察',
+    };
+  }
+
   String _extractHost(String url) {
     final uri = Uri.tryParse(url);
     final host = uri?.host ?? '';
@@ -2351,25 +2323,104 @@ class _SourcePickerSheetState extends State<_SourcePickerSheet> {
   }
 }
 
+class _DiscoverSourceTag extends StatelessWidget {
+  const _DiscoverSourceTag({
+    required this.label,
+    required this.background,
+    required this.foreground,
+  });
+
+  final String label;
+  final Color background;
+  final Color foreground;
+
+  @override
+  Widget build(BuildContext context) {
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        color: background,
+        borderRadius: BorderRadius.circular(999),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+        child: Text(
+          label,
+          style: Theme.of(context).textTheme.labelSmall?.copyWith(
+            color: foreground,
+            fontWeight: FontWeight.w700,
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _DiscoverSourceStatusTag extends StatelessWidget {
+  const _DiscoverSourceStatusTag({
+    required this.label,
+    required this.color,
+    required this.icon,
+  });
+
+  final String label;
+  final Color color;
+  final IconData icon;
+
+  @override
+  Widget build(BuildContext context) {
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.14),
+        borderRadius: BorderRadius.circular(999),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: <Widget>[
+            Icon(icon, size: 12, color: color),
+            const SizedBox(width: 4),
+            Text(
+              label,
+              style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                color: color,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
 _SourceRuntimeStatus _resolveSourceRuntimeStatus({
-  required String sourceId,
-  required Set<String> checkingSourceIds,
-  required Map<String, String> parseErrorBySourceId,
-  required Map<String, String> bookErrorBySourceId,
+  SourceHealthSnapshot? snapshot,
 }) {
-  if (sourceId.isEmpty) {
+  if (snapshot == null) {
     return _SourceRuntimeStatus.unknown;
   }
-  if (checkingSourceIds.contains(sourceId)) {
-    return _SourceRuntimeStatus.checking;
+  return _sourceRuntimeStatusFromHealth(snapshot);
+}
+
+_SourceRuntimeStatus _sourceRuntimeStatusFromHealth(
+  SourceHealthSnapshot snapshot,
+) {
+  switch (snapshot.level) {
+    case SourceHealthLevel.healthy:
+      return _SourceRuntimeStatus.ready;
+    case SourceHealthLevel.unchecked:
+      return _SourceRuntimeStatus.unknown;
+    case SourceHealthLevel.warning:
+    case SourceHealthLevel.risky:
+    case SourceHealthLevel.unavailable:
+      final failureKind = snapshot.lastFailureKind;
+      if (failureKind == SourceHealthFailureKind.parser ||
+          failureKind == SourceHealthFailureKind.disabled) {
+        return _SourceRuntimeStatus.parseFailed;
+      }
+      return _SourceRuntimeStatus.requestFailed;
   }
-  if (parseErrorBySourceId.containsKey(sourceId)) {
-    return _SourceRuntimeStatus.parseFailed;
-  }
-  if (bookErrorBySourceId.containsKey(sourceId)) {
-    return _SourceRuntimeStatus.requestFailed;
-  }
-  return _SourceRuntimeStatus.ready;
 }
 
 int _sourceStatusRank(_SourceRuntimeStatus status) {
