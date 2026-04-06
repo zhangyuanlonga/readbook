@@ -5,6 +5,7 @@ import 'dart:math';
 import 'dart:ui';
 
 import 'package:battery_plus/battery_plus.dart';
+import 'package:device_info_plus/device_info_plus.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_colorpicker/flutter_colorpicker.dart';
 import 'package:flutter/gestures.dart';
@@ -241,9 +242,11 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
   String? _lastReaderSnackKey;
   StreamSubscription<ReaderVolumeKeyEvent>? _volumeKeyEventSubscription;
   final Battery _battery = Battery();
+  final DeviceInfoPlugin _deviceInfo = DeviceInfoPlugin();
   DateTime _readerInfoNow = DateTime.now();
   int? _readerBatteryLevel;
   bool _readerBatteryReadFailed = false;
+  Future<bool>? _iosSimulatorCheck;
   int _autoReadTaskToken = 0;
   int _chapterContentRequestToken = 0;
   int _preloadTaskToken = 0;
@@ -1698,11 +1701,16 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
 
     int? batteryLevel;
     var batteryReadFailed = false;
-    try {
-      batteryLevel = await _battery.batteryLevel;
-    } catch (_) {
+    final shouldSkipBatteryRead = await _shouldSkipBatteryRead();
+    if (shouldSkipBatteryRead) {
       batteryReadFailed = true;
-      batteryLevel = null;
+    } else {
+      try {
+        batteryLevel = await _battery.batteryLevel;
+      } catch (_) {
+        batteryReadFailed = true;
+        batteryLevel = null;
+      }
     }
 
     if (!mounted) {
@@ -1731,6 +1739,23 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
       _readerBatteryLevel = batteryLevel;
       _readerBatteryReadFailed = batteryReadFailed;
     });
+  }
+
+  Future<bool> _shouldSkipBatteryRead() async {
+    if (kIsWeb || !Platform.isIOS) {
+      return false;
+    }
+    _iosSimulatorCheck ??= _loadIsIosSimulator();
+    return _iosSimulatorCheck!;
+  }
+
+  Future<bool> _loadIsIosSimulator() async {
+    try {
+      final iosInfo = await _deviceInfo.iosInfo;
+      return !iosInfo.isPhysicalDevice;
+    } catch (_) {
+      return false;
+    }
   }
 
   Widget _buildBody(_ReaderThemeColors colors) {
@@ -2975,6 +3000,10 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
     }
     final details = _selectionNotifier.selection;
     _selectionStatus = details.status;
+    if (_selectionStatus != SelectionStatus.uncollapsed) {
+      _clearSelectionState();
+      return;
+    }
     try {
       _selectionRange = details.range;
     } catch (_) {
