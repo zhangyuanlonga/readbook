@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../app/layout/app_spacing.dart';
+import '../../domain/entities/source_health.dart';
 import 'source_health_badge.dart';
 import '../../features/reader/application/switch_source_shared.dart';
 
@@ -122,113 +123,175 @@ Future<SwitchSourceCandidate?> showSwitchSourceCandidateSheet({
                           itemBuilder: (context, index) {
                             final candidate = candidates[index];
                             final author = candidate.book.author?.trim();
-                            final subtitle =
-                                (author == null || author.isEmpty)
-                                    ? candidate.sourceName
-                                    : '${candidate.sourceName} · $author';
                             final healthLevel = candidate.healthLevel;
+                            final recommendation = _buildRecommendationText(
+                              candidate,
+                              currentChapterCount: currentChapterCount,
+                            );
+                            final metadata =
+                                (author == null || author.isEmpty)
+                                    ? candidate.book.title
+                                    : '${candidate.book.title} · $author';
+                            final riskPresentation =
+                                _resolveRiskPresentation(healthLevel);
 
-                            return ListTile(
-                              contentPadding: EdgeInsets.zero,
-                              title: Text(
-                                candidate.book.title,
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                                style: Theme.of(context).textTheme.titleSmall
-                                    ?.copyWith(fontWeight: FontWeight.w600),
-                              ),
-                              subtitle: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Text(
-                                    subtitle,
-                                    maxLines: 1,
-                                    overflow: TextOverflow.ellipsis,
-                                  ),
-                                  if (healthLevel != null) ...[
-                                    const SizedBox(height: 4),
-                                    SourceHealthBadge(
-                                      level: healthLevel,
-                                      compact: true,
+                            return InkWell(
+                              onTap: () => Navigator.of(context).pop(candidate),
+                              child: Padding(
+                                padding: const EdgeInsets.symmetric(
+                                  vertical: 12,
+                                ),
+                                child: Row(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Expanded(
+                                      child: Column(
+                                        crossAxisAlignment:
+                                            CrossAxisAlignment.start,
+                                        children: [
+                                          Row(
+                                            children: [
+                                              Expanded(
+                                                child: Text(
+                                                  candidate.sourceName,
+                                                  maxLines: 1,
+                                                  overflow:
+                                                      TextOverflow.ellipsis,
+                                                  style: Theme.of(context)
+                                                      .textTheme
+                                                      .titleSmall
+                                                      ?.copyWith(
+                                                        fontWeight:
+                                                            FontWeight.w700,
+                                                      ),
+                                                ),
+                                              ),
+                                              if (index == 0) ...[
+                                                const SizedBox(width: 8),
+                                                _SwitchSourceTag(
+                                                  label: '推荐',
+                                                  background:
+                                                      colorScheme.primary,
+                                                  foreground:
+                                                      colorScheme.onPrimary,
+                                                ),
+                                              ],
+                                              if (riskPresentation != null) ...[
+                                                const SizedBox(width: 6),
+                                                _SwitchSourceTag(
+                                                  label: riskPresentation.$1,
+                                                  background:
+                                                      riskPresentation.$2,
+                                                  foreground:
+                                                      riskPresentation.$3,
+                                                ),
+                                              ],
+                                            ],
+                                          ),
+                                          const SizedBox(height: 6),
+                                          Text(
+                                            recommendation,
+                                            maxLines: 1,
+                                            overflow: TextOverflow.ellipsis,
+                                            style: Theme.of(
+                                              context,
+                                            ).textTheme.bodyMedium?.copyWith(
+                                              color:
+                                                  candidate
+                                                          .isPotentiallyOutdated
+                                                      ? colorScheme.error
+                                                      : colorScheme.primary,
+                                              fontWeight: FontWeight.w600,
+                                            ),
+                                          ),
+                                          const SizedBox(height: 3),
+                                          Text(
+                                            metadata,
+                                            maxLines: 1,
+                                            overflow: TextOverflow.ellipsis,
+                                            style: Theme.of(
+                                              context,
+                                            ).textTheme.bodySmall?.copyWith(
+                                              color:
+                                                  colorScheme.onSurfaceVariant,
+                                            ),
+                                          ),
+                                          const SizedBox(height: 3),
+                                          Text(
+                                            '最新：${candidate.latestChapterLabel}',
+                                            maxLines: 1,
+                                            overflow: TextOverflow.ellipsis,
+                                            style: Theme.of(
+                                              context,
+                                            ).textTheme.bodySmall?.copyWith(
+                                              color:
+                                                  colorScheme.onSurfaceVariant,
+                                              fontWeight: FontWeight.w500,
+                                            ),
+                                          ),
+                                          const SizedBox(height: 3),
+                                          Text(
+                                            lookupState.scoreRankingEnabled
+                                                ? '匹配 ${candidate.baseScore} · 命中 ${candidate.hitCount} · 源评 ${_formatSignedScore(candidate.sourceScore)} · 书评 ${_formatSignedScore(candidate.bookScore)}'
+                                                : '匹配 ${candidate.baseScore} · 命中 ${candidate.hitCount}',
+                                            maxLines: 1,
+                                            overflow: TextOverflow.ellipsis,
+                                            style: Theme.of(
+                                              context,
+                                            ).textTheme.bodySmall?.copyWith(
+                                              color:
+                                                  colorScheme.onSurfaceVariant,
+                                            ),
+                                          ),
+                                          if (healthLevel != null) ...[
+                                            const SizedBox(height: 6),
+                                            SourceHealthBadge(
+                                              level: healthLevel,
+                                              compact: true,
+                                            ),
+                                          ],
+                                        ],
+                                      ),
                                     ),
-                                  ],
-                                  const SizedBox(height: 2),
-                                  Text(
-                                    '最新：${candidate.latestChapterLabel}',
-                                    maxLines: 1,
-                                    overflow: TextOverflow.ellipsis,
-                                    style: Theme.of(
-                                      context,
-                                    ).textTheme.bodySmall?.copyWith(
-                                      color:
-                                          candidate.isPotentiallyOutdated
-                                              ? colorScheme.error
-                                              : colorScheme.onSurfaceVariant,
-                                      fontWeight:
-                                          candidate.isPotentiallyOutdated
-                                              ? FontWeight.w700
-                                              : FontWeight.w500,
-                                    ),
-                                  ),
-                                  const SizedBox(height: 2),
-                                  Text(
-                                    lookupState.scoreRankingEnabled
-                                        ? '匹配:${candidate.baseScore} · 命中:${candidate.hitCount} · 源评:${_formatSignedScore(candidate.sourceScore)} · 书评:${_formatSignedScore(candidate.bookScore)}'
-                                        : '匹配:${candidate.baseScore} · 命中:${candidate.hitCount}（评分排序关闭）',
-                                    maxLines: 1,
-                                    overflow: TextOverflow.ellipsis,
-                                    style: Theme.of(
-                                      context,
-                                    ).textTheme.bodySmall?.copyWith(
-                                      color: colorScheme.onSurfaceVariant,
-                                    ),
-                                  ),
-                                ],
-                              ),
-                              trailing: Row(
-                                mainAxisSize: MainAxisSize.min,
-                                children: [
-                                  if (candidate.isPotentiallyOutdated) ...[
-                                    Icon(
-                                      Icons.warning_amber_rounded,
-                                      color: colorScheme.error,
-                                      size: 18,
+                                    const SizedBox(width: 8),
+                                    PopupMenuButton<SwitchSourceScoreAction>(
+                                      tooltip: '评分',
+                                      icon: const Icon(
+                                        Icons.thumb_up_alt_outlined,
+                                        size: 18,
+                                      ),
+                                      onSelected:
+                                          (action) =>
+                                              onScoreAction(candidate, action),
+                                      itemBuilder:
+                                          (context) => const [
+                                            PopupMenuItem(
+                                              value:
+                                                  SwitchSourceScoreAction
+                                                      .upvote,
+                                              child: Text('推荐 +1'),
+                                            ),
+                                            PopupMenuItem(
+                                              value:
+                                                  SwitchSourceScoreAction
+                                                      .downvote,
+                                              child: Text('降权 -1'),
+                                            ),
+                                            PopupMenuItem(
+                                              value:
+                                                  SwitchSourceScoreAction.reset,
+                                              child: Text('重置本书评分'),
+                                            ),
+                                          ],
                                     ),
                                     const SizedBox(width: 2),
-                                  ],
-                                  PopupMenuButton<SwitchSourceScoreAction>(
-                                    tooltip: '评分',
-                                    icon: const Icon(
-                                      Icons.thumb_up_alt_outlined,
-                                      size: 18,
+                                    Icon(
+                                      Icons.chevron_right_rounded,
+                                      color: colorScheme.onSurfaceVariant,
                                     ),
-                                    onSelected:
-                                        (action) =>
-                                            onScoreAction(candidate, action),
-                                    itemBuilder:
-                                        (context) => const [
-                                          PopupMenuItem(
-                                            value:
-                                                SwitchSourceScoreAction.upvote,
-                                            child: Text('推荐 +1'),
-                                          ),
-                                          PopupMenuItem(
-                                            value:
-                                                SwitchSourceScoreAction
-                                                    .downvote,
-                                            child: Text('降权 -1'),
-                                          ),
-                                          PopupMenuItem(
-                                            value:
-                                                SwitchSourceScoreAction.reset,
-                                            child: Text('重置本书评分'),
-                                          ),
-                                        ],
-                                  ),
-                                  const Icon(Icons.chevron_right),
-                                ],
+                                  ],
+                                ),
                               ),
-                              onTap: () => Navigator.of(context).pop(candidate),
                             );
                           },
                         ),
@@ -336,4 +399,75 @@ String _formatSignedScore(int score) {
     return '+$score';
   }
   return '$score';
+}
+
+String _buildRecommendationText(
+  SwitchSourceCandidate candidate, {
+  required int currentChapterCount,
+}) {
+  final latest = candidate.latestChapterNumber;
+  if (latest != null && currentChapterCount > 0) {
+    if (candidate.isPotentiallyOutdated) {
+      return '章节可能落后，当前约 $currentChapterCount 章';
+    }
+    if (latest > currentChapterCount) {
+      return '章节更全，当前约 $latest / $currentChapterCount 章';
+    }
+    return '可接近当前阅读位置，当前约 $latest / $currentChapterCount 章';
+  }
+
+  if (candidate.hitCount > 0) {
+    return '搜索命中较稳定';
+  }
+
+  if (candidate.baseScore >= 140) {
+    return '标题与当前书籍高度匹配';
+  }
+
+  return '可作为备选来源';
+}
+
+(String, Color, Color)? _resolveRiskPresentation(SourceHealthLevel? level) {
+  return switch (level) {
+    SourceHealthLevel.healthy => ('稳定', const Color(0xFFE7F6EC), const Color(0xFF1F7A3D)),
+    SourceHealthLevel.warning => ('需验证', const Color(0xFFFFF4D9), const Color(0xFF9A6700)),
+    SourceHealthLevel.risky || SourceHealthLevel.unavailable => (
+      '高风险',
+      const Color(0xFFFDE7EA),
+      const Color(0xFFB42318),
+    ),
+    _ => null,
+  };
+}
+
+class _SwitchSourceTag extends StatelessWidget {
+  const _SwitchSourceTag({
+    required this.label,
+    required this.background,
+    required this.foreground,
+  });
+
+  final String label;
+  final Color background;
+  final Color foreground;
+
+  @override
+  Widget build(BuildContext context) {
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        color: background,
+        borderRadius: BorderRadius.circular(999),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+        child: Text(
+          label,
+          style: Theme.of(context).textTheme.labelSmall?.copyWith(
+            color: foreground,
+            fontWeight: FontWeight.w700,
+          ),
+        ),
+      ),
+    );
+  }
 }
