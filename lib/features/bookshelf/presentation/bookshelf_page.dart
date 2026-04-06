@@ -51,6 +51,20 @@ enum _TagManageSheetAction { rename, delete }
 
 enum _BookshelfMoreAction { importLocal }
 
+class _BookshelfProgressDisplay {
+  const _BookshelfProgressDisplay({
+    required this.progressValue,
+    required this.summaryText,
+    required this.trailingLabel,
+    required this.hasProgress,
+  });
+
+  final double progressValue;
+  final String summaryText;
+  final String trailingLabel;
+  final bool hasProgress;
+}
+
 class BookshelfPage extends StatefulWidget {
   const BookshelfPage({super.key, this.prefetchAnnouncementOnInit = true});
 
@@ -92,6 +106,7 @@ class _BookshelfPageState extends State<BookshelfPage>
   Map<String, ReadingProgress> _progressByBookKey =
       const <String, ReadingProgress>{};
   Map<String, String> _latestCachedChapterByBookKey = const <String, String>{};
+  Map<String, int> _cachedChapterCountByBookKey = const <String, int>{};
   Map<String, int> _sourceTypeBySourceId = const <String, int>{};
   Map<String, LocalBook> _localBooksById = const <String, LocalBook>{};
   Map<String, List<String>> _bookTagsByKey = const <String, List<String>>{};
@@ -1236,6 +1251,10 @@ class _BookshelfPageState extends State<BookshelfPage>
   Widget _buildGridCard(BookshelfBook book) {
     final bookKey = _bookKey(book);
     final progress = _progressByBookKey[bookKey];
+    final progressDisplay = _resolveBookshelfProgressDisplay(
+      book,
+      progress: progress,
+    );
     final colorScheme = Theme.of(context).colorScheme;
     final isOpening = _openingBookId == book.bookId;
     final isSelected = _isBookSelected(book);
@@ -1290,12 +1309,16 @@ class _BookshelfPageState extends State<BookshelfPage>
                           ),
                         ],
                       ),
-                      child: _buildCover(
-                        book.coverUrl,
-                        title: book.title,
-                        author: book.author,
-                        width: double.infinity,
-                        height: double.infinity,
+                      child: LayoutBuilder(
+                        builder: (context, constraints) {
+                          return _buildCover(
+                            book.coverUrl,
+                            title: book.title,
+                            author: book.author,
+                            width: constraints.maxWidth,
+                            height: constraints.maxHeight,
+                          );
+                        },
                       ),
                     ),
                     if (!_isSelectionMode)
@@ -1417,7 +1440,7 @@ class _BookshelfPageState extends State<BookshelfPage>
               ClipRRect(
                 borderRadius: BorderRadius.circular(2),
                 child: LinearProgressIndicator(
-                  value: progress?.chapterPositionRatio.clamp(0.0, 1.0) ?? 0.0,
+                  value: progressDisplay.progressValue,
                   minHeight: 3,
                   backgroundColor: colorScheme.surfaceContainerHighest,
                 ),
@@ -1432,6 +1455,10 @@ class _BookshelfPageState extends State<BookshelfPage>
   Widget _buildBookCard(BookshelfBook book) {
     final bookKey = _bookKey(book);
     final progress = _progressByBookKey[bookKey];
+    final progressDisplay = _resolveBookshelfProgressDisplay(
+      book,
+      progress: progress,
+    );
     final colorScheme = Theme.of(context).colorScheme;
     final isOpening = _openingBookId == book.bookId;
     final isSelected = _isBookSelected(book);
@@ -1443,10 +1470,7 @@ class _BookshelfPageState extends State<BookshelfPage>
     final authorLine = authorText.isNotEmpty ? '作者: $authorText' : '作者: 未知';
     final latestLine =
         latestChapterText.isNotEmpty ? '最新: $latestChapterText' : '最新: 暂无章节';
-    final progressLine =
-        progress == null
-            ? '阅读进度: 未开始'
-            : '阅读进度: ${(progress.chapterPositionRatio.clamp(0.0, 1.0) * 100).round()}%';
+    final progressLine = progressDisplay.summaryText;
     final isEditingSelected = _isSelectionMode && isSelected;
 
     return Card(
@@ -1608,22 +1632,20 @@ class _BookshelfPageState extends State<BookshelfPage>
                         overflow: TextOverflow.ellipsis,
                         style: Theme.of(context).textTheme.bodySmall?.copyWith(
                           color:
-                              progress == null
-                                  ? colorScheme.onSurfaceVariant
-                                  : colorScheme.primary,
+                              progressDisplay.hasProgress
+                                  ? colorScheme.primary
+                                  : colorScheme.onSurfaceVariant,
                           fontWeight:
-                              progress == null
-                                  ? FontWeight.w500
-                                  : FontWeight.w600,
+                              progressDisplay.hasProgress
+                                  ? FontWeight.w600
+                                  : FontWeight.w500,
                         ),
                       ),
                       const SizedBox(height: 8),
                       ClipRRect(
                         borderRadius: BorderRadius.circular(2),
                         child: LinearProgressIndicator(
-                          value:
-                              progress?.chapterPositionRatio.clamp(0.0, 1.0) ??
-                              0.0,
+                          value: progressDisplay.progressValue,
                           minHeight: 3,
                           backgroundColor: colorScheme.surfaceContainerHighest,
                         ),
@@ -1754,6 +1776,7 @@ class _BookshelfPageState extends State<BookshelfPage>
       _activeCustomTag,
       identityHashCode(_books),
       identityHashCode(_progressByBookKey),
+      identityHashCode(_cachedChapterCountByBookKey),
       identityHashCode(_sourceTypeBySourceId),
       identityHashCode(_bookTagsByKey),
       identityHashCode(_tagOrder),
@@ -2068,6 +2091,10 @@ class _BookshelfPageState extends State<BookshelfPage>
         final colorScheme = Theme.of(sheetContext).colorScheme;
         final horizontal = AppSpacing.pageHorizontal(sheetContext);
         final bottomInset = MediaQuery.viewPaddingOf(sheetContext).bottom;
+        final progressDisplay = _resolveBookshelfProgressDisplay(
+          book,
+          progress: progress,
+        );
         return Padding(
           padding: EdgeInsets.fromLTRB(
             horizontal,
@@ -2156,8 +2183,7 @@ class _BookshelfPageState extends State<BookshelfPage>
                                       child: ClipRRect(
                                         borderRadius: BorderRadius.circular(2),
                                         child: LinearProgressIndicator(
-                                          value: progress.chapterPositionRatio
-                                              .clamp(0.0, 1.0),
+                                          value: progressDisplay.progressValue,
                                           minHeight: 4,
                                           backgroundColor:
                                               colorScheme
@@ -2167,7 +2193,7 @@ class _BookshelfPageState extends State<BookshelfPage>
                                     ),
                                     const SizedBox(width: 8),
                                     Text(
-                                      '${(progress.chapterPositionRatio * 100).round()}%',
+                                      progressDisplay.trailingLabel,
                                       style: Theme.of(
                                         sheetContext,
                                       ).textTheme.labelSmall?.copyWith(
@@ -3398,6 +3424,10 @@ class _BookshelfPageState extends State<BookshelfPage>
         _books = books;
         _progressByBookKey = retainedProgress;
         _latestCachedChapterByBookKey = retainedCachedChapterTitles;
+        _cachedChapterCountByBookKey = _retainCachedChapterCountsForBooks(
+          source: _cachedChapterCountByBookKey,
+          books: books,
+        );
         _isLoading = false;
         _ensureFilterStillValid();
       });
@@ -3411,6 +3441,7 @@ class _BookshelfPageState extends State<BookshelfPage>
       }
 
       await _loadLatestCachedChapterMap(books, ticket: ticket);
+      await _loadCachedChapterCountMap(books, ticket: ticket);
       await _loadProgressMapInBatches(books, ticket: ticket);
       unawaited(_refreshOnlineBookshelfLatestInfo(books, ticket: ticket));
     } on TimeoutException {
@@ -3565,6 +3596,48 @@ class _BookshelfPageState extends State<BookshelfPage>
 
     setState(() {
       _latestCachedChapterByBookKey = latestByBookKey;
+    });
+  }
+
+  Future<void> _loadCachedChapterCountMap(
+    List<BookshelfBook> books, {
+    required int ticket,
+  }) async {
+    final pairs = books
+        .map((book) => MapEntry(book.bookId.trim(), book.sourceId.trim()))
+        .where((entry) => entry.key.isNotEmpty && entry.value.isNotEmpty)
+        .toSet()
+        .toList(growable: false);
+    if (pairs.isEmpty) {
+      return;
+    }
+
+    final countByBookSource = await AppDatabase.instance
+        .getCachedChapterCountsByBookSource(pairs);
+
+    if (!mounted || ticket != _loadTicket) {
+      return;
+    }
+
+    final countByBookKey = <String, int>{};
+    for (final book in books) {
+      final bookKey = _bookKey(book);
+      if (bookKey.isEmpty) {
+        continue;
+      }
+      final pairKey = _cachedChapterBookSourceKey(
+        bookId: book.bookId,
+        sourceId: book.sourceId,
+      );
+      final count = countByBookSource[pairKey] ?? 0;
+      if (count <= 0) {
+        continue;
+      }
+      countByBookKey[bookKey] = count;
+    }
+
+    setState(() {
+      _cachedChapterCountByBookKey = countByBookKey;
     });
   }
 
@@ -3826,6 +3899,24 @@ class _BookshelfPageState extends State<BookshelfPage>
     return retained;
   }
 
+  Map<String, int> _retainCachedChapterCountsForBooks({
+    required Map<String, int> source,
+    required List<BookshelfBook> books,
+  }) {
+    if (source.isEmpty || books.isEmpty) {
+      return const <String, int>{};
+    }
+    final validBookKeys =
+        books.map(_bookKey).where((key) => key.isNotEmpty).toSet();
+    final retained = <String, int>{};
+    for (final entry in source.entries) {
+      if (validBookKeys.contains(entry.key)) {
+        retained[entry.key] = entry.value;
+      }
+    }
+    return retained;
+  }
+
   String _cachedChapterBookSourceKey({
     required String bookId,
     required String sourceId,
@@ -3836,6 +3927,57 @@ class _BookshelfPageState extends State<BookshelfPage>
   bool _isProgressMatchingBook(ReadingProgress progress, BookshelfBook book) {
     return progress.sourceId.trim() == book.sourceId.trim() &&
         progress.detailUrl.trim() == book.detailUrl.trim();
+  }
+
+  _BookshelfProgressDisplay _resolveBookshelfProgressDisplay(
+    BookshelfBook book, {
+    required ReadingProgress? progress,
+  }) {
+    if (progress == null) {
+      return const _BookshelfProgressDisplay(
+        progressValue: 0,
+        summaryText: '阅读进度: 未开始',
+        trailingLabel: '未开始',
+        hasProgress: false,
+      );
+    }
+
+    final totalChapters = _resolveApproximateChapterCount(book);
+    final currentChapterNo = (progress.chapterIndex + 1).clamp(1, 999999);
+    if (totalChapters != null && totalChapters > 0) {
+      final normalizedTotal = totalChapters.clamp(1, 999999);
+      final normalizedIndex = progress.chapterIndex.clamp(
+        0,
+        normalizedTotal - 1,
+      );
+      final overallProgress =
+          (normalizedIndex + progress.chapterPositionRatio.clamp(0.0, 1.0)) /
+          normalizedTotal;
+      final percentage = (overallProgress.clamp(0.0, 1.0) * 100).round();
+      return _BookshelfProgressDisplay(
+        progressValue: overallProgress.clamp(0.0, 1.0),
+        summaryText: '阅读进度: 第 $currentChapterNo / $normalizedTotal 章',
+        trailingLabel: '$percentage%',
+        hasProgress: true,
+      );
+    }
+
+    return _BookshelfProgressDisplay(
+      progressValue: progress.chapterPositionRatio.clamp(0.0, 1.0),
+      summaryText: '阅读进度: 读到第 $currentChapterNo 章',
+      trailingLabel: '第$currentChapterNo章',
+      hasProgress: true,
+    );
+  }
+
+  int? _resolveApproximateChapterCount(BookshelfBook book) {
+    if (book.sourceId == _kLocalBookSourceId) {
+      final localCount = _localBooksById[book.bookId.trim()]?.chapterCount ?? 0;
+      return localCount > 0 ? localCount : null;
+    }
+
+    final cachedCount = _cachedChapterCountByBookKey[_bookKey(book)] ?? 0;
+    return cachedCount > 0 ? cachedCount : null;
   }
 
   void _showMessage(String text) {

@@ -867,6 +867,57 @@ class AppDatabase extends _$AppDatabase {
     return latestByPairKey;
   }
 
+  Future<Map<String, int>> getCachedChapterCountsByBookSource(
+    List<MapEntry<String, String>> bookSourcePairs,
+  ) async {
+    final normalizedPairs = <MapEntry<String, String>>[];
+    final requestPairKeys = <String>{};
+    final requestBookIds = <String>{};
+    final requestSourceIds = <String>{};
+
+    for (final pair in bookSourcePairs) {
+      final bookId = pair.key.trim();
+      final sourceId = pair.value.trim();
+      if (bookId.isEmpty || sourceId.isEmpty) {
+        continue;
+      }
+      final pairKey = _bookSourcePairKey(bookId: bookId, sourceId: sourceId);
+      if (!requestPairKeys.add(pairKey)) {
+        continue;
+      }
+      normalizedPairs.add(MapEntry(bookId, sourceId));
+      requestBookIds.add(bookId);
+      requestSourceIds.add(sourceId);
+    }
+
+    if (normalizedPairs.isEmpty) {
+      return <String, int>{};
+    }
+
+    final rows =
+        await (select(chapterCaches)
+              ..where(
+                (table) =>
+                    table.bookId.isIn(requestBookIds) &
+                    table.sourceId.isIn(requestSourceIds),
+              ))
+            .get();
+
+    final countsByPairKey = <String, int>{};
+    for (final row in rows) {
+      final pairKey = _bookSourcePairKey(
+        bookId: row.bookId,
+        sourceId: row.sourceId,
+      );
+      if (!requestPairKeys.contains(pairKey)) {
+        continue;
+      }
+      countsByPairKey[pairKey] = (countsByPairKey[pairKey] ?? 0) + 1;
+    }
+
+    return countsByPairKey;
+  }
+
   String _bookSourcePairKey({
     required String bookId,
     required String sourceId,
