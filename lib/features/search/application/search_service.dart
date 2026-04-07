@@ -17,6 +17,7 @@ import '../../../runtime/sources/source_result_models.dart' as runtime_models;
 import '../../source/application/source_health_auto_disable_service.dart';
 import '../../source/application/source_health_service.dart';
 import '../../source/application/source_runtime_facade.dart';
+import '../../source/application/source_runtime_scheduler_service.dart';
 import 'search_hit_cache_service.dart';
 import 'search_system_settings_service.dart';
 
@@ -193,6 +194,8 @@ class SearchService {
   final SearchSystemSettingsService _searchSystemSettingsService;
   final SearchRuntimePlatform _runtimePlatform;
   final SourceHealthAutoDisableService _sourceHealthAutoDisableService;
+  final SourceRuntimeSchedulerService _runtimeScheduler =
+      SourceRuntimeSchedulerService.instance;
   final _SearchRuntimeProfileService _profileService;
   late final _SearchPlanner _planner;
   late final _ScriptSourceSearchRunner _runner;
@@ -319,7 +322,16 @@ class SearchService {
           },
         );
 
+        SourceRuntimeTaskLease? lease;
         try {
+          lease = await _runtimeScheduler.acquire(
+            scene: SourceRuntimeSchedulerScene.search,
+            conflictKeys: <String>[source.sourceId],
+            cancelIfBlockedByHigherPriority: true,
+          );
+          if (lease == null) {
+            return;
+          }
           final report = await _runner.run(
             source: source.scriptSource,
             keyword: normalizedKeyword,
@@ -353,6 +365,7 @@ class SearchService {
             latencyMs: DateTime.now().difference(startAt).inMilliseconds,
           );
         } on AppException catch (error) {
+          // release handled by finally path below once set
           if (cancellationToken?.isCancelled ?? false) {
             return;
           }
@@ -440,6 +453,8 @@ class SearchService {
             sourceName: source.sourceName,
             trigger: 'search',
           );
+        } finally {
+          lease?.release();
         }
 
         progressAggregationState = await _emitProgress(

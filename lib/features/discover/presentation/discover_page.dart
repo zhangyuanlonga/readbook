@@ -17,6 +17,8 @@ import '../../book/presentation/book_detail_route.dart';
 import '../application/discover_preferences_service.dart';
 import '../application/explore_service.dart';
 import '../../source/application/source_health_service.dart';
+import '../../source/application/source_runtime_task_conflict_service.dart';
+import '../../source/application/source_runtime_scheduler_service.dart';
 
 enum _SourceRuntimeStatus {
   unknown,
@@ -59,6 +61,10 @@ class _DiscoverPageState extends State<DiscoverPage>
   late final ExploreService _exploreService;
   late final DiscoverPreferencesService _discoverPreferencesService;
   final SourceHealthService _sourceHealthService = SourceHealthService.instance;
+  final SourceRuntimeTaskConflictService _taskConflictService =
+      SourceRuntimeTaskConflictService.instance;
+  final SourceRuntimeSchedulerService _taskScheduler =
+      SourceRuntimeSchedulerService.instance;
   final ScrollController _booksScrollController = ScrollController();
   Timer? _sourceRefreshDebounce;
 
@@ -1298,8 +1304,17 @@ class _DiscoverPageState extends State<DiscoverPage>
     DiscoverSource source, {
     required bool preserveCurrentCategory,
   }) async {
+    _cancelBackgroundRefreshConflictForSource(source.id);
+    final lease = await _taskScheduler.acquire(
+      scene: SourceRuntimeSchedulerScene.discover,
+      conflictKeys: <String>[_taskConflictService.conflictKeyForSource(source.id)],
+    );
+    if (lease == null) {
+      return;
+    }
     final requestToken = ++_categoryRequestToken;
     final previousCategory = preserveCurrentCategory ? _selectedCategory : null;
+    var shouldLoadBooks = false;
     unawaited(_persistSelectedSourceId(source.id));
 
     setState(() {
@@ -1339,7 +1354,7 @@ class _DiscoverPageState extends State<DiscoverPage>
       if (nextCategoryIndex >= 0 &&
           nextCategoryIndex < parsedCategories.length &&
           parsedCategories[nextCategoryIndex].isActionable) {
-        await _loadBooks(reset: true);
+        shouldLoadBooks = true;
       }
     } catch (error) {
       if (!mounted || requestToken != _categoryRequestToken) {
@@ -1351,6 +1366,12 @@ class _DiscoverPageState extends State<DiscoverPage>
         _sourceErrorText = message;
         _refreshSourceHealth(source.id);
       });
+    } finally {
+      lease.release();
+    }
+
+    if (shouldLoadBooks) {
+      await _loadBooks(reset: true);
     }
   }
 
@@ -1360,7 +1381,16 @@ class _DiscoverPageState extends State<DiscoverPage>
     if (source == null || category == null || !category.isActionable) {
       return;
     }
+    _cancelBackgroundRefreshConflictForSource(source.id);
+    final lease = await _taskScheduler.acquire(
+      scene: SourceRuntimeSchedulerScene.discover,
+      conflictKeys: <String>[_taskConflictService.conflictKeyForSource(source.id)],
+    );
+    if (lease == null) {
+      return;
+    }
     if (!reset && (_isLoadingMore || _isLoadingBooks || !_hasMore)) {
+      lease.release();
       return;
     }
 
@@ -1418,6 +1448,8 @@ class _DiscoverPageState extends State<DiscoverPage>
         _bookErrorText = message;
         _refreshSourceHealth(source.id);
       });
+    } finally {
+      lease.release();
     }
   }
 
@@ -1667,6 +1699,17 @@ class _DiscoverPageState extends State<DiscoverPage>
   int _wrapIndex(int value, int length) {
     final mod = value % length;
     return mod < 0 ? mod + length : mod;
+  }
+
+  void _cancelBackgroundRefreshConflictForSource(String sourceId) {
+    final conflictKey = _taskConflictService.conflictKeyForSource(sourceId);
+    if (conflictKey.isEmpty) {
+      return;
+    }
+    _taskConflictService.cancelBackgroundWorkFor(
+      conflictKey: conflictKey,
+      byScene: SourceRuntimeConflictScene.discover,
+    );
   }
 
   _SourceRuntimeStatus _resolveSourceStatus(String? sourceId) {

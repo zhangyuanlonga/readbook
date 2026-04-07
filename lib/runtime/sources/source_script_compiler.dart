@@ -11,6 +11,7 @@ import '../html/html_runtime.dart';
 import '../http/http_models.dart';
 import '../http/request_engine.dart';
 import '../session/source_session.dart';
+import '../../core/logging/app_logger.dart';
 import '../../features/source/application/source_runtime_diagnostics_service.dart';
 import 'source_contract.dart';
 import 'source_manifest.dart';
@@ -331,15 +332,21 @@ class SourceScriptDebugService {
     return '''
 $normalizedSource
 ;(() => {
+  const __safeStringify =
+      globalThis.__appreadSafeStringify ||
+      ((value) => {
+        if (typeof value === 'string') {
+          return value;
+        }
+        try {
+          return JSON.stringify(value, null, 2);
+        } catch (_) {
+          return '[non-serializable value]';
+        }
+      });
+
   const __formatDebugValue = (value) => {
-    if (typeof value === 'string') {
-      return value;
-    }
-    try {
-      return JSON.stringify(value, null, 2);
-    } catch (_) {
-      return String(value);
-    }
+    return __safeStringify(value);
   };
 
   const __source = globalThis.__sourceDefinition || {};
@@ -382,6 +389,7 @@ class _SourceScriptRunner {
   final String _normalizedSource;
   final SourceRuntimeDiagnosticsService _diagnosticsService =
       SourceRuntimeDiagnosticsService.instance;
+  final AppLogger _logger = AppLogger.instance;
   JsRuntimeAdapter? _runtime;
   Future<void> _runQueue = Future<void>.value();
   bool _bootstrapsInstalled = false;
@@ -418,15 +426,13 @@ globalThis.source = __source;
 const __args = ${jsonEncode(args)};
 const __fn = __source?.['$methodName'];
 if (typeof __fn !== 'function') {
-  return null;
+  return globalThis.__appreadEncodeHostSuccess(null);
 }
 try {
-  return await __fn.apply(__source, [__ctx, ...__args]);
+  const __rawResult = await __fn.apply(__source, [__ctx, ...__args]);
+  return globalThis.__appreadEncodeHostSuccess(__rawResult);
 } catch (error) {
-  if (error && typeof error === 'object' && 'message' in error) {
-    throw String(error.message || error);
-  }
-  throw String(error);
+  return globalThis.__appreadEncodeHostFailure(error);
 } finally {
   ctx = undefined;
   source = undefined;
@@ -439,7 +445,31 @@ try {
           throw SourceScriptCompileException(result.output);
         }
 
-        completer.complete(_decodeDynamic(result.output));
+        final envelope = _decodeRuntimeEnvelope(result.output);
+        if (envelope != null) {
+          if (!envelope.ok) {
+            throw SourceScriptCompileException(envelope.error ?? '脚本执行失败。');
+          }
+          if (envelope.stats.hasMutations) {
+            _logger.warn(
+              'Sanitized script runtime result',
+              context: <String, Object?>{
+                'sourceId': ctx.source.id,
+                'sourceName': ctx.source.name,
+                'methodName': methodName,
+                'runtimeChain': 'source_script',
+                'droppedValues': envelope.stats.droppedValues,
+                'circularRefs': envelope.stats.circularRefs,
+                'maxDepthHits': envelope.stats.maxDepthHits,
+                'trimmedArrays': envelope.stats.trimmedArrays,
+                'trimmedObjects': envelope.stats.trimmedObjects,
+              },
+            );
+          }
+          completer.complete(envelope.value);
+        } else {
+          completer.complete(_decodeDynamic(result.output));
+        }
       } catch (error, stackTrace) {
         completer.completeError(error, stackTrace);
       } finally {
@@ -1164,6 +1194,77 @@ Object? _decodeDynamic(String output) {
   }
 }
 
+_RuntimeEnvelope? _decodeRuntimeEnvelope(String output) {
+  Object? decoded = _decodeDynamic(output);
+  if (decoded is String) {
+    decoded = _decodeDynamic(decoded);
+  }
+  if (decoded is! Map<String, dynamic>) {
+    return null;
+  }
+  final rawOk = decoded['ok'];
+  if (rawOk is! bool) {
+    return null;
+  }
+  return _RuntimeEnvelope(
+    ok: rawOk,
+    value: decoded['value'],
+    error: decoded['error']?.toString(),
+    stats: _decodeRuntimeSanitizeStats(decoded['stats']),
+  );
+}
+
+_RuntimeSanitizeStats _decodeRuntimeSanitizeStats(Object? raw) {
+  if (raw is! Map) {
+    return const _RuntimeSanitizeStats();
+  }
+  return _RuntimeSanitizeStats(
+    droppedValues: _readInt(raw['droppedValues']) ?? 0,
+    circularRefs: _readInt(raw['circularRefs']) ?? 0,
+    maxDepthHits: _readInt(raw['maxDepthHits']) ?? 0,
+    trimmedArrays: _readInt(raw['trimmedArrays']) ?? 0,
+    trimmedObjects: _readInt(raw['trimmedObjects']) ?? 0,
+  );
+}
+
+class _RuntimeEnvelope {
+  const _RuntimeEnvelope({
+    required this.ok,
+    this.value,
+    this.error,
+    this.stats = const _RuntimeSanitizeStats(),
+  });
+
+  final bool ok;
+  final Object? value;
+  final String? error;
+  final _RuntimeSanitizeStats stats;
+}
+
+class _RuntimeSanitizeStats {
+  const _RuntimeSanitizeStats({
+    this.droppedValues = 0,
+    this.circularRefs = 0,
+    this.maxDepthHits = 0,
+    this.trimmedArrays = 0,
+    this.trimmedObjects = 0,
+  });
+
+  final int droppedValues;
+  final int circularRefs;
+  final int maxDepthHits;
+  final int trimmedArrays;
+  final int trimmedObjects;
+
+  bool get hasMutations {
+    return droppedValues > 0 ||
+        circularRefs > 0 ||
+        maxDepthHits > 0 ||
+        trimmedArrays > 0 ||
+        trimmedObjects > 0;
+  }
+}
+
 List<Book> _decodeBooks(Object? result, {required String fallbackSourceId}) {
   if (result is! List) {
     throw const SourceScriptCompileException('search 必须返回数组。');
@@ -1491,9 +1592,151 @@ var ctx = undefined;
 var source = undefined;
 
 (function() {
+  const __appreadOmit = Symbol('appread.omit');
+  const __appreadMaxSanitizeDepth = 8;
+  const __appreadMaxArrayLength = 200;
+  const __appreadMaxObjectEntries = 200;
+
+  function isPlainObject(value) {
+    if (!value || typeof value !== 'object') {
+      return false;
+    }
+    const prototype = Object.getPrototypeOf(value);
+    return prototype === Object.prototype || prototype === null;
+  }
+
+  function createSanitizeStats() {
+    return {
+      droppedValues: 0,
+      circularRefs: 0,
+      maxDepthHits: 0,
+      trimmedArrays: 0,
+      trimmedObjects: 0,
+    };
+  }
+
+  function sanitizeForHost(value, depth, seen, stats) {
+    if (value === null) {
+      return null;
+    }
+
+    if (depth > __appreadMaxSanitizeDepth) {
+      stats.maxDepthHits += 1;
+      return null;
+    }
+
+    const valueType = typeof value;
+    switch (valueType) {
+      case 'string':
+      case 'boolean':
+        return value;
+      case 'number':
+        return Number.isFinite(value) ? value : null;
+      case 'undefined':
+      case 'function':
+      case 'symbol':
+      case 'bigint':
+        stats.droppedValues += 1;
+        return __appreadOmit;
+      default:
+        break;
+    }
+
+    if (value instanceof Date) {
+      const time = value.getTime();
+      return Number.isFinite(time) ? value.toISOString() : null;
+    }
+
+    if (Array.isArray(value)) {
+      if (seen.has(value)) {
+        stats.circularRefs += 1;
+        return null;
+      }
+      seen.add(value);
+      try {
+        const result = [];
+        const limit = Math.min(value.length, __appreadMaxArrayLength);
+        if (value.length > limit) {
+          stats.trimmedArrays += value.length - limit;
+        }
+        for (let index = 0; index < limit; index += 1) {
+          const sanitized = sanitizeForHost(value[index], depth + 1, seen, stats);
+          result.push(sanitized === __appreadOmit ? null : sanitized);
+        }
+        return result;
+      } finally {
+        seen.delete(value);
+      }
+    }
+
+    if (valueType === 'object') {
+      if (seen.has(value)) {
+        stats.circularRefs += 1;
+        return null;
+      }
+
+      if (typeof value.toJSON === 'function') {
+        try {
+          return sanitizeForHost(value.toJSON(), depth + 1, seen, stats);
+        } catch (_) {
+          stats.droppedValues += 1;
+          return null;
+        }
+      }
+
+      if (!isPlainObject(value)) {
+        stats.droppedValues += 1;
+        return null;
+      }
+
+      seen.add(value);
+      try {
+        const result = {};
+        const entries = Object.entries(value);
+        const limit = Math.min(entries.length, __appreadMaxObjectEntries);
+        if (entries.length > limit) {
+          stats.trimmedObjects += entries.length - limit;
+        }
+        for (let index = 0; index < limit; index += 1) {
+          const entry = entries[index];
+          const key = entry[0];
+          const sanitized = sanitizeForHost(entry[1], depth + 1, seen, stats);
+          if (sanitized !== __appreadOmit) {
+            result[key] = sanitized;
+          }
+        }
+        return result;
+      } finally {
+        seen.delete(value);
+      }
+    }
+
+    return null;
+  }
+
+  function safeErrorMessage(error) {
+    if (typeof error === 'string') {
+      return error;
+    }
+    if (!error || typeof error !== 'object') {
+      return '[non-serializable error]';
+    }
+    if (typeof error.message === 'string' && error.message.trim()) {
+      return error.message;
+    }
+    if (typeof error.name === 'string' && error.name.trim()) {
+      return '[' + error.name + ']';
+    }
+    return '[non-serializable error]';
+  }
+
+  function stringifySanitized(value) {
+    const stats = createSanitizeStats();
+    return JSON.stringify(sanitizeForHost(value, 0, new WeakSet(), stats));
+  }
 
   function encodePayload(payload) {
-    return JSON.stringify(payload === undefined ? {} : payload);
+    return stringifySanitized(payload === undefined ? {} : payload);
   }
 
   function safeStringify(value) {
@@ -1501,15 +1744,35 @@ var source = undefined;
       return value;
     }
     try {
-      return JSON.stringify(value, null, 2);
-    } catch (error) {
-      return String(value);
+      const sanitized = sanitizeForHost(value, 0, new WeakSet());
+      if (sanitized === __appreadOmit) {
+        return '[non-serializable value]';
+      }
+      return JSON.stringify(sanitized, null, 2);
+    } catch (_) {
+      return '[non-serializable value]';
     }
   }
 
   function hostCall(channel, payload) {
     return sendMessage(channel, encodePayload(payload));
   }
+
+  globalThis.__appreadSafeStringify = safeStringify;
+  globalThis.__appreadEncodeHostSuccess = function(value) {
+    const stats = createSanitizeStats();
+    return JSON.stringify({
+      ok: true,
+      value: sanitizeForHost(value, 0, new WeakSet(), stats),
+      stats,
+    });
+  };
+  globalThis.__appreadEncodeHostFailure = function(error) {
+    return JSON.stringify({
+      ok: false,
+      error: safeErrorMessage(error),
+    });
+  };
 
   function createCryptoChain(state) {
     const next = Object.assign({}, state);

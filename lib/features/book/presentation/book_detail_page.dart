@@ -39,6 +39,8 @@ import '../../reader/presentation/reader_route.dart';
 import '../../search/application/search_hit_cache_service.dart';
 import '../../search/application/search_service.dart';
 import '../../source/application/source_runtime_facade.dart';
+import '../../source/application/source_runtime_task_conflict_service.dart';
+import '../../source/application/source_runtime_scheduler_service.dart';
 import '../application/book_detail_service.dart';
 import 'book_detail_switch_source_helper.dart';
 import 'widgets/book_detail_primary_actions.dart';
@@ -121,6 +123,10 @@ class _BookDetailPageState extends State<BookDetailPage> {
   final ReaderPreferencesService _readerPreferencesService =
       ReaderPreferencesService();
   final ReadingRecordService _readingRecordService = ReadingRecordService();
+  final SourceRuntimeTaskConflictService _taskConflictService =
+      SourceRuntimeTaskConflictService.instance;
+  final SourceRuntimeSchedulerService _taskScheduler =
+      SourceRuntimeSchedulerService.instance;
 
   @override
   void initState() {
@@ -147,6 +153,9 @@ class _BookDetailPageState extends State<BookDetailPage> {
     _activeSourceId = _normalizeRouteParam(widget.sourceId);
     _activeDetailUrl = _normalizeRouteParam(widget.detailUrl);
     _activeBookId = widget.bookId.trim();
+    _cancelBackgroundRefreshConflictForCurrentBook(
+      byScene: SourceRuntimeConflictScene.detail,
+    );
     _applyLocalSchemeFallback();
     _displayTitle = _normalizeRouteParam(widget.title);
     final hydratedFromCache = _hydrateCachedDetailIfAvailable();
@@ -1328,6 +1337,9 @@ class _BookDetailPageState extends State<BookDetailPage> {
       _showMessage('来源信息缺失，暂时无法开始阅读。');
       return;
     }
+    _cancelBackgroundRefreshConflictForCurrentBook(
+      byScene: SourceRuntimeConflictScene.reader,
+    );
     final route = buildReaderRoute(
       bookId: _activeBookId,
       chapterId: chapter.id,
@@ -1347,6 +1359,16 @@ class _BookDetailPageState extends State<BookDetailPage> {
     bool backgroundRefresh = false,
   }) async {
     if (!mounted || _isMissingParams) {
+      return false;
+    }
+    _cancelBackgroundRefreshConflictForCurrentBook(
+      byScene: SourceRuntimeConflictScene.detail,
+    );
+    final lease = await _taskScheduler.acquire(
+      scene: SourceRuntimeSchedulerScene.detail,
+      conflictKeys: _currentConflictKeys(),
+    );
+    if (lease == null) {
       return false;
     }
     final requestToken = ++_detailLoadRequestToken;
@@ -1435,7 +1457,42 @@ class _BookDetailPageState extends State<BookDetailPage> {
           _isLoading = false;
         });
       }
+      lease.release();
     }
+  }
+
+  List<String> _currentConflictKeys() {
+    final sourceId = (_activeSourceId ?? '').trim();
+    final detailUrl = (_activeDetailUrl ?? '').trim();
+    final bookId = _activeBookId.trim();
+    return <String>[
+      _taskConflictService.conflictKeyForSource(sourceId),
+      _taskConflictService.conflictKeyForBook(
+        sourceId: sourceId,
+        detailUrl: detailUrl,
+        bookId: bookId,
+      ),
+    ].where((item) => item.trim().isNotEmpty).toList(growable: false);
+  }
+
+  void _cancelBackgroundRefreshConflictForCurrentBook({
+    required SourceRuntimeConflictScene byScene,
+  }) {
+    final sourceId = (_activeSourceId ?? '').trim();
+    final detailUrl = (_activeDetailUrl ?? '').trim();
+    final bookId = _activeBookId.trim();
+    final conflictKey = _taskConflictService.conflictKeyForBook(
+      sourceId: sourceId,
+      detailUrl: detailUrl,
+      bookId: bookId,
+    );
+    if (conflictKey.isEmpty) {
+      return;
+    }
+    _taskConflictService.cancelBackgroundWorkFor(
+      conflictKey: conflictKey,
+      byScene: byScene,
+    );
   }
 
   Future<void> _syncLocalBookMeta({int? loadRequestToken}) async {

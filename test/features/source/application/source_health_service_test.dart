@@ -1,6 +1,7 @@
 import 'package:shuxiang_reading_next/features/source/application/source_health_persistence_service.dart';
 import 'package:shuxiang_reading_next/domain/entities/source_health.dart';
 import 'package:shuxiang_reading_next/features/source/application/source_health_service.dart';
+import 'package:shuxiang_reading_next/runtime/session/source_session.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -92,6 +93,30 @@ void main() {
       expect(snapshot.timeoutCount, 0);
       expect(snapshot.lastFailureReason, isNull);
       expect(snapshot.level, SourceHealthLevel.unchecked);
+    });
+
+    test('cancelled failure does not penalize health counters', () {
+      service.upsert(
+        SourceHealthSnapshot(
+          sourceId: 'source_a',
+          level: SourceHealthLevel.warning,
+          enabled: true,
+          totalFailures: 1,
+          consecutiveFailures: 1,
+        ),
+      );
+
+      service.markSearchFailure(
+        sourceId: 'source_a',
+        message: 'Session-bound task was cancelled.',
+        error: const SessionTaskCancelledException(),
+        markCooldown: false,
+      );
+
+      final snapshot = service.snapshotFor('source_a');
+      expect(snapshot.totalFailures, 1);
+      expect(snapshot.consecutiveFailures, 1);
+      expect(snapshot.lastFailureKind, SourceHealthFailureKind.cancelled);
     });
   });
 }

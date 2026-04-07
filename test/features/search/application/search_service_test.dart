@@ -8,6 +8,7 @@ import 'package:shuxiang_reading_next/domain/entities/script_source.dart';
 import 'package:shuxiang_reading_next/domain/repositories/script_source_repository.dart';
 import 'package:shuxiang_reading_next/features/search/application/search_service.dart';
 import 'package:shuxiang_reading_next/features/source/application/source_health_auto_disable_service.dart';
+import 'package:shuxiang_reading_next/features/source/application/source_health_service.dart';
 import 'package:shuxiang_reading_next/features/source/application/source_runtime_facade.dart';
 import 'package:shuxiang_reading_next/runtime/session/source_session.dart';
 import 'package:shuxiang_reading_next/runtime/sources/source_contract.dart';
@@ -19,8 +20,10 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 void main() {
-  setUp(() {
+  setUp(() async {
     SharedPreferences.setMockInitialValues(<String, Object>{});
+    SourceHealthService.instance.clear();
+    await SourceHealthService.instance.persistNow();
   });
 
   group('SearchService', () {
@@ -596,15 +599,13 @@ void main() {
       service.setSearchDebugLoggingEnabled(true);
 
       final first = await service.search(keyword: '凡人');
-      final second = await service.search(keyword: '凡人');
-
-      expect(first.failedSourceCount, 1);
-      expect(second.failedSourceCount, 1);
       await expectLater(
         service.search(keyword: '凡人'),
         throwsA(isA<UnknownSourceException>()),
       );
-      expect(runtimeFacade.searchCallCount, 2);
+
+      expect(first.failedSourceCount, 1);
+      expect(runtimeFacade.searchCallCount, 1);
       final cooldownLog = logger.warnLogs.lastWhere(
         (entry) => entry.message == 'Search sources skipped by cooldown',
       );
@@ -634,6 +635,8 @@ void main() {
         scenario: SearchPlanScenario.switchSource,
       );
       expect(first.failedSourceCount, 1);
+      final health = SourceHealthService.instance.snapshotFor('browser_source');
+      SourceHealthService.instance.upsert(health.copyWith(cooldownUntil: null));
       runtimeFacade.throwOnSearchForSourceId = null;
       await service.search(
         keyword: '凡人',

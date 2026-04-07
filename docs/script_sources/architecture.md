@@ -1,6 +1,6 @@
 # 小说聚合平台总体架构
 
-更新时间：2026-04-01
+更新时间：2026-04-07
 
 当前说明：
 
@@ -64,6 +64,28 @@
 - 必须继承浏览器 Cookie/Storage 的流程
 
 ## 3. 三层执行架构
+
+### 3.0 运行体系总览
+
+```mermaid
+flowchart TD
+    A["书源规范层\nsource-spec / author guide / runtime-ctx-api"] --> B["编译与脚本运行层\nSourceScriptCompiler\nJsRuntimeAdapter\nbootstrap + bridge"]
+    B --> C["统一执行入口\nSourceRuntimeFacade\nScriptSourceRuntimeService\nSourceExecutor"]
+    C --> D["容器层\nrequest isolated\nreading flow isolated\ndiagnostic container"]
+    D --> E["治理层\nExecutionPolicy\nWarmState\nTaskGate\nScheduler\nResult Sanitization\nSourceHealth\nDiagnostics"]
+    E --> F["业务消费层\nSearchService\nExploreService\nBookDetailService\nChapterContentService\nSourceCheckService\nBookshelf background refresh"]
+
+    E --> G["可观测性\nAppLogger\nSourceRuntimeDiagnosticsService\nHealth snapshots"]
+    C --> H["宿主能力\nRequestEngine\nSessionManager\nCacheManager\nBrowserRuntime\nHtmlRuntime"]
+```
+
+说明：
+
+- 规范层定义“作者应该怎么写”
+- 编译与脚本运行层负责“书源如何真正执行”
+- 统一执行入口和容器层负责“不同步骤走什么隔离模型”
+- 治理层负责“怎么不崩、怎么调度、怎么打分、怎么监控”
+- 业务消费层负责“搜索、发现、详情、阅读、检测、书架刷新如何使用在线书源能力”
 
 ## 3.1 宿主请求层
 

@@ -5,6 +5,7 @@ import 'package:flutter_inappwebview/flutter_inappwebview.dart';
 import '../../core/errors/error_stage.dart';
 import '../../core/webview/interactive_verification_browser_executor.dart';
 import '../../core/webview/webview_executor.dart';
+import '../../features/source/application/source_runtime_scheduler_service.dart';
 import '../browser/browser_runtime.dart';
 import '../session/source_session.dart';
 
@@ -27,6 +28,8 @@ class AppReadBrowserRuntime implements BrowserRuntime {
   final WebViewExecutor _webViewExecutor;
   final InteractiveVerificationBrowserExecutor _interactiveExecutor;
   final BrowserCookieSynchronizer _cookieSynchronizer;
+  final SourceRuntimeSchedulerService _scheduler =
+      SourceRuntimeSchedulerService.instance;
   final ErrorStage defaultStage;
   Future<void> _queue = Future<void>.value();
 
@@ -36,20 +39,25 @@ class AppReadBrowserRuntime implements BrowserRuntime {
     SourceSession? session,
   }) async {
     await _runExclusive(() async {
+      final lease = await _acquireLease(session);
       _throwIfCancelled(session);
-      await _syncSessionCookiesToBrowser(request.uri, session);
-      final response = await _webViewExecutor.load(
-        request: WebViewRequestPayload(
-          url: request.uri.toString(),
-          stage: defaultStage,
-          sourceId: session?.sourceId,
-          timeout: request.timeout,
-        ),
-      );
-      _throwIfCancelled(session);
-      await _syncBrowserCookiesToSession(response.finalUrl, session);
-      _throwIfCancelled(session);
-      _persistSnapshot(session, response);
+      try {
+        await _syncSessionCookiesToBrowser(request.uri, session);
+        final response = await _webViewExecutor.load(
+          request: WebViewRequestPayload(
+            url: request.uri.toString(),
+            stage: defaultStage,
+            sourceId: session?.sourceId,
+            timeout: request.timeout,
+          ),
+        );
+        _throwIfCancelled(session);
+        await _syncBrowserCookiesToSession(response.finalUrl, session);
+        _throwIfCancelled(session);
+        _persistSnapshot(session, response);
+      } finally {
+        lease?.release();
+      }
     });
   }
 
@@ -63,23 +71,28 @@ class AppReadBrowserRuntime implements BrowserRuntime {
       throw StateError('Interactive browser challenge is disabled.');
     }
     await _runExclusive(() async {
+      final lease = await _acquireLease(session);
       _throwIfCancelled(session);
-      await _syncSessionCookiesToBrowser(request.uri, session);
-      final response = await _interactiveExecutor.open(
-        request: WebViewRequestPayload(
-          url: request.uri.toString(),
-          stage: defaultStage,
-          sourceId: session?.sourceId,
-          timeout: request.timeout,
-        ),
-        awaitUserResult: true,
-        title: request.reason,
-        refetchAfterSuccess: true,
-      );
-      _throwIfCancelled(session);
-      await _syncBrowserCookiesToSession(response.finalUrl, session);
-      _throwIfCancelled(session);
-      _persistSnapshot(session, response);
+      try {
+        await _syncSessionCookiesToBrowser(request.uri, session);
+        final response = await _interactiveExecutor.open(
+          request: WebViewRequestPayload(
+            url: request.uri.toString(),
+            stage: defaultStage,
+            sourceId: session?.sourceId,
+            timeout: request.timeout,
+          ),
+          awaitUserResult: true,
+          title: request.reason,
+          refetchAfterSuccess: true,
+        );
+        _throwIfCancelled(session);
+        await _syncBrowserCookiesToSession(response.finalUrl, session);
+        _throwIfCancelled(session);
+        _persistSnapshot(session, response);
+      } finally {
+        lease?.release();
+      }
     });
   }
 
@@ -89,22 +102,27 @@ class AppReadBrowserRuntime implements BrowserRuntime {
     SourceSession? session,
   }) async {
     return _runExclusive(() async {
+      final lease = await _acquireLease(session);
       _throwIfCancelled(session);
-      await _syncSessionCookiesToBrowser(request.uri, session);
-      final response = await _webViewExecutor.load(
-        request: WebViewRequestPayload(
-          url: request.uri.toString(),
-          stage: defaultStage,
-          sourceId: session?.sourceId,
-          timeout: request.timeout,
-          webJs: request.script,
-        ),
-      );
-      _throwIfCancelled(session);
-      await _syncBrowserCookiesToSession(response.finalUrl, session);
-      _throwIfCancelled(session);
-      _persistSnapshot(session, response);
-      return response.scriptResult;
+      try {
+        await _syncSessionCookiesToBrowser(request.uri, session);
+        final response = await _webViewExecutor.load(
+          request: WebViewRequestPayload(
+            url: request.uri.toString(),
+            stage: defaultStage,
+            sourceId: session?.sourceId,
+            timeout: request.timeout,
+            webJs: request.script,
+          ),
+        );
+        _throwIfCancelled(session);
+        await _syncBrowserCookiesToSession(response.finalUrl, session);
+        _throwIfCancelled(session);
+        _persistSnapshot(session, response);
+        return response.scriptResult;
+      } finally {
+        lease?.release();
+      }
     });
   }
 
@@ -112,6 +130,17 @@ class AppReadBrowserRuntime implements BrowserRuntime {
     if (session?.isCancelled ?? false) {
       throw const SessionTaskCancelledException();
     }
+  }
+
+  Future<SourceRuntimeTaskLease?> _acquireLease(SourceSession? session) async {
+    final sourceId = session?.sourceId.trim() ?? '';
+    if (sourceId.isEmpty) {
+      return null;
+    }
+    return _scheduler.acquire(
+      scene: SourceRuntimeSchedulerScene.browserInteractive,
+      conflictKeys: <String>[_scheduler.conflictKeyForSource(sourceId)],
+    );
   }
 
   Future<T> _runExclusive<T>(Future<T> Function() action) {

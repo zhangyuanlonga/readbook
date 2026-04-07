@@ -319,7 +319,9 @@ class SourceRuntimeFacade {
 
   Future<SourceRuntimeDiagnosticExecutionContainer?>
   createDiagnosticExecutionContainerById(
-    String sourceId,
+    String sourceId, {
+    SessionCancellationHandle? cancellationHandle,
+  }
   ) async {
     final normalizedSourceId = sourceId.trim();
     if (normalizedSourceId.isEmpty) {
@@ -333,9 +335,13 @@ class SourceRuntimeFacade {
       return await _scriptRuntimeService.createDiagnosticExecutionContainer(
         sourceId: normalizedSourceId,
         sourceCode: source.sourceCode,
+        cancellationHandle: cancellationHandle,
         serializeStartup: true,
       );
     } catch (error, stackTrace) {
+      if (error is SessionTaskCancelledException) {
+        rethrow;
+      }
       throw _normalizeRuntimeException(
         sourceId: normalizedSourceId,
         step: SourceRuntimeExecutionStep.search,
@@ -583,6 +589,9 @@ class SourceRuntimeFacade {
       }
       return result;
     } catch (error, stackTrace) {
+      if (error is SessionTaskCancelledException) {
+        rethrow;
+      }
       if (source != null && source.enabled) {
         _warmStateService.markUnstable(
           sourceId: normalizedSourceId,

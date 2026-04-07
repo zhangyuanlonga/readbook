@@ -1,6 +1,6 @@
 # 脚本源文档索引
 
-更新时间：2026-04-06
+更新时间：2026-04-07
 
 当前 `flutterreadbook` 运行时只支持脚本源。
 
@@ -37,6 +37,10 @@
 - [搜索首跑与检测首跑不稳定问题梳理](./search-first-run-instability-plan.md)
   用于专门梳理“脚本源首轮执行偶发闪退 / JSC 崩溃 / 检测路径不稳定”的问题边界、已验证事实和后续修法。
   当前已同步维护阶段进度，可直接查看各阶段完成度。
+- [脚本源返回值安全收口方案](./runtime-result-sanitization-plan.md)
+  用于专门梳理“结果模型看起来正确，但返回值内部不安全，最终把宿主带崩”的问题边界和改造方案。
+- [脚本源跨场景任务调度改进计划](./cross-scene-runtime-scheduler-plan.md)
+  用于专门梳理“书架、发现、详情、阅读、检测等多场景同时争用脚本运行时资源”时为什么仅靠 gate 不够，以及后续如何补齐任务调度层。
 - [第二阶段：Browser / Cookie / Cache 设计说明](./stage-two-browser-sources.md)
   只在你需要理解浏览器能力的设计取舍时阅读，不是入门必读。
 - [脚本源调试工作台任务拆分](./debug-workbench-task-plan.md)

@@ -5,6 +5,7 @@ import 'package:shuxiang_reading_next/domain/entities/script_source.dart';
 import 'package:shuxiang_reading_next/domain/repositories/script_source_repository.dart';
 import 'package:shuxiang_reading_next/features/search/application/search_hit_cache_service.dart';
 import 'package:shuxiang_reading_next/features/search/application/search_service.dart';
+import 'package:shuxiang_reading_next/features/source/application/source_health_service.dart';
 import 'package:shuxiang_reading_next/features/source/application/source_runtime_facade.dart';
 import 'package:shuxiang_reading_next/runtime/session/source_session.dart';
 import 'package:shuxiang_reading_next/runtime/sources/source_contract.dart';
@@ -16,8 +17,10 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 void main() {
-  setUp(() {
+  setUp(() async {
     SharedPreferences.setMockInitialValues(<String, Object>{});
+    SourceHealthService.instance.clear();
+    await SourceHealthService.instance.persistNow();
   });
 
   group('SearchService hit cache', () {

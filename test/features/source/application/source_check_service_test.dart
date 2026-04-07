@@ -5,6 +5,7 @@ import 'package:shuxiang_reading_next/features/source/application/source_check_s
 import 'package:shuxiang_reading_next/features/source/application/source_health_service.dart';
 import 'package:shuxiang_reading_next/features/source/application/source_runtime_diagnostic_execution_container.dart';
 import 'package:shuxiang_reading_next/features/source/application/source_runtime_facade.dart';
+import 'package:shuxiang_reading_next/features/source/application/source_runtime_scheduler_service.dart';
 import 'package:shuxiang_reading_next/runtime/session/source_session.dart';
 import 'package:shuxiang_reading_next/runtime/sources/source_contract.dart';
 import 'package:shuxiang_reading_next/runtime/sources/source_manifest.dart';
@@ -184,6 +185,27 @@ void main() {
 
       expect(result.status, SourceCheckStatus.skipped);
       expect(result.message, contains('冷却中'));
+    });
+
+    test('skips source check when higher-priority task is active', () async {
+      final runtimeFacade = _FakeRuntimeFacade(
+        sources: <RegisteredSource>[
+          _buildRegisteredSource(id: 's1', name: '源1'),
+        ],
+      );
+      final service = SourceCheckService(
+        sourceRuntimeFacade: runtimeFacade,
+        sourceHealthService: SourceHealthService(),
+        taskScheduler: _BlockingScheduler(),
+      );
+
+      final result = await service.checkSource(
+        sourceId: 's1',
+        keyword: '凡人修仙传',
+      );
+
+      expect(result.status, SourceCheckStatus.skipped);
+      expect(result.message, contains('更高优先级'));
     });
 
     test('searchAndDetail updates detail-related health progress', () async {
@@ -461,7 +483,10 @@ class _FakeRuntimeFacade extends SourceRuntimeFacade {
 
   @override
   Future<SourceRuntimeDiagnosticExecutionContainer?>
-  createDiagnosticExecutionContainerById(String sourceId) async {
+  createDiagnosticExecutionContainerById(
+    String sourceId, {
+    SessionCancellationHandle? cancellationHandle,
+  }) async {
     return diagnosticContainerBySourceId[sourceId];
   }
 
@@ -586,4 +611,15 @@ class _FakeScriptSourceRepository implements ScriptSourceRepository {
   @override
   Stream<List<ScriptSource>> watchAll() =>
       const Stream<List<ScriptSource>>.empty();
+}
+
+class _BlockingScheduler extends SourceRuntimeSchedulerService {
+  @override
+  Future<SourceRuntimeTaskLease?> acquire({
+    required SourceRuntimeSchedulerScene scene,
+    required Iterable<String> conflictKeys,
+    bool cancelIfBlockedByHigherPriority = false,
+  }) async {
+    return null;
+  }
 }

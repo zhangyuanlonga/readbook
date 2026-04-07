@@ -6,7 +6,9 @@ import 'package:shuxiang_reading_next/domain/entities/script_source.dart';
 import 'package:shuxiang_reading_next/domain/repositories/script_source_repository.dart';
 import 'package:shuxiang_reading_next/features/book/application/book_detail_service.dart';
 import 'package:shuxiang_reading_next/features/source/application/source_health_service.dart';
+import 'package:shuxiang_reading_next/features/source/application/source_runtime_diagnostic_execution_container.dart';
 import 'package:shuxiang_reading_next/features/source/application/source_runtime_facade.dart';
+import 'package:shuxiang_reading_next/runtime/session/source_session.dart';
 import 'package:shuxiang_reading_next/runtime/sources/source_contract.dart';
 import 'package:shuxiang_reading_next/runtime/sources/source_manifest.dart';
 import 'package:shuxiang_reading_next/runtime/sources/source_registry.dart';
@@ -158,8 +160,51 @@ void main() {
         expect(snapshot.lastFailureReason, contains('未找到书源'));
       }
     });
+
+    test('background refresh uses diagnostic container flow', () async {
+      final runtimeFacade = _FakeRuntimeFacade(
+        sources: <RegisteredSource>[
+          _buildRegisteredSource(id: 'source_refresh', name: '后台刷新源'),
+        ],
+        detailedBooksBySourceId: <String, runtime_models.Book>{
+          'source_refresh': const runtime_models.Book(
+            title: '刷新书籍',
+            author: '作者R',
+            detailUrl: 'https://example.com/book/r',
+          ),
+        },
+        chaptersBySourceId: <String, List<runtime_models.Chapter>>{
+          'source_refresh': const <runtime_models.Chapter>[
+            runtime_models.Chapter(
+              title: '第一章',
+              url: 'https://example.com/book/r/1',
+              index: 0,
+            ),
+          ],
+        },
+      );
+      final service = BookDetailService(sourceRuntimeFacade: runtimeFacade);
+
+      final result = await service.loadForBackgroundRefresh(
+        sourceId: 'source_refresh',
+        bookId: 'book_refresh',
+        detailUrl: 'https://example.com/book/r',
+        cancellationHandle: const SessionCancellationHandle(
+          isCancelled: _alwaysFalse,
+        ),
+      );
+
+      expect(result, isNotNull);
+      expect(result!.detail.title, '刷新书籍');
+      expect(result.chapters, hasLength(1));
+      expect(runtimeFacade.createdDiagnosticContainerCount, 1);
+      expect(runtimeFacade.disposedDiagnosticContainerCount, 1);
+      expect(runtimeFacade.lastDiagnosticCancellationHandleWasSet, isFalse);
+    });
   });
 }
+
+bool _alwaysFalse() => false;
 
 class _RecordingLogger implements AppLogger {
   final List<String> infoLogs = <String>[];
@@ -219,6 +264,9 @@ class _FakeRuntimeFacade extends SourceRuntimeFacade {
   final Map<String, runtime_models.Book> detailedBooksBySourceId;
   final Map<String, List<runtime_models.Chapter>> chaptersBySourceId;
   runtime_models.Book? lastDetailBook;
+  int createdDiagnosticContainerCount = 0;
+  int disposedDiagnosticContainerCount = 0;
+  bool lastDiagnosticCancellationHandleWasSet = false;
 
   @override
   RegisteredSource? registeredScriptSourceById(String sourceId) {
@@ -252,6 +300,79 @@ class _FakeRuntimeFacade extends SourceRuntimeFacade {
     required runtime_models.Book book,
   }) async {
     return chaptersBySourceId[sourceId] ?? const <runtime_models.Chapter>[];
+  }
+
+  @override
+  Future<SourceRuntimeDiagnosticExecutionContainer?>
+  createDiagnosticExecutionContainerById(
+    String sourceId, {
+    SessionCancellationHandle? cancellationHandle,
+  }) async {
+    final registered = await ensureRegisteredScriptSourceById(sourceId);
+    if (registered == null) {
+      return null;
+    }
+    createdDiagnosticContainerCount += 1;
+    lastDiagnosticCancellationHandleWasSet = cancellationHandle != null;
+    return _FakeDiagnosticExecutionContainer(
+      sourceId: sourceId,
+      sourceName: registered.runtime.name,
+      detailBook: detailedBooksBySourceId[sourceId],
+      chapterList:
+          chaptersBySourceId[sourceId] ?? const <runtime_models.Chapter>[],
+      onDispose: () {
+        disposedDiagnosticContainerCount += 1;
+      },
+    );
+  }
+}
+
+class _FakeDiagnosticExecutionContainer
+    implements SourceRuntimeDiagnosticExecutionContainer {
+  const _FakeDiagnosticExecutionContainer({
+    required this.sourceId,
+    required this.sourceName,
+    required this.detailBook,
+    required this.chapterList,
+    required this.onDispose,
+  });
+
+  @override
+  final String sourceId;
+
+  @override
+  final String sourceName;
+
+  final runtime_models.Book? detailBook;
+  final List<runtime_models.Chapter> chapterList;
+  final void Function() onDispose;
+
+  @override
+  Future<List<runtime_models.Book>> search(String keyword) async {
+    return const <runtime_models.Book>[];
+  }
+
+  @override
+  Future<runtime_models.Book> detail(runtime_models.Book book) async {
+    return detailBook ?? book;
+  }
+
+  @override
+  Future<List<runtime_models.Chapter>> chapters(runtime_models.Book book) async {
+    return chapterList;
+  }
+
+  @override
+  Future<runtime_models.Content> content(
+    runtime_models.Book book,
+    runtime_models.Chapter chapter,
+  ) async {
+    return const runtime_models.Content(title: '', content: '');
+  }
+
+  @override
+  void dispose() {
+    onDispose();
   }
 }
 

@@ -32,7 +32,9 @@ import '../../announcement/application/announcement_service.dart';
 import '../../announcement/application/announcement_read_state_service.dart';
 import '../../source/application/external_source_import_bridge.dart';
 import '../../source/application/source_runtime_facade.dart';
+import '../../source/application/source_runtime_task_conflict_service.dart';
 import '../../../runtime/sources/source_registry.dart';
+import '../../../runtime/session/source_session.dart';
 import 'widgets/bookshelf_grid_sliver.dart';
 import 'widgets/bookshelf_page_sections.dart';
 
@@ -101,6 +103,8 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
   final AnnouncementService _announcementService = AnnouncementService();
   final AnnouncementReadStateService _announcementReadStateService =
       AnnouncementReadStateService();
+  final SourceRuntimeTaskConflictService _taskConflictService =
+      SourceRuntimeTaskConflictService.instance;
   StreamSubscription<IncomingExternalImportPayload>? _incomingImportSub;
 
   bool _isLoading = true;
@@ -141,6 +145,7 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
   bool? _lastKnownAutoRefreshOnTabActiveEnabled;
   bool _hasShownContinueReadingPrompt = false;
   ReadingRecord? _continueReadingRecord;
+  int _latestInfoRefreshEpoch = 0;
 
   static const String _kLocalBookSourceId =
       LocalBookImportService.localBookSourceId;
@@ -202,6 +207,7 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
 
   @override
   void dispose() {
+    _cancelBackgroundLatestInfoRefresh();
     _loadTicket += 1;
     _routeInformationProvider?.removeListener(_handleRouteLocationChanged);
     _routeInformationProvider = null;
@@ -375,6 +381,10 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
     final wasOnBookshelf = _isBookshelfRoute(_lastKnownRouteLocation);
     final isOnBookshelf = _isBookshelfRoute(nextLocation);
     _lastKnownRouteLocation = nextLocation;
+
+    if (wasOnBookshelf && !isOnBookshelf) {
+      _cancelBackgroundLatestInfoRefresh();
+    }
 
     if (!wasOnBookshelf && isOnBookshelf) {
       unawaited(_maybeAutoRefreshOnTabActivated());
@@ -3406,6 +3416,7 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
 
   Future<void> _loadBookshelfCore() async {
     final ticket = ++_loadTicket;
+    _cancelBackgroundLatestInfoRefresh();
 
     if (mounted) {
       setState(() {
@@ -3454,7 +3465,14 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
       await _loadLatestCachedChapterMap(books, ticket: ticket);
       await _loadCachedChapterCountMap(books, ticket: ticket);
       await _loadProgressMapInBatches(books, ticket: ticket);
-      unawaited(_refreshOnlineBookshelfLatestInfo(books, ticket: ticket));
+      final refreshEpoch = ++_latestInfoRefreshEpoch;
+      unawaited(
+        _refreshOnlineBookshelfLatestInfo(
+          books,
+          ticket: ticket,
+          refreshEpoch: refreshEpoch,
+        ),
+      );
     } on TimeoutException {
       if (!mounted || ticket != _loadTicket) {
         return;
@@ -3655,6 +3673,7 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
   Future<void> _refreshOnlineBookshelfLatestInfo(
     List<BookshelfBook> books, {
     required int ticket,
+    required int refreshEpoch,
   }) async {
     final onlineBooks = books
         .where((book) => book.sourceId.trim() != _kLocalBookSourceId)
@@ -3665,21 +3684,56 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
 
     var changed = false;
     for (final book in onlineBooks) {
-      if (!mounted || ticket != _loadTicket) {
+      if (_isLatestInfoRefreshCancelled(
+        ticket: ticket,
+        refreshEpoch: refreshEpoch,
+      )) {
         return;
       }
 
       try {
+        final conflictKey = _bookConflictKey(
+          sourceId: book.sourceId,
+          detailUrl: book.detailUrl,
+          bookId: book.bookId,
+        );
+        final sourceConflictKey = _taskConflictService.conflictKeyForSource(
+          book.sourceId,
+        );
+        final capturedBookEpoch = _taskConflictService.captureBackgroundEpoch(
+          conflictKey,
+        );
+        final capturedSourceEpoch = _taskConflictService.captureBackgroundEpoch(
+          sourceConflictKey,
+        );
         final detailResult = await _bookDetailService
-            .load(
+            .loadForBackgroundRefresh(
               sourceId: book.sourceId,
               bookId: book.bookId,
               detailUrl: book.detailUrl,
               fallbackTitle: book.title,
               fallbackAuthor: book.author,
-              forceRefresh: true,
+              cancellationHandle: SessionCancellationHandle(
+                isCancelled:
+                    () =>
+                        _isLatestInfoRefreshCancelled(
+                          ticket: ticket,
+                          refreshEpoch: refreshEpoch,
+                        ) ||
+                        _taskConflictService.hasBackgroundConflictAdvanced(
+                          conflictKey: conflictKey,
+                          capturedEpoch: capturedBookEpoch,
+                        ) ||
+                        _taskConflictService.hasBackgroundConflictAdvanced(
+                          conflictKey: sourceConflictKey,
+                          capturedEpoch: capturedSourceEpoch,
+                        ),
+              ),
             )
             .timeout(const Duration(seconds: 8));
+        if (detailResult == null) {
+          continue;
+        }
 
         final latestChapterTitle =
             detailResult.chapters
@@ -3731,10 +3785,60 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
       }
     }
 
-    if (!changed || !mounted || ticket != _loadTicket) {
+    if (!changed ||
+        _isLatestInfoRefreshCancelled(
+          ticket: ticket,
+          refreshEpoch: refreshEpoch,
+        )) {
       return;
     }
     await _loadBookshelf(force: true);
+  }
+
+  void _cancelBackgroundLatestInfoRefresh() {
+    _latestInfoRefreshEpoch += 1;
+  }
+
+  bool _isLatestInfoRefreshCancelled({
+    required int ticket,
+    required int refreshEpoch,
+  }) {
+    return !mounted ||
+        ticket != _loadTicket ||
+        refreshEpoch != _latestInfoRefreshEpoch ||
+        !_isBookshelfRoute(_lastKnownRouteLocation);
+  }
+
+  String _bookConflictKey({
+    required String sourceId,
+    required String detailUrl,
+    required String bookId,
+  }) {
+    return _taskConflictService.conflictKeyForBook(
+      sourceId: sourceId,
+      detailUrl: detailUrl,
+      bookId: bookId,
+    );
+  }
+
+  void _cancelBackgroundRefreshForBook({
+    required String sourceId,
+    required String detailUrl,
+    required String bookId,
+    required SourceRuntimeConflictScene byScene,
+  }) {
+    final conflictKey = _bookConflictKey(
+      sourceId: sourceId,
+      detailUrl: detailUrl,
+      bookId: bookId,
+    );
+    if (conflictKey.isEmpty) {
+      return;
+    }
+    _taskConflictService.cancelBackgroundWorkFor(
+      conflictKey: conflictKey,
+      byScene: byScene,
+    );
   }
 
   Future<void> _restoreViewModePreference() async {
@@ -4299,6 +4403,13 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
     BookshelfBook book, {
     ReadingProgress? progress,
   }) async {
+    _cancelBackgroundLatestInfoRefresh();
+    _cancelBackgroundRefreshForBook(
+      sourceId: book.sourceId,
+      detailUrl: book.detailUrl,
+      bookId: book.bookId,
+      byScene: SourceRuntimeConflictScene.reader,
+    );
     if (_openingBookId != null) {
       return;
     }
@@ -4483,6 +4594,13 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
   }
 
   void _openReaderFallbackForSourceSwitch(BookshelfBook book) {
+    _cancelBackgroundLatestInfoRefresh();
+    _cancelBackgroundRefreshForBook(
+      sourceId: book.sourceId,
+      detailUrl: book.detailUrl,
+      bookId: book.bookId,
+      byScene: SourceRuntimeConflictScene.reader,
+    );
     final route = buildReaderRoute(
       bookId: book.bookId,
       chapterId: 'bootstrap',
@@ -4494,6 +4612,13 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
   }
 
   void _continueReading(ReadingProgress progress) {
+    _cancelBackgroundLatestInfoRefresh();
+    _cancelBackgroundRefreshForBook(
+      sourceId: progress.sourceId,
+      detailUrl: progress.detailUrl,
+      bookId: progress.bookId,
+      byScene: SourceRuntimeConflictScene.reader,
+    );
     final route = buildReaderRoute(
       bookId: progress.bookId,
       chapterId: progress.chapterId,
@@ -4508,6 +4633,13 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
   }
 
   void _openBookDetail(BookshelfBook book) {
+    _cancelBackgroundLatestInfoRefresh();
+    _cancelBackgroundRefreshForBook(
+      sourceId: book.sourceId,
+      detailUrl: book.detailUrl,
+      bookId: book.bookId,
+      byScene: SourceRuntimeConflictScene.detail,
+    );
     if (_isBatchDeleting) {
       return;
     }

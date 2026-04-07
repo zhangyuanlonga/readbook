@@ -146,6 +146,7 @@ class ScriptSourceRuntimeService {
   createDiagnosticExecutionContainer({
     required String sourceId,
     required String sourceCode,
+    SessionCancellationHandle? cancellationHandle,
     bool serializeStartup = true,
   }) async {
     final requestContainer = SourceRuntimeRequestExecutionContainer(
@@ -161,6 +162,14 @@ class ScriptSourceRuntimeService {
         );
       },
     );
+    if (cancellationHandle != null) {
+      requestContainer.session.set(
+        sessionCancellationHandleKey,
+        cancellationHandle,
+      );
+    } else {
+      requestContainer.session.clear(sessionCancellationHandleKey);
+    }
     try {
       final source = await _createIsolatedSource(
         sourceId: sourceId,

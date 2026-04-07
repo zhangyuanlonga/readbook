@@ -1,6 +1,7 @@
 import '../../../core/errors/app_exception.dart';
 import '../../../core/logging/app_logger.dart';
 import '../../../domain/entities/source_health.dart';
+import '../../../runtime/session/source_session.dart';
 import '../../../runtime/sources/source_registry.dart';
 import '../../../runtime/sources/source_result_models.dart' as runtime_models;
 import 'source_health_auto_disable_service.dart';
@@ -9,6 +10,8 @@ import 'source_health_service.dart';
 import 'source_health_snapshot_resolver.dart';
 import 'source_runtime_diagnostic_execution_container.dart';
 import 'source_runtime_facade.dart';
+import 'source_runtime_task_conflict_service.dart';
+import 'source_runtime_scheduler_service.dart';
 
 enum SourceCheckLevel { searchOnly, searchAndDetail, fullReadPath }
 
@@ -53,6 +56,8 @@ class SourceCheckService {
     SourceHealthService? sourceHealthService,
     SourceHealthReasonClassifier? reasonClassifier,
     SourceHealthAutoDisableService? autoDisableService,
+    SourceRuntimeTaskConflictService? taskConflictService,
+    SourceRuntimeSchedulerService? taskScheduler,
     AppLogger? logger,
   }) : _sourceRuntimeFacade =
            sourceRuntimeFacade ?? SourceRuntimeFacade.instance,
@@ -62,12 +67,17 @@ class SourceCheckService {
            reasonClassifier ?? const SourceHealthReasonClassifier(),
        _autoDisableService =
            autoDisableService ?? SourceHealthAutoDisableService.instance,
+       _taskConflictService =
+           taskConflictService ?? SourceRuntimeTaskConflictService.instance,
+       _taskScheduler = taskScheduler ?? SourceRuntimeSchedulerService.instance,
        _logger = logger ?? AppLogger.instance;
 
   final SourceRuntimeFacade _sourceRuntimeFacade;
   final SourceHealthService _sourceHealthService;
   final SourceHealthReasonClassifier _reasonClassifier;
   final SourceHealthAutoDisableService _autoDisableService;
+  final SourceRuntimeTaskConflictService _taskConflictService;
+  final SourceRuntimeSchedulerService _taskScheduler;
   final AppLogger _logger;
   static const String defaultCheckKeyword = '凡人修仙传';
 
@@ -130,10 +140,41 @@ class SourceCheckService {
 
     var attemptedStep = SourceCheckStep.search;
     SourceRuntimeDiagnosticExecutionContainer? diagnosticContainer;
+    final conflictKey = _taskConflictService.conflictKeyForSource(sourceId);
+    final lease = await _taskScheduler.acquire(
+      scene: SourceRuntimeSchedulerScene.sourceCheck,
+      conflictKeys: <String>[conflictKey],
+      cancelIfBlockedByHigherPriority: true,
+    );
+    if (lease == null) {
+      return _skippedResult(
+        sourceId: sourceId,
+        sourceName: sourceName,
+        usedKeyword: effectiveKeyword,
+        checkedLevel: level,
+        startedAt: startedAt,
+        message: '存在更高优先级在线书源任务，已跳过本次检测。',
+        stepReached: SourceCheckStep.none,
+        needsBrowser: needsBrowser,
+      );
+    }
+    final capturedEpoch = _taskConflictService.captureBackgroundEpoch(
+      conflictKey,
+    );
+    final cancellationHandle = SessionCancellationHandle(
+      isCancelled:
+          () => _taskConflictService.hasBackgroundConflictAdvanced(
+            conflictKey: conflictKey,
+            capturedEpoch: capturedEpoch,
+          ),
+    );
 
     try {
       diagnosticContainer = await _sourceRuntimeFacade
-          .createDiagnosticExecutionContainerById(sourceId);
+          .createDiagnosticExecutionContainerById(
+            sourceId,
+            cancellationHandle: cancellationHandle,
+          );
       _logStepStarted(
         sourceId: sourceId,
         sourceName: sourceName,
@@ -338,6 +379,17 @@ class SourceCheckService {
       );
       await _evaluateAutoDisable(sourceId: sourceId, sourceName: sourceName);
       return result;
+    } on SessionTaskCancelledException catch (error) {
+      return _skippedResult(
+        sourceId: sourceId,
+        sourceName: sourceName,
+        usedKeyword: effectiveKeyword,
+        checkedLevel: level,
+        startedAt: startedAt,
+        message: error.message,
+        stepReached: attemptedStep,
+        needsBrowser: needsBrowser,
+      );
     } catch (error) {
       _recordStepFailure(
         sourceId: sourceId,
@@ -361,6 +413,7 @@ class SourceCheckService {
       return result;
     } finally {
       diagnosticContainer?.dispose();
+      lease.release();
     }
   }
 

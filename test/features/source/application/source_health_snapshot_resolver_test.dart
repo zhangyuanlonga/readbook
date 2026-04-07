@@ -68,5 +68,27 @@ void main() {
       expect(next.level, SourceHealthLevel.unavailable);
       expect(next.coolingDown, isTrue);
     });
+
+    test('cancelled failure does not increase failure counters', () {
+      final snapshot = SourceHealthSnapshot(
+        sourceId: 'source_1',
+        level: SourceHealthLevel.healthy,
+        enabled: true,
+        totalFailures: 2,
+        consecutiveFailures: 1,
+      );
+
+      final next = resolver.recordFailure(
+        snapshot,
+        failureKind: SourceHealthFailureKind.cancelled,
+        message: 'Session-bound task was cancelled.',
+        occurredAt: DateTime.parse('2026-04-05T10:00:00.000Z'),
+      );
+
+      expect(next.totalFailures, 2);
+      expect(next.consecutiveFailures, 1);
+      expect(next.lastFailureKind, SourceHealthFailureKind.cancelled);
+      expect(next.level, SourceHealthLevel.warning);
+    });
   });
 }

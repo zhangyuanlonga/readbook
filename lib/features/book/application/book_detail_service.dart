@@ -7,6 +7,7 @@ import '../../../core/errors/error_stage.dart';
 import '../../../core/logging/app_logger.dart';
 import '../../../domain/entities/book_detail.dart';
 import '../../../domain/entities/chapter.dart';
+import '../../../runtime/session/source_session.dart';
 import '../../../runtime/sources/source_registry.dart';
 import '../../../runtime/sources/source_result_models.dart' as runtime_models;
 import '../../source/application/source_health_service.dart';
@@ -181,6 +182,40 @@ class BookDetailService {
         _inFlightLoads.remove(cacheKey);
       }
     }
+  }
+
+  Future<BookDetailLoadResult?> loadForBackgroundRefresh({
+    required String sourceId,
+    required String bookId,
+    required String detailUrl,
+    String? fallbackTitle,
+    String? fallbackAuthor,
+    SessionCancellationHandle? cancellationHandle,
+  }) async {
+    final normalizedSourceId = sourceId.trim();
+    final normalizedBookId = bookId.trim();
+    final normalizedDetailUrl = detailUrl.trim();
+    final normalizedFallbackTitle = _normalizeOptionalText(fallbackTitle);
+    final normalizedFallbackAuthor = _normalizeOptionalText(fallbackAuthor);
+
+    if (normalizedSourceId.isEmpty ||
+        normalizedBookId.isEmpty ||
+        normalizedDetailUrl.isEmpty) {
+      throw AppException(
+        code: ErrorCode.validation,
+        stage: ErrorStage.detail,
+        briefMessage: '加载详情缺少参数。',
+      );
+    }
+
+    return _loadWithDiagnosticContainer(
+      sourceId: normalizedSourceId,
+      bookId: normalizedBookId,
+      detailUrl: normalizedDetailUrl,
+      fallbackTitle: normalizedFallbackTitle,
+      fallbackAuthor: normalizedFallbackAuthor,
+      cancellationHandle: cancellationHandle,
+    );
   }
 
   Future<BookDetailLoadResult> _loadFromScriptRuntime({
@@ -361,6 +396,180 @@ class BookDetailService {
         },
       );
       rethrow;
+    }
+  }
+
+  Future<BookDetailLoadResult?> _loadWithDiagnosticContainer({
+    required String sourceId,
+    required String bookId,
+    required String detailUrl,
+    required String? fallbackTitle,
+    required String? fallbackAuthor,
+    SessionCancellationHandle? cancellationHandle,
+  }) async {
+    final facade = _sourceRuntimeFacade;
+    var currentStep = ErrorStage.detail;
+    final registered =
+        facade == null
+            ? null
+            : await facade.ensureRegisteredScriptSourceById(sourceId);
+    if (facade == null || registered == null) {
+      _sourceHealthService.markDetailFailure(
+        sourceId: sourceId,
+        message: '未找到书源：$sourceId',
+      );
+      throw UnknownSourceException(
+        briefMessage: '未找到书源：$sourceId',
+        sourceId: sourceId,
+        stage: ErrorStage.detail,
+      );
+    }
+
+    final diagnosticContainer = await facade.createDiagnosticExecutionContainerById(
+      sourceId,
+    );
+    if (diagnosticContainer == null) {
+      _sourceHealthService.markDetailFailure(
+        sourceId: sourceId,
+        message: '未找到书源：$sourceId',
+      );
+      throw UnknownSourceException(
+        briefMessage: '未找到书源：$sourceId',
+        sourceId: sourceId,
+        stage: ErrorStage.detail,
+      );
+    }
+
+    final runtimeBook = runtime_models.Book(
+      title: fallbackTitle ?? bookId,
+      author: fallbackAuthor ?? '',
+      detailUrl: detailUrl,
+      sourceId: sourceId,
+    );
+
+    try {
+      final detailStartedAt = DateTime.now();
+      final detailed = await _runDetailTask(
+        source: registered,
+        action: () => diagnosticContainer.detail(runtimeBook),
+      );
+      if (cancellationHandle?.isCancelled ?? false) {
+        return null;
+      }
+      _sourceHealthService.markDetailSuccess(
+        sourceId: sourceId,
+        latencyMs: DateTime.now().difference(detailStartedAt).inMilliseconds,
+      );
+      _logger.info(
+        'Runtime detail success',
+        context: <String, Object?>{
+          'chain': 'detail',
+          'step': 'detail',
+          'sourceId': sourceId,
+          'sourceName': registered.runtime.name,
+          'bookId': bookId,
+          'detailUrl': detailUrl,
+          'durationMs':
+              DateTime.now().difference(detailStartedAt).inMilliseconds,
+          'runtimeMode': 'diagnostic_isolated',
+        },
+      );
+
+      currentStep = ErrorStage.toc;
+      final chaptersStartedAt = DateTime.now();
+      final runtimeChapters = await _runChaptersTask(
+        source: registered,
+        action: () => diagnosticContainer.chapters(detailed),
+      );
+      if (cancellationHandle?.isCancelled ?? false) {
+        return null;
+      }
+      _sourceHealthService.markChaptersSuccess(sourceId: sourceId);
+      _logger.info(
+        'Runtime chapters success',
+        context: <String, Object?>{
+          'chain': 'detail',
+          'step': 'chapters',
+          'sourceId': sourceId,
+          'sourceName': registered.runtime.name,
+          'bookId': bookId,
+          'detailUrl': detailUrl,
+          'chapterCount': runtimeChapters.length,
+          'durationMs':
+              DateTime.now().difference(chaptersStartedAt).inMilliseconds,
+          'runtimeMode': 'diagnostic_isolated',
+        },
+      );
+
+      final chapters = runtimeChapters
+          .map(
+            (chapter) => Chapter(
+              id: _buildScriptChapterId(
+                bookId: bookId,
+                chapterUrl: chapter.url,
+                index: chapter.index,
+              ),
+              bookId: bookId,
+              title:
+                  chapter.title.trim().isNotEmpty
+                      ? chapter.title.trim()
+                      : chapter.isVolume
+                      ? '未命名分卷'
+                      : '第 ${chapter.index + 1} 章',
+              chapterUrl: chapter.url.trim(),
+              index: chapter.index,
+              isVolume: chapter.isVolume,
+            ),
+          )
+          .toList(growable: false);
+
+      return BookDetailLoadResult(
+        detail: BookDetail(
+          id: bookId,
+          sourceId: sourceId,
+          title:
+              detailed.title.trim().isNotEmpty
+                  ? detailed.title.trim()
+                  : (fallbackTitle ?? '未命名书籍'),
+          detailUrl:
+              detailed.detailUrl.trim().isNotEmpty
+                  ? detailed.detailUrl.trim()
+                  : detailUrl,
+          author: _normalizeOptionalText(detailed.author),
+          intro: _normalizeOptionalText(detailed.intro),
+          coverUrl: _normalizeOptionalText(detailed.cover),
+          tocUrl:
+              _normalizeOptionalText(detailed.tocUrl) ??
+              _normalizeOptionalText(detailed.extra['tocUrl']?.toString()) ??
+              _normalizeOptionalText(detailed.extra['catalogUrl']?.toString()),
+        ),
+        chapters: chapters,
+        sourceName: registered.runtime.name,
+        tocFromCache: false,
+        tocError: null,
+      );
+    } on AppException catch (error) {
+      _recordStepFailure(
+        sourceId: sourceId,
+        stage: currentStep,
+        message: error.briefMessage,
+        error: error,
+      );
+      rethrow;
+    } catch (error) {
+      if (error is SessionTaskCancelledException) {
+        return null;
+      }
+      final message = error.toString();
+      _recordStepFailure(
+        sourceId: sourceId,
+        stage: currentStep,
+        message: message,
+        error: error,
+      );
+      rethrow;
+    } finally {
+      diagnosticContainer.dispose();
     }
   }
 

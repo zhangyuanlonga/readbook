@@ -147,12 +147,46 @@ void main() {
 
       expect(factory.lastInstalledBootstrapSource, contains('var ctx = undefined;'));
       expect(factory.lastInstalledBootstrapSource, contains('var source = undefined;'));
+      expect(
+        factory.lastInstalledBootstrapSource,
+        contains('function sanitizeForHost(value, depth, seen, stats)'),
+      );
+      expect(
+        factory.lastInstalledBootstrapSource,
+        contains('globalThis.__appreadEncodeHostSuccess = function(value)'),
+      );
       expect(factory.lastRunSnippet, contains('ctx = __ctx;'));
       expect(factory.lastRunSnippet, contains('source = __source;'));
       expect(factory.lastRunSnippet, contains('globalThis.ctx = __ctx;'));
       expect(factory.lastRunSnippet, contains('globalThis.source = __source;'));
+      expect(
+        factory.lastRunSnippet,
+        contains('return globalThis.__appreadEncodeHostSuccess(__rawResult);'),
+      );
+      expect(
+        factory.lastRunSnippet,
+        contains('return globalThis.__appreadEncodeHostFailure(error);'),
+      );
       expect(factory.lastRunSnippet, contains('ctx = undefined;'));
       expect(factory.lastRunSnippet, contains('source = undefined;'));
+    });
+
+    test('unwraps runtime error envelope into compile exception', () async {
+      factory.searchOutputOverride =
+          '{"ok":false,"error":"规则异常：返回值不可安全序列化"}';
+      const compiler = SourceScriptCompiler();
+      final definition = await compiler.compile(_sourceWithImplicitDiscover);
+
+      await expectLater(
+        () => definition.search(_buildRuntimeContext(), '凡人'),
+        throwsA(
+          isA<SourceScriptCompileException>().having(
+            (error) => error.message,
+            'message',
+            contains('返回值不可安全序列化'),
+          ),
+        ),
+      );
     });
   });
 }
@@ -305,6 +339,7 @@ class _FakeReusableJsRuntimeAdapterFactory {
   int disposedCount = 0;
   String? lastRunSnippet;
   String? lastInstalledBootstrapSource;
+  String? searchOutputOverride;
 
   JsRuntimeAdapter create() {
     createdCount += 1;
@@ -317,6 +352,7 @@ class _FakeReusableJsRuntimeAdapterFactory {
       onRunSnippet: (script) {
         lastRunSnippet = script;
       },
+      searchOutputOverride: searchOutputOverride,
       onDispose: () {
         disposedCount += 1;
       },
@@ -329,11 +365,13 @@ class _FakeReusableJsRuntimeAdapter implements JsRuntimeAdapter {
     required this.onDispose,
     required this.onInstallBootstrap,
     required this.onRunSnippet,
+    this.searchOutputOverride,
   });
 
   final void Function() onDispose;
   final void Function(String source, String? sourceUrl) onInstallBootstrap;
   final void Function(String script) onRunSnippet;
+  final String? searchOutputOverride;
   String _installedSource = '';
 
   @override
@@ -374,7 +412,10 @@ class _FakeReusableJsRuntimeAdapter implements JsRuntimeAdapter {
 
     if (script.contains("__source?.['search']") ||
         script.contains("__sourceDefinition?.['search']")) {
-      return const JsExecutionResult(output: '[]', isError: false);
+      return JsExecutionResult(
+        output: searchOutputOverride ?? '[]',
+        isError: false,
+      );
     }
     if (script.contains("__source?.['chapters']") ||
         script.contains("__sourceDefinition?.['chapters']")) {

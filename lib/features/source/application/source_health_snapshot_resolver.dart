@@ -57,6 +57,15 @@ class SourceHealthSnapshotResolver {
     bool markCooldown = false,
     DateTime? cooldownUntil,
   }) {
+    if (failureKind == SourceHealthFailureKind.cancelled) {
+      return _resolveLevel(
+        snapshot.copyWith(
+          lastFailureAt: occurredAt,
+          lastFailureReason: message,
+          lastFailureKind: failureKind,
+        ),
+      );
+    }
     return _resolveLevel(
       snapshot.copyWith(
         totalFailures: snapshot.totalFailures + 1,

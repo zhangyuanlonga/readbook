@@ -49,6 +49,8 @@ import '../../search/application/search_hit_cache_service.dart';
 import '../../search/application/search_service.dart';
 import '../../source/application/source_health_service.dart';
 import '../../source/application/source_runtime_facade.dart';
+import '../../source/application/source_runtime_task_conflict_service.dart';
+import '../../source/application/source_runtime_scheduler_service.dart';
 import '../application/content_provider.dart';
 import '../application/chapter_content_service.dart';
 import '../application/local/local_reader_identity.dart';
@@ -156,6 +158,10 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
   final SourceSwitchScoreService _switchSourceScoreService =
       SourceSwitchScoreService();
   final SourceHealthService _sourceHealthService = SourceHealthService.instance;
+  final SourceRuntimeTaskConflictService _taskConflictService =
+      SourceRuntimeTaskConflictService.instance;
+  final SourceRuntimeSchedulerService _taskScheduler =
+      SourceRuntimeSchedulerService.instance;
   final ReaderSourceSwitchCoordinator _sourceSwitchCoordinator =
       const ReaderSourceSwitchCoordinator();
   final ReaderSourceSwitchTargetResolver _sourceSwitchTargetResolver =
@@ -903,6 +909,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
     _sourceId = widget.sourceId?.trim();
     _detailUrl = widget.detailUrl?.trim();
     _activeBookId = widget.bookId.trim();
+    _cancelBackgroundRefreshConflictForCurrentBook();
     _bookTitle = widget.chapterTitle?.trim() ?? '';
     _currentIndex = widget.chapterIndex;
     final incomingBookmarkId = widget.bookmarkId?.trim() ?? '';
@@ -6641,6 +6648,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
         _chapterTitle = targetChapter.title;
         _errorText = null;
       });
+      _cancelBackgroundRefreshConflictForCurrentBook();
 
       final loaded = await _loadCurrentChapter(
         initialScrollRatio: switchTarget.logicalPosition.chapterPositionRatio,
@@ -7308,6 +7316,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
   }
 
   Future<void> _bootstrap() async {
+    _cancelBackgroundRefreshConflictForCurrentBook();
     _scheduleBlockingLoadingCard();
     try {
       final loadedSettings = await _preferencesService.loadSettings();
@@ -9123,6 +9132,14 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
     if (!mounted) {
       return false;
     }
+    _cancelBackgroundRefreshConflictForCurrentBook();
+    final lease = await _taskScheduler.acquire(
+      scene: SourceRuntimeSchedulerScene.reader,
+      conflictKeys: _currentConflictKeys(),
+    );
+    if (lease == null) {
+      return false;
+    }
     final requestToken = ++_chapterContentRequestToken;
 
     double? readingRecordStartRatio;
@@ -9229,6 +9246,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
         }
         _reconcileAutoRead(restart: true);
       }
+      lease.release();
     }
   }
 
@@ -9258,6 +9276,38 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
     setState(() {
       _isInBookshelf = value;
     });
+  }
+
+  void _cancelBackgroundRefreshConflictForCurrentBook() {
+    final sourceId = (_sourceId ?? '').trim();
+    final detailUrl = (_detailUrl ?? '').trim();
+    final bookId = _currentBookId.trim();
+    final conflictKey = _taskConflictService.conflictKeyForBook(
+      sourceId: sourceId,
+      detailUrl: detailUrl,
+      bookId: bookId,
+    );
+    if (conflictKey.isEmpty) {
+      return;
+    }
+    _taskConflictService.cancelBackgroundWorkFor(
+      conflictKey: conflictKey,
+      byScene: SourceRuntimeConflictScene.reader,
+    );
+  }
+
+  List<String> _currentConflictKeys() {
+    final sourceId = (_sourceId ?? '').trim();
+    final detailUrl = (_detailUrl ?? '').trim();
+    final bookId = _currentBookId.trim();
+    return <String>[
+      _taskConflictService.conflictKeyForSource(sourceId),
+      _taskConflictService.conflictKeyForBook(
+        sourceId: sourceId,
+        detailUrl: detailUrl,
+        bookId: bookId,
+      ),
+    ].where((item) => item.trim().isNotEmpty).toList(growable: false);
   }
 
   Future<void> _toggleBookshelf() async {
