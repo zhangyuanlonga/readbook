@@ -31,9 +31,9 @@ class _MinePageState extends ConsumerState<MinePage> {
   );
   static const EdgeInsets _actionSectionPadding = EdgeInsets.fromLTRB(
     14,
-    12,
+    8,
     14,
-    14,
+    8,
   );
 
   static final Uri _sourceFeedbackUri = Uri.parse(
@@ -98,7 +98,7 @@ class _MinePageState extends ConsumerState<MinePage> {
                         subtitle: _buildProfileSubtitle(),
                       ),
                     ),
-                    const SizedBox(height: 12),
+                    const SizedBox(height: 8),
                     _buildPageEntrance(
                       index: 1,
                       child: _buildActionSection(
@@ -139,7 +139,7 @@ class _MinePageState extends ConsumerState<MinePage> {
                         ],
                       ),
                     ),
-                    const SizedBox(height: 12),
+                    const SizedBox(height: 4),
                     _buildPageEntrance(
                       index: 2,
                       child: _buildActionSection(

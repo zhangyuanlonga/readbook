@@ -272,7 +272,11 @@ class _AuthPageState extends State<AuthPage> {
         return;
       }
       _showMessage(_isRegister ? '注册成功，已登录。' : '登录成功。');
-      context.go('/profile');
+      if (context.canPop()) {
+        context.pushReplacement('/profile');
+      } else {
+        context.go('/profile');
+      }
     } on ApiException catch (error) {
       _showMessage(
         _isRegister && error.statusCode == 409

@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:io';
+import 'dart:math' as math;
 
 import 'package:file_selector/file_selector.dart';
 import 'package:flutter/material.dart';
@@ -790,6 +791,26 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
           _isBatchDeleting ? null : () => unawaited(_showFilterSheet()),
     );
   }
+  Future<T?> _showBookshelfBottomSheet<T>({
+    required WidgetBuilder builder,
+    bool isScrollControlled = false,
+  }) {
+    return showModalBottomSheet<T>(
+      context: context,
+      useRootNavigator: true,
+      useSafeArea: true,
+      showDragHandle: true,
+      isScrollControlled: isScrollControlled,
+      builder: builder,
+    );
+  }
+
+  double _bookshelfBottomSafeInset(BuildContext context) {
+    final viewPadding = MediaQuery.viewPaddingOf(context).bottom;
+    final gestureInsets = MediaQuery.systemGestureInsetsOf(context).bottom;
+    return math.max(viewPadding, gestureInsets);
+  }
+
 
   Future<void> _showFilterSheet() async {
     if (_isBatchDeleting || !mounted) {
@@ -823,12 +844,10 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
     final tagBookCount = _buildTagBookCount();
     var customTags = List<String>.from(_userTags);
 
-    final selected = await showModalBottomSheet<String>(
-      context: context,
-      useSafeArea: true,
-      showDragHandle: true,
+    final selected = await _showBookshelfBottomSheet<String>(
       isScrollControlled: true,
       builder: (sheetContext) {
+        final bottomInset = _bookshelfBottomSafeInset(sheetContext);
         final maxHeight = MediaQuery.sizeOf(sheetContext).height * 0.72;
         return StatefulBuilder(
           builder: (sheetContext, setSheetState) {
@@ -862,7 +881,7 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
             }
 
             return Padding(
-              padding: const EdgeInsets.fromLTRB(8, 0, 8, 10),
+              padding: EdgeInsets.fromLTRB(8, 0, 8, 10 + bottomInset),
               child: ConstrainedBox(
                 constraints: BoxConstraints(maxHeight: maxHeight),
                 child: ListView(
@@ -2104,10 +2123,7 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
     final authorLine = author.isNotEmpty ? '作者: $author' : '作者: 未知';
     final latestLine =
         latestChapter.isNotEmpty ? '最新: $latestChapter' : '最新: 暂无缓存章节';
-    final selected = await showModalBottomSheet<_BookshelfSheetAction>(
-      context: context,
-      useSafeArea: true,
-      showDragHandle: true,
+    final selected = await _showBookshelfBottomSheet<_BookshelfSheetAction>(
       builder: (sheetContext) {
         final colorScheme = Theme.of(sheetContext).colorScheme;
         final horizontal = AppSpacing.pageHorizontal(sheetContext);
@@ -2402,10 +2418,7 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
     final allTags = List<String>.from(_userTags);
     final selectedTags = List<String>.from(initialSelected);
 
-    final selected = await showModalBottomSheet<List<String>>(
-      context: context,
-      useSafeArea: true,
-      showDragHandle: true,
+    final selected = await _showBookshelfBottomSheet<List<String>>(
       isScrollControlled: true,
       builder: (sheetContext) {
         final horizontal = AppSpacing.pageHorizontal(sheetContext);
@@ -2567,10 +2580,7 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
     var submitted = false;
     String? selected;
     try {
-      selected = await showModalBottomSheet<String?>(
-        context: context,
-        useSafeArea: true,
-        showDragHandle: true,
+      selected = await _showBookshelfBottomSheet<String?>(
         isScrollControlled: true,
         builder: (sheetContext) {
           final horizontal = AppSpacing.pageHorizontal(sheetContext);
@@ -2871,10 +2881,7 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
       return;
     }
 
-    final selected = await showModalBottomSheet<_TagManageSheetAction>(
-      context: context,
-      useSafeArea: true,
-      showDragHandle: true,
+    final selected = await _showBookshelfBottomSheet<_TagManageSheetAction>(
       builder: (sheetContext) {
         return Column(
           mainAxisSize: MainAxisSize.min,

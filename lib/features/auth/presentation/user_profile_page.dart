@@ -75,47 +75,56 @@ class _UserProfilePageState extends State<UserProfilePage> {
     final horizontal = AppSpacing.pageHorizontal(context);
     final bottomSafe = MediaQuery.viewPaddingOf(context).bottom;
 
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('账号信息'),
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back),
-          onPressed: () {
-            if (context.canPop()) {
-              context.pop();
-              return;
-            }
-            context.go('/mine');
-          },
+    return PopScope<void>(
+      canPop: context.canPop(),
+      onPopInvokedWithResult: (didPop, _) {
+        if (didPop || !context.mounted) {
+          return;
+        }
+        context.go('/mine');
+      },
+      child: Scaffold(
+        appBar: AppBar(
+          title: const Text('账号信息'),
+          leading: IconButton(
+            icon: const Icon(Icons.arrow_back),
+            onPressed: () {
+              if (context.canPop()) {
+                context.pop();
+                return;
+              }
+              context.go('/mine');
+            },
+          ),
         ),
-      ),
-      body: LayoutBuilder(
-        builder: (context, _) {
-          final maxWidth = AppLayout.pageContentMaxWidth(
-            context,
-            maxWidth: AppLayout.systemSettingsContentMaxWidth,
-          );
+        body: LayoutBuilder(
+          builder: (context, _) {
+            final maxWidth = AppLayout.pageContentMaxWidth(
+              context,
+              maxWidth: AppLayout.systemSettingsContentMaxWidth,
+            );
 
-          return Align(
-            alignment: Alignment.topCenter,
-            child: ConstrainedBox(
-              constraints: BoxConstraints(maxWidth: maxWidth),
-              child: RefreshIndicator(
-                onRefresh: _refreshPage,
-                child: ListView(
-                  physics: const AlwaysScrollableScrollPhysics(),
-                  padding: EdgeInsets.fromLTRB(
-                    horizontal,
-                    12,
-                    horizontal,
-                    16 + bottomSafe,
+            return Align(
+              alignment: Alignment.topCenter,
+              child: ConstrainedBox(
+                constraints: BoxConstraints(maxWidth: maxWidth),
+                child: RefreshIndicator(
+                  onRefresh: _refreshPage,
+                  child: ListView(
+                    physics: const AlwaysScrollableScrollPhysics(),
+                    padding: EdgeInsets.fromLTRB(
+                      horizontal,
+                      12,
+                      horizontal,
+                      16 + bottomSafe,
+                    ),
+                    children: _buildContent(context),
                   ),
-                  children: _buildContent(context),
                 ),
               ),
-            ),
-          );
-        },
+            );
+          },
+        ),
       ),
     );
   }
