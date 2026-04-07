@@ -44,6 +44,10 @@
 - 文本分页或滚动渲染
 - 章节预加载
 - 阅读设置和进度持久化
+- 阅读器页面壳层后续统一按三层维护：
+  - `ReaderShell`
+  - `ReaderContentSession`
+  - `ReadingMode`
 
 ## 5. 代码规范
 

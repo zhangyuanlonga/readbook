@@ -226,9 +226,7 @@ final GoRouter appRouter = GoRouter(
             key: state.pageKey,
             transitionDuration: const Duration(milliseconds: 320),
             reverseTransitionDuration: const Duration(milliseconds: 220),
-            child: SearchPage(
-              hideTopSearchBar: state.uri.queryParameters['entry'] == 'dock',
-            ),
+            child: const SearchPage(),
             transitionsBuilder: (
               context,
               animation,

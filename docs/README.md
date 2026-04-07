@@ -18,6 +18,8 @@
   UI、自适应、阅读体验、字体和主题，包含当前断点和布局规则。
 - `docs/reader_refactor_task_plan.md`
   阅读器结构改造计划，包含统一文本内核、分页/滚动委托、设置分层和验收清单。
+- `docs/reader_multimodal_plan.md`
+  阅读器多内容形态统一规划，覆盖文本、漫画与未来听书模式的壳层、状态、界面与动画分层。
 - `docs/product_features_guide.md`
   阅读记录、书签、缓存、自定义规则和本地阅读。
 - `docs/engineering_delivery_guide.md`

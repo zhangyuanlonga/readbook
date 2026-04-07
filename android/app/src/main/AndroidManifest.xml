@@ -34,6 +34,15 @@
                     android:mimeType="application/json" />
                 <data
                     android:scheme="content"
+                    android:mimeType="application/javascript" />
+                <data
+                    android:scheme="content"
+                    android:mimeType="text/javascript" />
+                <data
+                    android:scheme="content"
+                    android:mimeType="application/x-javascript" />
+                <data
+                    android:scheme="content"
                     android:mimeType="text/plain" />
                 <data
                     android:scheme="content"
@@ -41,6 +50,15 @@
                 <data
                     android:scheme="file"
                     android:mimeType="application/json" />
+                <data
+                    android:scheme="file"
+                    android:mimeType="application/javascript" />
+                <data
+                    android:scheme="file"
+                    android:mimeType="text/javascript" />
+                <data
+                    android:scheme="file"
+                    android:mimeType="application/x-javascript" />
                 <data
                     android:scheme="file"
                     android:mimeType="text/plain" />
@@ -52,6 +70,9 @@
                 <action android:name="android.intent.action.SEND" />
                 <category android:name="android.intent.category.DEFAULT" />
                 <data android:mimeType="application/json" />
+                <data android:mimeType="application/javascript" />
+                <data android:mimeType="text/javascript" />
+                <data android:mimeType="application/x-javascript" />
                 <data android:mimeType="text/plain" />
                 <data android:mimeType="application/octet-stream" />
             </intent-filter>
@@ -59,6 +80,9 @@
                 <action android:name="android.intent.action.SEND_MULTIPLE" />
                 <category android:name="android.intent.category.DEFAULT" />
                 <data android:mimeType="application/json" />
+                <data android:mimeType="application/javascript" />
+                <data android:mimeType="text/javascript" />
+                <data android:mimeType="application/x-javascript" />
                 <data android:mimeType="text/plain" />
                 <data android:mimeType="application/octet-stream" />
             </intent-filter>

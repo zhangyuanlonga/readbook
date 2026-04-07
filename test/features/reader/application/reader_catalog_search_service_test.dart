@@ -35,6 +35,7 @@ void main() {
         keyword: '第一',
         chapters: chapters,
         currentChapterIndex: 0,
+        supportsContentSearch: true,
         chapterContent: '第一段正文命中关键词',
         chapterParagraphs: const ['第一段正文命中关键词', '第二段正文'],
         chapterDocument: document,
@@ -58,6 +59,7 @@ void main() {
       final first = service.lookup(
         keyword: keyword,
         state: const ReaderCatalogSearchCacheState(),
+        supportsContentSearch: true,
         chapterId: 'chapter_1',
         chapterUrl: 'https://example.com/1',
         currentChapterIndex: 0,
@@ -71,6 +73,7 @@ void main() {
       final second = service.lookup(
         keyword: keyword,
         state: first.state,
+        supportsContentSearch: true,
         chapterId: 'chapter_1',
         chapterUrl: 'https://example.com/1',
         currentChapterIndex: 0,
@@ -92,6 +95,7 @@ void main() {
       final first = service.lookup(
         keyword: keyword,
         state: const ReaderCatalogSearchCacheState(),
+        supportsContentSearch: true,
         chapterId: 'chapter_1',
         chapterUrl: 'https://example.com/1',
         currentChapterIndex: 0,
@@ -107,6 +111,7 @@ void main() {
       final second = service.lookup(
         keyword: keyword,
         state: first.state,
+        supportsContentSearch: true,
         chapterId: 'chapter_1',
         chapterUrl: 'https://example.com/1',
         currentChapterIndex: 0,
@@ -145,6 +150,7 @@ void main() {
           ),
         ],
         currentChapterIndex: null,
+        supportsContentSearch: true,
         chapterContent: '',
         chapterParagraphs: const <String>[],
         chapterDocument: ReaderDocument(blocks: const <ReaderBlock>[]),
@@ -173,6 +179,7 @@ void main() {
             ),
           ],
           currentChapterIndex: null,
+          supportsContentSearch: true,
           chapterContent: '',
           chapterParagraphs: const <String>[],
           chapterDocument: ReaderDocument(blocks: const <ReaderBlock>[]),
@@ -185,5 +192,25 @@ void main() {
         expect(entries.first.targetChapterIndex, isNull);
       },
     );
+
+    test('comic mode only searches toc titles', () {
+      final document = ReaderDocument(
+        blocks: const [ReaderTextBlock(text: '这里正文包含关键词')],
+      );
+
+      final entries = service.buildFullTextSearchEntries(
+        keyword: '关键词',
+        chapters: chapters,
+        currentChapterIndex: 0,
+        supportsContentSearch: false,
+        chapterContent: '这里正文包含关键词',
+        chapterParagraphs: const ['这里正文包含关键词'],
+        chapterDocument: document,
+        isPagedTextReaderEnabled: false,
+        currentPageIndex: 0,
+      );
+
+      expect(entries.where((entry) => entry.isContent), isEmpty);
+    });
   });
 }

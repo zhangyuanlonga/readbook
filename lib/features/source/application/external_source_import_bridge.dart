@@ -118,6 +118,10 @@ class ExternalImportBridge {
       final raw = await _channel.invokeMethod<dynamic>(
         _methodCacheExternalFileFromUri,
         <String, dynamic>{
+          'type': switch (payload.type) {
+            ExternalImportPayloadType.localBook => 'localBook',
+            ExternalImportPayloadType.scriptSource => 'scriptSource',
+          },
           'uri': payload.uri,
           'label': payload.label,
           'mimeType': payload.mimeType,

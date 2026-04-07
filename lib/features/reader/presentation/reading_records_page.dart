@@ -12,11 +12,11 @@ import '../../../domain/entities/reading_record.dart';
 import '../../../domain/entities/reading_record_day.dart';
 import '../../../domain/entities/reading_record_session.dart';
 import '../../book/presentation/book_detail_route.dart';
+import '../application/reader_entry_route_resolver.dart';
 import '../application/reader_preferences_service.dart';
 import '../application/reading_records_query_service.dart';
 import '../application/reading_record_service.dart';
 import '../application/reader_system_settings_service.dart';
-import 'reader_route.dart';
 
 enum _ReadingRecordsView { latest, daily, timeline }
 
@@ -47,6 +47,8 @@ class _ReadingRecordsPageState extends State<ReadingRecordsPage> {
   late final ReadingRecordService _readingRecordService;
   final ReadingRecordsQueryService _readingRecordsQueryService =
       const ReadingRecordsQueryService();
+  final ReaderEntryRouteResolver _readerEntryRouteResolver =
+      const ReaderEntryRouteResolver();
   late final ReaderPreferencesService _preferencesService;
   late final ReaderSystemSettingsService _readerSystemSettingsService;
   late final Stream<bool> _readRecordEnabledStream;
@@ -135,7 +137,7 @@ class _ReadingRecordsPageState extends State<ReadingRecordsPage> {
     final chapterIndex = progress?.chapterIndex ?? record.lastChapterIndex;
 
     if (chapterId.isNotEmpty && chapterUrl.isNotEmpty) {
-      final route = buildReaderRoute(
+      final route = _readerEntryRouteResolver.buildChapterRoute(
         bookId: record.bookId,
         chapterId: chapterId,
         chapterUrl: chapterUrl,
@@ -164,7 +166,7 @@ class _ReadingRecordsPageState extends State<ReadingRecordsPage> {
     final chapterTitle = session.chapterTitle?.trim();
 
     if (chapterId.isNotEmpty && chapterUrl.isNotEmpty) {
-      final route = buildReaderRoute(
+      final route = _readerEntryRouteResolver.buildChapterRoute(
         bookId: session.bookId,
         chapterId: chapterId,
         chapterUrl: chapterUrl,

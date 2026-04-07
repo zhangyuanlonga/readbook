@@ -42,6 +42,7 @@ Future<ReaderCatalogSheetResult?> showReaderCatalogSheet({
   required ThemeData readerModalTheme,
   required List<Chapter> chapters,
   required int? currentChapterIndex,
+  required bool supportsContentSearch,
   required BookmarkRepository bookmarkRepository,
   required String currentBookId,
   required List<ReaderCatalogSearchEntry>? Function(String normalizedKeyword)
@@ -287,7 +288,10 @@ Future<ReaderCatalogSheetResult?> showReaderCatalogSheet({
                                   isDense: true,
                                   filled: true,
                                   fillColor: colorScheme.surface,
-                                  hintText: '搜索目录标题或当前章节正文',
+                                  hintText:
+                                      supportsContentSearch
+                                          ? '搜索目录标题或当前章节正文'
+                                          : '搜索目录标题',
                                   prefixIcon: Icon(
                                     Icons.search_rounded,
                                     size: 17,
@@ -383,7 +387,9 @@ Future<ReaderCatalogSheetResult?> showReaderCatalogSheet({
                                   ),
                                   const SizedBox(height: 8),
                                   Text(
-                                    '当前仅支持搜索目录标题与本章正文。',
+                                    supportsContentSearch
+                                        ? '当前仅支持搜索目录标题与本章正文。'
+                                        : '当前模式仅支持搜索目录标题。',
                                     textAlign: TextAlign.center,
                                     style: textTheme.bodySmall?.copyWith(
                                       color: colorScheme.onSurfaceVariant,

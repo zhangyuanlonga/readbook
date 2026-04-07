@@ -26,6 +26,7 @@ class MainActivity : FlutterActivity() {
         private const val METHOD_SET_INTERCEPT_VOLUME_KEYS = "setInterceptVolumeKeys"
         private const val DEFAULT_PAYLOAD_LABEL = "外部导入"
         private const val PAYLOAD_TYPE_LOCAL_BOOK = "localBook"
+        private const val PAYLOAD_TYPE_SCRIPT_SOURCE = "scriptSource"
     }
 
     private var sourceImportMethodChannel: MethodChannel? = null
@@ -212,6 +213,12 @@ class MainActivity : FlutterActivity() {
                 "label" to label,
                 "mimeType" to (mimeType ?: ""),
             )
+            PAYLOAD_TYPE_SCRIPT_SOURCE -> mapOf(
+                "type" to PAYLOAD_TYPE_SCRIPT_SOURCE,
+                "uri" to uri.toString(),
+                "label" to label,
+                "mimeType" to (mimeType ?: ""),
+            )
             else -> null
         }
     }
@@ -246,6 +253,17 @@ class MainActivity : FlutterActivity() {
         val extension = label.substringAfterLast('.', "").lowercase(Locale.ROOT)
         val normalizedMimeType = mimeType?.lowercase(Locale.ROOT)
 
+        if (
+            extension == "js" ||
+            extension == "mjs" ||
+            extension == "json" ||
+            normalizedMimeType == "application/javascript" ||
+            normalizedMimeType == "text/javascript" ||
+            normalizedMimeType == "application/x-javascript" ||
+            normalizedMimeType == "application/json"
+        ) {
+            return PAYLOAD_TYPE_SCRIPT_SOURCE
+        }
         if (extension == "epub" || normalizedMimeType == "application/epub+zip") {
             return PAYLOAD_TYPE_LOCAL_BOOK
         }
@@ -259,10 +277,11 @@ class MainActivity : FlutterActivity() {
         val args = arguments as? Map<*, *> ?: return null
         val rawUri = args["uri"]?.toString()?.trim().takeUnless { it.isNullOrEmpty() } ?: return null
         val uri = Uri.parse(rawUri)
+        val type = args["type"]?.toString()?.trim()
         val rawLabel = args["label"]?.toString()?.trim()
         val label = if (rawLabel.isNullOrEmpty()) resolvePayloadLabel(uri) else rawLabel
         val mimeType = args["mimeType"]?.toString()?.trim().takeUnless { it.isNullOrEmpty() } ?: resolveMimeType(uri, null)
-        val extension = resolveLocalBookExtension(label, mimeType)
+        val extension = resolveExternalImportExtension(type, label, mimeType)
         if (extension == null) {
             return null
         }
@@ -297,6 +316,15 @@ class MainActivity : FlutterActivity() {
         )
     }
 
+    private fun resolveExternalImportExtension(type: String?, label: String, mimeType: String?): String? {
+        return when (type?.trim()) {
+            PAYLOAD_TYPE_SCRIPT_SOURCE -> resolveScriptSourceExtension(label, mimeType)
+            PAYLOAD_TYPE_LOCAL_BOOK -> resolveLocalBookExtension(label, mimeType)
+            else -> resolveScriptSourceExtension(label, mimeType)
+                ?: resolveLocalBookExtension(label, mimeType)
+        }
+    }
+
     private fun resolveLocalBookExtension(label: String, mimeType: String?): String? {
         val lowerLabel = label.lowercase(Locale.ROOT)
         return when {
@@ -305,6 +333,21 @@ class MainActivity : FlutterActivity() {
             mimeType.equals("application/epub+zip", ignoreCase = true) -> ".epub"
             mimeType.equals("text/plain", ignoreCase = true) ||
                 mimeType.equals("application/octet-stream", ignoreCase = true) -> ".txt"
+            else -> null
+        }
+    }
+
+    private fun resolveScriptSourceExtension(label: String, mimeType: String?): String? {
+        val lowerLabel = label.lowercase(Locale.ROOT)
+        return when {
+            lowerLabel.endsWith(".mjs") -> ".mjs"
+            lowerLabel.endsWith(".js") -> ".js"
+            lowerLabel.endsWith(".json") -> ".json"
+            lowerLabel.endsWith(".txt") -> ".txt"
+            mimeType.equals("application/javascript", ignoreCase = true) ||
+                mimeType.equals("text/javascript", ignoreCase = true) ||
+                mimeType.equals("application/x-javascript", ignoreCase = true) -> ".js"
+            mimeType.equals("application/json", ignoreCase = true) -> ".json"
             else -> null
         }
     }

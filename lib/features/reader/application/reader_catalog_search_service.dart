@@ -50,6 +50,7 @@ class ReaderCatalogSearchService {
   ReaderCatalogSearchLookupResult lookup({
     required String keyword,
     required ReaderCatalogSearchCacheState state,
+    required bool supportsContentSearch,
     required String chapterId,
     required String? chapterUrl,
     required int? currentChapterIndex,
@@ -66,6 +67,7 @@ class ReaderCatalogSearchService {
       chapterUrl: chapterUrl,
       currentChapterIndex: currentChapterIndex,
       chapters: chapters,
+      supportsContentSearch: supportsContentSearch,
       chapterContent: chapterContent,
       chapterParagraphCount: chapterParagraphs.length,
     );
@@ -96,6 +98,7 @@ class ReaderCatalogSearchService {
         keyword: keyword,
         chapters: chapters,
         currentChapterIndex: currentChapterIndex,
+        supportsContentSearch: supportsContentSearch,
         chapterContent: chapterContent,
         chapterParagraphs: chapterParagraphs,
         chapterDocument: chapterDocument,
@@ -120,6 +123,7 @@ class ReaderCatalogSearchService {
     required String keyword,
     required List<Chapter> chapters,
     required int? currentChapterIndex,
+    required bool supportsContentSearch,
     required String chapterContent,
     required List<String> chapterParagraphs,
     required ReaderDocument chapterDocument,
@@ -159,7 +163,9 @@ class ReaderCatalogSearchService {
       }
     }
 
-    if (currentChapterIndex == null || chapterContent.trim().isEmpty) {
+    if (!supportsContentSearch ||
+        currentChapterIndex == null ||
+        chapterContent.trim().isEmpty) {
       return entries;
     }
 
@@ -226,6 +232,7 @@ class ReaderCatalogSearchService {
     required String? chapterUrl,
     required int? currentChapterIndex,
     required List<Chapter> chapters,
+    required bool supportsContentSearch,
     required String chapterContent,
     required int chapterParagraphCount,
   }) {
@@ -236,6 +243,7 @@ class ReaderCatalogSearchService {
       chapterUrl ?? '',
       (currentChapterIndex ?? -1).toString(),
       chapters.length.toString(),
+      supportsContentSearch ? 'content:on' : 'content:off',
       firstChapterId,
       lastChapterId,
       chapterContent.hashCode.toString(),

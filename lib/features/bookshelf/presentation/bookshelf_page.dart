@@ -25,8 +25,8 @@ import '../application/bookshelf_service.dart';
 import '../application/bookshelf_system_settings_service.dart';
 import '../application/local_book_import_service.dart';
 import '../../reader/application/reader_preferences_service.dart';
+import '../../reader/application/reader_entry_route_resolver.dart';
 import '../../reader/application/local/local_book_index_service.dart';
-import '../../reader/presentation/reader_route.dart';
 import '../../book/application/book_detail_service.dart';
 import '../../book/presentation/book_detail_route.dart';
 import '../../announcement/application/announcement_service.dart';
@@ -93,6 +93,8 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
       BookshelfSystemSettingsService();
   final ReaderPreferencesService _readerPreferencesService =
       ReaderPreferencesService();
+  final ReaderEntryRouteResolver _readerEntryRouteResolver =
+      const ReaderEntryRouteResolver();
   final LocalBookIndexService _localBookIndexService = LocalBookIndexService();
   final BookDetailService _bookDetailService = BookDetailService();
   final ImageSelectionService _imageSelectionService = ImageSelectionService();
@@ -791,6 +793,7 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
           _isBatchDeleting ? null : () => unawaited(_showFilterSheet()),
     );
   }
+
   Future<T?> _showBookshelfBottomSheet<T>({
     required WidgetBuilder builder,
     bool isScrollControlled = false,
@@ -810,7 +813,6 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
     final gestureInsets = MediaQuery.systemGestureInsetsOf(context).bottom;
     return math.max(viewPadding, gestureInsets);
   }
-
 
   Future<void> _showFilterSheet() async {
     if (_isBatchDeleting || !mounted) {
@@ -847,8 +849,8 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
     final selected = await _showBookshelfBottomSheet<String>(
       isScrollControlled: true,
       builder: (sheetContext) {
-        final bottomInset = _bookshelfBottomSafeInset(sheetContext);
         final maxHeight = MediaQuery.sizeOf(sheetContext).height * 0.72;
+        final bottomInset = _bookshelfBottomSafeInset(sheetContext);
         return StatefulBuilder(
           builder: (sheetContext, setSheetState) {
             final colorScheme = Theme.of(sheetContext).colorScheme;
@@ -2127,7 +2129,7 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
       builder: (sheetContext) {
         final colorScheme = Theme.of(sheetContext).colorScheme;
         final horizontal = AppSpacing.pageHorizontal(sheetContext);
-        final bottomInset = MediaQuery.viewPaddingOf(sheetContext).bottom;
+        final bottomInset = _bookshelfBottomSafeInset(sheetContext);
         final progressDisplay = _resolveBookshelfProgressDisplay(
           book,
           progress: progress,
@@ -2302,8 +2304,8 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
                   ],
                   Expanded(
                     child: _BookSheetActionButton(
-                      icon: Icons.drive_file_move_rounded,
-                      label: '移动分组',
+                      icon: Icons.label_rounded,
+                      label: '整理书架',
                       onTap:
                           () => Navigator.of(
                             sheetContext,
@@ -2411,20 +2413,70 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
   }
 
   Future<void> _showBookTagSheet(BookshelfBook book) async {
+    await _showBookOrganizeSheet(book);
+  }
+
+  Future<void> _showMoveGroupSheet(BookshelfBook book) async {
+    await _showBookOrganizeSheet(book);
+  }
+
+  Future<void> _showBookOrganizeSheet(BookshelfBook book) async {
     final bookKey = _bookKey(book);
-    final initialSelected = List<String>.from(
+    final existingTags = List<String>.from(
       _bookTagsByKey[bookKey] ?? const <String>[],
     );
-    final allTags = List<String>.from(_userTags);
-    final selectedTags = List<String>.from(initialSelected);
+    var selectedGroup = existingTags.isEmpty ? null : existingTags.first;
+    var extraTags = _normalizeTags(
+      existingTags.skip(existingTags.isEmpty ? 0 : 1),
+    );
+    var allTags = _normalizeTags(<String>[..._userTags, ...existingTags]);
 
     final selected = await _showBookshelfBottomSheet<List<String>>(
       isScrollControlled: true,
       builder: (sheetContext) {
         final horizontal = AppSpacing.pageHorizontal(sheetContext);
-        final bottomInset = MediaQuery.viewInsetsOf(sheetContext).bottom;
+        final bottomInset = math.max(
+          MediaQuery.viewInsetsOf(sheetContext).bottom,
+          _bookshelfBottomSafeInset(sheetContext),
+        );
+        final maxHeight = MediaQuery.sizeOf(sheetContext).height * 0.76;
         return StatefulBuilder(
-          builder: (sheetContext, setModalState) {
+          builder: (sheetContext, setSheetState) {
+            final chipTags = allTags
+                .where((tag) => tag != selectedGroup)
+                .toList(growable: false);
+
+            Future<void> createGroup() async {
+              final created = await _showCreateGroupDialog(
+                sheetContext,
+                existingTags: <String>{...allTags, ...extraTags},
+              );
+              if (created == null || !mounted) {
+                return;
+              }
+              setSheetState(() {
+                allTags = _normalizeTags(<String>[...allTags, created]);
+                selectedGroup = created;
+                extraTags = extraTags.where((tag) => tag != created).toList();
+              });
+            }
+
+            Future<void> createTag() async {
+              final created = await _showCreateTagDialog(
+                sheetContext,
+                existingTags: <String>{...allTags, ...extraTags},
+              );
+              if (created == null || !mounted) {
+                return;
+              }
+              setSheetState(() {
+                allTags = _normalizeTags(<String>[...allTags, created]);
+                if (created != selectedGroup && !extraTags.contains(created)) {
+                  extraTags = <String>[...extraTags, created];
+                }
+              });
+            }
+
             return Padding(
               padding: EdgeInsets.fromLTRB(
                 horizontal,
@@ -2432,212 +2484,14 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
                 horizontal,
                 12 + bottomInset,
               ),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    '设置标签',
-                    style: Theme.of(sheetContext).textTheme.titleMedium
-                        ?.copyWith(fontWeight: FontWeight.w700),
-                  ),
-                  const SizedBox(height: 4),
-                  Text(
-                    _toSingleLineText(book.title),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: Theme.of(sheetContext).textTheme.bodySmall?.copyWith(
-                      color:
-                          Theme.of(sheetContext).colorScheme.onSurfaceVariant,
-                    ),
-                  ),
-                  const SizedBox(height: 12),
-                  Wrap(
-                    spacing: 8,
-                    runSpacing: 8,
-                    children: [
-                      ...allTags.map((tag) {
-                        return FilterChip(
-                          label: Text(tag),
-                          selected: selectedTags.contains(tag),
-                          onSelected: (enabled) {
-                            setModalState(() {
-                              if (enabled) {
-                                if (!selectedTags.contains(tag)) {
-                                  selectedTags.add(tag);
-                                }
-                              } else {
-                                selectedTags.remove(tag);
-                              }
-                            });
-                          },
-                        );
-                      }),
-                      ActionChip(
-                        avatar: const Icon(Icons.add_rounded, size: 16),
-                        label: const Text('新增标签'),
-                        onPressed: () async {
-                          final created = await _showCreateTagDialog(
-                            sheetContext,
-                            existingTags: <String>{...allTags, ...selectedTags},
-                          );
-                          if (created == null || !mounted) {
-                            return;
-                          }
-                          setModalState(() {
-                            if (!allTags.contains(created)) {
-                              allTags.add(created);
-                            }
-                            if (!selectedTags.contains(created)) {
-                              selectedTags.add(created);
-                            }
-                          });
-                        },
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 14),
-                  Row(
-                    children: [
-                      Expanded(
-                        child: OutlinedButton(
-                          onPressed: () => Navigator.of(sheetContext).pop(),
-                          child: const Text('取消'),
-                        ),
-                      ),
-                      const SizedBox(width: 10),
-                      Expanded(
-                        child: FilledButton(
-                          onPressed:
-                              () => Navigator.of(
-                                sheetContext,
-                              ).pop(_normalizeTags(selectedTags)),
-                          child: const Text('保存'),
-                        ),
-                      ),
-                    ],
-                  ),
-                ],
-              ),
-            );
-          },
-        );
-      },
-    );
-
-    if (!mounted || selected == null) {
-      return;
-    }
-
-    final normalized = _normalizeTags(selected);
-    final previous = _bookTagsByKey[bookKey] ?? const <String>[];
-    final unchanged =
-        previous.length == normalized.length &&
-        previous.every((tag) => normalized.contains(tag));
-    if (unchanged) {
-      return;
-    }
-
-    try {
-      await _bookshelfService.setBookTags(
-        sourceId: book.sourceId,
-        detailUrl: book.detailUrl,
-        tags: normalized,
-      );
-      if (!mounted) {
-        return;
-      }
-      setState(() {
-        final next = Map<String, List<String>>.from(_bookTagsByKey);
-        if (normalized.isEmpty) {
-          next.remove(bookKey);
-        } else {
-          next[bookKey] = normalized;
-        }
-        _bookTagsByKey = next;
-        _ensureFilterStillValid();
-      });
-      _showMessage(normalized.isEmpty ? '已清除标签。' : '标签已保存。');
-    } catch (_) {
-      _showMessage('标签保存失败，请重试。');
-    }
-  }
-
-  Future<void> _showMoveGroupSheet(BookshelfBook book) async {
-    final bookKey = _bookKey(book);
-    final existingTags = List<String>.from(
-      _bookTagsByKey[bookKey] ?? const <String>[],
-    );
-    String? selectedGroup = existingTags.isEmpty ? null : existingTags.first;
-    final groups = List<String>.from(_userTags);
-    if (selectedGroup != null && !groups.contains(selectedGroup)) {
-      groups.insert(0, selectedGroup);
-    }
-    final createGroupController = TextEditingController();
-    String? createGroupErrorText;
-    var showCreateGroupInput = groups.isEmpty;
-
-    var submitted = false;
-    String? selected;
-    try {
-      selected = await _showBookshelfBottomSheet<String?>(
-        isScrollControlled: true,
-        builder: (sheetContext) {
-          final horizontal = AppSpacing.pageHorizontal(sheetContext);
-          final bottomInset = MediaQuery.viewInsetsOf(sheetContext).bottom;
-          return StatefulBuilder(
-            builder: (sheetContext, setSheetState) {
-              void toggleCreateGroupInput() {
-                setSheetState(() {
-                  showCreateGroupInput = !showCreateGroupInput;
-                  createGroupErrorText = null;
-                  if (!showCreateGroupInput) {
-                    createGroupController.clear();
-                  }
-                });
-              }
-
-              void createGroup() {
-                final normalized = _normalizeTags([createGroupController.text]);
-                if (normalized.isEmpty) {
-                  setSheetState(() {
-                    createGroupErrorText = '请输入分组名称';
-                    showCreateGroupInput = true;
-                  });
-                  return;
-                }
-
-                final created = normalized.first;
-                if (groups.contains(created)) {
-                  setSheetState(() {
-                    createGroupErrorText = '该分组已存在';
-                    showCreateGroupInput = true;
-                  });
-                  return;
-                }
-
-                setSheetState(() {
-                  groups.add(created);
-                  selectedGroup = created;
-                  createGroupController.clear();
-                  createGroupErrorText = null;
-                  showCreateGroupInput = false;
-                });
-              }
-
-              return Padding(
-                padding: EdgeInsets.fromLTRB(
-                  horizontal,
-                  4,
-                  horizontal,
-                  12 + bottomInset,
-                ),
+              child: ConstrainedBox(
+                constraints: BoxConstraints(maxHeight: maxHeight),
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      '移动分组',
+                      '整理书架',
                       style: Theme.of(sheetContext).textTheme.titleMedium
                           ?.copyWith(fontWeight: FontWeight.w700),
                     ),
@@ -2653,72 +2507,127 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
                             Theme.of(sheetContext).colorScheme.onSurfaceVariant,
                       ),
                     ),
-                    const SizedBox(height: 10),
-                    RadioGroup<String?>(
-                      groupValue: selectedGroup,
-                      onChanged: (value) {
-                        setSheetState(() {
-                          selectedGroup = value;
-                        });
-                      },
-                      child: Column(
-                        mainAxisSize: MainAxisSize.min,
+                    const SizedBox(height: 14),
+                    Flexible(
+                      child: ListView(
+                        shrinkWrap: true,
                         children: [
-                          const RadioListTile<String?>(
-                            value: null,
-                            contentPadding: EdgeInsets.zero,
-                            title: Text('未分组'),
+                          Text(
+                            '所属分组',
+                            style: Theme.of(sheetContext).textTheme.labelLarge
+                                ?.copyWith(fontWeight: FontWeight.w700),
                           ),
-                          ...groups.map(
-                            (group) => RadioListTile<String?>(
-                              value: group,
-                              contentPadding: EdgeInsets.zero,
-                              title: Text(group),
+                          const SizedBox(height: 8),
+                          _MoveGroupOptionTile(
+                            label: '未分组',
+                            selected: selectedGroup == null,
+                            onTap: () {
+                              setSheetState(() {
+                                selectedGroup = null;
+                              });
+                            },
+                          ),
+                          ...allTags.map(
+                            (group) => _MoveGroupOptionTile(
+                              label: group,
+                              selected: selectedGroup == group,
+                              onTap: () {
+                                setSheetState(() {
+                                  selectedGroup = group;
+                                  extraTags = extraTags
+                                      .where((tag) => tag != group)
+                                      .toList(growable: false);
+                                });
+                              },
+                            ),
+                          ),
+                          const SizedBox(height: 4),
+                          Align(
+                            alignment: Alignment.centerLeft,
+                            child: TextButton.icon(
+                              onPressed: createGroup,
+                              icon: const Icon(Icons.add_rounded),
+                              label: const Text('新建分组'),
+                            ),
+                          ),
+                          const SizedBox(height: 8),
+                          Text(
+                            '附加标签',
+                            style: Theme.of(sheetContext).textTheme.labelLarge
+                                ?.copyWith(fontWeight: FontWeight.w700),
+                          ),
+                          const SizedBox(height: 8),
+                          if (chipTags.isEmpty)
+                            Container(
+                              width: double.infinity,
+                              padding: const EdgeInsets.fromLTRB(
+                                12,
+                                12,
+                                12,
+                                12,
+                              ),
+                              decoration: BoxDecoration(
+                                color:
+                                    Theme.of(
+                                      sheetContext,
+                                    ).colorScheme.surfaceContainerLow,
+                                borderRadius: BorderRadius.circular(14),
+                              ),
+                              child: Text(
+                                '暂无可选标签，可先新建一个标签。',
+                                style: Theme.of(
+                                  sheetContext,
+                                ).textTheme.bodySmall?.copyWith(
+                                  color:
+                                      Theme.of(
+                                        sheetContext,
+                                      ).colorScheme.onSurfaceVariant,
+                                ),
+                              ),
+                            )
+                          else
+                            Wrap(
+                              spacing: 8,
+                              runSpacing: 8,
+                              children: chipTags
+                                  .map((tag) {
+                                    final selected = extraTags.contains(tag);
+                                    return FilterChip(
+                                      label: Text(tag),
+                                      selected: selected,
+                                      onSelected: (enabled) {
+                                        setSheetState(() {
+                                          if (enabled) {
+                                            if (!extraTags.contains(tag)) {
+                                              extraTags = <String>[
+                                                ...extraTags,
+                                                tag,
+                                              ];
+                                            }
+                                          } else {
+                                            extraTags = extraTags
+                                                .where((value) => value != tag)
+                                                .toList(growable: false);
+                                          }
+                                        });
+                                      },
+                                    );
+                                  })
+                                  .toList(growable: false),
+                            ),
+                          const SizedBox(height: 8),
+                          Align(
+                            alignment: Alignment.centerLeft,
+                            child: TextButton.icon(
+                              onPressed: createTag,
+                              icon: const Icon(Icons.add_reaction_outlined),
+                              label: const Text('新增标签'),
                             ),
                           ),
                         ],
                       ),
                     ),
-                    Align(
-                      alignment: Alignment.centerLeft,
-                      child: TextButton.icon(
-                        onPressed: toggleCreateGroupInput,
-                        icon: Icon(
-                          showCreateGroupInput
-                              ? Icons.keyboard_arrow_up_rounded
-                              : Icons.add_rounded,
-                        ),
-                        label: Text(showCreateGroupInput ? '收起新建分组' : '新建分组'),
-                      ),
-                    ),
-                    if (showCreateGroupInput) ...[
-                      const SizedBox(height: 6),
-                      TextField(
-                        controller: createGroupController,
-                        autofocus: true,
-                        maxLength: 12,
-                        decoration: InputDecoration(
-                          labelText: '分组名称',
-                          hintText: '例如：在读 / 已完结',
-                          errorText: createGroupErrorText,
-                          suffixIcon: IconButton(
-                            tooltip: '添加分组',
-                            onPressed: createGroup,
-                            icon: const Icon(Icons.check_rounded),
-                          ),
-                        ),
-                        onChanged: (_) {
-                          if (createGroupErrorText == null) {
-                            return;
-                          }
-                          setSheetState(() {
-                            createGroupErrorText = null;
-                          });
-                        },
-                        onSubmitted: (_) => createGroup(),
-                      ),
-                    ],
-                    const SizedBox(height: 8),
+                    const SizedBox(height: 10),
                     Row(
                       children: [
                         Expanded(
@@ -2731,31 +2640,34 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
                         Expanded(
                           child: FilledButton(
                             onPressed: () {
-                              submitted = true;
-                              Navigator.of(sheetContext).pop(selectedGroup);
+                              Navigator.of(sheetContext).pop(
+                                _normalizeTags(<String>[
+                                  if (selectedGroup != null) selectedGroup!,
+                                  ...extraTags.where(
+                                    (tag) => tag != selectedGroup,
+                                  ),
+                                ]),
+                              );
                             },
-                            child: const Text('应用'),
+                            child: const Text('保存'),
                           ),
                         ),
                       ],
                     ),
                   ],
                 ),
-              );
-            },
-          );
-        },
-      );
-    } finally {
-      createGroupController.dispose();
-    }
+              ),
+            );
+          },
+        );
+      },
+    );
 
-    if (!mounted || !submitted) {
+    if (!mounted || selected == null) {
       return;
     }
 
-    final normalizedTags =
-        selected == null ? const <String>[] : _normalizeTags([selected]);
+    final normalizedTags = _normalizeTags(selected);
     final previous = _bookTagsByKey[bookKey] ?? const <String>[];
     final unchanged =
         previous.length == normalizedTags.length &&
@@ -2783,11 +2695,19 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
         _bookTagsByKey = next;
         _ensureFilterStillValid();
       });
-      _showMessage(
-        normalizedTags.isEmpty ? '已移动到未分组。' : '已移动到分组：${normalizedTags.first}',
-      );
+      if (normalizedTags.isEmpty) {
+        _showMessage('已移到未分组并清除标签。');
+      } else {
+        final groupLabel = normalizedTags.first;
+        final extraCount = normalizedTags.length - 1;
+        final summary =
+            extraCount > 0
+                ? '分组：$groupLabel，标签 $extraCount 个。'
+                : '分组：$groupLabel。';
+        _showMessage('书架整理已保存，$summary');
+      }
     } catch (_) {
-      _showMessage('移动分组失败，请重试。');
+      _showMessage('书架整理保存失败，请重试。');
     }
   }
 
@@ -3032,6 +2952,19 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
     return _showTagNameDialog(
       dialogContext,
       title: '新增标签',
+      confirmText: '创建',
+      hintText: '例如：在读 / 已完结',
+      existingTags: existingTags,
+    );
+  }
+
+  Future<String?> _showCreateGroupDialog(
+    BuildContext dialogContext, {
+    required Set<String> existingTags,
+  }) {
+    return _showTagNameDialog(
+      dialogContext,
+      title: '新建分组',
       confirmText: '创建',
       hintText: '例如：在读 / 已完结',
       existingTags: existingTags,
@@ -4187,7 +4120,7 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
             : record.bookTitle.trim();
 
     if (chapterId.isNotEmpty && chapterUrl.isNotEmpty) {
-      final route = buildReaderRoute(
+      final route = _readerEntryRouteResolver.buildChapterRoute(
         bookId: record.bookId,
         chapterId: chapterId,
         chapterUrl: chapterUrl,
@@ -4498,14 +4431,11 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
       }
 
       final chapter = detailResult.chapters.first;
-      final route = buildReaderRoute(
+      final route = _readerEntryRouteResolver.buildRouteFromChapter(
         bookId: chapter.bookId,
-        chapterId: chapter.id,
-        chapterUrl: chapter.chapterUrl,
-        chapterTitle: chapter.title,
         sourceId: book.sourceId,
         detailUrl: book.detailUrl,
-        chapterIndex: chapter.index,
+        chapter: chapter,
       );
 
       context.push(route);
@@ -4608,12 +4538,8 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
       bookId: book.bookId,
       byScene: SourceRuntimeConflictScene.reader,
     );
-    final route = buildReaderRoute(
-      bookId: book.bookId,
-      chapterId: 'bootstrap',
-      sourceId: book.sourceId,
-      detailUrl: book.detailUrl,
-      chapterTitle: book.title,
+    final route = _readerEntryRouteResolver.buildRouteFromBookshelfFallback(
+      book,
     );
     context.push(route);
   }
@@ -4626,15 +4552,7 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
       bookId: progress.bookId,
       byScene: SourceRuntimeConflictScene.reader,
     );
-    final route = buildReaderRoute(
-      bookId: progress.bookId,
-      chapterId: progress.chapterId,
-      chapterUrl: progress.chapterUrl,
-      chapterTitle: progress.chapterTitle,
-      sourceId: progress.sourceId,
-      detailUrl: progress.detailUrl,
-      chapterIndex: progress.chapterIndex,
-    );
+    final route = _readerEntryRouteResolver.buildRouteFromProgress(progress);
 
     context.push(route);
   }
@@ -4758,6 +4676,68 @@ class _BookSheetActionButton extends StatelessWidget {
               ),
             ),
           ],
+        ),
+      ),
+    );
+  }
+}
+
+class _MoveGroupOptionTile extends StatelessWidget {
+  const _MoveGroupOptionTile({
+    required this.label,
+    required this.selected,
+    required this.onTap,
+  });
+
+  final String label;
+  final bool selected;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+    final selectedBg = colorScheme.primaryContainer.withValues(alpha: 0.42);
+    final selectedFg = colorScheme.onPrimaryContainer;
+
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 6),
+      child: Material(
+        color: selected ? selectedBg : colorScheme.surfaceContainerLow,
+        borderRadius: BorderRadius.circular(14),
+        child: InkWell(
+          borderRadius: BorderRadius.circular(14),
+          onTap: onTap,
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
+            child: Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    label,
+                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                      color: selected ? selectedFg : colorScheme.onSurface,
+                      fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
+                    ),
+                  ),
+                ),
+                AnimatedSwitcher(
+                  duration: const Duration(milliseconds: 160),
+                  child:
+                      selected
+                          ? Icon(
+                            Icons.radio_button_checked_rounded,
+                            key: const ValueKey('selected'),
+                            color: colorScheme.primary,
+                          )
+                          : Icon(
+                            Icons.radio_button_off_rounded,
+                            key: const ValueKey('unselected'),
+                            color: colorScheme.onSurfaceVariant,
+                          ),
+                ),
+              ],
+            ),
+          ),
         ),
       ),
     );

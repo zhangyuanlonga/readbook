@@ -13,7 +13,7 @@ import '../../../domain/entities/bookmark.dart';
 import '../../../domain/entities/bookshelf_book.dart';
 import '../../../domain/repositories/bookmark_repository.dart';
 import '../../bookshelf/application/bookshelf_service.dart';
-import '../../reader/presentation/reader_route.dart';
+import '../../reader/application/reader_entry_route_resolver.dart';
 
 class BookmarksPage extends StatefulWidget {
   const BookmarksPage({super.key});
@@ -27,6 +27,8 @@ class _BookmarksPageState extends State<BookmarksPage> {
     AppDatabase.instance,
   );
   final BookshelfService _bookshelfService = BookshelfService();
+  final ReaderEntryRouteResolver _readerEntryRouteResolver =
+      const ReaderEntryRouteResolver();
 
   bool _isLoading = true;
   String? _errorText;
@@ -522,18 +524,11 @@ class _BookmarksPageState extends State<BookmarksPage> {
       return;
     }
 
-    final chapterId =
-        bookmark.chapterId.trim().isEmpty
-            ? 'bootstrap'
-            : bookmark.chapterId.trim();
     context.push(
-      buildReaderRoute(
-        bookId: bookmark.bookId,
-        chapterId: chapterId,
+      _readerEntryRouteResolver.buildRouteFromBookmark(
+        bookmark: bookmark,
         sourceId: book!.sourceId,
         detailUrl: book.detailUrl,
-        chapterIndex: bookmark.chapterIndex,
-        bookmarkId: bookmark.id,
       ),
     );
   }

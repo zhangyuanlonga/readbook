@@ -24,6 +24,8 @@ import '../../../domain/entities/local_book.dart';
 import '../../../domain/entities/reading_progress.dart';
 import '../../bookshelf/application/bookshelf_service.dart';
 import '../../reader/application/content_provider.dart';
+import '../../reader/application/reader_cache_feedback_resolver.dart';
+import '../../reader/application/reader_entry_route_resolver.dart';
 import '../../reader/application/local/local_book_index_service.dart';
 import '../../reader/application/local/local_reader_identity.dart';
 import '../../reader/application/local/local_book_storage_service.dart';
@@ -35,7 +37,6 @@ import '../../reader/application/source_content_provider.dart';
 import '../../reader/application/source_switch_score_service.dart';
 import '../../reader/application/switch_source_shared.dart';
 import '../../reader/presentation/chapter_cache_sheets.dart';
-import '../../reader/presentation/reader_route.dart';
 import '../../search/application/search_hit_cache_service.dart';
 import '../../search/application/search_service.dart';
 import '../../source/application/source_runtime_facade.dart';
@@ -123,6 +124,10 @@ class _BookDetailPageState extends State<BookDetailPage> {
   final ReaderPreferencesService _readerPreferencesService =
       ReaderPreferencesService();
   final ReadingRecordService _readingRecordService = ReadingRecordService();
+  final ReaderEntryRouteResolver _readerEntryRouteResolver =
+      const ReaderEntryRouteResolver();
+  final ReaderCacheFeedbackResolver _readerCacheFeedbackResolver =
+      const ReaderCacheFeedbackResolver();
   final SourceRuntimeTaskConflictService _taskConflictService =
       SourceRuntimeTaskConflictService.instance;
   final SourceRuntimeSchedulerService _taskScheduler =
@@ -551,7 +556,15 @@ class _BookDetailPageState extends State<BookDetailPage> {
       return const SizedBox.shrink();
     }
     if (!_contentCapabilities.canCacheChapter) {
-      return const SizedBox.shrink();
+      return BookDetailActionEntryCard(
+        title: '缓存章节',
+        subtitle: _readerCacheFeedbackResolver.unsupportedSubtitle(
+          isLocalContent: _isLocalContent,
+        ),
+        buttonLabel: '不可用',
+        onPressed: null,
+        enabled: false,
+      );
     }
 
     return StreamBuilder<int>(
@@ -1340,14 +1353,11 @@ class _BookDetailPageState extends State<BookDetailPage> {
     _cancelBackgroundRefreshConflictForCurrentBook(
       byScene: SourceRuntimeConflictScene.reader,
     );
-    final route = buildReaderRoute(
+    final route = _readerEntryRouteResolver.buildRouteFromChapter(
       bookId: _activeBookId,
-      chapterId: chapter.id,
-      chapterUrl: chapter.chapterUrl,
-      chapterTitle: chapter.title,
       sourceId: sourceId,
       detailUrl: detailUrl,
-      chapterIndex: chapter.index,
+      chapter: chapter,
     );
 
     context.push(route);
