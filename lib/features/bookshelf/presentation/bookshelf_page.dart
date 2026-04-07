@@ -45,7 +45,6 @@ enum _BookshelfSheetAction {
   repairLocal,
   select,
   tag,
-  moveGroup,
   customCover,
   delete,
 }
@@ -808,6 +807,10 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
     );
   }
 
+  void _dismissBookshelfBottomSheet<T>(BuildContext context, [T? result]) {
+    Navigator.of(context, rootNavigator: true).pop(result);
+  }
+
   double _bookshelfBottomSafeInset(BuildContext context) {
     final viewPadding = MediaQuery.viewPaddingOf(context).bottom;
     final gestureInsets = MediaQuery.systemGestureInsetsOf(context).bottom;
@@ -904,7 +907,11 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
                         borderRadius: BorderRadius.circular(12),
                         child: InkWell(
                           borderRadius: BorderRadius.circular(12),
-                          onTap: () => Navigator.of(sheetContext).pop(value),
+                          onTap:
+                              () => _dismissBookshelfBottomSheet(
+                                sheetContext,
+                                value,
+                              ),
                           child: Padding(
                             padding: const EdgeInsets.fromLTRB(16, 6, 12, 6),
                             child: Row(
@@ -1010,7 +1017,11 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
                           borderRadius: BorderRadius.circular(12),
                           child: InkWell(
                             borderRadius: BorderRadius.circular(12),
-                            onTap: () => Navigator.of(sheetContext).pop(value),
+                            onTap:
+                                () => _dismissBookshelfBottomSheet(
+                                  sheetContext,
+                                  value,
+                                ),
                             child: Padding(
                               padding: const EdgeInsets.fromLTRB(16, 6, 12, 6),
                               child: Row(
@@ -1914,7 +1925,7 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
       if (!mounted) {
         return;
       }
-      _showMessage('分组排序保存失败，请重试。');
+      _showMessage('标签排序保存失败，请重试。');
     }
   }
 
@@ -2252,6 +2263,7 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
                         onTap:
                             () => Navigator.of(
                               sheetContext,
+                              rootNavigator: true,
                             ).pop(_BookshelfSheetAction.detail),
                         child: Padding(
                           padding: const EdgeInsets.symmetric(
@@ -2297,6 +2309,7 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
                         onTap:
                             () => Navigator.of(
                               sheetContext,
+                              rootNavigator: true,
                             ).pop(_BookshelfSheetAction.repairLocal),
                       ),
                     ),
@@ -2305,11 +2318,12 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
                   Expanded(
                     child: _BookSheetActionButton(
                       icon: Icons.label_rounded,
-                      label: '整理书架',
+                      label: '管理标签',
                       onTap:
                           () => Navigator.of(
                             sheetContext,
-                          ).pop(_BookshelfSheetAction.moveGroup),
+                            rootNavigator: true,
+                          ).pop(_BookshelfSheetAction.tag),
                     ),
                   ),
                   const SizedBox(width: 8),
@@ -2320,6 +2334,7 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
                       onTap:
                           () => Navigator.of(
                             sheetContext,
+                            rootNavigator: true,
                           ).pop(_BookshelfSheetAction.customCover),
                     ),
                   ),
@@ -2331,6 +2346,7 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
                       onTap:
                           () => Navigator.of(
                             sheetContext,
+                            rootNavigator: true,
                           ).pop(_BookshelfSheetAction.delete),
                     ),
                   ),
@@ -2340,7 +2356,8 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
               SizedBox(
                 width: double.infinity,
                 child: FilledButton.tonal(
-                  onPressed: () => Navigator.of(sheetContext).pop(),
+                  onPressed:
+                      () => _dismissBookshelfBottomSheet<void>(sheetContext),
                   child: const Text('取消'),
                 ),
               ),
@@ -2369,9 +2386,6 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
         break;
       case _BookshelfSheetAction.tag:
         await _showBookTagSheet(book);
-        break;
-      case _BookshelfSheetAction.moveGroup:
-        await _showMoveGroupSheet(book);
         break;
       case _BookshelfSheetAction.customCover:
         await _pickAndApplyCustomCover(book);
@@ -2413,23 +2427,19 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
   }
 
   Future<void> _showBookTagSheet(BookshelfBook book) async {
-    await _showBookOrganizeSheet(book);
+    await _showBookTagEditorSheet(book);
   }
 
-  Future<void> _showMoveGroupSheet(BookshelfBook book) async {
-    await _showBookOrganizeSheet(book);
-  }
-
-  Future<void> _showBookOrganizeSheet(BookshelfBook book) async {
+  Future<void> _showBookTagEditorSheet(BookshelfBook book) async {
     final bookKey = _bookKey(book);
-    final existingTags = List<String>.from(
+    var selectedTags = List<String>.from(
       _bookTagsByKey[bookKey] ?? const <String>[],
     );
-    var selectedGroup = existingTags.isEmpty ? null : existingTags.first;
-    var extraTags = _normalizeTags(
-      existingTags.skip(existingTags.isEmpty ? 0 : 1),
-    );
-    var allTags = _normalizeTags(<String>[..._userTags, ...existingTags]);
+    var availableTags = _normalizeTags(<String>[..._userTags, ...selectedTags]);
+    var createTagDraft = '';
+    var createTagFieldVersion = 0;
+    String? createTagErrorText;
+    var showCreateTagInput = availableTags.isEmpty;
 
     final selected = await _showBookshelfBottomSheet<List<String>>(
       isScrollControlled: true,
@@ -2442,39 +2452,62 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
         final maxHeight = MediaQuery.sizeOf(sheetContext).height * 0.76;
         return StatefulBuilder(
           builder: (sheetContext, setSheetState) {
-            final chipTags = allTags
-                .where((tag) => tag != selectedGroup)
-                .toList(growable: false);
-
-            Future<void> createGroup() async {
-              final created = await _showCreateGroupDialog(
-                sheetContext,
-                existingTags: <String>{...allTags, ...extraTags},
-              );
-              if (created == null || !mounted) {
-                return;
-              }
+            void toggleCreateTagInput() {
               setSheetState(() {
-                allTags = _normalizeTags(<String>[...allTags, created]);
-                selectedGroup = created;
-                extraTags = extraTags.where((tag) => tag != created).toList();
+                showCreateTagInput = !showCreateTagInput;
+                createTagErrorText = null;
+                if (!showCreateTagInput) {
+                  createTagDraft = '';
+                  createTagFieldVersion += 1;
+                }
               });
             }
 
-            Future<void> createTag() async {
-              final created = await _showCreateTagDialog(
-                sheetContext,
-                existingTags: <String>{...allTags, ...extraTags},
-              );
-              if (created == null || !mounted) {
+            bool commitPendingTagDraft() {
+              final normalized = _normalizeTags([createTagDraft]);
+              if (normalized.isEmpty) {
+                return true;
+              }
+
+              final created = normalized.first;
+              if (availableTags.contains(created)) {
+                setSheetState(() {
+                  createTagErrorText = '该标签已存在';
+                  showCreateTagInput = true;
+                });
+                return false;
+              }
+
+              setSheetState(() {
+                availableTags = _normalizeTags(<String>[
+                  ...availableTags,
+                  created,
+                ]);
+                selectedTags = _normalizeTags(<String>[
+                  ...selectedTags,
+                  created,
+                ]);
+                createTagDraft = '';
+                createTagFieldVersion += 1;
+                createTagErrorText = null;
+                showCreateTagInput = false;
+              });
+              return true;
+            }
+
+            void createTagInline() {
+              final hasDraft = _normalizeTags([createTagDraft]).isNotEmpty;
+              if (!hasDraft) {
+                setSheetState(() {
+                  createTagErrorText = '请输入标签名称';
+                  showCreateTagInput = true;
+                });
                 return;
               }
-              setSheetState(() {
-                allTags = _normalizeTags(<String>[...allTags, created]);
-                if (created != selectedGroup && !extraTags.contains(created)) {
-                  extraTags = <String>[...extraTags, created];
-                }
-              });
+              final ok = commitPendingTagDraft();
+              if (!ok) {
+                return;
+              }
             }
 
             return Padding(
@@ -2491,7 +2524,7 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      '整理书架',
+                      '管理标签',
                       style: Theme.of(sheetContext).textTheme.titleMedium
                           ?.copyWith(fontWeight: FontWeight.w700),
                     ),
@@ -2513,51 +2546,12 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
                         shrinkWrap: true,
                         children: [
                           Text(
-                            '所属分组',
+                            '标签',
                             style: Theme.of(sheetContext).textTheme.labelLarge
                                 ?.copyWith(fontWeight: FontWeight.w700),
                           ),
                           const SizedBox(height: 8),
-                          _MoveGroupOptionTile(
-                            label: '未分组',
-                            selected: selectedGroup == null,
-                            onTap: () {
-                              setSheetState(() {
-                                selectedGroup = null;
-                              });
-                            },
-                          ),
-                          ...allTags.map(
-                            (group) => _MoveGroupOptionTile(
-                              label: group,
-                              selected: selectedGroup == group,
-                              onTap: () {
-                                setSheetState(() {
-                                  selectedGroup = group;
-                                  extraTags = extraTags
-                                      .where((tag) => tag != group)
-                                      .toList(growable: false);
-                                });
-                              },
-                            ),
-                          ),
-                          const SizedBox(height: 4),
-                          Align(
-                            alignment: Alignment.centerLeft,
-                            child: TextButton.icon(
-                              onPressed: createGroup,
-                              icon: const Icon(Icons.add_rounded),
-                              label: const Text('新建分组'),
-                            ),
-                          ),
-                          const SizedBox(height: 8),
-                          Text(
-                            '附加标签',
-                            style: Theme.of(sheetContext).textTheme.labelLarge
-                                ?.copyWith(fontWeight: FontWeight.w700),
-                          ),
-                          const SizedBox(height: 8),
-                          if (chipTags.isEmpty)
+                          if (availableTags.isEmpty)
                             Container(
                               width: double.infinity,
                               padding: const EdgeInsets.fromLTRB(
@@ -2574,7 +2568,7 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
                                 borderRadius: BorderRadius.circular(14),
                               ),
                               child: Text(
-                                '暂无可选标签，可先新建一个标签。',
+                                '还没有标签，直接在下面新增一个即可。',
                                 style: Theme.of(
                                   sheetContext,
                                 ).textTheme.bodySmall?.copyWith(
@@ -2589,23 +2583,22 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
                             Wrap(
                               spacing: 8,
                               runSpacing: 8,
-                              children: chipTags
+                              children: availableTags
                                   .map((tag) {
-                                    final selected = extraTags.contains(tag);
+                                    final selected = selectedTags.contains(tag);
                                     return FilterChip(
                                       label: Text(tag),
                                       selected: selected,
                                       onSelected: (enabled) {
                                         setSheetState(() {
                                           if (enabled) {
-                                            if (!extraTags.contains(tag)) {
-                                              extraTags = <String>[
-                                                ...extraTags,
-                                                tag,
-                                              ];
+                                            if (!selectedTags.contains(tag)) {
+                                              selectedTags = _normalizeTags(
+                                                <String>[...selectedTags, tag],
+                                              );
                                             }
                                           } else {
-                                            extraTags = extraTags
+                                            selectedTags = selectedTags
                                                 .where((value) => value != tag)
                                                 .toList(growable: false);
                                           }
@@ -2615,15 +2608,52 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
                                   })
                                   .toList(growable: false),
                             ),
-                          const SizedBox(height: 8),
+                          const SizedBox(height: 10),
                           Align(
                             alignment: Alignment.centerLeft,
                             child: TextButton.icon(
-                              onPressed: createTag,
-                              icon: const Icon(Icons.add_reaction_outlined),
-                              label: const Text('新增标签'),
+                              onPressed: toggleCreateTagInput,
+                              icon: Icon(
+                                showCreateTagInput
+                                    ? Icons.keyboard_arrow_up_rounded
+                                    : Icons.add_rounded,
+                              ),
+                              label: Text(
+                                showCreateTagInput ? '收起新增标签' : '新增标签',
+                              ),
                             ),
                           ),
+                          if (showCreateTagInput) ...[
+                            const SizedBox(height: 6),
+                            TextFormField(
+                              key: ValueKey<String>(
+                                'create_tag_field_$createTagFieldVersion',
+                              ),
+                              initialValue: createTagDraft,
+                              autofocus: true,
+                              maxLength: 12,
+                              decoration: InputDecoration(
+                                labelText: '标签名称',
+                                hintText: '例如：在读 / 已完结',
+                                errorText: createTagErrorText,
+                                suffixIcon: IconButton(
+                                  tooltip: '添加标签',
+                                  onPressed: createTagInline,
+                                  icon: const Icon(Icons.check_rounded),
+                                ),
+                              ),
+                              onChanged: (value) {
+                                createTagDraft = value;
+                                if (createTagErrorText == null) {
+                                  return;
+                                }
+                                setSheetState(() {
+                                  createTagErrorText = null;
+                                });
+                              },
+                              onFieldSubmitted: (_) => createTagInline(),
+                            ),
+                          ],
                         ],
                       ),
                     ),
@@ -2632,7 +2662,10 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
                       children: [
                         Expanded(
                           child: OutlinedButton(
-                            onPressed: () => Navigator.of(sheetContext).pop(),
+                            onPressed:
+                                () => _dismissBookshelfBottomSheet<void>(
+                                  sheetContext,
+                                ),
                             child: const Text('取消'),
                           ),
                         ),
@@ -2640,13 +2673,15 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
                         Expanded(
                           child: FilledButton(
                             onPressed: () {
-                              Navigator.of(sheetContext).pop(
-                                _normalizeTags(<String>[
-                                  if (selectedGroup != null) selectedGroup!,
-                                  ...extraTags.where(
-                                    (tag) => tag != selectedGroup,
-                                  ),
-                                ]),
+                              final canSave =
+                                  !showCreateTagInput ||
+                                  commitPendingTagDraft();
+                              if (!canSave) {
+                                return;
+                              }
+                              _dismissBookshelfBottomSheet(
+                                sheetContext,
+                                _normalizeTags(selectedTags),
                               );
                             },
                             child: const Text('保存'),
@@ -2695,19 +2730,9 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
         _bookTagsByKey = next;
         _ensureFilterStillValid();
       });
-      if (normalizedTags.isEmpty) {
-        _showMessage('已移到未分组并清除标签。');
-      } else {
-        final groupLabel = normalizedTags.first;
-        final extraCount = normalizedTags.length - 1;
-        final summary =
-            extraCount > 0
-                ? '分组：$groupLabel，标签 $extraCount 个。'
-                : '分组：$groupLabel。';
-        _showMessage('书架整理已保存，$summary');
-      }
+      _showMessage(normalizedTags.isEmpty ? '已清除标签。' : '标签已保存。');
     } catch (_) {
-      _showMessage('书架整理保存失败，请重试。');
+      _showMessage('标签保存失败，请重试。');
     }
   }
 
@@ -2813,6 +2838,7 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
               onTap:
                   () => Navigator.of(
                     sheetContext,
+                    rootNavigator: true,
                   ).pop(_TagManageSheetAction.rename),
             ),
             ListTile(
@@ -2830,6 +2856,7 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
               onTap:
                   () => Navigator.of(
                     sheetContext,
+                    rootNavigator: true,
                   ).pop(_TagManageSheetAction.delete),
             ),
             const SizedBox(height: 4),
@@ -2943,32 +2970,6 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
     } catch (_) {
       _showMessage('删除标签失败，请重试。');
     }
-  }
-
-  Future<String?> _showCreateTagDialog(
-    BuildContext dialogContext, {
-    required Set<String> existingTags,
-  }) {
-    return _showTagNameDialog(
-      dialogContext,
-      title: '新增标签',
-      confirmText: '创建',
-      hintText: '例如：在读 / 已完结',
-      existingTags: existingTags,
-    );
-  }
-
-  Future<String?> _showCreateGroupDialog(
-    BuildContext dialogContext, {
-    required Set<String> existingTags,
-  }) {
-    return _showTagNameDialog(
-      dialogContext,
-      title: '新建分组',
-      confirmText: '创建',
-      hintText: '例如：在读 / 已完结',
-      existingTags: existingTags,
-    );
   }
 
   Future<String?> _showRenameTagDialog(
@@ -4676,68 +4677,6 @@ class _BookSheetActionButton extends StatelessWidget {
               ),
             ),
           ],
-        ),
-      ),
-    );
-  }
-}
-
-class _MoveGroupOptionTile extends StatelessWidget {
-  const _MoveGroupOptionTile({
-    required this.label,
-    required this.selected,
-    required this.onTap,
-  });
-
-  final String label;
-  final bool selected;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    final colorScheme = Theme.of(context).colorScheme;
-    final selectedBg = colorScheme.primaryContainer.withValues(alpha: 0.42);
-    final selectedFg = colorScheme.onPrimaryContainer;
-
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 6),
-      child: Material(
-        color: selected ? selectedBg : colorScheme.surfaceContainerLow,
-        borderRadius: BorderRadius.circular(14),
-        child: InkWell(
-          borderRadius: BorderRadius.circular(14),
-          onTap: onTap,
-          child: Padding(
-            padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
-            child: Row(
-              children: [
-                Expanded(
-                  child: Text(
-                    label,
-                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                      color: selected ? selectedFg : colorScheme.onSurface,
-                      fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
-                    ),
-                  ),
-                ),
-                AnimatedSwitcher(
-                  duration: const Duration(milliseconds: 160),
-                  child:
-                      selected
-                          ? Icon(
-                            Icons.radio_button_checked_rounded,
-                            key: const ValueKey('selected'),
-                            color: colorScheme.primary,
-                          )
-                          : Icon(
-                            Icons.radio_button_off_rounded,
-                            key: const ValueKey('unselected'),
-                            color: colorScheme.onSurfaceVariant,
-                          ),
-                ),
-              ],
-            ),
-          ),
         ),
       ),
     );
