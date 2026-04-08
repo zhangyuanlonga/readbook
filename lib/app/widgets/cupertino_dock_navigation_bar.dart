@@ -1,3 +1,5 @@
+import 'dart:math' as math;
+
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 
@@ -8,6 +10,7 @@ class CupertinoDockNavigationBar extends StatelessWidget {
   static const double _kDockHeightWithLabels = 78;
   static const double _kDockHeightIconOnly = 64;
   static const double _kDockGap = 10;
+  static const double _kDockBottomMinimum = 10;
 
   const CupertinoDockNavigationBar({
     super.key,
@@ -23,6 +26,16 @@ class CupertinoDockNavigationBar extends StatelessWidget {
   final bool showLabels;
   final ValueChanged<int> onDestinationSelected;
   final VoidCallback onSearchPressed;
+
+  static double contentBottomInset(
+    BuildContext context, {
+    required bool showLabels,
+  }) {
+    final bottomSafe = MediaQuery.viewPaddingOf(context).bottom;
+    final dockHeight =
+        showLabels ? _kDockHeightWithLabels : _kDockHeightIconOnly;
+    return dockHeight + math.max(bottomSafe, _kDockBottomMinimum);
+  }
 
   @override
   Widget build(BuildContext context) {

@@ -9,8 +9,9 @@ import 'package:go_router/go_router.dart';
 import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
 
-import '../../../app/navigation/app_navigation_style_provider.dart';
 import '../../../app/layout/app_spacing.dart';
+import '../../../app/navigation/mobile_bottom_navigation_inset.dart';
+import '../../../app/navigation/app_navigation_style_provider.dart';
 import '../../../app/widgets/disk_cached_cover_image.dart';
 import '../../../app/widgets/text_cover_placeholder.dart';
 import '../../../core/errors/app_exception.dart';
@@ -70,7 +71,7 @@ class _BookshelfProgressDisplay {
 }
 
 class BookshelfPage extends ConsumerStatefulWidget {
-  const BookshelfPage({super.key, this.prefetchAnnouncementOnInit = true});
+  const BookshelfPage({super.key, this.prefetchAnnouncementOnInit = false});
 
   final bool prefetchAnnouncementOnInit;
 
@@ -222,12 +223,19 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
     super.build(context);
     final colorScheme = Theme.of(context).colorScheme;
     final horizontal = AppSpacing.pageHorizontal(context);
-    final bottomSafe = MediaQuery.paddingOf(context).bottom;
     final platform = Theme.of(context).platform;
     final effectiveNavigationStyle = resolveAppNavigationStyle(
       ref.watch(appNavigationStylePreferenceProvider),
       isWeb: false,
       platform: platform,
+    );
+    final showNavigationLabels = ref.watch(
+      appNavigationLabelVisibilityProvider,
+    );
+    final navigationBottomInset = mobileBottomNavigationContentInset(
+      context,
+      style: effectiveNavigationStyle,
+      showNavigationLabels: showNavigationLabels,
     );
     final showTopSearchAction =
         effectiveNavigationStyle != AppNavigationStyle.cupertinoDock;
@@ -351,7 +359,7 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
                       horizontal,
                       12,
                       horizontal,
-                      16 + bottomSafe + continueReadingReservedSpace,
+                      16 + navigationBottomInset + continueReadingReservedSpace,
                     ),
                     sliver: _buildBooksContentSliver(filteredBooks),
                   ),
@@ -362,7 +370,7 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
           Positioned(
             left: horizontal,
             right: horizontal,
-            bottom: 12 + bottomSafe,
+            bottom: 12 + navigationBottomInset,
             child: _buildContinueReadingPromptCard(),
           ),
         ],

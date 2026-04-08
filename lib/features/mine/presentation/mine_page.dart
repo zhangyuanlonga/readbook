@@ -7,7 +7,8 @@ import 'package:url_launcher/url_launcher.dart';
 
 import '../../../app/layout/app_layout.dart';
 import '../../../app/layout/app_spacing.dart';
-
+import '../../../app/navigation/mobile_bottom_navigation_inset.dart';
+import '../../../app/navigation/app_navigation_style_provider.dart';
 import '../../../app/theme/app_theme_seed_provider.dart';
 import '../../../core/app_update/app_update_dialog.dart';
 import '../../../core/app_update/app_update_service.dart';
@@ -64,8 +65,21 @@ class _MinePageState extends ConsumerState<MinePage> {
   @override
   Widget build(BuildContext context) {
     final horizontal = AppSpacing.pageHorizontal(context);
-    final bottomSafe = MediaQuery.viewPaddingOf(context).bottom;
     final seedColor = ref.watch(appSeedColorProvider);
+    final platform = Theme.of(context).platform;
+    final effectiveNavigationStyle = resolveAppNavigationStyle(
+      ref.watch(appNavigationStylePreferenceProvider),
+      isWeb: false,
+      platform: platform,
+    );
+    final showNavigationLabels = ref.watch(
+      appNavigationLabelVisibilityProvider,
+    );
+    final bottomInset = mobileBottomNavigationContentInset(
+      context,
+      style: effectiveNavigationStyle,
+      showNavigationLabels: showNavigationLabels,
+    );
 
     return Scaffold(
       appBar: AppBar(title: const Text('我的')),
@@ -88,7 +102,7 @@ class _MinePageState extends ConsumerState<MinePage> {
                     horizontal,
                     12,
                     horizontal,
-                    12 + bottomSafe,
+                    12 + bottomInset,
                   ),
                   children: [
                     _buildPageEntrance(

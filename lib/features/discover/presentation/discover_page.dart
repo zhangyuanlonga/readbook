@@ -3,10 +3,13 @@ import 'dart:math' as math;
 
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../app/layout/app_layout.dart';
 import '../../../app/layout/app_spacing.dart';
+import '../../../app/navigation/app_navigation_style_provider.dart';
+import '../../../app/navigation/mobile_bottom_navigation_inset.dart';
 import '../../../app/widgets/disk_cached_cover_image.dart';
 import '../../../app/widgets/runtime_feedback_card.dart';
 import '../../../app/widgets/text_cover_placeholder.dart';
@@ -30,7 +33,7 @@ enum _SourceRuntimeStatus {
 
 enum _SourceTypeFilter { all, novel, manga, unknown }
 
-class DiscoverPage extends StatefulWidget {
+class DiscoverPage extends ConsumerStatefulWidget {
   const DiscoverPage({
     super.key,
     ExploreService? exploreService,
@@ -42,10 +45,10 @@ class DiscoverPage extends StatefulWidget {
   final DiscoverPreferencesService? _discoverPreferencesService;
 
   @override
-  State<DiscoverPage> createState() => _DiscoverPageState();
+  ConsumerState<DiscoverPage> createState() => _DiscoverPageState();
 }
 
-class _DiscoverPageState extends State<DiscoverPage>
+class _DiscoverPageState extends ConsumerState<DiscoverPage>
     with AutomaticKeepAliveClientMixin<DiscoverPage> {
   static const int _bookPageSize = 24;
   static const int _compactCategoryPreviewCount = 8;
@@ -150,6 +153,20 @@ class _DiscoverPageState extends State<DiscoverPage>
     super.build(context);
     final colorScheme = Theme.of(context).colorScheme;
     final horizontal = AppSpacing.pageHorizontal(context);
+    final platform = Theme.of(context).platform;
+    final effectiveNavigationStyle = resolveAppNavigationStyle(
+      ref.watch(appNavigationStylePreferenceProvider),
+      isWeb: false,
+      platform: platform,
+    );
+    final showNavigationLabels = ref.watch(
+      appNavigationLabelVisibilityProvider,
+    );
+    final bottomInset = mobileBottomNavigationContentInset(
+      context,
+      style: effectiveNavigationStyle,
+      showNavigationLabels: showNavigationLabels,
+    );
 
     return Scaffold(
       appBar: AppBar(title: const Text('发现')),
@@ -184,7 +201,7 @@ class _DiscoverPageState extends State<DiscoverPage>
                     maxContentWidth: AppLayout.discoverMediumContentMaxWidth,
                   );
                 }
-                return _buildCompactLayout(context);
+                return _buildCompactLayout(context, bottomInset: bottomInset);
               },
             ),
           ),
@@ -222,7 +239,10 @@ class _DiscoverPageState extends State<DiscoverPage>
     await _loadSources();
   }
 
-  Widget _buildCompactLayout(BuildContext context) {
+  Widget _buildCompactLayout(
+    BuildContext context, {
+    required double bottomInset,
+  }) {
     return ScrollConfiguration(
       behavior: const MaterialScrollBehavior().copyWith(
         dragDevices: _dragDevices,
@@ -238,6 +258,8 @@ class _DiscoverPageState extends State<DiscoverPage>
             SliverToBoxAdapter(child: _buildCategoryStripCard(context)),
             const SliverToBoxAdapter(child: SizedBox(height: 12)),
             ..._buildBooksPaneSlivers(context),
+            if (bottomInset > 0)
+              SliverToBoxAdapter(child: SizedBox(height: bottomInset)),
           ],
         ),
       ),
@@ -1307,7 +1329,9 @@ class _DiscoverPageState extends State<DiscoverPage>
     _cancelBackgroundRefreshConflictForSource(source.id);
     final lease = await _taskScheduler.acquire(
       scene: SourceRuntimeSchedulerScene.discover,
-      conflictKeys: <String>[_taskConflictService.conflictKeyForSource(source.id)],
+      conflictKeys: <String>[
+        _taskConflictService.conflictKeyForSource(source.id),
+      ],
     );
     if (lease == null) {
       return;
@@ -1384,7 +1408,9 @@ class _DiscoverPageState extends State<DiscoverPage>
     _cancelBackgroundRefreshConflictForSource(source.id);
     final lease = await _taskScheduler.acquire(
       scene: SourceRuntimeSchedulerScene.discover,
-      conflictKeys: <String>[_taskConflictService.conflictKeyForSource(source.id)],
+      conflictKeys: <String>[
+        _taskConflictService.conflictKeyForSource(source.id),
+      ],
     );
     if (lease == null) {
       return;
@@ -1629,7 +1655,8 @@ class _DiscoverPageState extends State<DiscoverPage>
         continue;
       }
       final candidate = sources[candidateIndex];
-      if (_resolveSourceStatus(candidate.id) == _SourceRuntimeStatus.parseFailed) {
+      if (_resolveSourceStatus(candidate.id) ==
+          _SourceRuntimeStatus.parseFailed) {
         continue;
       }
       await _loadCategoriesForSource(candidate, preserveCurrentCategory: false);
@@ -1679,7 +1706,8 @@ class _DiscoverPageState extends State<DiscoverPage>
         continue;
       }
       final candidate = sources[index];
-      if (_resolveSourceStatus(candidate.id) == _SourceRuntimeStatus.parseFailed) {
+      if (_resolveSourceStatus(candidate.id) ==
+          _SourceRuntimeStatus.parseFailed) {
         continue;
       }
       await _loadCategoriesForSource(candidate, preserveCurrentCategory: false);

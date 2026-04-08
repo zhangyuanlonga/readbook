@@ -15,6 +15,7 @@ import 'package:shuxiang_reading_next/runtime/sources/source_registry.dart';
 import 'package:shuxiang_reading_next/runtime/sources/source_result_models.dart'
     as runtime_models;
 import 'package:flutter_test/flutter_test.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 void main() {
@@ -465,7 +466,7 @@ class _TestHarness extends StatelessWidget {
   Widget build(BuildContext context) {
     return MediaQuery(
       data: MediaQueryData(size: Size(width, height), devicePixelRatio: dpr),
-      child: MaterialApp(home: child),
+      child: ProviderScope(child: MaterialApp(home: child)),
     );
   }
 }
