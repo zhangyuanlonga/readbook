@@ -354,8 +354,8 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
   static const int _kCustomBackgroundStoreQuality = 82;
   static const double _kPinnedHeaderHeight = 40;
   static const double _kBottomProgressReserve = 24;
-  static const double _kBackgroundTileWidth = 84;
-  static const double _kBackgroundTileHeight = 52;
+  static const double _kBackgroundTileWidth = 72;
+  static const double _kBackgroundTileHeight = 44;
   static const int _kMaxCustomBackgrounds = 5;
   static const double _kSwipeTurnDistanceThreshold = 42;
   static const double _kSwipeTurnVelocityThreshold = 120;
@@ -12143,59 +12143,302 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
                   );
                 }
 
-                final interfaceCards = <Widget>[
-                  buildCompactSettingsCard([
-                    buildCompactSectionTitle(
-                      '亮度',
-                      trailing: FilterChip(
-                        label: const Text('护眼'),
-                        selected: draft.themeMode == ReaderThemeMode.sepia,
-                        onSelected: (selected) {
-                          setModalState(() {
-                            draft = draft.copyWith(
-                              themeMode:
-                                  selected
-                                      ? ReaderThemeMode.sepia
-                                      : ReaderThemeMode.light,
-                              backgroundStyle:
-                                  selected
-                                      ? ReaderBackgroundStyle.warm
-                                      : ReaderBackgroundStyle.plain,
-                              backgroundTone:
-                                  selected
-                                      ? ReaderBackgroundTone.container
-                                      : ReaderBackgroundTone.surface,
-                            );
-                          });
-                        },
+                String quickPageAnimationLabel(ReaderPageAnimationStyle style) {
+                  return switch (style) {
+                    ReaderPageAnimationStyle.cover => '覆盖',
+                    ReaderPageAnimationStyle.translate => '滑动',
+                    ReaderPageAnimationStyle.curl => '仿真',
+                    ReaderPageAnimationStyle.fade => '渐变',
+                    ReaderPageAnimationStyle.none => '无动画',
+                    ReaderPageAnimationStyle.vertical => '上下',
+                  };
+                }
+
+                Widget buildInterfaceCapsuleEntry({
+                  required IconData icon,
+                  required String title,
+                  required VoidCallback onTap,
+                  EdgeInsetsGeometry margin = const EdgeInsets.only(bottom: 10),
+                }) {
+                  final colorScheme = Theme.of(context).colorScheme;
+                  return Padding(
+                    padding: margin,
+                    child: Material(
+                      color: Colors.transparent,
+                      child: InkWell(
+                        borderRadius: BorderRadius.circular(999),
+                        onTap: onTap,
+                        child: Ink(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 14,
+                            vertical: 11,
+                          ),
+                          decoration: BoxDecoration(
+                            color: colorScheme.surfaceContainerLow,
+                            borderRadius: BorderRadius.circular(999),
+                            border: Border.all(
+                              color: colorScheme.outlineVariant.withValues(
+                                alpha: 0.38,
+                              ),
+                            ),
+                          ),
+                          child: Row(
+                            children: [
+                              Container(
+                                width: 28,
+                                height: 28,
+                                decoration: BoxDecoration(
+                                  color: colorScheme.primaryContainer
+                                      .withValues(alpha: 0.8),
+                                  shape: BoxShape.circle,
+                                ),
+                                child: Icon(
+                                  icon,
+                                  size: 15,
+                                  color: colorScheme.onPrimaryContainer,
+                                ),
+                              ),
+                              const SizedBox(width: 10),
+                              Expanded(
+                                child: Text(
+                                  title,
+                                  style: Theme.of(context).textTheme.titleSmall
+                                      ?.copyWith(fontWeight: FontWeight.w700),
+                                ),
+                              ),
+                              Icon(
+                                Icons.chevron_right_rounded,
+                                color: colorScheme.onSurfaceVariant,
+                              ),
+                            ],
+                          ),
+                        ),
                       ),
                     ),
-                    Slider(
-                      min: 0.2,
-                      max: 1,
-                      divisions: 8,
-                      value: draft.brightness,
-                      onChanged: (value) {
-                        setModalState(() {
-                          draft = draft.copyWith(brightness: value);
-                        });
-                      },
+                  );
+                }
+
+                Widget buildInterfaceInlineCapsule({
+                  required Widget child,
+                  EdgeInsetsGeometry padding = const EdgeInsets.symmetric(
+                    horizontal: 12,
+                    vertical: 8,
+                  ),
+                  Color? backgroundColor,
+                  Color? borderColor,
+                }) {
+                  final colorScheme = Theme.of(context).colorScheme;
+                  return Container(
+                    padding: padding,
+                    decoration: BoxDecoration(
+                      color: backgroundColor ?? colorScheme.surfaceContainerLow,
+                      borderRadius: BorderRadius.circular(999),
+                      border: Border.all(
+                        color:
+                            borderColor ??
+                            colorScheme.outlineVariant.withValues(alpha: 0.38),
+                      ),
                     ),
-                    buildSectionDivider(),
-                    buildCompactSectionTitle('背景色'),
-                    const SizedBox(height: 10),
-                    SingleChildScrollView(
-                      scrollDirection: Axis.horizontal,
-                      child: Row(
-                        children: _readerBackgroundColorOptions()
+                    child: child,
+                  );
+                }
+
+                Widget buildInterfaceSecondaryCapsule({
+                  required IconData icon,
+                  required String title,
+                  required VoidCallback onTap,
+                }) {
+                  final colorScheme = Theme.of(context).colorScheme;
+                  return buildInterfaceInlineCapsule(
+                    padding: EdgeInsets.zero,
+                    child: SizedBox(
+                      height: 44,
+                      child: TextButton(
+                        onPressed: onTap,
+                        style: TextButton.styleFrom(
+                          visualDensity: VisualDensity.compact,
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 10,
+                            vertical: 8,
+                          ),
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Container(
+                              width: 24,
+                              height: 24,
+                              decoration: BoxDecoration(
+                                color: colorScheme.primaryContainer.withValues(
+                                  alpha: 0.8,
+                                ),
+                                shape: BoxShape.circle,
+                              ),
+                              child: Icon(
+                                icon,
+                                size: 14,
+                                color: colorScheme.onPrimaryContainer,
+                              ),
+                            ),
+                            const SizedBox(width: 8),
+                            Expanded(
+                              child: Text(
+                                title,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: Theme.of(context).textTheme.bodyMedium
+                                    ?.copyWith(fontWeight: FontWeight.w600),
+                              ),
+                            ),
+                            const SizedBox(width: 4),
+                            Icon(
+                              Icons.chevron_right_rounded,
+                              size: 16,
+                              color: colorScheme.onSurfaceVariant,
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  );
+                }
+
+                List<Widget> buildQuickTypographySpacingCards() {
+                  final quickBackgroundOptions = <_ReaderBackgroundColorOption>[
+                    _createReaderBackgroundColorOption(
+                      label: '浅色',
+                      mode: ReaderThemeMode.light,
+                      backgroundStyle: ReaderBackgroundStyle.plain,
+                      backgroundTone: ReaderBackgroundTone.surface,
+                    ),
+                    _createReaderBackgroundColorOption(
+                      label: '护眼',
+                      mode: ReaderThemeMode.sepia,
+                      backgroundStyle: ReaderBackgroundStyle.warm,
+                      backgroundTone: ReaderBackgroundTone.container,
+                    ),
+                    _createReaderBackgroundColorOption(
+                      label: '深色',
+                      mode: ReaderThemeMode.dark,
+                      backgroundStyle: ReaderBackgroundStyle.plain,
+                      backgroundTone: ReaderBackgroundTone.pureBlack,
+                    ),
+                    _createReaderBackgroundColorOption(
+                      label: '纸张',
+                      mode: ReaderThemeMode.light,
+                      backgroundStyle: ReaderBackgroundStyle.paper,
+                      backgroundTone: ReaderBackgroundTone.containerHigh,
+                    ),
+                  ];
+                  final quickAnimationStyles = <ReaderPageAnimationStyle>[
+                    ReaderPageAnimationStyle.cover,
+                    ReaderPageAnimationStyle.translate,
+                    ReaderPageAnimationStyle.curl,
+                    ReaderPageAnimationStyle.fade,
+                    ReaderPageAnimationStyle.none,
+                  ];
+                  final quickPresets = _backgroundPresets
+                      .take(2)
+                      .toList(growable: false);
+
+                  bool isPresetSelected(_ReaderBackgroundPreset preset) {
+                    final presetBase64 =
+                        _backgroundPresetBase64[preset.assetPath];
+                    return activeBackgroundBase64 == preset.assetPath ||
+                        (presetBase64 != null &&
+                            activeBackgroundBase64 == presetBase64);
+                  }
+
+                  return <Widget>[
+                    buildCompactSettingsCard([
+                      buildCompactSectionTitle(
+                        '字号',
+                        trailing: OutlinedButton(
+                          onPressed: () {
+                            setModalState(() {
+                              activeSettingsGroupKey = 'typography';
+                            });
+                          },
+                          child: const Text('更多设置'),
+                        ),
+                      ),
+                      const SizedBox(height: 10),
+                      Row(
+                        children: [
+                          IconButton.filledTonal(
+                            visualDensity: VisualDensity.compact,
+                            onPressed: () {
+                              final next =
+                                  (draft.fontSize - 1).clamp(5, 50).toDouble();
+                              setModalState(() {
+                                draft = draft.copyWith(fontSize: next);
+                              });
+                            },
+                            icon: const Icon(Icons.remove_rounded),
+                          ),
+                          Expanded(
+                            child: Center(
+                              child: Text(
+                                draft.fontSize.toStringAsFixed(0),
+                                style: Theme.of(context).textTheme.headlineSmall
+                                    ?.copyWith(fontWeight: FontWeight.w700),
+                              ),
+                            ),
+                          ),
+                          IconButton.filledTonal(
+                            visualDensity: VisualDensity.compact,
+                            onPressed: () {
+                              final next =
+                                  (draft.fontSize + 1).clamp(5, 50).toDouble();
+                              setModalState(() {
+                                draft = draft.copyWith(fontSize: next);
+                              });
+                            },
+                            icon: const Icon(Icons.add_rounded),
+                          ),
+                        ],
+                      ),
+                      buildSectionDivider(),
+                      buildCompactSectionTitle('翻页动画'),
+                      const SizedBox(height: 10),
+                      Wrap(
+                        spacing: 8,
+                        runSpacing: 8,
+                        children: quickAnimationStyles
                             .map(
-                              (option) => _buildThemeColorDot(
+                              (style) => Opacity(
+                                opacity:
+                                    disablePageAnimationSelection ? 0.45 : 1.0,
+                                child: ChoiceChip(
+                                  label: Text(quickPageAnimationLabel(style)),
+                                  selected: draft.pageAnimationStyle == style,
+                                  showCheckmark: false,
+                                  onSelected:
+                                      disablePageAnimationSelection
+                                          ? null
+                                          : (_) {
+                                            setModalState(() {
+                                              draft = draft.copyWith(
+                                                pageAnimationStyle: style,
+                                              );
+                                            });
+                                          },
+                                ),
+                              ),
+                            )
+                            .toList(growable: false),
+                      ),
+                      buildSectionDivider(),
+                      buildCompactSectionTitle('背景'),
+                      const SizedBox(height: 10),
+                      Wrap(
+                        spacing: 8,
+                        runSpacing: 8,
+                        children: quickBackgroundOptions
+                            .map(
+                              (option) => _buildBackgroundColorChoiceChip(
                                 draft: draft,
-                                color: option.previewColor,
-                                label: option.label,
-                                mode: option.mode,
-                                backgroundStyle: option.backgroundStyle,
-                                backgroundTone: option.backgroundTone,
+                                option: option,
                                 onChanged: (next) {
                                   setModalState(() {
                                     draft = next;
@@ -12205,8 +12448,180 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
                             )
                             .toList(growable: false),
                       ),
-                    ),
-                    buildSectionDivider(),
+                      const SizedBox(height: 8),
+                      Wrap(
+                        spacing: 8,
+                        runSpacing: 8,
+                        children: [
+                          ...quickPresets.map(
+                            (preset) => ChoiceChip(
+                              label: Text(preset.label),
+                              selected: isPresetSelected(preset),
+                              showCheckmark: false,
+                              onSelected: (_) {
+                                setModalState(() {
+                                  draft = draft.copyWith(
+                                    backgroundImageBase64: preset.assetPath,
+                                  );
+                                });
+                                unawaited(persistBackgroundDraftNow(draft));
+                              },
+                            ),
+                          ),
+                          ChoiceChip(
+                            label: const Text('自定义'),
+                            selected: hasBackgroundImage && !isPresetBackground,
+                            showCheckmark: false,
+                            onSelected:
+                                (_) => unawaited(
+                                  hasBackgroundImage && !isPresetBackground
+                                      ? applyStoredCustomBackground(
+                                        activeBackgroundBase64,
+                                      )
+                                      : applyCustomBackgroundImage(),
+                                ),
+                          ),
+                        ],
+                      ),
+                    ]),
+                  ];
+                }
+
+                List<Widget> buildQuickMarginCards() {
+                  final marginDivisions =
+                      (ReaderSettings.maxLayoutMargin -
+                              ReaderSettings.minLayoutMargin)
+                          .round();
+                  return <Widget>[
+                    buildCompactSettingsCard([
+                      buildCompactSectionTitle('正文边距'),
+                      buildTypographySliderRow(
+                        label: '上',
+                        min: ReaderSettings.minLayoutMargin,
+                        max: ReaderSettings.maxLayoutMargin,
+                        divisions: marginDivisions,
+                        value: draft.bodyMarginTop,
+                        step: 1,
+                        valueLabel: draft.bodyMarginTop.round().toString(),
+                        onChanged: (value) {
+                          setModalState(() {
+                            draft = draft.copyWith(bodyMarginTop: value);
+                          });
+                        },
+                      ),
+                      buildTypographySliderRow(
+                        label: '下',
+                        min: ReaderSettings.minLayoutMargin,
+                        max: ReaderSettings.maxLayoutMargin,
+                        divisions: marginDivisions,
+                        value: draft.bodyMarginBottom,
+                        step: 1,
+                        valueLabel: draft.bodyMarginBottom.round().toString(),
+                        onChanged: (value) {
+                          setModalState(() {
+                            draft = draft.copyWith(bodyMarginBottom: value);
+                          });
+                        },
+                      ),
+                      buildTypographySliderRow(
+                        label: '左',
+                        min: ReaderSettings.minLayoutMargin,
+                        max: ReaderSettings.maxLayoutMargin,
+                        divisions: marginDivisions,
+                        value: draft.bodyMarginLeft,
+                        step: 1,
+                        valueLabel: draft.bodyMarginLeft.round().toString(),
+                        onChanged: (value) {
+                          setModalState(() {
+                            draft = draft.copyWith(bodyMarginLeft: value);
+                          });
+                        },
+                      ),
+                      buildTypographySliderRow(
+                        label: '右',
+                        min: ReaderSettings.minLayoutMargin,
+                        max: ReaderSettings.maxLayoutMargin,
+                        divisions: marginDivisions,
+                        value: draft.bodyMarginRight,
+                        step: 1,
+                        valueLabel: draft.bodyMarginRight.round().toString(),
+                        onChanged: (value) {
+                          setModalState(() {
+                            draft = draft.copyWith(bodyMarginRight: value);
+                          });
+                        },
+                      ),
+                    ]),
+                  ];
+                }
+
+                List<Widget> buildQuickInfoCards() {
+                  return <Widget>[
+                    buildCompactSettingsCard([
+                      buildCompactSectionTitle('信息'),
+                      const SizedBox(height: 10),
+                      Wrap(
+                        spacing: 8,
+                        runSpacing: 8,
+                        children: [
+                          FilterChip(
+                            label: const Text('时间'),
+                            selected: draft.infoShowTime,
+                            onSelected: (selected) {
+                              setModalState(() {
+                                draft = draft.copyWith(
+                                  infoShowTime: selected,
+                                  infoShowProgress:
+                                      !selected &&
+                                              !draft.infoShowBattery &&
+                                              !draft.infoShowProgress
+                                          ? true
+                                          : draft.infoShowProgress,
+                                );
+                              });
+                            },
+                          ),
+                          FilterChip(
+                            label: const Text('电量'),
+                            selected: draft.infoShowBattery,
+                            onSelected: (selected) {
+                              setModalState(() {
+                                draft = draft.copyWith(
+                                  infoShowBattery: selected,
+                                  infoShowProgress:
+                                      !selected &&
+                                              !draft.infoShowTime &&
+                                              !draft.infoShowProgress
+                                          ? true
+                                          : draft.infoShowProgress,
+                                );
+                              });
+                            },
+                          ),
+                          FilterChip(
+                            label: const Text('进度'),
+                            selected: draft.infoShowProgress,
+                            onSelected: (selected) {
+                              setModalState(() {
+                                draft = draft.copyWith(
+                                  infoShowProgress:
+                                      selected ||
+                                              (!draft.infoShowTime &&
+                                                  !draft.infoShowBattery)
+                                          ? true
+                                          : selected,
+                                );
+                              });
+                            },
+                          ),
+                        ],
+                      ),
+                    ]),
+                  ];
+                }
+
+                final interfaceCards = <Widget>[
+                  buildCompactSettingsCard([
                     buildCompactSectionTitle(
                       '字色',
                       trailing: Wrap(
@@ -12263,52 +12678,6 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
                         ),
                       ),
                     ],
-                    buildSectionDivider(),
-                    buildCompactSectionTitle('背景图'),
-                    const SizedBox(height: 10),
-                    ScrollConfiguration(
-                      behavior: ScrollConfiguration.of(
-                        context,
-                      ).copyWith(dragDevices: _kScrollDragDevices),
-                      child: SingleChildScrollView(
-                        scrollDirection: Axis.horizontal,
-                        child: Row(
-                          children: [
-                            _buildBackgroundTile(
-                              label: '无背景',
-                              selected: !hasBackgroundImage,
-                              icon: Icons.hide_image_outlined,
-                              onTap: () {
-                                setModalState(() {
-                                  draft = draft.copyWith(
-                                    clearBackgroundImage: true,
-                                  );
-                                });
-                                unawaited(persistBackgroundDraftNow(draft));
-                              },
-                            ),
-                            const SizedBox(width: 8),
-                            ...presetBackgroundTiles,
-                            ...customBackgroundTiles,
-                            _buildBackgroundTile(
-                              label: '自定义',
-                              selected: false,
-                              icon: Icons.upload_file_rounded,
-                              showLabel: true,
-                              onTap: applyCustomBackgroundImage,
-                            ),
-                            if (hasBackgroundImage) ...[
-                              const SizedBox(width: 8),
-                              OutlinedButton(
-                                onPressed:
-                                    () => unawaited(removeActiveBackground()),
-                                child: const Text('移除'),
-                              ),
-                            ],
-                          ],
-                        ),
-                      ),
-                    ),
                   ]),
                   buildSettingsSectionCard(
                     icon: Icons.touch_app_outlined,
@@ -12457,45 +12826,338 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
                   null =>
                     showInterfaceSettings
                         ? <Widget>[
-                          buildSettingsGroupEntryCard(
-                            icon: Icons.palette_outlined,
-                            title: '主题背景',
-                            subtitle: '亮度、背景色与背景图',
-                            onTap:
-                                () => setModalState(() {
-                                  activeSettingsGroupKey = 'appearance';
-                                }),
+                          Row(
+                            children: [
+                              Text(
+                                '亮度',
+                                style: Theme.of(context).textTheme.titleSmall
+                                    ?.copyWith(fontWeight: FontWeight.w700),
+                              ),
+                              const SizedBox(width: 12),
+                              Expanded(
+                                child: Slider(
+                                  min: 0.2,
+                                  max: 1,
+                                  divisions: 8,
+                                  value: draft.brightness,
+                                  onChanged: (value) {
+                                    setModalState(() {
+                                      draft = draft.copyWith(brightness: value);
+                                    });
+                                  },
+                                ),
+                              ),
+                              const SizedBox(width: 8),
+                              SizedBox(
+                                height: 48,
+                                child: TextButton.icon(
+                                  onPressed: () {
+                                    final selected =
+                                        draft.themeMode !=
+                                        ReaderThemeMode.sepia;
+                                    setModalState(() {
+                                      draft = draft.copyWith(
+                                        themeMode:
+                                            selected
+                                                ? ReaderThemeMode.sepia
+                                                : ReaderThemeMode.light,
+                                        backgroundStyle:
+                                            selected
+                                                ? ReaderBackgroundStyle.warm
+                                                : ReaderBackgroundStyle.plain,
+                                        backgroundTone:
+                                            selected
+                                                ? ReaderBackgroundTone.container
+                                                : ReaderBackgroundTone.surface,
+                                      );
+                                    });
+                                  },
+                                  style: TextButton.styleFrom(
+                                    visualDensity: VisualDensity.compact,
+                                    padding: const EdgeInsets.symmetric(
+                                      horizontal: 6,
+                                      vertical: 10,
+                                    ),
+                                  ),
+                                  icon: Icon(
+                                    draft.themeMode == ReaderThemeMode.sepia
+                                        ? Icons.visibility_rounded
+                                        : Icons.visibility_outlined,
+                                    size: 16,
+                                    color:
+                                        draft.themeMode == ReaderThemeMode.sepia
+                                            ? Theme.of(
+                                              context,
+                                            ).colorScheme.primary
+                                            : Theme.of(
+                                              context,
+                                            ).colorScheme.onSurfaceVariant,
+                                  ),
+                                  label: Text(
+                                    '护眼',
+                                    style: TextStyle(
+                                      color:
+                                          draft.themeMode ==
+                                                  ReaderThemeMode.sepia
+                                              ? Theme.of(
+                                                context,
+                                              ).colorScheme.primary
+                                              : null,
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            ],
                           ),
                           const SizedBox(height: 10),
-                          buildSettingsGroupEntryCard(
-                            icon: Icons.text_fields_rounded,
-                            title: '字体',
-                            subtitle: '字号、字重、行距与段距',
-                            onTap:
-                                () => setModalState(() {
-                                  activeSettingsGroupKey = 'typography';
-                                }),
+                          Row(
+                            children: [
+                              Expanded(
+                                child: buildInterfaceCapsuleEntry(
+                                  icon: Icons.format_size_rounded,
+                                  title: '字体',
+                                  margin: EdgeInsets.zero,
+                                  onTap:
+                                      () => setModalState(() {
+                                        activeSettingsGroupKey = 'typography';
+                                      }),
+                                ),
+                              ),
+                              const SizedBox(width: 10),
+                              Expanded(
+                                child: buildInterfaceCapsuleEntry(
+                                  icon: Icons.fit_screen_rounded,
+                                  title: '边距',
+                                  margin: EdgeInsets.zero,
+                                  onTap:
+                                      () => setModalState(() {
+                                        activeSettingsGroupKey =
+                                            'quick_margins';
+                                      }),
+                                ),
+                              ),
+                              const SizedBox(width: 10),
+                              Expanded(
+                                child: buildInterfaceCapsuleEntry(
+                                  icon: Icons.info_outline_rounded,
+                                  title: '信息',
+                                  margin: EdgeInsets.zero,
+                                  onTap:
+                                      () => setModalState(() {
+                                        activeSettingsGroupKey = 'info';
+                                      }),
+                                ),
+                              ),
+                            ],
                           ),
                           const SizedBox(height: 10),
-                          buildSettingsGroupEntryCard(
-                            icon: Icons.touch_app_outlined,
-                            title: '翻页与动画',
-                            subtitle: '触发方式、翻页模式与动画表现',
-                            onTap:
-                                () => setModalState(() {
-                                  activeSettingsGroupKey = 'interaction';
-                                }),
+                          Padding(
+                            padding: const EdgeInsets.only(left: 4),
+                            child: Text(
+                              '字号',
+                              style: Theme.of(
+                                context,
+                              ).textTheme.labelMedium?.copyWith(
+                                color:
+                                    Theme.of(
+                                      context,
+                                    ).colorScheme.onSurfaceVariant,
+                              ),
+                            ),
                           ),
+                          const SizedBox(height: 6),
+                          Row(
+                            children: [
+                              Expanded(
+                                flex: 4,
+                                child: buildInterfaceInlineCapsule(
+                                  padding: EdgeInsets.zero,
+                                  child: SizedBox(
+                                    height: 44,
+                                    child: Row(
+                                      children: [
+                                        const SizedBox(width: 8),
+                                        IconButton(
+                                          visualDensity: VisualDensity.compact,
+                                          constraints: const BoxConstraints(
+                                            minWidth: 32,
+                                            minHeight: 32,
+                                          ),
+                                          padding: EdgeInsets.zero,
+                                          onPressed: () {
+                                            final next =
+                                                (draft.fontSize - 1)
+                                                    .clamp(5, 50)
+                                                    .toDouble();
+                                            setModalState(() {
+                                              draft = draft.copyWith(
+                                                fontSize: next,
+                                              );
+                                            });
+                                          },
+                                          icon: const Icon(
+                                            Icons.remove_rounded,
+                                            size: 18,
+                                          ),
+                                        ),
+                                        Expanded(
+                                          child: Center(
+                                            child: Text(
+                                              draft.fontSize.toStringAsFixed(0),
+                                              style: Theme.of(
+                                                context,
+                                              ).textTheme.titleMedium?.copyWith(
+                                                fontWeight: FontWeight.w700,
+                                                height: 1,
+                                              ),
+                                            ),
+                                          ),
+                                        ),
+                                        IconButton(
+                                          visualDensity: VisualDensity.compact,
+                                          constraints: const BoxConstraints(
+                                            minWidth: 32,
+                                            minHeight: 32,
+                                          ),
+                                          padding: EdgeInsets.zero,
+                                          onPressed: () {
+                                            final next =
+                                                (draft.fontSize + 1)
+                                                    .clamp(5, 50)
+                                                    .toDouble();
+                                            setModalState(() {
+                                              draft = draft.copyWith(
+                                                fontSize: next,
+                                              );
+                                            });
+                                          },
+                                          icon: const Icon(
+                                            Icons.add_rounded,
+                                            size: 18,
+                                          ),
+                                        ),
+                                        const SizedBox(width: 8),
+                                      ],
+                                    ),
+                                  ),
+                                ),
+                              ),
+                              const SizedBox(width: 8),
+                              Expanded(
+                                flex: 4,
+                                child: buildInterfaceSecondaryCapsule(
+                                  icon: Icons.format_size_rounded,
+                                  title: currentFontLabel(),
+                                  onTap: openFontPickerSheet,
+                                ),
+                              ),
+                              const SizedBox(width: 8),
+                              Expanded(
+                                flex: 4,
+                                child: buildInterfaceSecondaryCapsule(
+                                  icon: Icons.tune_rounded,
+                                  title: '更多',
+                                  onTap:
+                                      () => setModalState(() {
+                                        activeSettingsGroupKey = 'interaction';
+                                      }),
+                                ),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 14),
+                          buildCompactSectionTitle('背景色'),
                           const SizedBox(height: 10),
-                          buildSettingsGroupEntryCard(
-                            icon: Icons.space_dashboard_outlined,
-                            title: '信息排版',
-                            subtitle: '信息栏显示与正文边距',
-                            onTap:
-                                () => setModalState(() {
-                                  activeSettingsGroupKey = 'info';
-                                }),
+                          SingleChildScrollView(
+                            scrollDirection: Axis.horizontal,
+                            child: Row(
+                              children: _readerBackgroundColorOptions()
+                                  .map(
+                                    (option) => _buildThemeColorDot(
+                                      draft: draft,
+                                      color: option.previewColor,
+                                      label: option.label,
+                                      mode: option.mode,
+                                      backgroundStyle: option.backgroundStyle,
+                                      backgroundTone: option.backgroundTone,
+                                      onChanged: (next) {
+                                        setModalState(() {
+                                          draft = next;
+                                        });
+                                      },
+                                    ),
+                                  )
+                                  .toList(growable: false),
+                            ),
                           ),
+                          const SizedBox(height: 14),
+                          buildCompactSectionTitle('背景图'),
+                          const SizedBox(height: 10),
+                          ScrollConfiguration(
+                            behavior: ScrollConfiguration.of(
+                              context,
+                            ).copyWith(dragDevices: _kScrollDragDevices),
+                            child: SingleChildScrollView(
+                              scrollDirection: Axis.horizontal,
+                              child: Row(
+                                children: [
+                                  _buildBackgroundTile(
+                                    label: '无背景',
+                                    selected: !hasBackgroundImage,
+                                    icon: Icons.hide_image_outlined,
+                                    onTap: () {
+                                      setModalState(() {
+                                        draft = draft.copyWith(
+                                          clearBackgroundImage: true,
+                                        );
+                                      });
+                                      unawaited(
+                                        persistBackgroundDraftNow(draft),
+                                      );
+                                    },
+                                  ),
+                                  const SizedBox(width: 8),
+                                  ...presetBackgroundTiles,
+                                  ...customBackgroundTiles,
+                                  _buildBackgroundTile(
+                                    label: '自定义',
+                                    selected: false,
+                                    icon: Icons.upload_file_rounded,
+                                    showLabel: true,
+                                    onTap: applyCustomBackgroundImage,
+                                  ),
+                                  if (hasBackgroundImage) ...[
+                                    const SizedBox(width: 8),
+                                    OutlinedButton(
+                                      onPressed:
+                                          () => unawaited(
+                                            removeActiveBackground(),
+                                          ),
+                                      child: const Text('移除'),
+                                    ),
+                                  ],
+                                ],
+                              ),
+                            ),
+                          ),
+                          const SizedBox(height: 14),
+                          buildCompactSectionTitle('翻页动画'),
+                          const SizedBox(height: 10),
+                          if (pageAnimationInactiveReason != null)
+                            Text(
+                              pageAnimationInactiveReason,
+                              style: Theme.of(
+                                context,
+                              ).textTheme.bodySmall?.copyWith(
+                                color:
+                                    Theme.of(
+                                      context,
+                                    ).colorScheme.onSurfaceVariant,
+                                height: 1.35,
+                              ),
+                            )
+                          else
+                            buildPageAnimationSelector(),
                         ]
                         : <Widget>[
                           buildSettingsGroupEntryCard(
@@ -12538,396 +13200,426 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
                                 }),
                           ),
                         ],
+                  'quick_typography_spacing' =>
+                    buildQuickTypographySpacingCards(),
+                  'quick_margins' => buildQuickMarginCards(),
+                  'quick_info' => buildQuickInfoCards(),
                   'appearance' => <Widget>[interfaceCards[0]],
                   'typography' => <Widget>[
-                    buildCompactSettingsCard([
-                      buildCompactSectionTitle('字体'),
+                    buildCompactSectionTitle('当前字体'),
+                    const SizedBox(height: 10),
+                    Row(
+                      children: [
+                        Text(
+                          currentFontLabel(),
+                          style: Theme.of(context).textTheme.titleMedium
+                              ?.copyWith(fontWeight: FontWeight.w700),
+                        ),
+                        const Spacer(),
+                        OutlinedButton(
+                          onPressed: () => unawaited(openFontWeightTabSheet()),
+                          child: Text(fontWeightDisplayLabel(draft)),
+                        ),
+                      ],
+                    ),
+                    buildSectionDivider(),
+                    buildCompactSectionTitle(
+                      '文字颜色',
+                      trailing: Wrap(
+                        spacing: 8,
+                        children: [
+                          OutlinedButton(
+                            onPressed: () {
+                              setModalState(() {
+                                draft = draft.copyWith(
+                                  clearBodyTextColor: true,
+                                );
+                              });
+                            },
+                            child: const Text('跟随主题'),
+                          ),
+                          FilledButton.tonalIcon(
+                            onPressed: () async {
+                              final selectedColor =
+                                  await _showBodyTextColorPickerDialog(
+                                    context,
+                                    initialColorValue: draft.bodyTextColorValue,
+                                  );
+                              if (selectedColor == null || !context.mounted) {
+                                return;
+                              }
+                              setModalState(() {
+                                draft = draft.copyWith(
+                                  bodyTextColorValue: selectedColor,
+                                );
+                              });
+                              unawaited(rememberBodyTextColor(selectedColor));
+                            },
+                            icon: const Icon(Icons.colorize_rounded, size: 16),
+                            label: const Text('自定义'),
+                          ),
+                        ],
+                      ),
+                    ),
+                    if (draft.bodyTextColorValue != null) ...[
+                      const SizedBox(height: 10),
+                      Align(
+                        alignment: Alignment.centerLeft,
+                        child: Container(
+                          width: 28,
+                          height: 28,
+                          decoration: BoxDecoration(
+                            color: Color(draft.bodyTextColorValue!),
+                            shape: BoxShape.circle,
+                            border: Border.all(
+                              color:
+                                  Theme.of(context).colorScheme.outlineVariant,
+                            ),
+                          ),
+                        ),
+                      ),
+                    ],
+                    buildSectionDivider(),
+                    buildCompactSectionTitle('文字效果'),
+                    buildCompactToggleRow(
+                      label: '斜体',
+                      value: draft.bodyTextItalicEnabled,
+                      onChanged: (enabled) {
+                        setModalState(() {
+                          draft = draft.copyWith(
+                            bodyTextItalicEnabled: enabled,
+                          );
+                        });
+                      },
+                    ),
+                    buildSectionDivider(),
+                    buildCompactToggleRow(
+                      label: '阴影',
+                      value: draft.bodyTextShadowEnabled,
+                      onChanged: (enabled) {
+                        setModalState(() {
+                          draft = draft.copyWith(
+                            bodyTextShadowEnabled: enabled,
+                          );
+                        });
+                      },
+                    ),
+                    if (draft.bodyTextShadowEnabled) ...[
+                      const SizedBox(height: 8),
                       Row(
                         children: [
-                          Expanded(
-                            child: OutlinedButton(
-                              onPressed: openFontPickerSheet,
-                              child: Text(
-                                currentFontLabel(),
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
+                          OutlinedButton.icon(
+                            onPressed: () async {
+                              final selectedColor =
+                                  await _showBodyTextShadowColorPickerDialog(
+                                    context,
+                                    initialColorValue:
+                                        draft.bodyTextShadowColorValue,
+                                  );
+                              if (selectedColor == null || !context.mounted) {
+                                return;
+                              }
+                              setModalState(() {
+                                draft = draft.copyWith(
+                                  bodyTextShadowColorValue: selectedColor,
+                                );
+                              });
+                            },
+                            icon: const Icon(Icons.blur_on_rounded, size: 16),
+                            label: const Text('阴影颜色'),
+                          ),
+                          if (draft.bodyTextShadowColorValue != null) ...[
+                            const SizedBox(width: 10),
+                            Container(
+                              width: 24,
+                              height: 24,
+                              decoration: BoxDecoration(
+                                color: Color(draft.bodyTextShadowColorValue!),
+                                shape: BoxShape.circle,
+                                border: Border.all(
+                                  color:
+                                      Theme.of(
+                                        context,
+                                      ).colorScheme.outlineVariant,
+                                ),
                               ),
                             ),
+                          ],
+                        ],
+                      ),
+                      buildTypographySliderRow(
+                        label: '模糊',
+                        min: 0,
+                        max: 32,
+                        divisions: 32,
+                        value: draft.bodyTextShadowBlurRadius,
+                        step: 1,
+                        valueLabel:
+                            draft.bodyTextShadowBlurRadius.round().toString(),
+                        onChanged: (value) {
+                          setModalState(() {
+                            draft = draft.copyWith(
+                              bodyTextShadowBlurRadius: value,
+                            );
+                          });
+                        },
+                      ),
+                      buildTypographySliderRow(
+                        label: 'X轴',
+                        min: -24,
+                        max: 24,
+                        divisions: 48,
+                        value: draft.bodyTextShadowOffsetDx,
+                        step: 1,
+                        valueLabel: draft.bodyTextShadowOffsetDx
+                            .toStringAsFixed(0),
+                        onChanged: (value) {
+                          setModalState(() {
+                            draft = draft.copyWith(
+                              bodyTextShadowOffsetDx: value,
+                            );
+                          });
+                        },
+                      ),
+                      buildTypographySliderRow(
+                        label: 'Y轴',
+                        min: -24,
+                        max: 24,
+                        divisions: 48,
+                        value: draft.bodyTextShadowOffsetDy,
+                        step: 1,
+                        valueLabel: draft.bodyTextShadowOffsetDy
+                            .toStringAsFixed(0),
+                        onChanged: (value) {
+                          setModalState(() {
+                            draft = draft.copyWith(
+                              bodyTextShadowOffsetDy: value,
+                            );
+                          });
+                        },
+                      ),
+                    ],
+                    buildSectionDivider(),
+                    buildCompactSectionTitle('下划线'),
+                    const SizedBox(height: 8),
+                    Wrap(
+                      spacing: 8,
+                      runSpacing: 8,
+                      children: ReaderBodyTextDecorationStyle.values
+                          .map(
+                            (style) => ChoiceChip(
+                              label: Text(decorationStyleLabel(style)),
+                              selected: draft.bodyTextDecorationStyle == style,
+                              onSelected: (_) {
+                                setModalState(() {
+                                  draft = draft.copyWith(
+                                    bodyTextDecorationStyle: style,
+                                  );
+                                });
+                              },
+                            ),
+                          )
+                          .toList(growable: false),
+                    ),
+                    if (draft.bodyTextDecorationStyle !=
+                        ReaderBodyTextDecorationStyle.none) ...[
+                      const SizedBox(height: 10),
+                      Row(
+                        children: [
+                          OutlinedButton.icon(
+                            onPressed: () {
+                              setModalState(() {
+                                draft = draft.copyWith(
+                                  clearBodyTextDecorationColor: true,
+                                );
+                              });
+                            },
+                            icon: const Icon(Icons.format_color_reset_rounded),
+                            label: const Text('跟随文字'),
                           ),
                           const SizedBox(width: 8),
-                          OutlinedButton(
-                            onPressed:
-                                () => unawaited(openFontWeightTabSheet()),
-                            child: Text(fontWeightDisplayLabel(draft)),
+                          OutlinedButton.icon(
+                            onPressed: () async {
+                              final selectedColor =
+                                  await _showBodyTextDecorationColorPickerDialog(
+                                    context,
+                                    initialColorValue:
+                                        draft.bodyTextDecorationColorValue,
+                                  );
+                              if (selectedColor == null || !context.mounted) {
+                                return;
+                              }
+                              setModalState(() {
+                                draft = draft.copyWith(
+                                  bodyTextDecorationColorValue: selectedColor,
+                                );
+                              });
+                            },
+                            icon: const Icon(Icons.colorize_rounded, size: 16),
+                            label: const Text('自定义颜色'),
                           ),
+                          if (draft.bodyTextDecorationColorValue != null) ...[
+                            const SizedBox(width: 10),
+                            Container(
+                              width: 24,
+                              height: 24,
+                              decoration: BoxDecoration(
+                                color: Color(
+                                  draft.bodyTextDecorationColorValue!,
+                                ),
+                                shape: BoxShape.circle,
+                                border: Border.all(
+                                  color:
+                                      Theme.of(
+                                        context,
+                                      ).colorScheme.outlineVariant,
+                                ),
+                              ),
+                            ),
+                          ],
                         ],
                       ),
-                      buildSectionDivider(),
-                      buildCompactToggleRow(
-                        label: '斜体',
-                        value: draft.bodyTextItalicEnabled,
-                        onChanged: (enabled) {
+                      buildTypographySliderRow(
+                        label: '粗细',
+                        min: 1,
+                        max: 10,
+                        divisions: 18,
+                        value: draft.bodyTextUnderlineThickness,
+                        step: 0.5,
+                        valueLabel: draft.bodyTextUnderlineThickness
+                            .toStringAsFixed(1),
+                        onChanged: (value) {
                           setModalState(() {
                             draft = draft.copyWith(
-                              bodyTextItalicEnabled: enabled,
+                              bodyTextUnderlineThickness: value,
                             );
                           });
                         },
                       ),
-                      buildSectionDivider(),
-                      buildCompactToggleRow(
-                        label: '阴影',
-                        value: draft.bodyTextShadowEnabled,
-                        onChanged: (enabled) {
+                      buildTypographySliderRow(
+                        label: '间距',
+                        min: 0,
+                        max: 16,
+                        divisions: 16,
+                        value: draft.bodyTextUnderlineGap,
+                        step: 1,
+                        valueLabel:
+                            draft.bodyTextUnderlineGap.round().toString(),
+                        onChanged: (value) {
                           setModalState(() {
-                            draft = draft.copyWith(
-                              bodyTextShadowEnabled: enabled,
-                            );
+                            draft = draft.copyWith(bodyTextUnderlineGap: value);
                           });
                         },
                       ),
-                      if (draft.bodyTextShadowEnabled) ...[
-                        const SizedBox(height: 8),
-                        Row(
-                          children: [
-                            OutlinedButton.icon(
-                              onPressed: () async {
-                                final selectedColor =
-                                    await _showBodyTextShadowColorPickerDialog(
-                                      context,
-                                      initialColorValue:
-                                          draft.bodyTextShadowColorValue,
-                                    );
-                                if (selectedColor == null || !context.mounted) {
-                                  return;
-                                }
-                                setModalState(() {
-                                  draft = draft.copyWith(
-                                    bodyTextShadowColorValue: selectedColor,
-                                  );
-                                });
-                              },
-                              icon: const Icon(Icons.blur_on_rounded, size: 16),
-                              label: const Text('阴影颜色'),
-                            ),
-                            if (draft.bodyTextShadowColorValue != null) ...[
-                              const SizedBox(width: 10),
-                              Container(
-                                width: 24,
-                                height: 24,
-                                decoration: BoxDecoration(
-                                  color: Color(draft.bodyTextShadowColorValue!),
-                                  shape: BoxShape.circle,
-                                  border: Border.all(
-                                    color:
-                                        Theme.of(
-                                          context,
-                                        ).colorScheme.outlineVariant,
-                                  ),
-                                ),
-                              ),
-                            ],
-                          ],
-                        ),
+                      if (draft.bodyTextDecorationStyle ==
+                          ReaderBodyTextDecorationStyle.dashed) ...[
                         buildTypographySliderRow(
-                          label: '模糊',
-                          min: 0,
-                          max: 32,
-                          divisions: 32,
-                          value: draft.bodyTextShadowBlurRadius,
-                          step: 1,
-                          valueLabel:
-                              draft.bodyTextShadowBlurRadius.round().toString(),
-                          onChanged: (value) {
-                            setModalState(() {
-                              draft = draft.copyWith(
-                                bodyTextShadowBlurRadius: value,
-                              );
-                            });
-                          },
-                        ),
-                        buildTypographySliderRow(
-                          label: 'X轴',
-                          min: -24,
-                          max: 24,
-                          divisions: 48,
-                          value: draft.bodyTextShadowOffsetDx,
-                          step: 1,
-                          valueLabel: draft.bodyTextShadowOffsetDx
-                              .toStringAsFixed(0),
-                          onChanged: (value) {
-                            setModalState(() {
-                              draft = draft.copyWith(
-                                bodyTextShadowOffsetDx: value,
-                              );
-                            });
-                          },
-                        ),
-                        buildTypographySliderRow(
-                          label: 'Y轴',
-                          min: -24,
-                          max: 24,
-                          divisions: 48,
-                          value: draft.bodyTextShadowOffsetDy,
-                          step: 1,
-                          valueLabel: draft.bodyTextShadowOffsetDy
-                              .toStringAsFixed(0),
-                          onChanged: (value) {
-                            setModalState(() {
-                              draft = draft.copyWith(
-                                bodyTextShadowOffsetDy: value,
-                              );
-                            });
-                          },
-                        ),
-                      ],
-                      buildSectionDivider(),
-                      buildCompactSectionTitle('下划线'),
-                      const SizedBox(height: 8),
-                      Wrap(
-                        spacing: 8,
-                        runSpacing: 8,
-                        children: ReaderBodyTextDecorationStyle.values
-                            .map(
-                              (style) => ChoiceChip(
-                                label: Text(decorationStyleLabel(style)),
-                                selected:
-                                    draft.bodyTextDecorationStyle == style,
-                                onSelected: (_) {
-                                  setModalState(() {
-                                    draft = draft.copyWith(
-                                      bodyTextDecorationStyle: style,
-                                    );
-                                  });
-                                },
-                              ),
-                            )
-                            .toList(growable: false),
-                      ),
-                      if (draft.bodyTextDecorationStyle !=
-                          ReaderBodyTextDecorationStyle.none) ...[
-                        const SizedBox(height: 10),
-                        Row(
-                          children: [
-                            OutlinedButton.icon(
-                              onPressed: () {
-                                setModalState(() {
-                                  draft = draft.copyWith(
-                                    clearBodyTextDecorationColor: true,
-                                  );
-                                });
-                              },
-                              icon: const Icon(
-                                Icons.format_color_reset_rounded,
-                              ),
-                              label: const Text('跟随文字'),
-                            ),
-                            const SizedBox(width: 8),
-                            OutlinedButton.icon(
-                              onPressed: () async {
-                                final selectedColor =
-                                    await _showBodyTextDecorationColorPickerDialog(
-                                      context,
-                                      initialColorValue:
-                                          draft.bodyTextDecorationColorValue,
-                                    );
-                                if (selectedColor == null || !context.mounted) {
-                                  return;
-                                }
-                                setModalState(() {
-                                  draft = draft.copyWith(
-                                    bodyTextDecorationColorValue: selectedColor,
-                                  );
-                                });
-                              },
-                              icon: const Icon(
-                                Icons.colorize_rounded,
-                                size: 16,
-                              ),
-                              label: const Text('自定义颜色'),
-                            ),
-                            if (draft.bodyTextDecorationColorValue != null) ...[
-                              const SizedBox(width: 10),
-                              Container(
-                                width: 24,
-                                height: 24,
-                                decoration: BoxDecoration(
-                                  color: Color(
-                                    draft.bodyTextDecorationColorValue!,
-                                  ),
-                                  shape: BoxShape.circle,
-                                  border: Border.all(
-                                    color:
-                                        Theme.of(
-                                          context,
-                                        ).colorScheme.outlineVariant,
-                                  ),
-                                ),
-                              ),
-                            ],
-                          ],
-                        ),
-                        buildTypographySliderRow(
-                          label: '粗细',
+                          label: '线长',
                           min: 1,
-                          max: 10,
-                          divisions: 18,
-                          value: draft.bodyTextUnderlineThickness,
-                          step: 0.5,
-                          valueLabel: draft.bodyTextUnderlineThickness
-                              .toStringAsFixed(1),
+                          max: 24,
+                          divisions: 23,
+                          value: draft.bodyTextUnderlineDashLength,
+                          step: 1,
+                          valueLabel:
+                              draft.bodyTextUnderlineDashLength
+                                  .round()
+                                  .toString(),
                           onChanged: (value) {
                             setModalState(() {
                               draft = draft.copyWith(
-                                bodyTextUnderlineThickness: value,
+                                bodyTextUnderlineDashLength: value,
                               );
                             });
                           },
                         ),
                         buildTypographySliderRow(
-                          label: '间距',
-                          min: 0,
-                          max: 16,
-                          divisions: 16,
-                          value: draft.bodyTextUnderlineGap,
+                          label: '比例',
+                          min: 1,
+                          max: 12,
+                          divisions: 11,
+                          value: draft.bodyTextUnderlineDashGapRatio,
                           step: 1,
                           valueLabel:
-                              draft.bodyTextUnderlineGap.round().toString(),
+                              draft.bodyTextUnderlineDashGapRatio
+                                  .round()
+                                  .toString(),
                           onChanged: (value) {
                             setModalState(() {
                               draft = draft.copyWith(
-                                bodyTextUnderlineGap: value,
+                                bodyTextUnderlineDashGapRatio: value,
                               );
                             });
                           },
                         ),
-                        if (draft.bodyTextDecorationStyle ==
-                            ReaderBodyTextDecorationStyle.dashed) ...[
-                          buildTypographySliderRow(
-                            label: '线长',
-                            min: 1,
-                            max: 24,
-                            divisions: 23,
-                            value: draft.bodyTextUnderlineDashLength,
-                            step: 1,
-                            valueLabel:
-                                draft.bodyTextUnderlineDashLength
-                                    .round()
-                                    .toString(),
-                            onChanged: (value) {
-                              setModalState(() {
-                                draft = draft.copyWith(
-                                  bodyTextUnderlineDashLength: value,
-                                );
-                              });
-                            },
-                          ),
-                          buildTypographySliderRow(
-                            label: '比例',
-                            min: 1,
-                            max: 12,
-                            divisions: 11,
-                            value: draft.bodyTextUnderlineDashGapRatio,
-                            step: 1,
-                            valueLabel:
-                                draft.bodyTextUnderlineDashGapRatio
-                                    .round()
-                                    .toString(),
-                            onChanged: (value) {
-                              setModalState(() {
-                                draft = draft.copyWith(
-                                  bodyTextUnderlineDashGapRatio: value,
-                                );
-                              });
-                            },
-                          ),
-                        ],
                       ],
-                      buildSectionDivider(),
-                      buildTypographySliderRow(
-                        label: '字号',
-                        min: 5,
-                        max: 50,
-                        divisions: 45,
-                        value: draft.fontSize,
-                        step: 1,
-                        valueLabel: draft.fontSize.toStringAsFixed(0),
-                        onChanged: (value) {
-                          setModalState(() {
-                            draft = draft.copyWith(fontSize: value);
-                          });
-                        },
-                      ),
-                      buildSectionDivider(),
-                      buildCompactSectionTitle('排版'),
-                      buildTypographySliderRow(
-                        label: '字距',
-                        min: 0,
-                        max: 100,
-                        divisions: 100,
-                        value: _letterSpacingSliderValue(draft),
-                        step: 1,
-                        valueLabel: _letterSpacingValueLabel(draft),
-                        onChanged: (value) {
-                          setModalState(() {
-                            draft = draft.copyWith(
-                              letterSpacing: _letterSpacingFromSliderValue(
-                                value,
-                              ),
-                            );
-                          });
-                        },
-                      ),
-                      buildTypographySliderRow(
-                        label: '行距',
-                        min: 0,
-                        max: 20,
-                        divisions: 20,
-                        value: _lineHeightSliderValue(draft),
-                        step: 1,
-                        valueLabel: _lineHeightValueLabel(draft),
-                        onChanged: (value) {
-                          setModalState(() {
-                            draft = draft.copyWith(
-                              lineHeight: _lineHeightFromSliderValue(
-                                sliderValue: value,
-                                settings: draft,
-                              ),
-                            );
-                          });
-                        },
-                      ),
-                      buildTypographySliderRow(
-                        label: '段距',
-                        min: 0,
-                        max: 20,
-                        divisions: 20,
-                        value: draft.paragraphSpacing,
-                        step: 1,
-                        valueLabel: _paragraphSpacingValueLabel(draft),
-                        onChanged: (value) {
-                          setModalState(() {
-                            draft = draft.copyWith(paragraphSpacing: value);
-                          });
-                        },
-                      ),
-                      buildTypographySliderRow(
-                        label: '缩进',
-                        min: 0,
-                        max: 8,
-                        divisions: 8,
-                        value: draft.paragraphIndent.clamp(0, 8).toDouble(),
-                        step: 1,
-                        valueLabel: _paragraphIndentValueLabel(draft),
-                        onChanged: (value) {
-                          setModalState(() {
-                            draft = draft.copyWith(
-                              paragraphIndent: value.round().toDouble(),
-                            );
-                          });
-                        },
-                      ),
-                    ]),
+                    ],
+                    buildSectionDivider(),
+                    buildCompactSectionTitle('排版'),
+                    buildTypographySliderRow(
+                      label: '字距',
+                      min: 0,
+                      max: 100,
+                      divisions: 100,
+                      value: _letterSpacingSliderValue(draft),
+                      step: 1,
+                      valueLabel: _letterSpacingValueLabel(draft),
+                      onChanged: (value) {
+                        setModalState(() {
+                          draft = draft.copyWith(
+                            letterSpacing: _letterSpacingFromSliderValue(value),
+                          );
+                        });
+                      },
+                    ),
+                    buildTypographySliderRow(
+                      label: '行距',
+                      min: 0,
+                      max: 20,
+                      divisions: 20,
+                      value: _lineHeightSliderValue(draft),
+                      step: 1,
+                      valueLabel: _lineHeightValueLabel(draft),
+                      onChanged: (value) {
+                        setModalState(() {
+                          draft = draft.copyWith(
+                            lineHeight: _lineHeightFromSliderValue(
+                              sliderValue: value,
+                              settings: draft,
+                            ),
+                          );
+                        });
+                      },
+                    ),
+                    buildTypographySliderRow(
+                      label: '段距',
+                      min: 0,
+                      max: 20,
+                      divisions: 20,
+                      value: draft.paragraphSpacing,
+                      step: 1,
+                      valueLabel: _paragraphSpacingValueLabel(draft),
+                      onChanged: (value) {
+                        setModalState(() {
+                          draft = draft.copyWith(paragraphSpacing: value);
+                        });
+                      },
+                    ),
+                    buildTypographySliderRow(
+                      label: '缩进',
+                      min: 0,
+                      max: 8,
+                      divisions: 8,
+                      value: draft.paragraphIndent.clamp(0, 8).toDouble(),
+                      step: 1,
+                      valueLabel: _paragraphIndentValueLabel(draft),
+                      onChanged: (value) {
+                        setModalState(() {
+                          draft = draft.copyWith(
+                            paragraphIndent: value.round().toDouble(),
+                          );
+                        });
+                      },
+                    ),
                   ],
                   'interaction' => <Widget>[
                     buildCompactSettingsCard([
@@ -13086,76 +13778,6 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
                           ),
                         ],
                       ),
-                      buildSectionDivider(),
-                      buildCompactSectionTitle('正文边距'),
-                      buildTypographySliderRow(
-                        label: '上',
-                        min: ReaderSettings.minLayoutMargin,
-                        max: ReaderSettings.maxLayoutMargin,
-                        divisions:
-                            (ReaderSettings.maxLayoutMargin -
-                                    ReaderSettings.minLayoutMargin)
-                                .round(),
-                        value: draft.bodyMarginTop,
-                        step: 1,
-                        valueLabel: draft.bodyMarginTop.round().toString(),
-                        onChanged: (value) {
-                          setModalState(() {
-                            draft = draft.copyWith(bodyMarginTop: value);
-                          });
-                        },
-                      ),
-                      buildTypographySliderRow(
-                        label: '下',
-                        min: ReaderSettings.minLayoutMargin,
-                        max: ReaderSettings.maxLayoutMargin,
-                        divisions:
-                            (ReaderSettings.maxLayoutMargin -
-                                    ReaderSettings.minLayoutMargin)
-                                .round(),
-                        value: draft.bodyMarginBottom,
-                        step: 1,
-                        valueLabel: draft.bodyMarginBottom.round().toString(),
-                        onChanged: (value) {
-                          setModalState(() {
-                            draft = draft.copyWith(bodyMarginBottom: value);
-                          });
-                        },
-                      ),
-                      buildTypographySliderRow(
-                        label: '左',
-                        min: ReaderSettings.minLayoutMargin,
-                        max: ReaderSettings.maxLayoutMargin,
-                        divisions:
-                            (ReaderSettings.maxLayoutMargin -
-                                    ReaderSettings.minLayoutMargin)
-                                .round(),
-                        value: draft.bodyMarginLeft,
-                        step: 1,
-                        valueLabel: draft.bodyMarginLeft.round().toString(),
-                        onChanged: (value) {
-                          setModalState(() {
-                            draft = draft.copyWith(bodyMarginLeft: value);
-                          });
-                        },
-                      ),
-                      buildTypographySliderRow(
-                        label: '右',
-                        min: ReaderSettings.minLayoutMargin,
-                        max: ReaderSettings.maxLayoutMargin,
-                        divisions:
-                            (ReaderSettings.maxLayoutMargin -
-                                    ReaderSettings.minLayoutMargin)
-                                .round(),
-                        value: draft.bodyMarginRight,
-                        step: 1,
-                        valueLabel: draft.bodyMarginRight.round().toString(),
-                        onChanged: (value) {
-                          setModalState(() {
-                            draft = draft.copyWith(bodyMarginRight: value);
-                          });
-                        },
-                      ),
                       const SizedBox(height: 10),
                       Text(
                         '当前启用 ${enabledInfoItemCount()} 项信息，控制正文页底部/角落的信息显示。',
@@ -13267,7 +13889,10 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
                   _ => const <Widget>[],
                 };
                 final sheetTitle = switch (activeSettingsGroupKey) {
-                  'appearance' => '主题背景',
+                  'quick_typography_spacing' => '字体与间距',
+                  'quick_margins' => '边距',
+                  'quick_info' => '信息',
+                  'appearance' => '文字颜色',
                   'typography' => '字体',
                   'interaction' => '翻页与动画',
                   'info' => '信息排版',
@@ -13275,7 +13900,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
                   'auto_read' => '自动阅读',
                   'cache' => '缓存与预加载',
                   'advanced' => '高级选项',
-                  _ => showInterfaceSettings ? '界面' : '设置',
+                  _ => showInterfaceSettings ? '界面设置' : '设置',
                 };
                 final textSheetMaxWidth = AppLayout.pageContentMaxWidth(
                   context,
@@ -13308,33 +13933,40 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
                             ),
                             child: Column(
                               children: [
-                                Row(
-                                  children: [
-                                    if (activeSettingsGroupKey != null)
-                                      IconButton(
-                                        visualDensity: VisualDensity.compact,
-                                        onPressed: () {
-                                          setModalState(() {
-                                            activeSettingsGroupKey = null;
-                                          });
-                                        },
-                                        icon: const Icon(
-                                          Icons.arrow_back_rounded,
+                                SizedBox(
+                                  height: 40,
+                                  child: Stack(
+                                    alignment: Alignment.center,
+                                    children: [
+                                      if (activeSettingsGroupKey != null)
+                                        Align(
+                                          alignment: Alignment.centerLeft,
+                                          child: IconButton(
+                                            visualDensity:
+                                                VisualDensity.compact,
+                                            onPressed: () {
+                                              setModalState(() {
+                                                activeSettingsGroupKey = null;
+                                              });
+                                            },
+                                            icon: const Icon(
+                                              Icons.arrow_back_rounded,
+                                            ),
+                                          ),
+                                        ),
+                                      Center(
+                                        child: Text(
+                                          sheetTitle,
+                                          textAlign: TextAlign.center,
+                                          style: Theme.of(
+                                            context,
+                                          ).textTheme.titleMedium?.copyWith(
+                                            fontWeight: FontWeight.w700,
+                                          ),
                                         ),
                                       ),
-                                    if (activeSettingsGroupKey != null)
-                                      const SizedBox(width: 4),
-                                    Expanded(
-                                      child: Text(
-                                        sheetTitle,
-                                        style: Theme.of(
-                                          context,
-                                        ).textTheme.titleMedium?.copyWith(
-                                          fontWeight: FontWeight.w700,
-                                        ),
-                                      ),
-                                    ),
-                                  ],
+                                    ],
+                                  ),
                                 ),
                                 const SizedBox(height: 6),
                                 Expanded(
