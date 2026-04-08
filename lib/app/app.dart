@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:math' as math;
+import 'dart:ui' show FrameTiming;
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -12,6 +13,7 @@ import '../core/auth/auth_event_bus.dart';
 import '../core/auth/auth_token_refresher_impl.dart';
 import '../core/device/device_identity_service.dart';
 import '../core/device/device_heartbeat_service.dart';
+import '../core/logging/app_logger.dart';
 import '../core/network/api_client.dart';
 import '../domain/entities/announcement.dart';
 import '../features/announcement/application/announcement_read_state_service.dart';
@@ -115,15 +117,35 @@ class _SystemUiOverlayWrapperState extends State<_SystemUiOverlayWrapper>
 
   static const Duration _kStartupMinDuration = Duration(milliseconds: 480);
   static const Duration _kStartupDeferredTasksDelay = Duration(
-    milliseconds: 1200,
+    milliseconds: 1800,
+  );
+  static const Duration _kStartupTaskGap = Duration(milliseconds: 320);
+  static const Duration _kStartupAnnouncementDelay = Duration(
+    milliseconds: 480,
   );
   static const Duration _kHeartbeatThrottle = Duration(minutes: 2);
+  final Stopwatch _startupStopwatch = Stopwatch()..start();
+  bool _firstFrameMetricsLogged = false;
+  final Completer<void> _startupFirstFrameCompleter = Completer<void>();
 
   @override
   void initState() {
     super.initState();
+    AppLogger.instance.info('Startup init begin');
     ApiClient.defaultAuthTokenRefresher ??= _authTokenRefresher;
     WidgetsBinding.instance.addObserver(this);
+    WidgetsBinding.instance.addTimingsCallback(_onFrameTimings);
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!_startupFirstFrameCompleter.isCompleted) {
+        _startupFirstFrameCompleter.complete();
+      }
+      AppLogger.instance.info(
+        'Startup first frame callback',
+        context: <String, Object?>{
+          'elapsedMs': _startupStopwatch.elapsedMilliseconds,
+        },
+      );
+    });
     _incomingImportSub = ExternalImportBridge.instance.payloadStream.listen(
       _onIncomingExternalImportPayload,
     );
@@ -133,10 +155,8 @@ class _SystemUiOverlayWrapperState extends State<_SystemUiOverlayWrapper>
   }
 
   Future<void> _prepareStartup() async {
-    final remaining = _kStartupMinDuration;
-    if (remaining > Duration.zero) {
-      await _waitStartupDelay(remaining);
-    }
+    await _startupFirstFrameCompleter.future;
+    await _waitStartupDelay(_kStartupMinDuration);
 
     if (!mounted) {
       return;
@@ -145,6 +165,12 @@ class _SystemUiOverlayWrapperState extends State<_SystemUiOverlayWrapper>
     setState(() {
       _isStartupReady = true;
     });
+    AppLogger.instance.info(
+      'Startup ready',
+      context: <String, Object?>{
+        'elapsedMs': _startupStopwatch.elapsedMilliseconds,
+      },
+    );
     WidgetsBinding.instance.addPostFrameCallback((_) {
       unawaited(_warmupLocalDatabase());
       _scheduleStartupDeferredTasks();
@@ -152,10 +178,19 @@ class _SystemUiOverlayWrapperState extends State<_SystemUiOverlayWrapper>
   }
 
   Future<void> _warmupLocalDatabase() async {
+    final stopwatch = Stopwatch()..start();
     try {
       await SourceRuntimeFacade.instance.listScriptSources();
     } catch (_) {
       // Ignore warmup failures to avoid affecting app startup or first frame.
+    } finally {
+      AppLogger.instance.info(
+        'Startup warmup local database',
+        context: <String, Object?>{
+          'costMs': stopwatch.elapsedMilliseconds,
+          'elapsedMs': _startupStopwatch.elapsedMilliseconds,
+        },
+      );
     }
   }
 
@@ -225,13 +260,31 @@ class _SystemUiOverlayWrapperState extends State<_SystemUiOverlayWrapper>
     if (!mounted) {
       return;
     }
-    await _sendHeartbeat();
-    await _sendVisitEvent();
-    await _checkStartupUpdateIfNeeded();
+    AppLogger.instance.info(
+      'Startup deferred tasks begin',
+      context: <String, Object?>{
+        'elapsedMs': _startupStopwatch.elapsedMilliseconds,
+      },
+    );
+    _showStartupAnnouncementIfNeeded();
+    await _waitDeferredGap(_kStartupAnnouncementDelay);
     if (!mounted) {
       return;
     }
-    _showStartupAnnouncementIfNeeded();
+    await _runStartupDeferredTask(name: 'heartbeat', task: _sendHeartbeat);
+    await _waitDeferredGap(_kStartupTaskGap);
+    await _runStartupDeferredTask(name: 'visit', task: _sendVisitEvent);
+    await _waitDeferredGap(_kStartupTaskGap);
+    await _runStartupDeferredTask(
+      name: 'updateCheck',
+      task: _checkStartupUpdateIfNeeded,
+    );
+    AppLogger.instance.info(
+      'Startup deferred tasks complete',
+      context: <String, Object?>{
+        'elapsedMs': _startupStopwatch.elapsedMilliseconds,
+      },
+    );
   }
 
   @override
@@ -279,11 +332,53 @@ class _SystemUiOverlayWrapperState extends State<_SystemUiOverlayWrapper>
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
+    WidgetsBinding.instance.removeTimingsCallback(_onFrameTimings);
     _incomingImportSub?.cancel();
     _authEventSub?.cancel();
     _startupDelayTimer?.cancel();
     _startupDeferredTasksTimer?.cancel();
     super.dispose();
+  }
+
+  Future<void> _runStartupDeferredTask({
+    required String name,
+    required Future<void> Function() task,
+  }) async {
+    final stopwatch = Stopwatch()..start();
+    await task();
+    AppLogger.instance.info(
+      'Startup deferred task complete',
+      context: <String, Object?>{
+        'task': name,
+        'costMs': stopwatch.elapsedMilliseconds,
+        'elapsedMs': _startupStopwatch.elapsedMilliseconds,
+      },
+    );
+  }
+
+  Future<void> _waitDeferredGap(Duration duration) async {
+    if (!mounted || duration <= Duration.zero) {
+      return;
+    }
+    await Future<void>.delayed(duration);
+  }
+
+  void _onFrameTimings(List<FrameTiming> timings) {
+    if (_firstFrameMetricsLogged || timings.isEmpty) {
+      return;
+    }
+    _firstFrameMetricsLogged = true;
+    final frame = timings.first;
+    AppLogger.instance.info(
+      'Startup first frame timing',
+      context: <String, Object?>{
+        'buildMs': frame.buildDuration.inMilliseconds,
+        'rasterMs': frame.rasterDuration.inMilliseconds,
+        'totalMs': frame.totalSpan.inMilliseconds,
+        'vsyncOverheadMs': frame.vsyncOverhead.inMilliseconds,
+        'elapsedMs': _startupStopwatch.elapsedMilliseconds,
+      },
+    );
   }
 
   void _handleAuthEvent(AuthEvent event) {
