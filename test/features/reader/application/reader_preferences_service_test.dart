@@ -30,13 +30,25 @@ void main() {
         backgroundStyle: ReaderBackgroundStyle.paper,
         pageTurnStepRatio: 0.72,
         fontWeightLevel: ReaderFontWeightLevel.medium,
+        fontWeightValue: 700,
         fontSource: ReaderFontSource.custom,
+        systemFontPreset: ReaderSystemFontPreset.monospace,
         fontFamilyKey: 'reader_custom_foo',
         customFontPath: '/tmp/reader_custom_foo.ttf',
+        bodyTextItalicEnabled: true,
+        bodyTextShadowEnabled: true,
+        bodyTextShadowColorValue: 0x88224466,
+        bodyTextShadowBlurRadius: 12,
+        bodyTextShadowOffsetDx: 2,
+        bodyTextShadowOffsetDy: -1,
         pageAnimationStyle: ReaderPageAnimationStyle.cover,
         backgroundImageBase64: 'dGVzdF9iZw==',
         bodyTextDecorationStyle: ReaderBodyTextDecorationStyle.dashed,
         bodyTextDecorationColorValue: 0xFF3366CC,
+        bodyTextUnderlineThickness: 3.5,
+        bodyTextUnderlineGap: 4,
+        bodyTextUnderlineDashLength: 9,
+        bodyTextUnderlineDashGapRatio: 5,
         mangaReadMode: ReaderMangaReadMode.horizontal,
         mangaImageSpacing: 14,
         mangaImagePadding: 12,
@@ -83,9 +95,17 @@ void main() {
       expect(restored.backgroundStyle, ReaderBackgroundStyle.paper);
       expect(restored.pageTurnStepRatio, 0.72);
       expect(restored.fontWeightLevel, ReaderFontWeightLevel.medium);
+      expect(restored.fontWeightValue, 700);
       expect(restored.fontSource, ReaderFontSource.custom);
+      expect(restored.systemFontPreset, ReaderSystemFontPreset.monospace);
       expect(restored.fontFamilyKey, 'reader_custom_foo');
       expect(restored.customFontPath, '/tmp/reader_custom_foo.ttf');
+      expect(restored.bodyTextItalicEnabled, isTrue);
+      expect(restored.bodyTextShadowEnabled, isTrue);
+      expect(restored.bodyTextShadowColorValue, 0x88224466);
+      expect(restored.bodyTextShadowBlurRadius, 12);
+      expect(restored.bodyTextShadowOffsetDx, 2);
+      expect(restored.bodyTextShadowOffsetDy, -1);
       expect(restored.pageAnimationStyle, ReaderPageAnimationStyle.cover);
       expect(restored.backgroundImageBase64, 'dGVzdF9iZw==');
       expect(
@@ -93,6 +113,10 @@ void main() {
         ReaderBodyTextDecorationStyle.dashed,
       );
       expect(restored.bodyTextDecorationColorValue, 0xFF3366CC);
+      expect(restored.bodyTextUnderlineThickness, 3.5);
+      expect(restored.bodyTextUnderlineGap, 4);
+      expect(restored.bodyTextUnderlineDashLength, 9);
+      expect(restored.bodyTextUnderlineDashGapRatio, 5);
       expect(restored.mangaReadMode, ReaderMangaReadMode.horizontal);
       expect(restored.mangaImageSpacing, 14);
       expect(restored.mangaImagePadding, 12);

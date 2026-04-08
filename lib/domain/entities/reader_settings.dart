@@ -44,6 +44,8 @@ enum ReaderFontWeightLevel { light, regular, medium }
 
 enum ReaderFontSource { system, builtin, custom }
 
+enum ReaderSystemFontPreset { defaultSans, serif, monospace }
+
 enum ReaderPageAnimationStyle { curl, fade, cover, translate, vertical, none }
 
 enum ReaderMangaReadMode { continuous, paged, horizontal }
@@ -71,14 +73,26 @@ class ReaderSettings {
     this.backgroundTone = ReaderBackgroundTone.surface,
     this.pageTurnStepRatio = 0.88,
     this.fontWeightLevel = ReaderFontWeightLevel.regular,
+    this.fontWeightValue,
     this.fontSource = ReaderFontSource.system,
+    this.systemFontPreset = ReaderSystemFontPreset.defaultSans,
     this.fontFamilyKey,
     this.customFontPath,
+    this.bodyTextItalicEnabled = false,
+    this.bodyTextShadowEnabled = false,
+    this.bodyTextShadowColorValue,
+    this.bodyTextShadowBlurRadius = 0,
+    this.bodyTextShadowOffsetDx = 0,
+    this.bodyTextShadowOffsetDy = 0,
     this.pageAnimationStyle = ReaderPageAnimationStyle.curl,
     this.backgroundImageBase64,
     this.bodyTextColorValue,
     this.bodyTextDecorationStyle = ReaderBodyTextDecorationStyle.none,
     this.bodyTextDecorationColorValue,
+    this.bodyTextUnderlineThickness = 2.2,
+    this.bodyTextUnderlineGap = 2,
+    this.bodyTextUnderlineDashLength = 6,
+    this.bodyTextUnderlineDashGapRatio = 6,
     this.mangaReadMode = ReaderMangaReadMode.continuous,
     this.mangaImageSpacing = 10,
     this.mangaImagePadding = 8,
@@ -114,6 +128,8 @@ class ReaderSettings {
   static const double minLetterSpacing = -0.5;
   static const double maxLetterSpacing = 0.5;
   static const double defaultLetterSpacing = 0;
+  static const int minFontWeightValue = 100;
+  static const int maxFontWeightValue = 900;
   static const double minInfoBarPadding = 0;
   static const double maxInfoBarPadding = 24;
   static const double minLayoutMargin = 0;
@@ -136,14 +152,26 @@ class ReaderSettings {
   final ReaderBackgroundTone backgroundTone;
   final double pageTurnStepRatio;
   final ReaderFontWeightLevel fontWeightLevel;
+  final int? fontWeightValue;
   final ReaderFontSource fontSource;
+  final ReaderSystemFontPreset systemFontPreset;
   final String? fontFamilyKey;
   final String? customFontPath;
+  final bool bodyTextItalicEnabled;
+  final bool bodyTextShadowEnabled;
+  final int? bodyTextShadowColorValue;
+  final double bodyTextShadowBlurRadius;
+  final double bodyTextShadowOffsetDx;
+  final double bodyTextShadowOffsetDy;
   final ReaderPageAnimationStyle pageAnimationStyle;
   final String? backgroundImageBase64;
   final int? bodyTextColorValue;
   final ReaderBodyTextDecorationStyle bodyTextDecorationStyle;
   final int? bodyTextDecorationColorValue;
+  final double bodyTextUnderlineThickness;
+  final double bodyTextUnderlineGap;
+  final double bodyTextUnderlineDashLength;
+  final double bodyTextUnderlineDashGapRatio;
   final ReaderMangaReadMode mangaReadMode;
   final double mangaImageSpacing;
   final double mangaImagePadding;
@@ -190,14 +218,26 @@ class ReaderSettings {
     ReaderBackgroundTone? backgroundTone,
     double? pageTurnStepRatio,
     ReaderFontWeightLevel? fontWeightLevel,
+    int? fontWeightValue,
     ReaderFontSource? fontSource,
+    ReaderSystemFontPreset? systemFontPreset,
     String? fontFamilyKey,
     String? customFontPath,
+    bool? bodyTextItalicEnabled,
+    bool? bodyTextShadowEnabled,
+    int? bodyTextShadowColorValue,
+    double? bodyTextShadowBlurRadius,
+    double? bodyTextShadowOffsetDx,
+    double? bodyTextShadowOffsetDy,
     ReaderPageAnimationStyle? pageAnimationStyle,
     String? backgroundImageBase64,
     int? bodyTextColorValue,
     ReaderBodyTextDecorationStyle? bodyTextDecorationStyle,
     int? bodyTextDecorationColorValue,
+    double? bodyTextUnderlineThickness,
+    double? bodyTextUnderlineGap,
+    double? bodyTextUnderlineDashLength,
+    double? bodyTextUnderlineDashGapRatio,
     ReaderMangaReadMode? mangaReadMode,
     double? mangaImageSpacing,
     double? mangaImagePadding,
@@ -278,11 +318,38 @@ class ReaderSettings {
       backgroundTone: backgroundTone ?? this.backgroundTone,
       pageTurnStepRatio: pageTurnStepRatio ?? this.pageTurnStepRatio,
       fontWeightLevel: fontWeightLevel ?? this.fontWeightLevel,
+      fontWeightValue:
+          fontWeightValue == null
+              ? this.fontWeightValue
+              : fontWeightValue
+                  .clamp(minFontWeightValue, maxFontWeightValue)
+                  .toInt(),
       fontSource: fontSource ?? this.fontSource,
+      systemFontPreset: systemFontPreset ?? this.systemFontPreset,
       fontFamilyKey:
           clearFontFamilyKey ? null : fontFamilyKey ?? this.fontFamilyKey,
       customFontPath:
           clearCustomFontPath ? null : customFontPath ?? this.customFontPath,
+      bodyTextItalicEnabled:
+          bodyTextItalicEnabled ?? this.bodyTextItalicEnabled,
+      bodyTextShadowEnabled:
+          bodyTextShadowEnabled ?? this.bodyTextShadowEnabled,
+      bodyTextShadowColorValue:
+          clearBodyTextColor
+              ? null
+              : bodyTextShadowColorValue ?? this.bodyTextShadowColorValue,
+      bodyTextShadowBlurRadius:
+          (bodyTextShadowBlurRadius ?? this.bodyTextShadowBlurRadius)
+              .clamp(0, 32)
+              .toDouble(),
+      bodyTextShadowOffsetDx:
+          (bodyTextShadowOffsetDx ?? this.bodyTextShadowOffsetDx)
+              .clamp(-24, 24)
+              .toDouble(),
+      bodyTextShadowOffsetDy:
+          (bodyTextShadowOffsetDy ?? this.bodyTextShadowOffsetDy)
+              .clamp(-24, 24)
+              .toDouble(),
       pageAnimationStyle: pageAnimationStyle ?? this.pageAnimationStyle,
       backgroundImageBase64:
           clearBackgroundImage
@@ -299,6 +366,22 @@ class ReaderSettings {
               ? null
               : bodyTextDecorationColorValue ??
                   this.bodyTextDecorationColorValue,
+      bodyTextUnderlineThickness:
+          (bodyTextUnderlineThickness ?? this.bodyTextUnderlineThickness)
+              .clamp(1, 10)
+              .toDouble(),
+      bodyTextUnderlineGap:
+          (bodyTextUnderlineGap ?? this.bodyTextUnderlineGap)
+              .clamp(0, 16)
+              .toDouble(),
+      bodyTextUnderlineDashLength:
+          (bodyTextUnderlineDashLength ?? this.bodyTextUnderlineDashLength)
+              .clamp(1, 24)
+              .toDouble(),
+      bodyTextUnderlineDashGapRatio:
+          (bodyTextUnderlineDashGapRatio ?? this.bodyTextUnderlineDashGapRatio)
+              .clamp(1, 12)
+              .toDouble(),
       mangaReadMode: mangaReadMode ?? this.mangaReadMode,
       mangaImageSpacing: mangaImageSpacing ?? this.mangaImageSpacing,
       mangaImagePadding: mangaImagePadding ?? this.mangaImagePadding,
@@ -382,14 +465,26 @@ class ReaderSettings {
       'backgroundTone': backgroundTone.name,
       'pageTurnStepRatio': pageTurnStepRatio,
       'fontWeightLevel': fontWeightLevel.name,
+      'fontWeightValue': fontWeightValue,
       'fontSource': fontSource.name,
+      'systemFontPreset': systemFontPreset.name,
       'fontFamilyKey': fontFamilyKey,
       'customFontPath': customFontPath,
+      'bodyTextItalicEnabled': bodyTextItalicEnabled,
+      'bodyTextShadowEnabled': bodyTextShadowEnabled,
+      'bodyTextShadowColorValue': bodyTextShadowColorValue,
+      'bodyTextShadowBlurRadius': bodyTextShadowBlurRadius,
+      'bodyTextShadowOffsetDx': bodyTextShadowOffsetDx,
+      'bodyTextShadowOffsetDy': bodyTextShadowOffsetDy,
       'pageAnimationStyle': pageAnimationStyle.name,
       'backgroundImageBase64': backgroundImageBase64,
       'bodyTextColorValue': bodyTextColorValue,
       'bodyTextDecorationStyle': bodyTextDecorationStyle.name,
       'bodyTextDecorationColorValue': bodyTextDecorationColorValue,
+      'bodyTextUnderlineThickness': bodyTextUnderlineThickness,
+      'bodyTextUnderlineGap': bodyTextUnderlineGap,
+      'bodyTextUnderlineDashLength': bodyTextUnderlineDashLength,
+      'bodyTextUnderlineDashGapRatio': bodyTextUnderlineDashGapRatio,
       'mangaReadMode': mangaReadMode.name,
       'mangaImageSpacing': mangaImageSpacing,
       'mangaImagePadding': mangaImagePadding,
@@ -459,6 +554,11 @@ class ReaderSettings {
       (item) => item.name == fontSourceName,
       orElse: () => ReaderFontSource.system,
     );
+    final systemFontPresetName = json['systemFontPreset']?.toString();
+    final systemFontPreset = ReaderSystemFontPreset.values.firstWhere(
+      (item) => item.name == systemFontPresetName,
+      orElse: () => ReaderSystemFontPreset.defaultSans,
+    );
 
     final animationName = json['pageAnimationStyle']?.toString();
     final pageAnimationStyle = ReaderPageAnimationStyle.values.firstWhere(
@@ -491,6 +591,7 @@ class ReaderSettings {
     final bodyTextDecorationColorValue = _asInt(
       json['bodyTextDecorationColorValue'],
     );
+    final rawFontWeightValue = _asInt(json['fontWeightValue']);
     final fontFamilyKey = json['fontFamilyKey']?.toString().trim();
     final customFontPath = json['customFontPath']?.toString().trim();
     final legacyHorizontalPadding = _asDouble(json['horizontalPadding']) ?? 18;
@@ -528,13 +629,27 @@ class ReaderSettings {
       pageTurnStepRatio:
           _asDouble(json['pageTurnStepRatio'])?.clamp(0.6, 1.0) ?? 0.88,
       fontWeightLevel: fontWeightLevel,
+      fontWeightValue:
+          rawFontWeightValue
+              ?.clamp(minFontWeightValue, maxFontWeightValue)
+              .toInt(),
       fontSource: fontSource,
+      systemFontPreset: systemFontPreset,
       fontFamilyKey:
           fontFamilyKey == null || fontFamilyKey.isEmpty ? null : fontFamilyKey,
       customFontPath:
           customFontPath == null || customFontPath.isEmpty
               ? null
               : customFontPath,
+      bodyTextItalicEnabled: _asBool(json['bodyTextItalicEnabled']) ?? false,
+      bodyTextShadowEnabled: _asBool(json['bodyTextShadowEnabled']) ?? false,
+      bodyTextShadowColorValue: _asInt(json['bodyTextShadowColorValue']),
+      bodyTextShadowBlurRadius:
+          _asDouble(json['bodyTextShadowBlurRadius'])?.clamp(0, 32) ?? 0,
+      bodyTextShadowOffsetDx:
+          _asDouble(json['bodyTextShadowOffsetDx'])?.clamp(-24, 24) ?? 0,
+      bodyTextShadowOffsetDy:
+          _asDouble(json['bodyTextShadowOffsetDy'])?.clamp(-24, 24) ?? 0,
       pageAnimationStyle: pageAnimationStyle,
       backgroundImageBase64:
           backgroundImageBase64 == null || backgroundImageBase64.isEmpty
@@ -543,6 +658,14 @@ class ReaderSettings {
       bodyTextColorValue: bodyTextColorValue,
       bodyTextDecorationStyle: bodyTextDecorationStyle,
       bodyTextDecorationColorValue: bodyTextDecorationColorValue,
+      bodyTextUnderlineThickness:
+          _asDouble(json['bodyTextUnderlineThickness'])?.clamp(1, 10) ?? 2.2,
+      bodyTextUnderlineGap:
+          _asDouble(json['bodyTextUnderlineGap'])?.clamp(0, 16) ?? 2,
+      bodyTextUnderlineDashLength:
+          _asDouble(json['bodyTextUnderlineDashLength'])?.clamp(1, 24) ?? 6,
+      bodyTextUnderlineDashGapRatio:
+          _asDouble(json['bodyTextUnderlineDashGapRatio'])?.clamp(1, 12) ?? 6,
       mangaReadMode: mangaReadMode,
       mangaImageSpacing:
           _asDouble(json['mangaImageSpacing'])?.clamp(0.0, 24.0) ?? 10,

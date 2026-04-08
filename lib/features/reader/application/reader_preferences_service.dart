@@ -36,9 +36,23 @@ class ReaderPreferencesService {
   static const String _pageTurnStepRatioKey =
       'reader.settings.pageTurnStepRatio';
   static const String _fontWeightLevelKey = 'reader.settings.fontWeightLevel';
+  static const String _fontWeightValueKey = 'reader.settings.fontWeightValue';
   static const String _fontSourceKey = 'reader.settings.fontSource';
+  static const String _systemFontPresetKey = 'reader.settings.systemFontPreset';
   static const String _fontFamilyKeyKey = 'reader.settings.fontFamilyKey';
   static const String _customFontPathKey = 'reader.settings.customFontPath';
+  static const String _bodyTextItalicEnabledKey =
+      'reader.settings.bodyTextItalicEnabled';
+  static const String _bodyTextShadowEnabledKey =
+      'reader.settings.bodyTextShadowEnabled';
+  static const String _bodyTextShadowColorValueKey =
+      'reader.settings.bodyTextShadowColorValue';
+  static const String _bodyTextShadowBlurRadiusKey =
+      'reader.settings.bodyTextShadowBlurRadius';
+  static const String _bodyTextShadowOffsetDxKey =
+      'reader.settings.bodyTextShadowOffsetDx';
+  static const String _bodyTextShadowOffsetDyKey =
+      'reader.settings.bodyTextShadowOffsetDy';
   static const String _pageAnimationStyleKey =
       'reader.settings.pageAnimationStyle';
   static const String _backgroundImageBase64Key =
@@ -49,6 +63,14 @@ class ReaderPreferencesService {
       'reader.settings.bodyTextDecorationStyle';
   static const String _bodyTextDecorationColorValueKey =
       'reader.settings.bodyTextDecorationColorValue';
+  static const String _bodyTextUnderlineThicknessKey =
+      'reader.settings.bodyTextUnderlineThickness';
+  static const String _bodyTextUnderlineGapKey =
+      'reader.settings.bodyTextUnderlineGap';
+  static const String _bodyTextUnderlineDashLengthKey =
+      'reader.settings.bodyTextUnderlineDashLength';
+  static const String _bodyTextUnderlineDashGapRatioKey =
+      'reader.settings.bodyTextUnderlineDashGapRatio';
   static const String _customBackgroundImagesKey =
       'reader.settings.customBackgroundImages';
   static const String _customBackgroundImageBase64Key =
@@ -144,6 +166,12 @@ class ReaderPreferencesService {
       (item) => item.name == fontSourceName,
       orElse: () => ReaderFontSource.system,
     );
+    final rawFontWeightValue = prefs.getInt(_fontWeightValueKey);
+    final systemFontPresetName = prefs.getString(_systemFontPresetKey);
+    final systemFontPreset = ReaderSystemFontPreset.values.firstWhere(
+      (item) => item.name == systemFontPresetName,
+      orElse: () => ReaderSystemFontPreset.defaultSans,
+    );
 
     final animationName = prefs.getString(_pageAnimationStyleKey);
     final pageAnimationStyle = ReaderPageAnimationStyle.values.firstWhere(
@@ -224,9 +252,26 @@ class ReaderPreferencesService {
         1.0,
       ),
       fontWeightLevel: fontWeightLevel,
+      fontWeightValue:
+          rawFontWeightValue
+              ?.clamp(
+                ReaderSettings.minFontWeightValue,
+                ReaderSettings.maxFontWeightValue,
+              )
+              .toInt(),
       fontSource: fontSource,
+      systemFontPreset: systemFontPreset,
       fontFamilyKey: prefs.getString(_fontFamilyKeyKey),
       customFontPath: prefs.getString(_customFontPathKey),
+      bodyTextItalicEnabled: prefs.getBool(_bodyTextItalicEnabledKey) ?? false,
+      bodyTextShadowEnabled: prefs.getBool(_bodyTextShadowEnabledKey) ?? false,
+      bodyTextShadowColorValue: prefs.getInt(_bodyTextShadowColorValueKey),
+      bodyTextShadowBlurRadius:
+          (prefs.getDouble(_bodyTextShadowBlurRadiusKey) ?? 0).clamp(0, 32),
+      bodyTextShadowOffsetDx: (prefs.getDouble(_bodyTextShadowOffsetDxKey) ?? 0)
+          .clamp(-24, 24),
+      bodyTextShadowOffsetDy: (prefs.getDouble(_bodyTextShadowOffsetDyKey) ?? 0)
+          .clamp(-24, 24),
       pageAnimationStyle: pageAnimationStyle,
       backgroundImageBase64: prefs.getString(_backgroundImageBase64Key),
       bodyTextColorValue: prefs.getInt(_bodyTextColorValueKey),
@@ -234,6 +279,17 @@ class ReaderPreferencesService {
       bodyTextDecorationColorValue: prefs.getInt(
         _bodyTextDecorationColorValueKey,
       ),
+      bodyTextUnderlineThickness:
+          (prefs.getDouble(_bodyTextUnderlineThicknessKey) ?? 2.2).clamp(1, 10),
+      bodyTextUnderlineGap: (prefs.getDouble(_bodyTextUnderlineGapKey) ?? 2)
+          .clamp(0, 16),
+      bodyTextUnderlineDashLength:
+          (prefs.getDouble(_bodyTextUnderlineDashLengthKey) ?? 6).clamp(1, 24),
+      bodyTextUnderlineDashGapRatio:
+          (prefs.getDouble(_bodyTextUnderlineDashGapRatioKey) ?? 6).clamp(
+            1,
+            12,
+          ),
       mangaReadMode: mangaReadMode,
       mangaImageSpacing: (prefs.getDouble(_mangaImageSpacingKey) ?? 10).clamp(
         0,
@@ -376,7 +432,14 @@ class ReaderPreferencesService {
     await prefs.setString(_backgroundToneKey, settings.backgroundTone.name);
     await prefs.setDouble(_pageTurnStepRatioKey, settings.pageTurnStepRatio);
     await prefs.setString(_fontWeightLevelKey, settings.fontWeightLevel.name);
+    final fontWeightValue = settings.fontWeightValue;
+    if (fontWeightValue == null) {
+      await prefs.remove(_fontWeightValueKey);
+    } else {
+      await prefs.setInt(_fontWeightValueKey, fontWeightValue);
+    }
     await prefs.setString(_fontSourceKey, settings.fontSource.name);
+    await prefs.setString(_systemFontPresetKey, settings.systemFontPreset.name);
     final fontFamilyKey = settings.fontFamilyKey;
     if (fontFamilyKey == null || fontFamilyKey.isEmpty) {
       await prefs.remove(_fontFamilyKeyKey);
@@ -389,6 +452,51 @@ class ReaderPreferencesService {
     } else {
       await prefs.setString(_customFontPathKey, customFontPath);
     }
+    await prefs.setBool(
+      _bodyTextItalicEnabledKey,
+      settings.bodyTextItalicEnabled,
+    );
+    await prefs.setBool(
+      _bodyTextShadowEnabledKey,
+      settings.bodyTextShadowEnabled,
+    );
+    final bodyTextShadowColorValue = settings.bodyTextShadowColorValue;
+    if (bodyTextShadowColorValue == null) {
+      await prefs.remove(_bodyTextShadowColorValueKey);
+    } else {
+      await prefs.setInt(
+        _bodyTextShadowColorValueKey,
+        bodyTextShadowColorValue,
+      );
+    }
+    await prefs.setDouble(
+      _bodyTextShadowBlurRadiusKey,
+      settings.bodyTextShadowBlurRadius,
+    );
+    await prefs.setDouble(
+      _bodyTextShadowOffsetDxKey,
+      settings.bodyTextShadowOffsetDx,
+    );
+    await prefs.setDouble(
+      _bodyTextShadowOffsetDyKey,
+      settings.bodyTextShadowOffsetDy,
+    );
+    await prefs.setDouble(
+      _bodyTextUnderlineThicknessKey,
+      settings.bodyTextUnderlineThickness,
+    );
+    await prefs.setDouble(
+      _bodyTextUnderlineGapKey,
+      settings.bodyTextUnderlineGap,
+    );
+    await prefs.setDouble(
+      _bodyTextUnderlineDashLengthKey,
+      settings.bodyTextUnderlineDashLength,
+    );
+    await prefs.setDouble(
+      _bodyTextUnderlineDashGapRatioKey,
+      settings.bodyTextUnderlineDashGapRatio,
+    );
     await prefs.setString(
       _pageAnimationStyleKey,
       settings.pageAnimationStyle.name,
