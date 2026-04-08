@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/foundation.dart';
 import 'package:flutter/widgets.dart';
 import 'package:flutter_inappwebview/flutter_inappwebview.dart';
@@ -23,11 +25,38 @@ Future<void> bootstrap() async {
   AppNavigationLabelVisibilityNotifier.prime(prefs);
   AppThemeModeNotifier.prime(prefs);
   AppSeedColorNotifier.prime(prefs);
-  await SourceRuntimeDiagnosticsService.instance.reportRecoveredInvocations(
-    logger: AppLogger.instance,
-  );
-  await SourceHealthService.instance.hydrate();
   runApp(const ProviderScope(child: App()));
+  WidgetsBinding.instance.addPostFrameCallback((_) {
+    unawaited(_runDeferredBootstrapTasks());
+  });
+}
+
+Future<void> _runDeferredBootstrapTasks() async {
+  try {
+    await SourceRuntimeDiagnosticsService.instance.reportRecoveredInvocations(
+      logger: AppLogger.instance,
+    );
+  } catch (error, stackTrace) {
+    AppLogger.instance.warn(
+      'Deferred diagnostics recovery failed',
+      context: <String, Object?>{
+        'error': error.toString(),
+        'stackTrace': stackTrace.toString(),
+      },
+    );
+  }
+
+  try {
+    await SourceHealthService.instance.hydrate();
+  } catch (error, stackTrace) {
+    AppLogger.instance.warn(
+      'Deferred source health hydrate failed',
+      context: <String, Object?>{
+        'error': error.toString(),
+        'stackTrace': stackTrace.toString(),
+      },
+    );
+  }
 }
 
 void _configureImagePicker() {

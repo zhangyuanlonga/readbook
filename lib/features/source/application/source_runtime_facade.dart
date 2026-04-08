@@ -58,9 +58,11 @@ class SourceRuntimeFacade {
            scriptRuntimeService ?? ScriptSourceRuntimeService(),
        _siteClusterService =
            siteClusterService ?? const SourceSiteClusterService(),
-       _sourceHealthService = sourceHealthService ?? SourceHealthService.instance,
+       _sourceHealthService =
+           sourceHealthService ?? SourceHealthService.instance,
        _executionPolicyService =
-           executionPolicyService ?? SourceRuntimeExecutionPolicyService.instance,
+           executionPolicyService ??
+           SourceRuntimeExecutionPolicyService.instance,
        _warmStateService =
            warmStateService ?? SourceRuntimeWarmStateService.instance,
        _logger = logger ?? AppLogger.instance,
@@ -92,6 +94,7 @@ class SourceRuntimeFacade {
     String? id,
     bool enabled = true,
   }) async {
+    final saveStopwatch = Stopwatch()..start();
     final normalizedCode = sourceCode.trim();
     if (normalizedCode.isEmpty) {
       throw StateError('Script source code cannot be empty.');
@@ -100,11 +103,13 @@ class SourceRuntimeFacade {
     final persistedId = id?.trim().isNotEmpty == true ? id!.trim() : _uuid.v4();
     final existing = await _scriptSourceRepository.getById(persistedId);
     _warmStateService.clearSource(persistedId);
+    final compileStopwatch = Stopwatch()..start();
     final registered = await _scriptRuntimeService.compileAndRegister(
       sourceCode: normalizedCode,
       runtimeId: persistedId,
       revision: 'script:${DateTime.now().millisecondsSinceEpoch}',
     );
+    final compileCostMs = compileStopwatch.elapsedMilliseconds;
 
     final now = DateTime.now();
     final manifest = registered.definition.manifest;
@@ -125,9 +130,10 @@ class SourceRuntimeFacade {
           manifest.description.trim().isEmpty
               ? null
               : manifest.description.trim(),
-      checkKeyword: manifest.checkKeyword?.trim().isEmpty ?? true
-          ? null
-          : manifest.checkKeyword!.trim(),
+      checkKeyword:
+          manifest.checkKeyword?.trim().isEmpty ?? true
+              ? null
+              : manifest.checkKeyword!.trim(),
       primaryHost: siteMeta.primaryHost,
       registrableDomain: siteMeta.registrableDomain,
       clusterKey: siteMeta.clusterKey,
@@ -136,7 +142,9 @@ class SourceRuntimeFacade {
       createdAt: existing?.createdAt ?? now,
       updatedAt: now,
     );
+    final persistStopwatch = Stopwatch()..start();
     await _scriptSourceRepository.upsert(nextSource);
+    final persistCostMs = persistStopwatch.elapsedMilliseconds;
 
     if (existing == null) {
       _sourceHealthService.upsert(
@@ -151,6 +159,17 @@ class SourceRuntimeFacade {
     if (!enabled) {
       _scriptRuntimeService.removeRegisteredSource(persistedId);
     }
+    _logger.info(
+      'Script source saved',
+      context: <String, Object?>{
+        'sourceId': persistedId,
+        'isNew': existing == null,
+        'enabled': enabled,
+        'compileMs': compileCostMs,
+        'persistMs': persistCostMs,
+        'totalMs': saveStopwatch.elapsedMilliseconds,
+      },
+    );
     return nextSource;
   }
 
@@ -321,8 +340,7 @@ class SourceRuntimeFacade {
   createDiagnosticExecutionContainerById(
     String sourceId, {
     SessionCancellationHandle? cancellationHandle,
-  }
-  ) async {
+  }) async {
     final normalizedSourceId = sourceId.trim();
     if (normalizedSourceId.isEmpty) {
       return null;
@@ -616,9 +634,10 @@ class SourceRuntimeFacade {
     final stage = _errorStageForStep(step);
     if (error is AppException) {
       return error.copyWith(
-        sourceId: error.sourceId?.trim().isNotEmpty == true
-            ? error.sourceId
-            : sourceId,
+        sourceId:
+            error.sourceId?.trim().isNotEmpty == true
+                ? error.sourceId
+                : sourceId,
         stage: error.stage == ErrorStage.unknown ? stage : error.stage,
         stackTrace: error.stackTrace ?? stackTrace,
       );

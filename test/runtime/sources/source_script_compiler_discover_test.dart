@@ -66,6 +66,23 @@ void main() {
       },
     );
 
+    test('accepts Android-style double encoded inspection payload', () async {
+      final factory =
+          _FakeReusableJsRuntimeAdapterFactory()
+            ..inspectionOutputOverride =
+                '"{\\"meta\\":{\\"name\\":\\"测试源\\",\\"group\\":\\"测试\\",\\"author\\":\\"tester\\",\\"description\\":\\"\\"},\\"hasInit\\":false,\\"hasDiscoverCategories\\":true,\\"hasDiscoverBooks\\":true,\\"hasSearch\\":true,\\"hasDetail\\":true,\\"hasChapters\\":true,\\"hasContent\\":true}"';
+      debugJsRuntimeAdapterFactory = factory.create;
+      addTearDown(() {
+        debugJsRuntimeAdapterFactory = null;
+      });
+
+      final definition = await compiler.compile(_sourceWithImplicitDiscover);
+
+      expect(definition.manifest.name, '测试源');
+      expect(definition.discoverCategories, isNotNull);
+      expect(definition.discoverBooks, isNotNull);
+    });
+
     test('chapters use array order as index and preserve isVolume', () async {
       final definition = await compiler.compile(_sourceWithChapterMeta);
       final chapters = await definition.chapters(_buildRuntimeContext(), _book);
@@ -94,50 +111,59 @@ void main() {
       SourceScriptCompiler.debugResetSharedRunners();
     });
 
-    test('reuses runtime for repeated search calls on same definition', () async {
-      const compiler = SourceScriptCompiler();
-      final definition = await compiler.compile(_sourceWithImplicitDiscover);
+    test(
+      'reuses runtime for repeated search calls on same definition',
+      () async {
+        const compiler = SourceScriptCompiler();
+        final definition = await compiler.compile(_sourceWithImplicitDiscover);
 
-      await definition.search(_buildRuntimeContext(), '凡人');
-      await definition.search(_buildRuntimeContext(), '凡人');
+        await definition.search(_buildRuntimeContext(), '凡人');
+        await definition.search(_buildRuntimeContext(), '凡人');
 
-      expect(factory.createdCount, 2);
-      expect(factory.disposedCount, 1);
+        expect(factory.createdCount, 2);
+        expect(factory.disposedCount, 1);
 
-      definition.dispose?.call();
-      expect(factory.disposedCount, 2);
-    });
+        definition.dispose?.call();
+        expect(factory.disposedCount, 2);
+      },
+    );
 
-    test('disposes reused runtime when source is removed from registry', () async {
-      const compiler = SourceScriptCompiler();
-      final definition = await compiler.compile(_sourceWithImplicitDiscover);
-      final registry = SourceRegistry();
-      registry.upsert('test_source', definition);
+    test(
+      'disposes reused runtime when source is removed from registry',
+      () async {
+        const compiler = SourceScriptCompiler();
+        final definition = await compiler.compile(_sourceWithImplicitDiscover);
+        final registry = SourceRegistry();
+        registry.upsert('test_source', definition);
 
-      await definition.search(_buildRuntimeContext(), '凡人');
-      expect(factory.createdCount, 2);
+        await definition.search(_buildRuntimeContext(), '凡人');
+        expect(factory.createdCount, 2);
 
-      registry.remove('test_source');
-      expect(factory.disposedCount, 2);
-    });
+        registry.remove('test_source');
+        expect(factory.disposedCount, 2);
+      },
+    );
 
-    test('does not reuse runtime across identical compiled definitions', () async {
-      const compiler = SourceScriptCompiler();
-      final definitionA = await compiler.compile(_sourceWithImplicitDiscover);
-      final definitionB = await compiler.compile(_sourceWithImplicitDiscover);
+    test(
+      'does not reuse runtime across identical compiled definitions',
+      () async {
+        const compiler = SourceScriptCompiler();
+        final definitionA = await compiler.compile(_sourceWithImplicitDiscover);
+        final definitionB = await compiler.compile(_sourceWithImplicitDiscover);
 
-      await definitionA.search(_buildRuntimeContext(), '凡人');
-      await definitionB.search(_buildRuntimeContext(), '作者');
+        await definitionA.search(_buildRuntimeContext(), '凡人');
+        await definitionB.search(_buildRuntimeContext(), '作者');
 
-      expect(factory.createdCount, 4);
-      expect(factory.disposedCount, 2);
+        expect(factory.createdCount, 4);
+        expect(factory.disposedCount, 2);
 
-      definitionA.dispose?.call();
-      expect(factory.disposedCount, 3);
+        definitionA.dispose?.call();
+        expect(factory.disposedCount, 3);
 
-      definitionB.dispose?.call();
-      expect(factory.disposedCount, 4);
-    });
+        definitionB.dispose?.call();
+        expect(factory.disposedCount, 4);
+      },
+    );
 
     test('binds implicit ctx and source variables before invocation', () async {
       const compiler = SourceScriptCompiler();
@@ -145,8 +171,14 @@ void main() {
 
       await definition.search(_buildRuntimeContext(), '凡人');
 
-      expect(factory.lastInstalledBootstrapSource, contains('var ctx = undefined;'));
-      expect(factory.lastInstalledBootstrapSource, contains('var source = undefined;'));
+      expect(
+        factory.lastInstalledBootstrapSource,
+        contains('var ctx = undefined;'),
+      );
+      expect(
+        factory.lastInstalledBootstrapSource,
+        contains('var source = undefined;'),
+      );
       expect(
         factory.lastInstalledBootstrapSource,
         contains('function sanitizeForHost(value, depth, seen, stats)'),
@@ -172,8 +204,7 @@ void main() {
     });
 
     test('unwraps runtime error envelope into compile exception', () async {
-      factory.searchOutputOverride =
-          '{"ok":false,"error":"规则异常：返回值不可安全序列化"}';
+      factory.searchOutputOverride = '{"ok":false,"error":"规则异常：返回值不可安全序列化"}';
       const compiler = SourceScriptCompiler();
       final definition = await compiler.compile(_sourceWithImplicitDiscover);
 
@@ -187,6 +218,16 @@ void main() {
           ),
         ),
       );
+    });
+
+    test('accepts Android-style double encoded runtime envelope', () async {
+      factory.searchOutputOverride = '"{\\"ok\\":true,\\"value\\":[]}"';
+      const compiler = SourceScriptCompiler();
+      final definition = await compiler.compile(_sourceWithImplicitDiscover);
+
+      final books = await definition.search(_buildRuntimeContext(), '凡人');
+
+      expect(books, isEmpty);
     });
   });
 }
@@ -340,6 +381,7 @@ class _FakeReusableJsRuntimeAdapterFactory {
   String? lastRunSnippet;
   String? lastInstalledBootstrapSource;
   String? searchOutputOverride;
+  String? inspectionOutputOverride;
 
   JsRuntimeAdapter create() {
     createdCount += 1;
@@ -353,6 +395,7 @@ class _FakeReusableJsRuntimeAdapterFactory {
         lastRunSnippet = script;
       },
       searchOutputOverride: searchOutputOverride,
+      inspectionOutputOverride: inspectionOutputOverride,
       onDispose: () {
         disposedCount += 1;
       },
@@ -366,12 +409,14 @@ class _FakeReusableJsRuntimeAdapter implements JsRuntimeAdapter {
     required this.onInstallBootstrap,
     required this.onRunSnippet,
     this.searchOutputOverride,
+    this.inspectionOutputOverride,
   });
 
   final void Function() onDispose;
   final void Function(String source, String? sourceUrl) onInstallBootstrap;
   final void Function(String script) onRunSnippet;
   final String? searchOutputOverride;
+  final String? inspectionOutputOverride;
   String _installedSource = '';
 
   @override
@@ -400,12 +445,13 @@ class _FakeReusableJsRuntimeAdapter implements JsRuntimeAdapter {
     if (script.contains('hasSearch:')) {
       return JsExecutionResult(
         output:
+            inspectionOutputOverride ??
             '{"meta":{"name":"测试源","group":"测试","author":"tester","description":""},"hasInit":false,"hasDiscoverCategories":${_installedSource.contains('discoverCategories')},'
-            '"hasDiscoverBooks":${_installedSource.contains('discoverBooks')},'
-            '"hasSearch":${_installedSource.contains('search(ctx, keyword)') || _installedSource.contains('search(ctx,keyword)')},'
-            '"hasDetail":${_installedSource.contains('detail(ctx, book)') || _installedSource.contains('detail(ctx,book)')},'
-            '"hasChapters":${_installedSource.contains('chapters(ctx, book)') || _installedSource.contains('chapters(ctx,book)')},'
-            '"hasContent":${_installedSource.contains('content(ctx, book, chapter)') || _installedSource.contains('content(ctx,book,chapter)')}}',
+                '"hasDiscoverBooks":${_installedSource.contains('discoverBooks')},'
+                '"hasSearch":${_installedSource.contains('search(ctx, keyword)') || _installedSource.contains('search(ctx,keyword)')},'
+                '"hasDetail":${_installedSource.contains('detail(ctx, book)') || _installedSource.contains('detail(ctx,book)')},'
+                '"hasChapters":${_installedSource.contains('chapters(ctx, book)') || _installedSource.contains('chapters(ctx,book)')},'
+                '"hasContent":${_installedSource.contains('content(ctx, book, chapter)') || _installedSource.contains('content(ctx,book,chapter)')}}',
         isError: false,
       );
     }
@@ -424,7 +470,8 @@ class _FakeReusableJsRuntimeAdapter implements JsRuntimeAdapter {
     if (script.contains("__source?.['detail']") ||
         script.contains("__sourceDefinition?.['detail']")) {
       return const JsExecutionResult(
-        output: '{"title":"测试书","author":"","detailUrl":"https://book","tocUrl":"","extra":{},"debug":{}}',
+        output:
+            '{"title":"测试书","author":"","detailUrl":"https://book","tocUrl":"","extra":{},"debug":{}}',
         isError: false,
       );
     }

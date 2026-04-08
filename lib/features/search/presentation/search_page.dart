@@ -138,7 +138,8 @@ class _SearchPageState extends State<SearchPage> {
             tooltip: '返回',
             icon: const Icon(Icons.arrow_back),
           ),
-          titleSpacing: widget.hideTopSearchBar ? NavigationToolbar.kMiddleSpacing : 0,
+          titleSpacing:
+              widget.hideTopSearchBar ? NavigationToolbar.kMiddleSpacing : 0,
           title:
               widget.hideTopSearchBar
                   ? const Text('搜索')
@@ -408,7 +409,7 @@ class _SearchPageState extends State<SearchPage> {
             child: TextField(
               controller: _keywordController,
               focusNode: _searchFocusNode,
-              autofocus: true,
+              autofocus: false,
               textInputAction: TextInputAction.search,
               textAlignVertical: TextAlignVertical.center,
               style: theme.textTheme.bodyMedium?.copyWith(
@@ -1395,10 +1396,13 @@ class _ScriptSourceFilterSheetState extends State<_ScriptSourceFilterSheet> {
     if (keyword.isEmpty) {
       return widget.items;
     }
-    return widget.items.where((item) {
-      final group = item.group?.trim().toLowerCase() ?? '';
-      return item.name.toLowerCase().contains(keyword) || group.contains(keyword);
-    }).toList(growable: false);
+    return widget.items
+        .where((item) {
+          final group = item.group?.trim().toLowerCase() ?? '';
+          return item.name.toLowerCase().contains(keyword) ||
+              group.contains(keyword);
+        })
+        .toList(growable: false);
   }
 
   Set<String> _resultSelection() {
@@ -1451,7 +1455,10 @@ class _ScriptSourceFilterSheetState extends State<_ScriptSourceFilterSheet> {
                         },
                         decoration: InputDecoration(
                           hintText: '筛选书源名称或分组',
-                          prefixIcon: const Icon(Icons.search_rounded, size: 18),
+                          prefixIcon: const Icon(
+                            Icons.search_rounded,
+                            size: 18,
+                          ),
                           suffixIcon:
                               _filterKeyword.isEmpty
                                   ? null
@@ -1463,7 +1470,10 @@ class _ScriptSourceFilterSheetState extends State<_ScriptSourceFilterSheet> {
                                         _filterKeyword = '';
                                       });
                                     },
-                                    icon: const Icon(Icons.close_rounded, size: 18),
+                                    icon: const Icon(
+                                      Icons.close_rounded,
+                                      size: 18,
+                                    ),
                                   ),
                           isDense: true,
                           border: OutlineInputBorder(
@@ -1513,7 +1523,9 @@ class _ScriptSourceFilterSheetState extends State<_ScriptSourceFilterSheet> {
                                 children: [
                                   CheckboxListTile(
                                     value: _allSelected,
-                                    title: Text('全部书源 (${widget.items.length})'),
+                                    title: Text(
+                                      '全部书源 (${widget.items.length})',
+                                    ),
                                     subtitle:
                                         _draftSelectedIds.isEmpty
                                             ? const Text('不指定时默认搜索全部书源')
@@ -1523,7 +1535,9 @@ class _ScriptSourceFilterSheetState extends State<_ScriptSourceFilterSheet> {
                                     onChanged: (value) {
                                       setState(() {
                                         if (value == true) {
-                                          _draftSelectedIds = <String>{..._allIds};
+                                          _draftSelectedIds = <String>{
+                                            ..._allIds,
+                                          };
                                         } else {
                                           _draftSelectedIds.clear();
                                         }
@@ -1531,12 +1545,15 @@ class _ScriptSourceFilterSheetState extends State<_ScriptSourceFilterSheet> {
                                     },
                                   ),
                                   ..._visibleItems.map((item) {
-                                    final selected = _draftSelectedIds.contains(item.id);
+                                    final selected = _draftSelectedIds.contains(
+                                      item.id,
+                                    );
                                     return CheckboxListTile(
                                       value: selected,
                                       title: Text(item.name),
                                       subtitle:
-                                          item.group == null || item.group!.trim().isEmpty
+                                          item.group == null ||
+                                                  item.group!.trim().isEmpty
                                               ? null
                                               : Text(item.group!),
                                       controlAffinity:

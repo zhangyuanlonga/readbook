@@ -153,6 +153,7 @@ class SourceScriptCompiler {
 
   Future<_SourceInspection> _inspectSource(String normalizedSource) async {
     final runtime = createJsRuntimeAdapter();
+    final logger = AppLogger.instance;
     if (!runtime.isSupported) {
       throw SourceScriptCompileException(
         runtime.unsupportedReason ?? '当前平台不支持 JS 书享源调试。',
@@ -170,24 +171,62 @@ class SourceScriptCompiler {
       );
 
       final result = await runtime.runSnippet('''
-return {
-  meta: globalThis.__sourceDefinition?.meta ?? {},
-  hasInit: typeof globalThis.__sourceDefinition?.init === 'function',
-  hasDiscoverCategories: typeof globalThis.__sourceDefinition?.discoverCategories === 'function',
-  hasDiscoverBooks: typeof globalThis.__sourceDefinition?.discoverBooks === 'function',
-  hasSearch: typeof globalThis.__sourceDefinition?.search === 'function',
-  hasDetail: typeof globalThis.__sourceDefinition?.detail === 'function',
-  hasChapters: typeof globalThis.__sourceDefinition?.chapters === 'function',
-  hasContent: typeof globalThis.__sourceDefinition?.content === 'function',
+const __source = globalThis.__sourceDefinition;
+const __inspection = {
+  meta: __source?.meta ?? {},
+  hasInit: typeof __source?.init === 'function',
+  hasDiscoverCategories: typeof __source?.discoverCategories === 'function',
+  hasDiscoverBooks: typeof __source?.discoverBooks === 'function',
+  hasSearch: typeof __source?.search === 'function',
+  hasDetail: typeof __source?.detail === 'function',
+  hasChapters: typeof __source?.chapters === 'function',
+  hasContent: typeof __source?.content === 'function',
 };
+return globalThis.__appreadEncodeHostSuccess(__inspection);
 ''');
 
       if (result.isError) {
+        logger.warn(
+          'Source inspection runtime error',
+          context: <String, Object?>{
+            'runtimeChain': 'source_script',
+            'output': _truncateLogField(result.output),
+          },
+        );
         throw SourceScriptCompileException(result.output);
       }
 
-      final decoded = _decodeDynamic(result.output);
+      final envelope = _decodeRuntimeEnvelope(result.output);
+      if (envelope != null) {
+        if (!envelope.ok) {
+          throw SourceScriptCompileException(envelope.error ?? '脚本执行失败。');
+        }
+        if (envelope.value is! Map<String, dynamic>) {
+          logger.warn(
+            'Source inspection decode failed',
+            context: <String, Object?>{
+              'runtimeChain': 'source_script',
+              'decodedType': envelope.value.runtimeType.toString(),
+              'output': _truncateLogField(result.output),
+            },
+          );
+          throw const SourceScriptCompileException('无法读取书享源导出的 meta。');
+        }
+        return _SourceInspection.fromMap(
+          envelope.value as Map<String, dynamic>,
+        );
+      }
+
+      final decoded = _decodePossiblyNestedDynamic(result.output);
       if (decoded is! Map<String, dynamic>) {
+        logger.warn(
+          'Source inspection decode failed',
+          context: <String, Object?>{
+            'runtimeChain': 'source_script',
+            'decodedType': decoded.runtimeType.toString(),
+            'output': _truncateLogField(result.output),
+          },
+        );
         throw const SourceScriptCompileException('无法读取书享源导出的 meta。');
       }
 
@@ -196,6 +235,14 @@ return {
       runtime.dispose();
     }
   }
+}
+
+String _truncateLogField(String value, {int maxLength = 480}) {
+  final normalized = value.replaceAll('\n', r'\n');
+  if (normalized.length <= maxLength) {
+    return normalized;
+  }
+  return '${normalized.substring(0, maxLength)}...';
 }
 
 enum SourceScriptDebugLogLevel { info, warn, error }
@@ -468,7 +515,7 @@ try {
           }
           completer.complete(envelope.value);
         } else {
-          completer.complete(_decodeDynamic(result.output));
+          completer.complete(_decodePossiblyNestedDynamic(result.output));
         }
       } catch (error, stackTrace) {
         completer.completeError(error, stackTrace);
@@ -1194,11 +1241,22 @@ Object? _decodeDynamic(String output) {
   }
 }
 
-_RuntimeEnvelope? _decodeRuntimeEnvelope(String output) {
+Object? _decodePossiblyNestedDynamic(String output, {int maxDepth = 3}) {
   Object? decoded = _decodeDynamic(output);
-  if (decoded is String) {
-    decoded = _decodeDynamic(decoded);
+  var remainingDepth = maxDepth - 1;
+  while (decoded is String && remainingDepth > 0) {
+    final next = _decodeDynamic(decoded);
+    if (next is String && next == decoded) {
+      break;
+    }
+    decoded = next;
+    remainingDepth -= 1;
   }
+  return decoded;
+}
+
+_RuntimeEnvelope? _decodeRuntimeEnvelope(String output) {
+  final decoded = _decodePossiblyNestedDynamic(output);
   if (decoded is! Map<String, dynamic>) {
     return null;
   }

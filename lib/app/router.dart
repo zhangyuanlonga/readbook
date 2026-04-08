@@ -33,7 +33,8 @@ final GoRouter appRouter = GoRouter(
   navigatorKey: globalRootNavigatorKey,
   initialLocation: '/bookshelf',
   redirect: (context, state) {
-    if (state.uri.scheme == 'file') {
+    final scheme = state.uri.scheme.toLowerCase();
+    if (scheme == 'file' || scheme == 'content') {
       return '/source';
     }
     return null;

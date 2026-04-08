@@ -31,12 +31,7 @@ class ScriptSourceEditorPage extends StatefulWidget {
   State<ScriptSourceEditorPage> createState() => _ScriptSourceEditorPageState();
 }
 
-enum _EditorToolbarMenuAction {
-  format,
-  search,
-  toggleAppearance,
-  debug,
-}
+enum _EditorToolbarMenuAction { format, search, toggleAppearance, debug }
 
 class _ScriptSourceEditorPageState extends State<ScriptSourceEditorPage> {
   late final SourceRuntimeFacade _sourceRuntimeFacade;
@@ -105,8 +100,17 @@ class _ScriptSourceEditorPageState extends State<ScriptSourceEditorPage> {
     );
     _controller.autocompleter.setCustomWords(_scriptSourceAutocompleteWords);
     _controller.addListener(_handleEditorChanged);
+    final scriptSourceId = widget.scriptSourceId?.trim() ?? '';
+    if (scriptSourceId.isEmpty) {
+      _isApplyingEditorValue = true;
+      _controller.fullText = sourceScriptTemplateV1;
+      _isApplyingEditorValue = false;
+      _isLoading = false;
+    }
     unawaited(_scheduleEditorMount());
-    unawaited(_loadInitialValue());
+    if (scriptSourceId.isNotEmpty) {
+      unawaited(_loadInitialValue());
+    }
   }
 
   @override
@@ -154,13 +158,6 @@ class _ScriptSourceEditorPageState extends State<ScriptSourceEditorPage> {
   Future<void> _loadInitialValue() async {
     final scriptSourceId = widget.scriptSourceId?.trim() ?? '';
     if (scriptSourceId.isEmpty) {
-      if (!mounted) {
-        return;
-      }
-      await _applySourceCode(sourceScriptTemplateV1, markDirty: false);
-      setState(() {
-        _isLoading = false;
-      });
       return;
     }
 
@@ -198,7 +195,7 @@ class _ScriptSourceEditorPageState extends State<ScriptSourceEditorPage> {
   }
 
   Future<void> _scheduleEditorMount() async {
-    await Future<void>.delayed(const Duration(milliseconds: 180));
+    await SchedulerBinding.instance.endOfFrame;
     if (!mounted) {
       return;
     }
@@ -222,6 +219,10 @@ class _ScriptSourceEditorPageState extends State<ScriptSourceEditorPage> {
     setState(() {
       _isSaving = true;
     });
+    await SchedulerBinding.instance.endOfFrame;
+    if (!mounted) {
+      return;
+    }
 
     try {
       await _sourceRuntimeFacade.saveScriptSource(
@@ -441,11 +442,7 @@ class _ScriptSourceEditorPageState extends State<ScriptSourceEditorPage> {
             wrap: false,
             background: _palette.panelBackground,
             cursorColor: _palette.accent,
-            padding: EdgeInsets.only(
-              top: 12,
-              right: 18,
-              bottom: 18,
-            ),
+            padding: EdgeInsets.only(top: 12, right: 18, bottom: 18),
             textStyle: TextStyle(
               color: _palette.textPrimary,
               fontFamily: 'Menlo, Consolas, "Courier New", monospace',
@@ -549,26 +546,27 @@ class _ScriptSourceEditorPageState extends State<ScriptSourceEditorPage> {
         tooltip: '更多工具',
         enabled: !_isLoading,
         onSelected: _handleToolbarMenuAction,
-        itemBuilder: (context) => [
-          const PopupMenuItem(
-            value: _EditorToolbarMenuAction.search,
-            child: Text('查找'),
-          ),
-          const PopupMenuItem(
-            value: _EditorToolbarMenuAction.format,
-            child: Text('格式化'),
-          ),
-          PopupMenuItem(
-            value: _EditorToolbarMenuAction.toggleAppearance,
-            child: Text(
-              _appearance == _EditorAppearance.night ? '切换到日间' : '切换到夜间',
-            ),
-          ),
-          const PopupMenuItem(
-            value: _EditorToolbarMenuAction.debug,
-            child: Text('调试'),
-          ),
-        ],
+        itemBuilder:
+            (context) => [
+              const PopupMenuItem(
+                value: _EditorToolbarMenuAction.search,
+                child: Text('查找'),
+              ),
+              const PopupMenuItem(
+                value: _EditorToolbarMenuAction.format,
+                child: Text('格式化'),
+              ),
+              PopupMenuItem(
+                value: _EditorToolbarMenuAction.toggleAppearance,
+                child: Text(
+                  _appearance == _EditorAppearance.night ? '切换到日间' : '切换到夜间',
+                ),
+              ),
+              const PopupMenuItem(
+                value: _EditorToolbarMenuAction.debug,
+                child: Text('调试'),
+              ),
+            ],
         child: Container(
           width: 38,
           height: 38,

@@ -149,6 +149,7 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
   bool _hasShownContinueReadingPrompt = false;
   ReadingRecord? _continueReadingRecord;
   int _latestInfoRefreshEpoch = 0;
+  bool _skipNextBackgroundLatestInfoRefresh = false;
 
   static const String _kLocalBookSourceId =
       LocalBookImportService.localBookSourceId;
@@ -169,6 +170,12 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
   static const Duration _kDuplicateLoadCooldown = Duration(milliseconds: 700);
   static const Duration _kContinueReadingPromptDuration = Duration(seconds: 6);
   static const double _kContinueReadingCardHeight = 84;
+  static const Set<String> _kMangaCapabilityKeywords = <String>{
+    'manga',
+    'comic',
+    'manhua',
+    'manhwa',
+  };
 
   @override
   void initState() {
@@ -2060,6 +2067,27 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
     return result;
   }
 
+  String? _coverUrlCompareKey(String? url) {
+    final normalized = url?.trim() ?? '';
+    if (normalized.isEmpty) {
+      return null;
+    }
+
+    final uri = Uri.tryParse(normalized);
+    if (uri == null || !uri.hasScheme || !uri.hasAuthority) {
+      return normalized;
+    }
+
+    final query = Map<String, String>.from(uri.queryParameters);
+    if (!query.containsKey('x-signature') && !query.containsKey('x-expires')) {
+      return normalized;
+    }
+
+    query.remove('x-signature');
+    query.remove('x-expires');
+    return uri.replace(queryParameters: query.isEmpty ? null : query).toString();
+  }
+
   void _ensureFilterStillValid() {
     if (_activeFilter != _BookshelfFilter.custom) {
       return;
@@ -3414,14 +3442,18 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
       await _loadLatestCachedChapterMap(books, ticket: ticket);
       await _loadCachedChapterCountMap(books, ticket: ticket);
       await _loadProgressMapInBatches(books, ticket: ticket);
-      final refreshEpoch = ++_latestInfoRefreshEpoch;
-      unawaited(
-        _refreshOnlineBookshelfLatestInfo(
-          books,
-          ticket: ticket,
-          refreshEpoch: refreshEpoch,
-        ),
-      );
+      if (_skipNextBackgroundLatestInfoRefresh) {
+        _skipNextBackgroundLatestInfoRefresh = false;
+      } else {
+        final refreshEpoch = ++_latestInfoRefreshEpoch;
+        unawaited(
+          _refreshOnlineBookshelfLatestInfo(
+            books,
+            ticket: ticket,
+            refreshEpoch: refreshEpoch,
+          ),
+        );
+      }
     } on TimeoutException {
       if (!mounted || ticket != _loadTicket) {
         return;
@@ -3708,11 +3740,15 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
         final currentLatestChapter = book.latestChapter?.trim();
         final currentAuthor = book.author?.trim();
         final currentCoverUrl = book.coverUrl?.trim();
+        final normalizedCoverCompareKey = _coverUrlCompareKey(
+          normalizedCoverUrl,
+        );
+        final currentCoverCompareKey = _coverUrlCompareKey(currentCoverUrl);
 
         final needsUpdate =
             normalizedLatestChapter != currentLatestChapter ||
             normalizedAuthor != currentAuthor ||
-            normalizedCoverUrl != currentCoverUrl;
+            normalizedCoverCompareKey != currentCoverCompareKey;
         if (!needsUpdate) {
           continue;
         }
@@ -3741,6 +3777,7 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
         )) {
       return;
     }
+    _skipNextBackgroundLatestInfoRefresh = true;
     await _loadBookshelf(force: true);
   }
 
@@ -3809,37 +3846,66 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
   }
 
   Future<Map<String, int>> _loadSourceTypeMap() async {
-    try {
-      var sources = SourceRuntimeFacade.instance.registeredScriptSources(
-        enabledOnly: false,
-      );
-      if (sources.isEmpty) {
-        final report = await SourceRuntimeFacade.instance
-            .reloadScriptSources(enabledOnly: false)
-            .timeout(_kSourceMapLoadTimeout);
-        sources = report.loaded;
-      }
-      return <String, int>{
-        for (final source in sources)
-          source.runtime.id: _inferScriptSourceType(source),
-      };
-    } catch (_) {
-      return const <String, int>{};
+    final sourceTypeBySourceId = <String, int>{};
+
+    // Prefer in-memory runtime metadata when available to avoid extra I/O.
+    final runtimeSources = SourceRuntimeFacade.instance.registeredScriptSources(
+      enabledOnly: false,
+    );
+    for (final source in runtimeSources) {
+      sourceTypeBySourceId[source.runtime.id] = _inferScriptSourceType(source);
     }
+
+    // Avoid triggering heavy runtime reload/compile during bookshelf startup.
+    // Read persisted script sources directly and classify by capabilities.
+    try {
+      final persistedSources = await SourceRuntimeFacade.instance
+          .listScriptSources()
+          .timeout(_kSourceMapLoadTimeout);
+      for (final source in persistedSources) {
+        sourceTypeBySourceId[source.id] = _inferScriptSourceTypeFromCode(
+          source.sourceCode,
+        );
+      }
+    } catch (_) {
+      // Keep whatever runtime-derived results we already have.
+    }
+
+    return sourceTypeBySourceId;
   }
 
   int _inferScriptSourceType(RegisteredSource source) {
-    final capabilities =
-        source.definition.manifest.capabilities
-            .map((item) => item.trim().toLowerCase())
-            .where((item) => item.isNotEmpty)
-            .toSet();
-    final isManga =
-        capabilities.contains('manga') ||
-        capabilities.contains('comic') ||
-        capabilities.contains('manhua') ||
-        capabilities.contains('manhwa');
-    return isManga ? 2 : 0;
+    final capabilities = source.definition.manifest.capabilities
+        .map((item) => item.trim().toLowerCase())
+        .where((item) => item.isNotEmpty)
+        .toSet();
+    return _isMangaCapabilities(capabilities) ? 2 : 0;
+  }
+
+  int _inferScriptSourceTypeFromCode(String sourceCode) {
+    final capabilities = _extractCapabilitiesFromSourceCode(sourceCode);
+    return _isMangaCapabilities(capabilities) ? 2 : 0;
+  }
+
+  bool _isMangaCapabilities(Set<String> capabilities) {
+    return capabilities.any(_kMangaCapabilityKeywords.contains);
+  }
+
+  Set<String> _extractCapabilitiesFromSourceCode(String sourceCode) {
+    final capabilitiesMatch = RegExp(
+      r'\bcapabilities\s*:\s*\[([\s\S]*?)\]',
+      caseSensitive: false,
+    ).firstMatch(sourceCode);
+    final rawCapabilities = capabilitiesMatch?.group(1);
+    if (rawCapabilities == null || rawCapabilities.trim().isEmpty) {
+      return const <String>{};
+    }
+
+    return RegExp(r'''['"]([^'"]+)['"]''')
+        .allMatches(rawCapabilities)
+        .map((match) => (match.group(1) ?? '').trim().toLowerCase())
+        .where((item) => item.isNotEmpty)
+        .toSet();
   }
 
   Future<void> _loadProgressMapInBatches(
