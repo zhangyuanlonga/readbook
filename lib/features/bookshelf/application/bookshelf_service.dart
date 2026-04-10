@@ -20,11 +20,32 @@ class BookshelfService {
       'bookshelf.base_filter_order';
   static const String _viewModeGridKey = 'bookshelf.view.useGrid';
   static const String _sortModeKey = 'bookshelf.sort.mode';
+  static const String _gridAdaptiveColumnsKey =
+      'bookshelf.grid.adaptiveColumns';
+  static const String _gridColumnCountKey = 'bookshelf.grid.columnCount';
+  static const String _gridCrossSpacingKey = 'bookshelf.grid.crossSpacing';
+  static const String _gridMainSpacingKey = 'bookshelf.grid.mainSpacing';
+  static const String _gridShowTitleKey = 'bookshelf.grid.showTitle';
+  static const String _gridShowAuthorKey = 'bookshelf.grid.showAuthor';
+  static const String _gridShowLatestChapterKey =
+      'bookshelf.grid.showLatestChapter';
+  static const String _gridShowProgressBarKey =
+      'bookshelf.grid.showProgressBar';
 
   static const String defaultSortMode = 'default';
   static const String recentReadSortMode = 'recentRead';
   static const String readingProgressSortMode = 'readingProgress';
   static const String createdAtSortMode = 'createdAt';
+  static const String authorSortMode = 'author';
+  static const String titleSortMode = 'title';
+  static const bool defaultGridAdaptiveColumns = true;
+  static const int defaultGridColumnCount = 3;
+  static const double defaultGridCrossSpacing = 8;
+  static const double defaultGridMainSpacing = 12;
+  static const bool defaultGridShowTitle = true;
+  static const bool defaultGridShowAuthor = true;
+  static const bool defaultGridShowLatestChapter = true;
+  static const bool defaultGridShowProgressBar = true;
 
   Future<List<BookshelfBook>> getAll() async {
     final prefs = await _preferencesFuture;
@@ -157,6 +178,96 @@ class BookshelfService {
   Future<void> saveUseGridView(bool useGridView) async {
     final prefs = await _preferencesFuture;
     await prefs.setBool(_viewModeGridKey, useGridView);
+  }
+
+  Future<bool> loadGridAdaptiveColumns() async {
+    final prefs = await _preferencesFuture;
+    return prefs.getBool(_gridAdaptiveColumnsKey) ?? defaultGridAdaptiveColumns;
+  }
+
+  Future<void> saveGridAdaptiveColumns(bool adaptive) async {
+    final prefs = await _preferencesFuture;
+    await prefs.setBool(_gridAdaptiveColumnsKey, adaptive);
+  }
+
+  Future<int> loadGridColumnCount() async {
+    final prefs = await _preferencesFuture;
+    final value = prefs.getInt(_gridColumnCountKey);
+    return _normalizeGridColumnCount(value);
+  }
+
+  Future<void> saveGridColumnCount(int count) async {
+    final prefs = await _preferencesFuture;
+    await prefs.setInt(_gridColumnCountKey, _normalizeGridColumnCount(count));
+  }
+
+  Future<double> loadGridCrossSpacing() async {
+    final prefs = await _preferencesFuture;
+    final raw = prefs.getDouble(_gridCrossSpacingKey);
+    return _normalizeGridSpacing(raw, fallback: defaultGridCrossSpacing);
+  }
+
+  Future<void> saveGridCrossSpacing(double spacing) async {
+    final prefs = await _preferencesFuture;
+    await prefs.setDouble(
+      _gridCrossSpacingKey,
+      _normalizeGridSpacing(spacing, fallback: defaultGridCrossSpacing),
+    );
+  }
+
+  Future<double> loadGridMainSpacing() async {
+    final prefs = await _preferencesFuture;
+    final raw = prefs.getDouble(_gridMainSpacingKey);
+    return _normalizeGridSpacing(raw, fallback: defaultGridMainSpacing);
+  }
+
+  Future<void> saveGridMainSpacing(double spacing) async {
+    final prefs = await _preferencesFuture;
+    await prefs.setDouble(
+      _gridMainSpacingKey,
+      _normalizeGridSpacing(spacing, fallback: defaultGridMainSpacing),
+    );
+  }
+
+  Future<bool> loadGridShowTitle() async {
+    final prefs = await _preferencesFuture;
+    return prefs.getBool(_gridShowTitleKey) ?? defaultGridShowTitle;
+  }
+
+  Future<void> saveGridShowTitle(bool visible) async {
+    final prefs = await _preferencesFuture;
+    await prefs.setBool(_gridShowTitleKey, visible);
+  }
+
+  Future<bool> loadGridShowAuthor() async {
+    final prefs = await _preferencesFuture;
+    return prefs.getBool(_gridShowAuthorKey) ?? defaultGridShowAuthor;
+  }
+
+  Future<void> saveGridShowAuthor(bool visible) async {
+    final prefs = await _preferencesFuture;
+    await prefs.setBool(_gridShowAuthorKey, visible);
+  }
+
+  Future<bool> loadGridShowLatestChapter() async {
+    final prefs = await _preferencesFuture;
+    return prefs.getBool(_gridShowLatestChapterKey) ??
+        defaultGridShowLatestChapter;
+  }
+
+  Future<void> saveGridShowLatestChapter(bool visible) async {
+    final prefs = await _preferencesFuture;
+    await prefs.setBool(_gridShowLatestChapterKey, visible);
+  }
+
+  Future<bool> loadGridShowProgressBar() async {
+    final prefs = await _preferencesFuture;
+    return prefs.getBool(_gridShowProgressBarKey) ?? defaultGridShowProgressBar;
+  }
+
+  Future<void> saveGridShowProgressBar(bool visible) async {
+    final prefs = await _preferencesFuture;
+    await prefs.setBool(_gridShowProgressBarKey, visible);
   }
 
   Future<String> loadSortMode() async {
@@ -408,7 +519,20 @@ class BookshelfService {
       recentReadSortMode => recentReadSortMode,
       readingProgressSortMode => readingProgressSortMode,
       createdAtSortMode => createdAtSortMode,
+      authorSortMode => authorSortMode,
+      titleSortMode => titleSortMode,
       _ => defaultSortMode,
     };
+  }
+
+  static int _normalizeGridColumnCount(int? value) {
+    return (value ?? defaultGridColumnCount).clamp(2, 6);
+  }
+
+  static double _normalizeGridSpacing(
+    double? value, {
+    required double fallback,
+  }) {
+    return (value ?? fallback).clamp(4.0, 24.0).toDouble();
   }
 }

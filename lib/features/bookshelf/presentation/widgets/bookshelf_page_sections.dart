@@ -171,6 +171,116 @@ class BookshelfFilterBar extends StatelessWidget {
   }
 }
 
+class BookshelfStepperSettingRow extends StatelessWidget {
+  const BookshelfStepperSettingRow({
+    super.key,
+    required this.title,
+    required this.valueLabel,
+    required this.onDecrease,
+    required this.onIncrease,
+    this.subtitle,
+    this.enabled = true,
+  });
+
+  final String title;
+  final String valueLabel;
+  final VoidCallback? onDecrease;
+  final VoidCallback? onIncrease;
+  final String? subtitle;
+  final bool enabled;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
+    final effectiveEnabled = enabled;
+
+    Widget buildButton({
+      required IconData icon,
+      required VoidCallback? onPressed,
+    }) {
+      return IconButton(
+        onPressed: effectiveEnabled ? onPressed : null,
+        visualDensity: VisualDensity.compact,
+        iconSize: 18,
+        style: IconButton.styleFrom(
+          backgroundColor: colorScheme.surfaceContainerLow,
+          foregroundColor: colorScheme.onSurface,
+          disabledBackgroundColor: colorScheme.surfaceContainerLow.withValues(
+            alpha: 0.58,
+          ),
+          disabledForegroundColor: colorScheme.onSurfaceVariant.withValues(
+            alpha: 0.45,
+          ),
+        ),
+        icon: Icon(icon),
+      );
+    }
+
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(12, 8, 12, 8),
+      child: Row(
+        children: [
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  title,
+                  style: theme.textTheme.bodyMedium?.copyWith(
+                    fontWeight: FontWeight.w600,
+                    color:
+                        effectiveEnabled
+                            ? colorScheme.onSurface
+                            : colorScheme.onSurfaceVariant,
+                  ),
+                ),
+                if (subtitle case final text?) ...[
+                  const SizedBox(height: 4),
+                  Text(
+                    text,
+                    style: theme.textTheme.bodySmall?.copyWith(
+                      color: colorScheme.onSurfaceVariant,
+                      height: 1.35,
+                    ),
+                  ),
+                ],
+              ],
+            ),
+          ),
+          const SizedBox(width: 12),
+          buildButton(icon: Icons.remove_rounded, onPressed: onDecrease),
+          const SizedBox(width: 6),
+          Container(
+            constraints: const BoxConstraints(minWidth: 64),
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+            decoration: BoxDecoration(
+              color: colorScheme.surfaceContainerLow,
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(
+                color: colorScheme.outlineVariant.withValues(alpha: 0.7),
+              ),
+            ),
+            alignment: Alignment.center,
+            child: Text(
+              valueLabel,
+              style: theme.textTheme.labelLarge?.copyWith(
+                fontWeight: FontWeight.w700,
+                color:
+                    effectiveEnabled
+                        ? colorScheme.onSurface
+                        : colorScheme.onSurfaceVariant,
+              ),
+            ),
+          ),
+          const SizedBox(width: 6),
+          buildButton(icon: Icons.add_rounded, onPressed: onIncrease),
+        ],
+      ),
+    );
+  }
+}
+
 class BookshelfEmptyCard extends StatelessWidget {
   const BookshelfEmptyCard({super.key, required this.onImportLocal});
 

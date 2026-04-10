@@ -88,6 +88,53 @@ void main() {
         await service.loadSortMode(),
         BookshelfService.readingProgressSortMode,
       );
+
+      await service.saveSortMode(BookshelfService.authorSortMode);
+
+      expect(await service.loadSortMode(), BookshelfService.authorSortMode);
+    });
+
+    test('persists bookshelf grid preferences', () async {
+      final service = BookshelfService();
+
+      expect(
+        await service.loadGridAdaptiveColumns(),
+        BookshelfService.defaultGridAdaptiveColumns,
+      );
+      expect(
+        await service.loadGridColumnCount(),
+        BookshelfService.defaultGridColumnCount,
+      );
+      expect(
+        await service.loadGridCrossSpacing(),
+        BookshelfService.defaultGridCrossSpacing,
+      );
+      expect(
+        await service.loadGridMainSpacing(),
+        BookshelfService.defaultGridMainSpacing,
+      );
+      expect(await service.loadGridShowTitle(), isTrue);
+      expect(await service.loadGridShowAuthor(), isTrue);
+      expect(await service.loadGridShowLatestChapter(), isTrue);
+      expect(await service.loadGridShowProgressBar(), isTrue);
+
+      await service.saveGridAdaptiveColumns(false);
+      await service.saveGridColumnCount(5);
+      await service.saveGridCrossSpacing(16);
+      await service.saveGridMainSpacing(20);
+      await service.saveGridShowTitle(false);
+      await service.saveGridShowAuthor(false);
+      await service.saveGridShowLatestChapter(false);
+      await service.saveGridShowProgressBar(false);
+
+      expect(await service.loadGridAdaptiveColumns(), isFalse);
+      expect(await service.loadGridColumnCount(), 5);
+      expect(await service.loadGridCrossSpacing(), 16);
+      expect(await service.loadGridMainSpacing(), 20);
+      expect(await service.loadGridShowTitle(), isFalse);
+      expect(await service.loadGridShowAuthor(), isFalse);
+      expect(await service.loadGridShowLatestChapter(), isFalse);
+      expect(await service.loadGridShowProgressBar(), isFalse);
     });
 
     test('renameTag renames across books and deduplicates tags', () async {

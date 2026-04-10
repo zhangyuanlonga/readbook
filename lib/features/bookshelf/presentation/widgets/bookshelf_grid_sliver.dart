@@ -10,6 +10,7 @@ class BookshelfGridSliver extends StatelessWidget {
     super.key,
     required this.itemCount,
     required this.itemBuilder,
+    this.fixedCrossAxisCount,
     this.crossSpacing = 8,
     this.mainSpacing = 12,
     this.itemHeightExtra = 42,
@@ -17,6 +18,7 @@ class BookshelfGridSliver extends StatelessWidget {
 
   final int itemCount;
   final BookshelfGridItemBuilder itemBuilder;
+  final int? fixedCrossAxisCount;
   final double crossSpacing;
   final double mainSpacing;
   final double itemHeightExtra;
@@ -27,7 +29,9 @@ class BookshelfGridSliver extends StatelessWidget {
       builder: (context, constraints) {
         final width =
             constraints.crossAxisExtent.clamp(220.0, 2400.0).toDouble();
-        final crossAxisCount = AppLayout.bookshelfGridColumnsForWidth(width);
+        final crossAxisCount =
+            fixedCrossAxisCount?.clamp(2, 6) ??
+            AppLayout.bookshelfGridColumnsForWidth(width);
         final itemWidth =
             (width - crossSpacing * (crossAxisCount - 1)) / crossAxisCount;
         final itemHeight = itemWidth * 1.32 + itemHeightExtra;

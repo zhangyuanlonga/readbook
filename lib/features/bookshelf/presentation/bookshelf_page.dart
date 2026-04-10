@@ -54,9 +54,18 @@ enum _BookshelfFilter { all, local, novel, manga, custom }
 
 enum _TagManageSheetAction { rename, delete }
 
-enum _BookshelfMoreAction { selectBooks, sortBooks, importLocal }
+enum _BookshelfMoreAction { selectBooks, sortBooks, settings, importLocal }
 
-enum _BookshelfSortMode { defaultOrder, recentRead, readingProgress, createdAt }
+enum _BookshelfSortMode {
+  defaultOrder,
+  recentRead,
+  readingProgress,
+  createdAt,
+  author,
+  title,
+}
+
+enum _BookshelfSettingsTab { list, grid }
 
 class _BookshelfProgressDisplay {
   const _BookshelfProgressDisplay({
@@ -130,6 +139,14 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
   List<_BookshelfFilter> _orderedBaseFiltersCache = _kDefaultBaseFilters;
   bool _useGridView = false;
   _BookshelfSortMode _sortMode = _BookshelfSortMode.defaultOrder;
+  bool _gridAdaptiveColumns = BookshelfService.defaultGridAdaptiveColumns;
+  int _gridColumnCount = BookshelfService.defaultGridColumnCount;
+  double _gridCrossSpacing = BookshelfService.defaultGridCrossSpacing;
+  double _gridMainSpacing = BookshelfService.defaultGridMainSpacing;
+  bool _gridShowTitle = BookshelfService.defaultGridShowTitle;
+  bool _gridShowAuthor = BookshelfService.defaultGridShowAuthor;
+  bool _gridShowLatestChapter = BookshelfService.defaultGridShowLatestChapter;
+  bool _gridShowProgressBar = BookshelfService.defaultGridShowProgressBar;
   _BookshelfFilter _activeFilter = _BookshelfFilter.all;
   String? _activeCustomTag;
   String? _openingBookId;
@@ -200,6 +217,7 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
       unawaited(_consumePendingExternalImportPayloads());
       unawaited(_restoreViewModePreference());
       unawaited(_restoreSortModePreference());
+      unawaited(_restoreGridPreferences());
       unawaited(_loadBookshelf());
       if (widget.prefetchAnnouncementOnInit) {
         unawaited(_prefetchLatestAnnouncement());
@@ -340,6 +358,16 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
                           Icon(Icons.sort_rounded, size: 18),
                           SizedBox(width: 10),
                           Text('书籍排序'),
+                        ],
+                      ),
+                    ),
+                    const PopupMenuItem<_BookshelfMoreAction>(
+                      value: _BookshelfMoreAction.settings,
+                      child: Row(
+                        children: [
+                          Icon(Icons.tune_rounded, size: 18),
+                          SizedBox(width: 10),
+                          Text('书架设置'),
                         ],
                       ),
                     ),
@@ -627,6 +655,9 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
       case _BookshelfMoreAction.sortBooks:
         unawaited(_showSortModeSheet());
         break;
+      case _BookshelfMoreAction.settings:
+        unawaited(_showBookshelfSettingsSheet());
+        break;
       case _BookshelfMoreAction.importLocal:
         unawaited(_importLocalBooksFromPicker());
         break;
@@ -688,6 +719,395 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
       }
       _showMessage('书籍排序保存失败，请重试。');
     }
+  }
+
+  Future<void> _showBookshelfSettingsSheet() async {
+    if (!mounted) {
+      return;
+    }
+
+    var draftAdaptive = _gridAdaptiveColumns;
+    var draftColumns = _gridColumnCount;
+    var draftCrossSpacing = _gridCrossSpacing;
+    var draftMainSpacing = _gridMainSpacing;
+    var draftShowTitle = _gridShowTitle;
+    var draftShowAuthor = _gridShowAuthor;
+    var draftShowLatestChapter = _gridShowLatestChapter;
+    var draftShowProgressBar = _gridShowProgressBar;
+
+    await _showBookshelfBottomSheet<void>(
+      isScrollControlled: true,
+      builder: (sheetContext) {
+        final bottomInset = _bookshelfBottomSafeInset(sheetContext);
+        return DefaultTabController(
+          length: _BookshelfSettingsTab.values.length,
+          child: StatefulBuilder(
+            builder: (sheetContext, setSheetState) {
+              final theme = Theme.of(sheetContext);
+              final colorScheme = theme.colorScheme;
+              final tabs = _BookshelfSettingsTab.values;
+
+              Future<void> persistGridSettings() async {
+                try {
+                  await _bookshelfService.saveGridAdaptiveColumns(
+                    draftAdaptive,
+                  );
+                  await _bookshelfService.saveGridColumnCount(draftColumns);
+                  await _bookshelfService.saveGridCrossSpacing(
+                    draftCrossSpacing,
+                  );
+                  await _bookshelfService.saveGridMainSpacing(draftMainSpacing);
+                  await _bookshelfService.saveGridShowTitle(draftShowTitle);
+                  await _bookshelfService.saveGridShowAuthor(draftShowAuthor);
+                  await _bookshelfService.saveGridShowLatestChapter(
+                    draftShowLatestChapter,
+                  );
+                  await _bookshelfService.saveGridShowProgressBar(
+                    draftShowProgressBar,
+                  );
+                } catch (_) {
+                  if (!mounted) {
+                    return;
+                  }
+                  _showMessage('书架设置保存失败，请重试。');
+                }
+              }
+
+              Widget buildSectionTitle(String title, String subtitle) {
+                return Padding(
+                  padding: const EdgeInsets.fromLTRB(12, 8, 12, 8),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        title,
+                        style: theme.textTheme.titleMedium?.copyWith(
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        subtitle,
+                        style: theme.textTheme.bodySmall?.copyWith(
+                          color: colorScheme.onSurfaceVariant,
+                          height: 1.35,
+                        ),
+                      ),
+                    ],
+                  ),
+                );
+              }
+
+              Widget buildGroupHeader(String title) {
+                return Padding(
+                  padding: const EdgeInsets.fromLTRB(12, 14, 12, 6),
+                  child: Text(
+                    title,
+                    style: theme.textTheme.labelLarge?.copyWith(
+                      fontWeight: FontWeight.w800,
+                      color: colorScheme.onSurface,
+                    ),
+                  ),
+                );
+              }
+
+              Widget buildGridSettings() {
+                return ListView(
+                  padding: const EdgeInsets.fromLTRB(0, 4, 0, 8),
+                  children: [
+                    buildSectionTitle('网格设置', '自定义网格列数与间距，自适应开启后会按屏幕宽度自动分列。'),
+                    buildGroupHeader('布局设置'),
+                    SwitchListTile.adaptive(
+                      value: draftAdaptive,
+                      title: const Text('自适应列数'),
+                      subtitle: const Text('根据当前宽度自动决定 2-6 列。'),
+                      onChanged: (value) {
+                        setSheetState(() {
+                          draftAdaptive = value;
+                        });
+                        setState(() {
+                          _gridAdaptiveColumns = value;
+                        });
+                        unawaited(persistGridSettings());
+                      },
+                    ),
+                    BookshelfStepperSettingRow(
+                      title: '网格列数',
+                      subtitle:
+                          draftAdaptive ? '已启用自适应列数，固定列数暂不可用' : '手动指定固定列数。',
+                      valueLabel: '$draftColumns',
+                      enabled: !draftAdaptive,
+                      onDecrease:
+                          draftAdaptive || draftColumns <= 2
+                              ? null
+                              : () {
+                                final next = draftColumns - 1;
+                                setSheetState(() {
+                                  draftColumns = next;
+                                });
+                                setState(() {
+                                  _gridColumnCount = next;
+                                });
+                                unawaited(persistGridSettings());
+                              },
+                      onIncrease:
+                          draftAdaptive || draftColumns >= 6
+                              ? null
+                              : () {
+                                final next = draftColumns + 1;
+                                setSheetState(() {
+                                  draftColumns = next;
+                                });
+                                setState(() {
+                                  _gridColumnCount = next;
+                                });
+                                unawaited(persistGridSettings());
+                              },
+                    ),
+                    BookshelfStepperSettingRow(
+                      title: '列间距',
+                      subtitle: '控制卡片之间的左右间距。',
+                      valueLabel: draftCrossSpacing.toStringAsFixed(0),
+                      onDecrease:
+                          draftCrossSpacing <= 4
+                              ? null
+                              : () {
+                                final next = (draftCrossSpacing - 2).clamp(
+                                  4.0,
+                                  24.0,
+                                );
+                                setSheetState(() {
+                                  draftCrossSpacing = next;
+                                });
+                                setState(() {
+                                  _gridCrossSpacing = next;
+                                });
+                                unawaited(persistGridSettings());
+                              },
+                      onIncrease:
+                          draftCrossSpacing >= 24
+                              ? null
+                              : () {
+                                final next = (draftCrossSpacing + 2).clamp(
+                                  4.0,
+                                  24.0,
+                                );
+                                setSheetState(() {
+                                  draftCrossSpacing = next;
+                                });
+                                setState(() {
+                                  _gridCrossSpacing = next;
+                                });
+                                unawaited(persistGridSettings());
+                              },
+                    ),
+                    BookshelfStepperSettingRow(
+                      title: '行间距',
+                      subtitle: '控制卡片之间的上下间距。',
+                      valueLabel: draftMainSpacing.toStringAsFixed(0),
+                      onDecrease:
+                          draftMainSpacing <= 4
+                              ? null
+                              : () {
+                                final next = (draftMainSpacing - 2).clamp(
+                                  4.0,
+                                  24.0,
+                                );
+                                setSheetState(() {
+                                  draftMainSpacing = next;
+                                });
+                                setState(() {
+                                  _gridMainSpacing = next;
+                                });
+                                unawaited(persistGridSettings());
+                              },
+                      onIncrease:
+                          draftMainSpacing >= 24
+                              ? null
+                              : () {
+                                final next = (draftMainSpacing + 2).clamp(
+                                  4.0,
+                                  24.0,
+                                );
+                                setSheetState(() {
+                                  draftMainSpacing = next;
+                                });
+                                setState(() {
+                                  _gridMainSpacing = next;
+                                });
+                                unawaited(persistGridSettings());
+                              },
+                    ),
+                    buildGroupHeader('文字信息'),
+                    SwitchListTile.adaptive(
+                      value: !draftShowTitle,
+                      title: const Text('隐藏书籍名称'),
+                      onChanged: (value) {
+                        final next = !value;
+                        setSheetState(() {
+                          draftShowTitle = next;
+                        });
+                        setState(() {
+                          _gridShowTitle = next;
+                        });
+                        unawaited(persistGridSettings());
+                      },
+                    ),
+                    SwitchListTile.adaptive(
+                      value: !draftShowAuthor,
+                      title: const Text('隐藏作者名称'),
+                      onChanged: (value) {
+                        final next = !value;
+                        setSheetState(() {
+                          draftShowAuthor = next;
+                        });
+                        setState(() {
+                          _gridShowAuthor = next;
+                        });
+                        unawaited(persistGridSettings());
+                      },
+                    ),
+                    SwitchListTile.adaptive(
+                      value: !draftShowLatestChapter,
+                      title: const Text('隐藏最新章节'),
+                      onChanged: (value) {
+                        final next = !value;
+                        setSheetState(() {
+                          draftShowLatestChapter = next;
+                        });
+                        setState(() {
+                          _gridShowLatestChapter = next;
+                        });
+                        unawaited(persistGridSettings());
+                      },
+                    ),
+                    buildGroupHeader('封面设置'),
+                    Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 12),
+                      child: Container(
+                        padding: const EdgeInsets.all(14),
+                        decoration: BoxDecoration(
+                          color: colorScheme.surfaceContainerLow,
+                          borderRadius: BorderRadius.circular(16),
+                          border: Border.all(
+                            color: colorScheme.outlineVariant.withValues(
+                              alpha: 0.55,
+                            ),
+                          ),
+                        ),
+                        child: Text(
+                          '当前暂未提供额外封面设置。',
+                          style: theme.textTheme.bodyMedium?.copyWith(
+                            color: colorScheme.onSurfaceVariant,
+                            height: 1.35,
+                          ),
+                        ),
+                      ),
+                    ),
+                    buildGroupHeader('其他设置'),
+                    SwitchListTile.adaptive(
+                      value: !draftShowProgressBar,
+                      title: const Text('隐藏进度条'),
+                      onChanged: (value) {
+                        final next = !value;
+                        setSheetState(() {
+                          draftShowProgressBar = next;
+                        });
+                        setState(() {
+                          _gridShowProgressBar = next;
+                        });
+                        unawaited(persistGridSettings());
+                      },
+                    ),
+                  ],
+                );
+              }
+
+              Widget buildListSettings() {
+                return ListView(
+                  padding: const EdgeInsets.fromLTRB(0, 4, 0, 8),
+                  children: [
+                    buildSectionTitle(
+                      '列表设置',
+                      '列表模式当前没有额外参数，后续可以继续在这里扩展卡片信息与密度设置。',
+                    ),
+                    Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 12),
+                      child: Container(
+                        padding: const EdgeInsets.all(14),
+                        decoration: BoxDecoration(
+                          color: colorScheme.surfaceContainerLow,
+                          borderRadius: BorderRadius.circular(16),
+                          border: Border.all(
+                            color: colorScheme.outlineVariant.withValues(
+                              alpha: 0.55,
+                            ),
+                          ),
+                        ),
+                        child: Text(
+                          '当前列表模式暂不提供额外设置。',
+                          style: theme.textTheme.bodyMedium?.copyWith(
+                            color: colorScheme.onSurfaceVariant,
+                            height: 1.35,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
+                );
+              }
+
+              return Padding(
+                padding: EdgeInsets.fromLTRB(8, 0, 8, 10 + bottomInset),
+                child: SizedBox(
+                  height: MediaQuery.sizeOf(sheetContext).height * 0.68,
+                  child: Column(
+                    children: [
+                      Padding(
+                        padding: const EdgeInsets.fromLTRB(12, 4, 12, 8),
+                        child: Row(
+                          children: [
+                            Expanded(
+                              child: Text(
+                                '书架设置',
+                                style: theme.textTheme.titleMedium?.copyWith(
+                                  fontWeight: FontWeight.w700,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      Container(
+                        margin: const EdgeInsets.symmetric(horizontal: 12),
+                        decoration: BoxDecoration(
+                          color: colorScheme.surfaceContainerLow,
+                          borderRadius: BorderRadius.circular(14),
+                        ),
+                        child: TabBar(
+                          dividerColor: Colors.transparent,
+                          indicatorSize: TabBarIndicatorSize.tab,
+                          tabs: [
+                            for (final tab in tabs)
+                              Tab(text: _bookshelfSettingsTabLabel(tab)),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      Expanded(
+                        child: TabBarView(
+                          children: [buildListSettings(), buildGridSettings()],
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              );
+            },
+          ),
+        );
+      },
+    );
   }
 
   Future<void> _importLocalBooksFromPicker() async {
@@ -1366,6 +1786,9 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
   Widget _buildBookGridSliver(List<BookshelfBook> books) {
     return BookshelfGridSliver(
       itemCount: books.length,
+      fixedCrossAxisCount: _gridAdaptiveColumns ? null : _gridColumnCount,
+      crossSpacing: _gridCrossSpacing,
+      mainSpacing: _gridMainSpacing,
       itemBuilder: (context, index) {
         final book = books[index];
         return _buildModeSwitchAnimatedBookItem(
@@ -1587,43 +2010,62 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
                   ],
                 ),
               ),
-              const SizedBox(height: 6),
-              Text(
-                titleText,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: Theme.of(
-                  context,
-                ).textTheme.labelMedium?.copyWith(fontWeight: FontWeight.w700),
-              ),
-              const SizedBox(height: 2),
-              Text(
-                authorLine,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                  color: colorScheme.onSurfaceVariant,
-                  fontWeight: FontWeight.w500,
+              if (_gridShowTitle ||
+                  _gridShowAuthor ||
+                  _gridShowLatestChapter ||
+                  _gridShowProgressBar)
+                const SizedBox(height: 6),
+              if (_gridShowTitle) ...[
+                Text(
+                  titleText,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: Theme.of(context).textTheme.labelMedium?.copyWith(
+                    fontWeight: FontWeight.w700,
+                  ),
                 ),
-              ),
-              const SizedBox(height: 1),
-              Text(
-                latestLine,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                  color: colorScheme.onSurfaceVariant,
+              ],
+              if (_gridShowAuthor) ...[
+                SizedBox(height: _gridShowTitle ? 2 : 0),
+                Text(
+                  authorLine,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                    color: colorScheme.onSurfaceVariant,
+                    fontWeight: FontWeight.w500,
+                  ),
                 ),
-              ),
-              const SizedBox(height: 4),
-              ClipRRect(
-                borderRadius: BorderRadius.circular(2),
-                child: LinearProgressIndicator(
-                  value: progressDisplay.progressValue,
-                  minHeight: 3,
-                  backgroundColor: colorScheme.surfaceContainerHighest,
+              ],
+              if (_gridShowLatestChapter) ...[
+                SizedBox(height: (_gridShowTitle || _gridShowAuthor) ? 1 : 0),
+                Text(
+                  latestLine,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                    color: colorScheme.onSurfaceVariant,
+                  ),
                 ),
-              ),
+              ],
+              if (_gridShowProgressBar) ...[
+                SizedBox(
+                  height:
+                      (_gridShowTitle ||
+                              _gridShowAuthor ||
+                              _gridShowLatestChapter)
+                          ? 4
+                          : 0,
+                ),
+                ClipRRect(
+                  borderRadius: BorderRadius.circular(2),
+                  child: LinearProgressIndicator(
+                    value: progressDisplay.progressValue,
+                    minHeight: 3,
+                    backgroundColor: colorScheme.surfaceContainerHighest,
+                  ),
+                ),
+              ],
             ],
           ),
         ),
@@ -2026,6 +2468,8 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
         b,
       ),
       _BookshelfSortMode.createdAt => _compareBookshelfBooksByCreatedAt(a, b),
+      _BookshelfSortMode.author => _compareBookshelfBooksByAuthor(a, b),
+      _BookshelfSortMode.title => _compareBookshelfBooksByTitle(a, b),
     };
   }
 
@@ -2084,6 +2528,30 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
       return createdCompare;
     }
     return a.title.compareTo(b.title);
+  }
+
+  int _compareBookshelfBooksByAuthor(BookshelfBook a, BookshelfBook b) {
+    final authorA = (a.author ?? '').trim();
+    final authorB = (b.author ?? '').trim();
+    if (authorA.isNotEmpty && authorB.isNotEmpty) {
+      final compare = authorA.compareTo(authorB);
+      if (compare != 0) {
+        return compare;
+      }
+    } else if (authorA.isNotEmpty) {
+      return -1;
+    } else if (authorB.isNotEmpty) {
+      return 1;
+    }
+    return _compareBookshelfBooksByTitle(a, b);
+  }
+
+  int _compareBookshelfBooksByTitle(BookshelfBook a, BookshelfBook b) {
+    final compare = a.title.compareTo(b.title);
+    if (compare != 0) {
+      return compare;
+    }
+    return _compareBookshelfBooksByCreatedAt(a, b);
   }
 
   Future<void> _persistTagOrder(List<String> tags) async {
@@ -4019,12 +4487,49 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
     });
   }
 
+  Future<void> _restoreGridPreferences() async {
+    final adaptive = await _bookshelfService.loadGridAdaptiveColumns();
+    final columns = await _bookshelfService.loadGridColumnCount();
+    final crossSpacing = await _bookshelfService.loadGridCrossSpacing();
+    final mainSpacing = await _bookshelfService.loadGridMainSpacing();
+    final showTitle = await _bookshelfService.loadGridShowTitle();
+    final showAuthor = await _bookshelfService.loadGridShowAuthor();
+    final showLatestChapter =
+        await _bookshelfService.loadGridShowLatestChapter();
+    final showProgressBar = await _bookshelfService.loadGridShowProgressBar();
+    if (!mounted) {
+      return;
+    }
+    if (_gridAdaptiveColumns == adaptive &&
+        _gridColumnCount == columns &&
+        _gridCrossSpacing == crossSpacing &&
+        _gridMainSpacing == mainSpacing &&
+        _gridShowTitle == showTitle &&
+        _gridShowAuthor == showAuthor &&
+        _gridShowLatestChapter == showLatestChapter &&
+        _gridShowProgressBar == showProgressBar) {
+      return;
+    }
+    setState(() {
+      _gridAdaptiveColumns = adaptive;
+      _gridColumnCount = columns;
+      _gridCrossSpacing = crossSpacing;
+      _gridMainSpacing = mainSpacing;
+      _gridShowTitle = showTitle;
+      _gridShowAuthor = showAuthor;
+      _gridShowLatestChapter = showLatestChapter;
+      _gridShowProgressBar = showProgressBar;
+    });
+  }
+
   _BookshelfSortMode _sortModeFromStorageValue(String value) {
     return switch (value) {
       BookshelfService.recentReadSortMode => _BookshelfSortMode.recentRead,
       BookshelfService.readingProgressSortMode =>
         _BookshelfSortMode.readingProgress,
       BookshelfService.createdAtSortMode => _BookshelfSortMode.createdAt,
+      BookshelfService.authorSortMode => _BookshelfSortMode.author,
+      BookshelfService.titleSortMode => _BookshelfSortMode.title,
       _ => _BookshelfSortMode.defaultOrder,
     };
   }
@@ -4036,6 +4541,8 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
       _BookshelfSortMode.readingProgress =>
         BookshelfService.readingProgressSortMode,
       _BookshelfSortMode.createdAt => BookshelfService.createdAtSortMode,
+      _BookshelfSortMode.author => BookshelfService.authorSortMode,
+      _BookshelfSortMode.title => BookshelfService.titleSortMode,
     };
   }
 
@@ -4045,6 +4552,8 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
       _BookshelfSortMode.recentRead => '最近阅读',
       _BookshelfSortMode.readingProgress => '阅读进度',
       _BookshelfSortMode.createdAt => '创建时间',
+      _BookshelfSortMode.author => '作者',
+      _BookshelfSortMode.title => '书名',
     };
   }
 
@@ -4054,6 +4563,15 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
       _BookshelfSortMode.recentRead => '最近打开或更新阅读位置的书籍排在前面。',
       _BookshelfSortMode.readingProgress => '按当前阅读进度从高到低排序。',
       _BookshelfSortMode.createdAt => '按加入书架时间从新到旧排序。',
+      _BookshelfSortMode.author => '按作者名称排序，缺少作者信息的书排在后面。',
+      _BookshelfSortMode.title => '按书名排序，相同书名再按加入时间兜底。',
+    };
+  }
+
+  String _bookshelfSettingsTabLabel(_BookshelfSettingsTab tab) {
+    return switch (tab) {
+      _BookshelfSettingsTab.list => '列表',
+      _BookshelfSettingsTab.grid => '网格',
     };
   }
 
