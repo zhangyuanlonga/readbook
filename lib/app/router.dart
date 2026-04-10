@@ -15,6 +15,7 @@ import '../features/mine/presentation/cache_management_page.dart';
 import '../features/mine/presentation/membership_center_page.dart';
 import '../features/mine/presentation/about_page.dart';
 import '../features/mine/presentation/bookmarks_page.dart';
+import '../features/mine/presentation/bottom_nav_icon_gallery_page.dart';
 import '../features/mine/presentation/feedback_page.dart';
 import '../features/mine/presentation/system_settings_page.dart';
 import '../features/auth/presentation/auth_page.dart';
@@ -90,7 +91,23 @@ final GoRouter appRouter = GoRouter(
     GoRoute(
       path: '/appearance',
       name: 'appearance',
-      builder: (context, state) => const AppearancePage(),
+      builder: (context, state) {
+        final section = switch (state.uri.queryParameters['section']) {
+          'theme-mode' => AppearanceSection.themeMode,
+          'app-icon' => AppearanceSection.appIcon,
+          'theme-color' => AppearanceSection.themeColor,
+          'bottom-bar' => AppearanceSection.bottomBar,
+          'cover-gallery' => AppearanceSection.coverGallery,
+          'background-gallery' => AppearanceSection.backgroundGallery,
+          _ => AppearanceSection.overview,
+        };
+        return AppearancePage(section: section);
+      },
+    ),
+    GoRoute(
+      path: '/bottom-nav-icon-galleries',
+      name: 'bottom-nav-icon-galleries',
+      builder: (context, state) => const BottomNavIconGalleryPage(),
     ),
     GoRoute(
       path: '/cache',

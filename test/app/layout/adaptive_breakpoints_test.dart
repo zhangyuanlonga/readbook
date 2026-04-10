@@ -6,6 +6,7 @@ import 'package:shuxiang_reading_next/app/layout/app_spacing.dart';
 import 'package:shuxiang_reading_next/app/navigation/app_navigation_style_provider.dart';
 import 'package:shuxiang_reading_next/app/shell_navigation_provider.dart';
 import 'package:shuxiang_reading_next/app/shell_scaffold.dart';
+import 'package:shuxiang_reading_next/app/widgets/bottom_nav_icon_view.dart';
 import 'package:shuxiang_reading_next/app/widgets/cupertino_dock_navigation_bar.dart';
 import '../../test_utils/adaptive_test_harness.dart';
 
@@ -469,23 +470,38 @@ void main() {
       growable: false,
     );
 
-    expect((destinations[0].icon as Icon).icon, Icons.menu_book_outlined);
     expect(
-      (destinations[0].selectedIcon as Icon).icon,
+      (destinations[0].icon as BottomNavIconView).icon.fallbackIcon,
+      Icons.menu_book_outlined,
+    );
+    expect(
+      (destinations[0].selectedIcon as BottomNavIconView).icon.fallbackIcon,
       Icons.menu_book_rounded,
     );
-    expect((destinations[1].icon as Icon).icon, Icons.explore_outlined);
-    expect((destinations[1].selectedIcon as Icon).icon, Icons.explore);
     expect(
-      (destinations[2].icon as Icon).icon,
+      (destinations[1].icon as BottomNavIconView).icon.fallbackIcon,
+      Icons.explore_outlined,
+    );
+    expect(
+      (destinations[1].selectedIcon as BottomNavIconView).icon.fallbackIcon,
+      Icons.explore,
+    );
+    expect(
+      (destinations[2].icon as BottomNavIconView).icon.fallbackIcon,
       Icons.insert_chart_outlined_rounded,
     );
     expect(
-      (destinations[2].selectedIcon as Icon).icon,
+      (destinations[2].selectedIcon as BottomNavIconView).icon.fallbackIcon,
       Icons.insert_chart_rounded,
     );
-    expect((destinations[3].icon as Icon).icon, Icons.person_outline);
-    expect((destinations[3].selectedIcon as Icon).icon, Icons.person);
+    expect(
+      (destinations[3].icon as BottomNavIconView).icon.fallbackIcon,
+      Icons.person_outline,
+    );
+    expect(
+      (destinations[3].selectedIcon as BottomNavIconView).icon.fallbackIcon,
+      Icons.person,
+    );
   });
 
   testWidgets('ShellScaffold 标准底部导航会响应文字显示开关', (tester) async {

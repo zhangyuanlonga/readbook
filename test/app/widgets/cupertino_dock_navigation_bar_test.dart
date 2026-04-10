@@ -17,6 +17,7 @@ void main() {
             destinations: appShellDestinations,
             selectedIndex: 0,
             showLabels: true,
+            activeIconGallery: null,
             onDestinationSelected: (index) {
               selectedIndex = index;
             },
@@ -47,6 +48,7 @@ void main() {
             destinations: appShellDestinations,
             selectedIndex: 0,
             showLabels: false,
+            activeIconGallery: null,
             onDestinationSelected: (_) {},
             onSearchPressed: () {},
           ),

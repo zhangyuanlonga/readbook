@@ -5,9 +5,13 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../domain/entities/bottom_nav_icon_gallery.dart';
 import 'layout/app_layout.dart';
+import 'navigation/bottom_nav_icon_gallery_provider.dart';
+import 'navigation/bottom_nav_icon_resolver.dart';
 import 'navigation/app_navigation_style_provider.dart';
 import 'shell_navigation_provider.dart';
+import 'widgets/bottom_nav_icon_view.dart';
 import 'widgets/cupertino_dock_navigation_bar.dart';
 
 class ShellScaffold extends ConsumerStatefulWidget {
@@ -107,6 +111,8 @@ class _ShellScaffoldState extends ConsumerState<ShellScaffold>
     );
     final navigationState = ref.watch(appShellNavigationProvider);
     final visibleDestinations = visibleAppShellDestinations(navigationState);
+    final activeIconGallery =
+        ref.watch(activeBottomNavIconGalleryProvider).value;
     final effectiveNavigationStyle = resolveAppNavigationStyle(
       navigationStylePreference,
       isWeb: kIsWeb,
@@ -212,6 +218,7 @@ class _ShellScaffoldState extends ConsumerState<ShellScaffold>
         selectedIndex: effectiveSelectedIndex,
         style: effectiveNavigationStyle,
         showNavigationLabels: showNavigationLabels,
+        activeIconGallery: activeIconGallery,
       ),
     );
   }
@@ -226,7 +233,10 @@ class _ShellScaffoldState extends ConsumerState<ShellScaffold>
     required int selectedIndex,
     required AppNavigationStyle style,
     required bool showNavigationLabels,
+    required BottomNavIconGallery? activeIconGallery,
   }) {
+    final brightness = Theme.of(context).brightness;
+
     switch (style) {
       case AppNavigationStyle.standard:
         return NavigationBar(
@@ -242,8 +252,24 @@ class _ShellScaffoldState extends ConsumerState<ShellScaffold>
           destinations: [
             for (final destination in destinations)
               NavigationDestination(
-                icon: Icon(destination.icon),
-                selectedIcon: Icon(destination.selectedIcon),
+                icon: BottomNavIconView(
+                  icon: resolveStandardBottomNavIcon(
+                    destination: destination,
+                    selected: false,
+                    brightness: brightness,
+                    gallery: activeIconGallery,
+                  ),
+                  size: 24,
+                ),
+                selectedIcon: BottomNavIconView(
+                  icon: resolveStandardBottomNavIcon(
+                    destination: destination,
+                    selected: true,
+                    brightness: brightness,
+                    gallery: activeIconGallery,
+                  ),
+                  size: 24,
+                ),
                 label: destination.label,
               ),
           ],
@@ -253,6 +279,7 @@ class _ShellScaffoldState extends ConsumerState<ShellScaffold>
           destinations: destinations,
           selectedIndex: selectedIndex,
           showLabels: showNavigationLabels,
+          activeIconGallery: activeIconGallery,
           onDestinationSelected:
               (index) => _goToDestination(context, destinations[index]),
           onSearchPressed: () {

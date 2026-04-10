@@ -9,19 +9,50 @@ import '../../../app/layout/app_layout.dart';
 import '../../../app/layout/app_spacing.dart';
 import '../../../app/navigation/app_navigation_style_provider.dart';
 import '../../../app/shell_navigation_provider.dart';
+import '../../../app/theme/app_icon_provider.dart';
 import '../../../app/theme/app_theme_palette.dart';
 import '../../../app/theme/app_theme_provider.dart';
 import '../../../app/theme/app_theme_seed_provider.dart';
 import '../../../app/widgets/cupertino_dock_navigation_bar.dart';
+import '../../../app/widgets/text_cover_placeholder.dart';
+import '../../../core/device/app_icon_service.dart';
+
+enum AppearanceSection {
+  overview,
+  themeMode,
+  appIcon,
+  themeColor,
+  bottomBar,
+  coverGallery,
+  backgroundGallery,
+}
 
 class AppearancePage extends ConsumerStatefulWidget {
-  const AppearancePage({super.key});
+  const AppearancePage({super.key, this.section = AppearanceSection.overview});
+
+  final AppearanceSection section;
 
   @override
   ConsumerState<AppearancePage> createState() => _AppearancePageState();
 }
 
 class _AppearancePageState extends ConsumerState<AppearancePage> {
+  static const List<Map<String, String>> _coverGallerySamples = [
+    {'title': '凡人修仙传', 'author': '忘语'},
+    {'title': '斗破苍穹', 'author': '天蚕土豆'},
+    {'title': '三体', 'author': '刘慈欣'},
+    {'title': '庆余年', 'author': '猫腻'},
+    {'title': '雪中悍刀行', 'author': '烽火戏诸侯'},
+    {'title': '活着', 'author': '余华'},
+  ];
+
+  static const List<String> _backgroundGalleryPaths = [
+    'assets/reader/backgrounds/20260224-212555-700782.jpeg',
+    'assets/reader/backgrounds/20260224-212555-b91cd8.jpeg',
+    'assets/reader/backgrounds/20260224-212555-01b93d.jpeg',
+    'assets/reader/backgrounds/Image_1768236174407.jpg',
+  ];
+
   static const List<_ThemeModeOption> _themeModeOptions = [
     _ThemeModeOption(
       mode: ThemeMode.light,
@@ -62,6 +93,7 @@ class _AppearancePageState extends ConsumerState<AppearancePage> {
   Widget build(BuildContext context) {
     final horizontal = AppSpacing.pageHorizontal(context);
     final selectedThemeMode = ref.watch(appThemeModeProvider);
+    final selectedAppIconVariant = ref.watch(appIconVariantProvider);
     final selectedSeedColor = ref.watch(appSeedColorProvider);
     final selectedNavigationStyle = ref.watch(
       appNavigationStylePreferenceProvider,
@@ -80,7 +112,7 @@ class _AppearancePageState extends ConsumerState<AppearancePage> {
         context.go('/mine');
       },
       child: Scaffold(
-        appBar: AppBar(title: const Text('外观')),
+        appBar: AppBar(title: Text(_pageTitle(widget.section))),
         body: LayoutBuilder(
           builder: (context, _) {
             final maxWidth = AppLayout.pageContentMaxWidth(
@@ -94,200 +126,539 @@ class _AppearancePageState extends ConsumerState<AppearancePage> {
                 constraints: BoxConstraints(maxWidth: maxWidth),
                 child: ListView(
                   padding: EdgeInsets.fromLTRB(horizontal, 12, horizontal, 12),
-                  children: [
-                    _buildPreviewCard(
-                      context,
-                      navigationState,
-                      selectedThemeMode: selectedThemeMode,
-                      selectedSeedColor: selectedSeedColor,
-                      selectedNavigationStyle: selectedNavigationStyle,
-                      showNavigationLabels: showNavigationLabels,
-                    ),
-                    const SizedBox(height: 12),
-                    _buildSectionCard(
-                      context,
-                      icon: Icons.light_mode_outlined,
-                      title: '主题模式',
-                      subtitle: '切换日间、夜间或跟随系统。',
-                      child: LayoutBuilder(
-                        builder: (context, constraints) {
-                          const spacing = 8.0;
-                          final columns = AppLayout.optionGridColumnsForWidth(
-                            constraints.maxWidth,
-                          );
-                          final itemWidth =
-                              (constraints.maxWidth -
-                                  ((columns - 1) * spacing)) /
-                              columns;
-
-                          return Wrap(
-                            spacing: spacing,
-                            runSpacing: spacing,
-                            children: _themeModeOptions
-                                .map(
-                                  (option) => SizedBox(
-                                    width: itemWidth,
-                                    child: _buildThemeModeTile(
-                                      context,
-                                      option: option,
-                                      selectedThemeMode: selectedThemeMode,
-                                      onTap: () {
-                                        if (selectedThemeMode == option.mode) {
-                                          return;
-                                        }
-                                        unawaited(
-                                          ref
-                                              .read(
-                                                appThemeModeProvider.notifier,
-                                              )
-                                              .setThemeMode(option.mode),
-                                        );
-                                      },
-                                    ),
-                                  ),
-                                )
-                                .toList(growable: false),
-                          );
-                        },
-                      ),
-                    ),
-                    const SizedBox(height: 12),
-                    _buildSectionCard(
-                      context,
-                      icon: Icons.palette_outlined,
-                      title: '主题颜色',
-                      subtitle: '控制应用主色与强调色。',
-                      child: LayoutBuilder(
-                        builder: (context, constraints) {
-                          const spacing = 8.0;
-                          final columns = AppLayout.optionGridColumnsForWidth(
-                            constraints.maxWidth,
-                          );
-                          final itemWidth =
-                              (constraints.maxWidth -
-                                  ((columns - 1) * spacing)) /
-                              columns;
-
-                          return Wrap(
-                            spacing: spacing,
-                            runSpacing: spacing,
-                            children: appThemeSeedOptions
-                                .map(
-                                  (option) => SizedBox(
-                                    width: itemWidth,
-                                    child: _buildThemeColorTile(
-                                      context,
-                                      option: option,
-                                      selectedSeedColor: selectedSeedColor,
-                                      onTap: () {
-                                        if (selectedSeedColor.toARGB32() ==
-                                            option.color.toARGB32()) {
-                                          return;
-                                        }
-                                        unawaited(
-                                          ref
-                                              .read(
-                                                appSeedColorProvider.notifier,
-                                              )
-                                              .setSeedColor(option.color),
-                                        );
-                                      },
-                                    ),
-                                  ),
-                                )
-                                .toList(growable: false),
-                          );
-                        },
-                      ),
-                    ),
-                    const SizedBox(height: 12),
-                    _buildSectionCard(
-                      context,
-                      icon: Icons.dock_outlined,
-                      title: '导航样式',
-                      subtitle: '在 Android 和 iOS 手机上切换主导航风格，平板保持侧边栏。',
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          LayoutBuilder(
-                            builder: (context, constraints) {
-                              const spacing = 8.0;
-                              final columns =
-                                  AppLayout.optionGridColumnsForWidth(
-                                    constraints.maxWidth,
-                                  );
-                              final itemWidth =
-                                  (constraints.maxWidth -
-                                      ((columns - 1) * spacing)) /
-                                  columns;
-
-                              return Wrap(
-                                spacing: spacing,
-                                runSpacing: spacing,
-                                children: _navigationStyleOptions
-                                    .map(
-                                      (option) => SizedBox(
-                                        width: itemWidth,
-                                        child: _buildNavigationStyleTile(
-                                          context,
-                                          option: option,
-                                          selectedNavigationStyle:
-                                              selectedNavigationStyle,
-                                          onTap: () {
-                                            if (selectedNavigationStyle ==
-                                                option.preference) {
-                                              return;
-                                            }
-                                            unawaited(
-                                              ref
-                                                  .read(
-                                                    appNavigationStylePreferenceProvider
-                                                        .notifier,
-                                                  )
-                                                  .setPreference(
-                                                    option.preference,
-                                                  ),
-                                            );
-                                          },
-                                        ),
-                                      ),
-                                    )
-                                    .toList(growable: false),
-                              );
-                            },
-                          ),
-                          const SizedBox(height: 12),
-                          _buildNavigationLabelVisibilityTile(
-                            context,
-                            showLabels: showNavigationLabels,
-                            onChanged: (value) {
-                              unawaited(
-                                ref
-                                    .read(
-                                      appNavigationLabelVisibilityProvider
-                                          .notifier,
-                                    )
-                                    .setVisible(value),
-                              );
-                            },
-                          ),
-                        ],
-                      ),
-                    ),
-                    const SizedBox(height: 12),
-                    _buildSectionCard(
-                      context,
-                      icon: Icons.space_dashboard_outlined,
-                      title: '底部菜单',
-                      subtitle: '控制底部主导航展示项，至少保留一个内容入口。',
-                      child: const _AppearanceNavigationVisibilityPanel(),
-                    ),
-                  ],
+                  children: _buildSectionContent(
+                    context,
+                    navigationState,
+                    selectedThemeMode: selectedThemeMode,
+                    selectedAppIconVariant: selectedAppIconVariant,
+                    selectedSeedColor: selectedSeedColor,
+                    selectedNavigationStyle: selectedNavigationStyle,
+                    showNavigationLabels: showNavigationLabels,
+                  ),
                 ),
               ),
             );
           },
         ),
+      ),
+    );
+  }
+
+  String _pageTitle(AppearanceSection section) {
+    return switch (section) {
+      AppearanceSection.overview => '外观',
+      AppearanceSection.themeMode => '主题模式',
+      AppearanceSection.appIcon => '应用图标',
+      AppearanceSection.themeColor => '主题颜色',
+      AppearanceSection.bottomBar => '底栏配置',
+      AppearanceSection.coverGallery => '封面图集',
+      AppearanceSection.backgroundGallery => '背景图集',
+    };
+  }
+
+  List<Widget> _buildSectionContent(
+    BuildContext context,
+    AppShellNavigationState navigationState, {
+    required ThemeMode selectedThemeMode,
+    required AppIconVariant selectedAppIconVariant,
+    required Color selectedSeedColor,
+    required AppNavigationStylePreference selectedNavigationStyle,
+    required bool showNavigationLabels,
+  }) {
+    final sections = <Widget>[];
+
+    if (widget.section == AppearanceSection.overview) {
+      sections.add(
+        _buildPreviewCard(
+          context,
+          navigationState,
+          selectedThemeMode: selectedThemeMode,
+          selectedSeedColor: selectedSeedColor,
+          selectedNavigationStyle: selectedNavigationStyle,
+          showNavigationLabels: showNavigationLabels,
+        ),
+      );
+      sections.add(const SizedBox(height: 12));
+    }
+
+    if (widget.section == AppearanceSection.overview ||
+        widget.section == AppearanceSection.themeMode) {
+      sections.add(
+        _buildThemeModeSection(context, selectedThemeMode: selectedThemeMode),
+      );
+      if (ref.watch(appIconServiceProvider).isSupported) {
+        sections.add(const SizedBox(height: 12));
+        sections.add(
+          _buildAppIconSection(
+            context,
+            selectedVariant: selectedAppIconVariant,
+          ),
+        );
+      }
+    }
+
+    if (widget.section == AppearanceSection.appIcon) {
+      sections.add(
+        _buildAppIconSection(context, selectedVariant: selectedAppIconVariant),
+      );
+    }
+
+    if (widget.section == AppearanceSection.overview ||
+        widget.section == AppearanceSection.themeColor) {
+      if (sections.isNotEmpty) {
+        sections.add(const SizedBox(height: 12));
+      }
+      sections.add(
+        _buildThemeColorSection(context, selectedSeedColor: selectedSeedColor),
+      );
+    }
+
+    if (widget.section == AppearanceSection.overview ||
+        widget.section == AppearanceSection.bottomBar) {
+      if (sections.isNotEmpty) {
+        sections.add(const SizedBox(height: 12));
+      }
+      sections.add(
+        _buildSectionCard(
+          context,
+          icon: Icons.collections_bookmark_outlined,
+          title: '底栏图集',
+          subtitle: '管理底栏图标图集与默认图集。',
+          child: ListTile(
+            contentPadding: EdgeInsets.zero,
+            leading: const Icon(Icons.dock_outlined),
+            title: const Text('打开图集管理'),
+            subtitle: const Text('当前先支持默认图集与启用切换。'),
+            trailing: const Icon(Icons.chevron_right_rounded),
+            onTap: () => context.push('/bottom-nav-icon-galleries'),
+          ),
+        ),
+      );
+      sections.add(const SizedBox(height: 12));
+      sections.add(
+        _buildNavigationStyleSection(
+          context,
+          selectedNavigationStyle: selectedNavigationStyle,
+          showNavigationLabels: showNavigationLabels,
+        ),
+      );
+      sections.add(const SizedBox(height: 12));
+      sections.add(
+        _buildSectionCard(
+          context,
+          icon: Icons.space_dashboard_outlined,
+          title: '底部菜单',
+          subtitle: '控制底部主导航展示项，至少保留一个内容入口。',
+          child: const _AppearanceNavigationVisibilityPanel(),
+        ),
+      );
+    }
+
+    if (widget.section == AppearanceSection.coverGallery) {
+      sections.add(_buildCoverGallerySection(context));
+    }
+
+    if (widget.section == AppearanceSection.backgroundGallery) {
+      sections.add(_buildBackgroundGallerySection(context));
+    }
+
+    return sections;
+  }
+
+  Widget _buildThemeModeSection(
+    BuildContext context, {
+    required ThemeMode selectedThemeMode,
+  }) {
+    return _buildSectionCard(
+      context,
+      icon: Icons.light_mode_outlined,
+      title: '主题模式',
+      subtitle: '切换日间、夜间或跟随系统。',
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          const spacing = 8.0;
+          final columns = AppLayout.optionGridColumnsForWidth(
+            constraints.maxWidth,
+          );
+          final itemWidth =
+              (constraints.maxWidth - ((columns - 1) * spacing)) / columns;
+
+          return Wrap(
+            spacing: spacing,
+            runSpacing: spacing,
+            children: _themeModeOptions
+                .map(
+                  (option) => SizedBox(
+                    width: itemWidth,
+                    child: _buildThemeModeTile(
+                      context,
+                      option: option,
+                      selectedThemeMode: selectedThemeMode,
+                      onTap: () {
+                        if (selectedThemeMode == option.mode) {
+                          return;
+                        }
+                        unawaited(
+                          ref
+                              .read(appThemeModeProvider.notifier)
+                              .setThemeMode(option.mode),
+                        );
+                      },
+                    ),
+                  ),
+                )
+                .toList(growable: false),
+          );
+        },
+      ),
+    );
+  }
+
+  Widget _buildAppIconSection(
+    BuildContext context, {
+    required AppIconVariant selectedVariant,
+  }) {
+    return _buildSectionCard(
+      context,
+      icon: Icons.apps_outage_outlined,
+      title: '应用图标',
+      subtitle: '切换浅色或深色桌面图标，默认浅色。仅 Android 和 iOS 支持。',
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          const spacing = 10.0;
+          final columns = AppLayout.optionGridColumnsForWidth(
+            constraints.maxWidth,
+          ).clamp(1, 2);
+          final itemWidth =
+              (constraints.maxWidth - ((columns - 1) * spacing)) / columns;
+
+          return Wrap(
+            spacing: spacing,
+            runSpacing: spacing,
+            children: AppIconVariant.values
+                .map(
+                  (variant) => SizedBox(
+                    width: itemWidth,
+                    child: _buildAppIconTile(
+                      context,
+                      variant: variant,
+                      selected: selectedVariant == variant,
+                      onTap: () async {
+                        if (selectedVariant == variant) {
+                          return;
+                        }
+                        final didApply = await ref
+                            .read(appIconVariantProvider.notifier)
+                            .setVariant(variant);
+                        if (!didApply && context.mounted) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(content: Text('切换应用图标失败，请稍后重试。')),
+                          );
+                        }
+                      },
+                    ),
+                  ),
+                )
+                .toList(growable: false),
+          );
+        },
+      ),
+    );
+  }
+
+  Widget _buildThemeColorSection(
+    BuildContext context, {
+    required Color selectedSeedColor,
+  }) {
+    return _buildSectionCard(
+      context,
+      icon: Icons.palette_outlined,
+      title: '主题颜色',
+      subtitle: '控制应用主色与强调色。',
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          const spacing = 8.0;
+          final columns = AppLayout.optionGridColumnsForWidth(
+            constraints.maxWidth,
+          );
+          final itemWidth =
+              (constraints.maxWidth - ((columns - 1) * spacing)) / columns;
+
+          return Wrap(
+            spacing: spacing,
+            runSpacing: spacing,
+            children: appThemeSeedOptions
+                .map(
+                  (option) => SizedBox(
+                    width: itemWidth,
+                    child: _buildThemeColorTile(
+                      context,
+                      option: option,
+                      selectedSeedColor: selectedSeedColor,
+                      onTap: () {
+                        if (selectedSeedColor.toARGB32() ==
+                            option.color.toARGB32()) {
+                          return;
+                        }
+                        unawaited(
+                          ref
+                              .read(appSeedColorProvider.notifier)
+                              .setSeedColor(option.color),
+                        );
+                      },
+                    ),
+                  ),
+                )
+                .toList(growable: false),
+          );
+        },
+      ),
+    );
+  }
+
+  Widget _buildAppIconTile(
+    BuildContext context, {
+    required AppIconVariant variant,
+    required bool selected,
+    required Future<void> Function() onTap,
+  }) {
+    final colorScheme = Theme.of(context).colorScheme;
+
+    return InkWell(
+      borderRadius: BorderRadius.circular(16),
+      onTap: () {
+        unawaited(onTap());
+      },
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 160),
+        curve: Curves.easeOutCubic,
+        padding: const EdgeInsets.fromLTRB(12, 12, 12, 12),
+        decoration: BoxDecoration(
+          color:
+              selected
+                  ? colorScheme.secondaryContainer.withValues(alpha: 0.82)
+                  : colorScheme.surface,
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(
+            color:
+                selected
+                    ? colorScheme.primary
+                    : colorScheme.outlineVariant.withValues(alpha: 0.58),
+            width: selected ? 1.4 : 1,
+          ),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Center(
+              child: Container(
+                width: 84,
+                height: 84,
+                clipBehavior: Clip.antiAlias,
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(20),
+                  boxShadow: [
+                    BoxShadow(
+                      color: colorScheme.shadow.withValues(alpha: 0.08),
+                      blurRadius: 16,
+                      offset: const Offset(0, 8),
+                    ),
+                  ],
+                ),
+                child: Image.asset(
+                  variant.previewAssetPath,
+                  fit: BoxFit.cover,
+                  filterQuality: FilterQuality.high,
+                ),
+              ),
+            ),
+            const SizedBox(height: 12),
+            Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    variant.label,
+                    style: Theme.of(context).textTheme.labelLarge?.copyWith(
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                ),
+                Icon(
+                  selected ? Icons.check_circle_rounded : Icons.circle_outlined,
+                  size: 18,
+                  color: selected ? colorScheme.primary : colorScheme.outline,
+                ),
+              ],
+            ),
+            const SizedBox(height: 4),
+            Text(
+              variant.subtitle,
+              style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                color: colorScheme.onSurfaceVariant,
+                height: 1.35,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildCoverGallerySection(BuildContext context) {
+    return _buildSectionCard(
+      context,
+      icon: Icons.photo_library_outlined,
+      title: '封面图集',
+      subtitle: '预览当前应用使用的文字封面风格。',
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          const spacing = 10.0;
+          final columns = AppLayout.optionGridColumnsForWidth(
+            constraints.maxWidth,
+          );
+          final itemWidth =
+              (constraints.maxWidth - ((columns - 1) * spacing)) / columns;
+
+          return Wrap(
+            spacing: spacing,
+            runSpacing: spacing,
+            children: _coverGallerySamples
+                .map(
+                  (sample) => SizedBox(
+                    width: itemWidth,
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        TextCoverPlaceholder(
+                          title: sample['title'],
+                          author: sample['author'],
+                          width: itemWidth,
+                          height: itemWidth * 1.42,
+                          borderRadius: BorderRadius.circular(14),
+                        ),
+                        const SizedBox(height: 6),
+                        Text(
+                          sample['title'] ?? '',
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: Theme.of(context).textTheme.labelMedium
+                              ?.copyWith(fontWeight: FontWeight.w700),
+                        ),
+                      ],
+                    ),
+                  ),
+                )
+                .toList(growable: false),
+          );
+        },
+      ),
+    );
+  }
+
+  Widget _buildBackgroundGallerySection(BuildContext context) {
+    return _buildSectionCard(
+      context,
+      icon: Icons.wallpaper_outlined,
+      title: '背景图集',
+      subtitle: '预览阅读器内置背景图。',
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          const spacing = 10.0;
+          final columns = AppLayout.optionGridColumnsForWidth(
+            constraints.maxWidth,
+          );
+          final itemWidth =
+              (constraints.maxWidth - ((columns - 1) * spacing)) / columns;
+
+          return Wrap(
+            spacing: spacing,
+            runSpacing: spacing,
+            children: _backgroundGalleryPaths
+                .map(
+                  (path) => SizedBox(
+                    width: itemWidth,
+                    child: ClipRRect(
+                      borderRadius: BorderRadius.circular(14),
+                      child: AspectRatio(
+                        aspectRatio: 1.45,
+                        child: Image.asset(path, fit: BoxFit.cover),
+                      ),
+                    ),
+                  ),
+                )
+                .toList(growable: false),
+          );
+        },
+      ),
+    );
+  }
+
+  Widget _buildNavigationStyleSection(
+    BuildContext context, {
+    required AppNavigationStylePreference selectedNavigationStyle,
+    required bool showNavigationLabels,
+  }) {
+    return _buildSectionCard(
+      context,
+      icon: Icons.dock_outlined,
+      title: '导航样式',
+      subtitle: '在 Android 和 iOS 手机上切换主导航风格，平板保持侧边栏。',
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          LayoutBuilder(
+            builder: (context, constraints) {
+              const spacing = 8.0;
+              final columns = AppLayout.optionGridColumnsForWidth(
+                constraints.maxWidth,
+              );
+              final itemWidth =
+                  (constraints.maxWidth - ((columns - 1) * spacing)) / columns;
+
+              return Wrap(
+                spacing: spacing,
+                runSpacing: spacing,
+                children: _navigationStyleOptions
+                    .map(
+                      (option) => SizedBox(
+                        width: itemWidth,
+                        child: _buildNavigationStyleTile(
+                          context,
+                          option: option,
+                          selectedNavigationStyle: selectedNavigationStyle,
+                          onTap: () {
+                            if (selectedNavigationStyle == option.preference) {
+                              return;
+                            }
+                            unawaited(
+                              ref
+                                  .read(
+                                    appNavigationStylePreferenceProvider
+                                        .notifier,
+                                  )
+                                  .setPreference(option.preference),
+                            );
+                          },
+                        ),
+                      ),
+                    )
+                    .toList(growable: false),
+              );
+            },
+          ),
+          const SizedBox(height: 12),
+          _buildNavigationLabelVisibilityTile(
+            context,
+            showLabels: showNavigationLabels,
+            onChanged: (value) {
+              unawaited(
+                ref
+                    .read(appNavigationLabelVisibilityProvider.notifier)
+                    .setVisible(value),
+              );
+            },
+          ),
+        ],
       ),
     );
   }
@@ -465,6 +836,7 @@ class _AppearancePageState extends ConsumerState<AppearancePage> {
             child: CupertinoDockNavigationBar(
               destinations: visibleDestinations,
               selectedIndex: 0,
+              activeIconGallery: null,
               showLabels: showNavigationLabels,
               onDestinationSelected: (_) {},
               onSearchPressed: () {},
@@ -884,62 +1256,49 @@ class _AppearanceNavigationVisibilityPanelState
           ),
         ),
         const SizedBox(height: 10),
-        LayoutBuilder(
-          builder: (context, constraints) {
-            const spacing = 10.0;
-            final columns = AppLayout.optionGridColumnsForWidth(
-              constraints.maxWidth,
-            );
-            final itemWidth =
-                (constraints.maxWidth - ((columns - 1) * spacing)) / columns;
-
-            return Wrap(
-              spacing: spacing,
-              runSpacing: spacing,
-              children: [
-                SizedBox(
-                  width: itemWidth,
-                  child: _buildNavigationCard(
-                    context,
-                    tab: AppShellTab.bookshelf,
-                    enabled: navigationState.showBookshelf,
-                    locked: false,
-                    isSaving: _isSaving && _savingTab == AppShellTab.bookshelf,
-                  ),
-                ),
-                SizedBox(
-                  width: itemWidth,
-                  child: _buildNavigationCard(
-                    context,
-                    tab: AppShellTab.discover,
-                    enabled: navigationState.showDiscover,
-                    locked: false,
-                    isSaving: _isSaving && _savingTab == AppShellTab.discover,
-                  ),
-                ),
-                SizedBox(
-                  width: itemWidth,
-                  child: _buildNavigationCard(
-                    context,
-                    tab: AppShellTab.stats,
-                    enabled: navigationState.showStats,
-                    locked: false,
-                    isSaving: _isSaving && _savingTab == AppShellTab.stats,
-                  ),
-                ),
-                SizedBox(
-                  width: itemWidth,
-                  child: _buildNavigationCard(
-                    context,
-                    tab: AppShellTab.mine,
-                    enabled: true,
-                    locked: true,
-                    isSaving: false,
-                  ),
-                ),
-              ],
-            );
-          },
+        Container(
+          decoration: BoxDecoration(
+            color: colorScheme.surface,
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(
+              color: colorScheme.outlineVariant.withValues(alpha: 0.5),
+            ),
+          ),
+          child: Column(
+            children: [
+              _buildNavigationRow(
+                context,
+                tab: AppShellTab.bookshelf,
+                enabled: navigationState.showBookshelf,
+                locked: false,
+                isSaving: _isSaving && _savingTab == AppShellTab.bookshelf,
+              ),
+              _buildNavigationDivider(context),
+              _buildNavigationRow(
+                context,
+                tab: AppShellTab.discover,
+                enabled: navigationState.showDiscover,
+                locked: false,
+                isSaving: _isSaving && _savingTab == AppShellTab.discover,
+              ),
+              _buildNavigationDivider(context),
+              _buildNavigationRow(
+                context,
+                tab: AppShellTab.stats,
+                enabled: navigationState.showStats,
+                locked: false,
+                isSaving: _isSaving && _savingTab == AppShellTab.stats,
+              ),
+              _buildNavigationDivider(context),
+              _buildNavigationRow(
+                context,
+                tab: AppShellTab.mine,
+                enabled: true,
+                locked: true,
+                isSaving: false,
+              ),
+            ],
+          ),
         ),
         if (_errorText case final message?) ...[
           const SizedBox(height: 10),
@@ -949,7 +1308,17 @@ class _AppearanceNavigationVisibilityPanelState
     );
   }
 
-  Widget _buildNavigationCard(
+  Widget _buildNavigationDivider(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+    return Divider(
+      height: 1,
+      indent: 52,
+      endIndent: 14,
+      color: colorScheme.outlineVariant.withValues(alpha: 0.42),
+    );
+  }
+
+  Widget _buildNavigationRow(
     BuildContext context, {
     required AppShellTab tab,
     required bool enabled,
@@ -963,89 +1332,73 @@ class _AppearanceNavigationVisibilityPanelState
     return Material(
       color: Colors.transparent,
       child: InkWell(
-        borderRadius: BorderRadius.circular(14),
+        borderRadius: BorderRadius.circular(16),
         onTap: locked || _isSaving ? null : () => _toggle(tab, !enabled),
-        child: AnimatedContainer(
-          duration: const Duration(milliseconds: 180),
-          curve: Curves.easeOutCubic,
-          padding: const EdgeInsets.fromLTRB(12, 12, 12, 12),
-          decoration: BoxDecoration(
-            color:
-                active
-                    ? colorScheme.secondaryContainer.withValues(alpha: 0.34)
-                    : colorScheme.surface,
-            borderRadius: BorderRadius.circular(14),
-            border: Border.all(
-              color:
-                  active
-                      ? colorScheme.secondary.withValues(alpha: 0.3)
-                      : colorScheme.outlineVariant.withValues(alpha: 0.5),
-            ),
-          ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(12, 10, 12, 10),
+          child: Row(
             children: [
-              Row(
-                children: [
-                  Container(
-                    width: 34,
-                    height: 34,
-                    decoration: BoxDecoration(
-                      color:
-                          active
-                              ? colorScheme.primaryContainer.withValues(
-                                alpha: 0.92,
-                              )
-                              : colorScheme.surfaceContainerHighest,
-                      borderRadius: BorderRadius.circular(10),
-                    ),
-                    child: Icon(
-                      destination.icon,
-                      size: 18,
-                      color:
-                          active
-                              ? colorScheme.onPrimaryContainer
-                              : colorScheme.onSurfaceVariant,
-                    ),
-                  ),
-                  const Spacer(),
-                  if (locked)
-                    _buildStatusPill(context, label: '固定')
-                  else if (isSaving)
-                    SizedBox(
-                      width: 18,
-                      height: 18,
-                      child: CircularProgressIndicator(
-                        strokeWidth: 2,
-                        color: colorScheme.primary,
-                      ),
-                    )
-                  else
-                    Switch.adaptive(
-                      value: enabled,
-                      onChanged: (value) => _toggle(tab, value),
-                    ),
-                ],
-              ),
-              const SizedBox(height: 12),
-              Text(
-                destination.label,
-                style: Theme.of(
-                  context,
-                ).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w700),
-              ),
-              const SizedBox(height: 4),
-              Text(
-                locked
-                    ? '入口固定保留。'
-                    : enabled
-                    ? '已显示在底部导航。'
-                    : '当前已隐藏。',
-                style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                  color: colorScheme.onSurfaceVariant,
-                  height: 1.35,
+              Container(
+                width: 32,
+                height: 32,
+                decoration: BoxDecoration(
+                  color:
+                      active
+                          ? colorScheme.primaryContainer.withValues(alpha: 0.92)
+                          : colorScheme.surfaceContainerHighest,
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: Icon(
+                  destination.icon,
+                  size: 18,
+                  color:
+                      active
+                          ? colorScheme.onPrimaryContainer
+                          : colorScheme.onSurfaceVariant,
                 ),
               ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      destination.label,
+                      style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      locked
+                          ? '入口固定保留'
+                          : enabled
+                          ? '已显示在底部导航'
+                          : '当前已隐藏',
+                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                        color: colorScheme.onSurfaceVariant,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 10),
+              if (locked)
+                _buildStatusPill(context, label: '固定')
+              else if (isSaving)
+                SizedBox(
+                  width: 18,
+                  height: 18,
+                  child: CircularProgressIndicator(
+                    strokeWidth: 2,
+                    color: colorScheme.primary,
+                  ),
+                )
+              else
+                Switch.adaptive(
+                  value: enabled,
+                  onChanged: (value) => _toggle(tab, value),
+                ),
             ],
           ),
         ),

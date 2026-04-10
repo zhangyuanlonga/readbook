@@ -3,8 +3,11 @@ import 'dart:math' as math;
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 
+import '../../domain/entities/bottom_nav_icon_gallery.dart';
+import '../navigation/bottom_nav_icon_resolver.dart';
 import '../navigation/search_entry_transition.dart';
 import '../shell_navigation_provider.dart';
+import 'bottom_nav_icon_view.dart';
 
 class CupertinoDockNavigationBar extends StatelessWidget {
   static const double _kDockHeightWithLabels = 78;
@@ -17,6 +20,7 @@ class CupertinoDockNavigationBar extends StatelessWidget {
     required this.destinations,
     required this.selectedIndex,
     required this.showLabels,
+    this.activeIconGallery,
     required this.onDestinationSelected,
     required this.onSearchPressed,
   });
@@ -24,6 +28,7 @@ class CupertinoDockNavigationBar extends StatelessWidget {
   final List<AppShellDestination> destinations;
   final int selectedIndex;
   final bool showLabels;
+  final BottomNavIconGallery? activeIconGallery;
   final ValueChanged<int> onDestinationSelected;
   final VoidCallback onSearchPressed;
 
@@ -86,6 +91,7 @@ class CupertinoDockNavigationBar extends StatelessWidget {
                                 destination: destinations[index],
                                 selected: index == selectedIndex,
                                 showLabel: showLabels,
+                                activeIconGallery: activeIconGallery,
                                 palette: palette,
                                 onTap: () => onDestinationSelected(index),
                               ),
@@ -147,6 +153,7 @@ class _DockItem extends StatelessWidget {
     required this.destination,
     required this.selected,
     required this.showLabel,
+    required this.activeIconGallery,
     required this.palette,
     required this.onTap,
   });
@@ -154,13 +161,19 @@ class _DockItem extends StatelessWidget {
   final AppShellDestination destination;
   final bool selected;
   final bool showLabel;
+  final BottomNavIconGallery? activeIconGallery;
   final _Md3DockPalette palette;
   final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final icon = _iconFor(destination.tab, selected: selected);
+    final resolvedIcon = resolveCupertinoBottomNavIcon(
+      tab: destination.tab,
+      selected: selected,
+      brightness: theme.brightness,
+      gallery: activeIconGallery,
+    );
     final iconColor =
         selected ? palette.selectedIconColor : palette.unselectedIconColor;
     final labelColor =
@@ -199,7 +212,11 @@ class _DockItem extends StatelessWidget {
                         duration: const Duration(milliseconds: 220),
                         curve: Curves.easeOutCubic,
                         scale: selected ? 1 : 0.96,
-                        child: Icon(icon, size: 21, color: iconColor),
+                        child: BottomNavIconView(
+                          icon: resolvedIcon,
+                          size: 21,
+                          fallbackColor: iconColor,
+                        ),
                       ),
                     ),
                   ),
@@ -239,19 +256,6 @@ class _DockItem extends StatelessWidget {
         ),
       ),
     );
-  }
-
-  IconData _iconFor(AppShellTab tab, {required bool selected}) {
-    return switch (tab) {
-      AppShellTab.bookshelf =>
-        selected ? CupertinoIcons.book_fill : CupertinoIcons.book,
-      AppShellTab.discover =>
-        selected ? CupertinoIcons.compass_fill : CupertinoIcons.compass,
-      AppShellTab.stats =>
-        selected ? CupertinoIcons.chart_bar_fill : CupertinoIcons.chart_bar,
-      AppShellTab.mine =>
-        selected ? CupertinoIcons.person_fill : CupertinoIcons.person,
-    };
   }
 }
 
