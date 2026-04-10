@@ -8,6 +8,7 @@ final appSeedColorProvider = NotifierProvider<AppSeedColorNotifier, Color>(
 
 class AppSeedColorNotifier extends Notifier<Color> {
   static const String _seedColorKey = 'app.seedColor';
+  static const Color _defaultSeedColor = Color(0xFFFFFFFF);
   static Color? _primedSeedColor;
 
   bool _loadTriggered = false;
@@ -29,7 +30,7 @@ class AppSeedColorNotifier extends Notifier<Color> {
       _load();
     }
 
-    return const Color(0xFF6750A4);
+    return _defaultSeedColor;
   }
 
   Future<void> _load() async {

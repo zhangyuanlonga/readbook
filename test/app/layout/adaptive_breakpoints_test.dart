@@ -488,6 +488,25 @@ void main() {
     expect((destinations[3].selectedIcon as Icon).icon, Icons.person);
   });
 
+  testWidgets('ShellScaffold 标准底部导航会响应文字显示开关', (tester) async {
+    await tester.pumpWidget(
+      AdaptiveTestHarness(
+        width: 390,
+        wrapWithMaterialApp: true,
+        overrides: [
+          appNavigationLabelVisibilityProvider.overrideWith(
+            _HiddenNavigationLabelsNotifier.new,
+          ),
+        ],
+        child: const ShellScaffold(location: '/bookshelf', child: SizedBox()),
+      ),
+    );
+    await tester.pump();
+
+    final bar = tester.widget<NavigationBar>(find.byType(NavigationBar));
+    expect(bar.labelBehavior, NavigationDestinationLabelBehavior.alwaysHide);
+  });
+
   testWidgets('ShellScaffold 会隐藏被禁用的导航项', (tester) async {
     await tester.pumpWidget(
       AdaptiveTestHarness(
@@ -606,6 +625,14 @@ class _CupertinoDockNavigationStyleNotifier
   @override
   AppNavigationStylePreference build() {
     return AppNavigationStylePreference.cupertinoDock;
+  }
+}
+
+class _HiddenNavigationLabelsNotifier
+    extends AppNavigationLabelVisibilityNotifier {
+  @override
+  bool build() {
+    return false;
   }
 }
 

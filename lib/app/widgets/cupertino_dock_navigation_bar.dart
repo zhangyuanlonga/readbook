@@ -191,10 +191,7 @@ class _DockItem extends StatelessWidget {
                     width: showLabel ? 50 : 44,
                     height: 34,
                     decoration: BoxDecoration(
-                      color:
-                          selected
-                              ? palette.indicatorColor
-                              : Colors.transparent,
+                      color: Colors.transparent,
                       borderRadius: BorderRadius.circular(20),
                     ),
                     child: Center(
@@ -325,7 +322,6 @@ class _SearchIconButton extends StatelessWidget {
 class _Md3DockPalette {
   const _Md3DockPalette({
     required this.containerColor,
-    required this.indicatorColor,
     required this.borderColor,
     required this.selectedIconColor,
     required this.unselectedIconColor,
@@ -360,8 +356,6 @@ class _Md3DockPalette {
     return _Md3DockPalette(
       containerColor:
           navigationBarTheme.backgroundColor ?? colorScheme.surfaceContainer,
-      indicatorColor:
-          navigationBarTheme.indicatorColor ?? colorScheme.secondaryContainer,
       borderColor: colorScheme.outlineVariant.withValues(alpha: 0.92),
       selectedIconColor: selectedIconColor,
       unselectedIconColor: unselectedIconColor,
@@ -378,7 +372,6 @@ class _Md3DockPalette {
   }
 
   final Color containerColor;
-  final Color indicatorColor;
   final Color borderColor;
   final Color selectedIconColor;
   final Color unselectedIconColor;

@@ -504,16 +504,18 @@ class _AppearancePageState extends ConsumerState<AppearancePage> {
                     color:
                         index == 0 ? previewTint : colorScheme.onSurfaceVariant,
                   ),
-                  const SizedBox(height: 6),
-                  Text(
-                    visibleDestinations[index].label,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: Theme.of(context).textTheme.labelMedium?.copyWith(
-                      color: colorScheme.onSurface,
-                      fontWeight: FontWeight.w700,
+                  if (showNavigationLabels) ...[
+                    const SizedBox(height: 6),
+                    Text(
+                      visibleDestinations[index].label,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: Theme.of(context).textTheme.labelMedium?.copyWith(
+                        color: colorScheme.onSurface,
+                        fontWeight: FontWeight.w700,
+                      ),
                     ),
-                  ),
+                  ],
                 ],
               ),
             ),

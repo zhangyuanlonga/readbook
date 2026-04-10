@@ -227,12 +227,14 @@ class _ShellScaffoldState extends ConsumerState<ShellScaffold>
     required AppNavigationStyle style,
     required bool showNavigationLabels,
   }) {
-    final colorScheme = Theme.of(context).colorScheme;
-
     switch (style) {
       case AppNavigationStyle.standard:
         return NavigationBar(
-          indicatorColor: colorScheme.secondaryContainer,
+          indicatorColor: Colors.transparent,
+          labelBehavior:
+              showNavigationLabels
+                  ? NavigationDestinationLabelBehavior.alwaysShow
+                  : NavigationDestinationLabelBehavior.alwaysHide,
           selectedIndex: selectedIndex,
           onDestinationSelected: (index) {
             _goToDestination(context, destinations[index]);
