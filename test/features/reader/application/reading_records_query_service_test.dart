@@ -72,16 +72,12 @@ void main() {
         sessions: sessions,
         period: ReadingRecordsPeriod.day,
         anchor: DateTime.parse('2026-04-04T00:00:00.000Z'),
-        searchKeyword: '',
-        viewLabel: '最近阅读',
         resolvedStatusesByBookId: const <String, ReadingBookResolvedStatus>{},
       );
 
       expect(view.filteredLatestRecords, hasLength(1));
       expect(view.filteredLatestRecords.first.bookId, 'book_1');
-      expect(view.filteredDailyRecords, hasLength(1));
-      expect(view.filteredSessions, hasLength(1));
-      expect(view.summary.title, '2026-04-04 阅读总览');
+      expect(view.summary.title, '阅读总览');
       expect(view.summary.totalBooks, 1);
       expect(view.summary.readingBookCount, 1);
       expect(view.summary.completedBookCount, 0);
@@ -90,9 +86,12 @@ void main() {
         const Duration(minutes: 30).inMilliseconds,
       );
       expect(view.summary.totalReadChars, 6000);
-      expect(view.summary.sessionCount, 1);
       expect(view.summary.chapterCount, 1);
       expect(view.summary.coverRecords, hasLength(1));
+      expect(view.distribution.weeks, isNotEmpty);
+      expect(view.distribution.monthLabel, '2026年04月');
+      expect(view.rankings, hasLength(1));
+      expect(view.rankings.first.record.bookId, 'book_1');
     });
 
     test('builds heatmap stats with work and session dimensions', () {

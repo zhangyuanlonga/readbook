@@ -40,7 +40,6 @@ class ReadingRecordsSummary {
     required this.totalReadMillis,
     required this.totalReadChars,
     required this.readCharsPerMinute,
-    required this.sessionCount,
     required this.chapterCount,
     required this.coverRecords,
   });
@@ -54,7 +53,6 @@ class ReadingRecordsSummary {
   final int totalReadMillis;
   final int totalReadChars;
   final double readCharsPerMinute;
-  final int sessionCount;
   final int chapterCount;
   final List<ReadingRecord> coverRecords;
 }
@@ -63,16 +61,16 @@ class ReadingRecordsQueryView {
   const ReadingRecordsQueryView({
     required this.periodRange,
     required this.filteredLatestRecords,
-    required this.filteredDailyRecords,
-    required this.filteredSessions,
     required this.summary,
+    required this.distribution,
+    required this.rankings,
   });
 
   final ReadingRecordsPeriodRange periodRange;
   final List<ReadingRecord> filteredLatestRecords;
-  final List<ReadingRecordDay> filteredDailyRecords;
-  final List<ReadingRecordSession> filteredSessions;
   final ReadingRecordsSummary summary;
+  final ReadingDurationDistribution distribution;
+  final List<ReadingDurationRankingItem> rankings;
 }
 
 class DailyHeatmapStat {
@@ -87,6 +85,59 @@ class DailyHeatmapStat {
   final int readMillis;
 }
 
+class ReadingCalendarDistributionDay {
+  const ReadingCalendarDistributionDay({
+    required this.day,
+    required this.isInCurrentMonth,
+    required this.readMillis,
+  });
+
+  final DateTime day;
+  final bool isInCurrentMonth;
+  final int readMillis;
+
+  bool get hasReading => readMillis > 0;
+
+  String get dateKey {
+    final local = day.toLocal();
+    final month = local.month.toString().padLeft(2, '0');
+    final date = local.day.toString().padLeft(2, '0');
+    return '${local.year}-$month-$date';
+  }
+}
+
+class ReadingCalendarDistributionWeek {
+  const ReadingCalendarDistributionWeek({required this.days});
+
+  final List<ReadingCalendarDistributionDay> days;
+}
+
+class ReadingDurationDistribution {
+  const ReadingDurationDistribution({
+    required this.title,
+    required this.monthLabel,
+    required this.weeks,
+  });
+
+  final String title;
+  final String monthLabel;
+  final List<ReadingCalendarDistributionWeek> weeks;
+}
+
+class ReadingDurationRankingItem {
+  const ReadingDurationRankingItem({
+    required this.record,
+    required this.readMillis,
+    required this.readChars,
+    required this.readDays,
+  });
+
+  final ReadingRecord record;
+  final int readMillis;
+  final int readChars;
+  final int readDays;
+}
+
 class ReadingRecordsQueryService {
   const ReadingRecordsQueryService();
 
@@ -96,8 +147,6 @@ class ReadingRecordsQueryService {
     required List<ReadingRecordSession> sessions,
     required ReadingRecordsPeriod period,
     required DateTime anchor,
-    required String searchKeyword,
-    required String viewLabel,
     required Map<String, ReadingBookResolvedStatus> resolvedStatusesByBookId,
   }) {
     final periodRange = resolvePeriodRange(period: period, anchor: anchor);
@@ -114,8 +163,6 @@ class ReadingRecordsQueryService {
     return ReadingRecordsQueryView(
       periodRange: periodRange,
       filteredLatestRecords: filteredLatestRecords,
-      filteredDailyRecords: filteredDailyRecords,
-      filteredSessions: filteredSessions,
       summary: buildSummary(
         latestRecords: latestRecords,
         dailyRecords: dailyRecords,
@@ -123,9 +170,17 @@ class ReadingRecordsQueryService {
         filteredDailyRecords: filteredDailyRecords,
         filteredSessions: filteredSessions,
         periodRange: periodRange,
-        searchKeyword: searchKeyword,
-        viewLabel: viewLabel,
         resolvedStatusesByBookId: resolvedStatusesByBookId,
+      ),
+      distribution: buildDurationDistribution(
+        periodRange: periodRange,
+        anchor: anchor,
+        filteredDailyRecords: filteredDailyRecords,
+      ),
+      rankings: buildDurationRankings(
+        latestRecords: latestRecords,
+        filteredDailyRecords: filteredDailyRecords,
+        periodRange: periodRange,
       ),
     );
   }
@@ -221,8 +276,6 @@ class ReadingRecordsQueryService {
     required List<ReadingRecordDay> filteredDailyRecords,
     required List<ReadingRecordSession> filteredSessions,
     required ReadingRecordsPeriodRange periodRange,
-    required String searchKeyword,
-    required String viewLabel,
     required Map<String, ReadingBookResolvedStatus> resolvedStatusesByBookId,
   }) {
     final recordsForSummary =
@@ -279,18 +332,14 @@ class ReadingRecordsQueryService {
     final readMinutes = totalReadMillis / Duration.millisecondsPerMinute;
     final readCharsPerMinute =
         readMinutes <= 0 ? 0.0 : totalReadChars / readMinutes;
-    final sessionCount = filteredSessions.length;
     final chapterCount =
         filteredSessions
             .map(_chapterDimensionKey)
             .whereType<String>()
             .toSet()
             .length;
-    final title = periodRange.isAll ? '累计阅读总览' : '${periodRange.label} 阅读总览';
-    final subtitle =
-        searchKeyword.isEmpty
-            ? '统计周期：${periodRange.label} · 当前查看：$viewLabel'
-            : '统计周期：${periodRange.label} · 搜索“$searchKeyword”';
+    const title = '阅读总览';
+    final subtitle = '统计周期：${periodRange.label}';
 
     return ReadingRecordsSummary(
       title: title,
@@ -302,7 +351,6 @@ class ReadingRecordsQueryService {
       totalReadMillis: totalReadMillis,
       totalReadChars: totalReadChars,
       readCharsPerMinute: readCharsPerMinute,
-      sessionCount: sessionCount,
       chapterCount: chapterCount,
       coverRecords: recordsForSummary,
     );
@@ -331,6 +379,126 @@ class ReadingRecordsQueryService {
       );
     }
     return result;
+  }
+
+  ReadingDurationDistribution buildDurationDistribution({
+    required ReadingRecordsPeriodRange periodRange,
+    required DateTime anchor,
+    required List<ReadingRecordDay> filteredDailyRecords,
+  }) {
+    final monthAnchor = _stripDate(anchor);
+    final monthStart = DateTime(monthAnchor.year, monthAnchor.month);
+    final monthEnd = DateTime(monthAnchor.year, monthAnchor.month + 1);
+    final gridStart = _startOfWeek(monthStart);
+    final gridEnd = _startOfWeek(
+      monthEnd.subtract(const Duration(days: 1)),
+    ).add(const Duration(days: 6));
+    final readMillisByDate = <String, int>{};
+    for (final item in filteredDailyRecords) {
+      final parsed = DateTime.parse(item.dateKey);
+      if (parsed.isBefore(monthStart) || !parsed.isBefore(monthEnd)) {
+        continue;
+      }
+      readMillisByDate[item.dateKey] =
+          (readMillisByDate[item.dateKey] ?? 0) + item.readMillis;
+    }
+
+    final weeks = <ReadingCalendarDistributionWeek>[];
+    var cursor = gridStart;
+    while (!cursor.isAfter(gridEnd)) {
+      weeks.add(
+        ReadingCalendarDistributionWeek(
+          days: List<ReadingCalendarDistributionDay>.generate(7, (index) {
+            final day = cursor.add(Duration(days: index));
+            final dateKey = _formatDateKey(day);
+            return ReadingCalendarDistributionDay(
+              day: day,
+              isInCurrentMonth: day.month == monthStart.month,
+              readMillis: readMillisByDate[dateKey] ?? 0,
+            );
+          }, growable: false),
+        ),
+      );
+      cursor = cursor.add(const Duration(days: 7));
+    }
+
+    return ReadingDurationDistribution(
+      title: '阅读时间分布',
+      monthLabel:
+          '${monthStart.year}年${monthStart.month.toString().padLeft(2, '0')}月',
+      weeks: List<ReadingCalendarDistributionWeek>.unmodifiable(weeks),
+    );
+  }
+
+  List<ReadingDurationRankingItem> buildDurationRankings({
+    required List<ReadingRecord> latestRecords,
+    required List<ReadingRecordDay> filteredDailyRecords,
+    required ReadingRecordsPeriodRange periodRange,
+  }) {
+    if (periodRange.isAll) {
+      final items = latestRecords
+          .map(
+            (record) => ReadingDurationRankingItem(
+              record: record,
+              readMillis: record.totalReadMillis,
+              readChars: record.totalReadChars,
+              readDays: 0,
+            ),
+          )
+          .where((item) => item.readMillis > 0)
+          .toList(growable: false);
+      return _sortRankings(items);
+    }
+
+    final recordByBookId = <String, ReadingRecord>{
+      for (final record in latestRecords) record.bookId: record,
+    };
+    final millisByBookId = <String, int>{};
+    final charsByBookId = <String, int>{};
+    final daysByBookId = <String, Set<String>>{};
+
+    for (final item in filteredDailyRecords) {
+      millisByBookId[item.bookId] =
+          (millisByBookId[item.bookId] ?? 0) + item.readMillis;
+      charsByBookId[item.bookId] =
+          (charsByBookId[item.bookId] ?? 0) + item.readChars;
+      daysByBookId.putIfAbsent(item.bookId, () => <String>{}).add(item.dateKey);
+    }
+
+    final items = <ReadingDurationRankingItem>[];
+    for (final entry in millisByBookId.entries) {
+      final record = recordByBookId[entry.key];
+      if (record == null || entry.value <= 0) {
+        continue;
+      }
+      items.add(
+        ReadingDurationRankingItem(
+          record: record,
+          readMillis: entry.value,
+          readChars: charsByBookId[entry.key] ?? 0,
+          readDays: daysByBookId[entry.key]?.length ?? 0,
+        ),
+      );
+    }
+    return _sortRankings(items);
+  }
+
+  List<ReadingDurationRankingItem> _sortRankings(
+    List<ReadingDurationRankingItem> items,
+  ) {
+    final mutable = List<ReadingDurationRankingItem>.from(items);
+    mutable.sort((a, b) {
+      final millisCompare = b.readMillis.compareTo(a.readMillis);
+      if (millisCompare != 0) {
+        return millisCompare;
+      }
+      final daysCompare = b.readDays.compareTo(a.readDays);
+      if (daysCompare != 0) {
+        return daysCompare;
+      }
+      return b.record.lastReadAt.compareTo(a.record.lastReadAt);
+    });
+    return List<ReadingDurationRankingItem>.unmodifiable(mutable);
   }
 
   String? _chapterDimensionKey(ReadingRecordSession session) {
