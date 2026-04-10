@@ -60,6 +60,7 @@ class ReadingRecordsQueryView {
     required this.filteredLatestRecords,
     required this.summary,
     required this.distribution,
+    required this.distributionCalendar,
     required this.rankings,
   });
 
@@ -67,6 +68,7 @@ class ReadingRecordsQueryView {
   final List<ReadingRecord> filteredLatestRecords;
   final ReadingRecordsSummary summary;
   final ReadingDurationDistribution distribution;
+  final ReadingCalendarDistribution distributionCalendar;
   final List<ReadingDurationRankingItem> rankings;
 }
 
@@ -79,6 +81,16 @@ class DailyHeatmapStat {
 
   final int workCount;
   final int sessionCount;
+  final int readMillis;
+}
+
+class ReadingDurationDistributionBucket {
+  const ReadingDurationDistributionBucket({
+    required this.label,
+    required this.readMillis,
+  });
+
+  final String label;
   final int readMillis;
 }
 
@@ -112,11 +124,21 @@ class ReadingCalendarDistributionWeek {
 class ReadingDurationDistribution {
   const ReadingDurationDistribution({
     required this.title,
+    required this.buckets,
+    required this.maxReadMillis,
+  });
+
+  final String title;
+  final List<ReadingDurationDistributionBucket> buckets;
+  final int maxReadMillis;
+}
+
+class ReadingCalendarDistribution {
+  const ReadingCalendarDistribution({
     required this.monthLabel,
     required this.weeks,
   });
 
-  final String title;
   final String monthLabel;
   final List<ReadingCalendarDistributionWeek> weeks;
 }

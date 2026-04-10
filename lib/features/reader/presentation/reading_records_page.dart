@@ -326,6 +326,27 @@ class _ReadingRecordsPageState extends State<ReadingRecordsPage> {
     messenger.showSnackBar(const SnackBar(content: Text('已撤销。')));
   }
 
+  Future<void> _openDistributionCalendarSheet(
+    ReadingCalendarDistribution distribution,
+  ) async {
+    await showModalBottomSheet<void>(
+      context: context,
+      useSafeArea: true,
+      showDragHandle: true,
+      builder: (sheetContext) {
+        return Padding(
+          padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
+          child: SingleChildScrollView(
+            child: _buildDistributionCalendarCard(
+              distribution,
+              embeddedInSheet: true,
+            ),
+          ),
+        );
+      },
+    );
+  }
+
   Future<void> _applyQuickAction(
     _ReadingRecordQuickAction action,
     ReadingRecord record,
@@ -644,6 +665,8 @@ class _ReadingRecordsPageState extends State<ReadingRecordsPage> {
                                       ),
                                       _buildDurationDistributionCard(
                                         queryView.distribution,
+                                        calendar:
+                                            queryView.distributionCalendar,
                                       ),
                                       if (showRanking) ...[
                                         const SizedBox(height: 12),
@@ -1079,8 +1102,220 @@ class _ReadingRecordsPageState extends State<ReadingRecordsPage> {
   }
 
   Widget _buildDurationDistributionCard(
-    ReadingDurationDistribution distribution,
-  ) {
+    ReadingDurationDistribution distribution, {
+    required ReadingCalendarDistribution calendar,
+  }) {
+    if (distribution.buckets.isEmpty) {
+      return _buildEmptyCard('当前周期下还没有可以展示的阅读时间分布。');
+    }
+
+    final colorScheme = Theme.of(context).colorScheme;
+    final maxValue =
+        distribution.maxReadMillis <= 0
+            ? Duration.millisecondsPerMinute
+            : distribution.maxReadMillis;
+    final axisValues = List<int>.generate(
+      5,
+      (index) => ((maxValue * (4 - index)) / 4).round(),
+      growable: false,
+    );
+    final visibleLabelCount = distribution.buckets.length;
+    final barWidth =
+        visibleLabelCount <= 7
+            ? 20.0
+            : visibleLabelCount <= 12
+            ? 16.0
+            : 12.0;
+
+    return Container(
+      decoration: BoxDecoration(
+        color: colorScheme.surface,
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(
+          color: colorScheme.outlineVariant.withValues(alpha: 0.32),
+        ),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(16, 16, 16, 18),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    '阅读时间分布',
+                    style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                ),
+                IconButton(
+                  tooltip: '查看日历',
+                  onPressed: () => _openDistributionCalendarSheet(calendar),
+                  icon: const Icon(Icons.calendar_month_rounded),
+                ),
+              ],
+            ),
+            Text(
+              '按当前统计周期展示阅读时长变化。',
+              style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                color: colorScheme.onSurfaceVariant,
+              ),
+            ),
+            const SizedBox(height: 16),
+            SizedBox(
+              height: 220,
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  SizedBox(
+                    width: 40,
+                    child: Column(
+                      children: [
+                        for (final value in axisValues)
+                          Expanded(
+                            child: Align(
+                              alignment: Alignment.topLeft,
+                              child: Text(
+                                _formatDistributionAxisValue(value),
+                                style: Theme.of(
+                                  context,
+                                ).textTheme.labelSmall?.copyWith(
+                                  color: colorScheme.onSurfaceVariant,
+                                ),
+                              ),
+                            ),
+                          ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: SingleChildScrollView(
+                      scrollDirection: Axis.horizontal,
+                      child: SizedBox(
+                        width:
+                            math.max(
+                              distribution.buckets.length * (barWidth + 10),
+                              220,
+                            ) +
+                            8,
+                        child: Column(
+                          children: [
+                            Expanded(
+                              child: Stack(
+                                children: [
+                                  for (
+                                    var index = 0;
+                                    index < axisValues.length;
+                                    index++
+                                  )
+                                    Positioned.fill(
+                                      top:
+                                          index == 0
+                                              ? 0
+                                              : (index / axisValues.length) *
+                                                  180,
+                                      child: Align(
+                                        alignment: Alignment.topCenter,
+                                        child: Divider(
+                                          height: 1,
+                                          color: colorScheme.outlineVariant
+                                              .withValues(alpha: 0.35),
+                                        ),
+                                      ),
+                                    ),
+                                  Row(
+                                    crossAxisAlignment: CrossAxisAlignment.end,
+                                    children: [
+                                      for (final bucket in distribution.buckets)
+                                        Padding(
+                                          padding: const EdgeInsets.symmetric(
+                                            horizontal: 5,
+                                          ),
+                                          child: Tooltip(
+                                            message:
+                                                '${bucket.label}\n${_formatDuration(bucket.readMillis)}',
+                                            child: Column(
+                                              mainAxisAlignment:
+                                                  MainAxisAlignment.end,
+                                              children: [
+                                                Container(
+                                                  width: barWidth,
+                                                  height:
+                                                      maxValue <= 0
+                                                          ? 0
+                                                          : (bucket.readMillis /
+                                                                      maxValue)
+                                                                  .clamp(
+                                                                    0.0,
+                                                                    1.0,
+                                                                  ) *
+                                                              180,
+                                                  decoration: BoxDecoration(
+                                                    color: colorScheme.primary,
+                                                    borderRadius:
+                                                        BorderRadius.circular(
+                                                          8,
+                                                        ),
+                                                  ),
+                                                ),
+                                              ],
+                                            ),
+                                          ),
+                                        ),
+                                    ],
+                                  ),
+                                ],
+                              ),
+                            ),
+                            const SizedBox(height: 10),
+                            Row(
+                              children: [
+                                for (
+                                  var index = 0;
+                                  index < distribution.buckets.length;
+                                  index++
+                                )
+                                  SizedBox(
+                                    width: barWidth + 10,
+                                    child: Center(
+                                      child: Text(
+                                        _shouldShowDistributionLabel(
+                                              index,
+                                              distribution.buckets.length,
+                                            )
+                                            ? distribution.buckets[index].label
+                                            : '',
+                                        style: Theme.of(
+                                          context,
+                                        ).textTheme.labelSmall?.copyWith(
+                                          color: colorScheme.onSurfaceVariant,
+                                        ),
+                                      ),
+                                    ),
+                                  ),
+                              ],
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildDistributionCalendarCard(
+    ReadingCalendarDistribution distribution, {
+    bool embeddedInSheet = false,
+  }) {
     if (distribution.weeks.isEmpty) {
       return _buildEmptyCard('当前周期下还没有可以展示的阅读时间分布。');
     }
@@ -1090,7 +1325,10 @@ class _ReadingRecordsPageState extends State<ReadingRecordsPage> {
 
     return Container(
       decoration: BoxDecoration(
-        color: colorScheme.surface,
+        color:
+            embeddedInSheet
+                ? colorScheme.surfaceContainerLowest
+                : colorScheme.surface,
         borderRadius: BorderRadius.circular(20),
         border: Border.all(
           color: colorScheme.outlineVariant.withValues(alpha: 0.32),
@@ -1155,6 +1393,33 @@ class _ReadingRecordsPageState extends State<ReadingRecordsPage> {
         ),
       ),
     );
+  }
+
+  bool _shouldShowDistributionLabel(int index, int totalCount) {
+    if (totalCount <= 7) {
+      return true;
+    }
+    if (totalCount <= 12) {
+      return index.isEven || index == totalCount - 1;
+    }
+    if (totalCount <= 24) {
+      return index % 3 == 0 || index == totalCount - 1;
+    }
+    return index == 0 || index % 5 == 0 || index == totalCount - 1;
+  }
+
+  String _formatDistributionAxisValue(int millis) {
+    if (millis <= 0) {
+      return '0';
+    }
+    final minutes = millis ~/ Duration.millisecondsPerMinute;
+    if (minutes < 60) {
+      return '$minutes分';
+    }
+    final hours = minutes / 60;
+    return hours >= 10
+        ? '${hours.toStringAsFixed(0)}时'
+        : '${hours.toStringAsFixed(1)}时';
   }
 
   Widget _buildDurationRankingSection(

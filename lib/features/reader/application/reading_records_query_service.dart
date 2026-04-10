@@ -68,6 +68,12 @@ class ReadingRecordsQueryService {
         resolvedStatusesByBookId: resolvedStatusesByBookId,
       ),
       distribution: _distributionAggregator.buildDistribution(
+        periodRange: periodRange,
+        anchor: anchor,
+        filteredDailyRecords: filtered.filteredDailyRecords,
+        filteredSessions: filtered.filteredSessions,
+      ),
+      distributionCalendar: _distributionAggregator.buildCalendarDistribution(
         anchor: anchor,
         filteredDailyRecords: filtered.filteredDailyRecords,
       ),
