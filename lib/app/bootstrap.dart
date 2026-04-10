@@ -13,6 +13,7 @@ import '../features/source/application/source_health_service.dart';
 import '../features/source/application/source_runtime_diagnostics_service.dart';
 import '../core/logging/app_logger.dart';
 import 'navigation/app_navigation_style_provider.dart';
+import 'theme/app_icon_provider.dart';
 import 'theme/app_theme_provider.dart';
 import 'theme/app_theme_seed_provider.dart';
 
@@ -23,6 +24,7 @@ Future<void> bootstrap() async {
   final prefs = await SharedPreferences.getInstance();
   AppNavigationStylePreferenceNotifier.prime(prefs);
   AppNavigationLabelVisibilityNotifier.prime(prefs);
+  AppIconVariantNotifier.prime(prefs);
   AppThemeModeNotifier.prime(prefs);
   AppSeedColorNotifier.prime(prefs);
   runApp(const ProviderScope(child: App()));

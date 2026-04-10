@@ -13,6 +13,9 @@ import UniformTypeIdentifiers
   private let readerVolumeKeyChannelName = "com.jiangyan.selune/reader_volume_keys"
   private let readerVolumeKeyEventChannelName = "com.jiangyan.selune/reader_volume_keys/events"
   private let methodSetInterceptVolumeKeys = "setInterceptVolumeKeys"
+  private let appIconChannelName = "com.jiangyan.selune/app_icon"
+  private let methodSetAppIcon = "setAppIcon"
+  private let methodGetCurrentAppIcon = "getCurrentAppIcon"
   private let defaultPayloadLabel = "外部导入"
   private let payloadTypeLocalBook = "localBook"
   private let payloadTypeScriptSource = "scriptSource"
@@ -22,6 +25,7 @@ import UniformTypeIdentifiers
   private var readerVolumeKeyMethodChannel: FlutterMethodChannel?
   private var readerVolumeKeyEventChannel: FlutterEventChannel?
   private let readerVolumeKeyStreamHandler = ReaderVolumeKeyStreamHandler()
+  private var appIconMethodChannel: FlutterMethodChannel?
   private var pendingInitialPayload: [String: Any]?
   private var interceptReaderVolumeKeys = false
   private var volumeObservation: NSKeyValueObservation?
@@ -45,6 +49,7 @@ import UniformTypeIdentifiers
     GeneratedPluginRegistrant.register(with: self)
     setupSourceImportMethodChannel()
     setupReaderVolumeKeyBridge()
+    setupAppIconBridge()
     return super.application(application, didFinishLaunchingWithOptions: launchOptions)
   }
 
@@ -124,6 +129,36 @@ import UniformTypeIdentifiers
       binaryMessenger: registrar.messenger())
     eventChannel.setStreamHandler(readerVolumeKeyStreamHandler)
     readerVolumeKeyEventChannel = eventChannel
+  }
+
+  private func setupAppIconBridge() {
+    guard let registrar = self.registrar(forPlugin: "AppIconBridge") else {
+      return
+    }
+
+    let channel = FlutterMethodChannel(
+      name: appIconChannelName,
+      binaryMessenger: registrar.messenger())
+    channel.setMethodCallHandler { [weak self] call, result in
+      guard let self else {
+        result(nil as Any?)
+        return
+      }
+
+      switch call.method {
+      case self.methodGetCurrentAppIcon:
+        result(self.currentAppIconVariant())
+      case self.methodSetAppIcon:
+        guard let arguments = call.arguments as? [String: Any] else {
+          result(nil as Any?)
+          return
+        }
+        self.setAppIcon(arguments, result: result)
+      default:
+        result(FlutterMethodNotImplemented)
+      }
+    }
+    appIconMethodChannel = channel
   }
 
   private func updateReaderVolumeKeyInterception() {
@@ -493,6 +528,38 @@ import UniformTypeIdentifiers
   private func resolvePayloadLabel(from url: URL) -> String {
     let name = url.lastPathComponent.trimmingCharacters(in: .whitespacesAndNewlines)
     return name.isEmpty ? defaultPayloadLabel : name
+  }
+
+  private func setAppIcon(_ arguments: [String: Any], result: @escaping FlutterResult) {
+    guard UIApplication.shared.supportsAlternateIcons else {
+      result(nil)
+      return
+    }
+
+    let rawVariant = (arguments["variant"] as? String)?
+      .trimmingCharacters(in: .whitespacesAndNewlines)
+      .lowercased()
+    let iconName: String? = rawVariant == "dark" ? "AppIconAlt" : nil
+
+    UIApplication.shared.setAlternateIconName(iconName) { error in
+      if let error {
+        result(
+          FlutterError(
+            code: "app_icon_failed",
+            message: error.localizedDescription,
+            details: nil
+          )
+        )
+        return
+      }
+      result(nil)
+    }
+  }
+
+  private func currentAppIconVariant() -> String {
+    let alternateName = UIApplication.shared.alternateIconName?
+      .trimmingCharacters(in: .whitespacesAndNewlines)
+    return alternateName == "AppIconAlt" ? "dark" : "light"
   }
 }
 
