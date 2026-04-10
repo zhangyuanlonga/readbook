@@ -583,7 +583,7 @@ class _ReadingRecordsPageState extends State<ReadingRecordsPage> {
           crossAxisAlignment: CrossAxisAlignment.start,
           mainAxisSize: MainAxisSize.min,
           children: [
-            const Text('阅读记录'),
+            const Text('统计'),
             Text(
               _viewLabel,
               style: theme.textTheme.labelMedium?.copyWith(

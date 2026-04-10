@@ -128,6 +128,14 @@ class _DockSurface extends StatelessWidget {
       decoration: BoxDecoration(
         color: palette.containerColor,
         borderRadius: BorderRadius.circular(radius),
+        border: Border.all(color: palette.borderColor, width: 0.8),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.035),
+            blurRadius: 18,
+            offset: const Offset(0, 8),
+          ),
+        ],
       ),
       child: child,
     );
@@ -242,6 +250,8 @@ class _DockItem extends StatelessWidget {
         selected ? CupertinoIcons.book_fill : CupertinoIcons.book,
       AppShellTab.discover =>
         selected ? CupertinoIcons.compass_fill : CupertinoIcons.compass,
+      AppShellTab.stats =>
+        selected ? CupertinoIcons.chart_bar_fill : CupertinoIcons.chart_bar,
       AppShellTab.mine =>
         selected ? CupertinoIcons.person_fill : CupertinoIcons.person,
     };
@@ -287,6 +297,14 @@ class _SearchIconButton extends StatelessWidget {
                 decoration: BoxDecoration(
                   color: palette.containerColor,
                   borderRadius: BorderRadius.circular(radius),
+                  border: Border.all(color: palette.borderColor, width: 0.8),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withValues(alpha: 0.035),
+                      blurRadius: 18,
+                      offset: const Offset(0, 8),
+                    ),
+                  ],
                 ),
                 child: Center(
                   child: Icon(
@@ -308,6 +326,7 @@ class _Md3DockPalette {
   const _Md3DockPalette({
     required this.containerColor,
     required this.indicatorColor,
+    required this.borderColor,
     required this.selectedIconColor,
     required this.unselectedIconColor,
     required this.selectedLabelColor,
@@ -343,6 +362,7 @@ class _Md3DockPalette {
           navigationBarTheme.backgroundColor ?? colorScheme.surfaceContainer,
       indicatorColor:
           navigationBarTheme.indicatorColor ?? colorScheme.secondaryContainer,
+      borderColor: colorScheme.outlineVariant.withValues(alpha: 0.92),
       selectedIconColor: selectedIconColor,
       unselectedIconColor: unselectedIconColor,
       selectedLabelColor:
@@ -359,6 +379,7 @@ class _Md3DockPalette {
 
   final Color containerColor;
   final Color indicatorColor;
+  final Color borderColor;
   final Color selectedIconColor;
   final Color unselectedIconColor;
   final Color selectedLabelColor;

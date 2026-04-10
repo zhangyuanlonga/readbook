@@ -392,7 +392,7 @@ class _AppearancePageState extends ConsumerState<AppearancePage> {
                 _buildPreviewMetaChip(
                   context,
                   icon: Icons.space_dashboard_outlined,
-                  label: '底部菜单 ${navigationState.visibleTabCount}/3',
+                  label: '底部菜单 ${navigationState.visibleTabCount}/4',
                 ),
                 _buildPreviewMetaChip(
                   context,
@@ -497,7 +497,9 @@ class _AppearancePageState extends ConsumerState<AppearancePage> {
               child: Column(
                 children: [
                   Icon(
-                    visibleDestinations[index].icon,
+                    index == 0
+                        ? visibleDestinations[index].selectedIcon
+                        : visibleDestinations[index].icon,
                     size: 18,
                     color:
                         index == 0 ? previewTint : colorScheme.onSurfaceVariant,
@@ -873,7 +875,7 @@ class _AppearanceNavigationVisibilityPanelState
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(
-          '当前展示 ${navigationState.visibleTabCount}/3 项，“我的”固定保留。',
+          '当前展示 ${navigationState.visibleTabCount}/4 项，“我的”固定保留。',
           style: textTheme.bodySmall?.copyWith(
             color: colorScheme.onSurfaceVariant,
             height: 1.35,
@@ -911,6 +913,16 @@ class _AppearanceNavigationVisibilityPanelState
                     enabled: navigationState.showDiscover,
                     locked: false,
                     isSaving: _isSaving && _savingTab == AppShellTab.discover,
+                  ),
+                ),
+                SizedBox(
+                  width: itemWidth,
+                  child: _buildNavigationCard(
+                    context,
+                    tab: AppShellTab.stats,
+                    enabled: navigationState.showStats,
+                    locked: false,
+                    isSaving: _isSaving && _savingTab == AppShellTab.stats,
                   ),
                 ),
                 SizedBox(

@@ -170,6 +170,8 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
   static const Duration _kDuplicateLoadCooldown = Duration(milliseconds: 700);
   static const Duration _kContinueReadingPromptDuration = Duration(seconds: 6);
   static const double _kContinueReadingCardHeight = 84;
+  static const double _kContinueReadingDockGap = 12;
+  static const double _kContinueReadingStandardGap = 0;
   static const Set<String> _kMangaCapabilityKeywords = <String>{
     'manga',
     'comic',
@@ -249,8 +251,19 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
     final filteredBooks = _filteredBooks;
     final continueReadingVisible =
         _continueReadingRecord != null && !_isSelectionMode;
+    final continueReadingBottomGap = _continueReadingBottomGap(
+      effectiveNavigationStyle,
+    );
+    final continueReadingOverlayInset = _continueReadingOverlayInset(
+      effectiveNavigationStyle,
+      navigationBottomInset: navigationBottomInset,
+    );
     final continueReadingReservedSpace =
-        continueReadingVisible ? _kContinueReadingCardHeight + 12 : 0.0;
+        continueReadingVisible
+            ? _kContinueReadingCardHeight +
+                continueReadingBottomGap +
+                continueReadingOverlayInset
+            : 0.0;
 
     return Scaffold(
       appBar: AppBar(
@@ -377,12 +390,30 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
           Positioned(
             left: horizontal,
             right: horizontal,
-            bottom: 12 + navigationBottomInset,
+            bottom: continueReadingBottomGap + continueReadingOverlayInset,
             child: _buildContinueReadingPromptCard(),
           ),
         ],
       ),
     );
+  }
+
+  double _continueReadingBottomGap(AppNavigationStyle style) {
+    return switch (style) {
+      AppNavigationStyle.standard => _kContinueReadingStandardGap,
+      AppNavigationStyle.cupertinoDock => _kContinueReadingDockGap,
+    };
+  }
+
+  double _continueReadingOverlayInset(
+    AppNavigationStyle style, {
+    required double navigationBottomInset,
+  }) {
+    return switch (style) {
+      // Standard NavigationBar already sits outside the scaffold body.
+      AppNavigationStyle.standard => 0,
+      AppNavigationStyle.cupertinoDock => navigationBottomInset,
+    };
   }
 
   @override
@@ -2085,7 +2116,9 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
 
     query.remove('x-signature');
     query.remove('x-expires');
-    return uri.replace(queryParameters: query.isEmpty ? null : query).toString();
+    return uri
+        .replace(queryParameters: query.isEmpty ? null : query)
+        .toString();
   }
 
   void _ensureFilterStillValid() {
@@ -3875,10 +3908,11 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
   }
 
   int _inferScriptSourceType(RegisteredSource source) {
-    final capabilities = source.definition.manifest.capabilities
-        .map((item) => item.trim().toLowerCase())
-        .where((item) => item.isNotEmpty)
-        .toSet();
+    final capabilities =
+        source.definition.manifest.capabilities
+            .map((item) => item.trim().toLowerCase())
+            .where((item) => item.isNotEmpty)
+            .toSet();
     return _isMangaCapabilities(capabilities) ? 2 : 0;
   }
 
@@ -4252,6 +4286,14 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
   Widget _buildContinueReadingCard(ReadingRecord record) {
     final colorScheme = Theme.of(context).colorScheme;
     final textTheme = Theme.of(context).textTheme;
+    final cardBackground = Color.alphaBlend(
+      colorScheme.surfaceContainerLow.withValues(alpha: 0.94),
+      colorScheme.surface,
+    );
+    final badgeBackground = Color.alphaBlend(
+      colorScheme.surfaceContainerHighest.withValues(alpha: 0.96),
+      colorScheme.surface,
+    );
     final title = _toSingleLineText(record.bookTitle);
     final chapterTitle = _toSingleLineText(
       record.lastChapterTitle?.trim() ?? '',
@@ -4266,10 +4308,7 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
       color: Colors.transparent,
       child: Container(
         decoration: BoxDecoration(
-          color: Color.alphaBlend(
-            colorScheme.primary.withValues(alpha: 0.045),
-            colorScheme.surface,
-          ),
+          color: cardBackground,
           borderRadius: BorderRadius.circular(18),
           border: Border.all(
             color: colorScheme.outlineVariant.withValues(alpha: 0.42),
@@ -4307,9 +4346,7 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
                               vertical: 3,
                             ),
                             decoration: BoxDecoration(
-                              color: colorScheme.primary.withValues(
-                                alpha: 0.10,
-                              ),
+                              color: badgeBackground,
                               borderRadius: BorderRadius.circular(999),
                             ),
                             child: Text(
@@ -4317,7 +4354,7 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
                               maxLines: 1,
                               overflow: TextOverflow.ellipsis,
                               style: textTheme.labelSmall?.copyWith(
-                                color: colorScheme.primary,
+                                color: colorScheme.onSurface,
                                 fontWeight: FontWeight.w700,
                               ),
                             ),
@@ -4381,7 +4418,7 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
                       child: Icon(
                         Icons.chevron_right_rounded,
                         size: 22,
-                        color: colorScheme.primary,
+                        color: colorScheme.onSurfaceVariant,
                       ),
                     ),
                   ],

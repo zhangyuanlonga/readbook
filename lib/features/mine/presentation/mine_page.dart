@@ -14,6 +14,8 @@ import '../../../core/app_update/app_update_dialog.dart';
 import '../../../core/app_update/app_update_service.dart';
 import '../../../core/auth/auth_event_bus.dart';
 import '../../../core/auth/auth_session_store.dart';
+import '../../../core/mobile_features/mobile_feature_module.dart';
+import '../../../core/mobile_features/mobile_feature_service.dart';
 
 class MinePage extends ConsumerStatefulWidget {
   const MinePage({super.key});
@@ -43,11 +45,13 @@ class _MinePageState extends ConsumerState<MinePage> {
 
   final AuthSessionStore _authSessionStore = AuthSessionStore();
   final AppUpdateService _updateService = AppUpdateService();
+  final MobileFeatureService _mobileFeatureService = MobileFeatureService();
   StreamSubscription<AuthEvent>? _authEventSub;
   String? _userId;
   String? _username;
   bool _isLoadingSession = true;
   bool _isCheckingUpdate = false;
+  bool _showSourceEntry = false;
 
   @override
   void initState() {
@@ -131,10 +135,16 @@ class _MinePageState extends ConsumerState<MinePage> {
                             onTap: () => context.push('/system-settings'),
                           ),
                           _MineActionItem(
-                            icon: Icons.menu_book_rounded,
-                            label: '书源',
-                            onTap: () => context.push('/source'),
+                            icon: Icons.workspace_premium_outlined,
+                            label: '会员中心',
+                            onTap: () => context.push('/membership'),
                           ),
+                          if (_showSourceEntry)
+                            _MineActionItem(
+                              icon: Icons.menu_book_rounded,
+                              label: '书源',
+                              onTap: () => context.push('/source'),
+                            ),
                           _MineActionItem(
                             icon: Icons.cloud_outlined,
                             label: '缓存',
@@ -147,8 +157,8 @@ class _MinePageState extends ConsumerState<MinePage> {
                           ),
                           _MineActionItem(
                             icon: Icons.history_rounded,
-                            label: '阅读记录',
-                            onTap: () => context.push('/read-records'),
+                            label: '统计',
+                            onTap: () => context.push('/stats'),
                           ),
                         ],
                       ),
@@ -195,6 +205,10 @@ class _MinePageState extends ConsumerState<MinePage> {
 
   Widget _buildProfileCard(BuildContext context, {required String subtitle}) {
     final colorScheme = Theme.of(context).colorScheme;
+    final avatarFill = Color.alphaBlend(
+      colorScheme.onSurface.withValues(alpha: 0.045),
+      colorScheme.surface,
+    );
     final displayName =
         _userId == null
             ? '登录 / 注册'
@@ -213,10 +227,10 @@ class _MinePageState extends ConsumerState<MinePage> {
             children: [
               CircleAvatar(
                 radius: 20,
-                backgroundColor: colorScheme.primaryContainer,
+                backgroundColor: avatarFill,
                 child: Icon(
                   Icons.auto_stories_rounded,
-                  color: colorScheme.onPrimaryContainer,
+                  color: colorScheme.onSurface,
                   size: 20,
                 ),
               ),
@@ -286,8 +300,43 @@ class _MinePageState extends ConsumerState<MinePage> {
     setState(() {
       _userId = session?.userId;
       _username = session?.username;
+      _showSourceEntry = false;
       _isLoadingSession = false;
     });
+    if (session == null) {
+      return;
+    }
+    await _loadFeatureModules();
+  }
+
+  Future<void> _loadFeatureModules() async {
+    try {
+      final modules =
+          _userId == null
+              ? await _mobileFeatureService.fetchPublicModules()
+              : await _mobileFeatureService.fetchMyModules();
+      MobileFeatureModule? sourceEntry;
+      for (final item in modules) {
+        if (item.code == 'source_entry') {
+          sourceEntry = item;
+          break;
+        }
+      }
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _showSourceEntry =
+            sourceEntry?.visible == true && sourceEntry?.enabled != false;
+      });
+    } catch (_) {
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _showSourceEntry = false;
+      });
+    }
   }
 
   void _handleAuthEvent(AuthEvent event) {
@@ -387,6 +436,10 @@ class _MinePageState extends ConsumerState<MinePage> {
   }) {
     final theme = Theme.of(context);
     final colorScheme = theme.colorScheme;
+    final iconFill = Color.alphaBlend(
+      colorScheme.onSurface.withValues(alpha: denseGrid ? 0.035 : 0.045),
+      colorScheme.surface,
+    );
     final iconSize = denseGrid ? 30.0 : 34.0;
     final iconGlyphSize = denseGrid ? 17.0 : 19.0;
     final labelTextStyle =
@@ -447,9 +500,7 @@ class _MinePageState extends ConsumerState<MinePage> {
                               width: iconSize,
                               height: iconSize,
                               decoration: BoxDecoration(
-                                color: colorScheme.primaryContainer.withValues(
-                                  alpha: denseGrid ? 0.4 : 0.46,
-                                ),
+                                color: iconFill,
                                 shape: BoxShape.circle,
                               ),
                               child: Icon(

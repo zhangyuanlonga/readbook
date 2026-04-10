@@ -437,7 +437,7 @@ void main() {
     expect(find.byType(NavigationRail), findsOneWidget);
   });
 
-  testWidgets('ShellScaffold 底部导航保持发现页位于中间', (tester) async {
+  testWidgets('ShellScaffold 底部导航保持统计页位于我的之前', (tester) async {
     await tester.pumpWidget(
       AdaptiveTestHarness(
         width: 390,
@@ -457,8 +457,35 @@ void main() {
         .map((item) => (item as NavigationDestination).label)
         .toList(growable: false);
 
-    expect(labels, <String>['书架', '发现', '我的']);
+    expect(labels, <String>['书架', '发现', '统计', '我的']);
     expect(bar.selectedIndex, 1);
+  });
+
+  testWidgets('ShellScaffold 标准底部导航为选中态提供独立图标', (tester) async {
+    await _pumpShellScaffold(tester, width: 390);
+
+    final bar = tester.widget<NavigationBar>(find.byType(NavigationBar));
+    final destinations = bar.destinations.cast<NavigationDestination>().toList(
+      growable: false,
+    );
+
+    expect((destinations[0].icon as Icon).icon, Icons.menu_book_outlined);
+    expect(
+      (destinations[0].selectedIcon as Icon).icon,
+      Icons.menu_book_rounded,
+    );
+    expect((destinations[1].icon as Icon).icon, Icons.explore_outlined);
+    expect((destinations[1].selectedIcon as Icon).icon, Icons.explore);
+    expect(
+      (destinations[2].icon as Icon).icon,
+      Icons.insert_chart_outlined_rounded,
+    );
+    expect(
+      (destinations[2].selectedIcon as Icon).icon,
+      Icons.insert_chart_rounded,
+    );
+    expect((destinations[3].icon as Icon).icon, Icons.person_outline);
+    expect((destinations[3].selectedIcon as Icon).icon, Icons.person);
   });
 
   testWidgets('ShellScaffold 会隐藏被禁用的导航项', (tester) async {
@@ -569,6 +596,7 @@ class _BookshelfMineNavigationNotifier extends AppShellNavigationNotifier {
     return const AppShellNavigationState(
       showBookshelf: true,
       showDiscover: false,
+      showStats: false,
     );
   }
 }
@@ -587,6 +615,7 @@ class _AllTabsNavigationNotifier extends AppShellNavigationNotifier {
     return const AppShellNavigationState(
       showBookshelf: true,
       showDiscover: true,
+      showStats: true,
     );
   }
 }

@@ -17,6 +17,7 @@ void main() {
     await runAdaptivePageSmokeMatrix(
       tester,
       pageBuilder: () => const BookshelfPage(prefetchAnnouncementOnInit: false),
+      useProviderScope: true,
       pageName: 'BookshelfPage',
     );
   });

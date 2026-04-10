@@ -12,6 +12,7 @@ import '../features/announcement/presentation/announcement_list_page.dart';
 import '../features/mine/presentation/mine_page.dart';
 import '../features/mine/presentation/appearance_page.dart';
 import '../features/mine/presentation/cache_management_page.dart';
+import '../features/mine/presentation/membership_center_page.dart';
 import '../features/mine/presentation/about_page.dart';
 import '../features/mine/presentation/bookmarks_page.dart';
 import '../features/mine/presentation/feedback_page.dart';
@@ -69,6 +70,15 @@ final GoRouter appRouter = GoRouter(
         StatefulShellBranch(
           routes: [
             GoRoute(
+              path: '/stats',
+              name: 'stats',
+              builder: (context, state) => const ReadingRecordsPage(),
+            ),
+          ],
+        ),
+        StatefulShellBranch(
+          routes: [
+            GoRoute(
               path: '/mine',
               name: 'mine',
               builder: (context, state) => const MinePage(),
@@ -86,6 +96,11 @@ final GoRouter appRouter = GoRouter(
       path: '/cache',
       name: 'cache',
       builder: (context, state) => const CacheManagementPage(),
+    ),
+    GoRoute(
+      path: '/membership',
+      name: 'membership',
+      builder: (context, state) => const MembershipCenterPage(),
     ),
     GoRoute(
       path: '/about',
@@ -128,7 +143,7 @@ final GoRouter appRouter = GoRouter(
     GoRoute(
       path: '/read-records',
       name: 'read-records',
-      builder: (context, state) => const ReadingRecordsPage(),
+      redirect: (context, state) => '/stats',
     ),
     GoRoute(
       path: '/source',

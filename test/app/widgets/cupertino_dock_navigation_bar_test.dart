@@ -56,6 +56,7 @@ void main() {
 
     expect(find.text('书架'), findsNothing);
     expect(find.text('发现'), findsNothing);
+    expect(find.text('统计'), findsNothing);
     expect(find.text('我的'), findsNothing);
     expect(find.byTooltip('发现'), findsOneWidget);
   });

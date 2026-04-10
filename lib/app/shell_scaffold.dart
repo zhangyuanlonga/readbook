@@ -32,7 +32,7 @@ class ShellScaffold extends ConsumerStatefulWidget {
 class _ShellScaffoldState extends ConsumerState<ShellScaffold>
     with SingleTickerProviderStateMixin {
   static const double _kSwipeVelocityThreshold = 420;
-  static const bool _kEnableMobileTabSwitchAnimation = true;
+  static const bool _kEnableMobileTabSwitchAnimation = false;
   static const Duration _kTabSwitchDuration = Duration(milliseconds: 320);
 
   late int _currentOrderIndex;
@@ -204,7 +204,7 @@ class _ShellScaffoldState extends ConsumerState<ShellScaffold>
     }
 
     return Scaffold(
-      extendBody: true,
+      extendBody: effectiveNavigationStyle == AppNavigationStyle.cupertinoDock,
       body: body,
       bottomNavigationBar: _buildMobileBottomNavigationBar(
         context,
@@ -232,11 +232,6 @@ class _ShellScaffoldState extends ConsumerState<ShellScaffold>
     switch (style) {
       case AppNavigationStyle.standard:
         return NavigationBar(
-          height: 64,
-          backgroundColor: Colors.transparent,
-          elevation: 0,
-          shadowColor: Colors.transparent,
-          surfaceTintColor: Colors.transparent,
           indicatorColor: colorScheme.secondaryContainer,
           selectedIndex: selectedIndex,
           onDestinationSelected: (index) {
@@ -246,6 +241,7 @@ class _ShellScaffoldState extends ConsumerState<ShellScaffold>
             for (final destination in destinations)
               NavigationDestination(
                 icon: Icon(destination.icon),
+                selectedIcon: Icon(destination.selectedIcon),
                 label: destination.label,
               ),
           ],
@@ -331,13 +327,18 @@ class _ShellScaffoldState extends ConsumerState<ShellScaffold>
     return switch (tab) {
       AppShellTab.bookshelf => 0,
       AppShellTab.discover => 1,
-      AppShellTab.mine => 2,
+      AppShellTab.stats => 2,
+      AppShellTab.mine => 3,
     };
   }
 
   AppShellTab _locationTab(String currentLocation) {
     if (currentLocation.startsWith('/discover')) {
       return AppShellTab.discover;
+    }
+    if (currentLocation.startsWith('/stats') ||
+        currentLocation.startsWith('/read-records')) {
+      return AppShellTab.stats;
     }
     if (currentLocation.startsWith('/mine')) {
       return AppShellTab.mine;
