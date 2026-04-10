@@ -77,6 +77,19 @@ void main() {
       expect(all, isEmpty);
     });
 
+    test('persists bookshelf sort mode', () async {
+      final service = BookshelfService();
+
+      expect(await service.loadSortMode(), BookshelfService.defaultSortMode);
+
+      await service.saveSortMode(BookshelfService.readingProgressSortMode);
+
+      expect(
+        await service.loadSortMode(),
+        BookshelfService.readingProgressSortMode,
+      );
+    });
+
     test('renameTag renames across books and deduplicates tags', () async {
       final service = BookshelfService();
       await service.setBookTags(

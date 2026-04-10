@@ -19,6 +19,12 @@ class BookshelfService {
   static const String _baseFilterOrderStorageKey =
       'bookshelf.base_filter_order';
   static const String _viewModeGridKey = 'bookshelf.view.useGrid';
+  static const String _sortModeKey = 'bookshelf.sort.mode';
+
+  static const String defaultSortMode = 'default';
+  static const String recentReadSortMode = 'recentRead';
+  static const String readingProgressSortMode = 'readingProgress';
+  static const String createdAtSortMode = 'createdAt';
 
   Future<List<BookshelfBook>> getAll() async {
     final prefs = await _preferencesFuture;
@@ -151,6 +157,16 @@ class BookshelfService {
   Future<void> saveUseGridView(bool useGridView) async {
     final prefs = await _preferencesFuture;
     await prefs.setBool(_viewModeGridKey, useGridView);
+  }
+
+  Future<String> loadSortMode() async {
+    final prefs = await _preferencesFuture;
+    return _normalizeSortMode(prefs.getString(_sortModeKey));
+  }
+
+  Future<void> saveSortMode(String mode) async {
+    final prefs = await _preferencesFuture;
+    await prefs.setString(_sortModeKey, _normalizeSortMode(mode));
   }
 
   Future<Map<String, List<String>>> getTagMap() async {
@@ -385,5 +401,14 @@ class BookshelfService {
       }
     }
     return result;
+  }
+
+  static String _normalizeSortMode(String? value) {
+    return switch (value?.trim()) {
+      recentReadSortMode => recentReadSortMode,
+      readingProgressSortMode => readingProgressSortMode,
+      createdAtSortMode => createdAtSortMode,
+      _ => defaultSortMode,
+    };
   }
 }

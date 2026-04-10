@@ -20,19 +20,13 @@ class BookshelfViewModeEditBar extends StatelessWidget {
     required this.summaryText,
     required this.useGridView,
     required this.viewButtonEnabled,
-    required this.editButtonEnabled,
-    required this.isSelectionMode,
     required this.onToggleViewMode,
-    required this.onToggleEditMode,
   });
 
   final String summaryText;
   final bool useGridView;
   final bool viewButtonEnabled;
-  final bool editButtonEnabled;
-  final bool isSelectionMode;
   final VoidCallback? onToggleViewMode;
-  final VoidCallback? onToggleEditMode;
 
   @override
   Widget build(BuildContext context) {
@@ -62,21 +56,6 @@ class BookshelfViewModeEditBar extends StatelessWidget {
                   : colorScheme.onSurfaceVariant.withValues(alpha: 0.45),
           icon: Icon(
             useGridView ? Icons.grid_view_rounded : Icons.view_list_rounded,
-          ),
-        ),
-        IconButton(
-          tooltip: isSelectionMode ? '完成编辑' : '进入编辑',
-          onPressed: editButtonEnabled ? onToggleEditMode : null,
-          visualDensity: VisualDensity.compact,
-          iconSize: 20,
-          color:
-              editButtonEnabled
-                  ? (isSelectionMode
-                      ? colorScheme.primary
-                      : colorScheme.onSurfaceVariant)
-                  : colorScheme.onSurfaceVariant.withValues(alpha: 0.45),
-          icon: Icon(
-            isSelectionMode ? Icons.check_rounded : Icons.edit_outlined,
           ),
         ),
       ],

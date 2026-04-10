@@ -54,7 +54,9 @@ enum _BookshelfFilter { all, local, novel, manga, custom }
 
 enum _TagManageSheetAction { rename, delete }
 
-enum _BookshelfMoreAction { importLocal }
+enum _BookshelfMoreAction { selectBooks, sortBooks, importLocal }
+
+enum _BookshelfSortMode { defaultOrder, recentRead, readingProgress, createdAt }
 
 class _BookshelfProgressDisplay {
   const _BookshelfProgressDisplay({
@@ -127,6 +129,7 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
   List<String> _userTagsCache = const <String>[];
   List<_BookshelfFilter> _orderedBaseFiltersCache = _kDefaultBaseFilters;
   bool _useGridView = false;
+  _BookshelfSortMode _sortMode = _BookshelfSortMode.defaultOrder;
   _BookshelfFilter _activeFilter = _BookshelfFilter.all;
   String? _activeCustomTag;
   String? _openingBookId;
@@ -196,6 +199,7 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
       }
       unawaited(_consumePendingExternalImportPayloads());
       unawaited(_restoreViewModePreference());
+      unawaited(_restoreSortModePreference());
       unawaited(_loadBookshelf());
       if (widget.prefetchAnnouncementOnInit) {
         unawaited(_prefetchLatestAnnouncement());
@@ -316,8 +320,30 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
               tooltip: '更多功能',
               onSelected: _handleMoreAction,
               itemBuilder:
-                  (context) => const [
+                  (context) => [
                     PopupMenuItem<_BookshelfMoreAction>(
+                      value: _BookshelfMoreAction.selectBooks,
+                      enabled: !_isLoading && _filteredBooks.isNotEmpty,
+                      child: const Row(
+                        children: [
+                          Icon(Icons.checklist_rounded, size: 18),
+                          SizedBox(width: 10),
+                          Text('选择书籍'),
+                        ],
+                      ),
+                    ),
+                    PopupMenuItem<_BookshelfMoreAction>(
+                      value: _BookshelfMoreAction.sortBooks,
+                      enabled: !_isLoading && _books.isNotEmpty,
+                      child: const Row(
+                        children: [
+                          Icon(Icons.sort_rounded, size: 18),
+                          SizedBox(width: 10),
+                          Text('书籍排序'),
+                        ],
+                      ),
+                    ),
+                    const PopupMenuItem<_BookshelfMoreAction>(
                       value: _BookshelfMoreAction.importLocal,
                       child: Row(
                         children: [
@@ -595,9 +621,72 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
 
   void _handleMoreAction(_BookshelfMoreAction action) {
     switch (action) {
+      case _BookshelfMoreAction.selectBooks:
+        _startSelectionMode();
+        break;
+      case _BookshelfMoreAction.sortBooks:
+        unawaited(_showSortModeSheet());
+        break;
       case _BookshelfMoreAction.importLocal:
         unawaited(_importLocalBooksFromPicker());
         break;
+    }
+  }
+
+  Future<void> _showSortModeSheet() async {
+    if (_books.isEmpty || !mounted) {
+      return;
+    }
+
+    final selected = await _showBookshelfBottomSheet<_BookshelfSortMode>(
+      builder: (sheetContext) {
+        final bottomInset = _bookshelfBottomSafeInset(sheetContext);
+        return Padding(
+          padding: EdgeInsets.fromLTRB(8, 0, 8, 10 + bottomInset),
+          child: RadioGroup<_BookshelfSortMode>(
+            groupValue: _sortMode,
+            onChanged:
+                (value) =>
+                    Navigator.of(sheetContext, rootNavigator: true).pop(value),
+            child: ListView(
+              shrinkWrap: true,
+              children: [
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(12, 4, 12, 8),
+                  child: Text(
+                    '书籍排序',
+                    style: Theme.of(sheetContext).textTheme.titleMedium
+                        ?.copyWith(fontWeight: FontWeight.w700),
+                  ),
+                ),
+                for (final mode in _BookshelfSortMode.values)
+                  RadioListTile<_BookshelfSortMode>(
+                    value: mode,
+                    contentPadding: const EdgeInsets.symmetric(horizontal: 12),
+                    title: Text(_sortModeLabel(mode)),
+                    subtitle: Text(_sortModeDescription(mode)),
+                  ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+
+    if (selected == null || selected == _sortMode || !mounted) {
+      return;
+    }
+
+    setState(() {
+      _sortMode = selected;
+    });
+    try {
+      await _bookshelfService.saveSortMode(_sortModeStorageValue(selected));
+    } catch (_) {
+      if (!mounted) {
+        return;
+      }
+      _showMessage('书籍排序保存失败，请重试。');
     }
   }
 
@@ -763,9 +852,6 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
 
   Widget _buildViewModeEditBar() {
     final viewButtonEnabled = !_isLoading && !_isBatchDeleting;
-    final editButtonEnabled =
-        !_isBatchDeleting &&
-        (_isSelectionMode || (!_isLoading && _filteredBooks.isNotEmpty));
     final summaryText =
         _isSelectionMode
             ? '已选择 ${_selectedBookKeys.length} 本'
@@ -775,13 +861,7 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
       summaryText: summaryText,
       useGridView: _useGridView,
       viewButtonEnabled: viewButtonEnabled,
-      editButtonEnabled: editButtonEnabled,
-      isSelectionMode: _isSelectionMode,
       onToggleViewMode: _toggleBookshelfViewMode,
-      onToggleEditMode:
-          editButtonEnabled
-              ? (_isSelectionMode ? _exitSelectionMode : _startSelectionMode)
-              : null,
     );
   }
 
@@ -1873,6 +1953,7 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
     final fingerprint = Object.hash(
       _activeFilter,
       _activeCustomTag,
+      _sortMode,
       identityHashCode(_books),
       identityHashCode(_progressByBookKey),
       identityHashCode(_cachedChapterCountByBookKey),
@@ -1937,6 +2018,18 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
   }
 
   int _compareBookshelfBooks(BookshelfBook a, BookshelfBook b) {
+    return switch (_sortMode) {
+      _BookshelfSortMode.defaultOrder => _compareBookshelfBooksDefault(a, b),
+      _BookshelfSortMode.recentRead => _compareBookshelfBooksByRecentRead(a, b),
+      _BookshelfSortMode.readingProgress => _compareBookshelfBooksByProgress(
+        a,
+        b,
+      ),
+      _BookshelfSortMode.createdAt => _compareBookshelfBooksByCreatedAt(a, b),
+    };
+  }
+
+  int _compareBookshelfBooksDefault(BookshelfBook a, BookshelfBook b) {
     final progressA = _progressByBookKey[_bookKey(a)];
     final progressB = _progressByBookKey[_bookKey(b)];
     if (progressA != null && progressB != null) {
@@ -1953,6 +2046,42 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
     final addedCompare = b.addedAt.compareTo(a.addedAt);
     if (addedCompare != 0) {
       return addedCompare;
+    }
+    return a.title.compareTo(b.title);
+  }
+
+  int _compareBookshelfBooksByRecentRead(BookshelfBook a, BookshelfBook b) {
+    final progressA = _progressByBookKey[_bookKey(a)];
+    final progressB = _progressByBookKey[_bookKey(b)];
+    if (progressA != null && progressB != null) {
+      final compare = progressB.updatedAt.compareTo(progressA.updatedAt);
+      if (compare != 0) {
+        return compare;
+      }
+    } else if (progressA != null) {
+      return -1;
+    } else if (progressB != null) {
+      return 1;
+    }
+    return _compareBookshelfBooksDefault(a, b);
+  }
+
+  int _compareBookshelfBooksByProgress(BookshelfBook a, BookshelfBook b) {
+    final progressA =
+        _progressByBookKey[_bookKey(a)]?.chapterPositionRatio ?? 0;
+    final progressB =
+        _progressByBookKey[_bookKey(b)]?.chapterPositionRatio ?? 0;
+    final compare = progressB.compareTo(progressA);
+    if (compare != 0) {
+      return compare;
+    }
+    return _compareBookshelfBooksByRecentRead(a, b);
+  }
+
+  int _compareBookshelfBooksByCreatedAt(BookshelfBook a, BookshelfBook b) {
+    final createdCompare = b.addedAt.compareTo(a.addedAt);
+    if (createdCompare != 0) {
+      return createdCompare;
     }
     return a.title.compareTo(b.title);
   }
@@ -3876,6 +4005,56 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
       _useGridView = next;
     });
     unawaited(_bookshelfService.saveUseGridView(next));
+  }
+
+  Future<void> _restoreSortModePreference() async {
+    final loaded = _sortModeFromStorageValue(
+      await _bookshelfService.loadSortMode(),
+    );
+    if (!mounted || _sortMode == loaded) {
+      return;
+    }
+    setState(() {
+      _sortMode = loaded;
+    });
+  }
+
+  _BookshelfSortMode _sortModeFromStorageValue(String value) {
+    return switch (value) {
+      BookshelfService.recentReadSortMode => _BookshelfSortMode.recentRead,
+      BookshelfService.readingProgressSortMode =>
+        _BookshelfSortMode.readingProgress,
+      BookshelfService.createdAtSortMode => _BookshelfSortMode.createdAt,
+      _ => _BookshelfSortMode.defaultOrder,
+    };
+  }
+
+  String _sortModeStorageValue(_BookshelfSortMode mode) {
+    return switch (mode) {
+      _BookshelfSortMode.defaultOrder => BookshelfService.defaultSortMode,
+      _BookshelfSortMode.recentRead => BookshelfService.recentReadSortMode,
+      _BookshelfSortMode.readingProgress =>
+        BookshelfService.readingProgressSortMode,
+      _BookshelfSortMode.createdAt => BookshelfService.createdAtSortMode,
+    };
+  }
+
+  String _sortModeLabel(_BookshelfSortMode mode) {
+    return switch (mode) {
+      _BookshelfSortMode.defaultOrder => '默认排序',
+      _BookshelfSortMode.recentRead => '最近阅读',
+      _BookshelfSortMode.readingProgress => '阅读进度',
+      _BookshelfSortMode.createdAt => '创建时间',
+    };
+  }
+
+  String _sortModeDescription(_BookshelfSortMode mode) {
+    return switch (mode) {
+      _BookshelfSortMode.defaultOrder => '优先按最近阅读，其次按加入书架时间。',
+      _BookshelfSortMode.recentRead => '最近打开或更新阅读位置的书籍排在前面。',
+      _BookshelfSortMode.readingProgress => '按当前阅读进度从高到低排序。',
+      _BookshelfSortMode.createdAt => '按加入书架时间从新到旧排序。',
+    };
   }
 
   Future<Map<String, int>> _loadSourceTypeMap() async {
