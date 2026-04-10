@@ -89,8 +89,8 @@ void main() {
       expect(view.summary.chapterCount, 1);
       expect(view.summary.coverRecords, hasLength(1));
       expect(view.distribution.buckets, hasLength(24));
-      expect(view.distributionCalendar.weeks, isNotEmpty);
-      expect(view.distributionCalendar.monthLabel, '2026年04月');
+      expect(view.distributionCalendar.months, hasLength(3));
+      expect(view.distributionCalendar.months[1].monthLabel, '2026年04月');
       expect(view.rankings, hasLength(1));
       expect(view.rankings.first.record.bookId, 'book_1');
     });

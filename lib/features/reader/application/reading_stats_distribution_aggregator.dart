@@ -50,23 +50,47 @@ class ReadingStatsDistributionAggregator {
     required DateTime anchor,
     required List<ReadingRecordDay> filteredDailyRecords,
   }) {
-    final monthAnchor = _scopeService.stripDate(anchor);
-    final monthStart = DateTime(monthAnchor.year, monthAnchor.month);
-    final monthEnd = DateTime(monthAnchor.year, monthAnchor.month + 1);
-    final gridStart = _scopeService.startOfWeek(monthStart);
-    final gridEnd = _scopeService
-        .startOfWeek(monthEnd.subtract(const Duration(days: 1)))
-        .add(const Duration(days: 6));
     final readMillisByDate = <String, int>{};
 
     for (final item in filteredDailyRecords) {
-      final parsed = DateTime.parse(item.dateKey);
-      if (parsed.isBefore(monthStart) || !parsed.isBefore(monthEnd)) {
-        continue;
-      }
       readMillisByDate[item.dateKey] =
           (readMillisByDate[item.dateKey] ?? 0) + item.readMillis;
     }
+
+    final monthAnchor = _scopeService.stripDate(anchor);
+    final months = <ReadingCalendarDistributionMonth>[
+      _buildCalendarMonth(
+        DateTime(monthAnchor.year, monthAnchor.month - 1, 1),
+        readMillisByDate,
+      ),
+      _buildCalendarMonth(
+        DateTime(monthAnchor.year, monthAnchor.month, 1),
+        readMillisByDate,
+      ),
+      _buildCalendarMonth(
+        DateTime(monthAnchor.year, monthAnchor.month + 1, 1),
+        readMillisByDate,
+      ),
+    ];
+
+    return ReadingCalendarDistribution(
+      months: List<ReadingCalendarDistributionMonth>.unmodifiable(months),
+    );
+  }
+
+  ReadingCalendarDistributionMonth _buildCalendarMonth(
+    DateTime monthStart,
+    Map<String, int> readMillisByDate,
+  ) {
+    final normalizedMonthStart = DateTime(monthStart.year, monthStart.month);
+    final monthEnd = DateTime(
+      normalizedMonthStart.year,
+      normalizedMonthStart.month + 1,
+    );
+    final gridStart = _scopeService.startOfWeek(normalizedMonthStart);
+    final gridEnd = _scopeService
+        .startOfWeek(monthEnd.subtract(const Duration(days: 1)))
+        .add(const Duration(days: 6));
 
     final weeks = <ReadingCalendarDistributionWeek>[];
     var cursor = gridStart;
@@ -78,7 +102,7 @@ class ReadingStatsDistributionAggregator {
             final dateKey = _scopeService.formatDateKey(day);
             return ReadingCalendarDistributionDay(
               day: day,
-              isInCurrentMonth: day.month == monthStart.month,
+              isInCurrentMonth: day.month == normalizedMonthStart.month,
               readMillis: readMillisByDate[dateKey] ?? 0,
             );
           }, growable: false),
@@ -87,9 +111,9 @@ class ReadingStatsDistributionAggregator {
       cursor = cursor.add(const Duration(days: 7));
     }
 
-    return ReadingCalendarDistribution(
+    return ReadingCalendarDistributionMonth(
       monthLabel:
-          '${monthStart.year}年${monthStart.month.toString().padLeft(2, '0')}月',
+          '${normalizedMonthStart.year}年${normalizedMonthStart.month.toString().padLeft(2, '0')}月',
       weeks: List<ReadingCalendarDistributionWeek>.unmodifiable(weeks),
     );
   }

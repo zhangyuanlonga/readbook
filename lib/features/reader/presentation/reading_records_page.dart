@@ -337,7 +337,7 @@ class _ReadingRecordsPageState extends State<ReadingRecordsPage> {
         return Padding(
           padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
           child: SingleChildScrollView(
-            child: _buildDistributionCalendarCard(
+            child: _buildDistributionCalendarOverview(
               distribution,
               embeddedInSheet: true,
             ),
@@ -1312,11 +1312,11 @@ class _ReadingRecordsPageState extends State<ReadingRecordsPage> {
     );
   }
 
-  Widget _buildDistributionCalendarCard(
+  Widget _buildDistributionCalendarOverview(
     ReadingCalendarDistribution distribution, {
     bool embeddedInSheet = false,
   }) {
-    if (distribution.weeks.isEmpty) {
+    if (distribution.months.isEmpty) {
       return _buildEmptyCard('当前周期下还没有可以展示的阅读时间分布。');
     }
 
@@ -1347,55 +1347,104 @@ class _ReadingRecordsPageState extends State<ReadingRecordsPage> {
             ),
             const SizedBox(height: 6),
             Text(
-              '${distribution.monthLabel} · 有阅读的日期会高亮显示。',
+              '缩略查看相邻 3 个月的阅读分布。',
               style: Theme.of(context).textTheme.bodySmall?.copyWith(
                 color: colorScheme.onSurfaceVariant,
               ),
             ),
             const SizedBox(height: 16),
-            Row(
-              children: [
-                for (final label in weekLabels)
-                  Expanded(
-                    child: Center(
-                      child: Padding(
-                        padding: const EdgeInsets.only(bottom: 8),
-                        child: Text(
-                          label,
-                          style: Theme.of(
-                            context,
-                          ).textTheme.labelSmall?.copyWith(
-                            color: colorScheme.onSurfaceVariant,
-                            fontWeight: FontWeight.w700,
-                          ),
-                        ),
+            SingleChildScrollView(
+              scrollDirection: Axis.horizontal,
+              child: Row(
+                children: [
+                  for (var index = 0; index < distribution.months.length; index++)
+                    Padding(
+                      padding: EdgeInsets.only(
+                        right: index == distribution.months.length - 1 ? 0 : 12,
+                      ),
+                      child: _buildDistributionMonthMiniCard(
+                        distribution.months[index],
+                        weekLabels: weekLabels,
                       ),
                     ),
-                  ),
-              ],
-            ),
-            for (final week in distribution.weeks)
-              Padding(
-                padding: const EdgeInsets.only(bottom: 8),
-                child: Row(
-                  children: [
-                    for (final day in week.days)
-                      Expanded(
-                        child: Padding(
-                          padding: const EdgeInsets.symmetric(horizontal: 2),
-                          child: _buildDistributionCalendarCell(day),
-                        ),
-                      ),
-                  ],
-                ),
+                ],
               ),
+            ),
           ],
         ),
       ),
     );
   }
 
+  Widget _buildDistributionMonthMiniCard(
+    ReadingCalendarDistributionMonth month, {
+    required List<String> weekLabels,
+  }) {
+    final colorScheme = Theme.of(context).colorScheme;
+    return Container(
+      width: 148,
+      padding: const EdgeInsets.fromLTRB(10, 10, 10, 10),
+      decoration: BoxDecoration(
+        color: colorScheme.surface,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(
+          color: colorScheme.outlineVariant.withValues(alpha: 0.28),
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            month.monthLabel,
+            style: Theme.of(
+              context,
+            ).textTheme.labelMedium?.copyWith(fontWeight: FontWeight.w700),
+          ),
+          const SizedBox(height: 8),
+          Row(
+            children: [
+              for (final label in weekLabels)
+                Expanded(
+                  child: Center(
+                    child: Text(
+                      label,
+                      style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                        color: colorScheme.onSurfaceVariant,
+                        fontSize: 10,
+                      ),
+                    ),
+                  ),
+                ),
+            ],
+          ),
+          const SizedBox(height: 4),
+          for (final week in month.weeks)
+            Padding(
+              padding: const EdgeInsets.only(bottom: 4),
+              child: Row(
+                children: [
+                  for (final day in week.days)
+                    Expanded(
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 1),
+                        child: _buildDistributionCalendarCell(day, compact: true),
+                      ),
+                    ),
+                ],
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+
   bool _shouldShowDistributionLabel(int index, int totalCount) {
+    if (_period == ReadingRecordsPeriod.month) {
+      final dayNumber = index + 1;
+      return dayNumber == 1 ||
+          (dayNumber - 1) % 5 == 0 ||
+          dayNumber == totalCount;
+    }
     if (totalCount <= 7) {
       return true;
     }
@@ -1512,7 +1561,10 @@ class _ReadingRecordsPageState extends State<ReadingRecordsPage> {
     );
   }
 
-  Widget _buildDistributionCalendarCell(ReadingCalendarDistributionDay day) {
+  Widget _buildDistributionCalendarCell(
+    ReadingCalendarDistributionDay day, {
+    bool compact = false,
+  }) {
     final colorScheme = Theme.of(context).colorScheme;
     final isSelected =
         _period == ReadingRecordsPeriod.day &&
@@ -1549,7 +1601,7 @@ class _ReadingRecordsPageState extends State<ReadingRecordsPage> {
           child: DecoratedBox(
             decoration: BoxDecoration(
               color: backgroundColor,
-              borderRadius: BorderRadius.circular(10),
+              borderRadius: BorderRadius.circular(compact ? 6 : 10),
               border:
                   isSelected
                       ? Border.all(color: colorScheme.onSurface, width: 2)
@@ -1566,6 +1618,7 @@ class _ReadingRecordsPageState extends State<ReadingRecordsPage> {
                   color: foregroundColor,
                   fontWeight:
                       day.hasReading ? FontWeight.w700 : FontWeight.w500,
+                  fontSize: compact ? 10 : null,
                 ),
               ),
             ),

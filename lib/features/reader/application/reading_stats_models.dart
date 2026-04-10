@@ -134,7 +134,13 @@ class ReadingDurationDistribution {
 }
 
 class ReadingCalendarDistribution {
-  const ReadingCalendarDistribution({
+  const ReadingCalendarDistribution({required this.months});
+
+  final List<ReadingCalendarDistributionMonth> months;
+}
+
+class ReadingCalendarDistributionMonth {
+  const ReadingCalendarDistributionMonth({
     required this.monthLabel,
     required this.weeks,
   });
