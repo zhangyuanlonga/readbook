@@ -40,7 +40,7 @@ class App extends ConsumerWidget {
     final darkScheme = buildAppDarkColorScheme(seedColor);
 
     return MaterialApp.router(
-      title: '书享阅读 Next',
+      title: 'Selune',
       theme: AppTheme.build(lightScheme),
       darkTheme: AppTheme.build(darkScheme),
       themeMode: themeMode,
@@ -856,125 +856,20 @@ class _SystemUiOverlayWrapperState extends State<_SystemUiOverlayWrapper>
 
 class _StartupGuardPage extends StatelessWidget {
   const _StartupGuardPage();
-
-  static const List<String> _brandTextChars = ['书', '享', '阅', '读'];
-  static const List<String> _sloganTextChars = ['享', '受', '阅', '读', '生', '活'];
+  static const String _startupArtwork = 'assets/branding/selune_launch_scene.png';
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final colorScheme = theme.colorScheme;
-    final isDark = theme.brightness == Brightness.dark;
-    final shortestSide = MediaQuery.sizeOf(context).shortestSide;
-    const brandGap = 2.0;
-    const brandLineHeight = 1.02;
-    final brandFontSize = (shortestSide * 0.165).clamp(48.0, 66.0).toDouble();
-    final sloganFontSize = (shortestSide * 0.08).clamp(23.0, 33.0).toDouble();
-    final sloganTopOffset = (brandFontSize * brandLineHeight + brandGap) * 2;
-    final fontFamilyFallback = const [
-      'STKaiti',
-      'Kaiti SC',
-      'KaiTi',
-      'Songti SC',
-      'Noto Serif CJK SC',
-      'serif',
-    ];
-    final backgroundTop = Color.alphaBlend(
-      colorScheme.primary.withValues(alpha: isDark ? 0.16 : 0.05),
-      colorScheme.surface,
-    );
-    final backgroundBottom = Color.alphaBlend(
-      colorScheme.secondary.withValues(alpha: isDark ? 0.14 : 0.04),
-      colorScheme.surface,
-    );
-    final brandColor =
-        isDark
-            ? const Color(0xFFF2EFE8)
-            : colorScheme.onSurface.withValues(alpha: 0.9);
-    final sloganColor = brandColor.withValues(alpha: isDark ? 0.88 : 0.72);
-
-    return DecoratedBox(
-      decoration: BoxDecoration(
-        gradient: LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: [backgroundTop, backgroundBottom],
+    return const ColoredBox(
+      color: Color(0xFFF6F8FB),
+      child: SizedBox.expand(
+        child: Image(
+          image: AssetImage(_startupArtwork),
+          fit: BoxFit.cover,
+          alignment: Alignment.center,
+          filterQuality: FilterQuality.high,
         ),
       ),
-      child: SafeArea(
-        child: Stack(
-          fit: StackFit.expand,
-          children: [
-            Center(
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  _VerticalTextColumn(
-                    characters: _brandTextChars,
-                    gap: brandGap,
-                    style: TextStyle(
-                      color: brandColor,
-                      fontSize: brandFontSize,
-                      height: brandLineHeight,
-                      fontWeight: FontWeight.w600,
-                      decoration: TextDecoration.none,
-                      fontFamilyFallback: fontFamilyFallback,
-                    ),
-                  ),
-                  SizedBox(width: shortestSide * 0.048),
-                  Padding(
-                    padding: EdgeInsets.only(top: sloganTopOffset),
-                    child: _VerticalTextColumn(
-                      characters: _sloganTextChars,
-                      gap: 1,
-                      style: TextStyle(
-                        color: sloganColor,
-                        fontSize: sloganFontSize,
-                        height: 1.02,
-                        fontWeight: FontWeight.w500,
-                        decoration: TextDecoration.none,
-                        fontFamilyFallback: fontFamilyFallback,
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-class _VerticalTextColumn extends StatelessWidget {
-  const _VerticalTextColumn({
-    required this.characters,
-    required this.style,
-    this.gap = 0,
-  });
-
-  final List<String> characters;
-  final TextStyle style;
-  final double gap;
-
-  @override
-  Widget build(BuildContext context) {
-    return Column(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        for (final character in characters)
-          Padding(
-            padding: EdgeInsets.symmetric(vertical: gap / 2),
-            child: Text(
-              character,
-              style: style.copyWith(
-                decoration: TextDecoration.none,
-                decorationColor: Colors.transparent,
-              ),
-            ),
-          ),
-      ],
     );
   }
 }

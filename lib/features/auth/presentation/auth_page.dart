@@ -122,7 +122,7 @@ class _AuthPageState extends State<AuthPage> {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    _isRegister ? '欢迎加入书享阅读 Next' : '欢迎回来',
+                    _isRegister ? '欢迎加入 Selune' : '欢迎回来',
                     style: Theme.of(context).textTheme.titleMedium?.copyWith(
                       fontWeight: FontWeight.w700,
                     ),

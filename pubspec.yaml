@@ -110,6 +110,7 @@ flutter:
     - test_read.json
     - assets/reader/backgrounds/
     - assets/mov/vx.png
+    - assets/branding/
 
   # An image asset can refer to one or more resolution-specific "variants", see
   # https://flutter.dev/to/resolution-aware-images
@@ -141,10 +142,13 @@ flutter:
 flutter_launcher_icons:
   android: true
   ios: true
-  image_path: assets/logo/testlogo.png
-  adaptive_icon_background: "#FFFFFF"
-  adaptive_icon_foreground: assets/logo/testlogo.png
+  image_path: assets/branding/selune_app_icon.png
+  adaptive_icon_background: "#17171C"
+  adaptive_icon_foreground: assets/branding/selune_app_icon_foreground.png
   remove_alpha_ios: true
+  macos:
+    generate: true
+    image_path: assets/branding/selune_app_icon.png
 
 hooks:
   user_defines:

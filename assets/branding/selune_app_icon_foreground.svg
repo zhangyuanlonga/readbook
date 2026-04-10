@@ -1,0 +1,34 @@
+<svg width="1024" height="1024" viewBox="0 0 100 100" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <g transform="translate(10 12) scale(0.8)">
+    <path
+      d="M63 16c-10.5 2.5-18.4 11.9-18.4 23.4 0 11.5 7.9 20.9 18.4 23.4-4.1 1.2-8.6 1.8-13.3 1.6-17.6-.7-31.7-14.8-32.4-32.4-.8-18.9 14.4-34.5 33.1-34.5 4.5 0 8.8.9 12.6 2.5z"
+      fill="url(#gold)"
+    />
+    <path
+      d="M24 71.5c8-2.8 16.8-4.2 26-4.2 9.4 0 18.3 1.4 26.5 4.3"
+      stroke="#F4EAD7"
+      stroke-width="4.5"
+      stroke-linecap="round"
+      opacity=".95"
+    />
+    <path
+      d="M30 78.5c6.2-2.1 13-3.2 20-3.2 7.2 0 14.2 1.2 20.6 3.4"
+      stroke="#D8C29A"
+      stroke-width="4"
+      stroke-linecap="round"
+      opacity=".86"
+    />
+    <path
+      d="M40.5 32.5c-4 2.5-6.6 7-6.6 12 0 5 2.5 9.4 6.4 11.9"
+      stroke="#D8C29A"
+      stroke-width="5"
+      stroke-linecap="round"
+    />
+  </g>
+  <defs>
+    <linearGradient id="gold" x1="50" y1="16" x2="50" y2="64" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#F1E3C0"/>
+      <stop offset="1" stop-color="#C5A56D"/>
+    </linearGradient>
+  </defs>
+</svg>

@@ -14,8 +14,18 @@
 
 ## 专题文档
 
+- `docs/brand_guidelines.md`
+  `Selune` 品牌视觉、主题配色、官网与营销素材的统一设计规范。
 - `docs/product_experience_guide.md`
   UI、自适应、阅读体验、字体和主题，包含当前断点和布局规则。
+- `docs/adaptive_layout_audit.md`
+  当前代码中的自适应现状审查，说明哪些页面只是限宽，哪些区域更适合重排或缩放。
+- `docs/adaptive_layout_playbook.md`
+  自适应落地策略，统一官方推荐、国内常用做法和本项目后续改造口径。
+- `docs/adaptive_layout_checklist.md`
+  页面级自适应改造清单，按优先级整理当前最值得改造的页面和方向。
+- `docs/adaptive_layout_task_list.md`
+  全页面自适应开发任务清单，覆盖主页面、二级页面和关键组件的改造优先级。
 - `docs/reader_refactor_task_plan.md`
   阅读器结构改造计划，包含统一文本内核、分页/滚动委托、设置分层和验收清单。
 - `docs/reader_multimodal_plan.md`

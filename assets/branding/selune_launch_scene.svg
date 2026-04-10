@@ -1,0 +1,209 @@
+<svg width="1080" height="1920" viewBox="0 0 1080 1920" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="sky" x1="540" y1="0" x2="540" y2="1920" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#F8F1F8"/>
+      <stop offset="0.24" stop-color="#E8EAF5"/>
+      <stop offset="0.55" stop-color="#EEF4FB"/>
+      <stop offset="1" stop-color="#F6F8FB"/>
+    </linearGradient>
+    <radialGradient id="cloudPink" cx="0" cy="0" r="1" gradientUnits="userSpaceOnUse" gradientTransform="translate(720 254) rotate(90) scale(196 286)">
+      <stop stop-color="#F8C8D7" stop-opacity="0.8"/>
+      <stop offset="1" stop-color="#F8C8D7" stop-opacity="0"/>
+    </radialGradient>
+    <radialGradient id="cloudBlue" cx="0" cy="0" r="1" gradientUnits="userSpaceOnUse" gradientTransform="translate(434 450) rotate(90) scale(320 540)">
+      <stop stop-color="#D7E4F5" stop-opacity="0.72"/>
+      <stop offset="1" stop-color="#D7E4F5" stop-opacity="0"/>
+    </radialGradient>
+    <linearGradient id="mountainBack" x1="540" y1="470" x2="540" y2="980" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#E8EDF5"/>
+      <stop offset="1" stop-color="#C5D0DE"/>
+    </linearGradient>
+    <linearGradient id="mountainFront" x1="540" y1="610" x2="540" y2="1180" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#D4DCE8"/>
+      <stop offset="1" stop-color="#A8B4C5"/>
+    </linearGradient>
+    <linearGradient id="snow" x1="540" y1="980" x2="540" y2="1920" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#FBFCFD"/>
+      <stop offset="1" stop-color="#E7EEF5"/>
+    </linearGradient>
+    <linearGradient id="branch" x1="0" y1="0" x2="1" y2="1">
+      <stop stop-color="#47353C"/>
+      <stop offset="1" stop-color="#1C141A"/>
+    </linearGradient>
+    <radialGradient id="blossom" cx="0" cy="0" r="1" gradientUnits="userSpaceOnUse" gradientTransform="translate(0.5 0.5) scale(0.5)">
+      <stop stop-color="#FFF8FC"/>
+      <stop offset="0.5" stop-color="#F4C1D1"/>
+      <stop offset="1" stop-color="#CC6F90"/>
+    </radialGradient>
+    <radialGradient id="petalCenter" cx="0" cy="0" r="1" gradientUnits="userSpaceOnUse" gradientTransform="translate(0.5 0.5) scale(0.5)">
+      <stop stop-color="#8C4A62"/>
+      <stop offset="1" stop-color="#5E2C3D"/>
+    </radialGradient>
+    <linearGradient id="roof" x1="770" y1="0" x2="1014" y2="312" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#3A4458"/>
+      <stop offset="1" stop-color="#171D2A"/>
+    </linearGradient>
+    <linearGradient id="wall" x1="0" y1="0" x2="1" y2="1">
+      <stop stop-color="#95A0B1"/>
+      <stop offset="1" stop-color="#636D7C"/>
+    </linearGradient>
+    <linearGradient id="timber" x1="0" y1="0" x2="1" y2="1">
+      <stop stop-color="#4A5365"/>
+      <stop offset="1" stop-color="#2D3443"/>
+    </linearGradient>
+    <filter id="blurBig" x="-120" y="-120" width="1320" height="2160" filterUnits="userSpaceOnUse" color-interpolation-filters="sRGB">
+      <feGaussianBlur stdDeviation="34"/>
+    </filter>
+    <filter id="blurMid" x="-80" y="-80" width="1240" height="2080" filterUnits="userSpaceOnUse" color-interpolation-filters="sRGB">
+      <feGaussianBlur stdDeviation="16"/>
+    </filter>
+    <filter id="shadow" x="620" y="556" width="376" height="568" filterUnits="userSpaceOnUse" color-interpolation-filters="sRGB">
+      <feFlood flood-opacity="0" result="BackgroundImageFix"/>
+      <feColorMatrix in="SourceAlpha" type="matrix" values="0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 127 0" result="hardAlpha"/>
+      <feOffset dy="22"/>
+      <feGaussianBlur stdDeviation="18"/>
+      <feComposite in2="hardAlpha" operator="out"/>
+      <feColorMatrix type="matrix" values="0 0 0 0 0.09 0 0 0 0 0.12 0 0 0 0 0.18 0 0 0 0.2 0"/>
+      <feBlend mode="normal" in2="BackgroundImageFix" result="effect1_dropShadow"/>
+      <feBlend mode="normal" in="SourceGraphic" in2="effect1_dropShadow" result="shape"/>
+    </filter>
+  </defs>
+
+  <rect width="1080" height="1920" fill="url(#sky)"/>
+  <rect width="1080" height="1920" fill="url(#cloudPink)"/>
+  <rect width="1080" height="1920" fill="url(#cloudBlue)"/>
+
+  <g opacity="0.62" filter="url(#blurBig)">
+    <ellipse cx="740" cy="306" rx="182" ry="112" fill="#F4C7D2"/>
+    <ellipse cx="606" cy="416" rx="260" ry="118" fill="#DDE7F5"/>
+  </g>
+
+  <g opacity="0.96">
+    <path d="M0 706C112 644 214 678 296 626C390 566 450 498 548 482C664 462 754 546 856 526C934 510 992 450 1080 484V1026H0V706Z" fill="url(#mountainBack)"/>
+    <path d="M0 848C132 796 212 840 306 786C412 726 500 618 608 602C722 586 800 676 914 650C982 634 1028 610 1080 620V1160H0V848Z" fill="url(#mountainFront)"/>
+    <path d="M186 746C258 672 312 596 344 518C396 582 420 660 416 744C344 756 266 760 186 746Z" fill="#F6F8FB"/>
+    <path d="M698 700C760 638 808 568 840 488C878 556 894 622 890 694C828 708 764 712 698 700Z" fill="#F8FAFD"/>
+  </g>
+
+  <g opacity="0.72" filter="url(#blurMid)">
+    <ellipse cx="550" cy="1018" rx="446" ry="72" fill="#DCE3ED"/>
+    <ellipse cx="858" cy="948" rx="170" ry="34" fill="#D8E0EA"/>
+    <ellipse cx="226" cy="1196" rx="244" ry="44" fill="#E3E9F0"/>
+  </g>
+
+  <path d="M0 1126C168 1060 302 1106 434 1074C560 1042 650 950 760 946C884 942 984 1038 1080 1020V1920H0V1126Z" fill="url(#snow)"/>
+  <path d="M0 1380C148 1342 304 1360 444 1314C578 1270 674 1162 784 1150C900 1138 996 1208 1080 1200V1920H0V1380Z" fill="#FBFCFD" opacity="0.92"/>
+  <path d="M0 1636C168 1608 332 1602 522 1560C674 1526 794 1458 936 1450C992 1448 1042 1456 1080 1468V1920H0V1636Z" fill="#F2F6FB" opacity="0.94"/>
+
+  <g opacity="0.44">
+    <path d="M120 1486C290 1378 466 1348 680 1366" stroke="#D1DAE6" stroke-width="14" stroke-linecap="round"/>
+    <path d="M518 1588C670 1462 846 1416 1004 1448" stroke="#D4DDE8" stroke-width="12" stroke-linecap="round"/>
+    <path d="M100 1770C326 1686 596 1682 844 1736" stroke="#D4DDE9" stroke-width="12" stroke-linecap="round"/>
+  </g>
+
+  <g filter="url(#shadow)">
+    <path d="M704 878L770 682L894 584L982 654L982 1038L678 1038L704 878Z" fill="#F7FAFD"/>
+    <path d="M740 756L906 770L988 820L1040 794L994 712L924 650L792 622L730 666L700 732L740 756Z" fill="url(#roof)"/>
+    <path d="M822 666L980 724L1060 686L1020 648L856 592L782 606L822 666Z" fill="#2E3647"/>
+    <path d="M724 812H968V1060H724V812Z" fill="url(#wall)"/>
+    <path d="M792 826H902V1060H792V826Z" fill="#2B3342"/>
+    <rect x="738" y="842" width="44" height="86" fill="#E5EBF2"/>
+    <rect x="912" y="842" width="40" height="86" fill="#E5EBF2"/>
+    <path d="M774 826V1060" stroke="url(#timber)" stroke-width="10"/>
+    <path d="M922 826V1060" stroke="url(#timber)" stroke-width="10"/>
+    <path d="M724 942H968" stroke="url(#timber)" stroke-width="10"/>
+    <path d="M704 1060H982L1016 1104H670L704 1060Z" fill="#EEF2F7"/>
+    <path d="M938 708C972 776 988 850 986 936" stroke="#D8DEE8" stroke-width="8" stroke-linecap="round"/>
+    <path d="M906 696C932 738 954 792 968 858" stroke="#CDD6E1" stroke-width="6" stroke-linecap="round"/>
+  </g>
+
+  <g>
+    <path d="M-94 404C190 488 384 676 510 942" stroke="url(#branch)" stroke-width="24" stroke-linecap="round"/>
+    <path d="M8 288C170 384 306 514 400 692" stroke="url(#branch)" stroke-width="16" stroke-linecap="round"/>
+    <path d="M112 200C194 284 268 364 328 466" stroke="url(#branch)" stroke-width="10" stroke-linecap="round"/>
+    <path d="M270 340C360 404 432 492 480 600" stroke="url(#branch)" stroke-width="10" stroke-linecap="round"/>
+    <path d="M334 494C404 530 456 590 488 664" stroke="url(#branch)" stroke-width="8" stroke-linecap="round"/>
+  </g>
+
+  <g opacity="0.96">
+    <g transform="translate(36 216) scale(1.24)">
+      <circle cx="0" cy="0" r="20" fill="url(#blossom)"/>
+      <circle cx="26" cy="-10" r="22" fill="url(#blossom)"/>
+      <circle cx="50" cy="8" r="20" fill="url(#blossom)"/>
+      <circle cx="18" cy="24" r="21" fill="url(#blossom)"/>
+      <circle cx="44" cy="34" r="19" fill="url(#blossom)"/>
+      <circle cx="28" cy="12" r="6" fill="url(#petalCenter)"/>
+    </g>
+    <g transform="translate(124 302) scale(1.52)">
+      <circle cx="0" cy="0" r="20" fill="url(#blossom)"/>
+      <circle cx="26" cy="-10" r="22" fill="url(#blossom)"/>
+      <circle cx="50" cy="8" r="20" fill="url(#blossom)"/>
+      <circle cx="18" cy="24" r="21" fill="url(#blossom)"/>
+      <circle cx="44" cy="34" r="19" fill="url(#blossom)"/>
+      <circle cx="28" cy="12" r="6" fill="url(#petalCenter)"/>
+    </g>
+    <g transform="translate(190 430) scale(1.34)">
+      <circle cx="0" cy="0" r="18" fill="url(#blossom)"/>
+      <circle cx="24" cy="-9" r="20" fill="url(#blossom)"/>
+      <circle cx="47" cy="8" r="18" fill="url(#blossom)"/>
+      <circle cx="16" cy="22" r="19" fill="url(#blossom)"/>
+      <circle cx="42" cy="32" r="17" fill="url(#blossom)"/>
+      <circle cx="26" cy="11" r="6" fill="url(#petalCenter)"/>
+    </g>
+    <g transform="translate(272 568) scale(1.12)">
+      <circle cx="0" cy="0" r="18" fill="url(#blossom)"/>
+      <circle cx="24" cy="-9" r="20" fill="url(#blossom)"/>
+      <circle cx="47" cy="8" r="18" fill="url(#blossom)"/>
+      <circle cx="16" cy="22" r="19" fill="url(#blossom)"/>
+      <circle cx="42" cy="32" r="17" fill="url(#blossom)"/>
+      <circle cx="26" cy="11" r="6" fill="url(#petalCenter)"/>
+    </g>
+    <g transform="translate(374 452) scale(0.9)">
+      <circle cx="0" cy="0" r="18" fill="url(#blossom)"/>
+      <circle cx="24" cy="-9" r="20" fill="url(#blossom)"/>
+      <circle cx="47" cy="8" r="18" fill="url(#blossom)"/>
+      <circle cx="16" cy="22" r="19" fill="url(#blossom)"/>
+      <circle cx="42" cy="32" r="17" fill="url(#blossom)"/>
+      <circle cx="26" cy="11" r="6" fill="url(#petalCenter)"/>
+    </g>
+    <g transform="translate(420 628) scale(0.76)">
+      <circle cx="0" cy="0" r="18" fill="url(#blossom)"/>
+      <circle cx="24" cy="-9" r="20" fill="url(#blossom)"/>
+      <circle cx="47" cy="8" r="18" fill="url(#blossom)"/>
+      <circle cx="16" cy="22" r="19" fill="url(#blossom)"/>
+      <circle cx="42" cy="32" r="17" fill="url(#blossom)"/>
+      <circle cx="26" cy="11" r="6" fill="url(#petalCenter)"/>
+    </g>
+    <g transform="translate(494 756) scale(0.58)">
+      <circle cx="0" cy="0" r="18" fill="url(#blossom)"/>
+      <circle cx="24" cy="-9" r="20" fill="url(#blossom)"/>
+      <circle cx="47" cy="8" r="18" fill="url(#blossom)"/>
+      <circle cx="16" cy="22" r="19" fill="url(#blossom)"/>
+      <circle cx="42" cy="32" r="17" fill="url(#blossom)"/>
+      <circle cx="26" cy="11" r="6" fill="url(#petalCenter)"/>
+    </g>
+  </g>
+
+  <g opacity="0.72">
+    <path d="M718 84C760 104 794 138 814 176" stroke="#EFB9CB" stroke-width="7" stroke-linecap="round"/>
+    <path d="M776 64C824 84 862 118 886 156" stroke="#F3C8D4" stroke-width="6" stroke-linecap="round"/>
+    <path d="M836 116C866 130 892 154 908 182" stroke="#EAAEC2" stroke-width="5" stroke-linecap="round"/>
+  </g>
+
+  <g opacity="0.66">
+    <path d="M158 996C170 1004 178 1012 184 1022" stroke="#E29EB6" stroke-width="4" stroke-linecap="round"/>
+    <path d="M278 1186C288 1192 296 1202 300 1210" stroke="#E2A8BC" stroke-width="4" stroke-linecap="round"/>
+    <path d="M462 866C472 874 478 882 482 890" stroke="#D889A4" stroke-width="4" stroke-linecap="round"/>
+    <path d="M908 1694C918 1702 924 1712 930 1722" stroke="#D987A3" stroke-width="4" stroke-linecap="round"/>
+    <path d="M964 1780C972 1788 980 1798 986 1808" stroke="#E5AEC0" stroke-width="4" stroke-linecap="round"/>
+  </g>
+
+  <g opacity="0.84" filter="url(#blurMid)">
+    <ellipse cx="538" cy="1810" rx="236" ry="20" fill="#D8DFE8"/>
+  </g>
+
+  <g opacity="0.92">
+    <text x="540" y="1760" text-anchor="middle" fill="#2A232A" font-size="60" font-family="Baskerville, Times New Roman, serif" letter-spacing="10">Selune</text>
+    <text x="540" y="1816" text-anchor="middle" fill="#7A7380" font-size="22" font-family="Helvetica, Arial, sans-serif" letter-spacing="6">LIGHT READING IN QUIET SEASONS</text>
+  </g>
+</svg>

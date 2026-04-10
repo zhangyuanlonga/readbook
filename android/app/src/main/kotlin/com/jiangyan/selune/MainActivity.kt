@@ -1,4 +1,4 @@
-package com.jiangyan.shuxiangread.next
+package com.jiangyan.selune
 
 import android.content.Intent
 import android.database.Cursor
@@ -17,12 +17,12 @@ import java.util.Locale
 
 class MainActivity : FlutterActivity() {
     private companion object {
-        private const val SOURCE_IMPORT_CHANNEL_NAME = "com.jiangyan.shuxiangread.next/source_import_intent"
+        private const val SOURCE_IMPORT_CHANNEL_NAME = "com.jiangyan.selune/source_import_intent"
         private const val METHOD_GET_INITIAL_IMPORT_PAYLOAD = "getInitialImportPayload"
         private const val METHOD_ON_IMPORT_PAYLOAD = "onImportPayload"
         private const val METHOD_CACHE_EXTERNAL_FILE_FROM_URI = "cacheExternalFileFromUri"
-        private const val READER_VOLUME_KEY_CHANNEL_NAME = "com.jiangyan.shuxiangread.next/reader_volume_keys"
-        private const val READER_VOLUME_KEY_EVENT_CHANNEL_NAME = "com.jiangyan.shuxiangread.next/reader_volume_keys/events"
+        private const val READER_VOLUME_KEY_CHANNEL_NAME = "com.jiangyan.selune/reader_volume_keys"
+        private const val READER_VOLUME_KEY_EVENT_CHANNEL_NAME = "com.jiangyan.selune/reader_volume_keys/events"
         private const val METHOD_SET_INTERCEPT_VOLUME_KEYS = "setInterceptVolumeKeys"
         private const val DEFAULT_PAYLOAD_LABEL = "外部导入"
         private const val PAYLOAD_TYPE_LOCAL_BOOK = "localBook"
