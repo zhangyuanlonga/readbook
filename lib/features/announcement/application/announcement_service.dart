@@ -9,7 +9,8 @@ class AnnouncementService {
   AnnouncementService({ApiClient? client, String? baseUrl})
     : _baseUrl = (baseUrl ?? AppApiConfig.baseUrl).trim(),
       _client =
-          client ?? ApiClient(baseUrl: (baseUrl ?? AppApiConfig.baseUrl).trim());
+          client ??
+          ApiClient(baseUrl: (baseUrl ?? AppApiConfig.baseUrl).trim());
 
   static const Duration _latestCacheTtl = Duration(minutes: 5);
   static Announcement? _latestCache;
@@ -49,9 +50,7 @@ class AnnouncementService {
     }
   }
 
-  Future<Announcement?> fetchLatestAnnouncement({
-    bool useCache = true,
-  }) async {
+  Future<Announcement?> fetchLatestAnnouncement({bool useCache = true}) async {
     _ensureBaseUrl();
     if (useCache) {
       final cached = _latestCache;
@@ -68,15 +67,21 @@ class AnnouncementService {
     }
     Future<Announcement?> task() async {
       try {
-        final data = await _client.request<Map<String, dynamic>>(
+        final data = await _client.request<Object?>(
           method: ApiMethod.get,
           path: '/v1/announcements/latest',
           enableCache: useCache,
           cacheTtl: _latestCacheTtl,
           stage: ErrorStage.unknown,
-          decoder: _decodeMap,
         );
-        final announcement = Announcement.fromJson(data);
+        if (data is! Map) {
+          _latestCache = null;
+          _latestCacheAt = null;
+          return null;
+        }
+        final announcement = Announcement.fromJson(
+          data.map((key, value) => MapEntry(key.toString(), value)),
+        );
         _latestCache = announcement;
         _latestCacheAt = DateTime.now();
         return announcement;

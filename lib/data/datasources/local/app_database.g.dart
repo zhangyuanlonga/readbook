@@ -5610,6 +5610,444 @@ class StoredReadingRecordSessionsCompanion
   }
 }
 
+class $StoredReadingBookStatusesTable extends StoredReadingBookStatuses
+    with TableInfo<$StoredReadingBookStatusesTable, StoredReadingBookStatuse> {
+  @override
+  final GeneratedDatabase attachedDatabase;
+  final String? _alias;
+  $StoredReadingBookStatusesTable(this.attachedDatabase, [this._alias]);
+  static const VerificationMeta _bookIdMeta = const VerificationMeta('bookId');
+  @override
+  late final GeneratedColumn<String> bookId = GeneratedColumn<String>(
+    'book_id',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _sourceIdMeta = const VerificationMeta(
+    'sourceId',
+  );
+  @override
+  late final GeneratedColumn<String> sourceId = GeneratedColumn<String>(
+    'source_id',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _detailUrlMeta = const VerificationMeta(
+    'detailUrl',
+  );
+  @override
+  late final GeneratedColumn<String> detailUrl = GeneratedColumn<String>(
+    'detail_url',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _bookTitleMeta = const VerificationMeta(
+    'bookTitle',
+  );
+  @override
+  late final GeneratedColumn<String> bookTitle = GeneratedColumn<String>(
+    'book_title',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _statusOverrideMeta = const VerificationMeta(
+    'statusOverride',
+  );
+  @override
+  late final GeneratedColumn<String> statusOverride = GeneratedColumn<String>(
+    'status_override',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _updatedAtMeta = const VerificationMeta(
+    'updatedAt',
+  );
+  @override
+  late final GeneratedColumn<DateTime> updatedAt = GeneratedColumn<DateTime>(
+    'updated_at',
+    aliasedName,
+    false,
+    type: DriftSqlType.dateTime,
+    requiredDuringInsert: true,
+  );
+  @override
+  List<GeneratedColumn> get $columns => [
+    bookId,
+    sourceId,
+    detailUrl,
+    bookTitle,
+    statusOverride,
+    updatedAt,
+  ];
+  @override
+  String get aliasedName => _alias ?? actualTableName;
+  @override
+  String get actualTableName => $name;
+  static const String $name = 'reading_book_statuses';
+  @override
+  VerificationContext validateIntegrity(
+    Insertable<StoredReadingBookStatuse> instance, {
+    bool isInserting = false,
+  }) {
+    final context = VerificationContext();
+    final data = instance.toColumns(true);
+    if (data.containsKey('book_id')) {
+      context.handle(
+        _bookIdMeta,
+        bookId.isAcceptableOrUnknown(data['book_id']!, _bookIdMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_bookIdMeta);
+    }
+    if (data.containsKey('source_id')) {
+      context.handle(
+        _sourceIdMeta,
+        sourceId.isAcceptableOrUnknown(data['source_id']!, _sourceIdMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_sourceIdMeta);
+    }
+    if (data.containsKey('detail_url')) {
+      context.handle(
+        _detailUrlMeta,
+        detailUrl.isAcceptableOrUnknown(data['detail_url']!, _detailUrlMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_detailUrlMeta);
+    }
+    if (data.containsKey('book_title')) {
+      context.handle(
+        _bookTitleMeta,
+        bookTitle.isAcceptableOrUnknown(data['book_title']!, _bookTitleMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_bookTitleMeta);
+    }
+    if (data.containsKey('status_override')) {
+      context.handle(
+        _statusOverrideMeta,
+        statusOverride.isAcceptableOrUnknown(
+          data['status_override']!,
+          _statusOverrideMeta,
+        ),
+      );
+    } else if (isInserting) {
+      context.missing(_statusOverrideMeta);
+    }
+    if (data.containsKey('updated_at')) {
+      context.handle(
+        _updatedAtMeta,
+        updatedAt.isAcceptableOrUnknown(data['updated_at']!, _updatedAtMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_updatedAtMeta);
+    }
+    return context;
+  }
+
+  @override
+  Set<GeneratedColumn> get $primaryKey => {bookId};
+  @override
+  StoredReadingBookStatuse map(
+    Map<String, dynamic> data, {
+    String? tablePrefix,
+  }) {
+    final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
+    return StoredReadingBookStatuse(
+      bookId:
+          attachedDatabase.typeMapping.read(
+            DriftSqlType.string,
+            data['${effectivePrefix}book_id'],
+          )!,
+      sourceId:
+          attachedDatabase.typeMapping.read(
+            DriftSqlType.string,
+            data['${effectivePrefix}source_id'],
+          )!,
+      detailUrl:
+          attachedDatabase.typeMapping.read(
+            DriftSqlType.string,
+            data['${effectivePrefix}detail_url'],
+          )!,
+      bookTitle:
+          attachedDatabase.typeMapping.read(
+            DriftSqlType.string,
+            data['${effectivePrefix}book_title'],
+          )!,
+      statusOverride:
+          attachedDatabase.typeMapping.read(
+            DriftSqlType.string,
+            data['${effectivePrefix}status_override'],
+          )!,
+      updatedAt:
+          attachedDatabase.typeMapping.read(
+            DriftSqlType.dateTime,
+            data['${effectivePrefix}updated_at'],
+          )!,
+    );
+  }
+
+  @override
+  $StoredReadingBookStatusesTable createAlias(String alias) {
+    return $StoredReadingBookStatusesTable(attachedDatabase, alias);
+  }
+}
+
+class StoredReadingBookStatuse extends DataClass
+    implements Insertable<StoredReadingBookStatuse> {
+  final String bookId;
+  final String sourceId;
+  final String detailUrl;
+  final String bookTitle;
+  final String statusOverride;
+  final DateTime updatedAt;
+  const StoredReadingBookStatuse({
+    required this.bookId,
+    required this.sourceId,
+    required this.detailUrl,
+    required this.bookTitle,
+    required this.statusOverride,
+    required this.updatedAt,
+  });
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    map['book_id'] = Variable<String>(bookId);
+    map['source_id'] = Variable<String>(sourceId);
+    map['detail_url'] = Variable<String>(detailUrl);
+    map['book_title'] = Variable<String>(bookTitle);
+    map['status_override'] = Variable<String>(statusOverride);
+    map['updated_at'] = Variable<DateTime>(updatedAt);
+    return map;
+  }
+
+  StoredReadingBookStatusesCompanion toCompanion(bool nullToAbsent) {
+    return StoredReadingBookStatusesCompanion(
+      bookId: Value(bookId),
+      sourceId: Value(sourceId),
+      detailUrl: Value(detailUrl),
+      bookTitle: Value(bookTitle),
+      statusOverride: Value(statusOverride),
+      updatedAt: Value(updatedAt),
+    );
+  }
+
+  factory StoredReadingBookStatuse.fromJson(
+    Map<String, dynamic> json, {
+    ValueSerializer? serializer,
+  }) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return StoredReadingBookStatuse(
+      bookId: serializer.fromJson<String>(json['bookId']),
+      sourceId: serializer.fromJson<String>(json['sourceId']),
+      detailUrl: serializer.fromJson<String>(json['detailUrl']),
+      bookTitle: serializer.fromJson<String>(json['bookTitle']),
+      statusOverride: serializer.fromJson<String>(json['statusOverride']),
+      updatedAt: serializer.fromJson<DateTime>(json['updatedAt']),
+    );
+  }
+  @override
+  Map<String, dynamic> toJson({ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return <String, dynamic>{
+      'bookId': serializer.toJson<String>(bookId),
+      'sourceId': serializer.toJson<String>(sourceId),
+      'detailUrl': serializer.toJson<String>(detailUrl),
+      'bookTitle': serializer.toJson<String>(bookTitle),
+      'statusOverride': serializer.toJson<String>(statusOverride),
+      'updatedAt': serializer.toJson<DateTime>(updatedAt),
+    };
+  }
+
+  StoredReadingBookStatuse copyWith({
+    String? bookId,
+    String? sourceId,
+    String? detailUrl,
+    String? bookTitle,
+    String? statusOverride,
+    DateTime? updatedAt,
+  }) => StoredReadingBookStatuse(
+    bookId: bookId ?? this.bookId,
+    sourceId: sourceId ?? this.sourceId,
+    detailUrl: detailUrl ?? this.detailUrl,
+    bookTitle: bookTitle ?? this.bookTitle,
+    statusOverride: statusOverride ?? this.statusOverride,
+    updatedAt: updatedAt ?? this.updatedAt,
+  );
+  StoredReadingBookStatuse copyWithCompanion(
+    StoredReadingBookStatusesCompanion data,
+  ) {
+    return StoredReadingBookStatuse(
+      bookId: data.bookId.present ? data.bookId.value : this.bookId,
+      sourceId: data.sourceId.present ? data.sourceId.value : this.sourceId,
+      detailUrl: data.detailUrl.present ? data.detailUrl.value : this.detailUrl,
+      bookTitle: data.bookTitle.present ? data.bookTitle.value : this.bookTitle,
+      statusOverride:
+          data.statusOverride.present
+              ? data.statusOverride.value
+              : this.statusOverride,
+      updatedAt: data.updatedAt.present ? data.updatedAt.value : this.updatedAt,
+    );
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('StoredReadingBookStatuse(')
+          ..write('bookId: $bookId, ')
+          ..write('sourceId: $sourceId, ')
+          ..write('detailUrl: $detailUrl, ')
+          ..write('bookTitle: $bookTitle, ')
+          ..write('statusOverride: $statusOverride, ')
+          ..write('updatedAt: $updatedAt')
+          ..write(')'))
+        .toString();
+  }
+
+  @override
+  int get hashCode => Object.hash(
+    bookId,
+    sourceId,
+    detailUrl,
+    bookTitle,
+    statusOverride,
+    updatedAt,
+  );
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is StoredReadingBookStatuse &&
+          other.bookId == this.bookId &&
+          other.sourceId == this.sourceId &&
+          other.detailUrl == this.detailUrl &&
+          other.bookTitle == this.bookTitle &&
+          other.statusOverride == this.statusOverride &&
+          other.updatedAt == this.updatedAt);
+}
+
+class StoredReadingBookStatusesCompanion
+    extends UpdateCompanion<StoredReadingBookStatuse> {
+  final Value<String> bookId;
+  final Value<String> sourceId;
+  final Value<String> detailUrl;
+  final Value<String> bookTitle;
+  final Value<String> statusOverride;
+  final Value<DateTime> updatedAt;
+  final Value<int> rowid;
+  const StoredReadingBookStatusesCompanion({
+    this.bookId = const Value.absent(),
+    this.sourceId = const Value.absent(),
+    this.detailUrl = const Value.absent(),
+    this.bookTitle = const Value.absent(),
+    this.statusOverride = const Value.absent(),
+    this.updatedAt = const Value.absent(),
+    this.rowid = const Value.absent(),
+  });
+  StoredReadingBookStatusesCompanion.insert({
+    required String bookId,
+    required String sourceId,
+    required String detailUrl,
+    required String bookTitle,
+    required String statusOverride,
+    required DateTime updatedAt,
+    this.rowid = const Value.absent(),
+  }) : bookId = Value(bookId),
+       sourceId = Value(sourceId),
+       detailUrl = Value(detailUrl),
+       bookTitle = Value(bookTitle),
+       statusOverride = Value(statusOverride),
+       updatedAt = Value(updatedAt);
+  static Insertable<StoredReadingBookStatuse> custom({
+    Expression<String>? bookId,
+    Expression<String>? sourceId,
+    Expression<String>? detailUrl,
+    Expression<String>? bookTitle,
+    Expression<String>? statusOverride,
+    Expression<DateTime>? updatedAt,
+    Expression<int>? rowid,
+  }) {
+    return RawValuesInsertable({
+      if (bookId != null) 'book_id': bookId,
+      if (sourceId != null) 'source_id': sourceId,
+      if (detailUrl != null) 'detail_url': detailUrl,
+      if (bookTitle != null) 'book_title': bookTitle,
+      if (statusOverride != null) 'status_override': statusOverride,
+      if (updatedAt != null) 'updated_at': updatedAt,
+      if (rowid != null) 'rowid': rowid,
+    });
+  }
+
+  StoredReadingBookStatusesCompanion copyWith({
+    Value<String>? bookId,
+    Value<String>? sourceId,
+    Value<String>? detailUrl,
+    Value<String>? bookTitle,
+    Value<String>? statusOverride,
+    Value<DateTime>? updatedAt,
+    Value<int>? rowid,
+  }) {
+    return StoredReadingBookStatusesCompanion(
+      bookId: bookId ?? this.bookId,
+      sourceId: sourceId ?? this.sourceId,
+      detailUrl: detailUrl ?? this.detailUrl,
+      bookTitle: bookTitle ?? this.bookTitle,
+      statusOverride: statusOverride ?? this.statusOverride,
+      updatedAt: updatedAt ?? this.updatedAt,
+      rowid: rowid ?? this.rowid,
+    );
+  }
+
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    if (bookId.present) {
+      map['book_id'] = Variable<String>(bookId.value);
+    }
+    if (sourceId.present) {
+      map['source_id'] = Variable<String>(sourceId.value);
+    }
+    if (detailUrl.present) {
+      map['detail_url'] = Variable<String>(detailUrl.value);
+    }
+    if (bookTitle.present) {
+      map['book_title'] = Variable<String>(bookTitle.value);
+    }
+    if (statusOverride.present) {
+      map['status_override'] = Variable<String>(statusOverride.value);
+    }
+    if (updatedAt.present) {
+      map['updated_at'] = Variable<DateTime>(updatedAt.value);
+    }
+    if (rowid.present) {
+      map['rowid'] = Variable<int>(rowid.value);
+    }
+    return map;
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('StoredReadingBookStatusesCompanion(')
+          ..write('bookId: $bookId, ')
+          ..write('sourceId: $sourceId, ')
+          ..write('detailUrl: $detailUrl, ')
+          ..write('bookTitle: $bookTitle, ')
+          ..write('statusOverride: $statusOverride, ')
+          ..write('updatedAt: $updatedAt, ')
+          ..write('rowid: $rowid')
+          ..write(')'))
+        .toString();
+  }
+}
+
 class $SearchSourceHitsTable extends SearchSourceHits
     with TableInfo<$SearchSourceHitsTable, SearchSourceHit> {
   @override
@@ -7138,6 +7576,8 @@ abstract class _$AppDatabase extends GeneratedDatabase {
       $StoredReadingRecordDaysTable(this);
   late final $StoredReadingRecordSessionsTable storedReadingRecordSessions =
       $StoredReadingRecordSessionsTable(this);
+  late final $StoredReadingBookStatusesTable storedReadingBookStatuses =
+      $StoredReadingBookStatusesTable(this);
   late final $SearchSourceHitsTable searchSourceHits = $SearchSourceHitsTable(
     this,
   );
@@ -7155,6 +7595,7 @@ abstract class _$AppDatabase extends GeneratedDatabase {
     storedReadingRecords,
     storedReadingRecordDays,
     storedReadingRecordSessions,
+    storedReadingBookStatuses,
     searchSourceHits,
     storedScriptSources,
   ];
@@ -9868,6 +10309,253 @@ typedef $$StoredReadingRecordSessionsTableProcessedTableManager =
       StoredReadingRecordSession,
       PrefetchHooks Function()
     >;
+typedef $$StoredReadingBookStatusesTableCreateCompanionBuilder =
+    StoredReadingBookStatusesCompanion Function({
+      required String bookId,
+      required String sourceId,
+      required String detailUrl,
+      required String bookTitle,
+      required String statusOverride,
+      required DateTime updatedAt,
+      Value<int> rowid,
+    });
+typedef $$StoredReadingBookStatusesTableUpdateCompanionBuilder =
+    StoredReadingBookStatusesCompanion Function({
+      Value<String> bookId,
+      Value<String> sourceId,
+      Value<String> detailUrl,
+      Value<String> bookTitle,
+      Value<String> statusOverride,
+      Value<DateTime> updatedAt,
+      Value<int> rowid,
+    });
+
+class $$StoredReadingBookStatusesTableFilterComposer
+    extends Composer<_$AppDatabase, $StoredReadingBookStatusesTable> {
+  $$StoredReadingBookStatusesTableFilterComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnFilters<String> get bookId => $composableBuilder(
+    column: $table.bookId,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get sourceId => $composableBuilder(
+    column: $table.sourceId,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get detailUrl => $composableBuilder(
+    column: $table.detailUrl,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get bookTitle => $composableBuilder(
+    column: $table.bookTitle,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get statusOverride => $composableBuilder(
+    column: $table.statusOverride,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<DateTime> get updatedAt => $composableBuilder(
+    column: $table.updatedAt,
+    builder: (column) => ColumnFilters(column),
+  );
+}
+
+class $$StoredReadingBookStatusesTableOrderingComposer
+    extends Composer<_$AppDatabase, $StoredReadingBookStatusesTable> {
+  $$StoredReadingBookStatusesTableOrderingComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnOrderings<String> get bookId => $composableBuilder(
+    column: $table.bookId,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get sourceId => $composableBuilder(
+    column: $table.sourceId,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get detailUrl => $composableBuilder(
+    column: $table.detailUrl,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get bookTitle => $composableBuilder(
+    column: $table.bookTitle,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get statusOverride => $composableBuilder(
+    column: $table.statusOverride,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<DateTime> get updatedAt => $composableBuilder(
+    column: $table.updatedAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+}
+
+class $$StoredReadingBookStatusesTableAnnotationComposer
+    extends Composer<_$AppDatabase, $StoredReadingBookStatusesTable> {
+  $$StoredReadingBookStatusesTableAnnotationComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  GeneratedColumn<String> get bookId =>
+      $composableBuilder(column: $table.bookId, builder: (column) => column);
+
+  GeneratedColumn<String> get sourceId =>
+      $composableBuilder(column: $table.sourceId, builder: (column) => column);
+
+  GeneratedColumn<String> get detailUrl =>
+      $composableBuilder(column: $table.detailUrl, builder: (column) => column);
+
+  GeneratedColumn<String> get bookTitle =>
+      $composableBuilder(column: $table.bookTitle, builder: (column) => column);
+
+  GeneratedColumn<String> get statusOverride => $composableBuilder(
+    column: $table.statusOverride,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<DateTime> get updatedAt =>
+      $composableBuilder(column: $table.updatedAt, builder: (column) => column);
+}
+
+class $$StoredReadingBookStatusesTableTableManager
+    extends
+        RootTableManager<
+          _$AppDatabase,
+          $StoredReadingBookStatusesTable,
+          StoredReadingBookStatuse,
+          $$StoredReadingBookStatusesTableFilterComposer,
+          $$StoredReadingBookStatusesTableOrderingComposer,
+          $$StoredReadingBookStatusesTableAnnotationComposer,
+          $$StoredReadingBookStatusesTableCreateCompanionBuilder,
+          $$StoredReadingBookStatusesTableUpdateCompanionBuilder,
+          (
+            StoredReadingBookStatuse,
+            BaseReferences<
+              _$AppDatabase,
+              $StoredReadingBookStatusesTable,
+              StoredReadingBookStatuse
+            >,
+          ),
+          StoredReadingBookStatuse,
+          PrefetchHooks Function()
+        > {
+  $$StoredReadingBookStatusesTableTableManager(
+    _$AppDatabase db,
+    $StoredReadingBookStatusesTable table,
+  ) : super(
+        TableManagerState(
+          db: db,
+          table: table,
+          createFilteringComposer:
+              () => $$StoredReadingBookStatusesTableFilterComposer(
+                $db: db,
+                $table: table,
+              ),
+          createOrderingComposer:
+              () => $$StoredReadingBookStatusesTableOrderingComposer(
+                $db: db,
+                $table: table,
+              ),
+          createComputedFieldComposer:
+              () => $$StoredReadingBookStatusesTableAnnotationComposer(
+                $db: db,
+                $table: table,
+              ),
+          updateCompanionCallback:
+              ({
+                Value<String> bookId = const Value.absent(),
+                Value<String> sourceId = const Value.absent(),
+                Value<String> detailUrl = const Value.absent(),
+                Value<String> bookTitle = const Value.absent(),
+                Value<String> statusOverride = const Value.absent(),
+                Value<DateTime> updatedAt = const Value.absent(),
+                Value<int> rowid = const Value.absent(),
+              }) => StoredReadingBookStatusesCompanion(
+                bookId: bookId,
+                sourceId: sourceId,
+                detailUrl: detailUrl,
+                bookTitle: bookTitle,
+                statusOverride: statusOverride,
+                updatedAt: updatedAt,
+                rowid: rowid,
+              ),
+          createCompanionCallback:
+              ({
+                required String bookId,
+                required String sourceId,
+                required String detailUrl,
+                required String bookTitle,
+                required String statusOverride,
+                required DateTime updatedAt,
+                Value<int> rowid = const Value.absent(),
+              }) => StoredReadingBookStatusesCompanion.insert(
+                bookId: bookId,
+                sourceId: sourceId,
+                detailUrl: detailUrl,
+                bookTitle: bookTitle,
+                statusOverride: statusOverride,
+                updatedAt: updatedAt,
+                rowid: rowid,
+              ),
+          withReferenceMapper:
+              (p0) =>
+                  p0
+                      .map(
+                        (e) => (
+                          e.readTable(table),
+                          BaseReferences(db, table, e),
+                        ),
+                      )
+                      .toList(),
+          prefetchHooksCallback: null,
+        ),
+      );
+}
+
+typedef $$StoredReadingBookStatusesTableProcessedTableManager =
+    ProcessedTableManager<
+      _$AppDatabase,
+      $StoredReadingBookStatusesTable,
+      StoredReadingBookStatuse,
+      $$StoredReadingBookStatusesTableFilterComposer,
+      $$StoredReadingBookStatusesTableOrderingComposer,
+      $$StoredReadingBookStatusesTableAnnotationComposer,
+      $$StoredReadingBookStatusesTableCreateCompanionBuilder,
+      $$StoredReadingBookStatusesTableUpdateCompanionBuilder,
+      (
+        StoredReadingBookStatuse,
+        BaseReferences<
+          _$AppDatabase,
+          $StoredReadingBookStatusesTable,
+          StoredReadingBookStatuse
+        >,
+      ),
+      StoredReadingBookStatuse,
+      PrefetchHooks Function()
+    >;
 typedef $$SearchSourceHitsTableCreateCompanionBuilder =
     SearchSourceHitsCompanion Function({
       required String titleNorm,
@@ -10643,6 +11331,11 @@ class $AppDatabaseManager {
       $$StoredReadingRecordSessionsTableTableManager(
         _db,
         _db.storedReadingRecordSessions,
+      );
+  $$StoredReadingBookStatusesTableTableManager get storedReadingBookStatuses =>
+      $$StoredReadingBookStatusesTableTableManager(
+        _db,
+        _db.storedReadingBookStatuses,
       );
   $$SearchSourceHitsTableTableManager get searchSourceHits =>
       $$SearchSourceHitsTableTableManager(_db, _db.searchSourceHits);

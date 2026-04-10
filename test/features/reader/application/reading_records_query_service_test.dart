@@ -1,6 +1,7 @@
 import 'package:shuxiang_reading_next/domain/entities/reading_record.dart';
 import 'package:shuxiang_reading_next/domain/entities/reading_record_day.dart';
 import 'package:shuxiang_reading_next/domain/entities/reading_record_session.dart';
+import 'package:shuxiang_reading_next/domain/entities/reading_book_status.dart';
 import 'package:shuxiang_reading_next/features/reader/application/reading_records_query_service.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -69,17 +70,21 @@ void main() {
         latestRecords: latestRecords,
         dailyRecords: dailyRecords,
         sessions: sessions,
-        selectedDateKey: '2026-04-04',
+        period: ReadingRecordsPeriod.day,
+        anchor: DateTime.parse('2026-04-04T00:00:00.000Z'),
         searchKeyword: '',
         viewLabel: '最近阅读',
+        resolvedStatusesByBookId: const <String, ReadingBookResolvedStatus>{},
       );
 
       expect(view.filteredLatestRecords, hasLength(1));
       expect(view.filteredLatestRecords.first.bookId, 'book_1');
       expect(view.filteredDailyRecords, hasLength(1));
       expect(view.filteredSessions, hasLength(1));
-      expect(view.summary.title, '2026-04-04 阅读概览');
+      expect(view.summary.title, '2026-04-04 阅读总览');
       expect(view.summary.totalBooks, 1);
+      expect(view.summary.readingBookCount, 1);
+      expect(view.summary.completedBookCount, 0);
       expect(
         view.summary.totalReadMillis,
         const Duration(minutes: 30).inMilliseconds,

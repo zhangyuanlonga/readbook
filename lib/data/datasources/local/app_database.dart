@@ -10,6 +10,7 @@ import '../../../domain/entities/bookmark.dart';
 import '../../../domain/entities/local_book.dart';
 import '../../../domain/entities/local_chapter.dart';
 import '../../../domain/entities/reader_document.dart';
+import '../../../domain/entities/reading_book_status.dart';
 import '../../../domain/entities/reading_record.dart';
 import '../../../domain/entities/reading_record_day.dart';
 import '../../../domain/entities/reading_record_session.dart';
@@ -175,6 +176,21 @@ class StoredReadingRecordSessions extends Table {
   String get tableName => 'reading_record_sessions';
 }
 
+class StoredReadingBookStatuses extends Table {
+  TextColumn get bookId => text()();
+  TextColumn get sourceId => text()();
+  TextColumn get detailUrl => text()();
+  TextColumn get bookTitle => text()();
+  TextColumn get statusOverride => text()();
+  DateTimeColumn get updatedAt => dateTime()();
+
+  @override
+  String get tableName => 'reading_book_statuses';
+
+  @override
+  Set<Column<Object>> get primaryKey => {bookId};
+}
+
 class SearchSourceHits extends Table {
   TextColumn get titleNorm => text()();
   TextColumn get authorNorm => text()();
@@ -265,6 +281,7 @@ class SearchSourceHitUpsert {
     StoredReadingRecords,
     StoredReadingRecordDays,
     StoredReadingRecordSessions,
+    StoredReadingBookStatuses,
     SearchSourceHits,
     StoredScriptSources,
   ],
@@ -275,7 +292,7 @@ class AppDatabase extends _$AppDatabase {
   static final AppDatabase instance = AppDatabase();
 
   @override
-  int get schemaVersion => 20;
+  int get schemaVersion => 21;
 
   @override
   MigrationStrategy get migration {
@@ -417,6 +434,9 @@ class AppDatabase extends _$AppDatabase {
                   storedScriptSources.checkKeyword,
                 ),
           );
+        }
+        if (from < 21) {
+          await migrator.createTable(storedReadingBookStatuses);
         }
         if (from < 13) {
           await _addColumnIfMissing(
@@ -895,13 +915,11 @@ class AppDatabase extends _$AppDatabase {
     }
 
     final rows =
-        await (select(chapterCaches)
-              ..where(
-                (table) =>
-                    table.bookId.isIn(requestBookIds) &
-                    table.sourceId.isIn(requestSourceIds),
-              ))
-            .get();
+        await (select(chapterCaches)..where(
+          (table) =>
+              table.bookId.isIn(requestBookIds) &
+              table.sourceId.isIn(requestSourceIds),
+        )).get();
 
     final countsByPairKey = <String, int>{};
     for (final row in rows) {
@@ -1221,6 +1239,14 @@ class AppDatabase extends _$AppDatabase {
         await (select(storedLocalBooks)
           ..orderBy([(table) => OrderingTerm.desc(table.updatedAt)])).get();
     return rows.map(_mapRowToLocalBook).toList(growable: false);
+  }
+
+  Stream<List<LocalBook>> watchAllLocalBooks() {
+    final query = select(storedLocalBooks)
+      ..orderBy([(table) => OrderingTerm.desc(table.updatedAt)]);
+    return query.watch().map(
+      (rows) => rows.map(_mapRowToLocalBook).toList(growable: false),
+    );
   }
 
   Future<void> updateLocalBookIndexState({
@@ -1886,6 +1912,51 @@ class AppDatabase extends _$AppDatabase {
     );
   }
 
+  Stream<List<ReadingBookStatusEntry>> watchReadingBookStatuses() {
+    final query = select(storedReadingBookStatuses)
+      ..orderBy([(table) => OrderingTerm.desc(table.updatedAt)]);
+    return query.watch().map(
+      (rows) => rows
+          .map<ReadingBookStatusEntry>(_mapRowToReadingBookStatus)
+          .toList(growable: false),
+    );
+  }
+
+  Future<void> upsertReadingBookStatus(ReadingBookStatusEntry status) async {
+    final normalizedBookId = status.bookId.trim();
+    final normalizedSourceId = status.sourceId.trim();
+    final normalizedDetailUrl = status.detailUrl.trim();
+    final normalizedTitle = status.bookTitle.trim();
+    if (normalizedBookId.isEmpty ||
+        normalizedSourceId.isEmpty ||
+        normalizedDetailUrl.isEmpty ||
+        normalizedTitle.isEmpty) {
+      return;
+    }
+
+    await into(storedReadingBookStatuses).insert(
+      StoredReadingBookStatusesCompanion(
+        bookId: Value(normalizedBookId),
+        sourceId: Value(normalizedSourceId),
+        detailUrl: Value(normalizedDetailUrl),
+        bookTitle: Value(normalizedTitle),
+        statusOverride: Value(status.override.name),
+        updatedAt: Value(status.updatedAt),
+      ),
+      mode: InsertMode.insertOrReplace,
+    );
+  }
+
+  Future<void> deleteReadingBookStatus(String bookId) async {
+    final normalizedBookId = bookId.trim();
+    if (normalizedBookId.isEmpty) {
+      return;
+    }
+
+    await (delete(storedReadingBookStatuses)
+      ..where((table) => table.bookId.equals(normalizedBookId))).go();
+  }
+
   Stream<int> watchTotalReadingMillis() {
     final sumExpression = storedReadingRecords.totalReadMillis.sum();
     final query = selectOnly(storedReadingRecords)..addColumns([sumExpression]);
@@ -2064,6 +2135,22 @@ class AppDatabase extends _$AppDatabase {
       readChars: row.readChars,
       startPositionRatio: row.startPositionRatio,
       endPositionRatio: row.endPositionRatio,
+    );
+  }
+
+  ReadingBookStatusEntry _mapRowToReadingBookStatus(
+    StoredReadingBookStatuse row,
+  ) {
+    return ReadingBookStatusEntry(
+      bookId: row.bookId,
+      sourceId: row.sourceId,
+      detailUrl: row.detailUrl,
+      bookTitle: row.bookTitle,
+      override: ReadingBookStatusOverride.values.firstWhere(
+        (item) => item.name == row.statusOverride,
+        orElse: () => ReadingBookStatusOverride.reading,
+      ),
+      updatedAt: row.updatedAt,
     );
   }
 
