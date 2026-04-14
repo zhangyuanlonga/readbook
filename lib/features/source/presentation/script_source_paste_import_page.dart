@@ -4,13 +4,12 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../../core/auth/auth_session_store.dart';
+import '../../../core/mobile_features/mobile_feature_service.dart';
 import '../application/source_runtime_facade.dart';
 
 class ScriptSourcePasteImportPage extends StatefulWidget {
-  const ScriptSourcePasteImportPage({
-    super.key,
-    this.sourceRuntimeFacade,
-  });
+  const ScriptSourcePasteImportPage({super.key, this.sourceRuntimeFacade});
 
   final SourceRuntimeFacade? sourceRuntimeFacade;
 
@@ -23,6 +22,8 @@ class _ScriptSourcePasteImportPageState
     extends State<ScriptSourcePasteImportPage> {
   late final SourceRuntimeFacade _sourceRuntimeFacade;
   late final TextEditingController _controller;
+  final AuthSessionStore _authSessionStore = AuthSessionStore();
+  final MobileFeatureService _mobileFeatureService = MobileFeatureService();
 
   bool _isImporting = false;
 
@@ -68,6 +69,9 @@ class _ScriptSourcePasteImportPageState
     });
 
     try {
+      if (!await _ensureCanImport()) {
+        return;
+      }
       final saved = await _sourceRuntimeFacade.saveScriptSource(
         sourceCode: sourceCode,
       );
@@ -87,6 +91,40 @@ class _ScriptSourcePasteImportPageState
         });
       }
     }
+  }
+
+  Future<bool> _ensureCanImport() async {
+    final session = await _authSessionStore.getSession();
+    if (session == null) {
+      _showMessage('登录后可导入书源。');
+      return false;
+    }
+
+    try {
+      final modules = await _mobileFeatureService.fetchMyModules();
+      var quotaLimit = 10;
+      for (final item in modules) {
+        if (item.code == 'source_import') {
+          quotaLimit = item.quotaLimit;
+          break;
+        }
+      }
+      if (quotaLimit >= 0) {
+        final currentSources = await _sourceRuntimeFacade.listScriptSources();
+        if (currentSources.length >= quotaLimit) {
+          _showMessage('普通用户最多导入 $quotaLimit 个书源，开通会员可不限量。');
+          return false;
+        }
+      }
+    } catch (_) {
+      final currentSources = await _sourceRuntimeFacade.listScriptSources();
+      if (currentSources.length >= 10) {
+        _showMessage('普通用户最多导入 10 个书源，开通会员可不限量。');
+        return false;
+      }
+    }
+
+    return true;
   }
 
   void _showMessage(String message) {

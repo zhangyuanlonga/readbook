@@ -117,6 +117,10 @@ void main() {
       expect(await service.loadGridShowAuthor(), isTrue);
       expect(await service.loadGridShowLatestChapter(), isTrue);
       expect(await service.loadGridShowProgressBar(), isTrue);
+      expect(await service.loadListShowTitle(), isTrue);
+      expect(await service.loadListShowAuthor(), isTrue);
+      expect(await service.loadListShowLatestChapter(), isTrue);
+      expect(await service.loadListShowProgressBar(), isTrue);
 
       await service.saveGridAdaptiveColumns(false);
       await service.saveGridColumnCount(5);
@@ -126,6 +130,10 @@ void main() {
       await service.saveGridShowAuthor(false);
       await service.saveGridShowLatestChapter(false);
       await service.saveGridShowProgressBar(false);
+      await service.saveListShowTitle(false);
+      await service.saveListShowAuthor(false);
+      await service.saveListShowLatestChapter(false);
+      await service.saveListShowProgressBar(false);
 
       expect(await service.loadGridAdaptiveColumns(), isFalse);
       expect(await service.loadGridColumnCount(), 5);
@@ -135,6 +143,10 @@ void main() {
       expect(await service.loadGridShowAuthor(), isFalse);
       expect(await service.loadGridShowLatestChapter(), isFalse);
       expect(await service.loadGridShowProgressBar(), isFalse);
+      expect(await service.loadListShowTitle(), isFalse);
+      expect(await service.loadListShowAuthor(), isFalse);
+      expect(await service.loadListShowLatestChapter(), isFalse);
+      expect(await service.loadListShowProgressBar(), isFalse);
     });
 
     test('renameTag renames across books and deduplicates tags', () async {

@@ -3,12 +3,17 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../../../app/layout/app_layout.dart';
 import '../../../app/layout/app_spacing.dart';
 import '../../../app/navigation/mobile_bottom_navigation_inset.dart';
 import '../../../app/navigation/app_navigation_style_provider.dart';
+import '../../../app/shell_navigation_provider.dart';
+import '../../../app/theme/app_icon_provider.dart';
+import '../../../app/theme/app_theme_palette.dart';
+import '../../../app/theme/app_theme_provider.dart';
 import '../../../app/theme/app_theme_seed_provider.dart';
 import '../../../core/app_update/app_update_dialog.dart';
 import '../../../core/app_update/app_update_service.dart';
@@ -24,14 +29,11 @@ class MinePage extends ConsumerStatefulWidget {
   ConsumerState<MinePage> createState() => _MinePageState();
 }
 
+enum _MineLayoutMode { grid, list }
+
 class _MinePageState extends ConsumerState<MinePage> {
+  static const String _layoutModeKey = 'mine.page.layoutMode';
   String? _highlightedTileId;
-  static const EdgeInsets _profileCardPadding = EdgeInsets.fromLTRB(
-    14,
-    12,
-    14,
-    12,
-  );
   static const EdgeInsets _actionSectionPadding = EdgeInsets.fromLTRB(
     14,
     8,
@@ -52,11 +54,13 @@ class _MinePageState extends ConsumerState<MinePage> {
   bool _isLoadingSession = true;
   bool _isCheckingUpdate = false;
   bool _showSourceEntry = false;
+  _MineLayoutMode _layoutMode = _MineLayoutMode.list;
 
   @override
   void initState() {
     super.initState();
     _authEventSub = AuthEventBus.instance.stream.listen(_handleAuthEvent);
+    _restoreLayoutMode();
     _loadSession();
   }
 
@@ -70,9 +74,16 @@ class _MinePageState extends ConsumerState<MinePage> {
   Widget build(BuildContext context) {
     final horizontal = AppSpacing.pageHorizontal(context);
     final seedColor = ref.watch(appSeedColorProvider);
+    final appIconVariant = ref.watch(appIconVariantProvider);
+    final appIconSupported = ref.watch(appIconServiceProvider).isSupported;
+    final themeMode = ref.watch(appThemeModeProvider);
+    final navigationPreference = ref.watch(
+      appNavigationStylePreferenceProvider,
+    );
+    final navigationState = ref.watch(appShellNavigationProvider);
     final platform = Theme.of(context).platform;
     final effectiveNavigationStyle = resolveAppNavigationStyle(
-      ref.watch(appNavigationStylePreferenceProvider),
+      navigationPreference,
       isWeb: false,
       platform: platform,
     );
@@ -84,9 +95,24 @@ class _MinePageState extends ConsumerState<MinePage> {
       style: effectiveNavigationStyle,
       showNavigationLabels: showNavigationLabels,
     );
+    final toggleTooltip =
+        _layoutMode == _MineLayoutMode.grid ? '切换为列表' : '切换为网格';
+    final toggleIcon =
+        _layoutMode == _MineLayoutMode.grid
+            ? Icons.view_list_rounded
+            : Icons.grid_view_rounded;
 
     return Scaffold(
-      appBar: AppBar(title: const Text('我的')),
+      appBar: AppBar(
+        title: const Text('我的'),
+        actions: [
+          IconButton(
+            tooltip: toggleTooltip,
+            onPressed: _toggleLayoutMode,
+            icon: Icon(toggleIcon),
+          ),
+        ],
+      ),
       body: LayoutBuilder(
         builder: (context, _) {
           final maxWidth = AppLayout.pageContentMaxWidth(
@@ -111,24 +137,80 @@ class _MinePageState extends ConsumerState<MinePage> {
                   children: [
                     _buildPageEntrance(
                       index: 0,
-                      child: _buildProfileCard(
-                        context,
-                        subtitle: _buildProfileSubtitle(),
-                      ),
+                      child: _buildProfileCard(context),
                     ),
                     const SizedBox(height: 8),
                     _buildPageEntrance(
                       index: 1,
                       child: _buildActionSection(
                         context,
-                        title: '常用',
+                        title: '外观',
                         actions: [
                           _MineActionItem(
-                            icon: Icons.palette_outlined,
-                            label: '外观',
-                            colorDot: seedColor,
-                            onTap: () => context.push('/appearance'),
+                            icon: Icons.light_mode_outlined,
+                            label: '主题模式',
+                            subtitle: _themeModeLabel(themeMode),
+                            onTap:
+                                () => context.push(
+                                  '/appearance?section=theme-mode',
+                                ),
                           ),
+                          if (appIconSupported)
+                            _MineActionItem(
+                              icon: Icons.apps_outage_outlined,
+                              label: '应用图标',
+                              subtitle: appIconVariant.label,
+                              onTap:
+                                  () => context.push(
+                                    '/appearance?section=app-icon',
+                                  ),
+                            ),
+                          _MineActionItem(
+                            icon: Icons.palette_outlined,
+                            label: '主题颜色',
+                            subtitle: appThemeSeedLabel(seedColor),
+                            colorDot: seedColor,
+                            onTap:
+                                () => context.push(
+                                  '/appearance?section=theme-color',
+                                ),
+                          ),
+                          _MineActionItem(
+                            icon: Icons.dock_outlined,
+                            label: '底栏配置',
+                            subtitle:
+                                '${appNavigationStylePreferenceLabel(navigationPreference)} · ${navigationState.visibleTabCount} 项',
+                            onTap:
+                                () => context.push(
+                                  '/appearance?section=bottom-bar',
+                                ),
+                          ),
+                          _MineActionItem(
+                            icon: Icons.photo_library_outlined,
+                            label: '封面图集',
+                            onTap:
+                                () => context.push(
+                                  '/appearance?section=cover-gallery',
+                                ),
+                          ),
+                          _MineActionItem(
+                            icon: Icons.wallpaper_outlined,
+                            label: '背景图集',
+                            onTap:
+                                () => context.push(
+                                  '/appearance?section=background-gallery',
+                                ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    _buildPageEntrance(
+                      index: 2,
+                      child: _buildActionSection(
+                        context,
+                        title: '常用',
+                        actions: [
                           _MineActionItem(
                             icon: Icons.tune_rounded,
                             label: '系统',
@@ -165,7 +247,7 @@ class _MinePageState extends ConsumerState<MinePage> {
                     ),
                     const SizedBox(height: 4),
                     _buildPageEntrance(
-                      index: 2,
+                      index: 3,
                       child: _buildActionSection(
                         context,
                         title: '其他',
@@ -203,16 +285,46 @@ class _MinePageState extends ConsumerState<MinePage> {
     );
   }
 
-  Widget _buildProfileCard(BuildContext context, {required String subtitle}) {
-    final colorScheme = Theme.of(context).colorScheme;
-    final avatarFill = Color.alphaBlend(
-      colorScheme.onSurface.withValues(alpha: 0.045),
-      colorScheme.surface,
+  Future<void> _restoreLayoutMode() async {
+    final prefs = await SharedPreferences.getInstance();
+    final raw = prefs.getString(_layoutModeKey);
+    final mode = raw == 'grid' ? _MineLayoutMode.grid : _MineLayoutMode.list;
+    if (!mounted || _layoutMode == mode) {
+      return;
+    }
+    setState(() {
+      _layoutMode = mode;
+    });
+  }
+
+  Future<void> _toggleLayoutMode() async {
+    final next =
+        _layoutMode == _MineLayoutMode.grid
+            ? _MineLayoutMode.list
+            : _MineLayoutMode.grid;
+    setState(() {
+      _layoutMode = next;
+    });
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString(
+      _layoutModeKey,
+      next == _MineLayoutMode.list ? 'list' : 'grid',
     );
+  }
+
+  Widget _buildProfileCard(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
     final displayName =
         _userId == null
             ? '登录 / 注册'
             : ((_username?.trim().isNotEmpty ?? false) ? _username! : _userId!);
+    final signature = _buildProfileSignature();
+    final statusLabel = _buildProfileStatusLabel();
+    final avatarLabel = _buildProfileAvatarLabel(displayName);
+    final avatarFill = Color.alphaBlend(
+      colorScheme.primary.withValues(alpha: 0.12),
+      colorScheme.surface,
+    );
 
     return Card(
       child: InkWell(
@@ -222,42 +334,90 @@ class _MinePageState extends ConsumerState<MinePage> {
           context.push(target).then((_) => _loadSession());
         },
         child: Padding(
-          padding: _profileCardPadding,
+          padding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
           child: Row(
+            crossAxisAlignment: CrossAxisAlignment.center,
             children: [
-              CircleAvatar(
-                radius: 20,
-                backgroundColor: avatarFill,
-                child: Icon(
-                  Icons.auto_stories_rounded,
-                  color: colorScheme.onSurface,
-                  size: 20,
+              Container(
+                width: 52,
+                height: 52,
+                decoration: BoxDecoration(
+                  color: avatarFill,
+                  shape: BoxShape.circle,
                 ),
+                alignment: Alignment.center,
+                child:
+                    avatarLabel == null
+                        ? Icon(
+                          Icons.person_outline_rounded,
+                          color: colorScheme.onSurface,
+                          size: 24,
+                        )
+                        : Text(
+                          avatarLabel,
+                          style: Theme.of(
+                            context,
+                          ).textTheme.titleMedium?.copyWith(
+                            fontWeight: FontWeight.w800,
+                            color: colorScheme.onSurface,
+                          ),
+                        ),
               ),
-              const SizedBox(width: 12),
+              const SizedBox(width: 14),
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(
-                      displayName,
-                      style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                        fontWeight: FontWeight.w700,
-                      ),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: Text(
+                            displayName,
+                            style: Theme.of(context).textTheme.titleMedium
+                                ?.copyWith(fontWeight: FontWeight.w800),
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 8,
+                            vertical: 4,
+                          ),
+                          decoration: BoxDecoration(
+                            color: colorScheme.surfaceContainerLow,
+                            borderRadius: BorderRadius.circular(999),
+                            border: Border.all(
+                              color: colorScheme.outlineVariant.withValues(
+                                alpha: 0.55,
+                              ),
+                            ),
+                          ),
+                          child: Text(
+                            statusLabel,
+                            style: Theme.of(
+                              context,
+                            ).textTheme.labelSmall?.copyWith(
+                              fontWeight: FontWeight.w700,
+                              color: colorScheme.onSurfaceVariant,
+                            ),
+                          ),
+                        ),
+                      ],
                     ),
-                    const SizedBox(height: 4),
+                    const SizedBox(height: 6),
                     Text(
-                      subtitle,
+                      signature,
                       maxLines: 2,
                       overflow: TextOverflow.ellipsis,
                       style: Theme.of(context).textTheme.bodySmall?.copyWith(
                         color: colorScheme.onSurfaceVariant,
-                        height: 1.32,
+                        height: 1.35,
                       ),
                     ),
                   ],
                 ),
               ),
+              const SizedBox(width: 12),
               Icon(
                 Icons.chevron_right_rounded,
                 color: colorScheme.onSurfaceVariant,
@@ -269,14 +429,40 @@ class _MinePageState extends ConsumerState<MinePage> {
     );
   }
 
-  String _buildProfileSubtitle() {
+  String _buildProfileSignature() {
     if (_isLoadingSession) {
-      return '读取登录状态中...';
+      return '正在同步账号状态与阅读数据。';
     }
     if (_userId == null) {
-      return '未登录，点击登录/注册以同步阅读数据。';
+      return '登录后可同步阅读进度、书架和个性设置。';
     }
-    return '已登录，点击查看账号信息。';
+    return '点击查看账号信息、会员状态与当前权益。';
+  }
+
+  String _buildProfileStatusLabel() {
+    if (_isLoadingSession) {
+      return '同步中';
+    }
+    if (_userId == null) {
+      return '未登录';
+    }
+    return '已登录';
+  }
+
+  String? _buildProfileAvatarLabel(String displayName) {
+    final normalized = displayName.trim();
+    if (normalized.isEmpty || normalized == '登录 / 注册') {
+      return null;
+    }
+    return String.fromCharCode(normalized.runes.first).toUpperCase();
+  }
+
+  String _themeModeLabel(ThemeMode mode) {
+    return switch (mode) {
+      ThemeMode.light => '日间',
+      ThemeMode.dark => '夜间',
+      ThemeMode.system => '跟随系统',
+    };
   }
 
   Future<void> _loadSession() async {
@@ -354,6 +540,15 @@ class _MinePageState extends ConsumerState<MinePage> {
     required List<_MineActionItem> actions,
     Widget? trailing,
   }) {
+    if (_layoutMode == _MineLayoutMode.list) {
+      return _buildActionListSection(
+        context,
+        title: title,
+        actions: actions,
+        trailing: trailing,
+      );
+    }
+
     final colorScheme = Theme.of(context).colorScheme;
 
     return _buildSectionCardShell(
@@ -422,6 +617,152 @@ class _MinePageState extends ConsumerState<MinePage> {
             },
           ),
         ],
+      ),
+    );
+  }
+
+  Widget _buildActionListSection(
+    BuildContext context, {
+    required String title,
+    required List<_MineActionItem> actions,
+    Widget? trailing,
+  }) {
+    final colorScheme = Theme.of(context).colorScheme;
+
+    return _buildSectionCardShell(
+      context,
+      padding: _actionSectionPadding,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Expanded(
+                child: Text(
+                  title,
+                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ),
+              if (trailing != null) trailing,
+            ],
+          ),
+          const SizedBox(height: 10),
+          Container(
+            decoration: BoxDecoration(
+              color: colorScheme.surface,
+              borderRadius: BorderRadius.circular(18),
+              border: Border.all(
+                color: colorScheme.outlineVariant.withValues(alpha: 0.48),
+              ),
+            ),
+            child: Column(
+              children: [
+                for (var index = 0; index < actions.length; index++) ...[
+                  _buildActionListTile(context, item: actions[index]),
+                  if (index < actions.length - 1)
+                    Divider(
+                      height: 1,
+                      indent: 56,
+                      endIndent: 14,
+                      color: colorScheme.outlineVariant.withValues(alpha: 0.45),
+                    ),
+                ],
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildActionListTile(
+    BuildContext context, {
+    required _MineActionItem item,
+  }) {
+    final colorScheme = Theme.of(context).colorScheme;
+    final iconFill = Color.alphaBlend(
+      colorScheme.onSurface.withValues(alpha: 0.04),
+      colorScheme.surface,
+    );
+
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        borderRadius: BorderRadius.circular(18),
+        onTap: item.onTap,
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
+          child: Row(
+            children: [
+              Stack(
+                clipBehavior: Clip.none,
+                children: [
+                  Container(
+                    width: 34,
+                    height: 34,
+                    decoration: BoxDecoration(
+                      color: iconFill,
+                      shape: BoxShape.circle,
+                    ),
+                    child: Icon(
+                      item.icon,
+                      size: 18,
+                      color: colorScheme.onSurface,
+                    ),
+                  ),
+                  if (item.colorDot != null)
+                    Positioned(
+                      right: -1,
+                      bottom: -1,
+                      child: Container(
+                        width: 10,
+                        height: 10,
+                        decoration: BoxDecoration(
+                          color: item.colorDot,
+                          shape: BoxShape.circle,
+                          border: Border.all(
+                            color: colorScheme.surface,
+                            width: 1.2,
+                          ),
+                        ),
+                      ),
+                    ),
+                ],
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      item.label,
+                      style: Theme.of(context).textTheme.bodyLarge?.copyWith(
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                    if (item.subtitle case final subtitle?) ...[
+                      const SizedBox(height: 2),
+                      Text(
+                        subtitle,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                          color: colorScheme.onSurfaceVariant,
+                        ),
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+              Icon(
+                Icons.chevron_right_rounded,
+                color: colorScheme.onSurfaceVariant,
+              ),
+            ],
+          ),
+        ),
       ),
     );
   }
@@ -671,11 +1012,13 @@ class _MineActionItem {
     required this.icon,
     required this.label,
     required this.onTap,
+    this.subtitle,
     this.colorDot,
   });
 
   final IconData icon;
   final String label;
   final VoidCallback onTap;
+  final String? subtitle;
   final Color? colorDot;
 }

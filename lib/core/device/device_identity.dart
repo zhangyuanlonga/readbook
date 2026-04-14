@@ -2,6 +2,7 @@ class DeviceIdentity {
   const DeviceIdentity({
     required this.installId,
     required this.deviceUid,
+    required this.deviceFingerprint,
     required this.platform,
     required this.deviceBrand,
     required this.deviceModel,
@@ -11,6 +12,7 @@ class DeviceIdentity {
 
   final String installId;
   final String deviceUid;
+  final String deviceFingerprint;
   final String platform;
   final String deviceBrand;
   final String deviceModel;

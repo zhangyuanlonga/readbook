@@ -9,6 +9,16 @@ class ResolvedBottomNavIcon {
 
   final IconData fallbackIcon;
   final BottomNavIconAssetRef? assetRef;
+
+  ResolvedBottomNavIcon copyWith({
+    IconData? fallbackIcon,
+    BottomNavIconAssetRef? assetRef,
+  }) {
+    return ResolvedBottomNavIcon(
+      fallbackIcon: fallbackIcon ?? this.fallbackIcon,
+      assetRef: assetRef ?? this.assetRef,
+    );
+  }
 }
 
 ResolvedBottomNavIcon resolveStandardBottomNavIcon({

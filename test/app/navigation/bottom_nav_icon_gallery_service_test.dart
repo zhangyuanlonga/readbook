@@ -50,6 +50,39 @@ void main() {
 
       expect(await service.loadActiveGalleryId(), isNull);
     });
+
+    test('creates, renames, duplicates and deletes custom galleries', () async {
+      final service = BottomNavIconGalleryService();
+
+      final created = await service.createGallery(name: '新图集');
+      expect(created.name, '新图集');
+      expect(created.isBuiltIn, isFalse);
+
+      await service.renameGallery(galleryId: created.id, name: '重命名图集');
+      final renamed = (await service.loadGalleries()).firstWhere(
+        (item) => item.id == created.id,
+      );
+      expect(renamed.name, '重命名图集');
+
+      final duplicated = await service.duplicateGallery(
+        sourceGalleryId: created.id,
+        name: '重命名图集 副本',
+      );
+      expect(duplicated.id, isNot(created.id));
+
+      final galleriesAfterDuplicate = await service.loadGalleries();
+      expect(galleriesAfterDuplicate.any((item) => item.id == duplicated.id), isTrue);
+
+      await service.saveActiveGalleryId(duplicated.id);
+      await service.deleteGallery(duplicated.id);
+
+      final galleriesAfterDelete = await service.loadGalleries();
+      expect(galleriesAfterDelete.any((item) => item.id == duplicated.id), isFalse);
+      expect(
+        await service.loadActiveGalleryId(),
+        defaultBottomNavIconGalleryId,
+      );
+    });
   });
 
   group('BottomNavIconGallery tab mapper', () {

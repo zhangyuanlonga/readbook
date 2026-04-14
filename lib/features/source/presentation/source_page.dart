@@ -8,6 +8,9 @@ import 'package:go_router/go_router.dart';
 
 import '../../../app/layout/app_layout.dart';
 import '../../../app/layout/app_spacing.dart';
+import '../../../core/auth/auth_session_store.dart';
+import '../../../core/mobile_features/mobile_feature_module.dart';
+import '../../../core/mobile_features/mobile_feature_service.dart';
 import '../../../domain/entities/script_source.dart';
 import '../../../domain/entities/source_health.dart';
 import '../application/external_source_import_bridge.dart';
@@ -116,7 +119,8 @@ class _CheckRequestDialog<T> extends StatefulWidget {
     String keyword,
     SourceCheckLevel level,
     _BatchCheckScope scope,
-  ) onSubmit;
+  )
+  onSubmit;
 
   @override
   State<_CheckRequestDialog<T>> createState() => _CheckRequestDialogState<T>();
@@ -220,9 +224,9 @@ class _CheckRequestDialogState<T> extends State<_CheckRequestDialog<T>> {
             if (!widget.allowEmptyKeyword && keyword.isEmpty) {
               return;
             }
-            Navigator.of(context).pop(
-              widget.onSubmit(keyword, _selectedLevel, _selectedScope),
-            );
+            Navigator.of(
+              context,
+            ).pop(widget.onSubmit(keyword, _selectedLevel, _selectedScope));
           },
           child: const Text('开始'),
         ),
@@ -296,6 +300,8 @@ class _SourcePageState extends State<SourcePage> {
   late final SourceHealthService _sourceHealthService;
   late final SourceHealthActionPolicyService _policyService;
   late final TextEditingController _searchController;
+  final AuthSessionStore _authSessionStore = AuthSessionStore();
+  final MobileFeatureService _mobileFeatureService = MobileFeatureService();
   List<ScriptSource> _lastRawSources = const <ScriptSource>[];
   List<ScriptSource> _lastVisibleSources = const <ScriptSource>[];
 
@@ -308,6 +314,9 @@ class _SourcePageState extends State<SourcePage> {
   final Dio _importDio = Dio();
   StreamSubscription<IncomingExternalImportPayload>? _incomingImportSub;
   bool _isConsumingExternalImportPayloads = false;
+  bool _isFeatureAccessLoading = true;
+  bool _canAccessSourcePage = false;
+  int _sourceImportLimit = 10;
 
   @override
   void initState() {
@@ -330,6 +339,7 @@ class _SourcePageState extends State<SourcePage> {
     if (widget.bootstrapOnInit) {
       unawaited(_reloadScriptSourcesSilently());
     }
+    unawaited(_loadFeatureAccess());
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) {
         return;
@@ -345,8 +355,149 @@ class _SourcePageState extends State<SourcePage> {
     super.dispose();
   }
 
+  Future<void> _loadFeatureAccess() async {
+    final session = await _authSessionStore.getSession();
+    if (!mounted) {
+      return;
+    }
+    if (session == null) {
+      try {
+        final modules = await _mobileFeatureService.fetchPublicModules();
+        final sourceEntry = _findFeatureModule(modules, 'source_entry');
+        final sourceImport = _findFeatureModule(modules, 'source_import');
+        if (!mounted) {
+          return;
+        }
+        setState(() {
+          _canAccessSourcePage =
+              sourceEntry?.visible == true && sourceEntry?.enabled != false;
+          _sourceImportLimit = sourceImport?.quotaLimit ?? 0;
+          _isFeatureAccessLoading = false;
+        });
+        return;
+      } catch (_) {
+        if (!mounted) {
+          return;
+        }
+        setState(() {
+          _canAccessSourcePage = false;
+          _sourceImportLimit = 0;
+          _isFeatureAccessLoading = false;
+        });
+        return;
+      }
+    }
+
+    try {
+      final modules = await _mobileFeatureService.fetchMyModules();
+      final sourceEntry = _findFeatureModule(modules, 'source_entry');
+      final sourceImport = _findFeatureModule(modules, 'source_import');
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _canAccessSourcePage =
+            sourceEntry?.visible == true && sourceEntry?.enabled != false;
+        _sourceImportLimit = sourceImport?.quotaLimit ?? 10;
+        _isFeatureAccessLoading = false;
+      });
+    } catch (_) {
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _canAccessSourcePage = true;
+        _sourceImportLimit = 10;
+        _isFeatureAccessLoading = false;
+      });
+    }
+  }
+
+  MobileFeatureModule? _findFeatureModule(
+    List<MobileFeatureModule> modules,
+    String code,
+  ) {
+    for (final item in modules) {
+      if (item.code == code) {
+        return item;
+      }
+    }
+    return null;
+  }
+
+  Future<bool> _ensureCanAddSource() async {
+    if (_isFeatureAccessLoading) {
+      _showMessage('正在读取书源权限，请稍后重试。');
+      return false;
+    }
+    if (!_canAccessSourcePage) {
+      _showMessage('登录后可使用书源功能。');
+      if (mounted) {
+        unawaited(context.push('/auth'));
+      }
+      return false;
+    }
+    if (_sourceImportLimit >= 0 &&
+        _lastRawSources.length >= _sourceImportLimit) {
+      _showMessage('普通用户最多导入 $_sourceImportLimit 个书源，开通会员可不限量。');
+      return false;
+    }
+    return true;
+  }
+
+  int _remainingSourceImportSlots() {
+    if (_sourceImportLimit < 0) {
+      return -1;
+    }
+    final remaining = _sourceImportLimit - _lastRawSources.length;
+    return remaining < 0 ? 0 : remaining;
+  }
+
   @override
   Widget build(BuildContext context) {
+    if (_isFeatureAccessLoading) {
+      return Scaffold(
+        appBar: AppBar(title: const Text('书源')),
+        body: const Center(child: CircularProgressIndicator()),
+      );
+    }
+
+    if (!_canAccessSourcePage) {
+      return Scaffold(
+        appBar: AppBar(title: const Text('书源')),
+        body: Center(
+          child: Padding(
+            padding: const EdgeInsets.all(24),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Icon(Icons.lock_outline, size: 40),
+                const SizedBox(height: 12),
+                Text(
+                  '登录后可使用书源功能',
+                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                    fontWeight: FontWeight.w700,
+                  ),
+                  textAlign: TextAlign.center,
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  '当前账号未开通书源入口，或尚未登录。',
+                  style: Theme.of(context).textTheme.bodyMedium,
+                  textAlign: TextAlign.center,
+                ),
+                const SizedBox(height: 16),
+                FilledButton(
+                  onPressed: () => context.push('/auth'),
+                  child: const Text('去登录'),
+                ),
+              ],
+            ),
+          ),
+        ),
+      );
+    }
+
     final canPopRoute =
         widget.enableRouterNavigation
             ? context.canPop()
@@ -1219,21 +1370,49 @@ class _SourcePageState extends State<SourcePage> {
   void _handlePageMenuAction(_SourcePageMenuAction action) {
     switch (action) {
       case _SourcePageMenuAction.create:
-        unawaited(_openScriptSourceEditorPage());
+        unawaited(_guardedOpenScriptSourceEditorPage());
         break;
       case _SourcePageMenuAction.importLocal:
-        unawaited(_importLocalScriptSources());
+        unawaited(_guardedImportLocalScriptSources());
         break;
       case _SourcePageMenuAction.importNetwork:
-        unawaited(_importNetworkScriptSource());
+        unawaited(_guardedImportNetworkScriptSource());
         break;
       case _SourcePageMenuAction.importPaste:
-        unawaited(_openPasteImportPage());
+        unawaited(_guardedOpenPasteImportPage());
         break;
       case _SourcePageMenuAction.batchCheck:
         unawaited(_runBatchCheck());
         break;
     }
+  }
+
+  Future<void> _guardedOpenScriptSourceEditorPage() async {
+    if (!await _ensureCanAddSource()) {
+      return;
+    }
+    await _openScriptSourceEditorPage();
+  }
+
+  Future<void> _guardedOpenPasteImportPage() async {
+    if (!await _ensureCanAddSource()) {
+      return;
+    }
+    await _openPasteImportPage();
+  }
+
+  Future<void> _guardedImportLocalScriptSources() async {
+    if (!await _ensureCanAddSource()) {
+      return;
+    }
+    await _importLocalScriptSources();
+  }
+
+  Future<void> _guardedImportNetworkScriptSource() async {
+    if (!await _ensureCanAddSource()) {
+      return;
+    }
+    await _importNetworkScriptSource();
   }
 
   void _handleSourceItemMenuAction(
@@ -1308,9 +1487,9 @@ class _SourcePageState extends State<SourcePage> {
   }
 
   bool _hasDuplicateSources(List<ScriptSource> sources) {
-    return _buildClusterSummaries(sources).values.any(
-      (summary) => summary.sourceCount >= 2,
-    );
+    return _buildClusterSummaries(
+      sources,
+    ).values.any((summary) => summary.sourceCount >= 2);
   }
 
   bool _isCurrentGroupSelectionAvailable({
@@ -1588,8 +1767,13 @@ class _SourcePageState extends State<SourcePage> {
     var successCount = 0;
     var failureCount = 0;
     String? lastError;
+    final remainingSlots = _remainingSourceImportSlots();
+    final importTargets =
+        remainingSlots < 0
+            ? files
+            : files.take(remainingSlots).toList(growable: false);
 
-    for (final file in files) {
+    for (final file in importTargets) {
       try {
         final contents = await file.readAsString();
         await _sourceRuntimeFacade.saveScriptSource(sourceCode: contents);
@@ -1605,6 +1789,10 @@ class _SourcePageState extends State<SourcePage> {
     }
 
     if (successCount > 0) {
+      if (remainingSlots >= 0 && importTargets.length < files.length) {
+        _showMessage('已导入 $successCount 个书源，已达到当前导入上限。');
+        return;
+      }
       if (failureCount > 0) {
         _showMessage('已导入 $successCount 个书源，失败 $failureCount 个。');
       } else {
@@ -1646,14 +1834,24 @@ class _SourcePageState extends State<SourcePage> {
   }
 
   Future<String?> _promptImportUrl() async {
-    final controller = TextEditingController();
+    var draftUrl = '';
     final result = await showDialog<String>(
       context: context,
       builder: (context) {
+        void submit() {
+          final url = draftUrl.trim();
+          final uri = Uri.tryParse(url);
+          if (uri == null ||
+              !uri.hasScheme ||
+              (uri.scheme != 'http' && uri.scheme != 'https')) {
+            return;
+          }
+          Navigator.of(context).pop(url);
+        }
+
         return AlertDialog(
           title: const Text('网络导入书源'),
-          content: TextField(
-            controller: controller,
+          content: TextFormField(
             autofocus: true,
             keyboardType: TextInputType.url,
             decoration: const InputDecoration(
@@ -1661,30 +1859,21 @@ class _SourcePageState extends State<SourcePage> {
               hintText: 'https://example.com/source.js',
               border: OutlineInputBorder(),
             ),
+            onChanged: (value) {
+              draftUrl = value;
+            },
+            onFieldSubmitted: (_) => submit(),
           ),
           actions: [
             TextButton(
               onPressed: () => Navigator.of(context).pop(),
               child: const Text('取消'),
             ),
-            FilledButton(
-              onPressed: () {
-                final url = controller.text.trim();
-                final uri = Uri.tryParse(url);
-                if (uri == null ||
-                    !uri.hasScheme ||
-                    (uri.scheme != 'http' && uri.scheme != 'https')) {
-                  return;
-                }
-                Navigator.of(context).pop(url);
-              },
-              child: const Text('导入'),
-            ),
+            FilledButton(onPressed: submit, child: const Text('导入')),
           ],
         );
       },
     );
-    controller.dispose();
     return result;
   }
 
@@ -1722,9 +1911,12 @@ class _SourcePageState extends State<SourcePage> {
 
     final tempFile = File(cached.path);
     try {
-      final extension = cached.label.contains('.')
-          ? cached.label.substring(cached.label.lastIndexOf('.')).toLowerCase()
-          : '';
+      final extension =
+          cached.label.contains('.')
+              ? cached.label
+                  .substring(cached.label.lastIndexOf('.'))
+                  .toLowerCase()
+              : '';
       if (extension != '.js' && extension != '.mjs' && extension != '.txt') {
         _showMessage('暂不支持导入该书源文件：${cached.label}');
         return;
@@ -1913,10 +2105,7 @@ class _SourcePageState extends State<SourcePage> {
                           ? candidates[completedCount].name
                           : null,
                   results: List<SourceCheckResult>.unmodifiable(
-                    <SourceCheckResult>[
-                      ...progress.value.results,
-                      result,
-                    ],
+                    <SourceCheckResult>[...progress.value.results, result],
                   ),
                 );
                 if (mounted) {
@@ -1942,11 +2131,15 @@ class _SourcePageState extends State<SourcePage> {
             final results = state.results;
             final healthyCount =
                 results
-                    .where((result) => result.status == SourceCheckStatus.healthy)
+                    .where(
+                      (result) => result.status == SourceCheckStatus.healthy,
+                    )
                     .length;
             final warningCount =
                 results
-                    .where((result) => result.status == SourceCheckStatus.warning)
+                    .where(
+                      (result) => result.status == SourceCheckStatus.warning,
+                    )
                     .length;
             final skippedResults = results
                 .where((result) => result.status == SourceCheckStatus.skipped)
@@ -1986,7 +2179,9 @@ class _SourcePageState extends State<SourcePage> {
                               const SizedBox(
                                 width: 16,
                                 height: 16,
-                                child: CircularProgressIndicator(strokeWidth: 2),
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2,
+                                ),
                               ),
                               const SizedBox(width: 10),
                               Expanded(
@@ -2234,7 +2429,8 @@ class _SourcePageState extends State<SourcePage> {
     return _showCheckRequestDialog<_SingleCheckRequest>(
       title: '单源检测',
       helperText: '默认建议先执行 searchOnly。留空时优先使用该书源的 checkKeyword，未配置则回退到系统默认关键词。',
-      initialKeyword: source.checkKeyword ?? SourceCheckService.defaultCheckKeyword,
+      initialKeyword:
+          source.checkKeyword ?? SourceCheckService.defaultCheckKeyword,
       allowEmptyKeyword: true,
       includeScope: false,
       onSubmit: (keyword, level, _) {

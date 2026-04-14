@@ -15,18 +15,9 @@ class BookshelfFilterChipData {
 }
 
 class BookshelfViewModeEditBar extends StatelessWidget {
-  const BookshelfViewModeEditBar({
-    super.key,
-    required this.summaryText,
-    required this.useGridView,
-    required this.viewButtonEnabled,
-    required this.onToggleViewMode,
-  });
+  const BookshelfViewModeEditBar({super.key, required this.summaryText});
 
   final String summaryText;
-  final bool useGridView;
-  final bool viewButtonEnabled;
-  final VoidCallback? onToggleViewMode;
 
   @override
   Widget build(BuildContext context) {
@@ -40,22 +31,6 @@ class BookshelfViewModeEditBar extends StatelessWidget {
           style: theme.textTheme.labelMedium?.copyWith(
             color: colorScheme.onSurfaceVariant,
             fontWeight: FontWeight.w600,
-          ),
-        ),
-        const Spacer(),
-        IconButton(
-          tooltip: useGridView ? '网格模式' : '列表模式',
-          onPressed: viewButtonEnabled ? onToggleViewMode : null,
-          visualDensity: VisualDensity.compact,
-          iconSize: 20,
-          color:
-              viewButtonEnabled
-                  ? (useGridView
-                      ? colorScheme.primary
-                      : colorScheme.onSurfaceVariant)
-                  : colorScheme.onSurfaceVariant.withValues(alpha: 0.45),
-          icon: Icon(
-            useGridView ? Icons.grid_view_rounded : Icons.view_list_rounded,
           ),
         ),
       ],

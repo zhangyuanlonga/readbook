@@ -31,6 +31,12 @@ class BookshelfService {
       'bookshelf.grid.showLatestChapter';
   static const String _gridShowProgressBarKey =
       'bookshelf.grid.showProgressBar';
+  static const String _listShowTitleKey = 'bookshelf.list.showTitle';
+  static const String _listShowAuthorKey = 'bookshelf.list.showAuthor';
+  static const String _listShowLatestChapterKey =
+      'bookshelf.list.showLatestChapter';
+  static const String _listShowProgressBarKey =
+      'bookshelf.list.showProgressBar';
 
   static const String defaultSortMode = 'default';
   static const String recentReadSortMode = 'recentRead';
@@ -46,6 +52,10 @@ class BookshelfService {
   static const bool defaultGridShowAuthor = true;
   static const bool defaultGridShowLatestChapter = true;
   static const bool defaultGridShowProgressBar = true;
+  static const bool defaultListShowTitle = true;
+  static const bool defaultListShowAuthor = true;
+  static const bool defaultListShowLatestChapter = true;
+  static const bool defaultListShowProgressBar = true;
 
   Future<List<BookshelfBook>> getAll() async {
     final prefs = await _preferencesFuture;
@@ -268,6 +278,47 @@ class BookshelfService {
   Future<void> saveGridShowProgressBar(bool visible) async {
     final prefs = await _preferencesFuture;
     await prefs.setBool(_gridShowProgressBarKey, visible);
+  }
+
+  Future<bool> loadListShowTitle() async {
+    final prefs = await _preferencesFuture;
+    return prefs.getBool(_listShowTitleKey) ?? defaultListShowTitle;
+  }
+
+  Future<void> saveListShowTitle(bool visible) async {
+    final prefs = await _preferencesFuture;
+    await prefs.setBool(_listShowTitleKey, visible);
+  }
+
+  Future<bool> loadListShowAuthor() async {
+    final prefs = await _preferencesFuture;
+    return prefs.getBool(_listShowAuthorKey) ?? defaultListShowAuthor;
+  }
+
+  Future<void> saveListShowAuthor(bool visible) async {
+    final prefs = await _preferencesFuture;
+    await prefs.setBool(_listShowAuthorKey, visible);
+  }
+
+  Future<bool> loadListShowLatestChapter() async {
+    final prefs = await _preferencesFuture;
+    return prefs.getBool(_listShowLatestChapterKey) ??
+        defaultListShowLatestChapter;
+  }
+
+  Future<void> saveListShowLatestChapter(bool visible) async {
+    final prefs = await _preferencesFuture;
+    await prefs.setBool(_listShowLatestChapterKey, visible);
+  }
+
+  Future<bool> loadListShowProgressBar() async {
+    final prefs = await _preferencesFuture;
+    return prefs.getBool(_listShowProgressBarKey) ?? defaultListShowProgressBar;
+  }
+
+  Future<void> saveListShowProgressBar(bool visible) async {
+    final prefs = await _preferencesFuture;
+    await prefs.setBool(_listShowProgressBarKey, visible);
   }
 
   Future<String> loadSortMode() async {

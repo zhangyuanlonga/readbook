@@ -147,6 +147,10 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
   bool _gridShowAuthor = BookshelfService.defaultGridShowAuthor;
   bool _gridShowLatestChapter = BookshelfService.defaultGridShowLatestChapter;
   bool _gridShowProgressBar = BookshelfService.defaultGridShowProgressBar;
+  bool _listShowTitle = BookshelfService.defaultListShowTitle;
+  bool _listShowAuthor = BookshelfService.defaultListShowAuthor;
+  bool _listShowLatestChapter = BookshelfService.defaultListShowLatestChapter;
+  bool _listShowProgressBar = BookshelfService.defaultListShowProgressBar;
   _BookshelfFilter _activeFilter = _BookshelfFilter.all;
   String? _activeCustomTag;
   String? _openingBookId;
@@ -216,6 +220,7 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
       }
       unawaited(_consumePendingExternalImportPayloads());
       unawaited(_restoreViewModePreference());
+      unawaited(_restoreListPreferences());
       unawaited(_restoreSortModePreference());
       unawaited(_restoreGridPreferences());
       unawaited(_loadBookshelf());
@@ -377,7 +382,7 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
                         children: [
                           Icon(Icons.library_add_rounded, size: 18),
                           SizedBox(width: 10),
-                          Text('导入本地图书'),
+                          Text('导入图书'),
                         ],
                       ),
                     ),
@@ -734,12 +739,17 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
     var draftShowAuthor = _gridShowAuthor;
     var draftShowLatestChapter = _gridShowLatestChapter;
     var draftShowProgressBar = _gridShowProgressBar;
+    var draftListShowTitle = _listShowTitle;
+    var draftListShowAuthor = _listShowAuthor;
+    var draftListShowLatestChapter = _listShowLatestChapter;
+    var draftListShowProgressBar = _listShowProgressBar;
 
     await _showBookshelfBottomSheet<void>(
       isScrollControlled: true,
       builder: (sheetContext) {
         final bottomInset = _bookshelfBottomSafeInset(sheetContext);
         return DefaultTabController(
+          initialIndex: _useGridView ? 1 : 0,
           length: _BookshelfSettingsTab.values.length,
           child: StatefulBuilder(
             builder: (sheetContext, setSheetState) {
@@ -770,6 +780,43 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
                     return;
                   }
                   _showMessage('书架设置保存失败，请重试。');
+                }
+              }
+
+              Future<void> persistListSettings() async {
+                try {
+                  await _bookshelfService.saveListShowTitle(draftListShowTitle);
+                  await _bookshelfService.saveListShowAuthor(
+                    draftListShowAuthor,
+                  );
+                  await _bookshelfService.saveListShowLatestChapter(
+                    draftListShowLatestChapter,
+                  );
+                  await _bookshelfService.saveListShowProgressBar(
+                    draftListShowProgressBar,
+                  );
+                } catch (_) {
+                  if (!mounted) {
+                    return;
+                  }
+                  _showMessage('书架设置保存失败，请重试。');
+                }
+              }
+
+              Future<void> setBookshelfViewMode(bool useGridView) async {
+                if (_useGridView == useGridView) {
+                  return;
+                }
+                setState(() {
+                  _useGridView = useGridView;
+                });
+                try {
+                  await _bookshelfService.saveUseGridView(useGridView);
+                } catch (_) {
+                  if (!mounted) {
+                    return;
+                  }
+                  _showMessage('书架视图保存失败，请重试。');
                 }
               }
 
@@ -1027,10 +1074,66 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
                 return ListView(
                   padding: const EdgeInsets.fromLTRB(0, 4, 0, 8),
                   children: [
-                    buildSectionTitle(
-                      '列表设置',
-                      '列表模式当前没有额外参数，后续可以继续在这里扩展卡片信息与密度设置。',
+                    buildSectionTitle('列表设置', '调整列表模式下展示哪些信息。'),
+                    buildGroupHeader('文字信息'),
+                    SwitchListTile.adaptive(
+                      value: !draftListShowTitle,
+                      title: const Text('隐藏书籍名称'),
+                      onChanged: (value) {
+                        final next = !value;
+                        setSheetState(() {
+                          draftListShowTitle = next;
+                        });
+                        setState(() {
+                          _listShowTitle = next;
+                        });
+                        unawaited(persistListSettings());
+                      },
                     ),
+                    SwitchListTile.adaptive(
+                      value: !draftListShowAuthor,
+                      title: const Text('隐藏作者名称'),
+                      onChanged: (value) {
+                        final next = !value;
+                        setSheetState(() {
+                          draftListShowAuthor = next;
+                        });
+                        setState(() {
+                          _listShowAuthor = next;
+                        });
+                        unawaited(persistListSettings());
+                      },
+                    ),
+                    SwitchListTile.adaptive(
+                      value: !draftListShowLatestChapter,
+                      title: const Text('隐藏最新章节'),
+                      onChanged: (value) {
+                        final next = !value;
+                        setSheetState(() {
+                          draftListShowLatestChapter = next;
+                        });
+                        setState(() {
+                          _listShowLatestChapter = next;
+                        });
+                        unawaited(persistListSettings());
+                      },
+                    ),
+                    buildGroupHeader('其他设置'),
+                    SwitchListTile.adaptive(
+                      value: !draftListShowProgressBar,
+                      title: const Text('隐藏进度条'),
+                      onChanged: (value) {
+                        final next = !value;
+                        setSheetState(() {
+                          draftListShowProgressBar = next;
+                        });
+                        setState(() {
+                          _listShowProgressBar = next;
+                        });
+                        unawaited(persistListSettings());
+                      },
+                    ),
+                    buildGroupHeader('封面设置'),
                     Padding(
                       padding: const EdgeInsets.symmetric(horizontal: 12),
                       child: Container(
@@ -1045,7 +1148,7 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
                           ),
                         ),
                         child: Text(
-                          '当前列表模式暂不提供额外设置。',
+                          '当前暂未提供额外封面设置。',
                           style: theme.textTheme.bodyMedium?.copyWith(
                             color: colorScheme.onSurfaceVariant,
                             height: 1.35,
@@ -1087,6 +1190,9 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
                         child: TabBar(
                           dividerColor: Colors.transparent,
                           indicatorSize: TabBarIndicatorSize.tab,
+                          onTap:
+                              (index) =>
+                                  unawaited(setBookshelfViewMode(index == 1)),
                           tabs: [
                             for (final tab in tabs)
                               Tab(text: _bookshelfSettingsTabLabel(tab)),
@@ -1271,18 +1377,12 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
   }
 
   Widget _buildViewModeEditBar() {
-    final viewButtonEnabled = !_isLoading && !_isBatchDeleting;
     final summaryText =
         _isSelectionMode
             ? '已选择 ${_selectedBookKeys.length} 本'
             : '${_activeFilterLabel()} · ${_filteredBooks.length} 本';
 
-    return BookshelfViewModeEditBar(
-      summaryText: summaryText,
-      useGridView: _useGridView,
-      viewButtonEnabled: viewButtonEnabled,
-      onToggleViewMode: _toggleBookshelfViewMode,
-    );
+    return BookshelfViewModeEditBar(summaryText: summaryText);
   }
 
   Widget _buildFilterBar() {
@@ -2190,15 +2290,18 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
                       Row(
                         crossAxisAlignment: CrossAxisAlignment.center,
                         children: [
-                          Expanded(
-                            child: Text(
-                              titleText,
-                              style: Theme.of(context).textTheme.titleMedium
-                                  ?.copyWith(fontWeight: FontWeight.w700),
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                            ),
-                          ),
+                          if (_listShowTitle)
+                            Expanded(
+                              child: Text(
+                                titleText,
+                                style: Theme.of(context).textTheme.titleMedium
+                                    ?.copyWith(fontWeight: FontWeight.w700),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            )
+                          else
+                            const Spacer(),
                           if (!_isSelectionMode) ...[
                             const SizedBox(width: 8),
                             SizedBox(
@@ -2226,26 +2329,34 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
                           ],
                         ],
                       ),
-                      const SizedBox(height: 6),
-                      Text(
-                        authorLine,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                          color: colorScheme.onSurfaceVariant,
-                          fontWeight: FontWeight.w500,
+                      if (_listShowAuthor) ...[
+                        const SizedBox(height: 6),
+                        Text(
+                          authorLine,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: Theme.of(
+                            context,
+                          ).textTheme.bodySmall?.copyWith(
+                            color: colorScheme.onSurfaceVariant,
+                            fontWeight: FontWeight.w500,
+                          ),
                         ),
-                      ),
-                      const SizedBox(height: 4),
-                      Text(
-                        latestLine,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                          color: colorScheme.onSurfaceVariant,
-                          fontWeight: FontWeight.w500,
+                      ],
+                      if (_listShowLatestChapter) ...[
+                        SizedBox(height: _listShowAuthor ? 4 : 6),
+                        Text(
+                          latestLine,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: Theme.of(
+                            context,
+                          ).textTheme.bodySmall?.copyWith(
+                            color: colorScheme.onSurfaceVariant,
+                            fontWeight: FontWeight.w500,
+                          ),
                         ),
-                      ),
+                      ],
                       const SizedBox(height: 4),
                       Text(
                         progressLine,
@@ -2262,15 +2373,18 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
                                   : FontWeight.w500,
                         ),
                       ),
-                      const SizedBox(height: 8),
-                      ClipRRect(
-                        borderRadius: BorderRadius.circular(2),
-                        child: LinearProgressIndicator(
-                          value: progressDisplay.progressValue,
-                          minHeight: 3,
-                          backgroundColor: colorScheme.surfaceContainerHighest,
+                      if (_listShowProgressBar) ...[
+                        const SizedBox(height: 8),
+                        ClipRRect(
+                          borderRadius: BorderRadius.circular(2),
+                          child: LinearProgressIndicator(
+                            value: progressDisplay.progressValue,
+                            minHeight: 3,
+                            backgroundColor:
+                                colorScheme.surfaceContainerHighest,
+                          ),
                         ),
-                      ),
+                      ],
                     ],
                   ),
                 ),
@@ -3663,7 +3777,7 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
     String initialValue = '',
     String? originalTag,
   }) async {
-    final controller = TextEditingController(text: initialValue);
+    var draftValue = initialValue;
     String? errorText;
 
     final result = await showDialog<String>(
@@ -3672,7 +3786,7 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
         return StatefulBuilder(
           builder: (context, setDialogState) {
             String? validate() {
-              final value = _normalizeTags([controller.text]);
+              final value = _normalizeTags([draftValue]);
               if (value.isEmpty) {
                 return '请输入标签名称';
               }
@@ -3694,21 +3808,29 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
                 });
                 return;
               }
-              final tag = _normalizeTags([controller.text]).first;
+              final tag = _normalizeTags([draftValue]).first;
               Navigator.of(context).pop(tag);
             }
 
             return AlertDialog(
               title: Text(title),
-              content: TextField(
-                controller: controller,
+              content: TextFormField(
+                initialValue: initialValue,
                 autofocus: true,
                 maxLength: 12,
                 decoration: InputDecoration(
                   hintText: hintText,
                   errorText: errorText,
                 ),
-                onSubmitted: (_) => submit(),
+                onChanged: (value) {
+                  draftValue = value;
+                  if (errorText != null) {
+                    setDialogState(() {
+                      errorText = null;
+                    });
+                  }
+                },
+                onFieldSubmitted: (_) => submit(),
               ),
               actions: [
                 TextButton(
@@ -3722,8 +3844,6 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
         );
       },
     );
-
-    controller.dispose();
     return result;
   }
 
@@ -4467,12 +4587,27 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
     });
   }
 
-  void _toggleBookshelfViewMode() {
-    final next = !_useGridView;
+  Future<void> _restoreListPreferences() async {
+    final showTitle = await _bookshelfService.loadListShowTitle();
+    final showAuthor = await _bookshelfService.loadListShowAuthor();
+    final showLatestChapter =
+        await _bookshelfService.loadListShowLatestChapter();
+    final showProgressBar = await _bookshelfService.loadListShowProgressBar();
+    if (!mounted) {
+      return;
+    }
+    if (_listShowTitle == showTitle &&
+        _listShowAuthor == showAuthor &&
+        _listShowLatestChapter == showLatestChapter &&
+        _listShowProgressBar == showProgressBar) {
+      return;
+    }
     setState(() {
-      _useGridView = next;
+      _listShowTitle = showTitle;
+      _listShowAuthor = showAuthor;
+      _listShowLatestChapter = showLatestChapter;
+      _listShowProgressBar = showProgressBar;
     });
-    unawaited(_bookshelfService.saveUseGridView(next));
   }
 
   Future<void> _restoreSortModePreference() async {

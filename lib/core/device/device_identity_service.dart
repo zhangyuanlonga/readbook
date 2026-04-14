@@ -82,10 +82,19 @@ class DeviceIdentityService {
         hardwareId: info.hardwareId,
         fallback: installId,
       );
+      final deviceFingerprint = _hashDeviceFingerprint(
+        platform: platform,
+        brand: info.brand,
+        model: info.model,
+        osVersion: info.osVersion,
+        hardwareId: info.hardwareId,
+        installId: installId,
+      );
 
       final identity = DeviceIdentity(
         installId: installId,
         deviceUid: deviceUid,
+        deviceFingerprint: deviceFingerprint,
         platform: platform,
         deviceBrand: _nonEmpty(info.brand, 'unknown'),
         deviceModel: _nonEmpty(info.model, 'unknown'),
@@ -197,6 +206,26 @@ class DeviceIdentityService {
   }) {
     final raw = '${platform.trim()}|${(hardwareId ?? '').trim()}';
     final normalized = raw.trim().isEmpty ? fallback.trim() : raw.trim();
+    final digest = sha256.convert(utf8.encode(normalized));
+    return digest.toString();
+  }
+
+  String _hashDeviceFingerprint({
+    required String platform,
+    required String? brand,
+    required String? model,
+    required String? osVersion,
+    required String? hardwareId,
+    required String installId,
+  }) {
+    final normalized = [
+      platform.trim(),
+      (brand ?? '').trim(),
+      (model ?? '').trim(),
+      (osVersion ?? '').trim(),
+      (hardwareId ?? '').trim(),
+      installId.trim(),
+    ].where((value) => value.isNotEmpty).join('|');
     final digest = sha256.convert(utf8.encode(normalized));
     return digest.toString();
   }

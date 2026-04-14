@@ -11322,9 +11322,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
                           required String label,
                           required double currentValue,
                         }) async {
-                          final controller = TextEditingController(
-                            text: currentValue.round().toString(),
-                          );
+                          var draftValue = currentValue.round().toString();
                           String? errorText;
 
                           final result = await showDialog<double>(
@@ -11333,7 +11331,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
                               return StatefulBuilder(
                                 builder: (dialogContext, setDialogState) {
                                   void submit() {
-                                    final raw = controller.text.trim();
+                                    final raw = draftValue.trim();
                                     final parsed = double.tryParse(raw);
                                     if (parsed == null) {
                                       setDialogState(() {
@@ -11356,8 +11354,8 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
 
                                   return AlertDialog(
                                     title: Text('$label 精确输入'),
-                                    content: TextField(
-                                      controller: controller,
+                                    content: TextFormField(
+                                      initialValue: draftValue,
                                       autofocus: true,
                                       keyboardType:
                                           const TextInputType.numberWithOptions(
@@ -11369,7 +11367,15 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
                                             '范围 ${ReaderSettings.minLayoutMargin.toInt()} - ${ReaderSettings.maxLayoutMargin.toInt()}',
                                         errorText: errorText,
                                       ),
-                                      onSubmitted: (_) => submit(),
+                                      onChanged: (value) {
+                                        draftValue = value;
+                                        if (errorText != null) {
+                                          setDialogState(() {
+                                            errorText = null;
+                                          });
+                                        }
+                                      },
+                                      onFieldSubmitted: (_) => submit(),
                                     ),
                                     actions: [
                                       TextButton(
@@ -11391,7 +11397,6 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
                             },
                           );
 
-                          controller.dispose();
                           return result;
                         }
 
@@ -11707,7 +11712,11 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
                   initialTab == _ReaderSettingsTab.interface;
               final showReadingSection =
                   initialTab == _ReaderSettingsTab.reading;
-
+              final presetTileScale =
+                  (AppLayout.pageContentMaxWidth(context, maxWidth: 760) /
+                          360.0)
+                      .clamp(0.94, 1.18)
+                      .toDouble();
               final presetBackgroundTiles = <Widget>[];
               for (final preset in _backgroundPresets) {
                 final previewBytes = _backgroundPresetBytes[preset.assetPath];
@@ -11717,7 +11726,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
                 }
                 presetBackgroundTiles.add(
                   Padding(
-                    padding: const EdgeInsets.only(right: 8),
+                    padding: EdgeInsets.only(right: 8 * presetTileScale),
                     child: _buildBackgroundTile(
                       label: preset.label,
                       selected:
@@ -11726,6 +11735,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
                               activeBackgroundBase64 == presetBase64),
                       previewBytes: previewBytes,
                       showLabel: false,
+                      scale: presetTileScale,
                       onTap: () {
                         setModalState(() {
                           draft = draft.copyWith(
@@ -11752,12 +11762,13 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
                     activeBackgroundBase64 == source;
                 customBackgroundTiles.add(
                   Padding(
-                    padding: const EdgeInsets.only(right: 8),
+                    padding: EdgeInsets.only(right: 8 * presetTileScale),
                     child: _buildBackgroundTile(
                       label: '自定义${index + 1}',
                       selected: isSelected,
                       previewBytes: previewBytes,
                       showLabel: true,
+                      scale: presetTileScale,
                       icon:
                           previewBytes == null
                               ? Icons.broken_image_outlined
@@ -11781,6 +11792,20 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
                 context,
                 maxWidth: showReadingSection && !isMangaChapter ? 700 : 640,
               );
+              final compactSheetBaseWidth = 360.0;
+              final compactSheetVisualWidth = min(
+                AppLayout.pageContentMaxWidth(context, maxWidth: 760),
+                max(
+                  320.0,
+                  MediaQuery.sizeOf(context).width - (sheetHorizontal * 2),
+                ),
+              );
+              final compactSheetScale =
+                  (compactSheetVisualWidth / compactSheetBaseWidth)
+                      .clamp(0.94, 1.18)
+                      .toDouble();
+              double compactScaleValue(double value) =>
+                  value * compactSheetScale;
               final disablePageAnimationSelection =
                   !isMangaChapter && _pageTurnUsesScroll(draft.pageTurnMode);
               final pageAnimationInactiveReason = _pageAnimationInactiveReason(
@@ -12116,6 +12141,12 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
                         style: Theme.of(context).textTheme.titleSmall?.copyWith(
                           fontWeight: FontWeight.w700,
                           color: colorScheme.onSurface,
+                          fontSize:
+                              (Theme.of(
+                                    context,
+                                  ).textTheme.titleSmall?.fontSize ??
+                                  14) *
+                              compactSheetScale,
                         ),
                       ),
                       const Spacer(),
@@ -12128,11 +12159,18 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
                   final colorScheme = Theme.of(context).colorScheme;
                   return Container(
                     width: double.infinity,
-                    margin: const EdgeInsets.only(bottom: 10),
-                    padding: const EdgeInsets.fromLTRB(14, 14, 14, 14),
+                    margin: EdgeInsets.only(bottom: compactScaleValue(10)),
+                    padding: EdgeInsets.fromLTRB(
+                      compactScaleValue(14),
+                      compactScaleValue(14),
+                      compactScaleValue(14),
+                      compactScaleValue(14),
+                    ),
                     decoration: BoxDecoration(
                       color: colorScheme.surfaceContainerLow,
-                      borderRadius: BorderRadius.circular(20),
+                      borderRadius: BorderRadius.circular(
+                        compactScaleValue(20),
+                      ),
                       border: Border.all(
                         color: colorScheme.outlineVariant.withValues(
                           alpha: 0.32,
@@ -12169,9 +12207,9 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
                         borderRadius: BorderRadius.circular(999),
                         onTap: onTap,
                         child: Ink(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 14,
-                            vertical: 11,
+                          padding: EdgeInsets.symmetric(
+                            horizontal: compactScaleValue(14),
+                            vertical: compactScaleValue(11),
                           ),
                           decoration: BoxDecoration(
                             color: colorScheme.surfaceContainerLow,
@@ -12185,8 +12223,8 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
                           child: Row(
                             children: [
                               Container(
-                                width: 28,
-                                height: 28,
+                                width: compactScaleValue(28),
+                                height: compactScaleValue(28),
                                 decoration: BoxDecoration(
                                   color: colorScheme.primaryContainer
                                       .withValues(alpha: 0.8),
@@ -12194,21 +12232,31 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
                                 ),
                                 child: Icon(
                                   icon,
-                                  size: 15,
+                                  size: compactScaleValue(15),
                                   color: colorScheme.onPrimaryContainer,
                                 ),
                               ),
-                              const SizedBox(width: 10),
+                              SizedBox(width: compactScaleValue(10)),
                               Expanded(
                                 child: Text(
                                   title,
-                                  style: Theme.of(context).textTheme.titleSmall
-                                      ?.copyWith(fontWeight: FontWeight.w700),
+                                  style: Theme.of(
+                                    context,
+                                  ).textTheme.titleSmall?.copyWith(
+                                    fontWeight: FontWeight.w700,
+                                    fontSize:
+                                        (Theme.of(
+                                              context,
+                                            ).textTheme.titleSmall?.fontSize ??
+                                            14) *
+                                        compactSheetScale,
+                                  ),
                                 ),
                               ),
                               Icon(
                                 Icons.chevron_right_rounded,
                                 color: colorScheme.onSurfaceVariant,
+                                size: compactScaleValue(24),
                               ),
                             ],
                           ),
@@ -12220,16 +12268,18 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
 
                 Widget buildInterfaceInlineCapsule({
                   required Widget child,
-                  EdgeInsetsGeometry padding = const EdgeInsets.symmetric(
-                    horizontal: 12,
-                    vertical: 8,
-                  ),
+                  EdgeInsetsGeometry? padding,
                   Color? backgroundColor,
                   Color? borderColor,
                 }) {
                   final colorScheme = Theme.of(context).colorScheme;
                   return Container(
-                    padding: padding,
+                    padding:
+                        padding ??
+                        EdgeInsets.symmetric(
+                          horizontal: compactScaleValue(12),
+                          vertical: compactScaleValue(8),
+                        ),
                     decoration: BoxDecoration(
                       color: backgroundColor ?? colorScheme.surfaceContainerLow,
                       borderRadius: BorderRadius.circular(999),
@@ -12252,22 +12302,22 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
                   return buildInterfaceInlineCapsule(
                     padding: EdgeInsets.zero,
                     child: SizedBox(
-                      height: 44,
+                      height: compactScaleValue(44),
                       child: TextButton(
                         onPressed: onTap,
                         style: TextButton.styleFrom(
                           visualDensity: VisualDensity.compact,
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 10,
-                            vertical: 8,
+                          padding: EdgeInsets.symmetric(
+                            horizontal: compactScaleValue(10),
+                            vertical: compactScaleValue(8),
                           ),
                         ),
                         child: Row(
                           mainAxisSize: MainAxisSize.min,
                           children: [
                             Container(
-                              width: 24,
-                              height: 24,
+                              width: compactScaleValue(24),
+                              height: compactScaleValue(24),
                               decoration: BoxDecoration(
                                 color: colorScheme.primaryContainer.withValues(
                                   alpha: 0.8,
@@ -12276,24 +12326,33 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
                               ),
                               child: Icon(
                                 icon,
-                                size: 14,
+                                size: compactScaleValue(14),
                                 color: colorScheme.onPrimaryContainer,
                               ),
                             ),
-                            const SizedBox(width: 8),
+                            SizedBox(width: compactScaleValue(8)),
                             Expanded(
                               child: Text(
                                 title,
                                 maxLines: 1,
                                 overflow: TextOverflow.ellipsis,
-                                style: Theme.of(context).textTheme.bodyMedium
-                                    ?.copyWith(fontWeight: FontWeight.w600),
+                                style: Theme.of(
+                                  context,
+                                ).textTheme.bodyMedium?.copyWith(
+                                  fontWeight: FontWeight.w600,
+                                  fontSize:
+                                      (Theme.of(
+                                            context,
+                                          ).textTheme.bodyMedium?.fontSize ??
+                                          14) *
+                                      compactSheetScale,
+                                ),
                               ),
                             ),
-                            const SizedBox(width: 4),
+                            SizedBox(width: compactScaleValue(4)),
                             Icon(
                               Icons.chevron_right_rounded,
-                              size: 16,
+                              size: compactScaleValue(16),
                               color: colorScheme.onSurfaceVariant,
                             ),
                           ],
@@ -12874,16 +12933,16 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
                                   },
                                   style: TextButton.styleFrom(
                                     visualDensity: VisualDensity.compact,
-                                    padding: const EdgeInsets.symmetric(
-                                      horizontal: 6,
-                                      vertical: 10,
+                                    padding: EdgeInsets.symmetric(
+                                      horizontal: compactScaleValue(6),
+                                      vertical: compactScaleValue(10),
                                     ),
                                   ),
                                   icon: Icon(
                                     draft.themeMode == ReaderThemeMode.sepia
                                         ? Icons.visibility_rounded
                                         : Icons.visibility_outlined,
-                                    size: 16,
+                                    size: compactScaleValue(16),
                                     color:
                                         draft.themeMode == ReaderThemeMode.sepia
                                             ? Theme.of(
@@ -12909,7 +12968,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
                               ),
                             ],
                           ),
-                          const SizedBox(height: 10),
+                          SizedBox(height: compactScaleValue(10)),
                           Row(
                             children: [
                               Expanded(
@@ -12923,7 +12982,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
                                       }),
                                 ),
                               ),
-                              const SizedBox(width: 10),
+                              SizedBox(width: compactScaleValue(10)),
                               Expanded(
                                 child: buildInterfaceCapsuleEntry(
                                   icon: Icons.fit_screen_rounded,
@@ -12936,7 +12995,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
                                       }),
                                 ),
                               ),
-                              const SizedBox(width: 10),
+                              SizedBox(width: compactScaleValue(10)),
                               Expanded(
                                 child: buildInterfaceCapsuleEntry(
                                   icon: Icons.info_outline_rounded,
@@ -12950,9 +13009,11 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
                               ),
                             ],
                           ),
-                          const SizedBox(height: 10),
+                          SizedBox(height: compactScaleValue(10)),
                           Padding(
-                            padding: const EdgeInsets.only(left: 4),
+                            padding: EdgeInsets.only(
+                              left: compactScaleValue(4),
+                            ),
                             child: Text(
                               '字号',
                               style: Theme.of(
@@ -12965,7 +13026,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
                               ),
                             ),
                           ),
-                          const SizedBox(height: 6),
+                          SizedBox(height: compactScaleValue(6)),
                           Row(
                             children: [
                               Expanded(
@@ -12973,15 +13034,15 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
                                 child: buildInterfaceInlineCapsule(
                                   padding: EdgeInsets.zero,
                                   child: SizedBox(
-                                    height: 44,
+                                    height: compactScaleValue(44),
                                     child: Row(
                                       children: [
-                                        const SizedBox(width: 8),
+                                        SizedBox(width: compactScaleValue(8)),
                                         IconButton(
                                           visualDensity: VisualDensity.compact,
-                                          constraints: const BoxConstraints(
-                                            minWidth: 32,
-                                            minHeight: 32,
+                                          constraints: BoxConstraints(
+                                            minWidth: compactScaleValue(32),
+                                            minHeight: compactScaleValue(32),
                                           ),
                                           padding: EdgeInsets.zero,
                                           onPressed: () {
@@ -12995,9 +13056,9 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
                                               );
                                             });
                                           },
-                                          icon: const Icon(
+                                          icon: Icon(
                                             Icons.remove_rounded,
-                                            size: 18,
+                                            size: compactScaleValue(18),
                                           ),
                                         ),
                                         Expanded(
@@ -13015,9 +13076,9 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
                                         ),
                                         IconButton(
                                           visualDensity: VisualDensity.compact,
-                                          constraints: const BoxConstraints(
-                                            minWidth: 32,
-                                            minHeight: 32,
+                                          constraints: BoxConstraints(
+                                            minWidth: compactScaleValue(32),
+                                            minHeight: compactScaleValue(32),
                                           ),
                                           padding: EdgeInsets.zero,
                                           onPressed: () {
@@ -13031,18 +13092,18 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
                                               );
                                             });
                                           },
-                                          icon: const Icon(
+                                          icon: Icon(
                                             Icons.add_rounded,
-                                            size: 18,
+                                            size: compactScaleValue(18),
                                           ),
                                         ),
-                                        const SizedBox(width: 8),
+                                        SizedBox(width: compactScaleValue(8)),
                                       ],
                                     ),
                                   ),
                                 ),
                               ),
-                              const SizedBox(width: 8),
+                              SizedBox(width: compactScaleValue(8)),
                               Expanded(
                                 flex: 4,
                                 child: buildInterfaceSecondaryCapsule(
@@ -13051,7 +13112,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
                                   onTap: openFontPickerSheet,
                                 ),
                               ),
-                              const SizedBox(width: 8),
+                              SizedBox(width: compactScaleValue(8)),
                               Expanded(
                                 flex: 4,
                                 child: buildInterfaceSecondaryCapsule(
@@ -13065,9 +13126,9 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
                               ),
                             ],
                           ),
-                          const SizedBox(height: 14),
+                          SizedBox(height: compactScaleValue(14)),
                           buildCompactSectionTitle('背景色'),
-                          const SizedBox(height: 10),
+                          SizedBox(height: compactScaleValue(10)),
                           SingleChildScrollView(
                             scrollDirection: Axis.horizontal,
                             child: Row(
@@ -13080,6 +13141,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
                                       mode: option.mode,
                                       backgroundStyle: option.backgroundStyle,
                                       backgroundTone: option.backgroundTone,
+                                      scale: compactSheetScale,
                                       onChanged: (next) {
                                         setModalState(() {
                                           draft = next;
@@ -13090,9 +13152,9 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
                                   .toList(growable: false),
                             ),
                           ),
-                          const SizedBox(height: 14),
+                          SizedBox(height: compactScaleValue(14)),
                           buildCompactSectionTitle('背景图'),
-                          const SizedBox(height: 10),
+                          SizedBox(height: compactScaleValue(10)),
                           ScrollConfiguration(
                             behavior: ScrollConfiguration.of(
                               context,
@@ -13105,6 +13167,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
                                     label: '无背景',
                                     selected: !hasBackgroundImage,
                                     icon: Icons.hide_image_outlined,
+                                    scale: compactSheetScale,
                                     onTap: () {
                                       setModalState(() {
                                         draft = draft.copyWith(
@@ -13116,7 +13179,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
                                       );
                                     },
                                   ),
-                                  const SizedBox(width: 8),
+                                  SizedBox(width: compactScaleValue(8)),
                                   ...presetBackgroundTiles,
                                   ...customBackgroundTiles,
                                   _buildBackgroundTile(
@@ -13124,10 +13187,11 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
                                     selected: false,
                                     icon: Icons.upload_file_rounded,
                                     showLabel: true,
+                                    scale: compactSheetScale,
                                     onTap: applyCustomBackgroundImage,
                                   ),
                                   if (hasBackgroundImage) ...[
-                                    const SizedBox(width: 8),
+                                    SizedBox(width: compactScaleValue(8)),
                                     OutlinedButton(
                                       onPressed:
                                           () => unawaited(
@@ -15650,6 +15714,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
     required ReaderBackgroundStyle backgroundStyle,
     required ReaderBackgroundTone backgroundTone,
     required ValueChanged<ReaderSettings> onChanged,
+    double scale = 1.0,
   }) {
     final normalizedTone = normalizeReaderBackgroundTone(
       mode: draft.themeMode,
@@ -15678,9 +15743,9 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
           );
         },
         child: Container(
-          width: 30,
-          height: 30,
-          margin: const EdgeInsets.only(right: 8),
+          width: 30 * scale,
+          height: 30 * scale,
+          margin: EdgeInsets.only(right: 8 * scale),
           decoration: BoxDecoration(
             color: color,
             shape: BoxShape.circle,
@@ -15689,12 +15754,16 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
                   selected
                       ? Theme.of(context).colorScheme.primary
                       : Theme.of(context).colorScheme.outlineVariant,
-              width: selected ? 2 : 1,
+              width: (selected ? 2 : 1) * scale.clamp(1.0, 1.4),
             ),
           ),
           child:
               selected
-                  ? Icon(Icons.check_rounded, size: 14, color: iconColor)
+                  ? Icon(
+                    Icons.check_rounded,
+                    size: 14 * scale,
+                    color: iconColor,
+                  )
                   : null,
         ),
       ),
@@ -15708,6 +15777,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
     VoidCallback? onTap,
     bool showLabel = true,
     IconData? icon,
+    double scale = 1.0,
   }) {
     final image =
         previewBytes == null
@@ -15718,18 +15788,18 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
             );
 
     final tile = Container(
-      width: _kBackgroundTileWidth,
-      height: _kBackgroundTileHeight,
+      width: _kBackgroundTileWidth * scale,
+      height: _kBackgroundTileHeight * scale,
       alignment: Alignment.center,
       decoration: BoxDecoration(
         color: Theme.of(context).colorScheme.surfaceContainerHighest,
-        borderRadius: BorderRadius.circular(8),
+        borderRadius: BorderRadius.circular(8 * scale),
         border: Border.all(
           color:
               selected
                   ? Theme.of(context).colorScheme.primary
                   : Theme.of(context).colorScheme.outlineVariant,
-          width: selected ? 2 : 1,
+          width: (selected ? 2 : 1) * scale.clamp(1.0, 1.4),
         ),
         image: image,
       ),
@@ -15741,19 +15811,36 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
                     children: [
                       Icon(
                         icon,
-                        size: 18,
+                        size: 18 * scale,
                         color: Theme.of(context).colorScheme.onSurfaceVariant,
                       ),
                       if (showLabel) ...[
-                        const SizedBox(height: 2),
+                        SizedBox(height: 2 * scale),
                         Text(
                           label,
-                          style: Theme.of(context).textTheme.labelSmall,
+                          style: Theme.of(
+                            context,
+                          ).textTheme.labelSmall?.copyWith(
+                            fontSize:
+                                (Theme.of(
+                                      context,
+                                    ).textTheme.labelSmall?.fontSize ??
+                                    11) *
+                                scale,
+                          ),
                         ),
                       ],
                     ],
                   )
-                  : Text(label, style: Theme.of(context).textTheme.labelSmall))
+                  : Text(
+                    label,
+                    style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                      fontSize:
+                          (Theme.of(context).textTheme.labelSmall?.fontSize ??
+                              11) *
+                          scale,
+                    ),
+                  ))
               : (!showLabel
                   ? const SizedBox.expand()
                   : Container(
@@ -15761,7 +15848,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
                     height: double.infinity,
                     alignment: Alignment.bottomCenter,
                     decoration: BoxDecoration(
-                      borderRadius: BorderRadius.circular(6),
+                      borderRadius: BorderRadius.circular(6 * scale),
                       gradient: const LinearGradient(
                         begin: Alignment.topCenter,
                         end: Alignment.bottomCenter,
@@ -15769,12 +15856,18 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
                       ),
                     ),
                     child: Padding(
-                      padding: const EdgeInsets.only(bottom: 2),
+                      padding: EdgeInsets.only(bottom: 2 * scale),
                       child: Text(
                         label,
-                        style: Theme.of(
-                          context,
-                        ).textTheme.labelSmall?.copyWith(color: Colors.white),
+                        style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                          color: Colors.white,
+                          fontSize:
+                              (Theme.of(
+                                    context,
+                                  ).textTheme.labelSmall?.fontSize ??
+                                  11) *
+                              scale,
+                        ),
                       ),
                     ),
                   )),

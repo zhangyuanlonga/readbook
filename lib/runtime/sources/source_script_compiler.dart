@@ -473,11 +473,11 @@ globalThis.source = __source;
 const __args = ${jsonEncode(args)};
 const __fn = __source?.['$methodName'];
 if (typeof __fn !== 'function') {
-  return globalThis.__appreadEncodeHostSuccess(null);
+  return globalThis.__appreadEncodeHostSuccess(null, '$methodName');
 }
 try {
   const __rawResult = await __fn.apply(__source, [__ctx, ...__args]);
-  return globalThis.__appreadEncodeHostSuccess(__rawResult);
+  return globalThis.__appreadEncodeHostSuccess(__rawResult, '$methodName');
 } catch (error) {
   return globalThis.__appreadEncodeHostFailure(error);
 } finally {
@@ -1653,6 +1653,7 @@ var source = undefined;
   const __appreadOmit = Symbol('appread.omit');
   const __appreadMaxSanitizeDepth = 8;
   const __appreadMaxArrayLength = 200;
+  const __appreadMaxChapterArrayLength = 10000;
   const __appreadMaxObjectEntries = 200;
 
   function isPlainObject(value) {
@@ -1673,13 +1674,21 @@ var source = undefined;
     };
   }
 
-  function sanitizeForHost(value, depth, seen, stats) {
+  function resolveArrayLengthLimit(rootMethodName, depth) {
+    if (depth === 0 && rootMethodName === 'chapters') {
+      return __appreadMaxChapterArrayLength;
+    }
+    return __appreadMaxArrayLength;
+  }
+
+  function sanitizeForHost(value, depth, seen, stats, rootMethodName) {
+    const effectiveStats = stats || createSanitizeStats();
     if (value === null) {
       return null;
     }
 
     if (depth > __appreadMaxSanitizeDepth) {
-      stats.maxDepthHits += 1;
+      effectiveStats.maxDepthHits += 1;
       return null;
     }
 
@@ -1694,7 +1703,7 @@ var source = undefined;
       case 'function':
       case 'symbol':
       case 'bigint':
-        stats.droppedValues += 1;
+        effectiveStats.droppedValues += 1;
         return __appreadOmit;
       default:
         break;
@@ -1707,18 +1716,27 @@ var source = undefined;
 
     if (Array.isArray(value)) {
       if (seen.has(value)) {
-        stats.circularRefs += 1;
+        effectiveStats.circularRefs += 1;
         return null;
       }
       seen.add(value);
       try {
         const result = [];
-        const limit = Math.min(value.length, __appreadMaxArrayLength);
+        const limit = Math.min(
+          value.length,
+          resolveArrayLengthLimit(rootMethodName, depth)
+        );
         if (value.length > limit) {
-          stats.trimmedArrays += value.length - limit;
+          effectiveStats.trimmedArrays += value.length - limit;
         }
         for (let index = 0; index < limit; index += 1) {
-          const sanitized = sanitizeForHost(value[index], depth + 1, seen, stats);
+          const sanitized = sanitizeForHost(
+            value[index],
+            depth + 1,
+            seen,
+            effectiveStats,
+            rootMethodName
+          );
           result.push(sanitized === __appreadOmit ? null : sanitized);
         }
         return result;
@@ -1729,21 +1747,27 @@ var source = undefined;
 
     if (valueType === 'object') {
       if (seen.has(value)) {
-        stats.circularRefs += 1;
+        effectiveStats.circularRefs += 1;
         return null;
       }
 
       if (typeof value.toJSON === 'function') {
         try {
-          return sanitizeForHost(value.toJSON(), depth + 1, seen, stats);
+          return sanitizeForHost(
+            value.toJSON(),
+            depth + 1,
+            seen,
+            effectiveStats,
+            rootMethodName
+          );
         } catch (_) {
-          stats.droppedValues += 1;
+          effectiveStats.droppedValues += 1;
           return null;
         }
       }
 
       if (!isPlainObject(value)) {
-        stats.droppedValues += 1;
+        effectiveStats.droppedValues += 1;
         return null;
       }
 
@@ -1753,12 +1777,18 @@ var source = undefined;
         const entries = Object.entries(value);
         const limit = Math.min(entries.length, __appreadMaxObjectEntries);
         if (entries.length > limit) {
-          stats.trimmedObjects += entries.length - limit;
+          effectiveStats.trimmedObjects += entries.length - limit;
         }
         for (let index = 0; index < limit; index += 1) {
           const entry = entries[index];
           const key = entry[0];
-          const sanitized = sanitizeForHost(entry[1], depth + 1, seen, stats);
+          const sanitized = sanitizeForHost(
+            entry[1],
+            depth + 1,
+            seen,
+            effectiveStats,
+            rootMethodName
+          );
           if (sanitized !== __appreadOmit) {
             result[key] = sanitized;
           }
@@ -1817,11 +1847,11 @@ var source = undefined;
   }
 
   globalThis.__appreadSafeStringify = safeStringify;
-  globalThis.__appreadEncodeHostSuccess = function(value) {
+  globalThis.__appreadEncodeHostSuccess = function(value, methodName) {
     const stats = createSanitizeStats();
     return JSON.stringify({
       ok: true,
-      value: sanitizeForHost(value, 0, new WeakSet(), stats),
+      value: sanitizeForHost(value, 0, new WeakSet(), stats, methodName),
       stats,
     });
   };

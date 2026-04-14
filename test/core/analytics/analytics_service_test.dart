@@ -112,6 +112,7 @@ class _FakeDeviceIdentityService extends DeviceIdentityService {
     return const DeviceIdentity(
       installId: 'uuid-per-install',
       deviceUid: 'hashed-device-id',
+      deviceFingerprint: 'hashed-device-fingerprint',
       platform: 'android',
       deviceBrand: 'xiaomi',
       deviceModel: '2304FPN6DC',

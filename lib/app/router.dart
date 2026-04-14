@@ -16,6 +16,7 @@ import '../features/mine/presentation/membership_center_page.dart';
 import '../features/mine/presentation/about_page.dart';
 import '../features/mine/presentation/bookmarks_page.dart';
 import '../features/mine/presentation/bottom_nav_icon_gallery_page.dart';
+import '../features/mine/presentation/bottom_nav_icon_gallery_editor_page.dart';
 import '../features/mine/presentation/feedback_page.dart';
 import '../features/mine/presentation/system_settings_page.dart';
 import '../features/auth/presentation/auth_page.dart';
@@ -108,6 +109,14 @@ final GoRouter appRouter = GoRouter(
       path: '/bottom-nav-icon-galleries',
       name: 'bottom-nav-icon-galleries',
       builder: (context, state) => const BottomNavIconGalleryPage(),
+    ),
+    GoRoute(
+      path: '/bottom-nav-icon-galleries/editor',
+      name: 'bottom-nav-icon-gallery-editor',
+      builder: (context, state) {
+        final galleryId = state.uri.queryParameters['id'] ?? '';
+        return BottomNavIconGalleryEditorPage(galleryId: galleryId);
+      },
     ),
     GoRoute(
       path: '/cache',

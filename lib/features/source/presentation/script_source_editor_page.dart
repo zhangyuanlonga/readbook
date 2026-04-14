@@ -10,6 +10,8 @@ import 'package:flutter_highlight/themes/vs2015.dart';
 import 'package:go_router/go_router.dart';
 import 'package:highlight/languages/javascript.dart';
 
+import '../../../core/auth/auth_session_store.dart';
+import '../../../core/mobile_features/mobile_feature_service.dart';
 import '../../../domain/entities/script_source.dart';
 import '../../../runtime/sources/source_script_compiler.dart'
     show SourceScriptCompileException;
@@ -36,6 +38,8 @@ enum _EditorToolbarMenuAction { format, search, toggleAppearance, debug }
 class _ScriptSourceEditorPageState extends State<ScriptSourceEditorPage> {
   late final SourceRuntimeFacade _sourceRuntimeFacade;
   late final CodeController _controller;
+  final AuthSessionStore _authSessionStore = AuthSessionStore();
+  final MobileFeatureService _mobileFeatureService = MobileFeatureService();
 
   ScriptSource? _source;
   _EditorAppearance _appearance = _EditorAppearance.night;
@@ -216,6 +220,13 @@ class _ScriptSourceEditorPageState extends State<ScriptSourceEditorPage> {
       return;
     }
 
+    if (!_isEditingExisting) {
+      final canSave = await _ensureCanCreateSource();
+      if (!canSave) {
+        return;
+      }
+    }
+
     setState(() {
       _isSaving = true;
     });
@@ -249,6 +260,40 @@ class _ScriptSourceEditorPageState extends State<ScriptSourceEditorPage> {
         });
       }
     }
+  }
+
+  Future<bool> _ensureCanCreateSource() async {
+    final session = await _authSessionStore.getSession();
+    if (session == null) {
+      _showTransientMessage('登录后可新增书源。');
+      return false;
+    }
+
+    try {
+      final modules = await _mobileFeatureService.fetchMyModules();
+      var quotaLimit = 10;
+      for (final item in modules) {
+        if (item.code == 'source_import') {
+          quotaLimit = item.quotaLimit;
+          break;
+        }
+      }
+      if (quotaLimit >= 0) {
+        final sources = await _sourceRuntimeFacade.listScriptSources();
+        if (sources.length >= quotaLimit) {
+          _showTransientMessage('普通用户最多导入 $quotaLimit 个书源，开通会员可不限量。');
+          return false;
+        }
+      }
+    } catch (_) {
+      final sources = await _sourceRuntimeFacade.listScriptSources();
+      if (sources.length >= 10) {
+        _showTransientMessage('普通用户最多导入 10 个书源，开通会员可不限量。');
+        return false;
+      }
+    }
+
+    return true;
   }
 
   Future<void> _formatSourceCode() async {

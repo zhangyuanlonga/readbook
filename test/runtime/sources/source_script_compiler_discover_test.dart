@@ -181,11 +181,19 @@ void main() {
       );
       expect(
         factory.lastInstalledBootstrapSource,
-        contains('function sanitizeForHost(value, depth, seen, stats)'),
+        contains(
+          'function sanitizeForHost(value, depth, seen, stats, rootMethodName)',
+        ),
       );
       expect(
         factory.lastInstalledBootstrapSource,
-        contains('globalThis.__appreadEncodeHostSuccess = function(value)'),
+        contains("if (depth === 0 && rootMethodName === 'chapters')"),
+      );
+      expect(
+        factory.lastInstalledBootstrapSource,
+        contains(
+          'globalThis.__appreadEncodeHostSuccess = function(value, methodName)',
+        ),
       );
       expect(factory.lastRunSnippet, contains('ctx = __ctx;'));
       expect(factory.lastRunSnippet, contains('source = __source;'));
@@ -193,7 +201,9 @@ void main() {
       expect(factory.lastRunSnippet, contains('globalThis.source = __source;'));
       expect(
         factory.lastRunSnippet,
-        contains('return globalThis.__appreadEncodeHostSuccess(__rawResult);'),
+        contains(
+          "return globalThis.__appreadEncodeHostSuccess(__rawResult, 'search');",
+        ),
       );
       expect(
         factory.lastRunSnippet,

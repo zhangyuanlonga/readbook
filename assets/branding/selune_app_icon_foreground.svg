@@ -1,34 +1,34 @@
 <svg width="1024" height="1024" viewBox="0 0 100 100" fill="none" xmlns="http://www.w3.org/2000/svg">
-  <g transform="translate(10 12) scale(0.8)">
+  <g transform="translate(7 7) scale(0.86)">
     <path
-      d="M63 16c-10.5 2.5-18.4 11.9-18.4 23.4 0 11.5 7.9 20.9 18.4 23.4-4.1 1.2-8.6 1.8-13.3 1.6-17.6-.7-31.7-14.8-32.4-32.4-.8-18.9 14.4-34.5 33.1-34.5 4.5 0 8.8.9 12.6 2.5z"
+      d="M66 12C54.6 14.7 46.1 24.9 46.1 37.3C46.1 49.7 54.6 59.9 66 62.6C61.5 63.9 56.7 64.4 51.8 64.2C32.7 63.4 17.4 48.1 16.7 29C15.8 7.9 33 -9.5 53.9 -9.5C58.8 -9.5 63.5 -8.6 67.7 -6.8L66 12Z"
       fill="url(#gold)"
     />
     <path
-      d="M24 71.5c8-2.8 16.8-4.2 26-4.2 9.4 0 18.3 1.4 26.5 4.3"
-      stroke="#F4EAD7"
-      stroke-width="4.5"
-      stroke-linecap="round"
-      opacity=".95"
-    />
-    <path
-      d="M30 78.5c6.2-2.1 13-3.2 20-3.2 7.2 0 14.2 1.2 20.6 3.4"
-      stroke="#D8C29A"
-      stroke-width="4"
-      stroke-linecap="round"
-      opacity=".86"
-    />
-    <path
-      d="M40.5 32.5c-4 2.5-6.6 7-6.6 12 0 5 2.5 9.4 6.4 11.9"
-      stroke="#D8C29A"
+      d="M42.4 26.7C38.8 29.2 36.6 33.3 36.6 37.9C36.6 42.5 38.8 46.6 42.3 49.1"
+      stroke="#E8D2A7"
       stroke-width="5"
       stroke-linecap="round"
     />
+    <path
+      d="M22.5 71.4C31.3 68.3 41 66.7 51.1 66.7C61.5 66.7 71.3 68.4 80.4 71.6"
+      stroke="#F6EDDE"
+      stroke-width="5"
+      stroke-linecap="round"
+    />
+    <path
+      d="M28 79.5C35.1 77.2 42.8 76 50.8 76C59.1 76 67 77.3 74.4 79.7"
+      stroke="#CDB383"
+      stroke-width="4.2"
+      stroke-linecap="round"
+      opacity=".95"
+    />
   </g>
   <defs>
-    <linearGradient id="gold" x1="50" y1="16" x2="50" y2="64" gradientUnits="userSpaceOnUse">
-      <stop stop-color="#F1E3C0"/>
-      <stop offset="1" stop-color="#C5A56D"/>
+    <linearGradient id="gold" x1="51.35" y1="-9.5" x2="51.35" y2="64.212" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#F6E6BF"/>
+      <stop offset="0.58" stop-color="#E0C68D"/>
+      <stop offset="1" stop-color="#C19A5A"/>
     </linearGradient>
   </defs>
 </svg>

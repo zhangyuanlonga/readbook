@@ -2,6 +2,13 @@ enum BottomNavIconGalleryTab { bookshelf, discover, stats, mine }
 
 enum BottomNavIconAssetFormat { svg, png }
 
+enum BottomNavIconVariantSlot {
+  lightUnselected,
+  lightSelected,
+  darkUnselected,
+  darkSelected,
+}
+
 class BottomNavIconAssetRef {
   const BottomNavIconAssetRef({
     required this.path,
@@ -41,6 +48,18 @@ class BottomNavIconAssetRef {
       isAsset: rawIsAsset,
     );
   }
+
+  BottomNavIconAssetRef copyWith({
+    String? path,
+    BottomNavIconAssetFormat? format,
+    bool? isAsset,
+  }) {
+    return BottomNavIconAssetRef(
+      path: path ?? this.path,
+      format: format ?? this.format,
+      isAsset: isAsset ?? this.isAsset,
+    );
+  }
 }
 
 class BottomNavIconSet {
@@ -72,6 +91,62 @@ class BottomNavIconSet {
       darkUnselected: _readAsset(json['darkUnselected']),
       darkSelected: _readAsset(json['darkSelected']),
     );
+  }
+
+  BottomNavIconSet copyWith({
+    BottomNavIconAssetRef? lightUnselected,
+    bool clearLightUnselected = false,
+    BottomNavIconAssetRef? lightSelected,
+    bool clearLightSelected = false,
+    BottomNavIconAssetRef? darkUnselected,
+    bool clearDarkUnselected = false,
+    BottomNavIconAssetRef? darkSelected,
+    bool clearDarkSelected = false,
+  }) {
+    return BottomNavIconSet(
+      lightUnselected:
+          clearLightUnselected ? null : (lightUnselected ?? this.lightUnselected),
+      lightSelected:
+          clearLightSelected ? null : (lightSelected ?? this.lightSelected),
+      darkUnselected:
+          clearDarkUnselected ? null : (darkUnselected ?? this.darkUnselected),
+      darkSelected:
+          clearDarkSelected ? null : (darkSelected ?? this.darkSelected),
+    );
+  }
+
+  BottomNavIconAssetRef? assetForSlot(BottomNavIconVariantSlot slot) {
+    return switch (slot) {
+      BottomNavIconVariantSlot.lightUnselected => lightUnselected,
+      BottomNavIconVariantSlot.lightSelected => lightSelected,
+      BottomNavIconVariantSlot.darkUnselected => darkUnselected,
+      BottomNavIconVariantSlot.darkSelected => darkSelected,
+    };
+  }
+
+  BottomNavIconSet copyWithSlot(
+    BottomNavIconVariantSlot slot, {
+    BottomNavIconAssetRef? asset,
+    bool clear = false,
+  }) {
+    return switch (slot) {
+      BottomNavIconVariantSlot.lightUnselected => copyWith(
+        lightUnselected: asset,
+        clearLightUnselected: clear,
+      ),
+      BottomNavIconVariantSlot.lightSelected => copyWith(
+        lightSelected: asset,
+        clearLightSelected: clear,
+      ),
+      BottomNavIconVariantSlot.darkUnselected => copyWith(
+        darkUnselected: asset,
+        clearDarkUnselected: clear,
+      ),
+      BottomNavIconVariantSlot.darkSelected => copyWith(
+        darkSelected: asset,
+        clearDarkSelected: clear,
+      ),
+    };
   }
 
   static BottomNavIconAssetRef? _readAsset(Object? value) {
@@ -172,6 +247,40 @@ class BottomNavIconGallery {
       isEditable: isEditable,
       isDeletable: isDeletable,
       items: Map<BottomNavIconGalleryTab, BottomNavIconSet>.unmodifiable(items),
+    );
+  }
+
+  BottomNavIconGallery copyWith({
+    String? id,
+    String? name,
+    DateTime? createdAt,
+    DateTime? updatedAt,
+    bool? isBuiltIn,
+    bool? isEditable,
+    bool? isDeletable,
+    Map<BottomNavIconGalleryTab, BottomNavIconSet>? items,
+  }) {
+    return BottomNavIconGallery(
+      id: id ?? this.id,
+      name: name ?? this.name,
+      createdAt: createdAt ?? this.createdAt,
+      updatedAt: updatedAt ?? this.updatedAt,
+      isBuiltIn: isBuiltIn ?? this.isBuiltIn,
+      isEditable: isEditable ?? this.isEditable,
+      isDeletable: isDeletable ?? this.isDeletable,
+      items: items ?? this.items,
+    );
+  }
+
+  BottomNavIconGallery copyWithItem(
+    BottomNavIconGalleryTab tab,
+    BottomNavIconSet item,
+  ) {
+    return copyWith(
+      items: Map<BottomNavIconGalleryTab, BottomNavIconSet>.unmodifiable({
+        ...items,
+        tab: item,
+      }),
     );
   }
 
