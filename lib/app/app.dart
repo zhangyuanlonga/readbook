@@ -24,6 +24,7 @@ import 'layout/app_layout.dart';
 import 'layout/app_spacing.dart';
 import 'router.dart';
 import 'theme/app_theme.dart';
+import 'theme/app_interface_typography_provider.dart';
 import 'theme/app_theme_palette.dart';
 import 'theme/app_theme_provider.dart';
 import 'theme/app_theme_seed_provider.dart';
@@ -35,21 +36,37 @@ class App extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final seedColor = ref.watch(appSeedColorProvider);
     final themeMode = ref.watch(appThemeModeProvider);
+    final interfaceFontSettings = ref.watch(appInterfaceFontSettingsProvider);
+    final interfaceTextScale = ref.watch(appInterfaceTextScaleProvider);
+    final interfaceFontWeight = ref.watch(appInterfaceFontWeightProvider);
 
     final lightScheme = buildAppLightColorScheme(seedColor);
     final darkScheme = buildAppDarkColorScheme(seedColor);
+    final fontFamily = resolveAppInterfaceFontFamily(interfaceFontSettings);
+    final fontWeight = appInterfaceFontWeightValue(interfaceFontWeight);
 
     return MaterialApp.router(
       title: 'Selune',
-      theme: AppTheme.build(lightScheme),
-      darkTheme: AppTheme.build(darkScheme),
+      theme: AppTheme.build(
+        lightScheme,
+        fontFamily: fontFamily,
+        fontWeight: fontWeight,
+      ),
+      darkTheme: AppTheme.build(
+        darkScheme,
+        fontFamily: fontFamily,
+        fontWeight: fontWeight,
+      ),
       themeMode: themeMode,
       themeAnimationDuration: const Duration(milliseconds: 180),
       themeAnimationCurve: Curves.easeOutCubic,
       routerConfig: appRouter,
       builder: (context, child) {
         final mediaQuery = MediaQuery.of(context);
-        final textScale = AppLayout.clampedTextScaleFactor(context);
+        final textScale = AppLayout.clampedTextScaleFactor(
+          context,
+          multiplier: interfaceTextScale,
+        );
         final appChild = _SystemUiOverlayWrapper(
           child: child ?? const SizedBox.shrink(),
         );

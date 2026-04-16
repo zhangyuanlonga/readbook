@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../core/navigation/global_navigator.dart';
@@ -29,6 +30,8 @@ import '../features/source/presentation/script_source_editor_page.dart';
 import '../features/source/presentation/script_source_paste_import_page.dart';
 import '../features/reader/presentation/reading_records_page.dart';
 import 'shell_scaffold.dart';
+import 'theme/app_interface_typography_provider.dart';
+import 'theme/app_theme.dart';
 
 GlobalKey<NavigatorState> get appRootNavigatorKey => globalRootNavigatorKey;
 
@@ -336,13 +339,32 @@ final GoRouter appRouter = GoRouter(
         final chapterId =
             state.pathParameters['chapterId'] ?? 'unknown-local-chapter';
         final bookmarkId = state.uri.queryParameters['bookmarkId'];
-        return ReaderPage(
-          bookId: bookId,
-          chapterId: chapterId,
-          sourceId: LocalBookImportService.localBookSourceId,
-          detailUrl: 'local://book/$bookId',
-          chapterUrl: 'local://chapter/$chapterId',
-          bookmarkId: bookmarkId,
+        return Consumer(
+          builder: (context, ref, _) {
+            final interfaceTextScale = ref.watch(
+              appInterfaceTextScaleProvider,
+            );
+            final currentScale = MediaQuery.textScalerOf(context).scale(1);
+            final baseScale = (currentScale / interfaceTextScale)
+                .clamp(0.6, 1.5)
+                .toDouble();
+            return MediaQuery(
+              data: MediaQuery.of(
+                context,
+              ).copyWith(textScaler: TextScaler.linear(baseScale)),
+              child: Theme(
+                data: AppTheme.build(Theme.of(context).colorScheme),
+                child: ReaderPage(
+                  bookId: bookId,
+                  chapterId: chapterId,
+                  sourceId: LocalBookImportService.localBookSourceId,
+                  detailUrl: 'local://book/$bookId',
+                  chapterUrl: 'local://chapter/$chapterId',
+                  bookmarkId: bookmarkId,
+                ),
+              ),
+            );
+          },
         );
       },
     ),
@@ -381,15 +403,34 @@ final GoRouter appRouter = GoRouter(
           state.uri.queryParameters['chapterIndex'] ?? '',
         );
 
-        return ReaderPage(
-          bookId: bookId,
-          chapterId: chapterId,
-          chapterUrl: chapterUrl,
-          chapterTitle: chapterTitle,
-          sourceId: sourceId,
-          detailUrl: detailUrl,
-          chapterIndex: chapterIndex,
-          bookmarkId: bookmarkId,
+        return Consumer(
+          builder: (context, ref, _) {
+            final interfaceTextScale = ref.watch(
+              appInterfaceTextScaleProvider,
+            );
+            final currentScale = MediaQuery.textScalerOf(context).scale(1);
+            final baseScale = (currentScale / interfaceTextScale)
+                .clamp(0.6, 1.5)
+                .toDouble();
+            return MediaQuery(
+              data: MediaQuery.of(
+                context,
+              ).copyWith(textScaler: TextScaler.linear(baseScale)),
+              child: Theme(
+                data: AppTheme.build(Theme.of(context).colorScheme),
+                child: ReaderPage(
+                  bookId: bookId,
+                  chapterId: chapterId,
+                  chapterUrl: chapterUrl,
+                  chapterTitle: chapterTitle,
+                  sourceId: sourceId,
+                  detailUrl: detailUrl,
+                  chapterIndex: chapterIndex,
+                  bookmarkId: bookmarkId,
+                ),
+              ),
+            );
+          },
         );
       },
     ),

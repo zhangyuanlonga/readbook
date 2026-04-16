@@ -228,10 +228,13 @@ class AppLayout {
     return shortestSide(context) < railBreakpointWidth;
   }
 
-  static double clampedTextScaleFactor(BuildContext context) {
-    final raw = MediaQuery.textScalerOf(context).scale(1);
-    final minScale = isPhone(context) ? 0.9 : 0.92;
-    final maxScale = isPhone(context) ? 1.24 : 1.3;
+  static double clampedTextScaleFactor(
+    BuildContext context, {
+    double multiplier = 1,
+  }) {
+    final raw = MediaQuery.textScalerOf(context).scale(1) * multiplier;
+    const minScale = 0.6;
+    const maxScale = 1.5;
     return raw.clamp(minScale, maxScale).toDouble();
   }
 

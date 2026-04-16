@@ -4,12 +4,17 @@ import 'package:flutter/services.dart';
 class AppTheme {
   const AppTheme._();
 
-  static ThemeData build(ColorScheme colorScheme) {
+  static ThemeData build(
+    ColorScheme colorScheme, {
+    String? fontFamily,
+    FontWeight? fontWeight,
+  }) {
     final overlayStyle = _overlayStyleFor(colorScheme.brightness);
 
-    return ThemeData(
+    final baseTheme = ThemeData(
       useMaterial3: true,
       colorScheme: colorScheme,
+      fontFamily: fontFamily,
       scaffoldBackgroundColor: colorScheme.surface,
       visualDensity: const VisualDensity(horizontal: -0.2, vertical: -0.2),
       appBarTheme: AppBarTheme(
@@ -77,6 +82,14 @@ class AppTheme {
         ),
       ),
     );
+
+    return baseTheme.copyWith(
+      textTheme: _applyGlobalFontWeight(baseTheme.textTheme, fontWeight),
+      primaryTextTheme: _applyGlobalFontWeight(
+        baseTheme.primaryTextTheme,
+        fontWeight,
+      ),
+    );
   }
 
   static SystemUiOverlayStyle _overlayStyleFor(Brightness brightness) {
@@ -89,6 +102,36 @@ class AppTheme {
       statusBarColor: Colors.transparent,
       systemNavigationBarColor: Colors.transparent,
       systemNavigationBarDividerColor: Colors.transparent,
+    );
+  }
+
+  static TextTheme _applyGlobalFontWeight(
+    TextTheme theme,
+    FontWeight? fontWeight,
+  ) {
+    if (fontWeight == null) {
+      return theme;
+    }
+    TextStyle? withWeight(TextStyle? style) => style?.copyWith(
+      fontWeight: fontWeight,
+    );
+
+    return TextTheme(
+      displayLarge: withWeight(theme.displayLarge),
+      displayMedium: withWeight(theme.displayMedium),
+      displaySmall: withWeight(theme.displaySmall),
+      headlineLarge: withWeight(theme.headlineLarge),
+      headlineMedium: withWeight(theme.headlineMedium),
+      headlineSmall: withWeight(theme.headlineSmall),
+      titleLarge: withWeight(theme.titleLarge),
+      titleMedium: withWeight(theme.titleMedium),
+      titleSmall: withWeight(theme.titleSmall),
+      bodyLarge: withWeight(theme.bodyLarge),
+      bodyMedium: withWeight(theme.bodyMedium),
+      bodySmall: withWeight(theme.bodySmall),
+      labelLarge: withWeight(theme.labelLarge),
+      labelMedium: withWeight(theme.labelMedium),
+      labelSmall: withWeight(theme.labelSmall),
     );
   }
 }
