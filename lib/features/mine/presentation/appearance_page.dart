@@ -32,8 +32,21 @@ enum AppFontFamily {
   final String label;
 }
 
-final appFontFamilyProvider = StateProvider<AppFontFamily>((ref) {
-  return AppFontFamily.system;
+class CustomFont {
+  const CustomFont({
+    required this.name,
+    required this.path,
+  });
+  final String name;
+  final String path;
+}
+
+final appFontFamilyProvider = StateProvider<String>((ref) {
+  return 'system';
+});
+
+final customFontsProvider = StateProvider<List<CustomFont>>((ref) {
+  return [];
 });
 
 final appFontScaleProvider = StateProvider<double>((ref) {
@@ -587,8 +600,16 @@ class _AppearancePageState extends ConsumerState<AppearancePage> {
     );
   }
 
-  Widget _buildFontFamilyTile(BuildContext context, AppFontFamily selected) {
+  Widget _buildFontFamilyTile(BuildContext context, String selectedFont) {
     final colorScheme = Theme.of(context).colorScheme;
+    final customFonts = ref.watch(customFontsProvider);
+    final fontLabel = selectedFont == 'system'
+        ? '系统默认'
+        : customFonts.firstWhere(
+            (f) => f.name == selectedFont,
+            orElse: () => const CustomFont(name: '系统默认', path: ''),
+          ).name;
+
     return InkWell(
       borderRadius: BorderRadius.circular(10),
       onTap: () => _showFontFamilyBottomSheet(context),
@@ -607,7 +628,7 @@ class _AppearancePageState extends ConsumerState<AppearancePage> {
               ),
             ),
             Text(
-              selected.label,
+              fontLabel,
               style: Theme.of(context).textTheme.bodySmall?.copyWith(
                 color: colorScheme.onSurfaceVariant,
               ),
@@ -689,33 +710,12 @@ class _AppearancePageState extends ConsumerState<AppearancePage> {
   Future<void> _showFontFamilyBottomSheet(BuildContext context) async {
     await showModalBottomSheet(
       context: context,
+      isScrollControlled: true,
       builder: (context) {
-        final selected = ref.read(appFontFamilyProvider);
         return SafeArea(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              const Padding(
-                padding: EdgeInsets.symmetric(vertical: 12),
-                child: Text(
-                  '选择字体',
-                  style: TextStyle(fontWeight: FontWeight.w700, fontSize: 16),
-                ),
-              ),
-              const Divider(height: 1),
-              for (final font in AppFontFamily.values)
-                ListTile(
-                  leading: Icon(
-                    font == selected ? Icons.check_circle : Icons.circle_outlined,
-                    color: font == selected ? Theme.of(context).colorScheme.primary : null,
-                  ),
-                  title: Text(font.label),
-                  onTap: () {
-                    ref.read(appFontFamilyProvider.notifier).state = font;
-                    Navigator.pop(context);
-                  },
-                ),
-            ],
+          child: SizedBox(
+            height: MediaQuery.of(context).size.height * 0.6,
+            child: const _FontFamilyPickerDialog(),
           ),
         );
       },
@@ -1249,4 +1249,190 @@ class _NavigationStyleOption {
   final AppNavigationStylePreference preference;
   final String label;
   final IconData icon;
+}
+
+class _FontFamilyPickerDialog extends ConsumerStatefulWidget {
+  const _FontFamilyPickerDialog();
+
+  @override
+  ConsumerState<_FontFamilyPickerDialog> createState() =>
+      _FontFamilyPickerDialogState();
+}
+
+class _FontFamilyPickerDialogState
+    extends ConsumerState<_FontFamilyPickerDialog>
+    with SingleTickerProviderStateMixin {
+  late TabController _tabController;
+
+  @override
+  void initState() {
+    super.initState();
+    _tabController = TabController(length: 2, vsync: this);
+  }
+
+  @override
+  void dispose() {
+    _tabController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      children: [
+        const Padding(
+          padding: EdgeInsets.symmetric(vertical: 12),
+          child: Text(
+            '选择字体',
+            style: TextStyle(fontWeight: FontWeight.w700, fontSize: 16),
+          ),
+        ),
+        const Divider(height: 1),
+        TabBar(
+          controller: _tabController,
+          tabs: const [
+            Tab(text: '我的字体'),
+            Tab(text: '系统字体'),
+          ],
+        ),
+        Expanded(
+          child: TabBarView(
+            controller: _tabController,
+            children: [
+              _buildMyFontsTab(),
+              _buildSystemFontsTab(),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildMyFontsTab() {
+    final customFonts = ref.watch(customFontsProvider);
+    final selectedFont = ref.watch(appFontFamilyProvider);
+
+    return Column(
+      children: [
+        ListTile(
+          leading: Icon(
+            Icons.add_circle_outline,
+            color: Theme.of(context).colorScheme.primary,
+          ),
+          title: Text(
+            '上传字体文件',
+            style: TextStyle(
+              color: Theme.of(context).colorScheme.primary,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+          subtitle: const Text('支持 TTF、OTF、TTC 格式'),
+          onTap: () {
+            (context as Element).visitAncestorElements((element) {
+              if (element.widget is AppearancePage) {
+                (element as StatefulElement).state;
+                return false;
+              }
+              return true;
+            });
+            _uploadFontFromDialog();
+          },
+        ),
+        const Divider(height: 1),
+        Expanded(
+          child: customFonts.isEmpty
+              ? const Center(
+                  child: Text(
+                    '暂未上传字体',
+                    style: TextStyle(color: Colors.grey),
+                  ),
+                )
+              : ListView.builder(
+                  itemCount: customFonts.length,
+                  itemBuilder: (context, index) {
+                    final font = customFonts[index];
+                    final isSelected = font.name == selectedFont;
+                    return ListTile(
+                      leading: Icon(
+                        isSelected
+                            ? Icons.check_circle
+                            : Icons.font_download_outlined,
+                        color:
+                            isSelected
+                                ? Theme.of(context).colorScheme.primary
+                                : null,
+                      ),
+                      title: Text(font.name),
+                      onTap: () {
+                        ref.read(appFontFamilyProvider.notifier).state =
+                            font.name;
+                        Navigator.pop(context);
+                      },
+                    );
+                  },
+                ),
+        ),
+      ],
+    );
+  }
+
+  Future<void> _uploadFontFromDialog() async {
+    final types = [
+      XTypeGroup(
+        label: 'Fonts',
+        extensions: const ['ttf', 'otf', 'ttc'],
+      ),
+    ];
+    final file = await openFile(acceptedTypeGroups: types);
+    if (file == null || !mounted) return;
+
+    final dir = await getApplicationDocumentsDirectory();
+    final fontDir = Directory('${dir.path}/fonts');
+    if (!await fontDir.exists()) {
+      await fontDir.create(recursive: true);
+    }
+
+    final fileName = file.name.split('/').last;
+    final destPath = '${fontDir.path}/$fileName';
+    final destFile = File(destPath);
+    await destFile.writeAsBytes(await file.readAsBytes());
+
+    final fontName = fileName.split('.').first;
+    final customFonts = ref.read(customFontsProvider);
+    if (!customFonts.any((f) => f.name == fontName)) {
+      ref.read(customFontsProvider.notifier).state = [
+        ...customFonts,
+        CustomFont(name: fontName, path: destPath),
+      ];
+    }
+  }
+
+  Widget _buildSystemFontsTab() {
+    final selectedFont = ref.watch(appFontFamilyProvider);
+    final systemFonts = const [
+      ('system', '系统默认'),
+      ('serif', '衬线体'),
+      ('monospace', '等宽体'),
+    ];
+
+    return ListView.builder(
+      itemCount: systemFonts.length,
+      itemBuilder: (context, index) {
+        final font = systemFonts[index];
+        final isSelected = font.$1 == selectedFont;
+        return ListTile(
+          leading: Icon(
+            isSelected ? Icons.check_circle : Icons.font_download_outlined,
+            color:
+                isSelected ? Theme.of(context).colorScheme.primary : null,
+          ),
+          title: Text(font.$2),
+          onTap: () {
+            ref.read(appFontFamilyProvider.notifier).state = font.$1;
+            Navigator.pop(context);
+          },
+        );
+      },
+    );
+  }
 }
