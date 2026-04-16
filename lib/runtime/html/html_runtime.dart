@@ -6,6 +6,7 @@ import 'html_helpers.dart';
 abstract class HtmlRuntime {
   dom.Document parse(String source);
   String text(dom.Node? node);
+  String innerHtml(dom.Element? element);
   String attr(dom.Element? element, String name);
   List<T> collect<T>(
     Iterable<dom.Element> elements,
@@ -27,6 +28,14 @@ class DefaultHtmlRuntime implements HtmlRuntime {
       return '';
     }
     return normalizeHtmlText(node.text ?? '');
+  }
+
+  @override
+  String innerHtml(dom.Element? element) {
+    if (element == null) {
+      return '';
+    }
+    return element.innerHtml;
   }
 
   @override

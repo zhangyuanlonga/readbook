@@ -356,40 +356,41 @@ class _SourcePageState extends State<SourcePage> {
   }
 
   Future<void> _loadFeatureAccess() async {
+    if (!mounted) {
+      return;
+    }
+
+    // 默认允许访问，设置合理的默认值
+    setState(() {
+      _canAccessSourcePage = true;
+      _sourceImportLimit = 10; // 默认限制10个书源
+      _isFeatureAccessLoading = true;
+    });
+
     final session = await _authSessionStore.getSession();
     if (!mounted) {
       return;
     }
+
+    // 未登录用户：直接使用默认配置
     if (session == null) {
-      try {
-        final modules = await _mobileFeatureService.fetchPublicModules();
-        final sourceEntry = _findFeatureModule(modules, 'source_entry');
-        final sourceImport = _findFeatureModule(modules, 'source_import');
-        if (!mounted) {
-          return;
-        }
-        setState(() {
-          _canAccessSourcePage =
-              sourceEntry?.visible == true && sourceEntry?.enabled != false;
-          _sourceImportLimit = sourceImport?.quotaLimit ?? 0;
-          _isFeatureAccessLoading = false;
-        });
-        return;
-      } catch (_) {
-        if (!mounted) {
-          return;
-        }
-        setState(() {
-          _canAccessSourcePage = false;
-          _sourceImportLimit = 0;
-          _isFeatureAccessLoading = false;
-        });
-        return;
-      }
+      setState(() {
+        _canAccessSourcePage = true;
+        _sourceImportLimit = 10;
+        _isFeatureAccessLoading = false;
+      });
+      return;
     }
 
+    // 已登录用户：尝试获取权限配置，失败时使用默认值
     try {
-      final modules = await _mobileFeatureService.fetchMyModules();
+      final modules = await _mobileFeatureService.fetchMyModules().timeout(
+        const Duration(seconds: 5),
+        onTimeout: () {
+          // 超时时抛出异常，走 catch 分支
+          throw TimeoutException('Request timeout');
+        },
+      );
       final sourceEntry = _findFeatureModule(modules, 'source_entry');
       final sourceImport = _findFeatureModule(modules, 'source_import');
       if (!mounted) {
@@ -401,13 +402,15 @@ class _SourcePageState extends State<SourcePage> {
         _sourceImportLimit = sourceImport?.quotaLimit ?? 10;
         _isFeatureAccessLoading = false;
       });
-    } catch (_) {
+    } catch (e) {
+      // 网络异常、超时或其他错误时，使用默认配置
       if (!mounted) {
         return;
       }
+      debugPrint('获取功能权限失败，使用默认配置: $e');
       setState(() {
-        _canAccessSourcePage = true;
-        _sourceImportLimit = 10;
+        _canAccessSourcePage = true; // 允许访问
+        _sourceImportLimit = 10; // 默认限制
         _isFeatureAccessLoading = false;
       });
     }
@@ -427,19 +430,14 @@ class _SourcePageState extends State<SourcePage> {
 
   Future<bool> _ensureCanAddSource() async {
     if (_isFeatureAccessLoading) {
-      _showMessage('正在读取书源权限，请稍后重试。');
+      _showMessage('正在初始化书源功能，请稍后重试。');
       return false;
     }
-    if (!_canAccessSourcePage) {
-      _showMessage('登录后可使用书源功能。');
-      if (mounted) {
-        unawaited(context.push('/auth'));
-      }
-      return false;
-    }
+
+    // 移除登录检查，只检查数量限制
     if (_sourceImportLimit >= 0 &&
         _lastRawSources.length >= _sourceImportLimit) {
-      _showMessage('普通用户最多导入 $_sourceImportLimit 个书源，开通会员可不限量。');
+      _showMessage('已达到书源导入上限（最多 $_sourceImportLimit 个）。');
       return false;
     }
     return true;
@@ -462,6 +460,7 @@ class _SourcePageState extends State<SourcePage> {
       );
     }
 
+    // 只有在明确被禁用时才显示提示（基本上不会发生）
     if (!_canAccessSourcePage) {
       return Scaffold(
         appBar: AppBar(title: const Text('书源')),
@@ -471,10 +470,10 @@ class _SourcePageState extends State<SourcePage> {
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                const Icon(Icons.lock_outline, size: 40),
+                const Icon(Icons.info_outline, size: 40),
                 const SizedBox(height: 12),
                 Text(
-                  '登录后可使用书源功能',
+                  '书源功能暂不可用',
                   style: Theme.of(context).textTheme.titleMedium?.copyWith(
                     fontWeight: FontWeight.w700,
                   ),
@@ -482,14 +481,9 @@ class _SourcePageState extends State<SourcePage> {
                 ),
                 const SizedBox(height: 8),
                 Text(
-                  '当前账号未开通书源入口，或尚未登录。',
+                  '请联系管理员或稍后再试。',
                   style: Theme.of(context).textTheme.bodyMedium,
                   textAlign: TextAlign.center,
-                ),
-                const SizedBox(height: 16),
-                FilledButton(
-                  onPressed: () => context.push('/auth'),
-                  child: const Text('去登录'),
                 ),
               ],
             ),

@@ -1,8 +1,6 @@
 package com.jiangyan.selune
 
-import android.content.ComponentName
 import android.content.Intent
-import android.content.pm.PackageManager
 import android.database.Cursor
 import android.net.Uri
 import android.os.Build
@@ -26,11 +24,6 @@ class MainActivity : FlutterActivity() {
         private const val READER_VOLUME_KEY_CHANNEL_NAME = "com.jiangyan.selune/reader_volume_keys"
         private const val READER_VOLUME_KEY_EVENT_CHANNEL_NAME = "com.jiangyan.selune/reader_volume_keys/events"
         private const val METHOD_SET_INTERCEPT_VOLUME_KEYS = "setInterceptVolumeKeys"
-        private const val APP_ICON_CHANNEL_NAME = "com.jiangyan.selune/app_icon"
-        private const val METHOD_SET_APP_ICON = "setAppIcon"
-        private const val METHOD_GET_CURRENT_APP_ICON = "getCurrentAppIcon"
-        private const val LIGHT_ICON_ALIAS = "com.jiangyan.selune.LightIconAlias"
-        private const val DARK_ICON_ALIAS = "com.jiangyan.selune.DarkIconAlias"
         private const val DEFAULT_PAYLOAD_LABEL = "外部导入"
         private const val PAYLOAD_TYPE_LOCAL_BOOK = "localBook"
         private const val PAYLOAD_TYPE_SCRIPT_SOURCE = "scriptSource"
@@ -40,7 +33,6 @@ class MainActivity : FlutterActivity() {
     private var readerVolumeKeyMethodChannel: MethodChannel? = null
     private var readerVolumeKeyEventChannel: EventChannel? = null
     private var readerVolumeKeyEventSink: EventChannel.EventSink? = null
-    private var appIconMethodChannel: MethodChannel? = null
     private var pendingInitialPayload: Map<String, Any>? = null
     private var interceptReaderVolumeKeys = false
 
@@ -104,24 +96,6 @@ class MainActivity : FlutterActivity() {
             )
         }
 
-        appIconMethodChannel = MethodChannel(
-            flutterEngine.dartExecutor.binaryMessenger,
-            APP_ICON_CHANNEL_NAME
-        ).also { channel ->
-            channel.setMethodCallHandler { call, result ->
-                when (call.method) {
-                    METHOD_GET_CURRENT_APP_ICON -> {
-                        result.success(getCurrentAppIcon())
-                    }
-                    METHOD_SET_APP_ICON -> {
-                        result.success(setAppIcon(call.arguments))
-                    }
-
-                    else -> result.notImplemented()
-                }
-            }
-        }
-
         if (pendingInitialPayload == null) {
             pendingInitialPayload = extractPayloadFromIntent(intent)
         }
@@ -144,8 +118,6 @@ class MainActivity : FlutterActivity() {
         readerVolumeKeyEventChannel?.setStreamHandler(null)
         readerVolumeKeyEventChannel = null
         readerVolumeKeyEventSink = null
-        appIconMethodChannel?.setMethodCallHandler(null)
-        appIconMethodChannel = null
         interceptReaderVolumeKeys = false
         super.onDestroy()
     }
@@ -422,40 +394,5 @@ class MainActivity : FlutterActivity() {
         }
 
         return list ?: emptyList()
-    }
-
-    private fun setAppIcon(arguments: Any?): Boolean {
-        val args = arguments as? Map<*, *> ?: return false
-        val variant = args["variant"]?.toString()?.trim()?.lowercase(Locale.ROOT) ?: return false
-        val enableLight = variant != "dark"
-
-        val packageManager = packageManager
-        val lightAlias = ComponentName(this, LIGHT_ICON_ALIAS)
-        val darkAlias = ComponentName(this, DARK_ICON_ALIAS)
-
-        packageManager.setComponentEnabledSetting(
-            lightAlias,
-            if (enableLight) PackageManager.COMPONENT_ENABLED_STATE_ENABLED
-            else PackageManager.COMPONENT_ENABLED_STATE_DISABLED,
-            PackageManager.DONT_KILL_APP
-        )
-        packageManager.setComponentEnabledSetting(
-            darkAlias,
-            if (enableLight) PackageManager.COMPONENT_ENABLED_STATE_DISABLED
-            else PackageManager.COMPONENT_ENABLED_STATE_ENABLED,
-            PackageManager.DONT_KILL_APP
-        )
-        return true
-    }
-
-    private fun getCurrentAppIcon(): String {
-        val packageManager = packageManager
-        val darkAlias = ComponentName(this, DARK_ICON_ALIAS)
-        val darkState = packageManager.getComponentEnabledSetting(darkAlias)
-        return if (darkState == PackageManager.COMPONENT_ENABLED_STATE_ENABLED) {
-            "dark"
-        } else {
-            "light"
-        }
     }
 }

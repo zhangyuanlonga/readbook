@@ -31,18 +31,6 @@
 			<key>CFBundleIconName</key>
 			<string>AppIcon</string>
 		</dict>
-		<key>CFBundleAlternateIcons</key>
-		<dict>
-			<key>AppIconAlt</key>
-			<dict>
-				<key>CFBundleIconFiles</key>
-				<array>
-					<string>AppIconAlt</string>
-				</array>
-				<key>UIPrerenderedIcon</key>
-				<false/>
-			</dict>
-		</dict>
 	</dict>
 	<key>CFBundleIcons~ipad</key>
 	<dict>
@@ -50,18 +38,6 @@
 		<dict>
 			<key>CFBundleIconName</key>
 			<string>AppIcon</string>
-		</dict>
-		<key>CFBundleAlternateIcons</key>
-		<dict>
-			<key>AppIconAlt</key>
-			<dict>
-				<key>CFBundleIconFiles</key>
-				<array>
-					<string>AppIconAlt</string>
-				</array>
-				<key>UIPrerenderedIcon</key>
-				<false/>
-			</dict>
 		</dict>
 	</dict>
 	<key>CFBundleDocumentTypes</key>

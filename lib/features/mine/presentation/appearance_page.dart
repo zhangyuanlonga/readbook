@@ -9,18 +9,15 @@ import '../../../app/layout/app_layout.dart';
 import '../../../app/layout/app_spacing.dart';
 import '../../../app/navigation/app_navigation_style_provider.dart';
 import '../../../app/shell_navigation_provider.dart';
-import '../../../app/theme/app_icon_provider.dart';
 import '../../../app/theme/app_theme_palette.dart';
 import '../../../app/theme/app_theme_provider.dart';
 import '../../../app/theme/app_theme_seed_provider.dart';
 import '../../../app/widgets/cupertino_dock_navigation_bar.dart';
 import '../../../app/widgets/text_cover_placeholder.dart';
-import '../../../core/device/app_icon_service.dart';
 
 enum AppearanceSection {
   overview,
   themeMode,
-  appIcon,
   themeColor,
   bottomBar,
   coverGallery,
@@ -93,7 +90,6 @@ class _AppearancePageState extends ConsumerState<AppearancePage> {
   Widget build(BuildContext context) {
     final horizontal = AppSpacing.pageHorizontal(context);
     final selectedThemeMode = ref.watch(appThemeModeProvider);
-    final selectedAppIconVariant = ref.watch(appIconVariantProvider);
     final selectedSeedColor = ref.watch(appSeedColorProvider);
     final selectedNavigationStyle = ref.watch(
       appNavigationStylePreferenceProvider,
@@ -130,7 +126,6 @@ class _AppearancePageState extends ConsumerState<AppearancePage> {
                     context,
                     navigationState,
                     selectedThemeMode: selectedThemeMode,
-                    selectedAppIconVariant: selectedAppIconVariant,
                     selectedSeedColor: selectedSeedColor,
                     selectedNavigationStyle: selectedNavigationStyle,
                     showNavigationLabels: showNavigationLabels,
@@ -148,7 +143,6 @@ class _AppearancePageState extends ConsumerState<AppearancePage> {
     return switch (section) {
       AppearanceSection.overview => '外观',
       AppearanceSection.themeMode => '主题模式',
-      AppearanceSection.appIcon => '应用图标',
       AppearanceSection.themeColor => '主题颜色',
       AppearanceSection.bottomBar => '底栏配置',
       AppearanceSection.coverGallery => '封面图集',
@@ -160,7 +154,6 @@ class _AppearancePageState extends ConsumerState<AppearancePage> {
     BuildContext context,
     AppShellNavigationState navigationState, {
     required ThemeMode selectedThemeMode,
-    required AppIconVariant selectedAppIconVariant,
     required Color selectedSeedColor,
     required AppNavigationStylePreference selectedNavigationStyle,
     required bool showNavigationLabels,
@@ -185,21 +178,6 @@ class _AppearancePageState extends ConsumerState<AppearancePage> {
         widget.section == AppearanceSection.themeMode) {
       sections.add(
         _buildThemeModeSection(context, selectedThemeMode: selectedThemeMode),
-      );
-      if (ref.watch(appIconServiceProvider).isSupported) {
-        sections.add(const SizedBox(height: 12));
-        sections.add(
-          _buildAppIconSection(
-            context,
-            selectedVariant: selectedAppIconVariant,
-          ),
-        );
-      }
-    }
-
-    if (widget.section == AppearanceSection.appIcon) {
-      sections.add(
-        _buildAppIconSection(context, selectedVariant: selectedAppIconVariant),
       );
     }
 
@@ -314,58 +292,6 @@ class _AppearancePageState extends ConsumerState<AppearancePage> {
     );
   }
 
-  Widget _buildAppIconSection(
-    BuildContext context, {
-    required AppIconVariant selectedVariant,
-  }) {
-    return _buildSectionCard(
-      context,
-      icon: Icons.apps_outage_outlined,
-      title: '应用图标',
-      subtitle: '切换浅色或深色桌面图标，默认浅色。仅 Android 和 iOS 支持。',
-      child: LayoutBuilder(
-        builder: (context, constraints) {
-          const spacing = 10.0;
-          final columns = AppLayout.optionGridColumnsForWidth(
-            constraints.maxWidth,
-          ).clamp(1, 2);
-          final itemWidth =
-              (constraints.maxWidth - ((columns - 1) * spacing)) / columns;
-
-          return Wrap(
-            spacing: spacing,
-            runSpacing: spacing,
-            children: AppIconVariant.values
-                .map(
-                  (variant) => SizedBox(
-                    width: itemWidth,
-                    child: _buildAppIconTile(
-                      context,
-                      variant: variant,
-                      selected: selectedVariant == variant,
-                      onTap: () async {
-                        if (selectedVariant == variant) {
-                          return;
-                        }
-                        final didApply = await ref
-                            .read(appIconVariantProvider.notifier)
-                            .setVariant(variant);
-                        if (!didApply && context.mounted) {
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            const SnackBar(content: Text('切换应用图标失败，请稍后重试。')),
-                          );
-                        }
-                      },
-                    ),
-                  ),
-                )
-                .toList(growable: false),
-          );
-        },
-      ),
-    );
-  }
-
   Widget _buildThemeColorSection(
     BuildContext context, {
     required Color selectedSeedColor,
@@ -412,94 +338,6 @@ class _AppearancePageState extends ConsumerState<AppearancePage> {
                 .toList(growable: false),
           );
         },
-      ),
-    );
-  }
-
-  Widget _buildAppIconTile(
-    BuildContext context, {
-    required AppIconVariant variant,
-    required bool selected,
-    required Future<void> Function() onTap,
-  }) {
-    final colorScheme = Theme.of(context).colorScheme;
-
-    return InkWell(
-      borderRadius: BorderRadius.circular(16),
-      onTap: () {
-        unawaited(onTap());
-      },
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 160),
-        curve: Curves.easeOutCubic,
-        padding: const EdgeInsets.fromLTRB(12, 12, 12, 12),
-        decoration: BoxDecoration(
-          color:
-              selected
-                  ? colorScheme.secondaryContainer.withValues(alpha: 0.82)
-                  : colorScheme.surface,
-          borderRadius: BorderRadius.circular(16),
-          border: Border.all(
-            color:
-                selected
-                    ? colorScheme.primary
-                    : colorScheme.outlineVariant.withValues(alpha: 0.58),
-            width: selected ? 1.4 : 1,
-          ),
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Center(
-              child: Container(
-                width: 84,
-                height: 84,
-                clipBehavior: Clip.antiAlias,
-                decoration: BoxDecoration(
-                  borderRadius: BorderRadius.circular(20),
-                  boxShadow: [
-                    BoxShadow(
-                      color: colorScheme.shadow.withValues(alpha: 0.08),
-                      blurRadius: 16,
-                      offset: const Offset(0, 8),
-                    ),
-                  ],
-                ),
-                child: Image.asset(
-                  variant.previewAssetPath,
-                  fit: BoxFit.cover,
-                  filterQuality: FilterQuality.high,
-                ),
-              ),
-            ),
-            const SizedBox(height: 12),
-            Row(
-              children: [
-                Expanded(
-                  child: Text(
-                    variant.label,
-                    style: Theme.of(context).textTheme.labelLarge?.copyWith(
-                      fontWeight: FontWeight.w700,
-                    ),
-                  ),
-                ),
-                Icon(
-                  selected ? Icons.check_circle_rounded : Icons.circle_outlined,
-                  size: 18,
-                  color: selected ? colorScheme.primary : colorScheme.outline,
-                ),
-              ],
-            ),
-            const SizedBox(height: 4),
-            Text(
-              variant.subtitle,
-              style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                color: colorScheme.onSurfaceVariant,
-                height: 1.35,
-              ),
-            ),
-          ],
-        ),
       ),
     );
   }

@@ -717,6 +717,12 @@ try {
       final handle = _readInt(payload['handle']);
       return ctx.html.text(htmlHandleStore.get(handle));
     });
+    runtime.registerBridge('__ctx_html_inner_html', (dynamic args) {
+      final payload = _asMap(args);
+      final handle = _readInt(payload['handle']);
+      final node = htmlHandleStore.get(handle);
+      return node is dom.Element ? ctx.html.innerHtml(node) : '';
+    });
     runtime.registerBridge('__ctx_html_attr', (dynamic args) {
       final payload = _asMap(args);
       final handle = _readInt(payload['handle']);
@@ -1976,6 +1982,9 @@ var source = undefined;
       },
       get innerText() {
         return hostCall('__ctx_html_text', { handle }) || '';
+      },
+      get innerHtml() {
+        return hostCall('__ctx_html_inner_html', { handle }) || '';
       }
     };
   }
@@ -2043,6 +2052,12 @@ var source = undefined;
             return '';
           }
           return hostCall('__ctx_html_text', { handle: node.__handle }) || '';
+        },
+        innerHtml(node) {
+          if (!node) {
+            return '';
+          }
+          return hostCall('__ctx_html_inner_html', { handle: node.__handle }) || '';
         },
         attr(node, name) {
           if (!node) {

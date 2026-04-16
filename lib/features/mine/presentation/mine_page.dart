@@ -11,7 +11,6 @@ import '../../../app/layout/app_spacing.dart';
 import '../../../app/navigation/mobile_bottom_navigation_inset.dart';
 import '../../../app/navigation/app_navigation_style_provider.dart';
 import '../../../app/shell_navigation_provider.dart';
-import '../../../app/theme/app_icon_provider.dart';
 import '../../../app/theme/app_theme_palette.dart';
 import '../../../app/theme/app_theme_provider.dart';
 import '../../../app/theme/app_theme_seed_provider.dart';
@@ -74,8 +73,6 @@ class _MinePageState extends ConsumerState<MinePage> {
   Widget build(BuildContext context) {
     final horizontal = AppSpacing.pageHorizontal(context);
     final seedColor = ref.watch(appSeedColorProvider);
-    final appIconVariant = ref.watch(appIconVariantProvider);
-    final appIconSupported = ref.watch(appIconServiceProvider).isSupported;
     final themeMode = ref.watch(appThemeModeProvider);
     final navigationPreference = ref.watch(
       appNavigationStylePreferenceProvider,
@@ -155,16 +152,6 @@ class _MinePageState extends ConsumerState<MinePage> {
                                   '/appearance?section=theme-mode',
                                 ),
                           ),
-                          if (appIconSupported)
-                            _MineActionItem(
-                              icon: Icons.apps_outage_outlined,
-                              label: '应用图标',
-                              subtitle: appIconVariant.label,
-                              onTap:
-                                  () => context.push(
-                                    '/appearance?section=app-icon',
-                                  ),
-                            ),
                           _MineActionItem(
                             icon: Icons.palette_outlined,
                             label: '主题颜色',

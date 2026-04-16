@@ -263,32 +263,53 @@ class _ScriptSourceEditorPageState extends State<ScriptSourceEditorPage> {
   }
 
   Future<bool> _ensureCanCreateSource() async {
-    final session = await _authSessionStore.getSession();
-    if (session == null) {
-      _showTransientMessage('登录后可新增书源。');
+    // 默认限制为 10 个书源
+    const int defaultQuotaLimit = 10;
+
+    // 获取当前书源数量
+    final sources = await _sourceRuntimeFacade.listScriptSources();
+    final currentCount = sources.length;
+
+    // 如果当前数量已经达到默认限制，直接拒绝
+    if (currentCount >= defaultQuotaLimit) {
+      _showTransientMessage('最多只能创建 $defaultQuotaLimit 个书源。');
       return false;
     }
 
+    // 尝试获取已登录用户的权限配置（网络请求可能失败）
+    final session = await _authSessionStore.getSession();
+    if (session == null) {
+      // 未登录用户：使用默认限制
+      return true;
+    }
+
+    // 已登录用户：尝试获取会员配置，失败时使用默认限制
     try {
-      final modules = await _mobileFeatureService.fetchMyModules();
-      var quotaLimit = 10;
+      final modules = await _mobileFeatureService.fetchMyModules().timeout(
+        const Duration(seconds: 5),
+        onTimeout: () {
+          // 超时时抛出异常，走 catch 分支
+          throw TimeoutException('Request timeout');
+        },
+      );
+
+      var quotaLimit = defaultQuotaLimit;
       for (final item in modules) {
         if (item.code == 'source_import') {
           quotaLimit = item.quotaLimit;
           break;
         }
       }
-      if (quotaLimit >= 0) {
-        final sources = await _sourceRuntimeFacade.listScriptSources();
-        if (sources.length >= quotaLimit) {
-          _showTransientMessage('普通用户最多导入 $quotaLimit 个书源，开通会员可不限量。');
-          return false;
-        }
+
+      if (quotaLimit >= 0 && currentCount >= quotaLimit) {
+        _showTransientMessage('已达到书源导入上限（最多 $quotaLimit 个）。');
+        return false;
       }
-    } catch (_) {
-      final sources = await _sourceRuntimeFacade.listScriptSources();
-      if (sources.length >= 10) {
-        _showTransientMessage('普通用户最多导入 10 个书源，开通会员可不限量。');
+    } catch (e) {
+      // 网络异常或超时，使用默认限制
+      debugPrint('获取会员权限失败，使用默认限制: $e');
+      if (currentCount >= defaultQuotaLimit) {
+        _showTransientMessage('最多只能创建 $defaultQuotaLimit 个书源。');
         return false;
       }
     }

@@ -1,5 +1,5 @@
 flutter_launcher_icons:
   android: "ic_launcher_light"
-  ios: true
+  ios: "AppIconLight"
   image_path: "assets/branding/selune_app_icon_light.png"
   remove_alpha_ios: true

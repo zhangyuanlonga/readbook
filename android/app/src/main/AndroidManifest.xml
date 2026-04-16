@@ -5,8 +5,8 @@
     <application
         android:label="@string/app_name"
         android:name="${applicationName}"
-        android:icon="@mipmap/ic_launcher_light"
-        android:roundIcon="@mipmap/ic_launcher_light"
+        android:icon="@mipmap/ic_launcher"
+        android:roundIcon="@mipmap/ic_launcher"
         android:enableOnBackInvokedCallback="true"
         android:usesCleartextTraffic="true"
         android:networkSecurityConfig="@xml/network_security_config">
@@ -25,6 +25,10 @@
             <meta-data
                 android:name="flutter_deeplinking_enabled"
                 android:value="false" />
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
             <intent-filter>
                 <action android:name="android.intent.action.VIEW" />
                 <category android:name="android.intent.category.DEFAULT" />
@@ -87,32 +91,6 @@
                 <data android:mimeType="application/octet-stream" />
             </intent-filter>
         </activity>
-        <activity-alias
-            android:name=".LightIconAlias"
-            android:enabled="true"
-            android:exported="true"
-            android:icon="@mipmap/ic_launcher_light"
-            android:roundIcon="@mipmap/ic_launcher_light"
-            android:label="@string/app_name"
-            android:targetActivity="com.jiangyan.selune.MainActivity">
-            <intent-filter>
-                <action android:name="android.intent.action.MAIN" />
-                <category android:name="android.intent.category.LAUNCHER" />
-            </intent-filter>
-        </activity-alias>
-        <activity-alias
-            android:name=".DarkIconAlias"
-            android:enabled="false"
-            android:exported="true"
-            android:icon="@mipmap/ic_launcher_dark"
-            android:roundIcon="@mipmap/ic_launcher_dark"
-            android:label="@string/app_name"
-            android:targetActivity="com.jiangyan.selune.MainActivity">
-            <intent-filter>
-                <action android:name="android.intent.action.MAIN" />
-                <category android:name="android.intent.category.LAUNCHER" />
-            </intent-filter>
-        </activity-alias>
         <meta-data
             android:name="io.flutter.embedding.android.EnableImpeller"
             android:value="false" />

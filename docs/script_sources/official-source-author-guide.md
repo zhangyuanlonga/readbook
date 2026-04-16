@@ -1452,6 +1452,7 @@ if (ctx.http.isChallenge(response)) {
 
 - `ctx.html.parse(html)`
 - `ctx.html.text(node)`
+- `ctx.html.innerHtml(node)`
 - `ctx.html.attr(node, name)`
 - `ctx.html.collect(nodes, mapper)`
 
@@ -1529,7 +1530,44 @@ const title = ctx.html.text(doc.querySelector('.book-title'));
 
 - 节点为空时，建议结合上游判空逻辑一起使用
 
-#### 8.3.3 `ctx.html.attr(node, name)`
+#### 8.3.3 `ctx.html.innerHtml(node)`
+
+作用：
+
+- 获取元素的内部 HTML 内容（不包含元素本身的标签）
+
+参数：
+
+```js
+node
+```
+
+返回值：
+
+```js
+string
+```
+
+适用场景：
+
+- 提取正文容器的原始 HTML
+- 需要保留子元素标签的场景（如正文中的图片、段落格式）
+- 配合其他规则进一步处理 HTML 片段
+
+示例：
+
+```js
+const html = ctx.html.innerHtml(doc.querySelector('.content'));
+// 返回类似：<p>第一段文字</p><p>第二段<img src="..."/></p>
+```
+
+注意：
+
+- 元素为空时返回空字符串
+- 与 `ctx.html.text()` 的区别：`text()` 只返回纯文本，`innerHtml()` 保留子元素标签
+- 正文提取时，如果正文包含图片等内联元素，使用 `innerHtml()` 可以保留这些元素
+
+#### 8.3.4 `ctx.html.attr(node, name)`
 
 作用：
 
@@ -1559,7 +1597,7 @@ string
 const href = ctx.html.attr(doc.querySelector('a'), 'href');
 ```
 
-#### 8.3.4 `ctx.html.collect(nodes, mapper)`
+#### 8.3.5 `ctx.html.collect(nodes, mapper)`
 
 作用：
 

@@ -95,7 +95,6 @@ final GoRouter appRouter = GoRouter(
       builder: (context, state) {
         final section = switch (state.uri.queryParameters['section']) {
           'theme-mode' => AppearanceSection.themeMode,
-          'app-icon' => AppearanceSection.appIcon,
           'theme-color' => AppearanceSection.themeColor,
           'bottom-bar' => AppearanceSection.bottomBar,
           'cover-gallery' => AppearanceSection.coverGallery,
