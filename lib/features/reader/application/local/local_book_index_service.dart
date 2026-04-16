@@ -12,8 +12,12 @@ import '../../../../domain/entities/local_chapter.dart';
 import '../../../../domain/repositories/local_book_repository.dart';
 import '../reader_system_settings_service.dart';
 import 'epub_local_book_parser.dart';
+import 'html_local_book_parser.dart';
+import 'kindle_local_book_parser.dart';
 import 'local_book_parser.dart';
 import 'local_book_storage_service.dart';
+import 'markdown_local_book_parser.dart';
+import 'pdf_local_book_parser.dart';
 import 'txt_local_book_parser.dart';
 
 class LocalBookIndexService {
@@ -30,6 +34,10 @@ class LocalBookIndexService {
            <LocalBookParser>[
              const TxtLocalBookParser(),
              const EpubLocalBookParser(),
+             const MarkdownLocalBookParser(),
+             const HtmlLocalBookParser(),
+             const PdfLocalBookParser(),
+             const KindleLocalBookParser(),
            ],
        _readerSystemSettingsService =
            readerSystemSettingsService ?? ReaderSystemSettingsService(),
@@ -261,6 +269,26 @@ class LocalBookIndexService {
       }
     }
 
+    if ((prepared.format == LocalBookFormat.txt ||
+            prepared.format == LocalBookFormat.epub) &&
+        prepared.indexStatus == LocalBookIndexStatus.ready &&
+        prepared.chapterCount > 0) {
+      final chapters = await _localBookRepository.getChapters(prepared.id);
+      final hasDeferredContent = chapters.any(
+        (chapter) => _hasLegacyDeferredChapterContent(
+          format: prepared.format,
+          chapter: chapter,
+        ),
+      );
+      if (hasDeferredContent) {
+        prepared = prepared.copyWith(
+          indexStatus: LocalBookIndexStatus.stale,
+          updatedAt: DateTime.now(),
+        );
+        shouldReindex = true;
+      }
+    }
+
     if (prepared.format == LocalBookFormat.txt) {
       final splitLongChapterEnabled =
           await _readerSystemSettingsService
@@ -375,6 +403,10 @@ class LocalBookIndexService {
       parsedBook.charset,
       fallback: null,
     );
+    final parsedDescription = _normalizeOptional(
+      parsedBook.description,
+      fallback: book.description,
+    );
     final parsedCoverPath = _normalizeOptional(
       parsedBook.coverPath,
       fallback: book.coverPath,
@@ -383,6 +415,8 @@ class LocalBookIndexService {
     final updatedBook = book.copyWith(
       title: _normalizeRequired(parsedBook.title, fallback: book.title),
       author: _normalizeOptional(parsedBook.author, fallback: book.author),
+      description: parsedDescription,
+      clearDescription: parsedDescription == null,
       coverPath: parsedCoverPath,
       clearCoverPath: parsedCoverPath == null,
       charset: parsedCharset,
@@ -416,13 +450,7 @@ class LocalBookIndexService {
               chapter.title,
               fallback: '第 ${index + 1} 章',
             ),
-            content:
-                book.format == LocalBookFormat.txt &&
-                        chapter.startOffset != null &&
-                        chapter.endOffset != null &&
-                        chapter.endOffset! > chapter.startOffset!
-                    ? ''
-                    : chapter.content,
+            content: chapter.content,
             imageUrls: chapter.imageUrls,
             sourceRef: chapter.sourceRef,
             createdAt: now,
@@ -446,6 +474,23 @@ class LocalBookIndexService {
       clearLastError: true,
     );
     return chapters;
+  }
+
+  bool _hasLegacyDeferredChapterContent({
+    required LocalBookFormat format,
+    required LocalChapter chapter,
+  }) {
+    return switch (format) {
+      LocalBookFormat.txt => chapter.content.trim().isEmpty,
+      LocalBookFormat.epub =>
+        chapter.content.trim().isEmpty && chapter.imageUrls.isEmpty,
+      LocalBookFormat.md => false,
+      LocalBookFormat.html => false,
+      LocalBookFormat.pdf => false,
+      LocalBookFormat.mobi => false,
+      LocalBookFormat.azw => false,
+      LocalBookFormat.azw3 => false,
+    };
   }
 
   void _emitIndexEvent({

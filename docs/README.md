@@ -1,6 +1,6 @@
 # 项目文档入口
 
-更新时间：2026-04-02
+更新时间：2026-04-16
 用途：当前项目文档总入口。
 
 当前文档按“主项目文档 + 脚本源运行时文档”两组维护。
@@ -30,6 +30,10 @@
   阅读器结构改造计划，包含统一文本内核、分页/滚动委托、设置分层和验收清单。
 - `docs/reader_multimodal_plan.md`
   阅读器多内容形态统一规划，覆盖文本、漫画与未来听书模式的壳层、状态、界面与动画分层。
+- `docs/local_reading_refactor_plan.md`
+  当前本地图文阅读链路的重构盘点与问题背景，适合在继续扩展本地阅读能力前先了解现状。
+- `docs/local_multi_format_reading_plan.md`
+  本地多格式阅读开发方案，覆盖 `txt`、`epub`、`md`、`html`、`pdf`、`mobi`、`azw`、`azw3` 的架构原则、阶段计划与风险边界。
 - `docs/product_features_guide.md`
   阅读记录、书签、缓存、自定义规则和本地阅读。
 - `docs/engineering_delivery_guide.md`

@@ -313,6 +313,10 @@ void main() {
         ),
         isTrue,
       );
+      expect(
+        localBookColumns.any((row) => row.data['name'] == 'description'),
+        isTrue,
+      );
 
       final localChapterColumns =
           await database
@@ -407,6 +411,7 @@ void main() {
       expect(migrated.chapterCount, 12);
       expect(migrated.splitLongChapter, isTrue);
       expect(migrated.charset, 'utf-8');
+      expect(migrated.description, isNull);
     });
   });
 }

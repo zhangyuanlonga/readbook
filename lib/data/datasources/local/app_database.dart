@@ -45,6 +45,7 @@ class StoredLocalBooks extends Table {
   TextColumn get charset => text().nullable()();
   IntColumn get fileSize => integer()();
   TextColumn get author => text().nullable()();
+  TextColumn get description => text().nullable()();
   TextColumn get coverPath => text().nullable()();
   IntColumn get sourceFileSize => integer().nullable()();
   IntColumn get sourceFileLastModifiedMs => integer().nullable()();
@@ -292,7 +293,7 @@ class AppDatabase extends _$AppDatabase {
   static final AppDatabase instance = AppDatabase();
 
   @override
-  int get schemaVersion => 21;
+  int get schemaVersion => 22;
 
   @override
   MigrationStrategy get migration {
@@ -437,6 +438,18 @@ class AppDatabase extends _$AppDatabase {
         }
         if (from < 21) {
           await migrator.createTable(storedReadingBookStatuses);
+        }
+        if (from < 22) {
+          await _addColumnIfMissing(
+            migrator: migrator,
+            tableName: storedLocalBooks.tableName,
+            columnName: 'description',
+            addColumn:
+                () => migrator.addColumn(
+                  storedLocalBooks,
+                  storedLocalBooks.description,
+                ),
+          );
         }
         if (from < 13) {
           await _addColumnIfMissing(
@@ -1203,6 +1216,7 @@ class AppDatabase extends _$AppDatabase {
         charset: Value(_nullableString(book.charset)),
         fileSize: Value(book.fileSize < 0 ? 0 : book.fileSize),
         author: Value(_nullableString(book.author)),
+        description: Value(_nullableString(book.description)),
         coverPath: Value(_nullableString(book.coverPath)),
         sourceFileSize: Value(book.sourceFileSize),
         sourceFileLastModifiedMs: Value(book.sourceFileLastModifiedMs),
@@ -2014,6 +2028,7 @@ class AppDatabase extends _$AppDatabase {
       sourcePath: row.sourcePath,
       charset: row.charset,
       author: row.author,
+      description: row.description,
       coverPath: row.coverPath,
       sourceFileSize: row.sourceFileSize,
       sourceFileLastModifiedMs: row.sourceFileLastModifiedMs,

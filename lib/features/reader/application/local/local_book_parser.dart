@@ -26,12 +26,14 @@ class LocalParsedBook {
     required this.chapters,
     this.title,
     this.author,
+    this.description,
     this.coverPath,
     this.charset,
   });
 
   final String? title;
   final String? author;
+  final String? description;
   final String? coverPath;
   final String? charset;
   final List<LocalParsedChapter> chapters;

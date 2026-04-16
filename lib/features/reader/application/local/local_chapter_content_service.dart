@@ -115,6 +115,14 @@ class LocalChapterContentService {
       return chapter.copyWith(content: hydratedContent);
     }
 
+    if (book.format != LocalBookFormat.epub) {
+      throw AppException(
+        code: ErrorCode.ruleMatchEmpty,
+        stage: ErrorStage.content,
+        briefMessage: '本地章节内容缺失，请重新索引后重试。',
+      );
+    }
+
     final hydrated = await _loadEpubChapterContent(
       chapter: chapter,
       book: readableBook,
@@ -250,7 +258,14 @@ class LocalChapterContentService {
   }
 
   bool _canUseStoredChapterContent({required LocalChapter chapter}) {
-    return chapter.content.trim().isNotEmpty;
+    if (chapter.content.trim().isNotEmpty) {
+      return true;
+    }
+    if (chapter.imageUrls.isNotEmpty) {
+      return true;
+    }
+    final document = chapter.document;
+    return document != null && document.blocks.isNotEmpty;
   }
 
   Future<LocalParsedChapter> _loadEpubChapterContent({

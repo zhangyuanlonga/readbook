@@ -66,24 +66,92 @@ void main() {
       expect(result.chapters, hasLength(2));
       expect(result.chapters.first.title, contains('第一章'));
       expect(result.chapters.last.title, contains('第二章'));
-      final firstChapterContent = await parser.parseChapter(
-        book: book,
-        chapter: LocalChapter(
-          id: '${book.id}_0',
-          bookId: book.id,
-          chapterIndex: 0,
-          title: result.chapters.first.title,
-          content: '',
-          sourceRef: result.chapters.first.sourceRef,
+      expect(result.chapters.first.content, contains('第一章内容'));
+      expect(result.chapters.first.document, isNotNull);
+      expect(
+        result.chapters.first.document!.blocks.first,
+        isA<ReaderTitleBlock>(),
+      );
+    });
+
+    test('extracts epub metadata and cover during parse', () async {
+      final archive =
+          Archive()
+            ..addFile(
+              ArchiveFile(
+                'META-INF/container.xml',
+                0,
+                utf8.encode('''
+<?xml version="1.0" encoding="UTF-8"?>
+<container version="1.0" xmlns="urn:oasis:names:tc:opendocument:xmlns:container">
+  <rootfiles>
+    <rootfile full-path="OPS/content.opf" media-type="application/oebps-package+xml"/>
+  </rootfiles>
+</container>
+'''),
+              ),
+            )
+            ..addFile(
+              ArchiveFile(
+                'OPS/content.opf',
+                0,
+                utf8.encode('''
+<?xml version="1.0" encoding="UTF-8"?>
+<package version="3.0" xmlns="http://www.idpf.org/2007/opf">
+  <metadata xmlns:dc="http://purl.org/dc/elements/1.1/">
+    <dc:title>元数据测试</dc:title>
+    <dc:creator>测试作者</dc:creator>
+    <dc:description>这是一段 EPUB 简介。</dc:description>
+    <meta name="cover" content="cover-image" />
+  </metadata>
+  <manifest>
+    <item id="cover-image" href="images/cover.jpg" media-type="image/jpeg"/>
+    <item id="chapter1" href="chapter1.xhtml" media-type="application/xhtml+xml"/>
+  </manifest>
+  <spine>
+    <itemref idref="chapter1"/>
+  </spine>
+</package>
+'''),
+              ),
+            )
+            ..addFile(
+              ArchiveFile(
+                'OPS/chapter1.xhtml',
+                0,
+                utf8.encode(
+                  '<html><body><h1>第一章</h1><p>第一章内容第一章内容第一章内容第一章内容第一章内容第一章内容。</p></body></html>',
+                ),
+              ),
+            )
+            ..addFile(
+              ArchiveFile('OPS/images/cover.jpg', 4, <int>[1, 2, 3, 4]),
+            );
+
+      final encoded = ZipEncoder().encode(archive);
+      expect(encoded, isNotNull);
+
+      final file = File('${tempDir.path}/metadata.epub');
+      await file.writeAsBytes(encoded!);
+
+      final now = DateTime.parse('2026-02-23T12:00:00.000Z');
+      final result = await parser.parse(
+        LocalBook(
+          id: 'local_epub_meta_1',
+          title: 'fallback title',
+          format: LocalBookFormat.epub,
+          storagePath: file.path,
+          fileSize: await file.length(),
           createdAt: now,
           updatedAt: now,
         ),
       );
-      expect(firstChapterContent.document, isNotNull);
-      expect(
-        firstChapterContent.document!.blocks.first,
-        isA<ReaderTitleBlock>(),
-      );
+
+      expect(result.title, '元数据测试');
+      expect(result.author, '测试作者');
+      expect(result.description, '这是一段 EPUB 简介。');
+      expect(result.coverPath, isNotNull);
+      expect(File(result.coverPath!).existsSync(), isTrue);
     });
 
     test('uses spine order instead of filename order and skips nav docs', () async {
@@ -381,8 +449,9 @@ void main() {
       );
 
       expect(result.chapters, hasLength(1));
-      expect(result.chapters.first.imageUrls, isEmpty);
+      expect(result.chapters.first.imageUrls, isNotEmpty);
       expect(result.chapters.first.sourceRef, 'OPS/chapter1.xhtml');
+      expect(result.chapters.first.document, isNotNull);
       final parsedChapter = await parser.parseChapter(
         book: LocalBook(
           id: 'local_epub_image_1',
@@ -514,7 +583,8 @@ void main() {
       );
 
       expect(result.chapters, hasLength(1));
-      expect(result.chapters.first.content, isEmpty);
+      expect(result.chapters.first.content, contains('第一段文字。'));
+      expect(result.chapters.first.imageUrls, isNotEmpty);
       final parsedChapter = await parser.parseChapter(
         book: LocalBook(
           id: 'local_epub_mixed_1',

@@ -1,5 +1,4 @@
 import 'dart:collection';
-import 'dart:convert';
 import 'dart:io';
 
 import 'package:archive/archive.dart';
@@ -107,13 +106,29 @@ class EpubLocalBookParser implements LocalBookParser {
         continue;
       }
 
+      final extraction = await _extractChapterContent(
+        book: book,
+        documentHtml: html,
+        chapterEntryName: entry.name,
+        archiveFileIndex: loadedArchive.archiveFileIndex,
+        assetRootDir: assetDir,
+      );
+      final structuredDocument = _withFallbackChapterTitle(
+        extraction.document,
+        chapterTitle: preview.title,
+      );
+      if (structuredDocument.compatibilityContent.trim().isEmpty &&
+          structuredDocument.imageUrls.isEmpty) {
+        continue;
+      }
+
       chapters.add(
         LocalParsedChapter(
           title: preview.title,
-          content: '',
-          imageUrls: const <String>[],
+          content: structuredDocument.compatibilityContent,
+          imageUrls: structuredDocument.imageUrls,
           sourceRef: _normalizeArchivePath(entry.name),
-          document: preview.document,
+          document: structuredDocument,
         ),
       );
       index += 1;
@@ -130,6 +145,7 @@ class EpubLocalBookParser implements LocalBookParser {
       chapters: chapters,
       title: metadata.title,
       author: metadata.author,
+      description: metadata.description,
       coverPath: coverPath,
     );
   }
@@ -229,6 +245,15 @@ class EpubLocalBookParser implements LocalBookParser {
       packageDocument.document,
       localNames: <String>{'dc:creator', 'creator', 'dc:author', 'author'},
     );
+    final description = _extractFirstElementText(
+      packageDocument.document,
+      localNames: const <String>{
+        'dc:description',
+        'description',
+        'dc:summary',
+        'summary',
+      },
+    );
     final coverArchivePath = _extractCoverArchivePath(
       document: packageDocument.document,
       packagePath: packageDocument.packagePath,
@@ -238,6 +263,7 @@ class EpubLocalBookParser implements LocalBookParser {
     return _EpubMetadata(
       title: title,
       author: author,
+      description: description,
       coverArchivePath: coverArchivePath,
     );
   }
@@ -1417,25 +1443,11 @@ class EpubLocalBookParser implements LocalBookParser {
   }
 
   List<int> _readArchiveEntryBytes(ArchiveFile entry) {
-    final content = entry.content;
-    if (content is List<int>) {
-      return content;
-    }
-    if (content is String) {
-      return utf8.encode(content);
-    }
     try {
-      final dynamicContent = entry.content;
-      if (dynamicContent is List<int>) {
-        return dynamicContent;
-      }
-      if (dynamicContent is String) {
-        return utf8.encode(dynamicContent);
-      }
+      return entry.content;
     } catch (_) {
       return const <int>[];
     }
-    return const <int>[];
   }
 
   String _resolveDocumentTitle({
@@ -1538,10 +1550,16 @@ class _EpubChapterCandidatePreview {
 }
 
 class _EpubMetadata {
-  const _EpubMetadata({this.title, this.author, this.coverArchivePath});
+  const _EpubMetadata({
+    this.title,
+    this.author,
+    this.description,
+    this.coverArchivePath,
+  });
 
   final String? title;
   final String? author;
+  final String? description;
   final String? coverArchivePath;
 }
 

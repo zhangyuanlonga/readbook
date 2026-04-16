@@ -671,6 +671,17 @@ class $StoredLocalBooksTable extends StoredLocalBooks
     type: DriftSqlType.string,
     requiredDuringInsert: false,
   );
+  static const VerificationMeta _descriptionMeta = const VerificationMeta(
+    'description',
+  );
+  @override
+  late final GeneratedColumn<String> description = GeneratedColumn<String>(
+    'description',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
   static const VerificationMeta _coverPathMeta = const VerificationMeta(
     'coverPath',
   );
@@ -799,6 +810,7 @@ class $StoredLocalBooksTable extends StoredLocalBooks
     charset,
     fileSize,
     author,
+    description,
     coverPath,
     sourceFileSize,
     sourceFileLastModifiedMs,
@@ -878,6 +890,15 @@ class $StoredLocalBooksTable extends StoredLocalBooks
       context.handle(
         _authorMeta,
         author.isAcceptableOrUnknown(data['author']!, _authorMeta),
+      );
+    }
+    if (data.containsKey('description')) {
+      context.handle(
+        _descriptionMeta,
+        description.isAcceptableOrUnknown(
+          data['description']!,
+          _descriptionMeta,
+        ),
       );
     }
     if (data.containsKey('cover_path')) {
@@ -1004,6 +1025,10 @@ class $StoredLocalBooksTable extends StoredLocalBooks
         DriftSqlType.string,
         data['${effectivePrefix}author'],
       ),
+      description: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}description'],
+      ),
       coverPath: attachedDatabase.typeMapping.read(
         DriftSqlType.string,
         data['${effectivePrefix}cover_path'],
@@ -1067,6 +1092,7 @@ class StoredLocalBook extends DataClass implements Insertable<StoredLocalBook> {
   final String? charset;
   final int fileSize;
   final String? author;
+  final String? description;
   final String? coverPath;
   final int? sourceFileSize;
   final int? sourceFileLastModifiedMs;
@@ -1086,6 +1112,7 @@ class StoredLocalBook extends DataClass implements Insertable<StoredLocalBook> {
     this.charset,
     required this.fileSize,
     this.author,
+    this.description,
     this.coverPath,
     this.sourceFileSize,
     this.sourceFileLastModifiedMs,
@@ -1113,6 +1140,9 @@ class StoredLocalBook extends DataClass implements Insertable<StoredLocalBook> {
     map['file_size'] = Variable<int>(fileSize);
     if (!nullToAbsent || author != null) {
       map['author'] = Variable<String>(author);
+    }
+    if (!nullToAbsent || description != null) {
+      map['description'] = Variable<String>(description);
     }
     if (!nullToAbsent || coverPath != null) {
       map['cover_path'] = Variable<String>(coverPath);
@@ -1158,6 +1188,10 @@ class StoredLocalBook extends DataClass implements Insertable<StoredLocalBook> {
       fileSize: Value(fileSize),
       author:
           author == null && nullToAbsent ? const Value.absent() : Value(author),
+      description:
+          description == null && nullToAbsent
+              ? const Value.absent()
+              : Value(description),
       coverPath:
           coverPath == null && nullToAbsent
               ? const Value.absent()
@@ -1200,6 +1234,7 @@ class StoredLocalBook extends DataClass implements Insertable<StoredLocalBook> {
       charset: serializer.fromJson<String?>(json['charset']),
       fileSize: serializer.fromJson<int>(json['fileSize']),
       author: serializer.fromJson<String?>(json['author']),
+      description: serializer.fromJson<String?>(json['description']),
       coverPath: serializer.fromJson<String?>(json['coverPath']),
       sourceFileSize: serializer.fromJson<int?>(json['sourceFileSize']),
       sourceFileLastModifiedMs: serializer.fromJson<int?>(
@@ -1228,6 +1263,7 @@ class StoredLocalBook extends DataClass implements Insertable<StoredLocalBook> {
       'charset': serializer.toJson<String?>(charset),
       'fileSize': serializer.toJson<int>(fileSize),
       'author': serializer.toJson<String?>(author),
+      'description': serializer.toJson<String?>(description),
       'coverPath': serializer.toJson<String?>(coverPath),
       'sourceFileSize': serializer.toJson<int?>(sourceFileSize),
       'sourceFileLastModifiedMs': serializer.toJson<int?>(
@@ -1254,6 +1290,7 @@ class StoredLocalBook extends DataClass implements Insertable<StoredLocalBook> {
     Value<String?> charset = const Value.absent(),
     int? fileSize,
     Value<String?> author = const Value.absent(),
+    Value<String?> description = const Value.absent(),
     Value<String?> coverPath = const Value.absent(),
     Value<int?> sourceFileSize = const Value.absent(),
     Value<int?> sourceFileLastModifiedMs = const Value.absent(),
@@ -1273,6 +1310,7 @@ class StoredLocalBook extends DataClass implements Insertable<StoredLocalBook> {
     charset: charset.present ? charset.value : this.charset,
     fileSize: fileSize ?? this.fileSize,
     author: author.present ? author.value : this.author,
+    description: description.present ? description.value : this.description,
     coverPath: coverPath.present ? coverPath.value : this.coverPath,
     sourceFileSize:
         sourceFileSize.present ? sourceFileSize.value : this.sourceFileSize,
@@ -1303,6 +1341,8 @@ class StoredLocalBook extends DataClass implements Insertable<StoredLocalBook> {
       charset: data.charset.present ? data.charset.value : this.charset,
       fileSize: data.fileSize.present ? data.fileSize.value : this.fileSize,
       author: data.author.present ? data.author.value : this.author,
+      description:
+          data.description.present ? data.description.value : this.description,
       coverPath: data.coverPath.present ? data.coverPath.value : this.coverPath,
       sourceFileSize:
           data.sourceFileSize.present
@@ -1343,6 +1383,7 @@ class StoredLocalBook extends DataClass implements Insertable<StoredLocalBook> {
           ..write('charset: $charset, ')
           ..write('fileSize: $fileSize, ')
           ..write('author: $author, ')
+          ..write('description: $description, ')
           ..write('coverPath: $coverPath, ')
           ..write('sourceFileSize: $sourceFileSize, ')
           ..write('sourceFileLastModifiedMs: $sourceFileLastModifiedMs, ')
@@ -1367,6 +1408,7 @@ class StoredLocalBook extends DataClass implements Insertable<StoredLocalBook> {
     charset,
     fileSize,
     author,
+    description,
     coverPath,
     sourceFileSize,
     sourceFileLastModifiedMs,
@@ -1390,6 +1432,7 @@ class StoredLocalBook extends DataClass implements Insertable<StoredLocalBook> {
           other.charset == this.charset &&
           other.fileSize == this.fileSize &&
           other.author == this.author &&
+          other.description == this.description &&
           other.coverPath == this.coverPath &&
           other.sourceFileSize == this.sourceFileSize &&
           other.sourceFileLastModifiedMs == this.sourceFileLastModifiedMs &&
@@ -1411,6 +1454,7 @@ class StoredLocalBooksCompanion extends UpdateCompanion<StoredLocalBook> {
   final Value<String?> charset;
   final Value<int> fileSize;
   final Value<String?> author;
+  final Value<String?> description;
   final Value<String?> coverPath;
   final Value<int?> sourceFileSize;
   final Value<int?> sourceFileLastModifiedMs;
@@ -1431,6 +1475,7 @@ class StoredLocalBooksCompanion extends UpdateCompanion<StoredLocalBook> {
     this.charset = const Value.absent(),
     this.fileSize = const Value.absent(),
     this.author = const Value.absent(),
+    this.description = const Value.absent(),
     this.coverPath = const Value.absent(),
     this.sourceFileSize = const Value.absent(),
     this.sourceFileLastModifiedMs = const Value.absent(),
@@ -1452,6 +1497,7 @@ class StoredLocalBooksCompanion extends UpdateCompanion<StoredLocalBook> {
     this.charset = const Value.absent(),
     required int fileSize,
     this.author = const Value.absent(),
+    this.description = const Value.absent(),
     this.coverPath = const Value.absent(),
     this.sourceFileSize = const Value.absent(),
     this.sourceFileLastModifiedMs = const Value.absent(),
@@ -1477,6 +1523,7 @@ class StoredLocalBooksCompanion extends UpdateCompanion<StoredLocalBook> {
     Expression<String>? charset,
     Expression<int>? fileSize,
     Expression<String>? author,
+    Expression<String>? description,
     Expression<String>? coverPath,
     Expression<int>? sourceFileSize,
     Expression<int>? sourceFileLastModifiedMs,
@@ -1498,6 +1545,7 @@ class StoredLocalBooksCompanion extends UpdateCompanion<StoredLocalBook> {
       if (charset != null) 'charset': charset,
       if (fileSize != null) 'file_size': fileSize,
       if (author != null) 'author': author,
+      if (description != null) 'description': description,
       if (coverPath != null) 'cover_path': coverPath,
       if (sourceFileSize != null) 'source_file_size': sourceFileSize,
       if (sourceFileLastModifiedMs != null)
@@ -1523,6 +1571,7 @@ class StoredLocalBooksCompanion extends UpdateCompanion<StoredLocalBook> {
     Value<String?>? charset,
     Value<int>? fileSize,
     Value<String?>? author,
+    Value<String?>? description,
     Value<String?>? coverPath,
     Value<int?>? sourceFileSize,
     Value<int?>? sourceFileLastModifiedMs,
@@ -1544,6 +1593,7 @@ class StoredLocalBooksCompanion extends UpdateCompanion<StoredLocalBook> {
       charset: charset ?? this.charset,
       fileSize: fileSize ?? this.fileSize,
       author: author ?? this.author,
+      description: description ?? this.description,
       coverPath: coverPath ?? this.coverPath,
       sourceFileSize: sourceFileSize ?? this.sourceFileSize,
       sourceFileLastModifiedMs:
@@ -1586,6 +1636,9 @@ class StoredLocalBooksCompanion extends UpdateCompanion<StoredLocalBook> {
     }
     if (author.present) {
       map['author'] = Variable<String>(author.value);
+    }
+    if (description.present) {
+      map['description'] = Variable<String>(description.value);
     }
     if (coverPath.present) {
       map['cover_path'] = Variable<String>(coverPath.value);
@@ -1638,6 +1691,7 @@ class StoredLocalBooksCompanion extends UpdateCompanion<StoredLocalBook> {
           ..write('charset: $charset, ')
           ..write('fileSize: $fileSize, ')
           ..write('author: $author, ')
+          ..write('description: $description, ')
           ..write('coverPath: $coverPath, ')
           ..write('sourceFileSize: $sourceFileSize, ')
           ..write('sourceFileLastModifiedMs: $sourceFileLastModifiedMs, ')
@@ -7904,6 +7958,7 @@ typedef $$StoredLocalBooksTableCreateCompanionBuilder =
       Value<String?> charset,
       required int fileSize,
       Value<String?> author,
+      Value<String?> description,
       Value<String?> coverPath,
       Value<int?> sourceFileSize,
       Value<int?> sourceFileLastModifiedMs,
@@ -7926,6 +7981,7 @@ typedef $$StoredLocalBooksTableUpdateCompanionBuilder =
       Value<String?> charset,
       Value<int> fileSize,
       Value<String?> author,
+      Value<String?> description,
       Value<String?> coverPath,
       Value<int?> sourceFileSize,
       Value<int?> sourceFileLastModifiedMs,
@@ -7985,6 +8041,11 @@ class $$StoredLocalBooksTableFilterComposer
 
   ColumnFilters<String> get author => $composableBuilder(
     column: $table.author,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get description => $composableBuilder(
+    column: $table.description,
     builder: (column) => ColumnFilters(column),
   );
 
@@ -8088,6 +8149,11 @@ class $$StoredLocalBooksTableOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
+  ColumnOrderings<String> get description => $composableBuilder(
+    column: $table.description,
+    builder: (column) => ColumnOrderings(column),
+  );
+
   ColumnOrderings<String> get coverPath => $composableBuilder(
     column: $table.coverPath,
     builder: (column) => ColumnOrderings(column),
@@ -8175,6 +8241,11 @@ class $$StoredLocalBooksTableAnnotationComposer
 
   GeneratedColumn<String> get author =>
       $composableBuilder(column: $table.author, builder: (column) => column);
+
+  GeneratedColumn<String> get description => $composableBuilder(
+    column: $table.description,
+    builder: (column) => column,
+  );
 
   GeneratedColumn<String> get coverPath =>
       $composableBuilder(column: $table.coverPath, builder: (column) => column);
@@ -8271,6 +8342,7 @@ class $$StoredLocalBooksTableTableManager
                 Value<String?> charset = const Value.absent(),
                 Value<int> fileSize = const Value.absent(),
                 Value<String?> author = const Value.absent(),
+                Value<String?> description = const Value.absent(),
                 Value<String?> coverPath = const Value.absent(),
                 Value<int?> sourceFileSize = const Value.absent(),
                 Value<int?> sourceFileLastModifiedMs = const Value.absent(),
@@ -8291,6 +8363,7 @@ class $$StoredLocalBooksTableTableManager
                 charset: charset,
                 fileSize: fileSize,
                 author: author,
+                description: description,
                 coverPath: coverPath,
                 sourceFileSize: sourceFileSize,
                 sourceFileLastModifiedMs: sourceFileLastModifiedMs,
@@ -8313,6 +8386,7 @@ class $$StoredLocalBooksTableTableManager
                 Value<String?> charset = const Value.absent(),
                 required int fileSize,
                 Value<String?> author = const Value.absent(),
+                Value<String?> description = const Value.absent(),
                 Value<String?> coverPath = const Value.absent(),
                 Value<int?> sourceFileSize = const Value.absent(),
                 Value<int?> sourceFileLastModifiedMs = const Value.absent(),
@@ -8333,6 +8407,7 @@ class $$StoredLocalBooksTableTableManager
                 charset: charset,
                 fileSize: fileSize,
                 author: author,
+                description: description,
                 coverPath: coverPath,
                 sourceFileSize: sourceFileSize,
                 sourceFileLastModifiedMs: sourceFileLastModifiedMs,

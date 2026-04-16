@@ -361,7 +361,12 @@ class LocalBookStorageService {
         );
       }
     }
-    if (localBook.format == LocalBookFormat.epub) {
+    if (localBook.format == LocalBookFormat.epub ||
+        localBook.format == LocalBookFormat.md ||
+        localBook.format == LocalBookFormat.html ||
+        localBook.format == LocalBookFormat.mobi ||
+        localBook.format == LocalBookFormat.azw ||
+        localBook.format == LocalBookFormat.azw3) {
       final assetDir = await resolveAssetDirectory(localBook);
       if (await assetDir.exists()) {
         try {
@@ -429,6 +434,12 @@ class LocalBookStorageService {
     return switch (format) {
       LocalBookFormat.txt => '.txt',
       LocalBookFormat.epub => '.epub',
+      LocalBookFormat.md => '.md',
+      LocalBookFormat.html => '.html',
+      LocalBookFormat.pdf => '.pdf',
+      LocalBookFormat.mobi => '.mobi',
+      LocalBookFormat.azw => '.azw',
+      LocalBookFormat.azw3 => '.azw3',
     };
   }
 }

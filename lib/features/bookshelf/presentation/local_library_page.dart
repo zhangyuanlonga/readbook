@@ -56,10 +56,23 @@ class _LocalLibraryPageState extends State<LocalLibraryPage> {
       acceptedTypeGroups: const [
         XTypeGroup(
           label: 'Book Files',
-          extensions: ['txt', 'epub'],
+          extensions: [
+            'txt',
+            'epub',
+            'md',
+            'markdown',
+            'html',
+            'htm',
+            'pdf',
+            'mobi',
+            'azw',
+            'azw3',
+          ],
           uniformTypeIdentifiers: [
             'public.plain-text',
             'org.idpf.epub-container',
+            'public.html',
+            'com.adobe.pdf',
           ],
         ),
       ],

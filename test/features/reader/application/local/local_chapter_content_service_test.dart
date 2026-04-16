@@ -60,7 +60,7 @@ void main() {
     });
 
     test(
-      'loads txt chapter content from file offsets after indexing',
+      'loads txt chapter content directly from stored indexed content',
       () async {
         final file = File('${tempDir.path}/offset_book.txt');
         await file.writeAsString('''
@@ -88,7 +88,7 @@ void main() {
 
         final metas = await repository.getChapters('local_offset_1');
         expect(metas, hasLength(2));
-        expect(metas.first.content, isEmpty);
+        expect(metas.first.content, contains('第一章内容'));
         expect(metas.first.startOffset, isNotNull);
         expect(metas.first.endOffset, isNotNull);
 
@@ -174,7 +174,7 @@ void main() {
       expect(chapter.content, contains('第二章内容'));
     });
 
-    test('lazily loads epub chapter content and persists it', () async {
+    test('returns epub chapter content directly from indexed storage', () async {
       final archive =
           Archive()
             ..addFile(
@@ -220,8 +220,10 @@ void main() {
       await indexService.ensureIndexed(bookId: 'local_epub_lazy_1');
       final metas = await repository.getChapters('local_epub_lazy_1');
       expect(metas, hasLength(1));
-      expect(metas.first.content, isEmpty);
+      expect(metas.first.content, contains('第一章正文。'));
       expect(metas.first.sourceRef, 'OPS/ch1.xhtml');
+      expect(metas.first.imageUrls, isNotEmpty);
+      expect(metas.first.document, isNotNull);
 
       final chapter = await contentService.load(
         bookId: 'local_epub_lazy_1',

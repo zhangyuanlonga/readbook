@@ -1225,10 +1225,23 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
       acceptedTypeGroups: const [
         XTypeGroup(
           label: 'Book Files',
-          extensions: ['txt', 'epub'],
+          extensions: [
+            'txt',
+            'epub',
+            'md',
+            'markdown',
+            'html',
+            'htm',
+            'pdf',
+            'mobi',
+            'azw',
+            'azw3',
+          ],
           uniformTypeIdentifiers: [
             'public.plain-text',
             'org.idpf.epub-container',
+            'public.html',
+            'com.adobe.pdf',
           ],
         ),
       ],
@@ -1336,7 +1349,16 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
     final tempFile = File(cached.path);
     try {
       final extension = p.extension(cached.label).toLowerCase();
-      if (extension != '.txt' && extension != '.epub') {
+      if (extension != '.txt' &&
+          extension != '.epub' &&
+          extension != '.md' &&
+          extension != '.markdown' &&
+          extension != '.html' &&
+          extension != '.htm' &&
+          extension != '.pdf' &&
+          extension != '.mobi' &&
+          extension != '.azw' &&
+          extension != '.azw3') {
         _showMessage('暂不支持导入该文件：${cached.label}');
         return;
       }
@@ -1953,6 +1975,7 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
   Widget _buildGridCard(BookshelfBook book) {
     final bookKey = _bookKey(book);
     final progress = _progressByBookKey[bookKey];
+    final localBook = _bookshelfLocalBook(book);
     final progressDisplay = _resolveBookshelfProgressDisplay(
       book,
       progress: progress,
@@ -1960,8 +1983,11 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
     final colorScheme = Theme.of(context).colorScheme;
     final isOpening = _openingBookId == book.bookId;
     final isSelected = _isBookSelected(book);
-    final titleText = _toSingleLineText(book.title);
-    final authorText = _toSingleLineText(book.author ?? '');
+    final displayTitle = _displayBookTitle(book, localBook: localBook);
+    final displayAuthor = _displayBookAuthor(book, localBook: localBook);
+    final displayCoverUrl = _displayBookCoverUrl(book, localBook: localBook);
+    final titleText = _toSingleLineText(displayTitle);
+    final authorText = _toSingleLineText(displayAuthor ?? '');
     final latestChapterText = _toSingleLineText(
       _latestCachedChapterByBookKey[bookKey] ?? book.latestChapter ?? '',
     );
@@ -2014,9 +2040,9 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
                       child: LayoutBuilder(
                         builder: (context, constraints) {
                           return _buildCover(
-                            book.coverUrl,
-                            title: book.title,
-                            author: book.author,
+                            displayCoverUrl,
+                            title: displayTitle,
+                            author: displayAuthor,
                             width: constraints.maxWidth,
                             height: constraints.maxHeight,
                           );
@@ -2176,6 +2202,7 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
   Widget _buildBookCard(BookshelfBook book) {
     final bookKey = _bookKey(book);
     final progress = _progressByBookKey[bookKey];
+    final localBook = _bookshelfLocalBook(book);
     final progressDisplay = _resolveBookshelfProgressDisplay(
       book,
       progress: progress,
@@ -2183,8 +2210,11 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
     final colorScheme = Theme.of(context).colorScheme;
     final isOpening = _openingBookId == book.bookId;
     final isSelected = _isBookSelected(book);
-    final titleText = _toSingleLineText(book.title);
-    final authorText = _toSingleLineText(book.author ?? '');
+    final displayTitle = _displayBookTitle(book, localBook: localBook);
+    final displayAuthor = _displayBookAuthor(book, localBook: localBook);
+    final displayCoverUrl = _displayBookCoverUrl(book, localBook: localBook);
+    final titleText = _toSingleLineText(displayTitle);
+    final authorText = _toSingleLineText(displayAuthor ?? '');
     final latestChapterText = _toSingleLineText(
       _latestCachedChapterByBookKey[bookKey] ?? book.latestChapter ?? '',
     );
@@ -2254,9 +2284,9 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
                     children: [
                       Positioned.fill(
                         child: _buildCover(
-                          book.coverUrl,
-                          title: book.title,
-                          author: book.author,
+                          displayCoverUrl,
+                          title: displayTitle,
+                          author: displayAuthor,
                           width: 68,
                           height: 96,
                         ),
@@ -2605,7 +2635,7 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
     if (addedCompare != 0) {
       return addedCompare;
     }
-    return a.title.compareTo(b.title);
+    return _displayBookTitle(a).compareTo(_displayBookTitle(b));
   }
 
   int _compareBookshelfBooksByRecentRead(BookshelfBook a, BookshelfBook b) {
@@ -2641,12 +2671,12 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
     if (createdCompare != 0) {
       return createdCompare;
     }
-    return a.title.compareTo(b.title);
+    return _displayBookTitle(a).compareTo(_displayBookTitle(b));
   }
 
   int _compareBookshelfBooksByAuthor(BookshelfBook a, BookshelfBook b) {
-    final authorA = (a.author ?? '').trim();
-    final authorB = (b.author ?? '').trim();
+    final authorA = (_displayBookAuthor(a) ?? '').trim();
+    final authorB = (_displayBookAuthor(b) ?? '').trim();
     if (authorA.isNotEmpty && authorB.isNotEmpty) {
       final compare = authorA.compareTo(authorB);
       if (compare != 0) {
@@ -2661,7 +2691,7 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
   }
 
   int _compareBookshelfBooksByTitle(BookshelfBook a, BookshelfBook b) {
-    final compare = a.title.compareTo(b.title);
+    final compare = _displayBookTitle(a).compareTo(_displayBookTitle(b));
     if (compare != 0) {
       return compare;
     }
@@ -2901,10 +2931,10 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
     }
     final bookKey = _bookKey(book);
     final progress = _progressByBookKey[bookKey];
-    final localBook =
-        book.sourceId == _kLocalBookSourceId
-            ? _localBooksById[book.bookId.trim()]
-            : null;
+    final localBook = _bookshelfLocalBook(book);
+    final displayTitle = _displayBookTitle(book, localBook: localBook);
+    final displayAuthor = _displayBookAuthor(book, localBook: localBook);
+    final displayCoverUrl = _displayBookCoverUrl(book, localBook: localBook);
     final localStatusText =
         localBook == null ? null : _localBookStatusActionText(localBook);
     final canRepairLocalBook =
@@ -2912,7 +2942,7 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
     final latestChapter = _toSingleLineText(
       _latestCachedChapterByBookKey[bookKey] ?? book.latestChapter ?? '',
     );
-    final author = _toSingleLineText(book.author ?? '');
+    final author = _toSingleLineText(displayAuthor ?? '');
     final authorLine = author.isNotEmpty ? '作者: $author' : '作者: 未知';
     final latestLine =
         latestChapter.isNotEmpty ? '最新: $latestChapter' : '最新: 暂无缓存章节';
@@ -2943,9 +2973,9 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       _buildCover(
-                        book.coverUrl,
-                        title: book.title,
-                        author: book.author,
+                        displayCoverUrl,
+                        title: displayTitle,
+                        author: displayAuthor,
                         width: 56,
                         height: 82,
                       ),
@@ -2958,7 +2988,7 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
                             mainAxisSize: MainAxisSize.min,
                             children: [
                               Text(
-                                _toSingleLineText(book.title),
+                                _toSingleLineText(displayTitle),
                                 maxLines: 1,
                                 overflow: TextOverflow.ellipsis,
                                 style: Theme.of(sheetContext)
@@ -3310,7 +3340,7 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
                     ),
                     const SizedBox(height: 4),
                     Text(
-                      _toSingleLineText(book.title),
+                      _toSingleLineText(_displayBookTitle(book)),
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                       style: Theme.of(
@@ -3850,7 +3880,8 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
   Future<void> _confirmAndRemoveBook(BookshelfBook book) async {
     final confirmed = await _showConfirmDialog(
       title: '删除书籍',
-      content: '确定从书架删除《${_toSingleLineText(book.title)}》吗？该操作不可撤销。',
+      content:
+          '确定从书架删除《${_toSingleLineText(_displayBookTitle(book))}》吗？该操作不可撤销。',
       confirmText: '删除',
     );
     if (!mounted || confirmed != true) {
@@ -4020,6 +4051,40 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
       height: height,
       borderRadius: BorderRadius.circular(12),
     );
+  }
+
+  LocalBook? _bookshelfLocalBook(BookshelfBook book) {
+    if (book.sourceId != _kLocalBookSourceId) {
+      return null;
+    }
+    return _localBooksById[book.bookId.trim()];
+  }
+
+  String _displayBookTitle(BookshelfBook book, {LocalBook? localBook}) {
+    final resolvedLocalBook = localBook ?? _bookshelfLocalBook(book);
+    final localTitle = resolvedLocalBook?.title.trim() ?? '';
+    if (localTitle.isNotEmpty) {
+      return localTitle;
+    }
+    return book.title;
+  }
+
+  String? _displayBookAuthor(BookshelfBook book, {LocalBook? localBook}) {
+    final resolvedLocalBook = localBook ?? _bookshelfLocalBook(book);
+    final localAuthor = resolvedLocalBook?.author?.trim() ?? '';
+    if (localAuthor.isNotEmpty) {
+      return localAuthor;
+    }
+    return book.author;
+  }
+
+  String? _displayBookCoverUrl(BookshelfBook book, {LocalBook? localBook}) {
+    final resolvedLocalBook = localBook ?? _bookshelfLocalBook(book);
+    final localCoverPath = resolvedLocalBook?.coverPath?.trim() ?? '';
+    if (localCoverPath.isNotEmpty) {
+      return Uri.file(localCoverPath).toString();
+    }
+    return book.coverUrl;
   }
 
   Widget _buildSourceBadge(BookshelfBook book, {bool compact = false}) {
@@ -5452,7 +5517,9 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
       if (!mounted) {
         return;
       }
-      _showMessage('《${_toSingleLineText(book.title)}》目录已更新，可以继续阅读了。');
+      _showMessage(
+        '《${_toSingleLineText(_displayBookTitle(book))}》目录已更新，可以继续阅读了。',
+      );
     } on AppException catch (error) {
       if (!mounted) {
         return;

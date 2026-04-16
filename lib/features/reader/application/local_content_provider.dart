@@ -73,6 +73,7 @@ class LocalContentProvider extends ContentProvider {
       title: result.book.title,
       detailUrl: LocalReaderIdentity.buildBookDetailUrl(result.book.id),
       author: _resolveAuthor(result.book.author),
+      intro: _resolveIntro(result.book.description),
       coverUrl: _resolveCoverUrl(result.book.coverPath),
     );
 
@@ -175,5 +176,10 @@ class LocalContentProvider extends ContentProvider {
       return normalized;
     }
     return sourceName;
+  }
+
+  String? _resolveIntro(String? intro) {
+    final normalized = intro?.trim() ?? '';
+    return normalized.isEmpty ? null : normalized;
   }
 }

@@ -132,7 +132,8 @@ class LocalBookImportService {
       throw AppException(
         code: ErrorCode.validation,
         stage: ErrorStage.detail,
-        briefMessage: '仅支持导入 txt 或 epub 文件。',
+        briefMessage:
+            '仅支持导入 txt、epub、md、html、pdf、mobi、azw 或 azw3 文件。',
       );
     }
 
@@ -425,6 +426,14 @@ class LocalBookImportService {
     return switch (ext) {
       '.txt' => LocalBookFormat.txt,
       '.epub' => LocalBookFormat.epub,
+      '.md' => LocalBookFormat.md,
+      '.markdown' => LocalBookFormat.md,
+      '.html' => LocalBookFormat.html,
+      '.htm' => LocalBookFormat.html,
+      '.pdf' => LocalBookFormat.pdf,
+      '.mobi' => LocalBookFormat.mobi,
+      '.azw' => LocalBookFormat.azw,
+      '.azw3' => LocalBookFormat.azw3,
       _ => null,
     };
   }

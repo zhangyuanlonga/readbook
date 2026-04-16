@@ -7,6 +7,7 @@ import 'package:shuxiang_reading_next/core/errors/app_exception.dart';
 import 'package:shuxiang_reading_next/data/datasources/local/app_database.dart';
 import 'package:shuxiang_reading_next/data/repositories/local_book_repository_impl.dart';
 import 'package:shuxiang_reading_next/domain/entities/local_book.dart';
+import 'package:shuxiang_reading_next/domain/entities/local_chapter.dart';
 import 'package:shuxiang_reading_next/features/reader/application/reader_system_settings_service.dart';
 import 'package:shuxiang_reading_next/features/reader/application/local/local_book_index_service.dart';
 import 'package:shuxiang_reading_next/features/reader/application/local/local_book_parser.dart';
@@ -69,6 +70,8 @@ void main() {
       expect(updated, isNotNull);
       expect(updated!.indexStatus, LocalBookIndexStatus.ready);
       expect(updated.chapterCount, 2);
+      expect(chapters.first.content, '内容1');
+      expect(chapters.last.content, '内容2');
     });
 
     test('marks book failed when parser throws', () async {
@@ -229,6 +232,55 @@ void main() {
         expect(refreshed.fileSize, await managedFile.length());
       },
     );
+
+    test('marks ready txt with deferred chapter content as stale', () async {
+      final now = DateTime.parse('2026-02-23T12:00:00.000Z');
+      final file = File('${tempDir.path}/legacy_txt.txt');
+      await file.writeAsString('第1章\n旧内容');
+      await repository.upsertBook(
+        LocalBook(
+          id: 'local_index_legacy_txt',
+          title: 'legacy txt',
+          format: LocalBookFormat.txt,
+          storagePath: file.path,
+          fileSize: await file.length(),
+          indexStatus: LocalBookIndexStatus.ready,
+          chapterCount: 1,
+          createdAt: now,
+          updatedAt: now,
+        ),
+      );
+      await repository.replaceChapters(
+        bookId: 'local_index_legacy_txt',
+        chapters: <LocalChapter>[
+          LocalChapter(
+            id: 'local_index_legacy_txt_0',
+            bookId: 'local_index_legacy_txt',
+            chapterIndex: 0,
+            title: '第1章',
+            content: '',
+            sourceRef: null,
+            startOffset: 0,
+            endOffset: 10,
+            createdAt: now,
+            updatedAt: now,
+          ),
+        ],
+      );
+
+      final service = LocalBookIndexService(
+        localBookRepository: repository,
+        parsers: const [_FakeSuccessParser()],
+        storageService: storageService,
+      );
+
+      final refreshed = await service.refreshBookState(
+        bookId: 'local_index_legacy_txt',
+      );
+
+      expect(refreshed, isNotNull);
+      expect(refreshed!.indexStatus, LocalBookIndexStatus.stale);
+    });
   });
 }
 

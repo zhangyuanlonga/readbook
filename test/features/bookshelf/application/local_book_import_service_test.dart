@@ -8,10 +8,12 @@ import 'package:shuxiang_reading_next/core/errors/error_stage.dart';
 import 'package:shuxiang_reading_next/core/logging/app_logger.dart';
 import 'package:shuxiang_reading_next/data/datasources/local/app_database.dart';
 import 'package:shuxiang_reading_next/data/repositories/local_book_repository_impl.dart';
+import 'package:shuxiang_reading_next/domain/entities/local_book.dart';
 import 'package:shuxiang_reading_next/domain/entities/local_chapter.dart';
 import 'package:shuxiang_reading_next/features/bookshelf/application/bookshelf_service.dart';
 import 'package:shuxiang_reading_next/features/bookshelf/application/local_book_import_service.dart';
 import 'package:shuxiang_reading_next/features/reader/application/local/local_book_index_service.dart';
+import 'package:shuxiang_reading_next/features/reader/application/local/local_book_parser.dart';
 import 'package:shuxiang_reading_next/features/reader/application/reader_system_settings_service.dart';
 import 'package:shuxiang_reading_next/features/reader/application/local/local_book_storage_service.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -239,8 +241,8 @@ void main() {
     });
 
     test('throws validation for unsupported file extension', () async {
-      final sourceFile = File('${tempDir.path}/invalid.pdf');
-      await sourceFile.writeAsString('pdf');
+      final sourceFile = File('${tempDir.path}/invalid.docx');
+      await sourceFile.writeAsString('docx');
 
       final service = LocalBookImportService(
         localBookRepository: LocalBookRepositoryImpl(database),
@@ -256,10 +258,188 @@ void main() {
           isA<AppException>().having(
             (error) => error.briefMessage,
             'briefMessage',
-            contains('仅支持导入 txt 或 epub'),
+            contains('仅支持导入 txt、epub、md、html、pdf、mobi、azw 或 azw3'),
           ),
         ),
       );
+    });
+
+    test('accepts pdf import when parser is provided', () async {
+      final sourceFile = File('${tempDir.path}/sample.pdf');
+      await sourceFile.writeAsBytes(const <int>[1, 2, 3], flush: true);
+
+      final repository = LocalBookRepositoryImpl(database);
+      final prefs = await SharedPreferences.getInstance();
+      final indexService = LocalBookIndexService(
+        localBookRepository: repository,
+        parsers: const <LocalBookParser>[_FakePdfSuccessParser()],
+        storageService: storageService,
+      );
+      final service = LocalBookImportService(
+        localBookRepository: repository,
+        bookshelfService: BookshelfService(preferences: prefs),
+        localBookIndexService: indexService,
+        localBookStorageService: storageService,
+      );
+
+      final result = await service.importFromFile(
+        filePath: sourceFile.path,
+        waitForIndexing: true,
+      );
+
+      expect(result.localBook.format, LocalBookFormat.pdf);
+      final stored = await database.getLocalBookById(result.localBook.id);
+      expect(stored, isNotNull);
+      expect(stored!.indexStatus, LocalBookIndexStatus.ready);
+      final chapters = await database.getLocalChapters(result.localBook.id);
+      expect(chapters, hasLength(2));
+      expect(chapters.first.title, '第 1 页');
+      expect(chapters.last.content, contains('第二页内容'));
+    });
+
+    test('imports markdown file and indexes chapters', () async {
+      final sourceFile = File('${tempDir.path}/demo.md');
+      await sourceFile.writeAsString('''
+# 第一章
+
+第一章内容。
+
+## 第二章
+
+第二章内容。
+''');
+
+      final prefs = await SharedPreferences.getInstance();
+      final service = LocalBookImportService(
+        localBookRepository: LocalBookRepositoryImpl(database),
+        bookshelfService: BookshelfService(preferences: prefs),
+        localBookStorageService: storageService,
+      );
+
+      final result = await service.importFromFile(
+        filePath: sourceFile.path,
+        waitForIndexing: true,
+      );
+
+      expect(result.localBook.format, LocalBookFormat.md);
+      final stored = await database.getLocalBookById(result.localBook.id);
+      expect(stored, isNotNull);
+      expect(stored!.indexStatus, LocalBookIndexStatus.ready);
+      expect(stored.description, '第一章内容。');
+      final chapters = await database.getLocalChapters(result.localBook.id);
+      expect(chapters, hasLength(2));
+      expect(chapters.first.content, contains('第一章内容'));
+      expect(chapters.last.content, contains('第二章内容'));
+    });
+
+    test('accepts mobi import when parser is provided', () async {
+      final sourceFile = File('${tempDir.path}/sample.mobi');
+      await sourceFile.writeAsBytes(const <int>[1, 2, 3], flush: true);
+
+      final repository = LocalBookRepositoryImpl(database);
+      final prefs = await SharedPreferences.getInstance();
+      final indexService = LocalBookIndexService(
+        localBookRepository: repository,
+        parsers: const <LocalBookParser>[_FakeKindleSuccessParser()],
+        storageService: storageService,
+      );
+      final service = LocalBookImportService(
+        localBookRepository: repository,
+        bookshelfService: BookshelfService(preferences: prefs),
+        localBookIndexService: indexService,
+        localBookStorageService: storageService,
+      );
+
+      final result = await service.importFromFile(
+        filePath: sourceFile.path,
+        waitForIndexing: true,
+      );
+
+      expect(result.localBook.format, LocalBookFormat.mobi);
+      final stored = await database.getLocalBookById(result.localBook.id);
+      expect(stored, isNotNull);
+      expect(stored!.indexStatus, LocalBookIndexStatus.ready);
+      final chapters = await database.getLocalChapters(result.localBook.id);
+      expect(chapters, hasLength(1));
+      expect(chapters.single.content, contains('Kindle 正文'));
+    });
+
+    test('accepts azw import when parser is provided', () async {
+      final sourceFile = File('${tempDir.path}/sample.azw');
+      await sourceFile.writeAsBytes(const <int>[1, 2, 3], flush: true);
+
+      final repository = LocalBookRepositoryImpl(database);
+      final prefs = await SharedPreferences.getInstance();
+      final indexService = LocalBookIndexService(
+        localBookRepository: repository,
+        parsers: const <LocalBookParser>[_FakeKindleSuccessParser()],
+        storageService: storageService,
+      );
+      final service = LocalBookImportService(
+        localBookRepository: repository,
+        bookshelfService: BookshelfService(preferences: prefs),
+        localBookIndexService: indexService,
+        localBookStorageService: storageService,
+      );
+
+      final result = await service.importFromFile(
+        filePath: sourceFile.path,
+        waitForIndexing: true,
+      );
+
+      expect(result.localBook.format, LocalBookFormat.azw);
+      final stored = await database.getLocalBookById(result.localBook.id);
+      expect(stored, isNotNull);
+      expect(stored!.indexStatus, LocalBookIndexStatus.ready);
+      final chapters = await database.getLocalChapters(result.localBook.id);
+      expect(chapters, hasLength(1));
+      expect(chapters.single.content, contains('Kindle 正文'));
+    });
+
+    test('imports html file and materializes relative images', () async {
+      final imageDir = Directory('${tempDir.path}/source_assets');
+      await imageDir.create(recursive: true);
+      final imageFile = File('${imageDir.path}/cover.png');
+      await imageFile.writeAsBytes(const <int>[1, 2, 3, 4], flush: true);
+      final sourceFile = File('${tempDir.path}/demo.html');
+      await sourceFile.writeAsString('''
+<html>
+  <head>
+    <title>HTML 示例</title>
+    <meta name="author" content="HTML 作者" />
+    <meta name="description" content="HTML 示例简介" />
+  </head>
+  <body>
+    <h1>第一章</h1>
+    <p>第一章内容。</p>
+    <img src="source_assets/cover.png" />
+  </body>
+</html>
+''');
+
+      final prefs = await SharedPreferences.getInstance();
+      final service = LocalBookImportService(
+        localBookRepository: LocalBookRepositoryImpl(database),
+        bookshelfService: BookshelfService(preferences: prefs),
+        localBookStorageService: storageService,
+      );
+
+      final result = await service.importFromFile(
+        filePath: sourceFile.path,
+        waitForIndexing: true,
+      );
+
+      expect(result.localBook.format, LocalBookFormat.html);
+      final stored = await database.getLocalBookById(result.localBook.id);
+      expect(stored, isNotNull);
+      expect(stored!.author, 'HTML 作者');
+      expect(stored.description, 'HTML 示例简介');
+      expect(stored.coverPath, isNotNull);
+      expect(File(stored.coverPath!).existsSync(), isTrue);
+      final chapters = await database.getLocalChapters(result.localBook.id);
+      expect(chapters, hasLength(1));
+      expect(chapters.first.imageUrls, isNotEmpty);
+      expect(Uri.parse(chapters.first.imageUrls.first).scheme, 'file');
     });
 
     test('always enables local txt split long chapter by default', () async {
@@ -410,6 +590,45 @@ class _FakeLocalBookIndexService extends LocalBookIndexService {
     ensureIndexedCallCount += 1;
     return _onEnsureIndexed();
   }
+}
+
+class _FakePdfSuccessParser implements LocalBookParser {
+  const _FakePdfSuccessParser();
+
+  @override
+  Future<LocalParsedBook> parse(LocalBook book) async {
+    return const LocalParsedBook(
+      chapters: <LocalParsedChapter>[
+        LocalParsedChapter(title: '第 1 页', content: '第一页内容'),
+        LocalParsedChapter(title: '第 2 页', content: '第二页内容'),
+      ],
+      title: 'PDF 标题',
+    );
+  }
+
+  @override
+  bool supports(LocalBookFormat format) => format == LocalBookFormat.pdf;
+}
+
+class _FakeKindleSuccessParser implements LocalBookParser {
+  const _FakeKindleSuccessParser();
+
+  @override
+  Future<LocalParsedBook> parse(LocalBook book) async {
+    return const LocalParsedBook(
+      chapters: <LocalParsedChapter>[
+        LocalParsedChapter(title: '第一章', content: 'Kindle 正文'),
+      ],
+      title: 'Kindle 标题',
+      author: 'Kindle 作者',
+    );
+  }
+
+  @override
+  bool supports(LocalBookFormat format) =>
+      format == LocalBookFormat.mobi ||
+      format == LocalBookFormat.azw ||
+      format == LocalBookFormat.azw3;
 }
 
 class _RecordingLogger implements AppLogger {
