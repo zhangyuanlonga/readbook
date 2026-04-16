@@ -1,9 +1,11 @@
 import 'dart:async';
+import 'dart:io';
 
-import 'package:flutter/foundation.dart';
+import 'package:file_selector/file_selector.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:path_provider/path_provider.dart';
 
 import '../../../app/layout/app_layout.dart';
 import '../../../app/layout/app_spacing.dart';
@@ -12,20 +14,38 @@ import '../../../app/shell_navigation_provider.dart';
 import '../../../app/theme/app_theme_palette.dart';
 import '../../../app/theme/app_theme_provider.dart';
 import '../../../app/theme/app_theme_seed_provider.dart';
-import '../../../app/widgets/cupertino_dock_navigation_bar.dart';
 import '../../../app/widgets/text_cover_placeholder.dart';
 
 enum AppearanceSection {
-  overview,
-  themeMode,
-  themeColor,
-  bottomBar,
-  coverGallery,
-  backgroundGallery,
+  appearance,
+  tabBar,
+  cover,
+  background,
 }
 
+enum AppFontFamily {
+  system('系统默认'),
+  serif('衬线体'),
+  monospace('等宽体');
+
+  const AppFontFamily(this.label);
+  final String label;
+}
+
+final appFontFamilyProvider = StateProvider<AppFontFamily>((ref) {
+  return AppFontFamily.system;
+});
+
+final appFontScaleProvider = StateProvider<double>((ref) {
+  return 1.0;
+});
+
+final appFontWeightProvider = StateProvider<double>((ref) {
+  return 400.0;
+});
+
 class AppearancePage extends ConsumerStatefulWidget {
-  const AppearancePage({super.key, this.section = AppearanceSection.overview});
+  const AppearancePage({super.key, this.section = AppearanceSection.appearance});
 
   final AppearanceSection section;
 
@@ -43,12 +63,95 @@ class _AppearancePageState extends ConsumerState<AppearancePage> {
     {'title': '活着', 'author': '余华'},
   ];
 
-  static const List<String> _backgroundGalleryPaths = [
-    'assets/reader/backgrounds/20260224-212555-700782.jpeg',
-    'assets/reader/backgrounds/20260224-212555-b91cd8.jpeg',
-    'assets/reader/backgrounds/20260224-212555-01b93d.jpeg',
-    'assets/reader/backgrounds/Image_1768236174407.jpg',
-  ];
+  List<String> _backgroundPaths = [];
+  bool _isLoadingBackgrounds = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadBackgrounds();
+  }
+
+  Future<void> _loadBackgrounds() async {
+    final dir = await getApplicationDocumentsDirectory();
+    final bgDir = Directory('${dir.path}/backgrounds');
+    final paths = <String>[];
+    if (await bgDir.exists()) {
+      final files = bgDir
+          .listSync()
+          .whereType<File>()
+          .where((f) => f.path.endsWith('.jpg') || f.path.endsWith('.jpeg') || f.path.endsWith('.png'))
+          .map((f) => f.path)
+          .toList();
+      paths.addAll(files);
+    }
+    if (!mounted) return;
+    setState(() {
+      _backgroundPaths = paths;
+      _isLoadingBackgrounds = false;
+    });
+  }
+
+  Future<void> _uploadBackground() async {
+    final types = [
+      XTypeGroup(
+        label: 'Images',
+        extensions: const ['jpg', 'jpeg', 'png'],
+      ),
+    ];
+    final file = await openFile(acceptedTypeGroups: types);
+    if (file == null || !mounted) return;
+
+    final dir = await getApplicationDocumentsDirectory();
+    final bgDir = Directory('${dir.path}/backgrounds');
+    if (!await bgDir.exists()) {
+      await bgDir.create(recursive: true);
+    }
+
+    final fileName = '${DateTime.now().millisecondsSinceEpoch}_${file.name.split('/').last}';
+    final destPath = '${bgDir.path}/$fileName';
+    final destFile = File(destPath);
+    await destFile.writeAsBytes(await file.readAsBytes());
+
+    if (!mounted) return;
+    setState(() {
+      _backgroundPaths.add(destPath);
+    });
+  }
+
+  Future<void> _deleteBackground(String path) async {
+    final file = File(path);
+    if (await file.exists()) {
+      await file.delete();
+    }
+    if (!mounted) return;
+    setState(() {
+      _backgroundPaths.remove(path);
+    });
+  }
+
+  Future<void> _confirmDeleteBackground(String path) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('删除背景'),
+        content: const Text('确定要删除这个背景图吗？'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('取消'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('删除', style: TextStyle(color: Colors.red)),
+          ),
+        ],
+      ),
+    );
+    if (confirmed == true) {
+      await _deleteBackground(path);
+    }
+  }
 
   static const List<_ThemeModeOption> _themeModeOptions = [
     _ThemeModeOption(
@@ -141,12 +244,10 @@ class _AppearancePageState extends ConsumerState<AppearancePage> {
 
   String _pageTitle(AppearanceSection section) {
     return switch (section) {
-      AppearanceSection.overview => '外观',
-      AppearanceSection.themeMode => '主题模式',
-      AppearanceSection.themeColor => '主题颜色',
-      AppearanceSection.bottomBar => '底栏配置',
-      AppearanceSection.coverGallery => '封面图集',
-      AppearanceSection.backgroundGallery => '背景图集',
+      AppearanceSection.appearance => '外观',
+      AppearanceSection.tabBar => '底栏',
+      AppearanceSection.cover => '封面',
+      AppearanceSection.background => '背景',
     };
   }
 
@@ -160,59 +261,15 @@ class _AppearancePageState extends ConsumerState<AppearancePage> {
   }) {
     final sections = <Widget>[];
 
-    if (widget.section == AppearanceSection.overview) {
-      sections.add(
-        _buildPreviewCard(
-          context,
-          navigationState,
-          selectedThemeMode: selectedThemeMode,
-          selectedSeedColor: selectedSeedColor,
-          selectedNavigationStyle: selectedNavigationStyle,
-          showNavigationLabels: showNavigationLabels,
-        ),
-      );
-      sections.add(const SizedBox(height: 12));
-    }
-
-    if (widget.section == AppearanceSection.overview ||
-        widget.section == AppearanceSection.themeMode) {
+    if (widget.section == AppearanceSection.appearance) {
       sections.add(
         _buildThemeModeSection(context, selectedThemeMode: selectedThemeMode),
       );
-    }
-
-    if (widget.section == AppearanceSection.overview ||
-        widget.section == AppearanceSection.themeColor) {
-      if (sections.isNotEmpty) {
-        sections.add(const SizedBox(height: 12));
-      }
+      sections.add(const SizedBox(height: 10));
       sections.add(
         _buildThemeColorSection(context, selectedSeedColor: selectedSeedColor),
       );
-    }
-
-    if (widget.section == AppearanceSection.overview ||
-        widget.section == AppearanceSection.bottomBar) {
-      if (sections.isNotEmpty) {
-        sections.add(const SizedBox(height: 12));
-      }
-      sections.add(
-        _buildSectionCard(
-          context,
-          icon: Icons.collections_bookmark_outlined,
-          title: '底栏图集',
-          subtitle: '管理底栏图标图集与默认图集。',
-          child: ListTile(
-            contentPadding: EdgeInsets.zero,
-            leading: const Icon(Icons.dock_outlined),
-            title: const Text('打开图集管理'),
-            subtitle: const Text('当前先支持默认图集与启用切换。'),
-            trailing: const Icon(Icons.chevron_right_rounded),
-            onTap: () => context.push('/bottom-nav-icon-galleries'),
-          ),
-        ),
-      );
-      sections.add(const SizedBox(height: 12));
+      sections.add(const SizedBox(height: 10));
       sections.add(
         _buildNavigationStyleSection(
           context,
@@ -220,7 +277,7 @@ class _AppearancePageState extends ConsumerState<AppearancePage> {
           showNavigationLabels: showNavigationLabels,
         ),
       );
-      sections.add(const SizedBox(height: 12));
+      sections.add(const SizedBox(height: 10));
       sections.add(
         _buildSectionCard(
           context,
@@ -230,17 +287,67 @@ class _AppearancePageState extends ConsumerState<AppearancePage> {
           child: const _AppearanceNavigationVisibilityPanel(),
         ),
       );
+      sections.add(const SizedBox(height: 10));
+      sections.add(
+        _buildFontSection(context),
+      );
     }
 
-    if (widget.section == AppearanceSection.coverGallery) {
+    if (widget.section == AppearanceSection.tabBar) {
+      sections.add(
+        _buildSectionCard(
+          context,
+          icon: Icons.collections_bookmark_outlined,
+          title: '底栏图集',
+          subtitle: '管理底栏图标图集与默认图集。',
+          child: _buildNavIconGalleryEntry(context),
+        ),
+      );
+    }
+
+    if (widget.section == AppearanceSection.cover) {
       sections.add(_buildCoverGallerySection(context));
     }
 
-    if (widget.section == AppearanceSection.backgroundGallery) {
+    if (widget.section == AppearanceSection.background) {
       sections.add(_buildBackgroundGallerySection(context));
     }
 
     return sections;
+  }
+
+  Widget _buildNavIconGalleryEntry(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+    return InkWell(
+      borderRadius: BorderRadius.circular(10),
+      onTap: () => context.push('/bottom-nav-icon-galleries'),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 2, vertical: 6),
+        child: Row(
+          children: [
+            Icon(
+              Icons.dock_outlined,
+              size: 17,
+              color: colorScheme.onSurfaceVariant,
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Text(
+                '打开图集管理',
+                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ),
+            Icon(
+              Icons.chevron_right_rounded,
+              size: 18,
+              color: colorScheme.onSurfaceVariant,
+            ),
+          ],
+        ),
+      ),
+    );
   }
 
   Widget _buildThemeModeSection(
@@ -250,44 +357,83 @@ class _AppearancePageState extends ConsumerState<AppearancePage> {
     return _buildSectionCard(
       context,
       icon: Icons.light_mode_outlined,
-      title: '主题模式',
-      subtitle: '切换日间、夜间或跟随系统。',
-      child: LayoutBuilder(
-        builder: (context, constraints) {
-          const spacing = 8.0;
-          final columns = AppLayout.optionGridColumnsForWidth(
-            constraints.maxWidth,
-          );
-          final itemWidth =
-              (constraints.maxWidth - ((columns - 1) * spacing)) / columns;
-
-          return Wrap(
-            spacing: spacing,
-            runSpacing: spacing,
-            children: _themeModeOptions
-                .map(
-                  (option) => SizedBox(
-                    width: itemWidth,
-                    child: _buildThemeModeTile(
-                      context,
-                      option: option,
-                      selectedThemeMode: selectedThemeMode,
-                      onTap: () {
-                        if (selectedThemeMode == option.mode) {
-                          return;
-                        }
-                        unawaited(
-                          ref
-                              .read(appThemeModeProvider.notifier)
-                              .setThemeMode(option.mode),
-                        );
-                      },
+      title: '模式',
+      subtitle: '日间、夜间或跟随系统。',
+      child: Row(
+        children: _themeModeOptions.map((option) {
+          final selected = option.mode == selectedThemeMode;
+          final colorScheme = Theme.of(context).colorScheme;
+          return Expanded(
+            child: Padding(
+              padding: EdgeInsets.only(
+                right: option == _themeModeOptions.last ? 0 : 6,
+              ),
+              child: InkWell(
+                borderRadius: BorderRadius.circular(10),
+                onTap: () {
+                  if (selected) return;
+                  unawaited(
+                    ref
+                        .read(appThemeModeProvider.notifier)
+                        .setThemeMode(option.mode),
+                  );
+                },
+                child: AnimatedContainer(
+                  duration: const Duration(milliseconds: 150),
+                  curve: Curves.easeOutCubic,
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 6,
+                    vertical: 9,
+                  ),
+                  decoration: BoxDecoration(
+                    color:
+                        selected
+                            ? colorScheme.secondaryContainer
+                            : colorScheme.surface,
+                    borderRadius: BorderRadius.circular(10),
+                    border: Border.all(
+                      color:
+                          selected
+                              ? colorScheme.primary
+                              : colorScheme.outlineVariant.withValues(
+                                  alpha: 0.5,
+                                ),
+                      width: selected ? 1.4 : 1,
                     ),
                   ),
-                )
-                .toList(growable: false),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(
+                        option.icon,
+                        size: 16,
+                        color:
+                            selected
+                                ? colorScheme.primary
+                                : colorScheme.onSurfaceVariant,
+                      ),
+                      const SizedBox(height: 5),
+                      Text(
+                        option.label,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: Theme.of(
+                          context,
+                        ).textTheme.labelSmall?.copyWith(
+                          fontWeight: FontWeight.w700,
+                          color:
+                              selected
+                                  ? colorScheme.primary
+                                  : colorScheme.onSurfaceVariant,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
           );
-        },
+        }).toList(growable: false),
       ),
     );
   }
@@ -296,48 +442,74 @@ class _AppearancePageState extends ConsumerState<AppearancePage> {
     BuildContext context, {
     required Color selectedSeedColor,
   }) {
+    final colorScheme = Theme.of(context).colorScheme;
     return _buildSectionCard(
       context,
       icon: Icons.palette_outlined,
-      title: '主题颜色',
-      subtitle: '控制应用主色与强调色。',
-      child: LayoutBuilder(
-        builder: (context, constraints) {
-          const spacing = 8.0;
-          final columns = AppLayout.optionGridColumnsForWidth(
-            constraints.maxWidth,
+      title: '颜色',
+      subtitle: '应用主色与强调色。',
+      child: Wrap(
+        spacing: 10,
+        runSpacing: 10,
+        children: appThemeSeedOptions.map((option) {
+          final selected =
+              option.color.toARGB32() == selectedSeedColor.toARGB32();
+          return GestureDetector(
+            onTap: () {
+              if (selected) return;
+              unawaited(
+                ref
+                    .read(appSeedColorProvider.notifier)
+                    .setSeedColor(option.color),
+              );
+            },
+            child: Tooltip(
+              message: option.label,
+              child: AnimatedContainer(
+                duration: const Duration(milliseconds: 150),
+                width: 30,
+                height: 30,
+                decoration: BoxDecoration(
+                  color: option.color,
+                  shape: BoxShape.circle,
+                  border: selected
+                      ? Border.all(
+                          color: colorScheme.primary,
+                          width: 2.5,
+                          strokeAlign: BorderSide.strokeAlignOutside,
+                        )
+                      : Border.all(
+                          color: colorScheme.outlineVariant.withValues(
+                            alpha: 0.4,
+                          ),
+                          width: 0.5,
+                        ),
+                  boxShadow: selected
+                      ? [
+                          BoxShadow(
+                            color: option.color.withValues(alpha: 0.4),
+                            blurRadius: 6,
+                            offset: const Offset(0, 2),
+                          ),
+                        ]
+                      : null,
+                ),
+                child: selected
+                    ? Icon(
+                        Icons.check_rounded,
+                        size: 16,
+                        color: ThemeData.estimateBrightnessForColor(
+                                  option.color,
+                                ) ==
+                                Brightness.dark
+                            ? Colors.white
+                            : Colors.black.withValues(alpha: 0.7),
+                      )
+                    : null,
+              ),
+            ),
           );
-          final itemWidth =
-              (constraints.maxWidth - ((columns - 1) * spacing)) / columns;
-
-          return Wrap(
-            spacing: spacing,
-            runSpacing: spacing,
-            children: appThemeSeedOptions
-                .map(
-                  (option) => SizedBox(
-                    width: itemWidth,
-                    child: _buildThemeColorTile(
-                      context,
-                      option: option,
-                      selectedSeedColor: selectedSeedColor,
-                      onTap: () {
-                        if (selectedSeedColor.toARGB32() ==
-                            option.color.toARGB32()) {
-                          return;
-                        }
-                        unawaited(
-                          ref
-                              .read(appSeedColorProvider.notifier)
-                              .setSeedColor(option.color),
-                        );
-                      },
-                    ),
-                  ),
-                )
-                .toList(growable: false),
-          );
-        },
+        }).toList(growable: false),
       ),
     );
   }
@@ -393,41 +565,295 @@ class _AppearancePageState extends ConsumerState<AppearancePage> {
     );
   }
 
+  Widget _buildFontSection(BuildContext context) {
+    final fontFamily = ref.watch(appFontFamilyProvider);
+    final fontScale = ref.watch(appFontScaleProvider);
+    final fontWeight = ref.watch(appFontWeightProvider);
+
+    return _buildSectionCard(
+      context,
+      icon: Icons.text_fields_outlined,
+      title: '字体',
+      subtitle: '全局字体、字体缩放与字重调整。',
+      child: Column(
+        children: [
+          _buildFontFamilyTile(context, fontFamily),
+          const SizedBox(height: 8),
+          _buildFontScaleTile(context, fontScale),
+          const SizedBox(height: 8),
+          _buildFontWeightTile(context, fontWeight),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildFontFamilyTile(BuildContext context, AppFontFamily selected) {
+    final colorScheme = Theme.of(context).colorScheme;
+    return InkWell(
+      borderRadius: BorderRadius.circular(10),
+      onTap: () => _showFontFamilyBottomSheet(context),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 2, vertical: 8),
+        child: Row(
+          children: [
+            Icon(Icons.font_download_outlined, size: 18, color: colorScheme.onSurfaceVariant),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Text(
+                '全局字体',
+                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ),
+            Text(
+              selected.label,
+              style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                color: colorScheme.onSurfaceVariant,
+              ),
+            ),
+            const SizedBox(width: 6),
+            Icon(Icons.chevron_right_rounded, size: 18, color: colorScheme.onSurfaceVariant),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildFontScaleTile(BuildContext context, double scale) {
+    final colorScheme = Theme.of(context).colorScheme;
+    return InkWell(
+      borderRadius: BorderRadius.circular(10),
+      onTap: () => _showFontScaleBottomSheet(context),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 2, vertical: 8),
+        child: Row(
+          children: [
+            Icon(Icons.zoom_in_outlined, size: 18, color: colorScheme.onSurfaceVariant),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Text(
+                '字体缩放',
+                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ),
+            Text(
+              '${(scale * 100).toInt()}%',
+              style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                color: colorScheme.onSurfaceVariant,
+              ),
+            ),
+            const SizedBox(width: 6),
+            Icon(Icons.chevron_right_rounded, size: 18, color: colorScheme.onSurfaceVariant),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildFontWeightTile(BuildContext context, double weight) {
+    final colorScheme = Theme.of(context).colorScheme;
+    return InkWell(
+      borderRadius: BorderRadius.circular(10),
+      onTap: () => _showFontWeightBottomSheet(context),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 2, vertical: 8),
+        child: Row(
+          children: [
+            Icon(Icons.format_bold, size: 18, color: colorScheme.onSurfaceVariant),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Text(
+                '字重调整',
+                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ),
+            Text(
+              weight.toInt().toString(),
+              style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                color: colorScheme.onSurfaceVariant,
+              ),
+            ),
+            const SizedBox(width: 6),
+            Icon(Icons.chevron_right_rounded, size: 18, color: colorScheme.onSurfaceVariant),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Future<void> _showFontFamilyBottomSheet(BuildContext context) async {
+    await showModalBottomSheet(
+      context: context,
+      builder: (context) {
+        final selected = ref.read(appFontFamilyProvider);
+        return SafeArea(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Padding(
+                padding: EdgeInsets.symmetric(vertical: 12),
+                child: Text(
+                  '选择字体',
+                  style: TextStyle(fontWeight: FontWeight.w700, fontSize: 16),
+                ),
+              ),
+              const Divider(height: 1),
+              for (final font in AppFontFamily.values)
+                ListTile(
+                  leading: Icon(
+                    font == selected ? Icons.check_circle : Icons.circle_outlined,
+                    color: font == selected ? Theme.of(context).colorScheme.primary : null,
+                  ),
+                  title: Text(font.label),
+                  onTap: () {
+                    ref.read(appFontFamilyProvider.notifier).state = font;
+                    Navigator.pop(context);
+                  },
+                ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  Future<void> _showFontScaleBottomSheet(BuildContext context) async {
+    final scales = [0.8, 0.9, 1.0, 1.1, 1.2, 1.3, 1.4, 1.5];
+    await showModalBottomSheet(
+      context: context,
+      builder: (context) {
+        final selected = ref.read(appFontScaleProvider);
+        return SafeArea(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Padding(
+                padding: EdgeInsets.symmetric(vertical: 12),
+                child: Text(
+                  '字体缩放',
+                  style: TextStyle(fontWeight: FontWeight.w700, fontSize: 16),
+                ),
+              ),
+              const Divider(height: 1),
+              for (final scale in scales)
+                ListTile(
+                  leading: Icon(
+                    scale == selected ? Icons.check_circle : Icons.circle_outlined,
+                    color: scale == selected ? Theme.of(context).colorScheme.primary : null,
+                  ),
+                  title: Text('${(scale * 100).toInt()}%'),
+                  onTap: () {
+                    ref.read(appFontScaleProvider.notifier).state = scale;
+                    Navigator.pop(context);
+                  },
+                ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  Future<void> _showFontWeightBottomSheet(BuildContext context) async {
+    final weights = [300.0, 400.0, 500.0, 600.0, 700.0];
+    await showModalBottomSheet(
+      context: context,
+      builder: (context) {
+        final selected = ref.read(appFontWeightProvider);
+        return SafeArea(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Padding(
+                padding: EdgeInsets.symmetric(vertical: 12),
+                child: Text(
+                  '字重调整',
+                  style: TextStyle(fontWeight: FontWeight.w700, fontSize: 16),
+                ),
+              ),
+              const Divider(height: 1),
+              for (final weight in weights)
+                ListTile(
+                  leading: Icon(
+                    weight == selected ? Icons.check_circle : Icons.circle_outlined,
+                    color: weight == selected ? Theme.of(context).colorScheme.primary : null,
+                  ),
+                  title: Text(
+                    weight.toInt().toString(),
+                    style: TextStyle(
+                      fontWeight: FontWeight.values.firstWhere(
+                        (w) => w.value == weight.toInt(),
+                        orElse: () => FontWeight.normal,
+                      ),
+                    ),
+                  ),
+                  onTap: () {
+                    ref.read(appFontWeightProvider.notifier).state = weight;
+                    Navigator.pop(context);
+                  },
+                ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
   Widget _buildBackgroundGallerySection(BuildContext context) {
     return _buildSectionCard(
       context,
       icon: Icons.wallpaper_outlined,
-      title: '背景图集',
-      subtitle: '预览阅读器内置背景图。',
-      child: LayoutBuilder(
-        builder: (context, constraints) {
-          const spacing = 10.0;
-          final columns = AppLayout.optionGridColumnsForWidth(
-            constraints.maxWidth,
-          );
-          final itemWidth =
-              (constraints.maxWidth - ((columns - 1) * spacing)) / columns;
-
-          return Wrap(
-            spacing: spacing,
-            runSpacing: spacing,
-            children: _backgroundGalleryPaths
-                .map(
-                  (path) => SizedBox(
-                    width: itemWidth,
-                    child: ClipRRect(
-                      borderRadius: BorderRadius.circular(14),
-                      child: AspectRatio(
-                        aspectRatio: 1.45,
-                        child: Image.asset(path, fit: BoxFit.cover),
+      title: '背景',
+      subtitle: '点击 + 上传背景图，长按可删除。',
+      child: _isLoadingBackgrounds
+          ? const SizedBox(
+              height: 80,
+              child: Center(child: CircularProgressIndicator()),
+            )
+          : GridView.builder(
+              shrinkWrap: true,
+              physics: const NeverScrollableScrollPhysics(),
+              gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                crossAxisCount: 5,
+                mainAxisSpacing: 8,
+                crossAxisSpacing: 8,
+              ),
+              itemCount: _backgroundPaths.length + 1,
+              itemBuilder: (context, index) {
+                if (index == 0) {
+                  return GestureDetector(
+                    onTap: _uploadBackground,
+                    child: Container(
+                      decoration: BoxDecoration(
+                        color: Theme.of(context).colorScheme.surfaceContainerLow,
+                        borderRadius: BorderRadius.circular(10),
+                        border: Border.all(
+                          color: Theme.of(context).colorScheme.outlineVariant.withValues(alpha: 0.4),
+                        ),
+                      ),
+                      child: Icon(
+                        Icons.add_rounded,
+                        size: 28,
+                        color: Theme.of(context).colorScheme.onSurfaceVariant.withValues(alpha: 0.4),
                       ),
                     ),
+                  );
+                }
+                final path = _backgroundPaths[index - 1];
+                return GestureDetector(
+                  onLongPress: () => _confirmDeleteBackground(path),
+                  child: ClipRRect(
+                    borderRadius: BorderRadius.circular(10),
+                    child: Image.file(File(path), fit: BoxFit.cover),
                   ),
-                )
-                .toList(growable: false),
-          );
-        },
-      ),
+                );
+              },
+            ),
     );
   }
 
@@ -440,51 +866,85 @@ class _AppearancePageState extends ConsumerState<AppearancePage> {
       context,
       icon: Icons.dock_outlined,
       title: '导航样式',
-      subtitle: '在 Android 和 iOS 手机上切换主导航风格，平板保持侧边栏。',
+      subtitle: '手机切换主导航风格，平板保持侧边栏。',
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          LayoutBuilder(
-            builder: (context, constraints) {
-              const spacing = 8.0;
-              final columns = AppLayout.optionGridColumnsForWidth(
-                constraints.maxWidth,
-              );
-              final itemWidth =
-                  (constraints.maxWidth - ((columns - 1) * spacing)) / columns;
-
-              return Wrap(
-                spacing: spacing,
-                runSpacing: spacing,
-                children: _navigationStyleOptions
-                    .map(
-                      (option) => SizedBox(
-                        width: itemWidth,
-                        child: _buildNavigationStyleTile(
-                          context,
-                          option: option,
-                          selectedNavigationStyle: selectedNavigationStyle,
-                          onTap: () {
-                            if (selectedNavigationStyle == option.preference) {
-                              return;
-                            }
-                            unawaited(
-                              ref
-                                  .read(
-                                    appNavigationStylePreferenceProvider
-                                        .notifier,
-                                  )
-                                  .setPreference(option.preference),
-                            );
-                          },
+          Row(
+            children: _navigationStyleOptions.map((option) {
+              final selected = option.preference == selectedNavigationStyle;
+              final colorScheme = Theme.of(context).colorScheme;
+              return Expanded(
+                child: Padding(
+                  padding: EdgeInsets.only(
+                    right: option == _navigationStyleOptions.last ? 0 : 6,
+                  ),
+                  child: InkWell(
+                    borderRadius: BorderRadius.circular(10),
+                    onTap: () {
+                      if (selected) return;
+                      unawaited(
+                        ref
+                            .read(
+                              appNavigationStylePreferenceProvider.notifier,
+                            )
+                            .setPreference(option.preference),
+                      );
+                    },
+                    child: AnimatedContainer(
+                      duration: const Duration(milliseconds: 150),
+                      curve: Curves.easeOutCubic,
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 6,
+                        vertical: 9,
+                      ),
+                      decoration: BoxDecoration(
+                        color: selected
+                            ? colorScheme.secondaryContainer
+                            : colorScheme.surface,
+                        borderRadius: BorderRadius.circular(10),
+                        border: Border.all(
+                          color: selected
+                              ? colorScheme.primary
+                              : colorScheme.outlineVariant
+                                  .withValues(alpha: 0.5),
+                          width: selected ? 1.4 : 1,
                         ),
                       ),
-                    )
-                    .toList(growable: false),
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(
+                            option.icon,
+                            size: 16,
+                            color: selected
+                                ? colorScheme.primary
+                                : colorScheme.onSurfaceVariant,
+                          ),
+                          const SizedBox(height: 5),
+                          Text(
+                            option.label,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: Theme.of(context)
+                                .textTheme
+                                .labelSmall
+                                ?.copyWith(
+                                  fontWeight: FontWeight.w700,
+                                  color: selected
+                                      ? colorScheme.primary
+                                      : colorScheme.onSurfaceVariant,
+                                ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
               );
-            },
+            }).toList(growable: false),
           ),
-          const SizedBox(height: 12),
+          const SizedBox(height: 8),
           _buildNavigationLabelVisibilityTile(
             context,
             showLabels: showNavigationLabels,
@@ -500,275 +960,6 @@ class _AppearancePageState extends ConsumerState<AppearancePage> {
       ),
     );
   }
-
-  Widget _buildPreviewCard(
-    BuildContext context,
-    AppShellNavigationState navigationState, {
-    required ThemeMode selectedThemeMode,
-    required Color selectedSeedColor,
-    required AppNavigationStylePreference selectedNavigationStyle,
-    required bool showNavigationLabels,
-  }) {
-    final theme = Theme.of(context);
-    final colorScheme = theme.colorScheme;
-    final selectedMode = _themeModeOptions.firstWhere(
-      (option) => option.mode == selectedThemeMode,
-    );
-    final visibleDestinations = visibleAppShellDestinations(navigationState);
-    final previewTint = appThemeDisplayColor(
-      selectedSeedColor,
-      brightness: colorScheme.brightness,
-    );
-    final effectiveNavigationStyle = resolveAppNavigationStyle(
-      selectedNavigationStyle,
-      isWeb: kIsWeb,
-      platform: theme.platform,
-    );
-
-    return Container(
-      decoration: BoxDecoration(
-        gradient: LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: [
-            previewTint.withValues(alpha: 0.18),
-            colorScheme.surfaceContainerLow,
-            colorScheme.surface,
-          ],
-        ),
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: previewTint.withValues(alpha: 0.24)),
-      ),
-      child: Padding(
-        padding: const EdgeInsets.fromLTRB(16, 16, 16, 16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                Container(
-                  width: 42,
-                  height: 42,
-                  decoration: BoxDecoration(
-                    color: previewTint.withValues(alpha: 0.18),
-                    shape: BoxShape.circle,
-                  ),
-                  child: Icon(
-                    Icons.palette_outlined,
-                    color: previewTint,
-                    size: 22,
-                  ),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        '当前外观',
-                        style: Theme.of(context).textTheme.titleMedium
-                            ?.copyWith(fontWeight: FontWeight.w700),
-                      ),
-                      const SizedBox(height: 3),
-                      Text(
-                        '主题与底部导航会在这里同步生效。',
-                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                          color: colorScheme.onSurfaceVariant,
-                          height: 1.35,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 14),
-            Wrap(
-              spacing: 8,
-              runSpacing: 8,
-              children: [
-                _buildPreviewMetaChip(
-                  context,
-                  icon: selectedMode.icon,
-                  label: selectedMode.label,
-                ),
-                _buildPreviewMetaChip(
-                  context,
-                  icon: Icons.color_lens_outlined,
-                  label: appThemeSeedLabel(selectedSeedColor),
-                  accentColor: previewTint,
-                ),
-                _buildPreviewMetaChip(
-                  context,
-                  icon: Icons.space_dashboard_outlined,
-                  label: '底部菜单 ${navigationState.visibleTabCount}/4',
-                ),
-                _buildPreviewMetaChip(
-                  context,
-                  icon: Icons.dock_outlined,
-                  label: appNavigationStylePreferenceLabel(
-                    selectedNavigationStyle,
-                  ),
-                ),
-                _buildPreviewMetaChip(
-                  context,
-                  icon: Icons.text_fields_outlined,
-                  label: appNavigationLabelVisibilityLabel(
-                    showNavigationLabels,
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 14),
-            Container(
-              width: double.infinity,
-              padding: const EdgeInsets.fromLTRB(12, 12, 12, 12),
-              decoration: BoxDecoration(
-                color: colorScheme.surface.withValues(alpha: 0.78),
-                borderRadius: BorderRadius.circular(16),
-                border: Border.all(
-                  color: colorScheme.outlineVariant.withValues(alpha: 0.46),
-                ),
-              ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    '底部导航预览',
-                    style: Theme.of(context).textTheme.labelLarge?.copyWith(
-                      fontWeight: FontWeight.w700,
-                    ),
-                  ),
-                  const SizedBox(height: 10),
-                  _buildBottomNavigationPreview(
-                    context,
-                    visibleDestinations,
-                    previewTint: previewTint,
-                    navigationStyle: effectiveNavigationStyle,
-                    showNavigationLabels: showNavigationLabels,
-                  ),
-                ],
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildBottomNavigationPreview(
-    BuildContext context,
-    List<AppShellDestination> visibleDestinations, {
-    required Color previewTint,
-    required AppNavigationStyle navigationStyle,
-    required bool showNavigationLabels,
-  }) {
-    final colorScheme = Theme.of(context).colorScheme;
-
-    if (navigationStyle == AppNavigationStyle.cupertinoDock) {
-      return ClipRRect(
-        borderRadius: BorderRadius.circular(18),
-        child: ColoredBox(
-          color: colorScheme.surface.withValues(alpha: 0.12),
-          child: IgnorePointer(
-            child: CupertinoDockNavigationBar(
-              destinations: visibleDestinations,
-              selectedIndex: 0,
-              activeIconGallery: null,
-              showLabels: showNavigationLabels,
-              onDestinationSelected: (_) {},
-              onSearchPressed: () {},
-            ),
-          ),
-        ),
-      );
-    }
-
-    return Row(
-      children: [
-        for (var index = 0; index < visibleDestinations.length; index++) ...[
-          if (index > 0) const SizedBox(width: 8),
-          Expanded(
-            child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 10),
-              decoration: BoxDecoration(
-                color:
-                    index == 0
-                        ? previewTint.withValues(alpha: 0.14)
-                        : colorScheme.surfaceContainerLow,
-                borderRadius: BorderRadius.circular(12),
-                border: Border.all(
-                  color:
-                      index == 0
-                          ? previewTint.withValues(alpha: 0.28)
-                          : colorScheme.outlineVariant.withValues(alpha: 0.44),
-                ),
-              ),
-              child: Column(
-                children: [
-                  Icon(
-                    index == 0
-                        ? visibleDestinations[index].selectedIcon
-                        : visibleDestinations[index].icon,
-                    size: 18,
-                    color:
-                        index == 0 ? previewTint : colorScheme.onSurfaceVariant,
-                  ),
-                  if (showNavigationLabels) ...[
-                    const SizedBox(height: 6),
-                    Text(
-                      visibleDestinations[index].label,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: Theme.of(context).textTheme.labelMedium?.copyWith(
-                        color: colorScheme.onSurface,
-                        fontWeight: FontWeight.w700,
-                      ),
-                    ),
-                  ],
-                ],
-              ),
-            ),
-          ),
-        ],
-      ],
-    );
-  }
-
-  Widget _buildPreviewMetaChip(
-    BuildContext context, {
-    required IconData icon,
-    required String label,
-    Color? accentColor,
-  }) {
-    final colorScheme = Theme.of(context).colorScheme;
-    final effectiveAccent = accentColor ?? colorScheme.primary;
-
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
-      decoration: BoxDecoration(
-        color: colorScheme.surface.withValues(alpha: 0.76),
-        borderRadius: BorderRadius.circular(999),
-        border: Border.all(
-          color: colorScheme.outlineVariant.withValues(alpha: 0.44),
-        ),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(icon, size: 15, color: effectiveAccent),
-          const SizedBox(width: 6),
-          Text(
-            label,
-            style: Theme.of(
-              context,
-            ).textTheme.labelMedium?.copyWith(fontWeight: FontWeight.w700),
-          ),
-        ],
-      ),
-    );
-  }
-
   Widget _buildSectionCard(
     BuildContext context, {
     required IconData icon,
@@ -781,12 +972,12 @@ class _AppearancePageState extends ConsumerState<AppearancePage> {
 
     return Container(
       width: double.infinity,
-      padding: const EdgeInsets.fromLTRB(14, 14, 14, 14),
+      padding: const EdgeInsets.fromLTRB(12, 12, 12, 12),
       decoration: BoxDecoration(
         color: colorScheme.surfaceContainerLow,
-        borderRadius: BorderRadius.circular(18),
+        borderRadius: BorderRadius.circular(16),
         border: Border.all(
-          color: colorScheme.outlineVariant.withValues(alpha: 0.46),
+          color: colorScheme.outlineVariant.withValues(alpha: 0.4),
         ),
       ),
       child: Column(
@@ -795,35 +986,34 @@ class _AppearancePageState extends ConsumerState<AppearancePage> {
           Row(
             children: [
               Container(
-                width: 32,
-                height: 32,
+                width: 28,
+                height: 28,
                 decoration: BoxDecoration(
-                  color: colorScheme.primaryContainer.withValues(alpha: 0.76),
-                  borderRadius: BorderRadius.circular(10),
+                  color: colorScheme.primaryContainer.withValues(alpha: 0.7),
+                  borderRadius: BorderRadius.circular(8),
                 ),
                 child: Icon(
                   icon,
-                  size: 18,
+                  size: 16,
                   color: colorScheme.onPrimaryContainer,
                 ),
               ),
-              const SizedBox(width: 10),
+              const SizedBox(width: 9),
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
                       title,
-                      style: textTheme.titleSmall?.copyWith(
+                      style: textTheme.labelLarge?.copyWith(
                         fontWeight: FontWeight.w700,
                       ),
                     ),
-                    const SizedBox(height: 2),
                     Text(
                       subtitle,
-                      style: textTheme.bodySmall?.copyWith(
+                      style: textTheme.labelSmall?.copyWith(
                         color: colorScheme.onSurfaceVariant,
-                        height: 1.35,
+                        height: 1.3,
                       ),
                     ),
                   ],
@@ -831,186 +1021,9 @@ class _AppearancePageState extends ConsumerState<AppearancePage> {
               ),
             ],
           ),
-          const SizedBox(height: 12),
+          const SizedBox(height: 10),
           child,
         ],
-      ),
-    );
-  }
-
-  Widget _buildThemeModeTile(
-    BuildContext context, {
-    required _ThemeModeOption option,
-    required ThemeMode selectedThemeMode,
-    required VoidCallback onTap,
-  }) {
-    final colorScheme = Theme.of(context).colorScheme;
-    final selected = option.mode == selectedThemeMode;
-
-    return InkWell(
-      borderRadius: BorderRadius.circular(12),
-      onTap: onTap,
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 160),
-        curve: Curves.easeOutCubic,
-        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
-        decoration: BoxDecoration(
-          color:
-              selected
-                  ? colorScheme.secondaryContainer.withValues(alpha: 0.8)
-                  : colorScheme.surface,
-          borderRadius: BorderRadius.circular(12),
-          border: Border.all(
-            color:
-                selected
-                    ? colorScheme.primary
-                    : colorScheme.outlineVariant.withValues(alpha: 0.58),
-            width: selected ? 1.4 : 1,
-          ),
-        ),
-        child: Row(
-          children: [
-            Icon(
-              option.icon,
-              size: 18,
-              color:
-                  selected ? colorScheme.primary : colorScheme.onSurfaceVariant,
-            ),
-            const SizedBox(width: 8),
-            Expanded(
-              child: Text(
-                option.label,
-                style: Theme.of(
-                  context,
-                ).textTheme.labelLarge?.copyWith(fontWeight: FontWeight.w700),
-              ),
-            ),
-            Icon(
-              selected ? Icons.check_circle_rounded : Icons.circle_outlined,
-              size: 18,
-              color: selected ? colorScheme.primary : colorScheme.outline,
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildThemeColorTile(
-    BuildContext context, {
-    required AppThemeSeedOption option,
-    required Color selectedSeedColor,
-    required VoidCallback onTap,
-  }) {
-    final colorScheme = Theme.of(context).colorScheme;
-    final selected = option.color.toARGB32() == selectedSeedColor.toARGB32();
-
-    return InkWell(
-      borderRadius: BorderRadius.circular(12),
-      onTap: onTap,
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 160),
-        curve: Curves.easeOutCubic,
-        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
-        decoration: BoxDecoration(
-          color:
-              selected
-                  ? colorScheme.secondaryContainer.withValues(alpha: 0.82)
-                  : colorScheme.surface,
-          borderRadius: BorderRadius.circular(12),
-          border: Border.all(
-            color:
-                selected
-                    ? colorScheme.primary
-                    : colorScheme.outlineVariant.withValues(alpha: 0.58),
-            width: selected ? 1.4 : 1,
-          ),
-        ),
-        child: Row(
-          children: [
-            Container(
-              width: 13,
-              height: 13,
-              decoration: BoxDecoration(
-                color: option.color,
-                shape: BoxShape.circle,
-                border: Border.all(
-                  color: colorScheme.outlineVariant,
-                  width: 0.8,
-                ),
-              ),
-            ),
-            const SizedBox(width: 8),
-            Expanded(
-              child: Text(
-                option.label,
-                style: Theme.of(
-                  context,
-                ).textTheme.labelLarge?.copyWith(fontWeight: FontWeight.w700),
-              ),
-            ),
-            if (selected)
-              Icon(Icons.check_rounded, size: 18, color: colorScheme.primary),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildNavigationStyleTile(
-    BuildContext context, {
-    required _NavigationStyleOption option,
-    required AppNavigationStylePreference selectedNavigationStyle,
-    required VoidCallback onTap,
-  }) {
-    final colorScheme = Theme.of(context).colorScheme;
-    final selected = option.preference == selectedNavigationStyle;
-
-    return InkWell(
-      borderRadius: BorderRadius.circular(12),
-      onTap: onTap,
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 160),
-        curve: Curves.easeOutCubic,
-        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
-        decoration: BoxDecoration(
-          color:
-              selected
-                  ? colorScheme.secondaryContainer.withValues(alpha: 0.8)
-                  : colorScheme.surface,
-          borderRadius: BorderRadius.circular(12),
-          border: Border.all(
-            color:
-                selected
-                    ? colorScheme.primary
-                    : colorScheme.outlineVariant.withValues(alpha: 0.58),
-            width: selected ? 1.4 : 1,
-          ),
-        ),
-        child: Row(
-          children: [
-            Icon(
-              option.icon,
-              size: 18,
-              color:
-                  selected ? colorScheme.primary : colorScheme.onSurfaceVariant,
-            ),
-            const SizedBox(width: 8),
-            Expanded(
-              child: Text(
-                option.label,
-                style: Theme.of(
-                  context,
-                ).textTheme.labelLarge?.copyWith(fontWeight: FontWeight.w700),
-              ),
-            ),
-            Icon(
-              selected ? Icons.check_circle_rounded : Icons.circle_outlined,
-              size: 18,
-              color: selected ? colorScheme.primary : colorScheme.outline,
-            ),
-          ],
-        ),
       ),
     );
   }
@@ -1074,170 +1087,113 @@ class _AppearanceNavigationVisibilityPanel extends ConsumerStatefulWidget {
 class _AppearanceNavigationVisibilityPanelState
     extends ConsumerState<_AppearanceNavigationVisibilityPanel> {
   bool _isSaving = false;
-  AppShellTab? _savingTab;
-  String? _errorText;
 
   @override
   Widget build(BuildContext context) {
     final navigationState = ref.watch(appShellNavigationProvider);
-    final textTheme = Theme.of(context).textTheme;
-    final colorScheme = Theme.of(context).colorScheme;
 
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
+    return Row(
       children: [
-        Text(
-          '当前展示 ${navigationState.visibleTabCount}/4 项，“我的”固定保留。',
-          style: textTheme.bodySmall?.copyWith(
-            color: colorScheme.onSurfaceVariant,
-            height: 1.35,
-          ),
+        _buildThemeModeStyleTab(
+          context,
+          tab: AppShellTab.bookshelf,
+          label: '书架',
+          icon: Icons.auto_stories_outlined,
+          active: navigationState.showBookshelf,
+          locked: false,
         ),
-        const SizedBox(height: 10),
-        Container(
-          decoration: BoxDecoration(
-            color: colorScheme.surface,
-            borderRadius: BorderRadius.circular(16),
-            border: Border.all(
-              color: colorScheme.outlineVariant.withValues(alpha: 0.5),
-            ),
-          ),
-          child: Column(
-            children: [
-              _buildNavigationRow(
-                context,
-                tab: AppShellTab.bookshelf,
-                enabled: navigationState.showBookshelf,
-                locked: false,
-                isSaving: _isSaving && _savingTab == AppShellTab.bookshelf,
-              ),
-              _buildNavigationDivider(context),
-              _buildNavigationRow(
-                context,
-                tab: AppShellTab.discover,
-                enabled: navigationState.showDiscover,
-                locked: false,
-                isSaving: _isSaving && _savingTab == AppShellTab.discover,
-              ),
-              _buildNavigationDivider(context),
-              _buildNavigationRow(
-                context,
-                tab: AppShellTab.stats,
-                enabled: navigationState.showStats,
-                locked: false,
-                isSaving: _isSaving && _savingTab == AppShellTab.stats,
-              ),
-              _buildNavigationDivider(context),
-              _buildNavigationRow(
-                context,
-                tab: AppShellTab.mine,
-                enabled: true,
-                locked: true,
-                isSaving: false,
-              ),
-            ],
-          ),
+        const SizedBox(width: 6),
+        _buildThemeModeStyleTab(
+          context,
+          tab: AppShellTab.discover,
+          label: '发现',
+          icon: Icons.explore_outlined,
+          active: navigationState.showDiscover,
+          locked: false,
         ),
-        if (_errorText case final message?) ...[
-          const SizedBox(height: 10),
-          _buildNavigationErrorBanner(context, message: message),
-        ],
+        const SizedBox(width: 6),
+        _buildThemeModeStyleTab(
+          context,
+          tab: AppShellTab.stats,
+          label: '统计',
+          icon: Icons.bar_chart_outlined,
+          active: navigationState.showStats,
+          locked: false,
+        ),
+        const SizedBox(width: 6),
+        _buildThemeModeStyleTab(
+          context,
+          tab: AppShellTab.mine,
+          label: '我的',
+          icon: Icons.person_outline,
+          active: true,
+          locked: true,
+        ),
       ],
     );
   }
 
-  Widget _buildNavigationDivider(BuildContext context) {
-    final colorScheme = Theme.of(context).colorScheme;
-    return Divider(
-      height: 1,
-      indent: 52,
-      endIndent: 14,
-      color: colorScheme.outlineVariant.withValues(alpha: 0.42),
-    );
-  }
-
-  Widget _buildNavigationRow(
+  Widget _buildThemeModeStyleTab(
     BuildContext context, {
     required AppShellTab tab,
-    required bool enabled,
+    required String label,
+    required IconData icon,
+    required bool active,
     required bool locked,
-    required bool isSaving,
   }) {
-    final destination = _destinationFor(tab);
     final colorScheme = Theme.of(context).colorScheme;
-    final active = locked || enabled;
 
-    return Material(
-      color: Colors.transparent,
-      child: InkWell(
-        borderRadius: BorderRadius.circular(16),
-        onTap: locked || _isSaving ? null : () => _toggle(tab, !enabled),
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(12, 10, 12, 10),
-          child: Row(
-            children: [
-              Container(
-                width: 32,
-                height: 32,
-                decoration: BoxDecoration(
+    return Expanded(
+      child: Padding(
+        padding: EdgeInsets.only(
+          right: tab == AppShellTab.mine ? 0 : 6,
+        ),
+        child: InkWell(
+          borderRadius: BorderRadius.circular(10),
+          onTap: locked || _isSaving ? null : () => _toggle(tab, !active),
+          child: AnimatedContainer(
+            duration: const Duration(milliseconds: 150),
+            curve: Curves.easeOutCubic,
+            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 9),
+            decoration: BoxDecoration(
+              color:
+                  active
+                      ? colorScheme.secondaryContainer
+                      : colorScheme.surface,
+              borderRadius: BorderRadius.circular(10),
+              border: Border.all(
+                color:
+                    active
+                        ? colorScheme.primary
+                        : colorScheme.outlineVariant.withValues(alpha: 0.5),
+                width: active ? 1.4 : 1,
+              ),
+            ),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(
+                  icon,
+                  size: 16,
                   color:
                       active
-                          ? colorScheme.primaryContainer.withValues(alpha: 0.92)
-                          : colorScheme.surfaceContainerHighest,
-                  borderRadius: BorderRadius.circular(10),
-                ),
-                child: Icon(
-                  destination.icon,
-                  size: 18,
-                  color:
-                      active
-                          ? colorScheme.onPrimaryContainer
+                          ? colorScheme.onSecondaryContainer
                           : colorScheme.onSurfaceVariant,
                 ),
-              ),
-              const SizedBox(width: 10),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      destination.label,
-                      style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                        fontWeight: FontWeight.w700,
-                      ),
-                    ),
-                    const SizedBox(height: 2),
-                    Text(
-                      locked
-                          ? '入口固定保留'
-                          : enabled
-                          ? '已显示在底部导航'
-                          : '当前已隐藏',
-                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                        color: colorScheme.onSurfaceVariant,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              const SizedBox(width: 10),
-              if (locked)
-                _buildStatusPill(context, label: '固定')
-              else if (isSaving)
-                SizedBox(
-                  width: 18,
-                  height: 18,
-                  child: CircularProgressIndicator(
-                    strokeWidth: 2,
-                    color: colorScheme.primary,
+                const SizedBox(height: 5),
+                Text(
+                  label,
+                  textAlign: TextAlign.center,
+                  style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                    color:
+                        active
+                            ? colorScheme.onSecondaryContainer
+                            : colorScheme.onSurfaceVariant,
+                    fontWeight: active ? FontWeight.w700 : FontWeight.w500,
                   ),
-                )
-              else
-                Switch.adaptive(
-                  value: enabled,
-                  onChanged: (value) => _toggle(tab, value),
                 ),
-            ],
+              ],
+            ),
           ),
         ),
       ),
@@ -1251,8 +1207,6 @@ class _AppearanceNavigationVisibilityPanelState
 
     setState(() {
       _isSaving = true;
-      _savingTab = tab;
-      _errorText = null;
     });
 
     try {
@@ -1263,77 +1217,14 @@ class _AppearanceNavigationVisibilityPanelState
       if (!mounted) {
         return;
       }
-      setState(() {
-        _errorText = '保存底部菜单配置失败，请稍后重试。';
-      });
     } finally {
       if (mounted) {
         setState(() {
           _isSaving = false;
-          _savingTab = null;
         });
       }
     }
   }
-}
-
-AppShellDestination _destinationFor(AppShellTab tab) {
-  return appShellDestinations.firstWhere(
-    (destination) => destination.tab == tab,
-  );
-}
-
-Widget _buildStatusPill(BuildContext context, {required String label}) {
-  final colorScheme = Theme.of(context).colorScheme;
-
-  return Container(
-    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
-    decoration: BoxDecoration(
-      color: colorScheme.primaryContainer.withValues(alpha: 0.84),
-      borderRadius: BorderRadius.circular(999),
-    ),
-    child: Text(
-      label,
-      style: Theme.of(context).textTheme.labelSmall?.copyWith(
-        color: colorScheme.onPrimaryContainer,
-        fontWeight: FontWeight.w700,
-      ),
-    ),
-  );
-}
-
-Widget _buildNavigationErrorBanner(
-  BuildContext context, {
-  required String message,
-}) {
-  final colorScheme = Theme.of(context).colorScheme;
-
-  return Container(
-    width: double.infinity,
-    padding: const EdgeInsets.fromLTRB(12, 10, 12, 10),
-    decoration: BoxDecoration(
-      color: colorScheme.errorContainer.withValues(alpha: 0.55),
-      borderRadius: BorderRadius.circular(12),
-      border: Border.all(color: colorScheme.error.withValues(alpha: 0.35)),
-    ),
-    child: Row(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Icon(Icons.error_outline_rounded, size: 16, color: colorScheme.error),
-        const SizedBox(width: 8),
-        Expanded(
-          child: Text(
-            message,
-            style: Theme.of(context).textTheme.bodySmall?.copyWith(
-              fontSize: 12.5,
-              color: colorScheme.onErrorContainer,
-              height: 1.35,
-            ),
-          ),
-        ),
-      ],
-    ),
-  );
 }
 
 class _ThemeModeOption {

@@ -137,6 +137,8 @@ class _MinePageState extends ConsumerState<MinePage> {
                       child: _buildProfileCard(context),
                     ),
                     const SizedBox(height: 8),
+                    _buildQuickAccessCards(context),
+                    const SizedBox(height: 8),
                     _buildPageEntrance(
                       index: 1,
                       child: _buildActionSection(
@@ -144,48 +146,37 @@ class _MinePageState extends ConsumerState<MinePage> {
                         title: '外观',
                         actions: [
                           _MineActionItem(
-                            icon: Icons.light_mode_outlined,
-                            label: '主题模式',
-                            subtitle: _themeModeLabel(themeMode),
-                            onTap:
-                                () => context.push(
-                                  '/appearance?section=theme-mode',
-                                ),
-                          ),
-                          _MineActionItem(
                             icon: Icons.palette_outlined,
-                            label: '主题颜色',
-                            subtitle: appThemeSeedLabel(seedColor),
+                            label: '外观',
+                            subtitle:
+                                '${_themeModeLabel(themeMode)} · ${appThemeSeedLabel(seedColor)} · ${appNavigationStylePreferenceLabel(navigationPreference)}',
                             colorDot: seedColor,
                             onTap:
                                 () => context.push(
-                                  '/appearance?section=theme-color',
+                                  '/appearance?section=appearance',
                                 ),
                           ),
                           _MineActionItem(
-                            icon: Icons.dock_outlined,
-                            label: '底栏配置',
-                            subtitle:
-                                '${appNavigationStylePreferenceLabel(navigationPreference)} · ${navigationState.visibleTabCount} 项',
+                            icon: Icons.dashboard_outlined,
+                            label: '底栏',
+                            subtitle: '${navigationState.visibleTabCount} 项',
                             onTap:
-                                () => context.push(
-                                  '/appearance?section=bottom-bar',
-                                ),
+                                () => context.push('/bottom-nav-icon-galleries'),
                           ),
                           _MineActionItem(
                             icon: Icons.photo_library_outlined,
-                            label: '封面图集',
+                            label: '封面',
                             onTap:
                                 () => context.push(
-                                  '/appearance?section=cover-gallery',
+                                  '/appearance?section=cover',
                                 ),
                           ),
                           _MineActionItem(
                             icon: Icons.wallpaper_outlined,
-                            label: '背景图集',
+                            label: '背景',
                             onTap:
                                 () => context.push(
-                                  '/appearance?section=background-gallery',
+                                  '/appearance?section=background',
                                 ),
                           ),
                         ],
@@ -203,11 +194,6 @@ class _MinePageState extends ConsumerState<MinePage> {
                             label: '系统',
                             onTap: () => context.push('/system-settings'),
                           ),
-                          _MineActionItem(
-                            icon: Icons.workspace_premium_outlined,
-                            label: '会员中心',
-                            onTap: () => context.push('/membership'),
-                          ),
                           if (_showSourceEntry)
                             _MineActionItem(
                               icon: Icons.menu_book_rounded,
@@ -218,16 +204,6 @@ class _MinePageState extends ConsumerState<MinePage> {
                             icon: Icons.cloud_outlined,
                             label: '缓存',
                             onTap: () => context.push('/cache'),
-                          ),
-                          _MineActionItem(
-                            icon: Icons.bookmarks_outlined,
-                            label: '书签',
-                            onTap: () => context.push('/bookmarks'),
-                          ),
-                          _MineActionItem(
-                            icon: Icons.history_rounded,
-                            label: '统计',
-                            onTap: () => context.push('/stats'),
                           ),
                         ],
                       ),
@@ -296,6 +272,74 @@ class _MinePageState extends ConsumerState<MinePage> {
     await prefs.setString(
       _layoutModeKey,
       next == _MineLayoutMode.list ? 'list' : 'grid',
+    );
+  }
+
+  Widget _buildQuickAccessCards(BuildContext context) {
+    return Row(
+      children: [
+        Expanded(
+          child: _buildQuickCard(
+            context,
+            icon: Icons.workspace_premium_outlined,
+            label: '会员',
+            onTap: () => context.push('/membership'),
+          ),
+        ),
+        const SizedBox(width: 8),
+        Expanded(
+          child: _buildQuickCard(
+            context,
+            icon: Icons.auto_awesome_outlined,
+            label: '灵感',
+            onTap: () => context.push('/bookmarks'),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildQuickCard(
+    BuildContext context, {
+    required IconData icon,
+    required String label,
+    required VoidCallback onTap,
+  }) {
+    final colorScheme = Theme.of(context).colorScheme;
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        borderRadius: BorderRadius.circular(16),
+        onTap: onTap,
+        child: Container(
+          padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
+          decoration: BoxDecoration(
+            color: colorScheme.surface,
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(
+              color: colorScheme.outlineVariant.withValues(alpha: 0.35),
+            ),
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(
+                icon,
+                size: 22,
+                color: colorScheme.primary,
+              ),
+              const SizedBox(width: 10),
+              Text(
+                label,
+                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                  fontWeight: FontWeight.w600,
+                  color: colorScheme.onSurface,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
     );
   }
 

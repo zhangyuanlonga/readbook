@@ -30,11 +30,19 @@ class _BottomNavIconGalleryEditorPageState
   BottomNavIconGallery? _gallery;
   bool _isLoading = true;
   bool _isSaving = false;
+  bool _isEditingName = false;
+  final TextEditingController _nameController = TextEditingController();
 
   @override
   void initState() {
     super.initState();
     _load();
+  }
+
+  @override
+  void dispose() {
+    _nameController.dispose();
+    super.dispose();
   }
 
   Future<void> _load() async {
@@ -174,7 +182,56 @@ class _BottomNavIconGalleryEditorPageState
       },
       child: Scaffold(
         appBar: AppBar(
-          title: Text(_gallery?.name ?? '编辑底栏图集'),
+          title: _isEditingName
+              ? ConstrainedBox(
+                  constraints: const BoxConstraints(maxWidth: 200),
+                  child: TextField(
+                    controller: _nameController,
+                    autofocus: true,
+                    decoration: const InputDecoration(
+                      border: OutlineInputBorder(),
+                      isDense: true,
+                      contentPadding: EdgeInsets.symmetric(
+                        horizontal: 10,
+                        vertical: 6,
+                      ),
+                    ),
+                    onSubmitted: (_) => _saveName(),
+                  ),
+                )
+              : GestureDetector(
+                  onTap: _startEditingName,
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(
+                        _gallery?.name ?? '编辑底栏图集',
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                      const SizedBox(width: 4),
+                      Icon(
+                        Icons.edit_outlined,
+                        size: 16,
+                        color: Theme.of(context).colorScheme.onSurfaceVariant,
+                      ),
+                    ],
+                  ),
+                ),
+          actions: [
+            if (_isEditingName)
+              IconButton(
+                icon: const Icon(Icons.check_rounded),
+                onPressed: _saveName,
+                tooltip: '保存名称',
+              )
+            else
+              IconButton(
+                icon: const Icon(Icons.save_outlined),
+                onPressed: _isSaving ? null : _saveGallery,
+                tooltip: '保存',
+              ),
+          ],
         ),
         body: LayoutBuilder(
           builder: (context, _) {
@@ -199,29 +256,16 @@ class _BottomNavIconGalleryEditorPageState
                             16 + bottomSafe,
                           ),
                           children: [
-                            _buildModeSection(
-                              context,
-                              title: '日间',
-                              configured: _configuredCountForBrightness(
-                                Brightness.light,
-                              ),
-                              unselectedSlot:
-                                  BottomNavIconVariantSlot.lightUnselected,
-                              selectedSlot:
-                                  BottomNavIconVariantSlot.lightSelected,
-                            ),
-                            const SizedBox(height: 16),
-                            _buildModeSection(
-                              context,
-                              title: '夜间',
-                              configured: _configuredCountForBrightness(
-                                Brightness.dark,
-                              ),
-                              unselectedSlot:
-                                  BottomNavIconVariantSlot.darkUnselected,
-                              selectedSlot:
-                                  BottomNavIconVariantSlot.darkSelected,
-                            ),
+                            _buildBatchToolbar(),
+                            const SizedBox(height: 10),
+                            _buildHeaderRow(),
+                            const SizedBox(height: 8),
+                            for (var index = 0;
+                                index < BottomNavIconGalleryTab.values.length;
+                                index++) ...[
+                              if (index > 0) const SizedBox(height: 8),
+                              _buildTabSection(BottomNavIconGalleryTab.values[index]),
+                            ],
                           ],
                         ),
               ),
@@ -232,117 +276,261 @@ class _BottomNavIconGalleryEditorPageState
     );
   }
 
-  int _configuredCountForBrightness(Brightness brightness) {
+  void _startEditingName() {
     final gallery = _gallery;
-    if (gallery == null) {
-      return 0;
-    }
-    var count = 0;
-    for (final tab in BottomNavIconGalleryTab.values) {
-      final iconSet = gallery.items[tab];
-      if (iconSet == null) {
-        continue;
-      }
-      final unselected = brightness == Brightness.light
-          ? iconSet.lightUnselected
-          : iconSet.darkUnselected;
-      final selected = brightness == Brightness.light
-          ? iconSet.lightSelected
-          : iconSet.darkSelected;
-      if (unselected != null) {
-        count += 1;
-      }
-      if (selected != null) {
-        count += 1;
-      }
-    }
-    return count;
+    if (gallery == null) return;
+    _nameController.text = gallery.name;
+    setState(() {
+      _isEditingName = true;
+    });
   }
 
-  Widget _buildModeSection(
-    BuildContext context, {
-    required String title,
-    required int configured,
-    required BottomNavIconVariantSlot unselectedSlot,
-    required BottomNavIconVariantSlot selectedSlot,
-  }) {
-    final colorScheme = Theme.of(context).colorScheme;
-    return Container(
-      decoration: BoxDecoration(
-        color: colorScheme.surface,
-        borderRadius: BorderRadius.circular(18),
-        border: Border.all(
-          color: colorScheme.outlineVariant.withValues(alpha: 0.48),
-        ),
-      ),
-      child: Column(
+  Future<void> _saveName() async {
+    final gallery = _gallery;
+    if (gallery == null || _isSaving) return;
+    final newName = _nameController.text.trim();
+    if (newName.isEmpty) return;
+
+    setState(() {
+      _isSaving = true;
+    });
+    try {
+      final saved = await _service.saveGallery(
+        gallery.copyWith(name: newName, updatedAt: DateTime.now()),
+      );
+      if (!mounted) return;
+      setState(() {
+        _gallery = saved;
+        _isEditingName = false;
+      });
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isSaving = false;
+        });
+      }
+    }
+  }
+
+  Future<void> _saveGallery() async {
+    final gallery = _gallery;
+    if (gallery == null || _isSaving) return;
+
+    setState(() {
+      _isSaving = true;
+    });
+    try {
+      final updated = gallery.copyWith(updatedAt: DateTime.now());
+      final saved = await _service.saveGallery(updated);
+      if (!mounted) return;
+      setState(() {
+        _gallery = saved;
+      });
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('已保存'),
+            duration: Duration(seconds: 1),
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isSaving = false;
+        });
+      }
+    }
+  }
+
+  Widget _buildHeaderRow() {
+    return Padding(
+      padding: const EdgeInsets.only(left: 12, right: 12),
+      child: Row(
         children: [
-          Padding(
-            padding: const EdgeInsets.fromLTRB(14, 14, 14, 10),
+          const SizedBox(width: 42, child: Text('')),
+          const SizedBox(width: 8),
+          Expanded(
             child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceEvenly,
               children: [
-                Expanded(
-                  child: Text(
-                    '$title · 已配置 $configured/8',
-                    style: Theme.of(
-                      context,
-                    ).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w700),
-                  ),
-                ),
-                const SizedBox(width: 12),
-                const SizedBox(width: 72, child: Text('未选中')),
-                const SizedBox(width: 12),
-                const SizedBox(width: 72, child: Text('已选中')),
+                Icon(Icons.light_mode_outlined, size: 14, color: Theme.of(context).colorScheme.onSurfaceVariant.withValues(alpha: 0.4)),
+                const SizedBox(width: 48, child: Text('未选中', textAlign: TextAlign.center)),
+                const SizedBox(width: 48, child: Text('已选中', textAlign: TextAlign.center)),
               ],
             ),
           ),
-          for (var index = 0; index < BottomNavIconGalleryTab.values.length; index++)
-            Column(
+          const SizedBox(width: 12),
+          Expanded(
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceEvenly,
               children: [
-                if (index > 0) const Divider(height: 1),
-                Padding(
-                  padding: const EdgeInsets.fromLTRB(14, 10, 14, 10),
-                  child: Row(
-                    children: [
-                      Expanded(
-                        child: Text(
-                          _tabLabel(BottomNavIconGalleryTab.values[index]),
-                          style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                            fontWeight: FontWeight.w600,
-                          ),
-                        ),
-                      ),
-                      _buildSlotCell(
-                        context,
-                        tab: BottomNavIconGalleryTab.values[index],
-                        slot: unselectedSlot,
-                      ),
-                      const SizedBox(width: 12),
-                      _buildSlotCell(
-                        context,
-                        tab: BottomNavIconGalleryTab.values[index],
-                        slot: selectedSlot,
-                      ),
-                    ],
-                  ),
-                ),
+                Icon(Icons.dark_mode_outlined, size: 14, color: Theme.of(context).colorScheme.onSurfaceVariant.withValues(alpha: 0.4)),
+                const SizedBox(width: 48, child: Text('未选中', textAlign: TextAlign.center)),
+                const SizedBox(width: 48, child: Text('已选中', textAlign: TextAlign.center)),
               ],
             ),
+          ),
         ],
       ),
     );
   }
 
-  Widget _buildSlotCell(
-    BuildContext context, {
+  Widget _buildBatchToolbar() {
+    final colorScheme = Theme.of(context).colorScheme;
+    final allLightConfigured = BottomNavIconGalleryTab.values.every(
+      (tab) {
+        final set = _gallery?.items[tab] ?? const BottomNavIconSet();
+        return set.lightUnselected != null && set.lightSelected != null;
+      },
+    );
+
+    return InkWell(
+      borderRadius: BorderRadius.circular(14),
+      onTap: allLightConfigured && !_isSaving ? _copyAllLightToDark : null,
+      child: Container(
+        padding: const EdgeInsets.fromLTRB(12, 10, 12, 10),
+        decoration: BoxDecoration(
+          color:
+              allLightConfigured
+                  ? colorScheme.primaryContainer.withValues(alpha: 0.4)
+                  : colorScheme.surfaceContainerHighest.withValues(alpha: 0.3),
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(
+            color: colorScheme.outlineVariant.withValues(alpha: 0.35),
+          ),
+        ),
+        child: Row(
+          children: [
+            Icon(
+              Icons.copy_all_rounded,
+              size: 18,
+              color:
+                  allLightConfigured
+                      ? colorScheme.primary
+                      : colorScheme.onSurfaceVariant.withValues(alpha: 0.4),
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Text(
+                '全部夜间 ← 同日间',
+                style: Theme.of(context).textTheme.labelLarge?.copyWith(
+                  fontWeight: FontWeight.w600,
+                  color:
+                      allLightConfigured
+                          ? colorScheme.primary
+                          : colorScheme.onSurfaceVariant.withValues(alpha: 0.4),
+                ),
+              ),
+            ),
+            if (!allLightConfigured)
+              Text(
+                '需先配齐日间',
+                style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                  color: colorScheme.onSurfaceVariant.withValues(alpha: 0.5),
+                ),
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildTabSection(BottomNavIconGalleryTab tab) {
+    final colorScheme = Theme.of(context).colorScheme;
+    final iconSet = _gallery!.items[tab] ?? const BottomNavIconSet();
+
+    return Container(
+      padding: const EdgeInsets.fromLTRB(12, 10, 12, 10),
+      decoration: BoxDecoration(
+        color: colorScheme.surface,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(
+          color: colorScheme.outlineVariant.withValues(alpha: 0.35),
+        ),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.center,
+        children: [
+          SizedBox(
+            width: 42,
+            child: Text(
+              _tabLabel(tab),
+              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+          ),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+              children: [
+                SizedBox(
+                  width: 48,
+                  child: _buildCompactSlot(
+                    tab: tab,
+                    slot: BottomNavIconVariantSlot.lightUnselected,
+                    asset: iconSet.lightUnselected,
+                    brightnessIcon: Icons.light_mode_outlined,
+                  ),
+                ),
+                SizedBox(
+                  width: 48,
+                  child: _buildCompactSlot(
+                    tab: tab,
+                    slot: BottomNavIconVariantSlot.lightSelected,
+                    asset: iconSet.lightSelected,
+                    brightnessIcon: Icons.light_mode_outlined,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+              children: [
+                SizedBox(
+                  width: 48,
+                  child: _buildCompactSlot(
+                    tab: tab,
+                    slot: BottomNavIconVariantSlot.darkUnselected,
+                    asset: iconSet.darkUnselected,
+                    brightnessIcon: Icons.dark_mode_outlined,
+                  ),
+                ),
+                SizedBox(
+                  width: 48,
+                  child: _buildCompactSlot(
+                    tab: tab,
+                    slot: BottomNavIconVariantSlot.darkSelected,
+                    asset: iconSet.darkSelected,
+                    brightnessIcon: Icons.dark_mode_outlined,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildCompactSlot({
     required BottomNavIconGalleryTab tab,
     required BottomNavIconVariantSlot slot,
+    required BottomNavIconAssetRef? asset,
+    required IconData brightnessIcon,
   }) {
-    final gallery = _gallery!;
-    final iconSet = gallery.items[tab] ?? const BottomNavIconSet();
-    final asset = iconSet.assetForSlot(slot);
     final isSelectedSlot = slot == BottomNavIconVariantSlot.lightSelected ||
         slot == BottomNavIconVariantSlot.darkSelected;
+    final brightness = slot == BottomNavIconVariantSlot.darkSelected ||
+            slot == BottomNavIconVariantSlot.darkUnselected
+        ? Brightness.dark
+        : Brightness.light;
     final fallback = resolveCupertinoBottomNavIcon(
       tab: switch (tab) {
         BottomNavIconGalleryTab.bookshelf => AppShellTab.bookshelf,
@@ -351,35 +539,95 @@ class _BottomNavIconGalleryEditorPageState
         BottomNavIconGalleryTab.mine => AppShellTab.mine,
       },
       selected: isSelectedSlot,
-      brightness: slot == BottomNavIconVariantSlot.darkSelected ||
-              slot == BottomNavIconVariantSlot.darkUnselected
-          ? Brightness.dark
-          : Brightness.light,
+      brightness: brightness,
     );
+    final colorScheme = Theme.of(context).colorScheme;
 
     return InkWell(
       onTap: _isSaving ? null : () => _pickForSlot(tab, slot),
-      borderRadius: BorderRadius.circular(12),
+      borderRadius: BorderRadius.circular(10),
       onLongPress: asset == null || _isSaving ? null : () => _clearSlot(tab, slot),
       child: Container(
-        width: 72,
-        height: 52,
+        width: 48,
+        height: 44,
         decoration: BoxDecoration(
-          color: Theme.of(context).colorScheme.surfaceContainerLow,
-          borderRadius: BorderRadius.circular(12),
+          color: colorScheme.surfaceContainerLow,
+          borderRadius: BorderRadius.circular(10),
           border: Border.all(
-            color: Theme.of(context).colorScheme.outlineVariant.withValues(
-              alpha: 0.55,
-            ),
+            color: colorScheme.outlineVariant.withValues(alpha: 0.4),
           ),
         ),
         alignment: Alignment.center,
         child:
             asset == null
-                ? const Icon(Icons.add_rounded)
+                ? Icon(
+                    Icons.add_rounded,
+                    size: 20,
+                    color: colorScheme.onSurfaceVariant.withValues(alpha: 0.4),
+                  )
                 : BottomNavIconView(icon: fallback.copyWith(assetRef: asset), size: 24),
       ),
     );
+  }
+
+  Future<void> _copyLightToDark(BottomNavIconGalleryTab tab) async {
+    final gallery = _gallery;
+    if (gallery == null || _isSaving) return;
+
+    final lightSet = gallery.items[tab] ?? const BottomNavIconSet();
+    if (lightSet.lightUnselected == null && lightSet.lightSelected == null) {
+      return;
+    }
+
+    setState(() {
+      _isSaving = true;
+    });
+    try {
+      var darkSet = gallery.items[tab] ?? const BottomNavIconSet();
+
+      if (lightSet.lightUnselected != null) {
+        final dupAsset = BottomNavIconAssetRef(
+          path: lightSet.lightUnselected!.path,
+          format: lightSet.lightUnselected!.format,
+          isAsset: lightSet.lightUnselected!.isAsset,
+        );
+        darkSet = darkSet.copyWithSlot(
+          BottomNavIconVariantSlot.darkUnselected,
+          asset: dupAsset,
+        );
+      }
+
+      if (lightSet.lightSelected != null) {
+        final dupAsset = BottomNavIconAssetRef(
+          path: lightSet.lightSelected!.path,
+          format: lightSet.lightSelected!.format,
+          isAsset: lightSet.lightSelected!.isAsset,
+        );
+        darkSet = darkSet.copyWithSlot(
+          BottomNavIconVariantSlot.darkSelected,
+          asset: dupAsset,
+        );
+      }
+
+      final updatedGallery = gallery.copyWithItem(tab, darkSet);
+      final saved = await _service.saveGallery(updatedGallery);
+      if (!mounted) return;
+      setState(() {
+        _gallery = saved;
+      });
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isSaving = false;
+        });
+      }
+    }
+  }
+
+  Future<void> _copyAllLightToDark() async {
+    for (final tab in BottomNavIconGalleryTab.values) {
+      await _copyLightToDark(tab);
+    }
   }
 
   String _tabLabel(BottomNavIconGalleryTab tab) {

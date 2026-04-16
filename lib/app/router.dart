@@ -94,12 +94,11 @@ final GoRouter appRouter = GoRouter(
       name: 'appearance',
       builder: (context, state) {
         final section = switch (state.uri.queryParameters['section']) {
-          'theme-mode' => AppearanceSection.themeMode,
-          'theme-color' => AppearanceSection.themeColor,
-          'bottom-bar' => AppearanceSection.bottomBar,
-          'cover-gallery' => AppearanceSection.coverGallery,
-          'background-gallery' => AppearanceSection.backgroundGallery,
-          _ => AppearanceSection.overview,
+          'appearance' => AppearanceSection.appearance,
+          'tab-bar' => AppearanceSection.tabBar,
+          'cover' => AppearanceSection.cover,
+          'background' => AppearanceSection.background,
+          _ => AppearanceSection.appearance,
         };
         return AppearancePage(section: section);
       },

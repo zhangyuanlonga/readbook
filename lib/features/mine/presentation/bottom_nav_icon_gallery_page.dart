@@ -107,19 +107,14 @@ class _BottomNavIconGalleryPageState extends State<BottomNavIconGalleryPage> {
   }
 
   Future<void> _createGallery() async {
-    final name = await _showNameDialog(title: '新增图集', initialValue: '');
-    if (name == null || !mounted) {
-      return;
-    }
+    if (_isSaving || !mounted) return;
     setState(() {
       _isSaving = true;
     });
     try {
-      final gallery = await _service.createGallery(name: name);
+      final gallery = await _service.createGallery(name: '未命名图集');
       await _load();
-      if (!mounted) {
-        return;
-      }
+      if (!mounted) return;
       context.push('/bottom-nav-icon-galleries/editor?id=${gallery.id}');
     } finally {
       if (mounted) {
