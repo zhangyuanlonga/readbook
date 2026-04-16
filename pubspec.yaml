@@ -142,13 +142,15 @@ flutter:
 flutter_launcher_icons:
   android: true
   ios: true
-  image_path: assets/branding/selune_app_icon.png
+  image_path: assets/branding/app_icon.png
+  image_path_ios: assets/branding/app_icon.png
+  image_path_android: assets/branding/app_icon.png
   adaptive_icon_background: "#17171C"
-  adaptive_icon_foreground: assets/branding/selune_app_icon_foreground.png
+  adaptive_icon_foreground: assets/branding/app_icon.png
   remove_alpha_ios: true
   macos:
     generate: true
-    image_path: assets/branding/selune_app_icon.png
+    image_path: assets/branding/app_icon.png
 
 hooks:
   user_defines:
