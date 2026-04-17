@@ -21,8 +21,6 @@ import '../application/reading_records_query_service.dart';
 import '../application/reading_record_service.dart';
 import '../application/reader_system_settings_service.dart';
 
-enum _HeatmapMetricMode { duration, sessionCount, workCount }
-
 enum _HeatmapRangeMode { threeMonths, sixMonths, oneYear, all }
 
 class ReadingRecordsPage extends StatefulWidget {
@@ -56,7 +54,6 @@ class _ReadingRecordsPageState extends State<ReadingRecordsPage> {
 
   ReadingRecordsPeriod _period = ReadingRecordsPeriod.day;
   DateTime _periodAnchor = DateTime.now();
-  _HeatmapMetricMode _heatmapMode = _HeatmapMetricMode.duration;
   _HeatmapRangeMode _heatmapRangeMode = _HeatmapRangeMode.threeMonths;
   DateTime? _selectedCalendarDate;
 
@@ -303,6 +300,8 @@ class _ReadingRecordsPageState extends State<ReadingRecordsPage> {
                                       _period == ReadingRecordsPeriod.month ||
                                       _period == ReadingRecordsPeriod.year ||
                                       _period == ReadingRecordsPeriod.all;
+                                  final showWeekActivity =
+                                      _period == ReadingRecordsPeriod.week;
                                   final showCalendar =
                                       _period == ReadingRecordsPeriod.month;
                                   final showHeatmap =
@@ -332,6 +331,14 @@ class _ReadingRecordsPageState extends State<ReadingRecordsPage> {
                                         calendar:
                                             queryView.distributionCalendar,
                                       ),
+                                      if (showWeekActivity) ...[
+                                        const SizedBox(height: 10),
+                                        _buildWeeklyActivityCard(
+                                          periodRange: queryView.periodRange,
+                                          dailyRecords: dailyRecords,
+                                          sessions: sessions,
+                                        ),
+                                      ],
                                       if (showCalendar) ...[
                                         const SizedBox(height: 10),
                                         _buildReadingCalendarCard(
@@ -348,17 +355,10 @@ class _ReadingRecordsPageState extends State<ReadingRecordsPage> {
                                       ],
                                       if (showHeatmap) ...[
                                         const SizedBox(height: 10),
-                                        _buildSectionHeading(
-                                          '阅读热力图',
-                                          subtitle:
-                                              _period ==
-                                                      ReadingRecordsPeriod.year
-                                                  ? '查看全年阅读活跃分布'
-                                                  : '查看长期阅读活跃分布',
-                                        ),
                                         _buildHeatmapCard(
                                           dailyRecords,
                                           sessions: sessions,
+                                          periodRange: queryView.periodRange,
                                         ),
                                       ],
                                     ],
@@ -540,6 +540,7 @@ class _ReadingRecordsPageState extends State<ReadingRecordsPage> {
   Widget _buildHeatmapCard(
     List<ReadingRecordDay> allDays, {
     required List<ReadingRecordSession> sessions,
+    required ReadingRecordsPeriodRange periodRange,
   }) {
     if (allDays.isEmpty) {
       return _buildEmptyCard('还没有可以展示的阅读热力图。');
@@ -556,17 +557,29 @@ class _ReadingRecordsPageState extends State<ReadingRecordsPage> {
           today,
           (current, item) => item.isBefore(current) ? item : current,
         );
-    final startDate = _resolveHeatmapStartDate(
-      firstDate: firstDate,
-      today: today,
-    );
-    final showEarlierDataIndicator = _heatmapRangeMode != _HeatmapRangeMode.all;
-    final weeks = _buildHeatmapWeeks(startDate: startDate, endDate: today);
+    final showEarlierDataIndicator =
+        _period == ReadingRecordsPeriod.all &&
+        _heatmapRangeMode != _HeatmapRangeMode.all;
+    final startDate =
+        _period == ReadingRecordsPeriod.year
+            ? _startOfWeek(_stripDate(periodRange.start!))
+            : _resolveHeatmapStartDate(firstDate: firstDate, today: today);
+    final endDate =
+        _period == ReadingRecordsPeriod.year
+            ? _stripDate(
+                  periodRange.endExclusive!.subtract(const Duration(days: 1)),
+                ).isAfter(today)
+                ? today
+                : _stripDate(
+                  periodRange.endExclusive!.subtract(const Duration(days: 1)),
+                )
+            : today;
+    final weeks = _buildHeatmapWeeks(startDate: startDate, endDate: endDate);
     final monthLabels = _buildHeatmapMonthLabels(weeks);
     final visibleDateKeys = <String>{};
     for (final week in weeks) {
       for (final day in week) {
-        if (day.isBefore(startDate) || day.isAfter(today)) {
+        if (day.isBefore(startDate) || day.isAfter(endDate)) {
           continue;
         }
         visibleDateKeys.add(_dateKeyFor(day));
@@ -577,13 +590,7 @@ class _ReadingRecordsPageState extends State<ReadingRecordsPage> {
       if (item == null) {
         return current;
       }
-      final value =
-          _heatmapMode == _HeatmapMetricMode.duration
-              ? item.readMillis
-              : _heatmapMode == _HeatmapMetricMode.sessionCount
-              ? item.sessionCount
-              : item.workCount;
-      return math.max(current, value);
+      return math.max(current, item.readMillis);
     });
 
     final content = Padding(
@@ -595,16 +602,18 @@ class _ReadingRecordsPageState extends State<ReadingRecordsPage> {
             children: [
               Expanded(
                 child: Text(
-                  '活跃分布',
+                  '阅读热力图',
                   style: Theme.of(
                     context,
                   ).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w700),
                 ),
               ),
-              if (_period != ReadingRecordsPeriod.all)
+              if (_period == ReadingRecordsPeriod.all)
                 TextButton(
                   onPressed: () {
-                    _setPeriod(ReadingRecordsPeriod.all);
+                    setState(() {
+                      _heatmapRangeMode = _HeatmapRangeMode.all;
+                    });
                   },
                   child: const Text('重置'),
                 ),
@@ -612,76 +621,49 @@ class _ReadingRecordsPageState extends State<ReadingRecordsPage> {
           ),
           const SizedBox(height: 6),
           Text(
-            '颜色越深，表示当天阅读更多。',
+            _period == ReadingRecordsPeriod.year
+                ? '查看全年每天的阅读活跃分布。'
+                : '查看长期每天的阅读活跃分布。',
             style: Theme.of(context).textTheme.bodySmall?.copyWith(
               color: Theme.of(context).colorScheme.onSurfaceVariant,
             ),
           ),
           const SizedBox(height: 6),
           Text(
-            '${_dateKeyFor(startDate)} 至 ${_dateKeyFor(today)}',
+            '${_dateKeyFor(startDate)} 至 ${_dateKeyFor(endDate)}',
             style: Theme.of(context).textTheme.labelSmall?.copyWith(
               color: Theme.of(context).colorScheme.onSurfaceVariant,
             ),
           ),
           const SizedBox(height: 12),
-          Wrap(
-            spacing: 8,
-            runSpacing: 8,
-            children: [
-              _buildHeatmapMenu<_HeatmapMetricMode>(
-                icon: Icons.auto_graph_rounded,
-                label: _heatmapModeLabel,
-                items: const [
-                  PopupMenuItem(
-                    value: _HeatmapMetricMode.duration,
-                    child: Text('按时长'),
-                  ),
-                  PopupMenuItem(
-                    value: _HeatmapMetricMode.sessionCount,
-                    child: Text('按会话数'),
-                  ),
-                  PopupMenuItem(
-                    value: _HeatmapMetricMode.workCount,
-                    child: Text('按作品数'),
-                  ),
-                ],
-                onSelected: (value) {
-                  setState(() {
-                    _heatmapMode = value;
-                  });
-                },
-              ),
-              _buildHeatmapMenu<_HeatmapRangeMode>(
-                icon: Icons.date_range_rounded,
-                label: _heatmapRangeLabel,
-                items: const [
-                  PopupMenuItem(
-                    value: _HeatmapRangeMode.threeMonths,
-                    child: Text('近 3 个月'),
-                  ),
-                  PopupMenuItem(
-                    value: _HeatmapRangeMode.sixMonths,
-                    child: Text('近 6 个月'),
-                  ),
-                  PopupMenuItem(
-                    value: _HeatmapRangeMode.oneYear,
-                    child: Text('近 1 年'),
-                  ),
-                  PopupMenuItem(
-                    value: _HeatmapRangeMode.all,
-                    child: Text('全部'),
-                  ),
-                ],
-                onSelected: (value) {
-                  setState(() {
-                    _heatmapRangeMode = value;
-                  });
-                },
-              ),
-            ],
-          ),
-          const SizedBox(height: 14),
+          if (_period == ReadingRecordsPeriod.all) ...[
+            _buildHeatmapMenu<_HeatmapRangeMode>(
+              icon: Icons.date_range_rounded,
+              label: _heatmapRangeLabel,
+              items: const [
+                PopupMenuItem(
+                  value: _HeatmapRangeMode.threeMonths,
+                  child: Text('近 3 个月'),
+                ),
+                PopupMenuItem(
+                  value: _HeatmapRangeMode.sixMonths,
+                  child: Text('近 6 个月'),
+                ),
+                PopupMenuItem(
+                  value: _HeatmapRangeMode.oneYear,
+                  child: Text('近 1 年'),
+                ),
+                PopupMenuItem(value: _HeatmapRangeMode.all, child: Text('全部')),
+              ],
+              onSelected: (value) {
+                setState(() {
+                  _heatmapRangeMode = value;
+                });
+              },
+            ),
+            const SizedBox(height: 14),
+          ] else
+            const SizedBox(height: 12),
           SingleChildScrollView(
             scrollDirection: Axis.horizontal,
             child: Column(
@@ -1225,6 +1207,116 @@ class _ReadingRecordsPageState extends State<ReadingRecordsPage> {
                   ],
                 ),
               ),
+            const SizedBox(height: 12),
+            _buildReadingCalendarDetailCard(
+              date: selectedDate,
+              detail: selectedDetail,
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildWeeklyActivityCard({
+    required ReadingRecordsPeriodRange periodRange,
+    required List<ReadingRecordDay> dailyRecords,
+    required List<ReadingRecordSession> sessions,
+  }) {
+    final start = periodRange.start;
+    final endExclusive = periodRange.endExclusive;
+    if (start == null || endExclusive == null) {
+      return _buildEmptyCard('当前周期下还没有可以展示的周活跃度。');
+    }
+
+    final weekDays = <DateTime>[
+      for (var offset = 0; offset < 7; offset += 1)
+        start.add(Duration(days: offset)),
+    ];
+    final allowedDateKeys = weekDays.map(_dateKeyFor).toSet();
+    final detailsByDate = _buildReadingCalendarDetailsByDate(
+      allowedDateKeys: allowedDateKeys,
+      dailyRecords: dailyRecords,
+      sessions: sessions,
+    );
+    final selectedDate = _resolveReadingCalendarSelectedDate(
+      currentMonthDays: weekDays,
+      detailsByDate: detailsByDate,
+    );
+    final selectedKey = _dateKeyFor(selectedDate);
+    final selectedDetail = detailsByDate[selectedKey];
+    const weekLabels = ['周一', '周二', '周三', '周四', '周五', '周六', '周日'];
+    final colorScheme = Theme.of(context).colorScheme;
+
+    return Container(
+      decoration: BoxDecoration(
+        color: colorScheme.surface,
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(
+          color: colorScheme.outlineVariant.withValues(alpha: 0.32),
+        ),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(14, 14, 14, 16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              '周活跃度',
+              style: Theme.of(
+                context,
+              ).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w700),
+            ),
+            const SizedBox(height: 6),
+            Text(
+              '${periodRange.label} · 查看本周每天的阅读活跃分布与摘要',
+              style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                color: colorScheme.onSurfaceVariant,
+              ),
+            ),
+            const SizedBox(height: 12),
+            Row(
+              children: [
+                for (var index = 0; index < weekLabels.length; index += 1)
+                  Expanded(
+                    child: Center(
+                      child: Text(
+                        weekLabels[index],
+                        style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                          color: colorScheme.onSurfaceVariant,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                    ),
+                  ),
+              ],
+            ),
+            const SizedBox(height: 8),
+            Row(
+              children: [
+                for (final day in weekDays)
+                  Expanded(
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 2),
+                      child: _buildReadingCalendarDayCell(
+                        day: ReadingCalendarDistributionDay(
+                          day: day,
+                          isInCurrentMonth: true,
+                          readMillis:
+                              detailsByDate[_dateKeyFor(day)]?.readMillis ?? 0,
+                        ),
+                        detail: detailsByDate[_dateKeyFor(day)],
+                        selected: _dateKeyFor(day) == selectedKey,
+                        onTap: () {
+                          setState(() {
+                            _selectedCalendarDate = day;
+                          });
+                        },
+                      ),
+                    ),
+                  ),
+              ],
+            ),
             const SizedBox(height: 12),
             _buildReadingCalendarDetailCard(
               date: selectedDate,
@@ -1854,14 +1946,6 @@ class _ReadingRecordsPageState extends State<ReadingRecordsPage> {
     );
   }
 
-  String get _heatmapModeLabel {
-    return switch (_heatmapMode) {
-      _HeatmapMetricMode.duration => '按时长',
-      _HeatmapMetricMode.sessionCount => '按会话数',
-      _HeatmapMetricMode.workCount => '按作品数',
-    };
-  }
-
   String get _heatmapRangeLabel {
     return switch (_heatmapRangeMode) {
       _HeatmapRangeMode.threeMonths => '近 3 个月',
@@ -1984,14 +2068,7 @@ class _ReadingRecordsPageState extends State<ReadingRecordsPage> {
     required int maxValue,
   }) {
     final dateKey = _dateKeyFor(day);
-    final value =
-        stats == null
-            ? 0
-            : _heatmapMode == _HeatmapMetricMode.duration
-            ? stats.readMillis
-            : _heatmapMode == _HeatmapMetricMode.sessionCount
-            ? stats.sessionCount
-            : stats.workCount;
+    final value = stats?.readMillis ?? 0;
     final normalized = maxValue <= 0 ? 0.0 : (value / maxValue).clamp(0.0, 1.0);
     final isSelected =
         _period == ReadingRecordsPeriod.day &&
