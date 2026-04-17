@@ -229,13 +229,21 @@ class TxtLocalBookParser implements LocalBookParser {
     required _CooperativeYieldGate yieldGate,
   }) async {
     final results = <_ScoredDecodedChunk>[];
+    final preferredCharset = _normalizeCharsetName(book.charset);
     for (final chunk in chunks) {
-      final decoded = await const LocalTextEncodingDetector()
-          .decodeSampleBestEffortAsync(
-            chunk.bytes,
-            preferredCharset: book.charset,
-            hintedCharset: book.charset,
-          );
+      final decoded =
+          preferredCharset == 'utf-8'
+              ? const LocalTextEncodingDetector().decodeSampleBestEffort(
+                chunk.bytes,
+                preferredCharset: preferredCharset,
+                hintedCharset: preferredCharset,
+              )
+              : await const LocalTextEncodingDetector()
+                  .decodeSampleBestEffortAsync(
+                    chunk.bytes,
+                    preferredCharset: book.charset,
+                    hintedCharset: book.charset,
+                  );
       if (decoded == null || decoded.text.trim().isEmpty) {
         continue;
       }
@@ -1093,12 +1101,26 @@ class TxtLocalBookParser implements LocalBookParser {
     List<int> bytes, {
     required List<TxtAutoChapterPattern> enabledRules,
   }) async {
+    final normalizedPreferred = _normalizeCharsetName(book.charset);
+    if (normalizedPreferred == 'utf-8') {
+      final decoded = const LocalTextEncodingDetector().decodeBestEffort(
+        bytes,
+        preferredCharset: normalizedPreferred,
+        hintedCharset: normalizedPreferred,
+      );
+      return _DecodedBookText(
+        text: decoded.text,
+        charsetName: decoded.charsetName,
+        bomLength: decoded.bomLength,
+      );
+    }
+
     final bomInfo = _detectBom(bytes);
     final bomLength = bomInfo.length;
     final contentBytes =
         bomLength > 0 ? bytes.sublist(bomLength) : List<int>.from(bytes);
 
-    final preferredCharset = _normalizeCharsetName(book.charset);
+    final preferredCharset = normalizedPreferred;
     final hintedCharset =
         preferredCharset ??
         bomInfo.charsetName ??

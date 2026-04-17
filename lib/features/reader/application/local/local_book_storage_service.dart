@@ -608,7 +608,8 @@ class LocalBookStorageService {
     final normalized = path.replaceAll('\\', '/').toLowerCase();
     return normalized.contains('/tmp/') ||
         normalized.contains('/inbox/') ||
-        normalized.contains('-inbox/');
+        normalized.contains('-inbox/') ||
+        normalized.contains('/external_imports/');
   }
 
   String _extensionForFormat(LocalBookFormat format) {

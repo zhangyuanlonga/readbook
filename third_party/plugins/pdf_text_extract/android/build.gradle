@@ -26,7 +26,8 @@ apply plugin: 'kotlin-android'
 
 android {
     namespace 'dev.vivek.pdftextextract'
-    compileSdkVersion 28
+    // Needs API 31+ so androidx/material resources like android:attr/lStar resolve.
+    compileSdkVersion 34
 
     sourceSets {
         main.java.srcDirs += 'src/main/kotlin'

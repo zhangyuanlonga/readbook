@@ -305,6 +305,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
       ReaderPageTurnMode.tapAndSwipe;
   List<String> _customBackgroundImages = const [];
   List<int> _recentBodyTextColors = const [];
+  String? _lightModeBackgroundImageBackup;
   String? _cachedBackgroundImageKey;
   MemoryImage? _cachedBackgroundImage;
   double? _bottomOverlayDraftProgressRatio;
@@ -321,6 +322,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
   _CurlTransitionState _curlTransition = const _CurlTransitionState();
   bool _isSystemUiVisible = true;
   bool _isVolumeKeyPageInterceptionEnabled = false;
+  ProviderSubscription<ThemeMode>? _appThemeModeSubscription;
   late final AnimationController _overlayControlsController;
   late final AnimationController _pagedTransitionController;
   late final AnimationController _curlAutoTurnController;
@@ -1018,6 +1020,12 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
     _curlAutoTurnController.addStatusListener(_onCurlAutoTurnStatus);
     _scrollController.addListener(_onScrollChanged);
     _selectionNotifier.addListener(_handleSelectionNotifierChanged);
+    _appThemeModeSubscription = ref.listenManual<ThemeMode>(
+      appThemeModeProvider,
+      (previous, next) {
+        unawaited(_syncReaderThemeModeWithAppTheme(next));
+      },
+    );
     if (ReaderVolumeKeyPageBridge.instance.isSupported) {
       _volumeKeyEventSubscription = ReaderVolumeKeyPageBridge.instance.events
           .listen(
@@ -1041,8 +1049,20 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
   }
 
   @override
+  void didChangePlatformBrightness() {
+    super.didChangePlatformBrightness();
+    final appThemeMode = ref.read(appThemeModeProvider);
+    if (appThemeMode != ThemeMode.system) {
+      return;
+    }
+    unawaited(_syncReaderThemeModeWithAppTheme(appThemeMode));
+  }
+
+  @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
+    _appThemeModeSubscription?.close();
+    _appThemeModeSubscription = null;
     _cancelActiveSwitchSourceSearch();
     _chapterContentRequestToken += 1;
     final sourceId = (_sourceId ?? '').trim();
@@ -3941,6 +3961,41 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
 
   ReaderThemeMode _effectiveReaderThemeMode() {
     return _settings.themeMode;
+  }
+
+  ReaderThemeMode _readerThemeModeForAppTheme(ThemeMode appThemeMode) {
+    final brightness = switch (appThemeMode) {
+      ThemeMode.dark => Brightness.dark,
+      ThemeMode.light => Brightness.light,
+      ThemeMode.system =>
+        WidgetsBinding.instance.platformDispatcher.platformBrightness,
+    };
+    return brightness == Brightness.dark
+        ? ReaderThemeMode.dark
+        : ReaderThemeMode.light;
+  }
+
+  Future<void> _syncReaderThemeModeWithAppTheme(
+    ThemeMode appThemeMode, {
+    bool persist = true,
+  }) async {
+    final targetMode = _readerThemeModeForAppTheme(appThemeMode);
+    if (_settings.themeMode == targetMode) {
+      return;
+    }
+
+    final nextSettings = _settings.copyWith(themeMode: targetMode);
+    if (mounted) {
+      setState(() {
+        _settings = nextSettings;
+      });
+    } else {
+      _settings = nextSettings;
+    }
+
+    if (persist) {
+      await _preferencesService.saveSettings(nextSettings);
+    }
   }
 
   ReaderPageAnimationStyle _currentPagedAnimationStyle() {
@@ -7008,14 +7063,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
     const middleLabel = '界面';
     const middleIcon = Icons.palette_outlined;
     const trailingLabel = '设置';
-    final appThemeMode = ref.watch(appThemeModeProvider);
-    final effectiveBrightness =
-        appThemeMode == ThemeMode.system
-            ? MediaQuery.platformBrightnessOf(context)
-            : (appThemeMode == ThemeMode.dark
-                ? Brightness.dark
-                : Brightness.light);
-    final isDarkMode = effectiveBrightness == Brightness.dark;
+    final isDarkMode = _effectiveReaderThemeMode() == ReaderThemeMode.dark;
     final dayNightLabel = isDarkMode ? '日间' : '夜间';
     final dayNightIcon =
         isDarkMode ? Icons.light_mode_rounded : Icons.dark_mode_rounded;
@@ -7224,14 +7272,41 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
   }
 
   Future<void> _toggleDayNightMode() async {
-    final appThemeMode = ref.read(appThemeModeProvider);
-    final effectiveBrightness =
-        appThemeMode == ThemeMode.system
-            ? MediaQuery.platformBrightnessOf(context)
-            : (appThemeMode == ThemeMode.dark
-                ? Brightness.dark
-                : Brightness.light);
-    final isDarkMode = effectiveBrightness == Brightness.dark;
+    final isDarkMode = _settings.themeMode == ReaderThemeMode.dark;
+    final currentBackgroundImage = _settings.backgroundImageBase64?.trim();
+    if (!isDarkMode &&
+        currentBackgroundImage != null &&
+        currentBackgroundImage.isNotEmpty) {
+      _lightModeBackgroundImageBackup = currentBackgroundImage;
+    }
+
+    final nextSettings = switch (isDarkMode) {
+      true => _settings.copyWith(
+        themeMode: ReaderThemeMode.light,
+        backgroundStyle: ReaderBackgroundStyle.plain,
+        backgroundTone: ReaderBackgroundTone.surface,
+        backgroundImageBase64:
+            (_settings.backgroundImageBase64?.trim().isEmpty ?? true)
+                ? _lightModeBackgroundImageBackup
+                : _settings.backgroundImageBase64,
+      ),
+      false => _settings.copyWith(
+        themeMode: ReaderThemeMode.dark,
+        backgroundStyle: ReaderBackgroundStyle.plain,
+        backgroundTone: ReaderBackgroundTone.pureBlack,
+        clearBackgroundImage: true,
+      ),
+    };
+
+    if (!mounted) {
+      return;
+    }
+
+    setState(() {
+      _settings = nextSettings;
+    });
+
+    await _preferencesService.saveSettings(nextSettings);
     await ref
         .read(appThemeModeProvider.notifier)
         .setThemeMode(isDarkMode ? ThemeMode.light : ThemeMode.dark);
@@ -7420,6 +7495,10 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
         _customBackgroundImages = storedCustomBackgrounds;
         unawaited(_preloadCustomBackgroundPreviews(storedCustomBackgrounds));
       }
+      await _syncReaderThemeModeWithAppTheme(
+        ref.read(appThemeModeProvider),
+        persist: true,
+      );
       try {
         final recentColors =
             await _preferencesService.loadRecentBodyTextColors();

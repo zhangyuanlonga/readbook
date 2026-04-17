@@ -64,6 +64,21 @@ void main() {
         expect(decoded.text, contains('正文内容'));
       },
     );
+
+    test(
+      'decodeBestEffortAsync decodes preferred utf8 without platform converter',
+      () async {
+        final bytes = utf8.encode('第1章 开始\n正文内容。');
+
+        final decoded = await detector.decodeBestEffortAsync(
+          bytes,
+          preferredCharset: 'utf-8',
+        );
+
+        expect(decoded.charsetName, 'utf-8');
+        expect(decoded.text, contains('正文内容'));
+      },
+    );
   });
 }
 

@@ -596,7 +596,6 @@ class LocalTextEncodingDetector {
       return false;
     }
     return defaultTargetPlatform == TargetPlatform.android ||
-        defaultTargetPlatform == TargetPlatform.iOS ||
         defaultTargetPlatform == TargetPlatform.linux ||
         defaultTargetPlatform == TargetPlatform.windows;
   }
@@ -630,6 +629,11 @@ class LocalTextEncodingDetector {
     required String charsetName,
     required List<int> bytes,
   }) async {
+    final directDecoded = tryDecodeByCharset(bytes, charsetName);
+    if (directDecoded != null) {
+      return directDecoded;
+    }
+
     if (!_shouldUsePlatformConverter || bytes.isEmpty) {
       return null;
     }
