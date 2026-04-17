@@ -2,6 +2,8 @@ import 'package:file_selector/file_selector.dart' as fs;
 import 'package:flutter/foundation.dart';
 import 'package:image_picker/image_picker.dart' as ip;
 
+enum ImageSelectionSource { auto, gallery, files }
+
 class PickedImageData {
   const PickedImageData({required this.bytes, required this.name});
 
@@ -27,20 +29,29 @@ class ImageSelectionService {
   Future<PickedImageData?> pickImage({
     required String confirmButtonText,
     Set<String> allowedExtensions = const {'jpg', 'jpeg', 'png', 'webp'},
+    ImageSelectionSource source = ImageSelectionSource.auto,
   }) async {
     final normalizedExtensions = _normalizeExtensions(allowedExtensions);
     if (normalizedExtensions.isEmpty) {
       throw const ImageSelectionException('未配置可选图片格式。');
     }
 
-    if (kIsWeb || _usesDesktopFileSelector(defaultTargetPlatform)) {
-      return _pickWithFileSelector(
+    return switch (source) {
+      ImageSelectionSource.gallery => _pickWithSystemPicker(
+        allowedExtensions: normalizedExtensions,
+      ),
+      ImageSelectionSource.files => _pickWithFileSelector(
         confirmButtonText: confirmButtonText,
         allowedExtensions: normalizedExtensions,
-      );
-    }
-
-    return _pickWithSystemPicker(allowedExtensions: normalizedExtensions);
+      ),
+      ImageSelectionSource.auto =>
+        kIsWeb || _usesDesktopFileSelector(defaultTargetPlatform)
+            ? _pickWithFileSelector(
+              confirmButtonText: confirmButtonText,
+              allowedExtensions: normalizedExtensions,
+            )
+            : _pickWithSystemPicker(allowedExtensions: normalizedExtensions),
+    };
   }
 
   bool _usesDesktopFileSelector(TargetPlatform platform) {
@@ -52,6 +63,9 @@ class ImageSelectionService {
   Future<PickedImageData?> _pickWithSystemPicker({
     required Set<String> allowedExtensions,
   }) async {
+    if (kIsWeb || _usesDesktopFileSelector(defaultTargetPlatform)) {
+      throw const ImageSelectionException('当前设备不支持从相册选择图片。');
+    }
     final picked = await _mobilePicker.pickImage(
       source: ip.ImageSource.gallery,
       requestFullMetadata: false,

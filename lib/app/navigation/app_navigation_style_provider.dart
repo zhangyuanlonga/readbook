@@ -40,7 +40,7 @@ class AppNavigationStylePreferenceNotifier
       _loadTriggered = true;
       _load();
     }
-    return AppNavigationStylePreference.followSystem;
+    return AppNavigationStylePreference.standard;
   }
 
   Future<void> _load() async {
@@ -69,7 +69,7 @@ class AppNavigationStylePreferenceNotifier
     return switch (raw) {
       'standard' => AppNavigationStylePreference.standard,
       'cupertinoDock' => AppNavigationStylePreference.cupertinoDock,
-      _ => AppNavigationStylePreference.followSystem,
+      _ => AppNavigationStylePreference.standard,
     };
   }
 
@@ -152,9 +152,7 @@ AppNavigationStyle resolveAppNavigationStyle(
 
   return switch (preference) {
     AppNavigationStylePreference.followSystem =>
-      platform == TargetPlatform.iOS
-          ? AppNavigationStyle.cupertinoDock
-          : AppNavigationStyle.standard,
+      AppNavigationStyle.standard,
     AppNavigationStylePreference.standard => AppNavigationStyle.standard,
     AppNavigationStylePreference.cupertinoDock =>
       AppNavigationStyle.cupertinoDock,
@@ -165,7 +163,7 @@ String appNavigationStylePreferenceLabel(
   AppNavigationStylePreference preference,
 ) {
   return switch (preference) {
-    AppNavigationStylePreference.followSystem => '跟随系统',
+    AppNavigationStylePreference.followSystem => '标准',
     AppNavigationStylePreference.standard => '标准',
     AppNavigationStylePreference.cupertinoDock => '苹果风格',
   };

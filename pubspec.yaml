@@ -95,6 +95,8 @@ dev_dependencies:
 dependency_overrides:
   flutter_charset_detector_android:
     path: third_party/plugins/flutter_charset_detector_android
+  pdf_text_extract:
+    path: third_party/plugins/pdf_text_extract
 
 # For information on the generic Dart part of this file, see the
 # following page: https://dart.dev/tools/pub/pubspec

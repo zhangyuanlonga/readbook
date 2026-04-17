@@ -1,7 +1,7 @@
 import 'dart:async';
 import 'dart:io';
 
-import 'package:file_selector/file_selector.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter/services.dart';
@@ -17,6 +17,7 @@ import '../../../app/theme/app_theme_palette.dart';
 import '../../../app/theme/app_theme_provider.dart';
 import '../../../app/theme/app_theme_seed_provider.dart';
 import '../../../app/widgets/text_cover_placeholder.dart';
+import '../../../core/media/image_selection_service.dart';
 import '../../reader/application/reader_font_registry_service.dart';
 
 enum AppearanceSection {
@@ -49,6 +50,7 @@ class _AppearancePageState extends ConsumerState<AppearancePage> {
   bool _isLoadingBackgrounds = true;
   final ReaderFontRegistryService _fontRegistryService =
       ReaderFontRegistryService();
+  final ImageSelectionService _imageSelectionService = ImageSelectionService();
   List<ReaderCustomFontEntry> _availableCustomFonts = const [];
 
   @override
@@ -89,30 +91,100 @@ class _AppearancePageState extends ConsumerState<AppearancePage> {
   }
 
   Future<void> _uploadBackground() async {
-    final types = [
-      XTypeGroup(
-        label: 'Images',
-        extensions: const ['jpg', 'jpeg', 'png'],
-      ),
-    ];
-    final file = await openFile(acceptedTypeGroups: types);
-    if (file == null || !mounted) return;
+    try {
+      final source = await _selectBackgroundImageSource();
+      if (source == null || !mounted) {
+        return;
+      }
 
-    final dir = await getApplicationDocumentsDirectory();
-    final bgDir = Directory('${dir.path}/backgrounds');
-    if (!await bgDir.exists()) {
-      await bgDir.create(recursive: true);
+      final picked = await _imageSelectionService.pickImage(
+        confirmButtonText: '选择背景',
+        allowedExtensions: const {'jpg', 'jpeg', 'png', 'webp', 'gif'},
+        source: source,
+      );
+      if (picked == null || !mounted) {
+        return;
+      }
+
+      final dir = await getApplicationDocumentsDirectory();
+      final bgDir = Directory('${dir.path}/backgrounds');
+      if (!await bgDir.exists()) {
+        await bgDir.create(recursive: true);
+      }
+
+      final extension = _imageExtensionForName(picked.name);
+      final fileName =
+          '${DateTime.now().millisecondsSinceEpoch}_bg.$extension';
+      final destPath = '${bgDir.path}/$fileName';
+      final destFile = File(destPath);
+      await destFile.writeAsBytes(picked.bytes, flush: true);
+
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _backgroundPaths = <String>[..._backgroundPaths, destPath];
+      });
+      _showMessage('背景已添加');
+    } on ImageSelectionException catch (error) {
+      _showMessage(error.message);
+    } on PlatformException catch (error) {
+      _showMessage('选择背景失败：${error.message ?? error.code}');
+    } catch (error) {
+      _showMessage('添加背景失败：$error');
+    }
+  }
+
+  Future<ImageSelectionSource?> _selectBackgroundImageSource() async {
+    if (kIsWeb ||
+        defaultTargetPlatform == TargetPlatform.macOS ||
+        defaultTargetPlatform == TargetPlatform.windows ||
+        defaultTargetPlatform == TargetPlatform.linux) {
+      return ImageSelectionSource.files;
     }
 
-    final fileName = '${DateTime.now().millisecondsSinceEpoch}_${file.name.split('/').last}';
-    final destPath = '${bgDir.path}/$fileName';
-    final destFile = File(destPath);
-    await destFile.writeAsBytes(await file.readAsBytes());
-
-    if (!mounted) return;
-    setState(() {
-      _backgroundPaths.add(destPath);
-    });
+    return showModalBottomSheet<ImageSelectionSource>(
+      context: context,
+      showDragHandle: true,
+      useSafeArea: true,
+      builder: (context) {
+        final colorScheme = Theme.of(context).colorScheme;
+        return SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(8, 0, 8, 12),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                ListTile(
+                  leading: Icon(
+                    Icons.photo_library_outlined,
+                    color: colorScheme.primary,
+                  ),
+                  title: const Text('相册'),
+                  subtitle: const Text('从系统照片库选择一张图片'),
+                  onTap:
+                      () => Navigator.of(
+                        context,
+                      ).pop(ImageSelectionSource.gallery),
+                ),
+                ListTile(
+                  leading: Icon(
+                    Icons.folder_open_outlined,
+                    color: colorScheme.primary,
+                  ),
+                  title: const Text('文件'),
+                  subtitle: const Text('从文件 App 或本地目录选择图片'),
+                  onTap:
+                      () => Navigator.of(
+                        context,
+                      ).pop(ImageSelectionSource.files),
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
   }
 
   Future<void> _deleteBackground(String path) async {
@@ -149,6 +221,15 @@ class _AppearancePageState extends ConsumerState<AppearancePage> {
     }
   }
 
+  void _showMessage(String message) {
+    if (!mounted) {
+      return;
+    }
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: Text(message)));
+  }
+
   static const List<_ThemeModeOption> _themeModeOptions = [
     _ThemeModeOption(
       mode: ThemeMode.light,
@@ -168,11 +249,6 @@ class _AppearancePageState extends ConsumerState<AppearancePage> {
   ];
 
   static const List<_NavigationStyleOption> _navigationStyleOptions = [
-    _NavigationStyleOption(
-      preference: AppNavigationStylePreference.followSystem,
-      label: '跟随系统',
-      icon: Icons.settings_suggest_outlined,
-    ),
     _NavigationStyleOption(
       preference: AppNavigationStylePreference.standard,
       label: '标准',
@@ -878,56 +954,192 @@ class _AppearancePageState extends ConsumerState<AppearancePage> {
   }
 
   Widget _buildBackgroundGallerySection(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
     return _buildSectionCard(
       context,
       icon: Icons.wallpaper_outlined,
       title: '背景',
-      subtitle: '点击 + 上传背景图，长按可删除。',
+      subtitle: '移动端可选相册或文件，桌面端从文件选择。长按图片可删除。',
       child: _isLoadingBackgrounds
           ? const SizedBox(
               height: 80,
               child: Center(child: CircularProgressIndicator()),
             )
-          : GridView.builder(
-              shrinkWrap: true,
-              physics: const NeverScrollableScrollPhysics(),
-              gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                crossAxisCount: 5,
-                mainAxisSpacing: 8,
-                crossAxisSpacing: 8,
-              ),
-              itemCount: _backgroundPaths.length + 1,
-              itemBuilder: (context, index) {
-                if (index == 0) {
-                  return GestureDetector(
-                    onTap: _uploadBackground,
-                    child: Container(
-                      decoration: BoxDecoration(
-                        color: Theme.of(context).colorScheme.surfaceContainerLow,
-                        borderRadius: BorderRadius.circular(10),
-                        border: Border.all(
-                          color: Theme.of(context).colorScheme.outlineVariant.withValues(alpha: 0.4),
+          : LayoutBuilder(
+              builder: (context, constraints) {
+                const spacing = 8.0;
+                final columns = AppLayout.optionGridColumnsForWidth(
+                  constraints.maxWidth,
+                ).clamp(3, 5);
+                final itemWidth =
+                    (constraints.maxWidth - ((columns - 1) * spacing)) /
+                    columns;
+
+                return Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    InkWell(
+                      borderRadius: BorderRadius.circular(14),
+                      onTap: _uploadBackground,
+                      child: Ink(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 12,
+                          vertical: 12,
+                        ),
+                        decoration: BoxDecoration(
+                          color: colorScheme.surface,
+                          borderRadius: BorderRadius.circular(14),
+                          border: Border.all(
+                            color: colorScheme.outlineVariant.withValues(
+                              alpha: 0.42,
+                            ),
+                          ),
+                        ),
+                        child: Row(
+                          children: [
+                            Container(
+                              width: 34,
+                              height: 34,
+                              decoration: BoxDecoration(
+                                color: colorScheme.secondaryContainer,
+                                borderRadius: BorderRadius.circular(12),
+                              ),
+                              child: Icon(
+                                Icons.add_photo_alternate_outlined,
+                                size: 18,
+                                color: colorScheme.onSecondaryContainer,
+                              ),
+                            ),
+                            const SizedBox(width: 10),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    '添加背景',
+                                    style: Theme.of(context)
+                                        .textTheme
+                                        .bodyMedium
+                                        ?.copyWith(
+                                          fontWeight: FontWeight.w700,
+                                        ),
+                                  ),
+                                  const SizedBox(height: 2),
+                                  Text(
+                                    '支持 JPG、PNG、WEBP、GIF',
+                                    style: Theme.of(context)
+                                        .textTheme
+                                        .bodySmall
+                                        ?.copyWith(
+                                          color:
+                                              colorScheme.onSurfaceVariant,
+                                        ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                            Icon(
+                              Icons.chevron_right_rounded,
+                              color: colorScheme.onSurfaceVariant,
+                            ),
+                          ],
                         ),
                       ),
-                      child: Icon(
-                        Icons.add_rounded,
-                        size: 28,
-                        color: Theme.of(context).colorScheme.onSurfaceVariant.withValues(alpha: 0.4),
-                      ),
                     ),
-                  );
-                }
-                final path = _backgroundPaths[index - 1];
-                return GestureDetector(
-                  onLongPress: () => _confirmDeleteBackground(path),
-                  child: ClipRRect(
-                    borderRadius: BorderRadius.circular(10),
-                    child: Image.file(File(path), fit: BoxFit.cover),
-                  ),
+                    const SizedBox(height: 10),
+                    if (_backgroundPaths.isEmpty)
+                      Container(
+                        width: double.infinity,
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 12,
+                          vertical: 18,
+                        ),
+                        decoration: BoxDecoration(
+                          color: colorScheme.surfaceContainerLow,
+                          borderRadius: BorderRadius.circular(14),
+                          border: Border.all(
+                            color: colorScheme.outlineVariant.withValues(
+                              alpha: 0.35,
+                            ),
+                          ),
+                        ),
+                        child: Text(
+                          '还没有自定义背景，点上方“添加背景”开始。',
+                          style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                            color: colorScheme.onSurfaceVariant,
+                          ),
+                        ),
+                      )
+                    else
+                      Wrap(
+                        spacing: spacing,
+                        runSpacing: spacing,
+                        children: _backgroundPaths.map((path) {
+                          return GestureDetector(
+                            onLongPress: () => _confirmDeleteBackground(path),
+                            child: Stack(
+                              children: [
+                                ClipRRect(
+                                  borderRadius: BorderRadius.circular(12),
+                                  child: SizedBox(
+                                    width: itemWidth,
+                                    height: itemWidth * 1.28,
+                                    child: Image.file(
+                                      File(path),
+                                      fit: BoxFit.cover,
+                                    ),
+                                  ),
+                                ),
+                                Positioned(
+                                  right: 6,
+                                  top: 6,
+                                  child: Container(
+                                    padding: const EdgeInsets.symmetric(
+                                      horizontal: 6,
+                                      vertical: 3,
+                                    ),
+                                    decoration: BoxDecoration(
+                                      color: Colors.black.withValues(
+                                        alpha: 0.45,
+                                      ),
+                                      borderRadius: BorderRadius.circular(999),
+                                    ),
+                                    child: const Text(
+                                      '长按删除',
+                                      style: TextStyle(
+                                        color: Colors.white,
+                                        fontSize: 10,
+                                        fontWeight: FontWeight.w600,
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          );
+                        }).toList(growable: false),
+                      ),
+                  ],
                 );
               },
             ),
     );
+  }
+
+  String _imageExtensionForName(String fileName) {
+    final normalized = fileName.trim().toLowerCase();
+    final dotIndex = normalized.lastIndexOf('.');
+    if (dotIndex < 0 || dotIndex >= normalized.length - 1) {
+      return 'png';
+    }
+    final extension = normalized.substring(dotIndex + 1);
+    return switch (extension) {
+      'jpg' || 'jpeg' => 'jpg',
+      'png' => 'png',
+      'webp' => 'webp',
+      'gif' => 'gif',
+      _ => 'png',
+    };
   }
 
   Widget _buildNavigationStyleSection(

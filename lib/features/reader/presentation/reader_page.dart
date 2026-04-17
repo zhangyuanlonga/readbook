@@ -9956,6 +9956,9 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
       readerModalTheme: _readerModalTheme(),
       chapters: _chapters,
       currentChapterIndex: _currentIndex,
+      bookTitle: _bookTitle,
+      bookAuthor: _bookAuthor,
+      bookCoverUrl: _bookCoverUrl,
       supportsContentSearch:
           _readerModeCapabilities.supportsCatalogContentSearch,
       bookmarkRepository: _bookmarkRepository,

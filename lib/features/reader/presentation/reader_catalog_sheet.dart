@@ -5,6 +5,8 @@ import 'package:flutter/material.dart';
 
 import '../../../app/layout/app_layout.dart';
 import '../../../app/layout/app_spacing.dart';
+import '../../../app/widgets/disk_cached_cover_image.dart';
+import '../../../app/widgets/text_cover_placeholder.dart';
 import '../../../domain/entities/bookmark.dart';
 import '../../../domain/entities/chapter.dart';
 import '../../../domain/repositories/bookmark_repository.dart';
@@ -42,6 +44,9 @@ Future<ReaderCatalogSheetResult?> showReaderCatalogSheet({
   required ThemeData readerModalTheme,
   required List<Chapter> chapters,
   required int? currentChapterIndex,
+  required String bookTitle,
+  required String? bookAuthor,
+  required String? bookCoverUrl,
   required bool supportsContentSearch,
   required BookmarkRepository bookmarkRepository,
   required String currentBookId,
@@ -55,9 +60,6 @@ Future<ReaderCatalogSheetResult?> showReaderCatalogSheet({
   required ValueChanged<String> showMessage,
 }) async {
   const itemExtent = 58.0;
-  final readableChapterCount = chapters.where(_isReadableChapter).length;
-  final volumeChapterCount =
-      chapters.where((chapter) => chapter.isVolume).length;
   final anchorIndex =
       currentChapterIndex == null
           ? 0
@@ -94,7 +96,7 @@ Future<ReaderCatalogSheetResult?> showReaderCatalogSheet({
       final items = await bookmarkRepository.listBookmarks(currentBookId);
       bookmarks = items;
     } catch (_) {
-      bookmarkErrorText = '书签加载失败，请稍后重试。';
+      bookmarkErrorText = '灵感加载失败，请稍后重试。';
     } finally {
       if (modalContext.mounted) {
         setModalState(() {
@@ -187,9 +189,9 @@ Future<ReaderCatalogSheetResult?> showReaderCatalogSheet({
             final safeBottom = _bottomSafeInset(context);
             final sheetHeightFactor = AppLayout.sheetHeightFactor(
               context,
-              compact: 0.70,
-              regular: 0.70,
-              large: 0.70,
+              compact: 0.80,
+              regular: 0.80,
+              large: 0.80,
             );
             final sheetHorizontal = AppSpacing.pageHorizontal(context);
 
@@ -214,150 +216,6 @@ Future<ReaderCatalogSheetResult?> showReaderCatalogSheet({
 
                   return Column(
                     children: [
-                      Padding(
-                        padding: EdgeInsets.fromLTRB(
-                          sheetHorizontal,
-                          6,
-                          sheetHorizontal,
-                          8,
-                        ),
-                        child: _ReaderCatalogSummaryCard(
-                          chapters: chapters,
-                          chapterCount: chapters.length,
-                          readableChapterCount: readableChapterCount,
-                          volumeChapterCount: volumeChapterCount,
-                          currentIndex: currentChapterIndex,
-                          locateButton:
-                              currentChapterIndex == null
-                                  ? null
-                                  : FilledButton.tonalIcon(
-                                    style: FilledButton.styleFrom(
-                                      backgroundColor:
-                                          colorScheme.primaryContainer,
-                                      foregroundColor:
-                                          colorScheme.onPrimaryContainer,
-                                      padding: const EdgeInsets.symmetric(
-                                        horizontal: 10,
-                                        vertical: 8,
-                                      ),
-                                      minimumSize: const Size(0, 36),
-                                      visualDensity: VisualDensity.compact,
-                                      shape: const StadiumBorder(),
-                                    ),
-                                    onPressed: () {
-                                      final currentDisplayIndex = orderedIndexes
-                                          .indexOf(currentChapterIndex);
-                                      final target =
-                                          ((currentDisplayIndex - 2).clamp(
-                                                    0,
-                                                    chapters.length - 1,
-                                                  ) *
-                                                  itemExtent)
-                                              .toDouble();
-                                      scrollController.animateTo(
-                                        target,
-                                        duration: const Duration(
-                                          milliseconds: 180,
-                                        ),
-                                        curve: Curves.easeOutCubic,
-                                      );
-                                    },
-                                    icon: const Icon(
-                                      Icons.my_location_outlined,
-                                      size: 17,
-                                    ),
-                                    label: Text(
-                                      '定位 ${currentChapterIndex + 1}',
-                                    ),
-                                  ),
-                        ),
-                      ),
-                      Padding(
-                        padding: EdgeInsets.fromLTRB(
-                          sheetHorizontal,
-                          2,
-                          sheetHorizontal,
-                          10,
-                        ),
-                        child: Row(
-                          children: [
-                            Expanded(
-                              child: TextField(
-                                controller: searchController,
-                                decoration: InputDecoration(
-                                  isDense: true,
-                                  filled: true,
-                                  fillColor: colorScheme.surface,
-                                  hintText:
-                                      supportsContentSearch
-                                          ? '搜索目录标题或当前章节正文'
-                                          : '搜索目录标题',
-                                  prefixIcon: Icon(
-                                    Icons.search_rounded,
-                                    size: 17,
-                                    color: colorScheme.onSurfaceVariant,
-                                  ),
-                                  contentPadding: const EdgeInsets.symmetric(
-                                    horizontal: 12,
-                                    vertical: 10,
-                                  ),
-                                  border: OutlineInputBorder(
-                                    borderRadius: BorderRadius.circular(14),
-                                  ),
-                                  enabledBorder: OutlineInputBorder(
-                                    borderRadius: BorderRadius.circular(14),
-                                    borderSide: BorderSide(
-                                      color: colorScheme.outlineVariant
-                                          .withValues(alpha: 0.6),
-                                    ),
-                                  ),
-                                  focusedBorder: OutlineInputBorder(
-                                    borderRadius: BorderRadius.circular(14),
-                                    borderSide: BorderSide(
-                                      color: colorScheme.primary.withValues(
-                                        alpha: 0.9,
-                                      ),
-                                      width: 1.1,
-                                    ),
-                                  ),
-                                ),
-                              ),
-                            ),
-                            const SizedBox(width: 8),
-                            Tooltip(
-                              message: catalogDescending ? '当前倒序' : '当前正序',
-                              child: FilledButton.tonalIcon(
-                                onPressed: () {
-                                  setModalState(() {
-                                    catalogDescending = !catalogDescending;
-                                  });
-                                },
-                                icon: Icon(
-                                  catalogDescending
-                                      ? Icons.south_rounded
-                                      : Icons.north_rounded,
-                                  size: 17,
-                                ),
-                                label: Text(catalogDescending ? '倒序' : '正序'),
-                                style: FilledButton.styleFrom(
-                                  minimumSize: const Size(0, 40),
-                                  padding: const EdgeInsets.symmetric(
-                                    horizontal: 12,
-                                    vertical: 9,
-                                  ),
-                                  visualDensity: VisualDensity.compact,
-                                ),
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                      Divider(
-                        height: 1,
-                        color: colorScheme.outlineVariant.withValues(
-                          alpha: 0.7,
-                        ),
-                      ),
                       if (isSearching && searchState.isLoading)
                         const Expanded(
                           child: Center(
@@ -453,7 +311,7 @@ Future<ReaderCatalogSheetResult?> showReaderCatalogSheet({
                                 itemExtent: itemExtent,
                                 padding: const EdgeInsets.fromLTRB(
                                   12,
-                                  8,
+                                  10,
                                   12,
                                   10,
                                 ),
@@ -464,7 +322,6 @@ Future<ReaderCatalogSheetResult?> showReaderCatalogSheet({
                                       chapterIndex == currentChapterIndex;
                                   return _ReaderCatalogChapterTile(
                                     chapter: chapter,
-                                    index: chapterIndex,
                                     selected: selected,
                                     enabled: _isReadableChapter(chapter),
                                     onTap:
@@ -498,7 +355,7 @@ Future<ReaderCatalogSheetResult?> showReaderCatalogSheet({
                 chapters,
               );
               final title =
-                  isBookmarkLoading ? '书签' : '书签（${bookmarks.length}）';
+                  isBookmarkLoading ? '灵感' : '灵感（${bookmarks.length}）';
 
               return Padding(
                 padding: EdgeInsets.fromLTRB(
@@ -527,7 +384,7 @@ Future<ReaderCatalogSheetResult?> showReaderCatalogSheet({
                           ),
                           const SizedBox(width: 8),
                           Text(
-                            '正在加载书签...',
+                            '正在加载灵感...',
                             style: textTheme.bodyMedium?.copyWith(
                               color: colorScheme.onSurfaceVariant,
                             ),
@@ -558,7 +415,7 @@ Future<ReaderCatalogSheetResult?> showReaderCatalogSheet({
                       Padding(
                         padding: const EdgeInsets.symmetric(vertical: 18),
                         child: Text(
-                          '当前书籍还没有书签。',
+                          '当前书籍还没有灵感。',
                           style: textTheme.bodyMedium?.copyWith(
                             color: colorScheme.onSurfaceVariant,
                           ),
@@ -672,12 +529,33 @@ Future<ReaderCatalogSheetResult?> showReaderCatalogSheet({
                                 ),
                                 _buildCountTab(
                                   context,
-                                  label: '书签',
+                                  label: '灵感',
                                   countText: bookmarkCountLabel,
                                 ),
                               ],
                             ),
                           ),
+                        ),
+                      ),
+                      Padding(
+                        padding: EdgeInsets.fromLTRB(
+                          sheetHorizontal,
+                          6,
+                          sheetHorizontal,
+                          10,
+                        ),
+                        child: _ReaderCatalogHeaderCard(
+                          bookTitle: bookTitle,
+                          bookAuthor: bookAuthor,
+                          bookCoverUrl: bookCoverUrl,
+                          supportsContentSearch: supportsContentSearch,
+                          searchController: searchController,
+                          catalogDescending: catalogDescending,
+                          onToggleSort: () {
+                            setModalState(() {
+                              catalogDescending = !catalogDescending;
+                            });
+                          },
                         ),
                       ),
                       Divider(
@@ -898,36 +776,37 @@ class _CatalogSearchResultList extends StatelessWidget {
   }
 }
 
-class _ReaderCatalogSummaryCard extends StatelessWidget {
-  const _ReaderCatalogSummaryCard({
-    required this.chapters,
-    required this.chapterCount,
-    required this.readableChapterCount,
-    required this.volumeChapterCount,
-    required this.currentIndex,
-    this.locateButton,
+class _ReaderCatalogHeaderCard extends StatelessWidget {
+  const _ReaderCatalogHeaderCard({
+    required this.bookTitle,
+    required this.bookAuthor,
+    required this.bookCoverUrl,
+    required this.supportsContentSearch,
+    required this.searchController,
+    required this.catalogDescending,
+    required this.onToggleSort,
   });
 
-  final List<Chapter> chapters;
-  final int chapterCount;
-  final int readableChapterCount;
-  final int volumeChapterCount;
-  final int? currentIndex;
-  final Widget? locateButton;
+  final String bookTitle;
+  final String? bookAuthor;
+  final String? bookCoverUrl;
+  final bool supportsContentSearch;
+  final TextEditingController searchController;
+  final bool catalogDescending;
+  final VoidCallback onToggleSort;
 
   @override
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
     final textTheme = Theme.of(context).textTheme;
-    final currentChapterTitle =
-        currentIndex != null &&
-                currentIndex! >= 0 &&
-                currentIndex! < chapters.length
-            ? chapters[currentIndex!].title
-            : '尚未定位到章节';
+    final normalizedTitle = bookTitle.trim().isEmpty ? '未命名书籍' : bookTitle;
+    final normalizedAuthor = (bookAuthor ?? '').trim();
 
-    return Container(
-      padding: const EdgeInsets.fromLTRB(12, 11, 12, 10),
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final searchWidth = (constraints.maxWidth * 0.34).clamp(120.0, 164.0);
+        return Container(
+      padding: const EdgeInsets.fromLTRB(12, 12, 12, 12),
       decoration: BoxDecoration(
         gradient: LinearGradient(
           begin: Alignment.topLeft,
@@ -942,106 +821,107 @@ class _ReaderCatalogSummaryCard extends StatelessWidget {
           color: colorScheme.outlineVariant.withValues(alpha: 0.25),
         ),
       ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.center,
         children: [
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      '阅读导航',
-                      style: textTheme.labelMedium?.copyWith(
-                        color: colorScheme.primary,
-                        fontWeight: FontWeight.w700,
-                      ),
-                    ),
-                    const SizedBox(height: 2),
-                    Text(
-                      volumeChapterCount > 0
-                          ? '目录 $chapterCount 项 · 可读 $readableChapterCount 章 · 分卷 $volumeChapterCount'
-                          : '目录 $readableChapterCount 章',
-                      style: textTheme.titleSmall?.copyWith(
-                        fontWeight: FontWeight.w700,
-                      ),
-                    ),
-                    const SizedBox(height: 3),
-                    Text(
-                      currentIndex == null
-                          ? '可从目录或书签中快速定位'
-                          : '当前阅读 · 第 ${currentIndex! + 1} 章',
-                      style: textTheme.bodySmall?.copyWith(
-                        color: colorScheme.onSurfaceVariant,
-                      ),
-                    ),
-                  ],
+          ClipRRect(
+            borderRadius: BorderRadius.circular(12),
+            child: SizedBox(
+              width: 50,
+              height: 68,
+              child: DiskCachedCoverImage(
+                imageUrl: bookCoverUrl,
+                fit: BoxFit.cover,
+                fallback: TextCoverPlaceholder(
+                  title: normalizedTitle,
+                  author: normalizedAuthor.isEmpty ? null : normalizedAuthor,
+                  width: 50,
+                  height: 68,
                 ),
               ),
-              if (locateButton != null) locateButton!,
-            ],
-          ),
-          const SizedBox(height: 8),
-          Container(
-            width: double.infinity,
-            padding: const EdgeInsets.fromLTRB(10, 8, 10, 8),
-            decoration: BoxDecoration(
-              color: colorScheme.surface.withValues(alpha: 0.92),
-              borderRadius: BorderRadius.circular(12),
             ),
-            child: Row(
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                Container(
-                  width: 24,
-                  height: 24,
-                  decoration: BoxDecoration(
-                    color: colorScheme.primaryContainer,
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                  child: Icon(
-                    Icons.menu_book_rounded,
-                    size: 14,
-                    color: colorScheme.onPrimaryContainer,
+                Text(
+                  normalizedTitle,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: textTheme.titleSmall?.copyWith(
+                    fontWeight: FontWeight.w700,
                   ),
                 ),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: Text(
-                    currentChapterTitle,
+                if (normalizedAuthor.isNotEmpty) ...[
+                  const SizedBox(height: 4),
+                  Text(
+                    normalizedAuthor,
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
-                    style: textTheme.bodyMedium?.copyWith(
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
-                ),
-                if (currentIndex != null) ...[
-                  const SizedBox(width: 8),
-                  Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 7,
-                      vertical: 3,
-                    ),
-                    decoration: BoxDecoration(
-                      color: colorScheme.primaryContainer,
-                      borderRadius: BorderRadius.circular(999),
-                    ),
-                    child: Text(
-                      '当前',
-                      style: textTheme.labelSmall?.copyWith(
-                        color: colorScheme.onPrimaryContainer,
-                        fontWeight: FontWeight.w700,
-                      ),
+                    style: textTheme.bodySmall?.copyWith(
+                      color: colorScheme.onSurfaceVariant,
                     ),
                   ),
                 ],
               ],
             ),
           ),
+          const SizedBox(width: 10),
+          SizedBox(
+            width: searchWidth,
+            child: TextField(
+              controller: searchController,
+              decoration: InputDecoration(
+                isDense: true,
+                filled: true,
+                fillColor: colorScheme.surface.withValues(alpha: 0.92),
+                hintText: supportsContentSearch ? '搜索目录/正文' : '搜索目录',
+                prefixIcon: Icon(
+                  Icons.search_rounded,
+                  size: 17,
+                  color: colorScheme.onSurfaceVariant,
+                ),
+                suffixIcon: IconButton(
+                  tooltip: catalogDescending ? '当前倒序' : '当前正序',
+                  onPressed: onToggleSort,
+                  icon: Icon(
+                    catalogDescending
+                        ? Icons.south_rounded
+                        : Icons.north_rounded,
+                    size: 18,
+                    color: colorScheme.onSurfaceVariant,
+                  ),
+                ),
+                contentPadding: const EdgeInsets.symmetric(
+                  horizontal: 10,
+                  vertical: 10,
+                ),
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(14),
+                ),
+                enabledBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(14),
+                  borderSide: BorderSide(
+                    color: colorScheme.outlineVariant.withValues(alpha: 0.5),
+                  ),
+                ),
+                focusedBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(14),
+                  borderSide: BorderSide(
+                    color: colorScheme.primary.withValues(alpha: 0.9),
+                    width: 1.1,
+                  ),
+                ),
+              ),
+            ),
+          ),
         ],
       ),
+    );
+      },
     );
   }
 }
@@ -1049,14 +929,12 @@ class _ReaderCatalogSummaryCard extends StatelessWidget {
 class _ReaderCatalogChapterTile extends StatelessWidget {
   const _ReaderCatalogChapterTile({
     required this.chapter,
-    required this.index,
     required this.selected,
     required this.enabled,
     this.onTap,
   });
 
   final Chapter chapter;
-  final int index;
   final bool selected;
   final bool enabled;
   final VoidCallback? onTap;
@@ -1117,15 +995,15 @@ class _ReaderCatalogChapterTile extends StatelessWidget {
                             size: 16,
                             color: colorScheme.onSecondaryContainer,
                           )
-                          : Text(
-                            '${index + 1}',
-                            style: textTheme.labelSmall?.copyWith(
-                              fontWeight: FontWeight.w800,
-                              color:
-                                  selected
-                                      ? colorScheme.onPrimary
-                                      : colorScheme.onSurfaceVariant,
-                            ),
+                          : Icon(
+                            selected
+                                ? Icons.menu_book_rounded
+                                : Icons.article_outlined,
+                            size: 16,
+                            color:
+                                selected
+                                    ? colorScheme.onPrimary
+                                    : colorScheme.onSurfaceVariant,
                           ),
                 ),
                 const SizedBox(width: 8),

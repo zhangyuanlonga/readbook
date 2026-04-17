@@ -8,9 +8,9 @@ import 'package:url_launcher/url_launcher.dart';
 
 import '../../../app/layout/app_layout.dart';
 import '../../../app/layout/app_spacing.dart';
+import '../../../app/navigation/bottom_nav_icon_gallery_provider.dart';
 import '../../../app/navigation/mobile_bottom_navigation_inset.dart';
 import '../../../app/navigation/app_navigation_style_provider.dart';
-import '../../../app/shell_navigation_provider.dart';
 import '../../../app/theme/app_theme_palette.dart';
 import '../../../app/theme/app_theme_provider.dart';
 import '../../../app/theme/app_theme_seed_provider.dart';
@@ -74,10 +74,12 @@ class _MinePageState extends ConsumerState<MinePage> {
     final horizontal = AppSpacing.pageHorizontal(context);
     final seedColor = ref.watch(appSeedColorProvider);
     final themeMode = ref.watch(appThemeModeProvider);
+    final activeBottomNavIconGallery = ref.watch(
+      activeBottomNavIconGalleryProvider,
+    );
     final navigationPreference = ref.watch(
       appNavigationStylePreferenceProvider,
     );
-    final navigationState = ref.watch(appShellNavigationProvider);
     final platform = Theme.of(context).platform;
     final effectiveNavigationStyle = resolveAppNavigationStyle(
       navigationPreference,
@@ -159,7 +161,15 @@ class _MinePageState extends ConsumerState<MinePage> {
                           _MineActionItem(
                             icon: Icons.dashboard_outlined,
                             label: '底栏',
-                            subtitle: '${navigationState.visibleTabCount} 项',
+                            subtitle: activeBottomNavIconGallery.when(
+                              data:
+                                  (gallery) =>
+                                      gallery?.name.trim().isNotEmpty == true
+                                          ? gallery!.name
+                                          : null,
+                              loading: () => null,
+                              error: (_, _) => null,
+                            ),
                             onTap:
                                 () => context.push('/bottom-nav-icon-galleries'),
                           ),
@@ -276,26 +286,86 @@ class _MinePageState extends ConsumerState<MinePage> {
   }
 
   Widget _buildQuickAccessCards(BuildContext context) {
-    return Row(
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        Expanded(
-          child: _buildQuickCard(
-            context,
-            icon: Icons.workspace_premium_outlined,
-            label: '会员',
-            onTap: () => context.push('/membership'),
-          ),
-        ),
-        const SizedBox(width: 8),
-        Expanded(
-          child: _buildQuickCard(
-            context,
-            icon: Icons.auto_awesome_outlined,
-            label: '灵感',
-            onTap: () => context.push('/bookmarks'),
-          ),
+        _buildMembershipQuickCard(context),
+        const SizedBox(height: 8),
+        Row(
+          children: [
+            Expanded(
+              child: _buildQuickCard(
+                context,
+                icon: Icons.sync_rounded,
+                label: _isLoadingSession ? '同步中' : '同步',
+                onTap: _syncQuickAccess,
+              ),
+            ),
+            const SizedBox(width: 8),
+            Expanded(
+              child: _buildQuickCard(
+                context,
+                icon: Icons.auto_awesome_outlined,
+                label: '灵感',
+                onTap: () => context.push('/bookmarks'),
+              ),
+            ),
+          ],
         ),
       ],
+    );
+  }
+
+  Widget _buildMembershipQuickCard(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        borderRadius: BorderRadius.circular(16),
+        onTap: () => context.push('/membership'),
+        child: Container(
+          padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
+          decoration: BoxDecoration(
+            color: colorScheme.surface,
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(
+              color: colorScheme.outlineVariant.withValues(alpha: 0.35),
+            ),
+          ),
+          child: Row(
+            children: [
+              Icon(
+                Icons.workspace_premium_outlined,
+                size: 22,
+                color: colorScheme.primary,
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Text(
+                  '成为高级会员',
+                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                    fontWeight: FontWeight.w700,
+                    color: colorScheme.onSurface,
+                  ),
+                ),
+              ),
+              Text(
+                '立即开通',
+                style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                  fontWeight: FontWeight.w700,
+                  color: colorScheme.primary,
+                ),
+              ),
+              const SizedBox(width: 2),
+              Icon(
+                Icons.chevron_right_rounded,
+                size: 18,
+                color: colorScheme.primary,
+              ),
+            ],
+          ),
+        ),
+      ),
     );
   }
 
@@ -554,6 +624,18 @@ class _MinePageState extends ConsumerState<MinePage> {
         _showSourceEntry = false;
       });
     }
+  }
+
+  Future<void> _syncQuickAccess() async {
+    if (_isLoadingSession) {
+      _showMessage('正在同步，请稍候');
+      return;
+    }
+    await _reloadSession(showLoading: true);
+    if (!mounted) {
+      return;
+    }
+    _showMessage('同步完成');
   }
 
   void _handleAuthEvent(AuthEvent event) {
