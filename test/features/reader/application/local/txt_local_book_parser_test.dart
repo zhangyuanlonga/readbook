@@ -392,6 +392,43 @@ $chapter2
       expect(result.chapters.first.startOffset, isNotNull);
       expect(result.chapters.first.endOffset, isNotNull);
     });
+
+    test(
+      'detects gbk correctly in streaming path when file head is ascii',
+      () async {
+        final file = File('${tempDir.path}/large_ascii_head_gbk.txt');
+        final gbk = Charset.getByName('gbk');
+        expect(gbk, isNotNull);
+
+        final header = List<int>.filled(24000, 'A'.codeUnitAt(0));
+        final bodyText = List<String>.generate(
+          50000,
+          (index) => '第${index + 1}章 正文内容测试。',
+        ).join('\n');
+        final bodyBytes = gbk!.encode(bodyText);
+        await file.writeAsBytes(<int>[...header, ...bodyBytes], flush: true);
+        expect(await file.length(), greaterThan(1024 * 1024));
+
+        final now = DateTime.parse('2026-02-23T12:00:00.000Z');
+        final result = await parser.parse(
+          LocalBook(
+            id: 'local_txt_streaming_gbk',
+            title: '流式 GBK 测试',
+            format: LocalBookFormat.txt,
+            storagePath: file.path,
+            splitLongChapter: false,
+            fileSize: await file.length(),
+            createdAt: now,
+            updatedAt: now,
+          ),
+        );
+
+        expect(result.charset, anyOf('gbk', 'gb18030'));
+        expect(result.chapters, isNotEmpty);
+        expect(result.chapters.first.startOffset, isNotNull);
+        expect(result.chapters.first.endOffset, isNotNull);
+      },
+    );
   });
 }
 

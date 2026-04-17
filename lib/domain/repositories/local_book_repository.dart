@@ -7,6 +7,8 @@ abstract class LocalBookRepository {
 
   Future<LocalBook?> getBookById(String bookId);
 
+  Future<LocalBook?> getBookBySourcePath(String sourcePath);
+
   Future<List<LocalBook>> getAllBooks();
 
   Future<void> updateBookIndexState({

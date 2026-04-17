@@ -37,6 +37,20 @@ class LocalBookStorageRestoreResult {
   final bool storageRestored;
 }
 
+class _EncodingSampleChunk {
+  const _EncodingSampleChunk({required this.start, required this.bytes});
+
+  final int start;
+  final List<int> bytes;
+}
+
+class _ScoredEncodingSample {
+  const _ScoredEncodingSample({required this.result, required this.score});
+
+  final LocalTextDecodeResult result;
+  final int score;
+}
+
 class LocalBookStorageService {
   LocalBookStorageService({
     LocalTextEncodingDetector? textEncodingDetector,
@@ -148,7 +162,7 @@ class LocalBookStorageService {
       );
     }
 
-    final sample = await _detectEncodingFromSample(sourceFile);
+    final sample = await _detectEncodingFromSamples(sourceFile);
     if (fileLength >= _largeTxtRawCopyThresholdBytes && sample != null) {
       await _ensureParentDir(targetFile);
       await sourceFile.copy(targetFile.path);
@@ -211,30 +225,197 @@ class LocalBookStorageService {
     }
   }
 
-  Future<List<int>> _readEncodingSample(File file) async {
+  Future<List<_EncodingSampleChunk>> _readEncodingSamples(File file) async {
     final fileLength = await file.length();
     if (fileLength == 0) {
-      return const <int>[];
+      return const <_EncodingSampleChunk>[];
     }
     final sampleLength =
         fileLength < _encodingSampleBytes ? fileLength : _encodingSampleBytes;
     if (sampleLength <= 0) {
-      return const <int>[];
+      return const <_EncodingSampleChunk>[];
     }
-    final builder = BytesBuilder(copy: false);
-    await file.openRead(0, sampleLength).forEach(builder.add);
-    return builder.takeBytes();
+    final ranges = <(int, int)>[(0, sampleLength)];
+    if (fileLength > sampleLength * 2) {
+      final middleStart = ((fileLength - sampleLength) ~/ 2).clamp(
+        0,
+        fileLength - sampleLength,
+      );
+      ranges.add((middleStart, sampleLength));
+    }
+    if (fileLength > sampleLength * 3) {
+      final tailStart = (fileLength - sampleLength).clamp(
+        0,
+        fileLength - sampleLength,
+      );
+      ranges.add((tailStart, sampleLength));
+    }
+
+    final uniqueRanges = <String, (int, int)>{};
+    for (final range in ranges) {
+      uniqueRanges['${range.$1}:${range.$2}'] = range;
+    }
+
+    final chunks = <_EncodingSampleChunk>[];
+    for (final range in uniqueRanges.values) {
+      final builder = BytesBuilder(copy: false);
+      await file.openRead(range.$1, range.$1 + range.$2).forEach(builder.add);
+      final bytes = builder.takeBytes();
+      if (bytes.isEmpty) {
+        continue;
+      }
+      chunks.add(_EncodingSampleChunk(start: range.$1, bytes: bytes));
+    }
+    return chunks;
   }
 
-  Future<LocalTextDecodeResult?> _detectEncodingFromSample(File file) async {
-    final sampleBytes = await _readEncodingSample(file);
-    if (sampleBytes.isEmpty) {
+  Future<LocalTextDecodeResult?> _detectEncodingFromSamples(File file) async {
+    final sampleChunks = await _readEncodingSamples(file);
+    if (sampleChunks.isEmpty) {
       return null;
     }
-    return _textEncodingDetector.decodeSampleBestEffortAsync(
-      sampleBytes,
-      htmlAware: false,
-    );
+
+    final scoredResults = <_ScoredEncodingSample>[];
+    final fileLength = await file.length();
+    for (final chunk in sampleChunks) {
+      final decoded = await _textEncodingDetector.decodeSampleBestEffortAsync(
+        chunk.bytes,
+        htmlAware: false,
+      );
+      if (decoded == null || decoded.text.trim().isEmpty) {
+        continue;
+      }
+      scoredResults.add(
+        _ScoredEncodingSample(
+          result: decoded,
+          score: _scoreEncodingSample(
+            chunk: chunk,
+            fileLength: fileLength,
+            decoded: decoded,
+          ),
+        ),
+      );
+    }
+
+    if (scoredResults.isEmpty) {
+      return null;
+    }
+
+    final aggregated = <String, int>{};
+    final bestByCharset = <String, _ScoredEncodingSample>{};
+    for (final sample in scoredResults) {
+      final charset = sample.result.charsetName;
+      aggregated[charset] = (aggregated[charset] ?? 0) + sample.score;
+      final currentBest = bestByCharset[charset];
+      if (currentBest == null || sample.score > currentBest.score) {
+        bestByCharset[charset] = sample;
+      }
+    }
+
+    String? bestCharset;
+    var bestScore = -0x7fffffff;
+    for (final entry in aggregated.entries) {
+      if (entry.value > bestScore) {
+        bestCharset = entry.key;
+        bestScore = entry.value;
+      }
+    }
+    if (bestCharset == null) {
+      return null;
+    }
+    return bestByCharset[bestCharset]?.result;
+  }
+
+  int _scoreEncodingSample({
+    required _EncodingSampleChunk chunk,
+    required int fileLength,
+    required LocalTextDecodeResult decoded,
+  }) {
+    final text = decoded.text.trim();
+    if (text.isEmpty) {
+      return -1000;
+    }
+
+    var score = 0;
+    final lower = text.toLowerCase();
+    final hanCount =
+        text.runes.where((rune) => rune >= 0x4E00 && rune <= 0x9FFF).length;
+    final asciiCount =
+        text.runes.where((rune) => rune >= 0x20 && rune <= 0x7E).length;
+    final punctuationCount =
+        text.runes
+            .where((rune) => '，。！？；：“”‘’《》、（）【】'.runes.contains(rune))
+            .length;
+    final replacementCount = text.runes.where((rune) => rune == 0xFFFD).length;
+    final suspiciousMojibakeCount =
+        text.runes
+            .where(
+              (rune) =>
+                  rune == 0x00C3 ||
+                  rune == 0x00C2 ||
+                  rune == 0x00E2 ||
+                  rune == 0x00D0 ||
+                  rune == 0x00D1 ||
+                  rune == 0x00FE ||
+                  rune == 0x00FF,
+            )
+            .length;
+
+    score += hanCount * 6;
+    score += punctuationCount * 10;
+    score -= replacementCount * 40;
+    score -= suspiciousMojibakeCount * 25;
+    if (decoded.fallbackUsed) {
+      score -= 140;
+    }
+
+    if (asciiCount > 0 && hanCount == 0 && punctuationCount == 0) {
+      score -= 80;
+    }
+    if (RegExp(r'第.{0,12}[章节回卷部集]').hasMatch(text)) {
+      score += 80;
+    }
+    if (lower.contains('chapter') || lower.contains('part ')) {
+      score += 20;
+    }
+
+    final midpoint = chunk.start + (chunk.bytes.length ~/ 2);
+    final normalizedPosition =
+        fileLength <= 0 ? 0.0 : midpoint / fileLength.toDouble();
+    if (normalizedPosition >= 0.25 && normalizedPosition <= 0.75) {
+      score += 70;
+    } else if (normalizedPosition > 0.75) {
+      score += 50;
+    } else {
+      score += 10;
+    }
+
+    if (decoded.charsetName == 'utf-8' &&
+        hanCount == 0 &&
+        punctuationCount == 0) {
+      score -= 20;
+    }
+
+    if (decoded.charsetName == 'utf-16be' ||
+        decoded.charsetName == 'utf-16le' ||
+        decoded.charsetName == 'utf-16') {
+      final zeroRatio = _zeroByteRatio(chunk.bytes);
+      if (zeroRatio < 0.12) {
+        score -= 240;
+      } else {
+        score += 40;
+      }
+    }
+
+    return score;
+  }
+
+  double _zeroByteRatio(List<int> bytes) {
+    if (bytes.isEmpty) {
+      return 0;
+    }
+    final zeroCount = bytes.where((byte) => byte == 0).length;
+    return zeroCount / bytes.length;
   }
 
   Future<void> _ensureParentDir(File target) async {

@@ -174,6 +174,74 @@ void main() {
       expect(chapter.content, contains('第二章内容'));
     });
 
+    test(
+      'loads streamed utf-16be txt chapters without marking the index stale',
+      () async {
+        final file = File('${tempDir.path}/streamed_utf16be_book.txt');
+        final chapter1 = List.filled(180000, '内容一').join();
+        final chapter2 = List.filled(180000, '内容二').join();
+        await file.writeAsBytes(
+          _encodeUtf16(
+            '''
+第1章 开始
+$chapter1
+
+第2章 继续
+$chapter2
+''',
+            littleEndian: false,
+            withBom: true,
+          ),
+          flush: true,
+        );
+
+        final now = DateTime.parse('2026-03-21T12:00:00.000Z');
+        await repository.upsertBook(
+          LocalBook(
+            id: 'local_offset_streamed_utf16be_1',
+            title: '偏移读取 UTF16BE 大文件测试',
+            format: LocalBookFormat.txt,
+            storagePath: file.path,
+            splitLongChapter: false,
+            fileSize: await file.length(),
+            createdAt: now,
+            updatedAt: now,
+          ),
+        );
+
+        await indexService.ensureIndexed(
+          bookId: 'local_offset_streamed_utf16be_1',
+        );
+
+        final indexedBook = await repository.getBookById(
+          'local_offset_streamed_utf16be_1',
+        );
+        expect(indexedBook, isNotNull);
+        expect(indexedBook!.charset, 'utf-16be');
+        expect(indexedBook.indexStatus, LocalBookIndexStatus.ready);
+
+        final metas = await repository.getChapters(
+          'local_offset_streamed_utf16be_1',
+        );
+        expect(metas.length, greaterThan(1));
+        expect(metas.first.content, isEmpty);
+        expect(metas.first.startOffset, isNotNull);
+        expect(metas.first.endOffset, isNotNull);
+
+        final chapter = await contentService.load(
+          bookId: 'local_offset_streamed_utf16be_1',
+          chapterIndex: metas.length - 1,
+        );
+        expect(chapter.content, contains('内容'));
+
+        final refreshedBook = await repository.getBookById(
+          'local_offset_streamed_utf16be_1',
+        );
+        expect(refreshedBook, isNotNull);
+        expect(refreshedBook!.indexStatus, LocalBookIndexStatus.ready);
+      },
+    );
+
     test('returns epub chapter content directly from indexed storage', () async {
       final archive =
           Archive()

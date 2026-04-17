@@ -19,6 +19,7 @@ import '../../../core/media/image_selection_service.dart';
 import '../../../data/datasources/local/app_database.dart';
 import '../../../data/repositories/local_book_repository_impl.dart';
 import '../../../domain/entities/bookshelf_book.dart';
+import '../../../domain/entities/chapter.dart';
 import '../../../domain/entities/local_book.dart';
 import '../../../domain/entities/reading_progress.dart';
 import '../../../domain/entities/reading_record.dart';
@@ -5370,7 +5371,8 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
     try {
       final localBook =
           book.sourceId == _kLocalBookSourceId
-              ? _localBooksById[book.bookId.trim()]
+              ? (_localBooksById[book.bookId.trim()] ??
+                  await _localBookRepository.getBookById(book.bookId.trim()))
               : null;
       if (localBook != null &&
           localBook.format == LocalBookFormat.txt &&
@@ -5420,6 +5422,40 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
           });
         }
         _continueReading(effectiveProgress);
+        return;
+      }
+
+      if (book.sourceId == _kLocalBookSourceId) {
+        if (localBook == null) {
+          _openBookDetail(book);
+          _showMessage('未找到本地图书记录，请检查导入是否完成。');
+          return;
+        }
+
+        final chapters = await _localBookRepository.getChapters(book.bookId);
+        if (chapters.isEmpty) {
+          _openBookDetail(book);
+          _showMessage('本地图书目录尚未建立完成，请先在详情页重建目录。');
+          return;
+        }
+
+        final firstChapter = Chapter(
+          id: chapters.first.id,
+          bookId: chapters.first.bookId,
+          title: chapters.first.title,
+          chapterUrl: 'local://chapter/${chapters.first.id}',
+          index: chapters.first.chapterIndex,
+        );
+        final route = _readerEntryRouteResolver.buildRouteFromChapter(
+          bookId: firstChapter.bookId,
+          sourceId: book.sourceId,
+          detailUrl: book.detailUrl,
+          chapter: firstChapter,
+        );
+        if (!mounted) {
+          return;
+        }
+        context.push(route);
         return;
       }
 

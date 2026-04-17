@@ -55,6 +55,7 @@ class LocalBookImportService {
     LocalBookStorageService? localBookStorageService,
     AppLogger? logger,
     Future<Directory> Function()? supportDirectoryProvider,
+    Duration warmUpDelay = const Duration(milliseconds: 350),
   }) : this._(
          localBookRepository:
              localBookRepository ??
@@ -70,6 +71,7 @@ class LocalBookImportService {
              ),
          localBookIndexService: localBookIndexService,
          logger: logger ?? AppLogger.instance,
+         warmUpDelay: warmUpDelay,
        );
 
   LocalBookImportService._({
@@ -78,6 +80,7 @@ class LocalBookImportService {
     required ReaderSystemSettingsService readerSystemSettingsService,
     required LocalBookStorageService localBookStorageService,
     required AppLogger logger,
+    required Duration warmUpDelay,
     LocalBookIndexService? localBookIndexService,
   }) : _localBookRepository = localBookRepository,
        _bookshelfService = bookshelfService,
@@ -91,7 +94,8 @@ class LocalBookImportService {
              storageService: localBookStorageService,
              logger: logger,
            ),
-       _logger = logger;
+       _logger = logger,
+       _warmUpDelay = warmUpDelay;
 
   static const String localBookSourceId = '__local_book__';
 
@@ -101,6 +105,7 @@ class LocalBookImportService {
   final LocalBookIndexService _localBookIndexService;
   final AppLogger _logger;
   final LocalBookStorageService _localBookStorageService;
+  final Duration _warmUpDelay;
   final Uuid _uuid = const Uuid();
 
   Future<LocalBookImportResult> importFromFile({
@@ -132,8 +137,7 @@ class LocalBookImportService {
       throw AppException(
         code: ErrorCode.validation,
         stage: ErrorStage.detail,
-        briefMessage:
-            '仅支持导入 txt、epub、md、html、pdf、mobi、azw 或 azw3 文件。',
+        briefMessage: '仅支持导入 txt、epub、md、html、pdf、mobi、azw 或 azw3 文件。',
       );
     }
 
@@ -222,6 +226,9 @@ class LocalBookImportService {
 
   Future<void> _warmUpLocalBookIndex(String bookId) async {
     try {
+      if (_warmUpDelay > Duration.zero) {
+        await Future<void>.delayed(_warmUpDelay);
+      }
       await _localBookIndexService.ensureIndexed(bookId: bookId);
     } catch (error) {
       if (_shouldIgnoreWarmUpError(error)) {
@@ -405,15 +412,7 @@ class LocalBookImportService {
     if (normalized.isEmpty) {
       return null;
     }
-
-    final books = await _localBookRepository.getAllBooks();
-    for (final book in books) {
-      if (book.sourcePath == normalized) {
-        return book;
-      }
-    }
-
-    return null;
+    return _localBookRepository.getBookBySourcePath(normalized);
   }
 
   String _buildBookId() {

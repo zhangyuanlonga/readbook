@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:io';
 
+import 'package:charset/charset.dart';
 import 'package:drift/native.dart';
 import 'package:shuxiang_reading_next/core/errors/app_exception.dart';
 import 'package:shuxiang_reading_next/core/errors/error_codes.dart';
@@ -152,6 +153,48 @@ void main() {
         );
         expect(await File(resolvedStoragePath).readAsBytes(), rawBytes);
         expect(result.localBook.charset, 'utf-16le');
+      },
+    );
+
+    test(
+      'detects gbk correctly when large txt head is ascii but body is chinese',
+      () async {
+        final gbk = Charset.getByName('gbk');
+        expect(gbk, isNotNull);
+
+        final sourceFile = File('${tempDir.path}/ascii_head_body_gbk.txt');
+        final header = List<int>.filled(24000, 'A'.codeUnitAt(0));
+        final bodyText = List<String>.generate(
+          50000,
+          (index) => '第${index + 1}章 正文内容测试。',
+        ).join('\n');
+        final bodyBytes = gbk!.encode(bodyText);
+        expect(header.length + bodyBytes.length, greaterThan(1024 * 1024));
+        await sourceFile.writeAsBytes(<int>[
+          ...header,
+          ...bodyBytes,
+        ], flush: true);
+
+        final prefs = await SharedPreferences.getInstance();
+        final service = LocalBookImportService(
+          localBookRepository: LocalBookRepositoryImpl(database),
+          bookshelfService: BookshelfService(preferences: prefs),
+          localBookStorageService: storageService,
+        );
+
+        final result = await service.importFromFile(
+          filePath: sourceFile.path,
+          displayName: 'ascii_head_body_gbk.txt',
+        );
+
+        expect(result.localBook.charset, anyOf('gbk', 'gb18030'));
+        final resolvedStoragePath = await storageService.resolveStoragePath(
+          result.localBook.storagePath,
+        );
+        expect(
+          await File(resolvedStoragePath).readAsBytes(),
+          sourceFile.readAsBytesSync(),
+        );
       },
     );
 
@@ -467,35 +510,42 @@ void main() {
       expect(stored!.splitLongChapter, isTrue);
     });
 
-    test('returns after persistence when waitForIndexing is false', () async {
-      final sourceFile = File('${tempDir.path}/async_import.txt');
-      await sourceFile.writeAsString('第一章\n内容');
+    test(
+      'returns after persistence and starts warm up after a short delay',
+      () async {
+        final sourceFile = File('${tempDir.path}/async_import.txt');
+        await sourceFile.writeAsString('第一章\n内容');
 
-      final indexCompleter = Completer<List<LocalChapter>>();
-      final fakeIndexService = _FakeLocalBookIndexService(
-        localBookRepository: LocalBookRepositoryImpl(database),
-        storageService: storageService,
-        onEnsureIndexed: () => indexCompleter.future,
-      );
-      final service = LocalBookImportService(
-        localBookRepository: LocalBookRepositoryImpl(database),
-        bookshelfService: BookshelfService(
-          preferences: await SharedPreferences.getInstance(),
-        ),
-        localBookStorageService: storageService,
-        localBookIndexService: fakeIndexService,
-      );
+        final indexCompleter = Completer<List<LocalChapter>>();
+        final fakeIndexService = _FakeLocalBookIndexService(
+          localBookRepository: LocalBookRepositoryImpl(database),
+          storageService: storageService,
+          onEnsureIndexed: () => indexCompleter.future,
+        );
+        final service = LocalBookImportService(
+          localBookRepository: LocalBookRepositoryImpl(database),
+          bookshelfService: BookshelfService(
+            preferences: await SharedPreferences.getInstance(),
+          ),
+          localBookStorageService: storageService,
+          localBookIndexService: fakeIndexService,
+          warmUpDelay: const Duration(milliseconds: 20),
+        );
 
-      final result = await service.importFromFile(
-        filePath: sourceFile.path,
-        waitForIndexing: false,
-      );
+        final result = await service.importFromFile(
+          filePath: sourceFile.path,
+          waitForIndexing: false,
+        );
 
-      expect(result.localBook.id, startsWith('local_'));
-      expect(fakeIndexService.ensureIndexedCallCount, 1);
+        expect(result.localBook.id, startsWith('local_'));
+        expect(fakeIndexService.ensureIndexedCallCount, 0);
 
-      indexCompleter.complete(const <LocalChapter>[]);
-    });
+        await Future<void>.delayed(const Duration(milliseconds: 40));
+        expect(fakeIndexService.ensureIndexedCallCount, 1);
+
+        indexCompleter.complete(const <LocalChapter>[]);
+      },
+    );
 
     test('ignores expected warm up failures without warning log', () async {
       final sourceFile = File('${tempDir.path}/warmup_ignore.txt');
@@ -522,6 +572,7 @@ void main() {
         localBookStorageService: storageService,
         localBookIndexService: fakeIndexService,
         logger: logger,
+        warmUpDelay: Duration.zero,
       );
 
       await service.importFromFile(
@@ -558,6 +609,7 @@ void main() {
         localBookStorageService: storageService,
         localBookIndexService: fakeIndexService,
         logger: logger,
+        warmUpDelay: Duration.zero,
       );
 
       await service.importFromFile(

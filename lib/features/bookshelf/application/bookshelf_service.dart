@@ -1,3 +1,4 @@
+import 'dart:isolate';
 import 'dart:convert';
 
 import 'package:shared_preferences/shared_preferences.dart';
@@ -65,18 +66,15 @@ class BookshelfService {
     }
 
     try {
-      final decoded = jsonDecode(raw);
-      if (decoded is! List) {
+      final decoded = await Isolate.run<List<Map<String, Object?>>?>(
+        () => _decodeBookshelfBookJsonMaps(raw),
+      );
+      if (decoded == null) {
         return const <BookshelfBook>[];
       }
 
       final items = decoded
-          .whereType<Map>()
-          .map(
-            (item) => BookshelfBook.fromJson(
-              item.map((key, value) => MapEntry(key.toString(), value)),
-            ),
-          )
+          .map((item) => BookshelfBook.fromJson(item))
           .toList(growable: false);
 
       return items.reversed.toList(growable: false);
@@ -339,27 +337,9 @@ class BookshelfService {
     }
 
     try {
-      final decoded = jsonDecode(raw);
-      if (decoded is! Map) {
-        return const <String, List<String>>{};
-      }
-
-      final result = <String, List<String>>{};
-      for (final entry in decoded.entries) {
-        final key = entry.key.toString().trim();
-        if (key.isEmpty) {
-          continue;
-        }
-        if (entry.value is! List) {
-          continue;
-        }
-        final tags = _normalizeTags((entry.value as List).map((e) => '$e'));
-        if (tags.isEmpty) {
-          continue;
-        }
-        result[key] = tags;
-      }
-      return result;
+      return await Isolate.run<Map<String, List<String>>>(
+        () => _decodeBookshelfTagMap(raw),
+      );
     } catch (_) {
       return const <String, List<String>>{};
     }
@@ -530,13 +510,21 @@ class BookshelfService {
 
   Future<void> _save(List<BookshelfBook> books) async {
     final prefs = await _preferencesFuture;
-    final encoded = jsonEncode(books.map((item) => item.toJson()).toList());
+    final payload = books
+        .map((item) => Map<String, Object?>.from(item.toJson()))
+        .toList(growable: false);
+    final encoded = await Isolate.run<String>(
+      () => _encodeBookshelfBookJsonMaps(payload),
+    );
     await prefs.setString(_storageKey, encoded);
   }
 
   Future<void> _saveTagMap(Map<String, List<String>> map) async {
     final prefs = await _preferencesFuture;
-    await prefs.setString(_tagStorageKey, jsonEncode(map));
+    final encoded = await Isolate.run<String>(
+      () => _encodeBookshelfTagMap(map),
+    );
+    await prefs.setString(_tagStorageKey, encoded);
   }
 
   static String _bookKey({
@@ -586,4 +574,50 @@ class BookshelfService {
   }) {
     return (value ?? fallback).clamp(4.0, 24.0).toDouble();
   }
+}
+
+List<Map<String, Object?>>? _decodeBookshelfBookJsonMaps(String raw) {
+  final decoded = jsonDecode(raw);
+  if (decoded is! List) {
+    return null;
+  }
+  return decoded
+      .whereType<Map>()
+      .map(
+        (item) => <String, Object?>{
+          for (final entry in item.entries) entry.key.toString(): entry.value,
+        },
+      )
+      .toList(growable: false);
+}
+
+Map<String, List<String>> _decodeBookshelfTagMap(String raw) {
+  final decoded = jsonDecode(raw);
+  if (decoded is! Map) {
+    return const <String, List<String>>{};
+  }
+
+  final result = <String, List<String>>{};
+  for (final entry in decoded.entries) {
+    final key = entry.key.toString().trim();
+    if (key.isEmpty || entry.value is! List) {
+      continue;
+    }
+    final tags = BookshelfService._normalizeTags(
+      (entry.value as List).map((value) => '$value'),
+    );
+    if (tags.isEmpty) {
+      continue;
+    }
+    result[key] = tags;
+  }
+  return result;
+}
+
+String _encodeBookshelfBookJsonMaps(List<Map<String, Object?>> payload) {
+  return jsonEncode(payload);
+}
+
+String _encodeBookshelfTagMap(Map<String, List<String>> map) {
+  return jsonEncode(map);
 }

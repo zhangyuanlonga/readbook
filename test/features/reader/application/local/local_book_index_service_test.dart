@@ -233,54 +233,109 @@ void main() {
       },
     );
 
-    test('marks ready txt with deferred chapter content as stale', () async {
-      final now = DateTime.parse('2026-02-23T12:00:00.000Z');
-      final file = File('${tempDir.path}/legacy_txt.txt');
-      await file.writeAsString('第1章\n旧内容');
-      await repository.upsertBook(
-        LocalBook(
-          id: 'local_index_legacy_txt',
-          title: 'legacy txt',
-          format: LocalBookFormat.txt,
-          storagePath: file.path,
-          fileSize: await file.length(),
-          indexStatus: LocalBookIndexStatus.ready,
-          chapterCount: 1,
-          createdAt: now,
-          updatedAt: now,
-        ),
-      );
-      await repository.replaceChapters(
-        bookId: 'local_index_legacy_txt',
-        chapters: <LocalChapter>[
-          LocalChapter(
-            id: 'local_index_legacy_txt_0',
-            bookId: 'local_index_legacy_txt',
-            chapterIndex: 0,
-            title: '第1章',
-            content: '',
-            sourceRef: null,
-            startOffset: 0,
-            endOffset: 10,
+    test(
+      'marks ready txt with empty content and missing offsets as stale',
+      () async {
+        final now = DateTime.parse('2026-02-23T12:00:00.000Z');
+        final file = File('${tempDir.path}/legacy_txt.txt');
+        await file.writeAsString('第1章\n旧内容');
+        await repository.upsertBook(
+          LocalBook(
+            id: 'local_index_legacy_txt',
+            title: 'legacy txt',
+            format: LocalBookFormat.txt,
+            storagePath: file.path,
+            fileSize: await file.length(),
+            indexStatus: LocalBookIndexStatus.ready,
+            chapterCount: 1,
             createdAt: now,
             updatedAt: now,
           ),
-        ],
-      );
+        );
+        await repository.replaceChapters(
+          bookId: 'local_index_legacy_txt',
+          chapters: <LocalChapter>[
+            LocalChapter(
+              id: 'local_index_legacy_txt_0',
+              bookId: 'local_index_legacy_txt',
+              chapterIndex: 0,
+              title: '第1章',
+              content: '',
+              sourceRef: null,
+              createdAt: now,
+              updatedAt: now,
+            ),
+          ],
+        );
 
-      final service = LocalBookIndexService(
-        localBookRepository: repository,
-        parsers: const [_FakeSuccessParser()],
-        storageService: storageService,
-      );
+        final service = LocalBookIndexService(
+          localBookRepository: repository,
+          parsers: const [_FakeSuccessParser()],
+          storageService: storageService,
+        );
 
-      final refreshed = await service.refreshBookState(
-        bookId: 'local_index_legacy_txt',
-      );
+        final refreshed = await service.refreshBookState(
+          bookId: 'local_index_legacy_txt',
+        );
 
-      expect(refreshed, isNotNull);
-      expect(refreshed!.indexStatus, LocalBookIndexStatus.stale);
-    });
+        expect(refreshed, isNotNull);
+        expect(refreshed!.indexStatus, LocalBookIndexStatus.stale);
+      },
+    );
+
+    test(
+      'keeps ready txt with empty content and valid offsets readable',
+      () async {
+        final now = DateTime.parse('2026-02-23T12:00:00.000Z');
+        final file = File('${tempDir.path}/streamed_txt.txt');
+        await file.writeAsString('第1章\n按偏移读取的正文');
+        final fileStat = await file.stat();
+        await repository.upsertBook(
+          LocalBook(
+            id: 'local_index_streamed_txt',
+            title: 'streamed txt',
+            format: LocalBookFormat.txt,
+            storagePath: file.path,
+            fileSize: fileStat.size,
+            storageFileLastModifiedMs: fileStat.modified.millisecondsSinceEpoch,
+            indexStatus: LocalBookIndexStatus.ready,
+            chapterCount: 1,
+            createdAt: now,
+            updatedAt: now,
+          ),
+        );
+        await repository.replaceChapters(
+          bookId: 'local_index_streamed_txt',
+          chapters: <LocalChapter>[
+            LocalChapter(
+              id: 'local_index_streamed_txt_0',
+              bookId: 'local_index_streamed_txt',
+              chapterIndex: 0,
+              title: '第1章',
+              content: '',
+              sourceRef: null,
+              startOffset: 4,
+              endOffset: 26,
+              createdAt: now,
+              updatedAt: now,
+            ),
+          ],
+        );
+
+        final service = LocalBookIndexService(
+          localBookRepository: repository,
+          parsers: const [_FakeSuccessParser()],
+          storageService: storageService,
+        );
+
+        final refreshed = await service.refreshBookState(
+          bookId: 'local_index_streamed_txt',
+        );
+
+        expect(refreshed, isNotNull);
+        expect(refreshed!.indexStatus, LocalBookIndexStatus.ready);
+      },
+    );
   });
 }
 

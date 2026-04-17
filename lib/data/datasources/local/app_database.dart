@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
@@ -288,6 +289,9 @@ class SearchSourceHitUpsert {
   ],
 )
 class AppDatabase extends _$AppDatabase {
+  static const int _localChapterInsertBatchSize = 64;
+  static const int _localChapterInsertYieldEveryChunks = 2;
+
   AppDatabase({QueryExecutor? executor}) : super(executor ?? _openConnection());
 
   static final AppDatabase instance = AppDatabase();
@@ -1248,6 +1252,23 @@ class AppDatabase extends _$AppDatabase {
     return _mapRowToLocalBook(row);
   }
 
+  Future<LocalBook?> getLocalBookBySourcePath(String sourcePath) async {
+    final normalized = sourcePath.trim();
+    if (normalized.isEmpty) {
+      return null;
+    }
+
+    final row =
+        await (select(storedLocalBooks)
+              ..where((table) => table.sourcePath.equals(normalized))
+              ..limit(1))
+            .getSingleOrNull();
+    if (row == null) {
+      return null;
+    }
+    return _mapRowToLocalBook(row);
+  }
+
   Future<List<LocalBook>> getAllLocalBooks() async {
     final rows =
         await (select(storedLocalBooks)
@@ -1333,35 +1354,52 @@ class AppDatabase extends _$AppDatabase {
           .toList(growable: false);
 
       if (sanitizedChapters.isNotEmpty) {
-        await batch((batch) {
-          for (final chapter in sanitizedChapters) {
-            final normalizedId = chapter.id.trim();
-            final normalizedTitle = chapter.title.trim();
+        var chunkIndex = 0;
+        for (
+          var start = 0;
+          start < sanitizedChapters.length;
+          start += _localChapterInsertBatchSize
+        ) {
+          final end =
+              (start + _localChapterInsertBatchSize)
+                  .clamp(0, sanitizedChapters.length)
+                  .toInt();
+          final chunk = sanitizedChapters.sublist(start, end);
+          await batch((batch) {
+            for (final chapter in chunk) {
+              final normalizedId = chapter.id.trim();
+              final normalizedTitle = chapter.title.trim();
 
-            batch.insert(
-              storedLocalChapters,
-              StoredLocalChaptersCompanion(
-                id: Value(normalizedId),
-                bookId: Value(normalizedBookId),
-                chapterIndex: Value(chapter.chapterIndex),
-                title: Value(normalizedTitle),
-                content: Value(chapter.content),
-                imageUrlsJson: Value(jsonEncode(chapter.imageUrls)),
-                documentJson: Value(
-                  chapter.document == null
-                      ? null
-                      : jsonEncode(chapter.document!.toJson()),
+              batch.insert(
+                storedLocalChapters,
+                StoredLocalChaptersCompanion(
+                  id: Value(normalizedId),
+                  bookId: Value(normalizedBookId),
+                  chapterIndex: Value(chapter.chapterIndex),
+                  title: Value(normalizedTitle),
+                  content: Value(chapter.content),
+                  imageUrlsJson: Value(jsonEncode(chapter.imageUrls)),
+                  documentJson: Value(
+                    chapter.document == null
+                        ? null
+                        : jsonEncode(chapter.document!.toJson()),
+                  ),
+                  sourceRef: Value(chapter.sourceRef),
+                  startOffset: Value(chapter.startOffset),
+                  endOffset: Value(chapter.endOffset),
+                  createdAt: Value(chapter.createdAt),
+                  updatedAt: Value(chapter.updatedAt),
                 ),
-                sourceRef: Value(chapter.sourceRef),
-                startOffset: Value(chapter.startOffset),
-                endOffset: Value(chapter.endOffset),
-                createdAt: Value(chapter.createdAt),
-                updatedAt: Value(chapter.updatedAt),
-              ),
-              mode: InsertMode.insertOrReplace,
-            );
+                mode: InsertMode.insertOrReplace,
+              );
+            }
+          });
+          chunkIndex += 1;
+          if (chunkIndex % _localChapterInsertYieldEveryChunks == 0 &&
+              end < sanitizedChapters.length) {
+            await Future<void>.delayed(Duration.zero);
           }
-        });
+        }
       }
 
       await (update(storedLocalBooks)

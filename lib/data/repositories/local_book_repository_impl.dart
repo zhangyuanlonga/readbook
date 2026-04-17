@@ -20,6 +20,10 @@ class LocalBookRepositoryImpl implements LocalBookRepository {
       _database.getLocalBookById(bookId);
 
   @override
+  Future<LocalBook?> getBookBySourcePath(String sourcePath) =>
+      _database.getLocalBookBySourcePath(sourcePath);
+
+  @override
   Future<LocalChapter?> getChapterById(String chapterId) =>
       _database.getLocalChapterById(chapterId);
 
