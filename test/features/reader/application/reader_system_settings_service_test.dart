@@ -61,12 +61,15 @@ void main() {
       expect(secondValues, <bool>[true]);
     });
 
-    test('always keeps local txt split setting enabled', () async {
+    test('persists local txt split setting', () async {
       final service = ReaderSystemSettingsService();
 
       expect(await service.loadLocalTxtSplitLongChapterEnabled(), isTrue);
 
       await service.saveLocalTxtSplitLongChapterEnabled(false);
+      expect(await service.loadLocalTxtSplitLongChapterEnabled(), isFalse);
+
+      await service.saveLocalTxtSplitLongChapterEnabled(true);
       expect(await service.loadLocalTxtSplitLongChapterEnabled(), isTrue);
     });
   });

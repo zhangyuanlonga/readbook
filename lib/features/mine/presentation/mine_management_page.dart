@@ -5,6 +5,7 @@ import 'package:go_router/go_router.dart';
 
 import '../../../app/layout/app_layout.dart';
 import '../../../app/layout/app_spacing.dart';
+import 'chapter_rule_management_page.dart';
 import '../../bookshelf/application/bookshelf_service.dart';
 
 enum MineManagementSection {
@@ -41,6 +42,9 @@ class MineManagementPage extends StatelessWidget {
         bookshelfService: bookshelfService,
         loadTimeout: loadTimeout,
       );
+    }
+    if (section == MineManagementSection.chapterRuleManagement) {
+      return ChapterRuleManagementPage(loadTimeout: loadTimeout);
     }
 
     final config = _MineManagementPageConfig.forSection(section);

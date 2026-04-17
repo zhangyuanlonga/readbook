@@ -39,8 +39,6 @@ class ReaderCatalogSheetResult {
   final Bookmark? bookmark;
 }
 
-enum _ReaderCatalogMoreAction { locateCurrent, toggleSort }
-
 Future<ReaderCatalogSheetResult?> showReaderCatalogSheet({
   required BuildContext context,
   required ThemeData readerModalTheme,
@@ -61,7 +59,7 @@ Future<ReaderCatalogSheetResult?> showReaderCatalogSheet({
   required Future<void> Function() refreshChapterBookmarks,
   required ValueChanged<String> showMessage,
 }) async {
-  const itemExtent = 58.0;
+  const itemExtent = 52.0;
   final anchorIndex =
       currentChapterIndex == null
           ? 0
@@ -196,6 +194,65 @@ Future<ReaderCatalogSheetResult?> showReaderCatalogSheet({
               large: 0.80,
             );
             final sheetHorizontal = AppSpacing.pageHorizontal(context);
+
+            Future<void> openCatalogMoreActions() async {
+              final action = await showModalBottomSheet<String>(
+                context: context,
+                useSafeArea: true,
+                showDragHandle: true,
+                builder: (actionContext) {
+                  return Padding(
+                    padding: const EdgeInsets.fromLTRB(16, 4, 16, 16),
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        if (currentChapterIndex != null)
+                          ListTile(
+                            leading: const Icon(Icons.my_location_rounded),
+                            title: const Text('定位当前章节'),
+                            onTap:
+                                () => Navigator.of(actionContext).pop('locate'),
+                          ),
+                        ListTile(
+                          leading: Icon(
+                            catalogDescending
+                                ? Icons.arrow_downward_rounded
+                                : Icons.arrow_upward_rounded,
+                          ),
+                          title: Text(catalogDescending ? '切换为正序' : '切换为倒序'),
+                          onTap: () => Navigator.of(actionContext).pop('sort'),
+                        ),
+                      ],
+                    ),
+                  );
+                },
+              );
+
+              if (action == 'locate') {
+                if (currentChapterIndex == null) {
+                  return;
+                }
+                final currentDisplayIndex = orderedChapterIndexes().indexOf(
+                  currentChapterIndex,
+                );
+                final target =
+                    ((currentDisplayIndex - 2).clamp(0, chapters.length - 1) *
+                            itemExtent)
+                        .toDouble();
+                scrollController.animateTo(
+                  target,
+                  duration: const Duration(milliseconds: 180),
+                  curve: Curves.easeOutCubic,
+                );
+                return;
+              }
+
+              if (action == 'sort') {
+                setModalState(() {
+                  catalogDescending = !catalogDescending;
+                });
+              }
+            }
 
             Widget buildCatalogTab() {
               return ValueListenableBuilder<_ReaderCatalogSearchState>(
@@ -480,9 +537,9 @@ Future<ReaderCatalogSheetResult?> showReaderCatalogSheet({
                       Padding(
                         padding: EdgeInsets.fromLTRB(
                           sheetHorizontal,
-                          6,
+                          4,
                           sheetHorizontal,
-                          10,
+                          8,
                         ),
                         child: _ReaderCatalogHeaderCard(
                           bookTitle: bookTitle,
@@ -490,35 +547,7 @@ Future<ReaderCatalogSheetResult?> showReaderCatalogSheet({
                           bookCoverUrl: bookCoverUrl,
                           supportsContentSearch: supportsContentSearch,
                           searchController: searchController,
-                          catalogDescending: catalogDescending,
-                          canLocateCurrent: currentChapterIndex != null,
-                          onLocateCurrent:
-                              currentChapterIndex == null
-                                  ? null
-                                  : () {
-                                    final currentDisplayIndex =
-                                        orderedChapterIndexes()
-                                        .indexOf(currentChapterIndex);
-                                    final target =
-                                        ((currentDisplayIndex - 2).clamp(
-                                                  0,
-                                                  chapters.length - 1,
-                                                ) *
-                                                itemExtent)
-                                            .toDouble();
-                                    scrollController.animateTo(
-                                      target,
-                                      duration: const Duration(
-                                        milliseconds: 180,
-                                      ),
-                                      curve: Curves.easeOutCubic,
-                                    );
-                                  },
-                          onToggleSort: () {
-                            setModalState(() {
-                              catalogDescending = !catalogDescending;
-                            });
-                          },
+                          onMoreActions: openCatalogMoreActions,
                         ),
                       ),
                       Padding(
@@ -526,12 +555,12 @@ Future<ReaderCatalogSheetResult?> showReaderCatalogSheet({
                           sheetHorizontal,
                           0,
                           sheetHorizontal,
-                          4,
+                          2,
                         ),
                         child: DecoratedBox(
                           decoration: BoxDecoration(
                             color: colorScheme.surfaceContainerLow,
-                            borderRadius: BorderRadius.circular(18),
+                            borderRadius: BorderRadius.circular(16),
                             border: Border.all(
                               color: colorScheme.outlineVariant.withValues(
                                 alpha: 0.28,
@@ -539,7 +568,7 @@ Future<ReaderCatalogSheetResult?> showReaderCatalogSheet({
                             ),
                           ),
                           child: Padding(
-                            padding: const EdgeInsets.all(4),
+                            padding: const EdgeInsets.all(3),
                             child: TabBar(
                               labelColor: colorScheme.primary,
                               unselectedLabelColor:
@@ -548,9 +577,18 @@ Future<ReaderCatalogSheetResult?> showReaderCatalogSheet({
                               indicatorSize: TabBarIndicatorSize.tab,
                               indicator: BoxDecoration(
                                 color: colorScheme.primaryContainer,
-                                borderRadius: BorderRadius.circular(14),
+                                borderRadius: BorderRadius.circular(12),
                               ),
-                              splashBorderRadius: BorderRadius.circular(14),
+                              splashBorderRadius: BorderRadius.circular(12),
+                              labelStyle: textTheme.labelLarge?.copyWith(
+                                fontWeight: FontWeight.w700,
+                                fontSize: 12,
+                              ),
+                              unselectedLabelStyle: textTheme.labelLarge
+                                  ?.copyWith(
+                                    fontWeight: FontWeight.w600,
+                                    fontSize: 12,
+                                  ),
                               onTap: (index) {
                                 if (activeTabIndex == index) {
                                   return;
@@ -626,9 +664,9 @@ Tab _buildCountTab(
       mainAxisSize: MainAxisSize.min,
       children: [
         Text(label),
-        const SizedBox(width: 6),
+        const SizedBox(width: 4),
         Container(
-          padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
+          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1.5),
           decoration: BoxDecoration(
             color: colorScheme.surfaceContainerHigh,
             borderRadius: BorderRadius.circular(999),
@@ -808,10 +846,7 @@ class _ReaderCatalogHeaderCard extends StatelessWidget {
     required this.bookCoverUrl,
     required this.supportsContentSearch,
     required this.searchController,
-    required this.catalogDescending,
-    required this.canLocateCurrent,
-    this.onLocateCurrent,
-    required this.onToggleSort,
+    required this.onMoreActions,
   });
 
   final String bookTitle;
@@ -819,10 +854,7 @@ class _ReaderCatalogHeaderCard extends StatelessWidget {
   final String? bookCoverUrl;
   final bool supportsContentSearch;
   final TextEditingController searchController;
-  final bool catalogDescending;
-  final bool canLocateCurrent;
-  final VoidCallback? onLocateCurrent;
-  final VoidCallback onToggleSort;
+  final VoidCallback onMoreActions;
 
   @override
   Widget build(BuildContext context) {
@@ -834,9 +866,9 @@ class _ReaderCatalogHeaderCard extends StatelessWidget {
 
     return LayoutBuilder(
       builder: (context, constraints) {
-        final actionWidth = (constraints.maxWidth * 0.24).clamp(92.0, 132.0);
+        final actionWidth = (constraints.maxWidth * 0.28).clamp(104.0, 148.0);
         return Container(
-          padding: const EdgeInsets.fromLTRB(12, 12, 12, 12),
+          padding: const EdgeInsets.fromLTRB(10, 10, 10, 10),
           decoration: BoxDecoration(
             gradient: LinearGradient(
               begin: Alignment.topLeft,
@@ -846,7 +878,7 @@ class _ReaderCatalogHeaderCard extends StatelessWidget {
                 colorScheme.surfaceContainerLow,
               ],
             ),
-            borderRadius: BorderRadius.circular(16),
+            borderRadius: BorderRadius.circular(14),
             border: Border.all(
               color: colorScheme.outlineVariant.withValues(alpha: 0.25),
             ),
@@ -855,10 +887,10 @@ class _ReaderCatalogHeaderCard extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.center,
             children: [
               ClipRRect(
-                borderRadius: BorderRadius.circular(12),
+                borderRadius: BorderRadius.circular(10),
                 child: SizedBox(
-                  width: 50,
-                  height: 68,
+                  width: 44,
+                  height: 60,
                   child: DiskCachedCoverImage(
                     imageUrl: bookCoverUrl,
                     fit: BoxFit.cover,
@@ -866,13 +898,13 @@ class _ReaderCatalogHeaderCard extends StatelessWidget {
                       title: normalizedTitle,
                       author:
                           normalizedAuthor.isEmpty ? null : normalizedAuthor,
-                      width: 50,
-                      height: 68,
+                      width: 44,
+                      height: 60,
                     ),
                   ),
                 ),
               ),
-              const SizedBox(width: 10),
+              const SizedBox(width: 8),
               Expanded(
                 child: SizedBox(
                   height: 68,
@@ -889,9 +921,9 @@ class _ReaderCatalogHeaderCard extends StatelessWidget {
                           style: textTheme.bodyMedium?.copyWith(
                             fontWeight: FontWeight.w700,
                             height: 1.15,
-                            fontSize:
-                                ((textTheme.bodyLarge?.fontSize ?? 16) - 4.5)
-                                    .clamp(11.0, 13.0),
+                            fontSize: ((textTheme.bodyLarge?.fontSize ?? 16) -
+                                    4.5)
+                                .clamp(10.5, 12.0),
                           ),
                         ),
                       ),
@@ -907,7 +939,7 @@ class _ReaderCatalogHeaderCard extends StatelessWidget {
                   ),
                 ),
               ),
-              const SizedBox(width: 10),
+              const SizedBox(width: 8),
               SizedBox(
                 width: actionWidth,
                 child: SizedBox(
@@ -925,7 +957,9 @@ class _ReaderCatalogHeaderCard extends StatelessWidget {
                         decoration: InputDecoration(
                           isDense: true,
                           filled: true,
-                          fillColor: colorScheme.surface.withValues(alpha: 0.92),
+                          fillColor: colorScheme.surface.withValues(
+                            alpha: 0.92,
+                          ),
                           hintText: '请搜索',
                           hintStyle: textTheme.bodySmall?.copyWith(
                             fontSize: 11,
@@ -937,18 +971,18 @@ class _ReaderCatalogHeaderCard extends StatelessWidget {
                             color: colorScheme.onSurfaceVariant,
                           ),
                           prefixIconConstraints: const BoxConstraints(
-                            minWidth: 28,
-                            minHeight: 28,
+                            minWidth: 26,
+                            minHeight: 26,
                           ),
                           contentPadding: const EdgeInsets.symmetric(
                             horizontal: 8,
-                            vertical: 7,
+                            vertical: 6,
                           ),
                           border: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(12),
+                            borderRadius: BorderRadius.circular(10),
                           ),
                           enabledBorder: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(12),
+                            borderRadius: BorderRadius.circular(10),
                             borderSide: BorderSide(
                               color: colorScheme.outlineVariant.withValues(
                                 alpha: 0.5,
@@ -956,7 +990,7 @@ class _ReaderCatalogHeaderCard extends StatelessWidget {
                             ),
                           ),
                           focusedBorder: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(12),
+                            borderRadius: BorderRadius.circular(10),
                             borderSide: BorderSide(
                               color: colorScheme.primary.withValues(alpha: 0.9),
                               width: 1.1,
@@ -966,37 +1000,21 @@ class _ReaderCatalogHeaderCard extends StatelessWidget {
                       ),
                       Align(
                         alignment: Alignment.centerRight,
-                        child: PopupMenuButton<_ReaderCatalogMoreAction>(
+                        child: IconButton(
                           tooltip: '更多',
+                          visualDensity: VisualDensity.compact,
                           padding: EdgeInsets.zero,
+                          style: IconButton.styleFrom(
+                            minimumSize: const Size(36, 36),
+                            tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                            padding: EdgeInsets.zero,
+                          ),
+                          onPressed: onMoreActions,
                           icon: Icon(
                             Icons.more_horiz_rounded,
                             size: 20,
                             color: colorScheme.onSurfaceVariant,
                           ),
-                          onSelected: (action) {
-                            switch (action) {
-                              case _ReaderCatalogMoreAction.locateCurrent:
-                                onLocateCurrent?.call();
-                              case _ReaderCatalogMoreAction.toggleSort:
-                                onToggleSort();
-                            }
-                          },
-                          itemBuilder: (context) {
-                            return <PopupMenuEntry<_ReaderCatalogMoreAction>>[
-                              if (canLocateCurrent)
-                                const PopupMenuItem<_ReaderCatalogMoreAction>(
-                                  value: _ReaderCatalogMoreAction.locateCurrent,
-                                  child: Text('定位当前章节'),
-                                ),
-                              PopupMenuItem<_ReaderCatalogMoreAction>(
-                                value: _ReaderCatalogMoreAction.toggleSort,
-                                child: Text(
-                                  catalogDescending ? '切换为正序' : '切换为倒序',
-                                ),
-                              ),
-                            ];
-                          },
                         ),
                       ),
                     ],
@@ -1037,7 +1055,7 @@ class _ReaderCatalogChapterTile extends StatelessWidget {
     final colorScheme = Theme.of(context).colorScheme;
     final textTheme = Theme.of(context).textTheme;
     final isVolume = chapter.isVolume;
-    final borderRadius = BorderRadius.circular(14);
+    final borderRadius = BorderRadius.circular(12);
     final selectedBackground = Color.alphaBlend(
       colorScheme.primary.withValues(alpha: 0.15),
       colorScheme.surfaceContainerLow,
@@ -1065,12 +1083,12 @@ class _ReaderCatalogChapterTile extends StatelessWidget {
             ),
           ),
           child: Padding(
-            padding: const EdgeInsets.fromLTRB(10, 8, 10, 8),
+            padding: const EdgeInsets.fromLTRB(9, 7, 9, 7),
             child: Row(
               children: [
                 Container(
-                  width: 28,
-                  height: 28,
+                  width: 24,
+                  height: 24,
                   alignment: Alignment.center,
                   decoration: BoxDecoration(
                     color:
@@ -1079,27 +1097,27 @@ class _ReaderCatalogChapterTile extends StatelessWidget {
                             : selected
                             ? colorScheme.primary
                             : colorScheme.surfaceContainerHigh,
-                    borderRadius: BorderRadius.circular(9),
+                    borderRadius: BorderRadius.circular(8),
                   ),
                   child:
                       isVolume
                           ? Icon(
                             Icons.folder_outlined,
-                            size: 16,
+                            size: 14,
                             color: colorScheme.onSecondaryContainer,
                           )
                           : Icon(
                             selected
                                 ? Icons.menu_book_rounded
                                 : Icons.article_outlined,
-                            size: 16,
+                            size: 14,
                             color:
                                 selected
                                     ? colorScheme.onPrimary
                                     : colorScheme.onSurfaceVariant,
                           ),
                 ),
-                const SizedBox(width: 8),
+                const SizedBox(width: 7),
                 Expanded(
                   child: Text(
                     chapter.title,
@@ -1107,6 +1125,7 @@ class _ReaderCatalogChapterTile extends StatelessWidget {
                     overflow: TextOverflow.ellipsis,
                     style: textTheme.bodyMedium?.copyWith(
                       height: 1.2,
+                      fontSize: 13,
                       fontWeight:
                           isVolume
                               ? FontWeight.w700
@@ -1122,12 +1141,12 @@ class _ReaderCatalogChapterTile extends StatelessWidget {
                     ),
                   ),
                 ),
-                const SizedBox(width: 6),
+                const SizedBox(width: 4),
                 if (isVolume)
                   Container(
                     padding: const EdgeInsets.symmetric(
-                      horizontal: 8,
-                      vertical: 4,
+                      horizontal: 7,
+                      vertical: 3,
                     ),
                     decoration: BoxDecoration(
                       color: colorScheme.secondaryContainer,
@@ -1146,7 +1165,7 @@ class _ReaderCatalogChapterTile extends StatelessWidget {
                     selected
                         ? Icons.play_circle_fill_rounded
                         : Icons.chevron_right_rounded,
-                    size: 18,
+                    size: 16,
                     color:
                         selected
                             ? colorScheme.primary
@@ -1229,15 +1248,15 @@ class _CatalogSearchEntryTile extends StatelessWidget {
         borderRadius: BorderRadius.circular(12),
         onTap: onTap,
         child: Padding(
-          padding: const EdgeInsets.fromLTRB(10, 8, 10, 8),
+          padding: const EdgeInsets.fromLTRB(9, 7, 9, 7),
           child: Row(
             children: [
               Container(
-                width: 28,
-                height: 28,
+                width: 24,
+                height: 24,
                 decoration: BoxDecoration(
                   color: accentColor.withValues(alpha: 0.12),
-                  borderRadius: BorderRadius.circular(9),
+                  borderRadius: BorderRadius.circular(8),
                 ),
                 child: Icon(
                   entry.isContent
@@ -1245,11 +1264,11 @@ class _CatalogSearchEntryTile extends StatelessWidget {
                       : isVolumeEntry
                       ? Icons.folder_outlined
                       : Icons.list_alt_outlined,
-                  size: 16,
+                  size: 14,
                   color: accentColor,
                 ),
               ),
-              const SizedBox(width: 8),
+              const SizedBox(width: 7),
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -1260,23 +1279,28 @@ class _CatalogSearchEntryTile extends StatelessWidget {
                       overflow: TextOverflow.ellipsis,
                       style: textTheme.bodyMedium?.copyWith(
                         fontWeight: FontWeight.w600,
+                        fontSize: 13,
                       ),
                     ),
-                    const SizedBox(height: 2),
+                    const SizedBox(height: 1),
                     Text(
                       entry.subtitle,
                       maxLines: 2,
                       overflow: TextOverflow.ellipsis,
                       style: textTheme.bodySmall?.copyWith(
                         color: colorScheme.onSurfaceVariant,
+                        fontSize: 11.5,
                       ),
                     ),
                   ],
                 ),
               ),
-              const SizedBox(width: 8),
+              const SizedBox(width: 6),
               Container(
-                padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 6,
+                  vertical: 2.5,
+                ),
                 decoration: BoxDecoration(
                   color: accentColor.withValues(alpha: 0.1),
                   borderRadius: BorderRadius.circular(999),
@@ -1334,12 +1358,15 @@ class _BookmarkGroupSection extends StatelessWidget {
       children: [
         Text(
           title,
-          style: textTheme.labelLarge?.copyWith(fontWeight: FontWeight.w700),
+          style: textTheme.labelLarge?.copyWith(
+            fontWeight: FontWeight.w700,
+            fontSize: 12,
+          ),
         ),
-        const SizedBox(height: 4),
+        const SizedBox(height: 3),
         ...items.map((bookmark) {
           return Padding(
-            padding: const EdgeInsets.only(bottom: 4),
+            padding: const EdgeInsets.only(bottom: 3),
             child: Material(
               color: colorScheme.surfaceContainerHighest,
               borderRadius: BorderRadius.circular(12),
@@ -1347,7 +1374,7 @@ class _BookmarkGroupSection extends StatelessWidget {
                 borderRadius: BorderRadius.circular(12),
                 onTap: () => onTap(bookmark),
                 child: Padding(
-                  padding: const EdgeInsets.fromLTRB(10, 8, 6, 8),
+                  padding: const EdgeInsets.fromLTRB(9, 7, 5, 7),
                   child: Row(
                     children: [
                       Expanded(
@@ -1361,13 +1388,15 @@ class _BookmarkGroupSection extends StatelessWidget {
                               style: textTheme.bodyMedium?.copyWith(
                                 fontWeight: FontWeight.w500,
                                 height: 1.2,
+                                fontSize: 13,
                               ),
                             ),
-                            const SizedBox(height: 3),
+                            const SizedBox(height: 2),
                             Text(
                               timeLabel(bookmark.createdAt),
                               style: textTheme.bodySmall?.copyWith(
                                 color: colorScheme.onSurfaceVariant,
+                                fontSize: 11.5,
                               ),
                             ),
                           ],
@@ -1376,7 +1405,7 @@ class _BookmarkGroupSection extends StatelessWidget {
                       IconButton(
                         tooltip: '删除',
                         visualDensity: VisualDensity.compact,
-                        icon: const Icon(Icons.delete_outline, size: 18),
+                        icon: const Icon(Icons.delete_outline, size: 16),
                         onPressed: () => onDelete(bookmark),
                       ),
                     ],

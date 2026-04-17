@@ -485,7 +485,7 @@ void main() {
       expect(Uri.parse(chapters.first.imageUrls.first).scheme, 'file');
     });
 
-    test('always enables local txt split long chapter by default', () async {
+    test('uses persisted local txt split long chapter default', () async {
       final sourceFile = File('${tempDir.path}/system_split.txt');
       await sourceFile.writeAsString('第一章\n内容');
 
@@ -503,11 +503,11 @@ void main() {
       );
 
       final result = await service.importFromFile(filePath: sourceFile.path);
-      expect(result.localBook.splitLongChapter, isTrue);
+      expect(result.localBook.splitLongChapter, isFalse);
 
       final stored = await database.getLocalBookById(result.localBook.id);
       expect(stored, isNotNull);
-      expect(stored!.splitLongChapter, isTrue);
+      expect(stored!.splitLongChapter, isFalse);
     });
 
     test(

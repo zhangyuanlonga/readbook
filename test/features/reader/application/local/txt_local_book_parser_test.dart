@@ -2,6 +2,7 @@ import 'dart:io';
 
 import 'package:charset/charset.dart';
 import 'package:shuxiang_reading_next/domain/entities/local_book.dart';
+import 'package:shuxiang_reading_next/features/reader/application/local/txt_chapter_rule_service.dart';
 import 'package:shuxiang_reading_next/features/reader/application/local/txt_local_book_parser.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -104,6 +105,46 @@ Second chapter content.
         expect(result.chapters.last.title, 'Chapter 2 Return');
       },
     );
+
+    test('detects chapter headings from stored rule list', () async {
+      final prefs = await SharedPreferences.getInstance();
+      final ruleService = TxtChapterRuleService(preferences: prefs);
+      await ruleService.saveRules([
+        const TxtChapterRule(
+          id: 'custom_rule_1',
+          name: '自定义节标题',
+          pattern: r'^自定义第\d+节.*$',
+          enabled: true,
+        ),
+      ]);
+
+      final file = File('${tempDir.path}/custom_rule.txt');
+      final longContent = List.filled(1200, '自定义内容').join();
+      await file.writeAsString('''
+自定义第1节 开始
+$longContent
+
+自定义第2节 继续
+$longContent
+''');
+
+      final now = DateTime.parse('2026-02-23T12:00:00.000Z');
+      final result = await parser.parse(
+        LocalBook(
+          id: 'local_txt_custom_1',
+          title: '自定义规则书',
+          format: LocalBookFormat.txt,
+          storagePath: file.path,
+          fileSize: await file.length(),
+          createdAt: now,
+          updatedAt: now,
+        ),
+      );
+
+      expect(result.chapters, hasLength(2));
+      expect(result.chapters.first.title, '自定义第1节 开始');
+      expect(result.chapters.last.title, '自定义第2节 继续');
+    });
 
     test(
       'creates a preface chapter when content exists before first heading',

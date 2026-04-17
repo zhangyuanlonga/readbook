@@ -12,6 +12,7 @@ import '../../../../core/errors/error_stage.dart';
 import '../../../../domain/entities/local_book.dart';
 import 'local_book_parser.dart';
 import 'txt_auto_chapter_patterns.dart';
+import 'txt_chapter_rule_service.dart';
 import 'local_text_encoding_detector.dart';
 
 class TxtLocalBookParser implements LocalBookParser {
@@ -26,9 +27,6 @@ class TxtLocalBookParser implements LocalBookParser {
   static const int _splitBreakMinDistance = 800;
   static const int _backgroundYieldByteBudget = 512 * 1024;
   static const int _backgroundYieldStepBudget = 8;
-  static final List<TxtAutoChapterPattern> _builtInChapterPatterns =
-      defaultEnabledTxtAutoChapterPatterns;
-
   @override
   bool supports(LocalBookFormat format) {
     return format == LocalBookFormat.txt;
@@ -45,6 +43,7 @@ class TxtLocalBookParser implements LocalBookParser {
       );
     }
 
+    final enabledRules = await TxtChapterRuleService().loadEnabledPatterns();
     final fileLength = await file.length();
     final yieldGate = _CooperativeYieldGate(
       byteBudget: _backgroundYieldByteBudget,
@@ -55,6 +54,7 @@ class TxtLocalBookParser implements LocalBookParser {
         file,
         book,
         fileLength,
+        enabledRules: enabledRules,
         yieldGate: yieldGate,
       );
       if (parsed != null) {
@@ -71,7 +71,11 @@ class TxtLocalBookParser implements LocalBookParser {
       );
     }
 
-    final decoded = await _decodeBookText(book, bytes);
+    final decoded = await _decodeBookText(
+      book,
+      bytes,
+      enabledRules: enabledRules,
+    );
     final text = decoded.text;
     if (text.trim().isEmpty) {
       throw AppException(
@@ -81,7 +85,10 @@ class TxtLocalBookParser implements LocalBookParser {
       );
     }
 
-    final selectedPattern = _detectChapterPattern(text);
+    final selectedPattern = _detectChapterPattern(
+      text,
+      enabledRules: enabledRules,
+    );
     final chapters = _withByteOffsets(
       _splitChapters(
         text: text,
@@ -112,6 +119,7 @@ class TxtLocalBookParser implements LocalBookParser {
     File file,
     LocalBook book,
     int fileLength, {
+    required List<TxtAutoChapterPattern> enabledRules,
     required _CooperativeYieldGate yieldGate,
   }) async {
     final sampleLength =
@@ -132,6 +140,7 @@ class TxtLocalBookParser implements LocalBookParser {
       book: book,
       chunks: sampleChunks,
       fileLength: fileLength,
+      enabledRules: enabledRules,
       yieldGate: yieldGate,
     );
     if (sampleDecoded == null || sampleDecoded.text.trim().isEmpty) {
@@ -140,7 +149,10 @@ class TxtLocalBookParser implements LocalBookParser {
 
     final charsetName = sampleDecoded.charsetName;
     final bomInfo = _detectBom(sampleChunks.first.bytes);
-    final selectedPattern = _detectChapterPattern(sampleDecoded.text);
+    final selectedPattern = _detectChapterPattern(
+      sampleDecoded.text,
+      enabledRules: enabledRules,
+    );
     final chapters =
         selectedPattern == null
             ? await _splitByFixedLengthStreaming(
@@ -213,6 +225,7 @@ class TxtLocalBookParser implements LocalBookParser {
     required LocalBook book,
     required List<_StreamingSampleChunk> chunks,
     required int fileLength,
+    required List<TxtAutoChapterPattern> enabledRules,
     required _CooperativeYieldGate yieldGate,
   }) async {
     final results = <_ScoredDecodedChunk>[];
@@ -238,6 +251,7 @@ class TxtLocalBookParser implements LocalBookParser {
             fileLength: fileLength,
             book: book,
             decoded: decoded,
+            enabledRules: enabledRules,
           ),
         ),
       );
@@ -277,10 +291,11 @@ class TxtLocalBookParser implements LocalBookParser {
     required int fileLength,
     required LocalBook book,
     required LocalTextDecodeResult decoded,
+    required List<TxtAutoChapterPattern> enabledRules,
   }) {
     var score = _scoreDecodedText(
       decoded.text,
-      enabledRules: _builtInChapterPatterns,
+      enabledRules: enabledRules,
       charsetName: decoded.charsetName,
       hintedCharset: _normalizeCharsetName(book.charset),
     );
@@ -811,7 +826,10 @@ class TxtLocalBookParser implements LocalBookParser {
         utf8.decode(bytes, allowMalformed: true);
   }
 
-  _ResolvedTxtChapterPattern? _detectChapterPattern(String text) {
+  _ResolvedTxtChapterPattern? _detectChapterPattern(
+    String text, {
+    required List<TxtAutoChapterPattern> enabledRules,
+  }) {
     final sample =
         text.length > _chapterPatternDetectionSampleLength
             ? text.substring(0, _chapterPatternDetectionSampleLength)
@@ -821,7 +839,7 @@ class TxtLocalBookParser implements LocalBookParser {
     var maxRawMatches = 0;
     int? earliestStart;
 
-    for (final chapterPattern in _builtInChapterPatterns.reversed) {
+    for (final chapterPattern in enabledRules.reversed) {
       final pattern = chapterPattern.compiled;
       final matches = pattern.allMatches(sample).toList(growable: false);
       if (matches.isEmpty) {
@@ -1072,8 +1090,9 @@ class TxtLocalBookParser implements LocalBookParser {
 
   Future<_DecodedBookText> _decodeBookText(
     LocalBook book,
-    List<int> bytes,
-  ) async {
+    List<int> bytes, {
+    required List<TxtAutoChapterPattern> enabledRules,
+  }) async {
     final bomInfo = _detectBom(bytes);
     final bomLength = bomInfo.length;
     final contentBytes =
@@ -1115,7 +1134,7 @@ class TxtLocalBookParser implements LocalBookParser {
 
       final score = _scoreDecodedText(
         text,
-        enabledRules: _builtInChapterPatterns,
+        enabledRules: enabledRules,
         charsetName: candidate,
         hintedCharset: hintedCharset,
       );
@@ -1139,7 +1158,7 @@ class TxtLocalBookParser implements LocalBookParser {
           );
       final mobileScore = _scoreDecodedText(
         mobileDecoded.text,
-        enabledRules: _builtInChapterPatterns,
+        enabledRules: enabledRules,
         charsetName: mobileDecoded.charsetName,
         hintedCharset: hintedCharset,
       );

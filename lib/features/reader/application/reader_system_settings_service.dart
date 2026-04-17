@@ -26,7 +26,10 @@ class ReaderSystemSettingsService {
 
   Future<bool> loadReadRecordEnabled() async => true;
 
-  Future<bool> loadLocalTxtSplitLongChapterEnabled() async => true;
+  Future<bool> loadLocalTxtSplitLongChapterEnabled() async {
+    final prefs = await _preferencesFuture;
+    return prefs.getBool(_localTxtSplitLongChapterEnabledKey) ?? true;
+  }
 
   Stream<bool> watchReadRecordEnabled() {
     return Stream<bool>.value(true).asBroadcastStream();
@@ -39,6 +42,6 @@ class ReaderSystemSettingsService {
 
   Future<void> saveLocalTxtSplitLongChapterEnabled(bool enabled) async {
     final prefs = await _preferencesFuture;
-    await prefs.remove(_localTxtSplitLongChapterEnabledKey);
+    await prefs.setBool(_localTxtSplitLongChapterEnabledKey, enabled);
   }
 }

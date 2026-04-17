@@ -108,45 +108,42 @@ void main() {
       expect(updated.lastError, contains('模拟解析失败'));
     });
 
-    test(
-      'keeps split long chapter enabled even if legacy setting was off',
-      () async {
-        final now = DateTime.parse('2026-02-23T12:00:00.000Z');
-        final file = File('${tempDir.path}/split.txt');
-        await file.writeAsString('第一章\n内容');
-        await repository.upsertBook(
-          LocalBook(
-            id: 'local_index_split_1',
-            title: '系统设置同步测试',
-            format: LocalBookFormat.txt,
-            storagePath: file.path,
-            fileSize: await file.length(),
-            splitLongChapter: true,
-            createdAt: now,
-            updatedAt: now,
-          ),
-        );
+    test('syncs split long chapter from persisted global setting', () async {
+      final now = DateTime.parse('2026-02-23T12:00:00.000Z');
+      final file = File('${tempDir.path}/split.txt');
+      await file.writeAsString('第一章\n内容');
+      await repository.upsertBook(
+        LocalBook(
+          id: 'local_index_split_1',
+          title: '系统设置同步测试',
+          format: LocalBookFormat.txt,
+          storagePath: file.path,
+          fileSize: await file.length(),
+          splitLongChapter: true,
+          createdAt: now,
+          updatedAt: now,
+        ),
+      );
 
-        final prefs = await SharedPreferences.getInstance();
-        final systemSettingsService = ReaderSystemSettingsService(
-          preferences: prefs,
-        );
-        await systemSettingsService.saveLocalTxtSplitLongChapterEnabled(false);
+      final prefs = await SharedPreferences.getInstance();
+      final systemSettingsService = ReaderSystemSettingsService(
+        preferences: prefs,
+      );
+      await systemSettingsService.saveLocalTxtSplitLongChapterEnabled(false);
 
-        final service = LocalBookIndexService(
-          localBookRepository: repository,
-          parsers: const [_FakeSuccessParser()],
-          readerSystemSettingsService: systemSettingsService,
-          storageService: storageService,
-        );
+      final service = LocalBookIndexService(
+        localBookRepository: repository,
+        parsers: const [_FakeSuccessParser()],
+        readerSystemSettingsService: systemSettingsService,
+        storageService: storageService,
+      );
 
-        await service.ensureIndexed(bookId: 'local_index_split_1');
+      await service.ensureIndexed(bookId: 'local_index_split_1');
 
-        final updated = await repository.getBookById('local_index_split_1');
-        expect(updated, isNotNull);
-        expect(updated!.splitLongChapter, isTrue);
-      },
-    );
+      final updated = await repository.getBookById('local_index_split_1');
+      expect(updated, isNotNull);
+      expect(updated!.splitLongChapter, isFalse);
+    });
 
     test('marks ready book stale when source file changed', () async {
       final sourceFile = File('${tempDir.path}/source.txt');
