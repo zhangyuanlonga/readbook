@@ -546,7 +546,7 @@ class _AdvancedThemeListPageState extends ConsumerState<AdvancedThemeListPage> {
     final wallpaperPath = config.wallpaperPath?.trim() ?? '';
 
     return Container(
-      height: 112,
+      height: 118,
       decoration: BoxDecoration(
         color: backgroundColor,
         borderRadius: BorderRadius.circular(16),
@@ -587,7 +587,7 @@ class _AdvancedThemeListPageState extends ConsumerState<AdvancedThemeListPage> {
                 ),
               ],
             ),
-            const SizedBox(height: 10),
+            const SizedBox(height: 8),
             Container(
               width: 74,
               height: 10,
@@ -596,11 +596,11 @@ class _AdvancedThemeListPageState extends ConsumerState<AdvancedThemeListPage> {
                 borderRadius: BorderRadius.circular(999),
               ),
             ),
-            const SizedBox(height: 10),
+            const SizedBox(height: 8),
             Expanded(
               child: Container(
                 width: double.infinity,
-                padding: const EdgeInsets.all(10),
+                padding: const EdgeInsets.all(8),
                 decoration: BoxDecoration(
                   color: cardColor.withValues(alpha: 0.96),
                   borderRadius: BorderRadius.circular(14),
@@ -610,6 +610,7 @@ class _AdvancedThemeListPageState extends ConsumerState<AdvancedThemeListPage> {
                 ),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisAlignment: MainAxisAlignment.center,
                   children: [
                     Container(
                       width: 64,
@@ -619,7 +620,7 @@ class _AdvancedThemeListPageState extends ConsumerState<AdvancedThemeListPage> {
                         borderRadius: BorderRadius.circular(999),
                       ),
                     ),
-                    const SizedBox(height: 8),
+                    const SizedBox(height: 6),
                     Container(
                       width: 96,
                       height: 6,

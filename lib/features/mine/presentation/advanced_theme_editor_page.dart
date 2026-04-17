@@ -317,7 +317,7 @@ class _AdvancedThemeEditorPageState
   }
 
   Future<void> _pickWallpaperFromBackgroundLibrary() async {
-    if (_backgroundLibraryPaths.isEmpty || _isSaving) {
+    if (_isSaving) {
       return;
     }
     String? selectedPath;
@@ -342,66 +342,121 @@ class _AdvancedThemeEditorPageState
                     ),
                   ),
                   const SizedBox(height: 10),
-                  SizedBox(
-                    height: 116,
-                    child: ListView.separated(
-                      scrollDirection: Axis.horizontal,
-                      itemCount: _backgroundLibraryPaths.length,
-                      separatorBuilder: (_, __) => const SizedBox(width: 8),
-                      itemBuilder: (context, index) {
-                        final path = _backgroundLibraryPaths[index];
-                        final selected = path == selectedPath;
-                        return InkWell(
-                          borderRadius: BorderRadius.circular(12),
-                          onTap: () {
-                            setSheetState(() {
-                              selectedPath = path;
-                            });
-                          },
-                          child: Stack(
-                            children: [
-                              Container(
-                                width: 88,
-                                decoration: BoxDecoration(
-                                  borderRadius: BorderRadius.circular(12),
-                                  border: Border.all(
-                                    color:
-                                        selected
-                                            ? colorScheme.primary
-                                            : colorScheme.outlineVariant
-                                                .withValues(alpha: 0.45),
-                                    width: selected ? 2 : 1,
-                                  ),
-                                  image: DecorationImage(
-                                    image: FileImage(File(path)),
-                                    fit: BoxFit.cover,
-                                  ),
-                                ),
-                              ),
-                              if (selected)
-                                Positioned(
-                                  top: 8,
-                                  right: 8,
-                                  child: Container(
-                                    width: 24,
-                                    height: 24,
-                                    decoration: BoxDecoration(
-                                      color: colorScheme.primary,
-                                      shape: BoxShape.circle,
-                                    ),
-                                    child: const Icon(
-                                      Icons.check_rounded,
-                                      size: 16,
-                                      color: Colors.white,
-                                    ),
-                                  ),
-                                ),
-                            ],
+                  if (_backgroundLibraryPaths.isEmpty)
+                    Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.fromLTRB(12, 18, 12, 18),
+                      decoration: BoxDecoration(
+                        color: colorScheme.surfaceContainerLow,
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(
+                          color: colorScheme.outlineVariant.withValues(
+                            alpha: 0.4,
                           ),
-                        );
-                      },
+                        ),
+                      ),
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(
+                            Icons.wallpaper_outlined,
+                            color: colorScheme.onSurfaceVariant,
+                          ),
+                          const SizedBox(height: 8),
+                          Text(
+                            '还没有背景素材',
+                            style: Theme.of(context).textTheme.labelLarge
+                                ?.copyWith(fontWeight: FontWeight.w700),
+                          ),
+                          const SizedBox(height: 4),
+                          Text(
+                            '先去背景页添加图片，再回来选择。',
+                            textAlign: TextAlign.center,
+                            style: Theme.of(context).textTheme.bodySmall
+                                ?.copyWith(color: colorScheme.onSurfaceVariant),
+                          ),
+                        ],
+                      ),
+                    )
+                  else
+                    Flexible(
+                      child: LayoutBuilder(
+                        builder: (context, constraints) {
+                          const spacing = 8.0;
+                          final columns = AppLayout.optionGridColumnsForWidth(
+                            constraints.maxWidth,
+                          ).clamp(3, 5);
+                          final itemWidth =
+                              (constraints.maxWidth -
+                                  ((columns - 1) * spacing)) /
+                              columns;
+                          return SingleChildScrollView(
+                            child: Wrap(
+                              spacing: spacing,
+                              runSpacing: spacing,
+                              children: _backgroundLibraryPaths
+                                  .map((path) {
+                                    final selected = path == selectedPath;
+                                    return InkWell(
+                                      borderRadius: BorderRadius.circular(12),
+                                      onTap: () {
+                                        setSheetState(() {
+                                          selectedPath = path;
+                                        });
+                                      },
+                                      child: Stack(
+                                        children: [
+                                          Container(
+                                            width: itemWidth,
+                                            height: itemWidth * 1.28,
+                                            decoration: BoxDecoration(
+                                              borderRadius:
+                                                  BorderRadius.circular(12),
+                                              border: Border.all(
+                                                color:
+                                                    selected
+                                                        ? colorScheme.primary
+                                                        : colorScheme
+                                                            .outlineVariant
+                                                            .withValues(
+                                                              alpha: 0.45,
+                                                            ),
+                                                width: selected ? 2 : 1,
+                                              ),
+                                              image: DecorationImage(
+                                                image: FileImage(File(path)),
+                                                fit: BoxFit.cover,
+                                              ),
+                                            ),
+                                          ),
+                                          if (selected)
+                                            Positioned(
+                                              top: 8,
+                                              right: 8,
+                                              child: Container(
+                                                width: 24,
+                                                height: 24,
+                                                decoration: BoxDecoration(
+                                                  color: colorScheme.primary,
+                                                  shape: BoxShape.circle,
+                                                ),
+                                                child: const Icon(
+                                                  Icons.check_rounded,
+                                                  size: 16,
+                                                  color: Colors.white,
+                                                ),
+                                              ),
+                                            ),
+                                        ],
+                                      ),
+                                    );
+                                  })
+                                  .toList(growable: false),
+                            ),
+                          );
+                        },
+                      ),
                     ),
-                  ),
                   const SizedBox(height: 12),
                   Row(
                     children: [
@@ -410,6 +465,17 @@ class _AdvancedThemeEditorPageState
                         child: const Text('取消'),
                       ),
                       const Spacer(),
+                      TextButton(
+                        onPressed:
+                            () => unawaited(
+                              _openRouteFromSheet(
+                                context,
+                                '/appearance?section=background',
+                              ),
+                            ),
+                        child: const Text('去管理'),
+                      ),
+                      const SizedBox(width: 8),
                       FilledButton(
                         onPressed:
                             selectedPath == null
@@ -478,6 +544,15 @@ class _AdvancedThemeEditorPageState
         });
       }
     }
+  }
+
+  Future<void> _openRouteFromSheet(
+    BuildContext sheetContext,
+    String route,
+  ) async {
+    Navigator.of(sheetContext).pop();
+    await context.push(route);
+    await _loadAppearanceLinks();
   }
 
   Future<void> _pickBottomNavGallery() async {
@@ -590,14 +665,6 @@ class _AdvancedThemeEditorPageState
     if (_isSaving) {
       return;
     }
-    if (_coverGalleries.isEmpty) {
-      if (!mounted) {
-        return;
-      }
-      _showMessage('请先在封面图集里准备素材');
-      unawaited(context.push('/appearance?section=cover'));
-      return;
-    }
 
     String? selectedId = _draft?.coverGalleryId?.trim();
     final result = await showModalBottomSheet<_CoverGallerySelectionResult>(
@@ -621,79 +688,115 @@ class _AdvancedThemeEditorPageState
                     ),
                   ),
                   const SizedBox(height: 10),
-                  Flexible(
-                    child: ListView.separated(
-                      shrinkWrap: true,
-                      itemCount: _coverGalleries.length,
-                      separatorBuilder: (_, __) => const Divider(height: 1),
-                      itemBuilder: (context, index) {
-                        final gallery = _coverGalleries[index];
-                        final selected = gallery.id == selectedId;
-                        final previewPath = _firstExistingGalleryImagePath(
-                          gallery,
-                        );
-                        final imageCount = gallery.imagePaths.length;
-                        return InkWell(
-                          borderRadius: BorderRadius.circular(12),
-                          onTap: () {
-                            setSheetState(() {
-                              selectedId = gallery.id;
-                            });
-                          },
-                          child: Padding(
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 4,
-                              vertical: 12,
-                            ),
-                            child: Row(
-                              children: [
-                                _buildGalleryPreviewThumb(
-                                  context,
-                                  previewPath: previewPath,
-                                  title: gallery.name,
-                                ),
-                                const SizedBox(width: 12),
-                                Expanded(
-                                  child: Column(
-                                    crossAxisAlignment:
-                                        CrossAxisAlignment.start,
-                                    children: [
-                                      Text(
-                                        gallery.name,
-                                        style: Theme.of(context)
-                                            .textTheme
-                                            .labelLarge
-                                            ?.copyWith(
-                                              fontWeight: FontWeight.w700,
-                                            ),
-                                      ),
-                                      const SizedBox(height: 2),
-                                      Text(
-                                        imageCount <= 0
-                                            ? '暂无图片'
-                                            : '$imageCount 张图片',
-                                        style: Theme.of(
-                                          context,
-                                        ).textTheme.bodySmall?.copyWith(
-                                          color: colorScheme.onSurfaceVariant,
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                ),
-                                if (selected)
-                                  Icon(
-                                    Icons.check_rounded,
-                                    color: colorScheme.primary,
-                                    size: 18,
-                                  ),
-                              ],
-                            ),
+                  if (_coverGalleries.isEmpty)
+                    Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.fromLTRB(12, 18, 12, 18),
+                      decoration: BoxDecoration(
+                        color: colorScheme.surfaceContainerLow,
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(
+                          color: colorScheme.outlineVariant.withValues(
+                            alpha: 0.4,
                           ),
-                        );
-                      },
+                        ),
+                      ),
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(
+                            Icons.photo_library_outlined,
+                            color: colorScheme.onSurfaceVariant,
+                          ),
+                          const SizedBox(height: 8),
+                          Text(
+                            '还没有封面图集',
+                            style: Theme.of(context).textTheme.labelLarge
+                                ?.copyWith(fontWeight: FontWeight.w700),
+                          ),
+                          const SizedBox(height: 4),
+                          Text(
+                            '先去封面图集页准备素材，再回来绑定。',
+                            textAlign: TextAlign.center,
+                            style: Theme.of(context).textTheme.bodySmall
+                                ?.copyWith(color: colorScheme.onSurfaceVariant),
+                          ),
+                        ],
+                      ),
+                    )
+                  else
+                    Flexible(
+                      child: ListView.separated(
+                        shrinkWrap: true,
+                        itemCount: _coverGalleries.length,
+                        separatorBuilder: (_, __) => const Divider(height: 1),
+                        itemBuilder: (context, index) {
+                          final gallery = _coverGalleries[index];
+                          final selected = gallery.id == selectedId;
+                          final previewPath = _firstExistingGalleryImagePath(
+                            gallery,
+                          );
+                          final imageCount = gallery.imagePaths.length;
+                          return InkWell(
+                            borderRadius: BorderRadius.circular(12),
+                            onTap: () {
+                              setSheetState(() {
+                                selectedId = gallery.id;
+                              });
+                            },
+                            child: Padding(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 4,
+                                vertical: 12,
+                              ),
+                              child: Row(
+                                children: [
+                                  _buildGalleryPreviewThumb(
+                                    context,
+                                    previewPath: previewPath,
+                                    title: gallery.name,
+                                  ),
+                                  const SizedBox(width: 12),
+                                  Expanded(
+                                    child: Column(
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.start,
+                                      children: [
+                                        Text(
+                                          gallery.name,
+                                          style: Theme.of(
+                                            context,
+                                          ).textTheme.labelLarge?.copyWith(
+                                            fontWeight: FontWeight.w700,
+                                          ),
+                                        ),
+                                        const SizedBox(height: 2),
+                                        Text(
+                                          imageCount <= 0
+                                              ? '暂无图片'
+                                              : '$imageCount 张图片',
+                                          style: Theme.of(
+                                            context,
+                                          ).textTheme.bodySmall?.copyWith(
+                                            color: colorScheme.onSurfaceVariant,
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                  if (selected)
+                                    Icon(
+                                      Icons.check_rounded,
+                                      color: colorScheme.primary,
+                                      size: 18,
+                                    ),
+                                ],
+                              ),
+                            ),
+                          );
+                        },
+                      ),
                     ),
-                  ),
                   const SizedBox(height: 10),
                   Row(
                     children: [
@@ -702,6 +805,14 @@ class _AdvancedThemeEditorPageState
                         child: const Text('取消'),
                       ),
                       const Spacer(),
+                      TextButton(
+                        onPressed:
+                            () => unawaited(
+                              _openRouteFromSheet(context, '/cover-galleries'),
+                            ),
+                        child: const Text('去管理'),
+                      ),
+                      const SizedBox(width: 8),
                       TextButton(
                         onPressed:
                             selectedId == null
@@ -1318,13 +1429,7 @@ class _AdvancedThemeEditorPageState
             children: [
               InkWell(
                 borderRadius: BorderRadius.circular(12),
-                onTap:
-                    _isSaving
-                        ? null
-                        : (_backgroundLibraryPaths.isNotEmpty
-                            ? _pickWallpaperFromBackgroundLibrary
-                            : () =>
-                                context.push('/appearance?section=background')),
+                onTap: _isSaving ? null : _pickWallpaperFromBackgroundLibrary,
                 child: Container(
                   height: 108,
                   width: double.infinity,
@@ -1368,9 +1473,7 @@ class _AdvancedThemeEditorPageState
                               ),
                               const SizedBox(height: 8),
                               Text(
-                                _backgroundLibraryPaths.isNotEmpty
-                                    ? '点击 + 选择背景'
-                                    : '先去背景页准备图片素材',
+                                '点击选择背景',
                                 style: Theme.of(
                                   context,
                                 ).textTheme.bodySmall?.copyWith(
@@ -1409,47 +1512,6 @@ class _AdvancedThemeEditorPageState
                   ),
                 ),
               ),
-              if (_backgroundLibraryPaths.isNotEmpty) ...[
-                const SizedBox(height: 8),
-                SizedBox(
-                  height: 56,
-                  child: ListView.separated(
-                    scrollDirection: Axis.horizontal,
-                    itemCount: _backgroundLibraryPaths.length.clamp(0, 8),
-                    separatorBuilder: (_, __) => const SizedBox(width: 8),
-                    itemBuilder: (context, index) {
-                      final path = _backgroundLibraryPaths[index];
-                      return InkWell(
-                        borderRadius: BorderRadius.circular(10),
-                        onTap:
-                            _isSaving
-                                ? null
-                                : () => _applyPickedWallpaper(
-                                  PickedImageData(
-                                    bytes: File(path).readAsBytesSync(),
-                                    name: File(path).uri.pathSegments.last,
-                                  ),
-                                ),
-                        child: Container(
-                          width: 48,
-                          decoration: BoxDecoration(
-                            borderRadius: BorderRadius.circular(10),
-                            border: Border.all(
-                              color: colorScheme.outlineVariant.withValues(
-                                alpha: 0.4,
-                              ),
-                            ),
-                            image: DecorationImage(
-                              image: FileImage(File(path)),
-                              fit: BoxFit.cover,
-                            ),
-                          ),
-                        ),
-                      );
-                    },
-                  ),
-                ),
-              ],
               const SizedBox(height: 10),
               ..._buildColorRows(context, const [
                 _ThemeColorSlot.wallpaperOverlay,
@@ -1569,11 +1631,7 @@ class _AdvancedThemeEditorPageState
             ),
             if (trailing != null) ...[const SizedBox(width: 10), trailing],
             const SizedBox(width: 6),
-            Icon(
-              trailingIcon,
-              size: 18,
-              color: colorScheme.onSurfaceVariant,
-            ),
+            Icon(trailingIcon, size: 18, color: colorScheme.onSurfaceVariant),
           ],
         ),
       ),
@@ -1769,7 +1827,7 @@ class _AdvancedThemeEditorPageState
           context,
           backgroundColor: surfaceColor,
           child: Container(
-            height: 164,
+            constraints: const BoxConstraints(minHeight: 180),
             decoration: BoxDecoration(
               color: backgroundColor,
               borderRadius: BorderRadius.circular(14),
@@ -1805,135 +1863,134 @@ class _AdvancedThemeEditorPageState
                       borderRadius: BorderRadius.circular(999),
                     ),
                   ),
-                  const SizedBox(height: 12),
-                  Expanded(
-                    child: Container(
-                      width: double.infinity,
-                      padding: const EdgeInsets.all(12),
-                      decoration: BoxDecoration(
-                        color: cardColor.withValues(alpha: 0.96),
-                        borderRadius: BorderRadius.circular(14),
-                        border: Border.all(
-                          color: cardBorderColor.withValues(alpha: 0.72),
+                  const SizedBox(height: 10),
+                  Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: cardColor.withValues(alpha: 0.96),
+                      borderRadius: BorderRadius.circular(14),
+                      border: Border.all(
+                        color: cardBorderColor.withValues(alpha: 0.72),
+                      ),
+                      boxShadow: [
+                        BoxShadow(
+                          color: primaryColor.withValues(alpha: 0.08),
+                          blurRadius: 14,
+                          offset: const Offset(0, 6),
                         ),
-                        boxShadow: [
-                          BoxShadow(
-                            color: primaryColor.withValues(alpha: 0.08),
-                            blurRadius: 14,
-                            offset: const Offset(0, 6),
+                      ],
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Container(
+                          width: 80,
+                          height: 9,
+                          decoration: BoxDecoration(
+                            color: textPrimaryColor.withValues(alpha: 0.88),
+                            borderRadius: BorderRadius.circular(999),
                           ),
-                        ],
-                      ),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Container(
-                            width: 80,
-                            height: 9,
-                            decoration: BoxDecoration(
-                              color: textPrimaryColor.withValues(alpha: 0.88),
-                              borderRadius: BorderRadius.circular(999),
-                            ),
+                        ),
+                        const SizedBox(height: 6),
+                        Container(
+                          width: 122,
+                          height: 6,
+                          decoration: BoxDecoration(
+                            color: textSecondaryColor.withValues(alpha: 0.74),
+                            borderRadius: BorderRadius.circular(999),
                           ),
-                          const SizedBox(height: 8),
-                          Container(
-                            width: 122,
-                            height: 6,
-                            decoration: BoxDecoration(
-                              color: textSecondaryColor.withValues(alpha: 0.74),
-                              borderRadius: BorderRadius.circular(999),
-                            ),
-                          ),
-                          const SizedBox(height: 8),
-                          Wrap(
-                            spacing: 6,
-                            runSpacing: 6,
-                            children: [
-                              _buildPreviewTokenChip(
-                                context,
-                                label: '高层级',
-                                backgroundColor: elevatedSurfaceColor,
-                                borderColor: cardBorderColor.withValues(
-                                  alpha: 0.35,
-                                ),
-                                dotColor: primaryColor,
-                                textColor: textPrimaryColor,
+                        ),
+                        const SizedBox(height: 6),
+                        Wrap(
+                          spacing: 6,
+                          runSpacing: 6,
+                          children: [
+                            _buildPreviewTokenChip(
+                              context,
+                              label: '高层级',
+                              backgroundColor: elevatedSurfaceColor,
+                              borderColor: cardBorderColor.withValues(
+                                alpha: 0.35,
                               ),
-                              _buildPreviewTokenChip(
-                                context,
-                                label: '提示',
-                                backgroundColor: noticeSurfaceColor,
-                                borderColor: noticeAccentColor.withValues(
-                                  alpha: 0.45,
-                                ),
-                                dotColor: noticeAccentColor,
-                                textColor: textPrimaryColor,
+                              dotColor: primaryColor,
+                              textColor: textPrimaryColor,
+                            ),
+                            _buildPreviewTokenChip(
+                              context,
+                              label: '提示',
+                              backgroundColor: noticeSurfaceColor,
+                              borderColor: noticeAccentColor.withValues(
+                                alpha: 0.45,
                               ),
-                              Container(
-                                padding: const EdgeInsets.symmetric(
-                                  horizontal: 8,
-                                  vertical: 5,
-                                ),
-                                decoration: BoxDecoration(
-                                  color: iconBackgroundColor,
-                                  borderRadius: BorderRadius.circular(999),
-                                ),
-                                child: Row(
-                                  mainAxisSize: MainAxisSize.min,
-                                  children: [
-                                    Icon(
-                                      Icons.palette_outlined,
-                                      size: 12,
+                              dotColor: noticeAccentColor,
+                              textColor: textPrimaryColor,
+                            ),
+                            Container(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 8,
+                                vertical: 5,
+                              ),
+                              decoration: BoxDecoration(
+                                color: iconBackgroundColor,
+                                borderRadius: BorderRadius.circular(999),
+                              ),
+                              child: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Icon(
+                                    Icons.palette_outlined,
+                                    size: 12,
+                                    color: textPrimaryColor,
+                                  ),
+                                  const SizedBox(width: 4),
+                                  Text(
+                                    '图标',
+                                    style: Theme.of(
+                                      context,
+                                    ).textTheme.labelSmall?.copyWith(
                                       color: textPrimaryColor,
+                                      fontWeight: FontWeight.w700,
                                     ),
-                                    const SizedBox(width: 4),
-                                    Text(
-                                      '图标',
-                                      style: Theme.of(
-                                        context,
-                                      ).textTheme.labelSmall?.copyWith(
-                                        color: textPrimaryColor,
-                                        fontWeight: FontWeight.w700,
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                              ),
-                            ],
-                          ),
-                          const Spacer(),
-                          Container(
-                            width: 78,
-                            height: 28,
-                            decoration: BoxDecoration(
-                              color: primaryColor,
-                              borderRadius: BorderRadius.circular(999),
-                            ),
-                            alignment: Alignment.center,
-                            child: Text(
-                              '按钮',
-                              style: Theme.of(
-                                context,
-                              ).textTheme.labelMedium?.copyWith(
-                                color: _resolvedColor(
-                                  _parseHexColor(
-                                    _currentControllers[_ThemeColorSlot
-                                            .buttonText]!
-                                        .text
-                                        .trim(),
                                   ),
-                                  _fallbackColorForSlot(
-                                    context,
-                                    _selectedMode,
-                                    _ThemeColorSlot.buttonText,
-                                  ),
-                                ),
-                                fontWeight: FontWeight.w700,
+                                ],
                               ),
                             ),
+                          ],
+                        ),
+                        const SizedBox(height: 12),
+                        Container(
+                          width: 78,
+                          height: 26,
+                          decoration: BoxDecoration(
+                            color: primaryColor,
+                            borderRadius: BorderRadius.circular(999),
                           ),
-                        ],
-                      ),
+                          alignment: Alignment.center,
+                          child: Text(
+                            '按钮',
+                            style: Theme.of(
+                              context,
+                            ).textTheme.labelMedium?.copyWith(
+                              color: _resolvedColor(
+                                _parseHexColor(
+                                  _currentControllers[_ThemeColorSlot
+                                          .buttonText]!
+                                      .text
+                                      .trim(),
+                                ),
+                                _fallbackColorForSlot(
+                                  context,
+                                  _selectedMode,
+                                  _ThemeColorSlot.buttonText,
+                                ),
+                              ),
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
+                        ),
+                      ],
                     ),
                   ),
                 ],
@@ -1997,9 +2054,7 @@ class _AdvancedThemeEditorPageState
               keyboardType: TextInputType.text,
               textCapitalization: TextCapitalization.characters,
               inputFormatters: [
-                FilteringTextInputFormatter.allow(
-                  RegExp(r'[#0-9a-fA-F]'),
-                ),
+                FilteringTextInputFormatter.allow(RegExp(r'[#0-9a-fA-F]')),
               ],
               onChanged: (_) => setState(() {}),
               decoration: InputDecoration(
@@ -2025,7 +2080,10 @@ class _AdvancedThemeEditorPageState
                 ),
                 focusedBorder: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(10),
-                  borderSide: BorderSide(color: colorScheme.primary, width: 1.2),
+                  borderSide: BorderSide(
+                    color: colorScheme.primary,
+                    width: 1.2,
+                  ),
                 ),
                 suffixIcon: InkWell(
                   borderRadius: BorderRadius.circular(8),
