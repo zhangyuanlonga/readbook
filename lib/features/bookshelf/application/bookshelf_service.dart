@@ -60,12 +60,22 @@ class BookshelfService {
       'bookshelf.grid.showLatestChapter';
   static const String _gridShowProgressBarKey =
       'bookshelf.grid.showProgressBar';
+  static const String _gridAlwaysShowSearchBarKey =
+      'bookshelf.grid.search.alwaysVisible';
+  static const String _gridPinSearchBarKey = 'bookshelf.grid.search.pinned';
+  static const String _gridQuickFilterContentKey =
+      'bookshelf.grid.search.quickFilterContent';
   static const String _listShowTitleKey = 'bookshelf.list.showTitle';
   static const String _listShowAuthorKey = 'bookshelf.list.showAuthor';
   static const String _listShowLatestChapterKey =
       'bookshelf.list.showLatestChapter';
   static const String _listShowProgressBarKey =
       'bookshelf.list.showProgressBar';
+  static const String _listAlwaysShowSearchBarKey =
+      'bookshelf.list.search.alwaysVisible';
+  static const String _listPinSearchBarKey = 'bookshelf.list.search.pinned';
+  static const String _listQuickFilterContentKey =
+      'bookshelf.list.search.quickFilterContent';
 
   static const String defaultSortMode = 'default';
   static const String recentReadSortMode = 'recentRead';
@@ -81,10 +91,16 @@ class BookshelfService {
   static const bool defaultGridShowAuthor = true;
   static const bool defaultGridShowLatestChapter = true;
   static const bool defaultGridShowProgressBar = true;
+  static const bool defaultGridAlwaysShowSearchBar = true;
+  static const bool defaultGridPinSearchBar = false;
+  static const String defaultGridQuickFilterContent = 'none';
   static const bool defaultListShowTitle = true;
   static const bool defaultListShowAuthor = true;
   static const bool defaultListShowLatestChapter = true;
   static const bool defaultListShowProgressBar = true;
+  static const bool defaultListAlwaysShowSearchBar = true;
+  static const bool defaultListPinSearchBar = false;
+  static const String defaultListQuickFilterContent = 'none';
   static final StreamController<BookshelfTaxonomyChange>
   _taxonomyChangeController =
       StreamController<BookshelfTaxonomyChange>.broadcast();
@@ -335,6 +351,46 @@ class BookshelfService {
     await prefs.setBool(_gridShowProgressBarKey, visible);
   }
 
+  Future<bool> loadGridAlwaysShowSearchBar() async {
+    final prefs = await _preferencesFuture;
+    return prefs.getBool(_gridAlwaysShowSearchBarKey) ??
+        defaultGridAlwaysShowSearchBar;
+  }
+
+  Future<void> saveGridAlwaysShowSearchBar(bool visible) async {
+    final prefs = await _preferencesFuture;
+    await prefs.setBool(_gridAlwaysShowSearchBarKey, visible);
+  }
+
+  Future<bool> loadGridPinSearchBar() async {
+    final prefs = await _preferencesFuture;
+    return prefs.getBool(_gridPinSearchBarKey) ?? defaultGridPinSearchBar;
+  }
+
+  Future<void> saveGridPinSearchBar(bool pinned) async {
+    final prefs = await _preferencesFuture;
+    await prefs.setBool(_gridPinSearchBarKey, pinned);
+  }
+
+  Future<String> loadGridQuickFilterContent() async {
+    final prefs = await _preferencesFuture;
+    return _normalizeSearchQuickFilterContent(
+      prefs.getString(_gridQuickFilterContentKey),
+      fallback: defaultGridQuickFilterContent,
+    );
+  }
+
+  Future<void> saveGridQuickFilterContent(String value) async {
+    final prefs = await _preferencesFuture;
+    await prefs.setString(
+      _gridQuickFilterContentKey,
+      _normalizeSearchQuickFilterContent(
+        value,
+        fallback: defaultGridQuickFilterContent,
+      ),
+    );
+  }
+
   Future<bool> loadListShowTitle() async {
     final prefs = await _preferencesFuture;
     return prefs.getBool(_listShowTitleKey) ?? defaultListShowTitle;
@@ -374,6 +430,46 @@ class BookshelfService {
   Future<void> saveListShowProgressBar(bool visible) async {
     final prefs = await _preferencesFuture;
     await prefs.setBool(_listShowProgressBarKey, visible);
+  }
+
+  Future<bool> loadListAlwaysShowSearchBar() async {
+    final prefs = await _preferencesFuture;
+    return prefs.getBool(_listAlwaysShowSearchBarKey) ??
+        defaultListAlwaysShowSearchBar;
+  }
+
+  Future<void> saveListAlwaysShowSearchBar(bool visible) async {
+    final prefs = await _preferencesFuture;
+    await prefs.setBool(_listAlwaysShowSearchBarKey, visible);
+  }
+
+  Future<bool> loadListPinSearchBar() async {
+    final prefs = await _preferencesFuture;
+    return prefs.getBool(_listPinSearchBarKey) ?? defaultListPinSearchBar;
+  }
+
+  Future<void> saveListPinSearchBar(bool pinned) async {
+    final prefs = await _preferencesFuture;
+    await prefs.setBool(_listPinSearchBarKey, pinned);
+  }
+
+  Future<String> loadListQuickFilterContent() async {
+    final prefs = await _preferencesFuture;
+    return _normalizeSearchQuickFilterContent(
+      prefs.getString(_listQuickFilterContentKey),
+      fallback: defaultListQuickFilterContent,
+    );
+  }
+
+  Future<void> saveListQuickFilterContent(String value) async {
+    final prefs = await _preferencesFuture;
+    await prefs.setString(
+      _listQuickFilterContentKey,
+      _normalizeSearchQuickFilterContent(
+        value,
+        fallback: defaultListQuickFilterContent,
+      ),
+    );
   }
 
   Future<String> loadSortMode() async {
@@ -873,6 +969,18 @@ class BookshelfService {
 
   static int _normalizeGridColumnCount(int? value) {
     return (value ?? defaultGridColumnCount).clamp(2, 6);
+  }
+
+  static String _normalizeSearchQuickFilterContent(
+    String? value, {
+    required String fallback,
+  }) {
+    return switch (value?.trim()) {
+      'tags' => 'tags',
+      'categories' => 'categories',
+      'none' => 'none',
+      _ => fallback,
+    };
   }
 
   static double _normalizeGridSpacing(

@@ -12,6 +12,7 @@ import 'package:path_provider/path_provider.dart';
 import '../../../app/layout/app_spacing.dart';
 import '../../../app/navigation/mobile_bottom_navigation_inset.dart';
 import '../../../app/navigation/app_navigation_style_provider.dart';
+import '../../../app/theme/app_advanced_theme_tokens.dart';
 import '../../../app/widgets/disk_cached_cover_image.dart';
 import '../../../app/widgets/text_cover_placeholder.dart';
 import '../../../core/errors/app_exception.dart';
@@ -33,6 +34,7 @@ import '../../book/application/book_detail_service.dart';
 import '../../book/presentation/book_detail_route.dart';
 import '../../announcement/application/announcement_service.dart';
 import '../../announcement/application/announcement_read_state_service.dart';
+import '../../mine/application/advanced_theme_provider.dart';
 import '../../source/application/external_source_import_bridge.dart';
 import '../../source/application/source_runtime_facade.dart';
 import '../../source/application/source_runtime_task_conflict_service.dart';
@@ -54,15 +56,7 @@ enum _BookshelfSheetAction {
 
 enum _BookshelfFilter { all, local, novel, manga, custom }
 
-enum _TagManageSheetAction { rename, delete }
-
-enum _BookshelfMoreAction {
-  selectBooks,
-  sortBooks,
-  manageViews,
-  settings,
-  importLocal,
-}
+enum _BookshelfMoreAction { selectBooks, sortBooks, settings, importLocal }
 
 enum _BookshelfSortMode {
   defaultOrder,
@@ -76,6 +70,8 @@ enum _BookshelfSortMode {
 enum _BookshelfViewKind { base, tag, category }
 
 enum _BookshelfCategorySheetAction { rename, delete }
+
+enum _BookshelfSearchQuickFilterContent { none, tags, categories }
 
 List<String> mergeBookshelfTaxonomyNames({
   required Map<String, int> counts,
@@ -188,6 +184,9 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
   final LocalBookIndexService _localBookIndexService = LocalBookIndexService();
   final BookDetailService _bookDetailService = BookDetailService();
   final ImageSelectionService _imageSelectionService = ImageSelectionService();
+  final TextEditingController _bookshelfSearchController =
+      TextEditingController();
+  final FocusNode _bookshelfSearchFocusNode = FocusNode();
   final LocalBookImportService _localBookImportService =
       LocalBookImportService();
   final LocalBookRepositoryImpl _localBookRepository = LocalBookRepositoryImpl(
@@ -220,7 +219,6 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
   Map<String, int> _categoryBookCountCache = const <String, int>{};
   List<String> _userTagsCache = const <String>[];
   List<String> _userCategoriesCache = const <String>[];
-  List<_BookshelfFilter> _orderedBaseFiltersCache = _kDefaultBaseFilters;
   bool _useGridView = false;
   _BookshelfSortMode _sortMode = _BookshelfSortMode.defaultOrder;
   bool _gridAdaptiveColumns = BookshelfService.defaultGridAdaptiveColumns;
@@ -231,13 +229,25 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
   bool _gridShowAuthor = BookshelfService.defaultGridShowAuthor;
   bool _gridShowLatestChapter = BookshelfService.defaultGridShowLatestChapter;
   bool _gridShowProgressBar = BookshelfService.defaultGridShowProgressBar;
+  bool _gridAlwaysShowSearchBar =
+      BookshelfService.defaultGridAlwaysShowSearchBar;
+  bool _gridPinSearchBar = BookshelfService.defaultGridPinSearchBar;
+  _BookshelfSearchQuickFilterContent _gridQuickFilterContent =
+      _BookshelfSearchQuickFilterContent.none;
   bool _listShowTitle = BookshelfService.defaultListShowTitle;
   bool _listShowAuthor = BookshelfService.defaultListShowAuthor;
   bool _listShowLatestChapter = BookshelfService.defaultListShowLatestChapter;
   bool _listShowProgressBar = BookshelfService.defaultListShowProgressBar;
+  bool _listAlwaysShowSearchBar =
+      BookshelfService.defaultListAlwaysShowSearchBar;
+  bool _listPinSearchBar = BookshelfService.defaultListPinSearchBar;
+  _BookshelfSearchQuickFilterContent _listQuickFilterContent =
+      _BookshelfSearchQuickFilterContent.none;
   _BookshelfViewSelection _activeView = const _BookshelfViewSelection.base(
     _BookshelfFilter.all,
   );
+  String _bookshelfSearchKeyword = '';
+  bool _isBookshelfSearchExpanded = false;
   String? _openingBookId;
   String? _loadErrorText;
   bool _isConsumingExternalImportPayloads = false;
@@ -291,6 +301,7 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
   @override
   void initState() {
     super.initState();
+    _bookshelfSearchFocusNode.addListener(_handleBookshelfSearchFocusChanged);
     _incomingImportSub = ExternalImportBridge.instance.payloadStream.listen((
       payload,
     ) {
@@ -341,13 +352,19 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
     _routeInformationProvider = null;
     _incomingImportSub?.cancel();
     _taxonomyChangeSub?.cancel();
+    _bookshelfSearchFocusNode.removeListener(
+      _handleBookshelfSearchFocusChanged,
+    );
+    _bookshelfSearchFocusNode.dispose();
+    _bookshelfSearchController.dispose();
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
     super.build(context);
-    final colorScheme = Theme.of(context).colorScheme;
+    ref.watch(activeAdvancedThemeProvider);
+    final palette = _resolvedPalette(context);
     final horizontal = AppSpacing.pageHorizontal(context);
     final platform = Theme.of(context).platform;
     final effectiveNavigationStyle = resolveAppNavigationStyle(
@@ -457,17 +474,6 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
                         ],
                       ),
                     ),
-                    PopupMenuItem<_BookshelfMoreAction>(
-                      value: _BookshelfMoreAction.manageViews,
-                      enabled: !_isLoading && _books.isNotEmpty,
-                      child: const Row(
-                        children: [
-                          Icon(Icons.view_list_rounded, size: 18),
-                          SizedBox(width: 10),
-                          Text('管理视图'),
-                        ],
-                      ),
-                    ),
                     const PopupMenuItem<_BookshelfMoreAction>(
                       value: _BookshelfMoreAction.settings,
                       child: Row(
@@ -505,26 +511,18 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
               gradient: LinearGradient(
                 begin: Alignment.topCenter,
                 end: Alignment.bottomCenter,
-                colors: [colorScheme.surface, colorScheme.surfaceContainerLow],
+                colors: [palette.backgroundColor, palette.surfaceColor],
               ),
             ),
             child: RefreshIndicator(
               onRefresh: () => _loadBookshelf(force: true),
               child: CustomScrollView(
+                keyboardDismissBehavior:
+                    ScrollViewKeyboardDismissBehavior.onDrag,
                 physics: const AlwaysScrollableScrollPhysics(),
                 slivers: [
                   if (_books.isNotEmpty)
-                    SliverPadding(
-                      padding: EdgeInsets.fromLTRB(
-                        horizontal,
-                        12,
-                        horizontal,
-                        0,
-                      ),
-                      sliver: SliverToBoxAdapter(
-                        child: _buildViewModeEditBar(),
-                      ),
-                    ),
+                    _buildBookshelfSearchSliver(horizontal: horizontal),
                   if (_books.isNotEmpty)
                     SliverPadding(
                       padding: EdgeInsets.fromLTRB(
@@ -584,6 +582,13 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
 
   @override
   bool get wantKeepAlive => true;
+
+  ResolvedAdvancedThemePalette _resolvedPalette(BuildContext context) {
+    return resolveAdvancedThemePalette(
+      Theme.of(context).colorScheme,
+      ref.read(activeAdvancedThemeProvider).valueOrNull,
+    );
+  }
 
   void _handleRouteLocationChanged() {
     final provider = _routeInformationProvider;
@@ -834,7 +839,10 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
   }
 
   Widget _buildEmptyCard() {
-    return BookshelfEmptyCard(onImportLocal: _importLocalBooksFromPicker);
+    return BookshelfEmptyCard(
+      onImportLocal: _importLocalBooksFromPicker,
+      palette: _resolvedPalette(context),
+    );
   }
 
   void _handleMoreAction(_BookshelfMoreAction action) {
@@ -845,9 +853,6 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
       case _BookshelfMoreAction.sortBooks:
         unawaited(_showSortModeSheet());
         break;
-      case _BookshelfMoreAction.manageViews:
-        unawaited(_showFilterSheet());
-        break;
       case _BookshelfMoreAction.settings:
         unawaited(_showBookshelfSettingsSheet());
         break;
@@ -855,6 +860,82 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
         unawaited(_importLocalBooksFromPicker());
         break;
     }
+  }
+
+  void _handleBookshelfSearchFocusChanged() {
+    if (!mounted ||
+        _bookshelfSearchFocusNode.hasFocus ||
+        _hasBookshelfSearchKeyword ||
+        _alwaysShowBookshelfSearchBar ||
+        !_isBookshelfSearchExpanded) {
+      return;
+    }
+    setState(() {
+      _isBookshelfSearchExpanded = false;
+    });
+  }
+
+  bool get _alwaysShowBookshelfSearchBar {
+    return _useGridView ? _gridAlwaysShowSearchBar : _listAlwaysShowSearchBar;
+  }
+
+  bool get _pinBookshelfSearchBar {
+    return _useGridView ? _gridPinSearchBar : _listPinSearchBar;
+  }
+
+  _BookshelfSearchQuickFilterContent get _bookshelfQuickFilterContent {
+    return _useGridView ? _gridQuickFilterContent : _listQuickFilterContent;
+  }
+
+  bool get _shouldShowExpandedBookshelfSearch {
+    return _alwaysShowBookshelfSearchBar ||
+        _hasBookshelfSearchKeyword ||
+        _isBookshelfSearchExpanded;
+  }
+
+  void _expandBookshelfSearch() {
+    if (_shouldShowExpandedBookshelfSearch) {
+      _bookshelfSearchFocusNode.requestFocus();
+      return;
+    }
+    setState(() {
+      _isBookshelfSearchExpanded = true;
+    });
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) {
+        return;
+      }
+      _bookshelfSearchFocusNode.requestFocus();
+    });
+  }
+
+  void _updateBookshelfSearchKeyword(String value) {
+    if (_bookshelfSearchKeyword == value) {
+      return;
+    }
+    setState(() {
+      _bookshelfSearchKeyword = value;
+      if (value.trim().isNotEmpty) {
+        _isBookshelfSearchExpanded = true;
+      }
+    });
+    _syncSelectionWithBooks();
+  }
+
+  void _clearBookshelfSearchKeyword() {
+    if (_bookshelfSearchController.text.isEmpty &&
+        _bookshelfSearchKeyword.isEmpty) {
+      return;
+    }
+    _bookshelfSearchController.clear();
+    _bookshelfSearchFocusNode.unfocus();
+    setState(() {
+      _bookshelfSearchKeyword = '';
+      if (!_alwaysShowBookshelfSearchBar) {
+        _isBookshelfSearchExpanded = false;
+      }
+    });
+    _syncSelectionWithBooks();
   }
 
   Future<void> _showSortModeSheet() async {
@@ -927,10 +1008,16 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
     var draftShowAuthor = _gridShowAuthor;
     var draftShowLatestChapter = _gridShowLatestChapter;
     var draftShowProgressBar = _gridShowProgressBar;
+    var draftGridAlwaysShowSearchBar = _gridAlwaysShowSearchBar;
+    var draftGridPinSearchBar = _gridPinSearchBar;
+    var draftGridQuickFilterContent = _gridQuickFilterContent;
     var draftListShowTitle = _listShowTitle;
     var draftListShowAuthor = _listShowAuthor;
     var draftListShowLatestChapter = _listShowLatestChapter;
     var draftListShowProgressBar = _listShowProgressBar;
+    var draftListAlwaysShowSearchBar = _listAlwaysShowSearchBar;
+    var draftListPinSearchBar = _listPinSearchBar;
+    var draftListQuickFilterContent = _listQuickFilterContent;
 
     await _showBookshelfBottomSheet<void>(
       isScrollControlled: true,
@@ -963,6 +1050,17 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
                   await _bookshelfService.saveGridShowProgressBar(
                     draftShowProgressBar,
                   );
+                  await _bookshelfService.saveGridAlwaysShowSearchBar(
+                    draftGridAlwaysShowSearchBar,
+                  );
+                  await _bookshelfService.saveGridPinSearchBar(
+                    draftGridPinSearchBar,
+                  );
+                  await _bookshelfService.saveGridQuickFilterContent(
+                    _searchQuickFilterContentStorageValue(
+                      draftGridQuickFilterContent,
+                    ),
+                  );
                 } catch (_) {
                   if (!mounted) {
                     return;
@@ -982,6 +1080,17 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
                   );
                   await _bookshelfService.saveListShowProgressBar(
                     draftListShowProgressBar,
+                  );
+                  await _bookshelfService.saveListAlwaysShowSearchBar(
+                    draftListAlwaysShowSearchBar,
+                  );
+                  await _bookshelfService.saveListPinSearchBar(
+                    draftListPinSearchBar,
+                  );
+                  await _bookshelfService.saveListQuickFilterContent(
+                    _searchQuickFilterContentStorageValue(
+                      draftListQuickFilterContent,
+                    ),
                   );
                 } catch (_) {
                   if (!mounted) {
@@ -1010,7 +1119,7 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
 
               Widget buildSectionTitle(String title, String subtitle) {
                 return Padding(
-                  padding: const EdgeInsets.fromLTRB(12, 8, 12, 8),
+                  padding: const EdgeInsets.fromLTRB(12, 7, 12, 7),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
@@ -1018,13 +1127,15 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
                         title,
                         style: theme.textTheme.titleMedium?.copyWith(
                           fontWeight: FontWeight.w700,
+                          fontSize: 16,
                         ),
                       ),
-                      const SizedBox(height: 4),
+                      const SizedBox(height: 3),
                       Text(
                         subtitle,
                         style: theme.textTheme.bodySmall?.copyWith(
                           color: colorScheme.onSurfaceVariant,
+                          fontSize: 12.5,
                           height: 1.35,
                         ),
                       ),
@@ -1035,14 +1146,129 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
 
               Widget buildGroupHeader(String title) {
                 return Padding(
-                  padding: const EdgeInsets.fromLTRB(12, 14, 12, 6),
+                  padding: const EdgeInsets.fromLTRB(12, 12, 12, 5),
                   child: Text(
                     title,
                     style: theme.textTheme.labelLarge?.copyWith(
-                      fontWeight: FontWeight.w800,
+                      fontWeight: FontWeight.w700,
+                      letterSpacing: 0.1,
                       color: colorScheme.onSurface,
                     ),
                   ),
+                );
+              }
+
+              Widget buildCompactSwitchTile({
+                required bool value,
+                required String title,
+                String? subtitle,
+                required ValueChanged<bool> onChanged,
+              }) {
+                return SwitchListTile.adaptive(
+                  value: value,
+                  dense: false,
+                  visualDensity: const VisualDensity(
+                    horizontal: -1,
+                    vertical: -1,
+                  ),
+                  contentPadding: const EdgeInsets.symmetric(horizontal: 12),
+                  title: Text(
+                    title,
+                    style: theme.textTheme.bodyMedium?.copyWith(
+                      fontSize: 15,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                  subtitle:
+                      subtitle == null
+                          ? null
+                          : Text(
+                            subtitle,
+                            style: theme.textTheme.bodySmall?.copyWith(
+                              fontSize: 12.5,
+                              color: colorScheme.onSurfaceVariant,
+                              height: 1.3,
+                            ),
+                          ),
+                  onChanged: onChanged,
+                );
+              }
+
+              Widget buildSearchSettings({
+                required bool alwaysShowSearchBar,
+                required bool pinSearchBar,
+                required _BookshelfSearchQuickFilterContent quickFilterContent,
+                required ValueChanged<bool> onAlwaysShowChanged,
+                required ValueChanged<bool> onPinChanged,
+                required ValueChanged<_BookshelfSearchQuickFilterContent>
+                onQuickFilterChanged,
+              }) {
+                return Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    buildGroupHeader('搜索设置'),
+                    buildCompactSwitchTile(
+                      value: alwaysShowSearchBar,
+                      title: '总是显示搜索框',
+                      subtitle: '关闭后显示为紧凑入口，点击后再展开搜索。',
+                      onChanged: onAlwaysShowChanged,
+                    ),
+                    buildCompactSwitchTile(
+                      value: pinSearchBar,
+                      title: '搜索框吸顶',
+                      subtitle: '滚动时将快捷筛选和搜索入口固定在顶部。',
+                      onChanged: onPinChanged,
+                    ),
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(12, 4, 12, 0),
+                      child: Row(
+                        children: [
+                          Expanded(
+                            child: Text(
+                              '快捷筛选内容',
+                              style: theme.textTheme.bodyMedium?.copyWith(
+                                fontWeight: FontWeight.w600,
+                                fontSize: 15,
+                              ),
+                            ),
+                          ),
+                          const SizedBox(width: 10),
+                          DropdownButtonHideUnderline(
+                            child: DropdownButton<
+                              _BookshelfSearchQuickFilterContent
+                            >(
+                              value: quickFilterContent,
+                              isDense: true,
+                              borderRadius: BorderRadius.circular(14),
+                              style: theme.textTheme.bodyMedium?.copyWith(
+                                color: colorScheme.onSurface,
+                                fontWeight: FontWeight.w600,
+                                fontSize: 14,
+                              ),
+                              onChanged:
+                                  (value) =>
+                                      value == null
+                                          ? null
+                                          : onQuickFilterChanged(value),
+                              items: [
+                                for (final option
+                                    in _BookshelfSearchQuickFilterContent
+                                        .values)
+                                  DropdownMenuItem<
+                                    _BookshelfSearchQuickFilterContent
+                                  >(
+                                    value: option,
+                                    child: Text(
+                                      _searchQuickFilterContentLabel(option),
+                                    ),
+                                  ),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
                 );
               }
 
@@ -1052,10 +1278,10 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
                   children: [
                     buildSectionTitle('网格设置', '自定义网格列数与间距，自适应开启后会按屏幕宽度自动分列。'),
                     buildGroupHeader('布局设置'),
-                    SwitchListTile.adaptive(
+                    buildCompactSwitchTile(
                       value: draftAdaptive,
-                      title: const Text('自适应列数'),
-                      subtitle: const Text('根据当前宽度自动决定 2-6 列。'),
+                      title: '自适应列数',
+                      subtitle: '根据当前宽度自动决定 2-6 列。',
                       onChanged: (value) {
                         setSheetState(() {
                           draftAdaptive = value;
@@ -1174,9 +1400,9 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
                               },
                     ),
                     buildGroupHeader('文字信息'),
-                    SwitchListTile.adaptive(
+                    buildCompactSwitchTile(
                       value: !draftShowTitle,
-                      title: const Text('隐藏书籍名称'),
+                      title: '隐藏书籍名称',
                       onChanged: (value) {
                         final next = !value;
                         setSheetState(() {
@@ -1188,9 +1414,9 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
                         unawaited(persistGridSettings());
                       },
                     ),
-                    SwitchListTile.adaptive(
+                    buildCompactSwitchTile(
                       value: !draftShowAuthor,
-                      title: const Text('隐藏作者名称'),
+                      title: '隐藏作者名称',
                       onChanged: (value) {
                         final next = !value;
                         setSheetState(() {
@@ -1202,9 +1428,9 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
                         unawaited(persistGridSettings());
                       },
                     ),
-                    SwitchListTile.adaptive(
+                    buildCompactSwitchTile(
                       value: !draftShowLatestChapter,
-                      title: const Text('隐藏最新章节'),
+                      title: '隐藏最新章节',
                       onChanged: (value) {
                         final next = !value;
                         setSheetState(() {
@@ -1212,6 +1438,41 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
                         });
                         setState(() {
                           _gridShowLatestChapter = next;
+                        });
+                        unawaited(persistGridSettings());
+                      },
+                    ),
+                    buildSearchSettings(
+                      alwaysShowSearchBar: draftGridAlwaysShowSearchBar,
+                      pinSearchBar: draftGridPinSearchBar,
+                      quickFilterContent: draftGridQuickFilterContent,
+                      onAlwaysShowChanged: (value) {
+                        setSheetState(() {
+                          draftGridAlwaysShowSearchBar = value;
+                        });
+                        setState(() {
+                          _gridAlwaysShowSearchBar = value;
+                          if (value) {
+                            _isBookshelfSearchExpanded = false;
+                          }
+                        });
+                        unawaited(persistGridSettings());
+                      },
+                      onPinChanged: (value) {
+                        setSheetState(() {
+                          draftGridPinSearchBar = value;
+                        });
+                        setState(() {
+                          _gridPinSearchBar = value;
+                        });
+                        unawaited(persistGridSettings());
+                      },
+                      onQuickFilterChanged: (value) {
+                        setSheetState(() {
+                          draftGridQuickFilterContent = value;
+                        });
+                        setState(() {
+                          _gridQuickFilterContent = value;
                         });
                         unawaited(persistGridSettings());
                       },
@@ -1240,9 +1501,9 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
                       ),
                     ),
                     buildGroupHeader('其他设置'),
-                    SwitchListTile.adaptive(
+                    buildCompactSwitchTile(
                       value: !draftShowProgressBar,
-                      title: const Text('隐藏进度条'),
+                      title: '隐藏进度条',
                       onChanged: (value) {
                         final next = !value;
                         setSheetState(() {
@@ -1264,9 +1525,9 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
                   children: [
                     buildSectionTitle('列表设置', '调整列表模式下展示哪些信息。'),
                     buildGroupHeader('文字信息'),
-                    SwitchListTile.adaptive(
+                    buildCompactSwitchTile(
                       value: !draftListShowTitle,
-                      title: const Text('隐藏书籍名称'),
+                      title: '隐藏书籍名称',
                       onChanged: (value) {
                         final next = !value;
                         setSheetState(() {
@@ -1278,9 +1539,9 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
                         unawaited(persistListSettings());
                       },
                     ),
-                    SwitchListTile.adaptive(
+                    buildCompactSwitchTile(
                       value: !draftListShowAuthor,
-                      title: const Text('隐藏作者名称'),
+                      title: '隐藏作者名称',
                       onChanged: (value) {
                         final next = !value;
                         setSheetState(() {
@@ -1292,9 +1553,9 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
                         unawaited(persistListSettings());
                       },
                     ),
-                    SwitchListTile.adaptive(
+                    buildCompactSwitchTile(
                       value: !draftListShowLatestChapter,
-                      title: const Text('隐藏最新章节'),
+                      title: '隐藏最新章节',
                       onChanged: (value) {
                         final next = !value;
                         setSheetState(() {
@@ -1306,10 +1567,45 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
                         unawaited(persistListSettings());
                       },
                     ),
+                    buildSearchSettings(
+                      alwaysShowSearchBar: draftListAlwaysShowSearchBar,
+                      pinSearchBar: draftListPinSearchBar,
+                      quickFilterContent: draftListQuickFilterContent,
+                      onAlwaysShowChanged: (value) {
+                        setSheetState(() {
+                          draftListAlwaysShowSearchBar = value;
+                        });
+                        setState(() {
+                          _listAlwaysShowSearchBar = value;
+                          if (value) {
+                            _isBookshelfSearchExpanded = false;
+                          }
+                        });
+                        unawaited(persistListSettings());
+                      },
+                      onPinChanged: (value) {
+                        setSheetState(() {
+                          draftListPinSearchBar = value;
+                        });
+                        setState(() {
+                          _listPinSearchBar = value;
+                        });
+                        unawaited(persistListSettings());
+                      },
+                      onQuickFilterChanged: (value) {
+                        setSheetState(() {
+                          draftListQuickFilterContent = value;
+                        });
+                        setState(() {
+                          _listQuickFilterContent = value;
+                        });
+                        unawaited(persistListSettings());
+                      },
+                    ),
                     buildGroupHeader('其他设置'),
-                    SwitchListTile.adaptive(
+                    buildCompactSwitchTile(
                       value: !draftListShowProgressBar,
-                      title: const Text('隐藏进度条'),
+                      title: '隐藏进度条',
                       onChanged: (value) {
                         final next = !value;
                         setSheetState(() {
@@ -1351,11 +1647,11 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
               return Padding(
                 padding: EdgeInsets.fromLTRB(8, 0, 8, 10 + bottomInset),
                 child: SizedBox(
-                  height: MediaQuery.sizeOf(sheetContext).height * 0.68,
+                  height: MediaQuery.sizeOf(sheetContext).height * 0.66,
                   child: Column(
                     children: [
                       Padding(
-                        padding: const EdgeInsets.fromLTRB(12, 4, 12, 8),
+                        padding: const EdgeInsets.fromLTRB(12, 3, 12, 7),
                         child: Row(
                           children: [
                             Expanded(
@@ -1363,6 +1659,7 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
                                 '书架设置',
                                 style: theme.textTheme.titleMedium?.copyWith(
                                   fontWeight: FontWeight.w700,
+                                  fontSize: 17,
                                 ),
                               ),
                             ),
@@ -1373,11 +1670,21 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
                         margin: const EdgeInsets.symmetric(horizontal: 12),
                         decoration: BoxDecoration(
                           color: colorScheme.surfaceContainerLow,
-                          borderRadius: BorderRadius.circular(14),
+                          borderRadius: BorderRadius.circular(13),
                         ),
                         child: TabBar(
                           dividerColor: Colors.transparent,
                           indicatorSize: TabBarIndicatorSize.tab,
+                          labelStyle: theme.textTheme.labelMedium?.copyWith(
+                            fontSize: 14,
+                            fontWeight: FontWeight.w700,
+                          ),
+                          unselectedLabelStyle: theme.textTheme.labelMedium
+                              ?.copyWith(fontSize: 14),
+                          labelPadding: const EdgeInsets.symmetric(
+                            horizontal: 10,
+                          ),
+                          tabAlignment: TabAlignment.fill,
                           onTap:
                               (index) =>
                                   unawaited(setBookshelfViewMode(index == 1)),
@@ -1387,7 +1694,7 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
                           ],
                         ),
                       ),
-                      const SizedBox(height: 8),
+                      const SizedBox(height: 7),
                       Expanded(
                         child: TabBarView(
                           children: [buildListSettings(), buildGridSettings()],
@@ -1554,6 +1861,7 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
       await _localBookImportService.importFromFile(
         filePath: cached.path,
         displayName: cached.label,
+        waitForIndexing: true,
       );
       await _loadBookshelf(force: true);
       if (!mounted) {
@@ -1576,23 +1884,195 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
   }
 
   Widget _buildFilterEmptyCard() {
-    return BookshelfFilterEmptyCard(label: _activeFilterLabel());
+    return BookshelfFilterEmptyCard(
+      label: _activeFilterLabel(),
+      searchKeyword: _normalizedBookshelfSearchKeyword,
+      palette: _resolvedPalette(context),
+    );
   }
 
   Widget _buildLoadErrorCard({required String message}) {
     return BookshelfLoadErrorCard(
       message: message,
       onRetry: () => unawaited(_loadBookshelf(force: true)),
+      palette: _resolvedPalette(context),
     );
   }
 
-  Widget _buildViewModeEditBar() {
-    final summaryText =
-        _isSelectionMode
-            ? '已选择 ${_selectedBookKeys.length} 本'
-            : '${_activeFilterLabel()} · ${_filteredBooks.length} 本';
+  Widget _buildBookshelfSearchBar() {
+    return BookshelfInlineSearchBar(
+      palette: _resolvedPalette(context),
+      controller: _bookshelfSearchController,
+      focusNode: _bookshelfSearchFocusNode,
+      onChanged: _updateBookshelfSearchKeyword,
+      onClear: _clearBookshelfSearchKeyword,
+      summaryText: _bookshelfSearchSummaryText,
+    );
+  }
 
-    return BookshelfViewModeEditBar(summaryText: summaryText);
+  String get _bookshelfSearchSummaryText {
+    if (_isSelectionMode) {
+      return '已选 ${_selectedBookKeys.length} 本';
+    }
+    if (_hasBookshelfSearchKeyword) {
+      return '结果 ${_filteredBooks.length} 本';
+    }
+    return '${_activeFilterLabel()} ${_filteredBooks.length} 本';
+  }
+
+  Widget _buildBookshelfSearchSliver({required double horizontal}) {
+    final height = _bookshelfSearchSectionHeight;
+    final child = _buildBookshelfSearchSection(horizontal: horizontal);
+    if (_pinBookshelfSearchBar) {
+      return SliverPersistentHeader(
+        pinned: true,
+        delegate: _BookshelfPinnedHeaderDelegate(extent: height, child: child),
+      );
+    }
+    return SliverToBoxAdapter(child: child);
+  }
+
+  double get _bookshelfSearchSectionHeight {
+    final quickFilterHeight = _shouldShowBookshelfQuickFilters ? 46.0 : 0.0;
+    final searchHeight = _shouldShowExpandedBookshelfSearch ? 42.0 : 40.0;
+    return 12 + quickFilterHeight + searchHeight;
+  }
+
+  Widget _buildBookshelfSearchSection({required double horizontal}) {
+    final palette = _resolvedPalette(context);
+    return Container(
+      color: palette.backgroundColor,
+      padding: EdgeInsets.fromLTRB(horizontal, 12, horizontal, 0),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          if (_shouldShowBookshelfQuickFilters) ...[
+            _buildBookshelfQuickFilterBar(),
+            const SizedBox(height: 8),
+          ],
+          _shouldShowExpandedBookshelfSearch
+              ? _buildBookshelfSearchBar()
+              : _buildBookshelfSearchTrigger(),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildBookshelfSearchTrigger() {
+    return BookshelfInlineSearchTrigger(
+      palette: _resolvedPalette(context),
+      summaryText: _bookshelfSearchSummaryText,
+      onTap: _expandBookshelfSearch,
+    );
+  }
+
+  bool get _shouldShowBookshelfQuickFilters {
+    return switch (_bookshelfQuickFilterContent) {
+      _BookshelfSearchQuickFilterContent.none => false,
+      _BookshelfSearchQuickFilterContent.tags =>
+        _userTags.isNotEmpty || _books.any((book) => _tagsOfBook(book).isEmpty),
+      _BookshelfSearchQuickFilterContent.categories =>
+        _userCategories.isNotEmpty ||
+            _books.any((book) => (_categoryOfBook(book) ?? '').isEmpty),
+    };
+  }
+
+  Widget _buildBookshelfQuickFilterBar() {
+    final chips = switch (_bookshelfQuickFilterContent) {
+      _BookshelfSearchQuickFilterContent.tags => _buildTagQuickFilterChips(),
+      _BookshelfSearchQuickFilterContent.categories =>
+        _buildCategoryQuickFilterChips(),
+      _BookshelfSearchQuickFilterContent.none =>
+        const <BookshelfFilterChipData>[],
+    };
+
+    return BookshelfFilterBar(
+      palette: _resolvedPalette(context),
+      baseChips: chips,
+      customChips: const <BookshelfFilterChipData>[],
+      highlightFilterAction: false,
+      filterActionMessage: '',
+      onOpenFilterSheet: null,
+      showActionButton: false,
+    );
+  }
+
+  List<BookshelfFilterChipData> _buildTagQuickFilterChips() {
+    final chips = <BookshelfFilterChipData>[
+      BookshelfFilterChipData(
+        label: '全部',
+        selected: !_activeView.isTag,
+        onTap:
+            !_activeView.isTag
+                ? null
+                : () => _activateView(
+                  const _BookshelfViewSelection.base(_BookshelfFilter.all),
+                ),
+      ),
+    ];
+
+    final hasUntagged = _books.any((book) => _tagsOfBook(book).isEmpty);
+    if (hasUntagged) {
+      chips.add(
+        BookshelfFilterChipData(
+          label: '未打标签',
+          selected: _activeView.isTag && (_activeView.tag?.isEmpty ?? false),
+          onTap: () => _activateView(const _BookshelfViewSelection.tag('')),
+        ),
+      );
+    }
+
+    for (final tag in _userTags) {
+      chips.add(
+        BookshelfFilterChipData(
+          label: tag,
+          selected: _activeView.isTag && _activeView.tag == tag,
+          onTap: () => _activateView(_BookshelfViewSelection.tag(tag)),
+        ),
+      );
+    }
+    return chips;
+  }
+
+  List<BookshelfFilterChipData> _buildCategoryQuickFilterChips() {
+    final chips = <BookshelfFilterChipData>[
+      BookshelfFilterChipData(
+        label: '全部',
+        selected: !_activeView.isCategory,
+        onTap:
+            !_activeView.isCategory
+                ? null
+                : () => _activateView(
+                  const _BookshelfViewSelection.base(_BookshelfFilter.all),
+                ),
+      ),
+    ];
+
+    final hasUncategorized = _books.any(
+      (book) => (_categoryOfBook(book) ?? '').isEmpty,
+    );
+    if (hasUncategorized) {
+      chips.add(
+        BookshelfFilterChipData(
+          label: '未分类',
+          selected: _activeView.isUncategorized,
+          onTap:
+              () => _activateView(const _BookshelfViewSelection.category(null)),
+        ),
+      );
+    }
+
+    for (final category in _userCategories) {
+      chips.add(
+        BookshelfFilterChipData(
+          label: category,
+          selected: _activeView.isCategory && _activeView.category == category,
+          onTap:
+              () => _activateView(_BookshelfViewSelection.category(category)),
+        ),
+      );
+    }
+    return chips;
   }
 
   Widget _buildBookshelfViewTitle() {
@@ -2031,291 +2511,6 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
     }
   }
 
-  Future<void> _showFilterSheet() async {
-    if (_isBatchDeleting || !mounted) {
-      return;
-    }
-    var baseFilters = List<_BookshelfFilter>.from(_orderedBaseFilters);
-    final baseFilterBookCount = <_BookshelfFilter, int>{
-      _BookshelfFilter.all: _books.length,
-      _BookshelfFilter.local:
-          _books
-              .where(
-                (book) =>
-                    _bookMatchesStaticFilter(book, _BookshelfFilter.local),
-              )
-              .length,
-      _BookshelfFilter.novel:
-          _books
-              .where(
-                (book) =>
-                    _bookMatchesStaticFilter(book, _BookshelfFilter.novel),
-              )
-              .length,
-      _BookshelfFilter.manga:
-          _books
-              .where(
-                (book) =>
-                    _bookMatchesStaticFilter(book, _BookshelfFilter.manga),
-              )
-              .length,
-    };
-    final tagBookCount = _buildTagBookCount();
-    var customTags = List<String>.from(_userTags);
-
-    final selected = await _showBookshelfBottomSheet<String>(
-      isScrollControlled: true,
-      builder: (sheetContext) {
-        final maxHeight = MediaQuery.sizeOf(sheetContext).height * 0.72;
-        final bottomInset = _bookshelfBottomSafeInset(sheetContext);
-        return StatefulBuilder(
-          builder: (sheetContext, setSheetState) {
-            final colorScheme = Theme.of(sheetContext).colorScheme;
-            final textTheme = Theme.of(sheetContext).textTheme;
-
-            void moveBaseFilter(int index, int offset) {
-              final nextIndex = index + offset;
-              if (nextIndex < 0 || nextIndex >= baseFilters.length) {
-                return;
-              }
-              final nextFilters = List<_BookshelfFilter>.from(baseFilters);
-              final movedFilter = nextFilters.removeAt(index);
-              nextFilters.insert(nextIndex, movedFilter);
-              setSheetState(() {
-                baseFilters = nextFilters;
-              });
-            }
-
-            return Padding(
-              padding: EdgeInsets.fromLTRB(8, 0, 8, 10 + bottomInset),
-              child: ConstrainedBox(
-                constraints: BoxConstraints(maxHeight: maxHeight),
-                child: ListView(
-                  shrinkWrap: true,
-                  children: [
-                    ...baseFilters.asMap().entries.map((entry) {
-                      final index = entry.key;
-                      final filter = entry.value;
-                      final value = filter.name;
-                      final isSelected =
-                          !_activeView.isTag && _activeView.filter == filter;
-                      return Material(
-                        color:
-                            isSelected
-                                ? colorScheme.primaryContainer.withValues(
-                                  alpha: 0.38,
-                                )
-                                : Colors.transparent,
-                        borderRadius: BorderRadius.circular(12),
-                        child: InkWell(
-                          borderRadius: BorderRadius.circular(12),
-                          onTap:
-                              () => _dismissBookshelfBottomSheet(
-                                sheetContext,
-                                value,
-                              ),
-                          child: Padding(
-                            padding: const EdgeInsets.fromLTRB(16, 6, 12, 6),
-                            child: Row(
-                              children: [
-                                Expanded(
-                                  child: Text(
-                                    _filterLabel(filter),
-                                    style: textTheme.bodyMedium?.copyWith(
-                                      color:
-                                          isSelected
-                                              ? colorScheme.onPrimaryContainer
-                                              : colorScheme.onSurface,
-                                      fontWeight:
-                                          isSelected
-                                              ? FontWeight.w700
-                                              : FontWeight.w500,
-                                    ),
-                                  ),
-                                ),
-                                Text(
-                                  '${baseFilterBookCount[filter] ?? 0} 本书',
-                                  style: textTheme.bodySmall?.copyWith(
-                                    color: colorScheme.onSurfaceVariant,
-                                    fontWeight: FontWeight.w600,
-                                  ),
-                                ),
-                                const SizedBox(width: 6),
-                                if (isSelected)
-                                  Padding(
-                                    padding: const EdgeInsets.only(right: 4),
-                                    child: Icon(
-                                      Icons.check_rounded,
-                                      size: 18,
-                                      color: colorScheme.primary,
-                                    ),
-                                  ),
-                                IconButton(
-                                  tooltip: '上移',
-                                  onPressed:
-                                      index > 0
-                                          ? () => moveBaseFilter(index, -1)
-                                          : null,
-                                  visualDensity: VisualDensity.compact,
-                                  padding: EdgeInsets.zero,
-                                  constraints: const BoxConstraints.tightFor(
-                                    width: 30,
-                                    height: 30,
-                                  ),
-                                  icon: const Icon(
-                                    Icons.arrow_upward_rounded,
-                                    size: 18,
-                                  ),
-                                ),
-                                IconButton(
-                                  tooltip: '下移',
-                                  onPressed:
-                                      index < baseFilters.length - 1
-                                          ? () => moveBaseFilter(index, 1)
-                                          : null,
-                                  visualDensity: VisualDensity.compact,
-                                  padding: EdgeInsets.zero,
-                                  constraints: const BoxConstraints.tightFor(
-                                    width: 30,
-                                    height: 30,
-                                  ),
-                                  icon: const Icon(
-                                    Icons.arrow_downward_rounded,
-                                    size: 18,
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                        ),
-                      );
-                    }),
-                    if (customTags.isNotEmpty) ...[
-                      const SizedBox(height: 6),
-                      Padding(
-                        padding: const EdgeInsets.symmetric(horizontal: 16),
-                        child: Text(
-                          '标签',
-                          style: textTheme.titleSmall?.copyWith(
-                            fontWeight: FontWeight.w700,
-                          ),
-                        ),
-                      ),
-                      const SizedBox(height: 4),
-                      ...customTags.map((tag) {
-                        final value = 'tag::$tag';
-                        final isSelected =
-                            _activeView.isTag && _activeView.tag == tag;
-                        return Material(
-                          color:
-                              isSelected
-                                  ? colorScheme.secondaryContainer.withValues(
-                                    alpha: 0.42,
-                                  )
-                                  : Colors.transparent,
-                          borderRadius: BorderRadius.circular(12),
-                          child: InkWell(
-                            borderRadius: BorderRadius.circular(12),
-                            onLongPress:
-                                () => unawaited(_showTagManageSheet(tag)),
-                            onTap:
-                                () => _dismissBookshelfBottomSheet(
-                                  sheetContext,
-                                  value,
-                                ),
-                            child: Padding(
-                              padding: const EdgeInsets.fromLTRB(16, 6, 12, 6),
-                              child: Row(
-                                children: [
-                                  Expanded(
-                                    child: Text(
-                                      tag,
-                                      maxLines: 1,
-                                      overflow: TextOverflow.ellipsis,
-                                      style: textTheme.bodyMedium?.copyWith(
-                                        color:
-                                            isSelected
-                                                ? colorScheme
-                                                    .onSecondaryContainer
-                                                : colorScheme.onSurface,
-                                        fontWeight:
-                                            isSelected
-                                                ? FontWeight.w700
-                                                : FontWeight.w500,
-                                      ),
-                                    ),
-                                  ),
-                                  const SizedBox(width: 10),
-                                  Text(
-                                    '${tagBookCount[tag] ?? 0} 本书',
-                                    style: textTheme.bodySmall?.copyWith(
-                                      color: colorScheme.onSurfaceVariant,
-                                      fontWeight: FontWeight.w600,
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ),
-                          ),
-                        );
-                      }),
-                    ],
-                  ],
-                ),
-              ),
-            );
-          },
-        );
-      },
-    );
-
-    if (!mounted) {
-      return;
-    }
-
-    if (!_sameBaseFilterOrder(baseFilters, _orderedBaseFilters)) {
-      await _persistBaseFilterOrder(baseFilters);
-    }
-    if (!_sameStringOrder(customTags, _userTags)) {
-      await _persistTagOrder(customTags);
-    }
-
-    if (!mounted || selected == null) {
-      return;
-    }
-
-    if (selected.startsWith('tag::')) {
-      final tag = selected.substring(5).trim();
-      if (tag.isNotEmpty) {
-        _activateView(_BookshelfViewSelection.tag(tag));
-      }
-      return;
-    }
-
-    switch (selected) {
-      case 'all':
-        _activateView(const _BookshelfViewSelection.base(_BookshelfFilter.all));
-        break;
-      case 'local':
-        _activateView(
-          const _BookshelfViewSelection.base(_BookshelfFilter.local),
-        );
-        break;
-      case 'novel':
-        _activateView(
-          const _BookshelfViewSelection.base(_BookshelfFilter.novel),
-        );
-        break;
-      case 'manga':
-        _activateView(
-          const _BookshelfViewSelection.base(_BookshelfFilter.manga),
-        );
-        break;
-      default:
-        break;
-    }
-  }
-
   Widget _buildSelectionActionBar({
     required List<BookshelfBook> filteredBooks,
   }) {
@@ -2485,6 +2680,7 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
       progress: progress,
     );
     final colorScheme = Theme.of(context).colorScheme;
+    final palette = _resolvedPalette(context);
     final isOpening = _openingBookId == book.bookId;
     final isSelected = _isBookSelected(book);
     final displayTitle = _displayBookTitle(book, localBook: localBook);
@@ -2535,7 +2731,7 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
                         borderRadius: BorderRadius.circular(14),
                         boxShadow: [
                           BoxShadow(
-                            color: Colors.black.withValues(alpha: 0.06),
+                            color: colorScheme.shadow.withValues(alpha: 0.12),
                             blurRadius: 10,
                             offset: const Offset(0, 4),
                           ),
@@ -2613,7 +2809,7 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
                               color:
                                   isSelected
                                       ? colorScheme.primary
-                                      : colorScheme.surface.withValues(
+                                      : palette.cardColor.withValues(
                                         alpha: 0.9,
                                       ),
                               shape: BoxShape.circle,
@@ -2621,7 +2817,7 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
                                 color:
                                     isSelected
                                         ? colorScheme.primary
-                                        : colorScheme.outline.withValues(
+                                        : palette.cardBorderColor.withValues(
                                           alpha: 0.7,
                                         ),
                               ),
@@ -2632,7 +2828,7 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
                               color:
                                   isSelected
                                       ? colorScheme.onPrimary
-                                      : colorScheme.onSurfaceVariant,
+                                      : palette.textSecondaryColor,
                             ),
                           ),
                         ),
@@ -2662,7 +2858,7 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                    color: colorScheme.onSurfaceVariant,
+                    color: palette.textSecondaryColor,
                     fontWeight: FontWeight.w500,
                   ),
                 ),
@@ -2674,7 +2870,7 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                    color: colorScheme.onSurfaceVariant,
+                    color: palette.textSecondaryColor,
                   ),
                 ),
               ],
@@ -2692,7 +2888,7 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
                   child: LinearProgressIndicator(
                     value: progressDisplay.progressValue,
                     minHeight: 3,
-                    backgroundColor: colorScheme.surfaceContainerHighest,
+                    backgroundColor: palette.elevatedSurfaceColor,
                   ),
                 ),
               ],
@@ -2711,7 +2907,7 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
       book,
       progress: progress,
     );
-    final colorScheme = Theme.of(context).colorScheme;
+    final palette = _resolvedPalette(context);
     final isOpening = _openingBookId == book.bookId;
     final isSelected = _isBookSelected(book);
     final displayTitle = _displayBookTitle(book, localBook: localBook);
@@ -2732,16 +2928,16 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
       margin: const EdgeInsets.only(bottom: 10),
       color:
           isEditingSelected
-              ? colorScheme.primaryContainer.withValues(alpha: 0.34)
-              : colorScheme.surfaceContainerLowest,
+              ? palette.noticeSurfaceColor.withValues(alpha: 0.34)
+              : palette.cardColor,
       elevation: 0,
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(14),
         side: BorderSide(
           color:
               isEditingSelected
-                  ? colorScheme.primary.withValues(alpha: 0.38)
-                  : colorScheme.outlineVariant.withValues(alpha: 0.56),
+                  ? palette.noticeAccentColor.withValues(alpha: 0.38)
+                  : palette.cardBorderColor.withValues(alpha: 0.56),
         ),
       ),
       clipBehavior: Clip.antiAlias,
@@ -2848,15 +3044,14 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
                                       )
                                       : Container(
                                         decoration: BoxDecoration(
-                                          color:
-                                              colorScheme.surfaceContainerHigh,
+                                          color: palette.elevatedSurfaceColor,
                                           shape: BoxShape.circle,
                                         ),
                                         alignment: Alignment.center,
                                         child: Icon(
                                           Icons.chevron_right_rounded,
                                           size: 18,
-                                          color: colorScheme.onSurfaceVariant,
+                                          color: palette.textSecondaryColor,
                                         ),
                                       ),
                             ),
@@ -2872,7 +3067,7 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
                           style: Theme.of(
                             context,
                           ).textTheme.bodySmall?.copyWith(
-                            color: colorScheme.onSurfaceVariant,
+                            color: palette.textSecondaryColor,
                             fontWeight: FontWeight.w500,
                           ),
                         ),
@@ -2886,7 +3081,7 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
                           style: Theme.of(
                             context,
                           ).textTheme.bodySmall?.copyWith(
-                            color: colorScheme.onSurfaceVariant,
+                            color: palette.textSecondaryColor,
                             fontWeight: FontWeight.w500,
                           ),
                         ),
@@ -2899,8 +3094,8 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
                         style: Theme.of(context).textTheme.bodySmall?.copyWith(
                           color:
                               progressDisplay.hasProgress
-                                  ? colorScheme.primary
-                                  : colorScheme.onSurfaceVariant,
+                                  ? palette.primaryColor
+                                  : palette.textSecondaryColor,
                           fontWeight:
                               progressDisplay.hasProgress
                                   ? FontWeight.w600
@@ -2914,8 +3109,7 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
                           child: LinearProgressIndicator(
                             value: progressDisplay.progressValue,
                             minHeight: 3,
-                            backgroundColor:
-                                colorScheme.surfaceContainerHighest,
+                            backgroundColor: palette.elevatedSurfaceColor,
                           ),
                         ),
                       ],
@@ -2992,8 +3186,11 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
         return _bookMatchesStaticFilter(book, view.filter);
       case _BookshelfViewKind.tag:
         final tag = view.tag;
-        if (tag == null || tag.isEmpty) {
+        if (tag == null) {
           return true;
+        }
+        if (tag.isEmpty) {
+          return _tagsOfBook(book).isEmpty;
         }
         return _tagsOfBook(book).contains(tag);
       case _BookshelfViewKind.category:
@@ -3003,6 +3200,26 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
         }
         return _categoryOfBook(book) == category;
     }
+  }
+
+  bool _bookMatchesSearchKeyword(BookshelfBook book, String keyword) {
+    if (keyword.isEmpty) {
+      return true;
+    }
+
+    final localBook = _bookshelfLocalBook(book);
+    final bookKey = _bookKey(book);
+    final candidates = <String>[
+      _displayBookTitle(book, localBook: localBook),
+      _displayBookAuthor(book, localBook: localBook) ?? '',
+      _categoryOfBook(book) ?? book.category ?? '',
+      _latestCachedChapterByBookKey[bookKey] ?? book.latestChapter ?? '',
+      ..._tagsOfBook(book),
+    ];
+
+    return candidates.any(
+      (candidate) => _normalizeBookshelfSearchText(candidate).contains(keyword),
+    );
   }
 
   bool _bookMatchesStaticFilter(BookshelfBook book, _BookshelfFilter filter) {
@@ -3027,11 +3244,6 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
     return _userTagsCache;
   }
 
-  List<_BookshelfFilter> get _orderedBaseFilters {
-    _ensureDerivedBookshelfState();
-    return _orderedBaseFiltersCache;
-  }
-
   Map<String, int> _buildTagBookCount() {
     _ensureDerivedBookshelfState();
     return _tagBookCountCache;
@@ -3048,13 +3260,17 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
   }
 
   void _ensureDerivedBookshelfState() {
+    final searchKeyword = _normalizedBookshelfSearchKeyword;
     final fingerprint = Object.hash(
       _activeView,
       _sortMode,
+      searchKeyword,
       identityHashCode(_books),
       identityHashCode(_progressByBookKey),
+      identityHashCode(_latestCachedChapterByBookKey),
       identityHashCode(_cachedChapterCountByBookKey),
       identityHashCode(_sourceTypeBySourceId),
+      identityHashCode(_localBooksById),
       identityHashCode(_bookTagsByKey),
       identityHashCode(_tagOrder),
       identityHashCode(_bookCategoriesByKey),
@@ -3083,29 +3299,16 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
       order: _categoryOrder,
     );
 
-    final orderedBaseFilters = <_BookshelfFilter>[];
-    for (final filter in _baseFilterOrder) {
-      if (!_kDefaultBaseFilters.contains(filter) ||
-          orderedBaseFilters.contains(filter)) {
-        continue;
-      }
-      orderedBaseFilters.add(filter);
-    }
-    for (final filter in _kDefaultBaseFilters) {
-      if (!orderedBaseFilters.contains(filter)) {
-        orderedBaseFilters.add(filter);
-      }
-    }
-
     _tagBookCountCache = Map<String, int>.unmodifiable(counts);
     _categoryBookCountCache = Map<String, int>.unmodifiable(categoryCounts);
     _userTagsCache = List<String>.unmodifiable(tags);
     _userCategoriesCache = List<String>.unmodifiable(categories);
-    _orderedBaseFiltersCache = List<_BookshelfFilter>.unmodifiable(
-      orderedBaseFilters,
-    );
     final filteredBooks = _books
-      .where((book) => _bookMatchesView(book, _activeView))
+      .where(
+        (book) =>
+            _bookMatchesView(book, _activeView) &&
+            _bookMatchesSearchKeyword(book, searchKeyword),
+      )
       .toList(growable: true)..sort(_compareBookshelfBooks);
     _filteredBooksCache = List<BookshelfBook>.unmodifiable(filteredBooks);
     _derivedBookshelfFingerprint = fingerprint;
@@ -3206,83 +3409,6 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
     return _compareBookshelfBooksByCreatedAt(a, b);
   }
 
-  Future<void> _persistTagOrder(List<String> tags) async {
-    final normalized = _normalizeTags(tags);
-    if (!mounted) {
-      return;
-    }
-    setState(() {
-      _tagOrder = normalized;
-    });
-    try {
-      await _bookshelfService.saveTagOrder(normalized);
-    } catch (_) {
-      if (!mounted) {
-        return;
-      }
-      _showMessage('标签排序保存失败，请重试。');
-    }
-  }
-
-  bool _sameStringOrder(List<String> left, List<String> right) {
-    if (left.length != right.length) {
-      return false;
-    }
-    for (var index = 0; index < left.length; index += 1) {
-      if (left[index] != right[index]) {
-        return false;
-      }
-    }
-    return true;
-  }
-
-  bool _sameBaseFilterOrder(
-    List<_BookshelfFilter> left,
-    List<_BookshelfFilter> right,
-  ) {
-    if (left.length != right.length) {
-      return false;
-    }
-    for (var index = 0; index < left.length; index += 1) {
-      if (left[index] != right[index]) {
-        return false;
-      }
-    }
-    return true;
-  }
-
-  Future<void> _persistBaseFilterOrder(List<_BookshelfFilter> filters) async {
-    final normalized = <_BookshelfFilter>[];
-    for (final filter in filters) {
-      if (!_kDefaultBaseFilters.contains(filter) ||
-          normalized.contains(filter)) {
-        continue;
-      }
-      normalized.add(filter);
-    }
-    for (final filter in _kDefaultBaseFilters) {
-      if (!normalized.contains(filter)) {
-        normalized.add(filter);
-      }
-    }
-    if (!mounted) {
-      return;
-    }
-    setState(() {
-      _baseFilterOrder = normalized;
-    });
-    try {
-      await _bookshelfService.saveBaseFilterOrder(
-        normalized.map((filter) => filter.name).toList(growable: false),
-      );
-    } catch (_) {
-      if (!mounted) {
-        return;
-      }
-      _showMessage('筛选排序保存失败，请重试。');
-    }
-  }
-
   List<String> _tagsOfBook(BookshelfBook book) {
     return _bookTagsByKey[_bookKey(book)] ?? const <String>[];
   }
@@ -3310,7 +3436,7 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
     if (_activeView.isTag) {
       final tag = _activeView.tag;
       if (tag == null || tag.isEmpty) {
-        return '标签';
+        return '未打标签';
       }
       return tag;
     }
@@ -4624,172 +4750,6 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
     return targetFile.uri;
   }
 
-  Future<void> _showTagManageSheet(String tag) async {
-    if (_isSelectionMode || _isBatchDeleting || !mounted) {
-      return;
-    }
-
-    final selected = await _showBookshelfBottomSheet<_TagManageSheetAction>(
-      builder: (sheetContext) {
-        return Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            ListTile(
-              leading: const Icon(Icons.edit_outlined),
-              title: const Text('重命名标签'),
-              subtitle: Text(tag),
-              onTap:
-                  () => Navigator.of(
-                    sheetContext,
-                    rootNavigator: true,
-                  ).pop(_TagManageSheetAction.rename),
-            ),
-            ListTile(
-              leading: Icon(
-                Icons.delete_outline_rounded,
-                color: Theme.of(sheetContext).colorScheme.error,
-              ),
-              title: Text(
-                '删除标签',
-                style: TextStyle(
-                  color: Theme.of(sheetContext).colorScheme.error,
-                ),
-              ),
-              subtitle: Text(tag),
-              onTap:
-                  () => Navigator.of(
-                    sheetContext,
-                    rootNavigator: true,
-                  ).pop(_TagManageSheetAction.delete),
-            ),
-            const SizedBox(height: 4),
-          ],
-        );
-      },
-    );
-    if (!mounted || selected == null) {
-      return;
-    }
-
-    switch (selected) {
-      case _TagManageSheetAction.rename:
-        await _renameTag(tag);
-        break;
-      case _TagManageSheetAction.delete:
-        await _deleteTag(tag);
-        break;
-    }
-  }
-
-  Future<void> _renameTag(String tag) async {
-    final nextTag = await _showRenameTagDialog(
-      context,
-      initialTag: tag,
-      existingTags: _userTags.toSet(),
-    );
-    if (!mounted || nextTag == null || nextTag == tag) {
-      return;
-    }
-
-    try {
-      final affectedCount = await _bookshelfService.renameTag(
-        fromTag: tag,
-        toTag: nextTag,
-      );
-      if (!mounted) {
-        return;
-      }
-      if (affectedCount <= 0) {
-        _showMessage('未找到可重命名的标签。');
-        return;
-      }
-
-      setState(() {
-        final nextMap = <String, List<String>>{};
-        for (final entry in _bookTagsByKey.entries) {
-          final tags = _normalizeTags(
-            entry.value.map((value) => value == tag ? nextTag : value),
-          );
-          if (tags.isNotEmpty) {
-            nextMap[entry.key] = tags;
-          }
-        }
-        _bookTagsByKey = nextMap;
-        _tagOrder = _normalizeTags(
-          _tagOrder.map((value) => value == tag ? nextTag : value),
-        );
-        if (_activeView.isTag && _activeView.tag == tag) {
-          _activeView = _BookshelfViewSelection.tag(nextTag);
-        }
-        _ensureFilterStillValid();
-      });
-      _showMessage('标签已重命名为 $nextTag。');
-    } catch (_) {
-      _showMessage('重命名失败，请重试。');
-    }
-  }
-
-  Future<void> _deleteTag(String tag) async {
-    final bindCount =
-        _bookTagsByKey.values.where((tags) => tags.contains(tag)).length;
-    final confirmed = await _showConfirmDialog(
-      title: '删除标签',
-      content:
-          bindCount > 0
-              ? '确定删除标签 $tag 吗？会从 $bindCount 本书中移除。'
-              : '确定删除标签 $tag 吗？',
-      confirmText: '删除',
-    );
-    if (!mounted || confirmed != true) {
-      return;
-    }
-
-    try {
-      final affectedCount = await _bookshelfService.deleteTag(tag);
-      if (!mounted) {
-        return;
-      }
-      if (affectedCount <= 0) {
-        _showMessage('标签已不存在。');
-        return;
-      }
-
-      setState(() {
-        final nextMap = <String, List<String>>{};
-        for (final entry in _bookTagsByKey.entries) {
-          final tags = entry.value
-              .where((value) => value != tag)
-              .toList(growable: false);
-          if (tags.isNotEmpty) {
-            nextMap[entry.key] = tags;
-          }
-        }
-        _bookTagsByKey = nextMap;
-        _tagOrder = _tagOrder.where((value) => value != tag).toList();
-        _ensureFilterStillValid();
-      });
-      _showMessage('已删除标签 $tag。');
-    } catch (_) {
-      _showMessage('删除标签失败，请重试。');
-    }
-  }
-
-  Future<String?> _showRenameTagDialog(
-    BuildContext dialogContext, {
-    required String initialTag,
-    required Set<String> existingTags,
-  }) {
-    return _showTagNameDialog(
-      dialogContext,
-      title: '重命名标签',
-      confirmText: '保存',
-      hintText: '输入新的标签名称',
-      initialValue: initialTag,
-      existingTags: existingTags,
-      originalTag: initialTag,
-    );
-  }
-
   Future<String?> _showTagNameDialog(
     BuildContext dialogContext, {
     required String title,
@@ -4994,6 +4954,18 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
 
   String _toSingleLineText(String text) {
     return text.replaceAll(RegExp(r'\s+'), ' ').trim();
+  }
+
+  String _normalizeBookshelfSearchText(String text) {
+    return _toSingleLineText(text).toLowerCase();
+  }
+
+  String get _normalizedBookshelfSearchKeyword {
+    return _normalizeBookshelfSearchText(_bookshelfSearchKeyword);
+  }
+
+  bool get _hasBookshelfSearchKeyword {
+    return _normalizedBookshelfSearchKeyword.isNotEmpty;
   }
 
   Widget _buildCover(
@@ -5669,13 +5641,22 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
     final showLatestChapter =
         await _bookshelfService.loadListShowLatestChapter();
     final showProgressBar = await _bookshelfService.loadListShowProgressBar();
+    final alwaysShowSearchBar =
+        await _bookshelfService.loadListAlwaysShowSearchBar();
+    final pinSearchBar = await _bookshelfService.loadListPinSearchBar();
+    final quickFilterContent = _searchQuickFilterContentFromStorageValue(
+      await _bookshelfService.loadListQuickFilterContent(),
+    );
     if (!mounted) {
       return;
     }
     if (_listShowTitle == showTitle &&
         _listShowAuthor == showAuthor &&
         _listShowLatestChapter == showLatestChapter &&
-        _listShowProgressBar == showProgressBar) {
+        _listShowProgressBar == showProgressBar &&
+        _listAlwaysShowSearchBar == alwaysShowSearchBar &&
+        _listPinSearchBar == pinSearchBar &&
+        _listQuickFilterContent == quickFilterContent) {
       return;
     }
     setState(() {
@@ -5683,6 +5664,9 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
       _listShowAuthor = showAuthor;
       _listShowLatestChapter = showLatestChapter;
       _listShowProgressBar = showProgressBar;
+      _listAlwaysShowSearchBar = alwaysShowSearchBar;
+      _listPinSearchBar = pinSearchBar;
+      _listQuickFilterContent = quickFilterContent;
     });
   }
 
@@ -5708,6 +5692,12 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
     final showLatestChapter =
         await _bookshelfService.loadGridShowLatestChapter();
     final showProgressBar = await _bookshelfService.loadGridShowProgressBar();
+    final alwaysShowSearchBar =
+        await _bookshelfService.loadGridAlwaysShowSearchBar();
+    final pinSearchBar = await _bookshelfService.loadGridPinSearchBar();
+    final quickFilterContent = _searchQuickFilterContentFromStorageValue(
+      await _bookshelfService.loadGridQuickFilterContent(),
+    );
     if (!mounted) {
       return;
     }
@@ -5718,7 +5708,10 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
         _gridShowTitle == showTitle &&
         _gridShowAuthor == showAuthor &&
         _gridShowLatestChapter == showLatestChapter &&
-        _gridShowProgressBar == showProgressBar) {
+        _gridShowProgressBar == showProgressBar &&
+        _gridAlwaysShowSearchBar == alwaysShowSearchBar &&
+        _gridPinSearchBar == pinSearchBar &&
+        _gridQuickFilterContent == quickFilterContent) {
       return;
     }
     setState(() {
@@ -5730,6 +5723,9 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
       _gridShowAuthor = showAuthor;
       _gridShowLatestChapter = showLatestChapter;
       _gridShowProgressBar = showProgressBar;
+      _gridAlwaysShowSearchBar = alwaysShowSearchBar;
+      _gridPinSearchBar = pinSearchBar;
+      _gridQuickFilterContent = quickFilterContent;
     });
   }
 
@@ -5783,6 +5779,36 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
     return switch (tab) {
       _BookshelfSettingsTab.list => '列表',
       _BookshelfSettingsTab.grid => '网格',
+    };
+  }
+
+  _BookshelfSearchQuickFilterContent _searchQuickFilterContentFromStorageValue(
+    String value,
+  ) {
+    return switch (value) {
+      'tags' => _BookshelfSearchQuickFilterContent.tags,
+      'categories' => _BookshelfSearchQuickFilterContent.categories,
+      _ => _BookshelfSearchQuickFilterContent.none,
+    };
+  }
+
+  String _searchQuickFilterContentStorageValue(
+    _BookshelfSearchQuickFilterContent value,
+  ) {
+    return switch (value) {
+      _BookshelfSearchQuickFilterContent.tags => 'tags',
+      _BookshelfSearchQuickFilterContent.categories => 'categories',
+      _BookshelfSearchQuickFilterContent.none => 'none',
+    };
+  }
+
+  String _searchQuickFilterContentLabel(
+    _BookshelfSearchQuickFilterContent value,
+  ) {
+    return switch (value) {
+      _BookshelfSearchQuickFilterContent.tags => '标签',
+      _BookshelfSearchQuickFilterContent.categories => '分类',
+      _BookshelfSearchQuickFilterContent.none => '不显示',
     };
   }
 
@@ -6193,24 +6219,31 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
 
   Widget _buildContinueReadingCard(ReadingRecord record) {
     final colorScheme = Theme.of(context).colorScheme;
+    final palette = _resolvedPalette(context);
     final textTheme = Theme.of(context).textTheme;
     final cardBackground = Color.alphaBlend(
-      colorScheme.surfaceContainerLow.withValues(alpha: 0.94),
-      colorScheme.surface,
+      palette.surfaceColor.withValues(alpha: 0.94),
+      palette.cardColor,
     );
     final badgeBackground = Color.alphaBlend(
-      colorScheme.surfaceContainerHighest.withValues(alpha: 0.96),
-      colorScheme.surface,
+      palette.elevatedSurfaceColor.withValues(alpha: 0.96),
+      palette.cardColor,
     );
     final title = _toSingleLineText(record.bookTitle);
+    final author = _toSingleLineText(record.bookAuthor?.trim() ?? '');
     final chapterTitle = _toSingleLineText(
       record.lastChapterTitle?.trim() ?? '',
     );
-    final footer = _formatRelativeReadTime(record.lastReadAt);
-    final subtitle =
-        chapterTitle.isNotEmpty
-            ? '上次阅读 $footer · $chapterTitle'
-            : '上次阅读 $footer';
+    final relativeReadTime = _formatRelativeReadTime(record.lastReadAt);
+    final chapterLabel = _buildContinueReadingChapterLabel(
+      chapterIndex: record.lastChapterIndex,
+      chapterTitle: chapterTitle,
+    );
+    final progressLabel = _buildContinueReadingProgressLabel(
+      record.lastPositionRatio,
+    );
+    final secondaryText =
+        chapterLabel ?? (author.isNotEmpty ? author : '回到上次阅读位置');
 
     return Material(
       color: Colors.transparent,
@@ -6219,7 +6252,7 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
           color: cardBackground,
           borderRadius: BorderRadius.circular(18),
           border: Border.all(
-            color: colorScheme.outlineVariant.withValues(alpha: 0.42),
+            color: palette.cardBorderColor.withValues(alpha: 0.42),
           ),
         ),
         child: InkWell(
@@ -6246,42 +6279,6 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
                     crossAxisAlignment: CrossAxisAlignment.start,
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
-                      Row(
-                        children: [
-                          Container(
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 8,
-                              vertical: 3,
-                            ),
-                            decoration: BoxDecoration(
-                              color: badgeBackground,
-                              borderRadius: BorderRadius.circular(999),
-                            ),
-                            child: Text(
-                              '继续阅读',
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              style: textTheme.labelSmall?.copyWith(
-                                color: colorScheme.onSurface,
-                                fontWeight: FontWeight.w700,
-                              ),
-                            ),
-                          ),
-                          const SizedBox(width: 8),
-                          Expanded(
-                            child: Text(
-                              footer,
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              style: textTheme.labelSmall?.copyWith(
-                                color: colorScheme.onSurfaceVariant,
-                                fontWeight: FontWeight.w600,
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 8),
                       Text(
                         title.isEmpty ? '继续阅读' : title,
                         maxLines: 1,
@@ -6291,15 +6288,99 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
                           height: 1.2,
                         ),
                       ),
-                      const SizedBox(height: 4),
-                      Text(
-                        subtitle,
-                        maxLines: 2,
-                        overflow: TextOverflow.ellipsis,
-                        style: textTheme.bodySmall?.copyWith(
-                          color: colorScheme.onSurfaceVariant,
-                          height: 1.35,
-                        ),
+                      const SizedBox(height: 6),
+                      Row(
+                        children: [
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 7,
+                              vertical: 3,
+                            ),
+                            decoration: BoxDecoration(
+                              color: badgeBackground,
+                              borderRadius: BorderRadius.circular(999),
+                            ),
+                            child: Text(
+                              '最近阅读',
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: textTheme.labelSmall?.copyWith(
+                                color: palette.textPrimaryColor,
+                                fontWeight: FontWeight.w700,
+                              ),
+                            ),
+                          ),
+                          const SizedBox(width: 6),
+                          Flexible(
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 7,
+                                vertical: 3,
+                              ),
+                              decoration: BoxDecoration(
+                                color: palette.cardColor.withValues(
+                                  alpha: 0.72,
+                                ),
+                                borderRadius: BorderRadius.circular(999),
+                              ),
+                              child: Text(
+                                relativeReadTime,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: textTheme.labelSmall?.copyWith(
+                                  color: palette.textSecondaryColor,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 6),
+                      Row(
+                        children: [
+                          Icon(
+                            chapterLabel != null
+                                ? Icons.auto_stories_outlined
+                                : Icons.person_outline_rounded,
+                            size: 14,
+                            color: colorScheme.onSurfaceVariant,
+                          ),
+                          const SizedBox(width: 4),
+                          Expanded(
+                            child: Text(
+                              secondaryText,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: textTheme.bodySmall?.copyWith(
+                                color: palette.textSecondaryColor,
+                                height: 1.35,
+                              ),
+                            ),
+                          ),
+                          if (progressLabel != null) ...[
+                            const SizedBox(width: 8),
+                            Container(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 7,
+                                vertical: 3,
+                              ),
+                              decoration: BoxDecoration(
+                                color: palette.noticeSurfaceColor.withValues(
+                                  alpha: 0.88,
+                                ),
+                                borderRadius: BorderRadius.circular(999),
+                              ),
+                              child: Text(
+                                progressLabel,
+                                style: textTheme.labelSmall?.copyWith(
+                                  color: palette.noticeAccentColor,
+                                  fontWeight: FontWeight.w700,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ],
                       ),
                     ],
                   ),
@@ -6310,22 +6391,20 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
                   crossAxisAlignment: CrossAxisAlignment.end,
                   children: [
                     Container(
-                      width: 34,
-                      height: 34,
+                      width: 30,
+                      height: 30,
                       decoration: BoxDecoration(
-                        color: colorScheme.surfaceContainerHighest.withValues(
-                          alpha: 0.9,
-                        ),
+                        color: palette.cardColor.withValues(alpha: 0.76),
                         border: Border.all(
-                          color: colorScheme.outlineVariant.withValues(
-                            alpha: 0.45,
+                          color: palette.cardBorderColor.withValues(
+                            alpha: 0.38,
                           ),
                         ),
                         borderRadius: BorderRadius.circular(999),
                       ),
                       child: Icon(
-                        Icons.chevron_right_rounded,
-                        size: 22,
+                        Icons.arrow_forward_ios_rounded,
+                        size: 14,
                         color: colorScheme.onSurfaceVariant,
                       ),
                     ),
@@ -6337,6 +6416,31 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
         ),
       ),
     );
+  }
+
+  String? _buildContinueReadingChapterLabel({
+    required int? chapterIndex,
+    required String chapterTitle,
+  }) {
+    final hasChapterIndex = chapterIndex != null && chapterIndex >= 0;
+    if (hasChapterIndex && chapterTitle.isNotEmpty) {
+      return '第 ${chapterIndex + 1} 章 · $chapterTitle';
+    }
+    if (hasChapterIndex) {
+      return '第 ${chapterIndex + 1} 章';
+    }
+    if (chapterTitle.isNotEmpty) {
+      return chapterTitle;
+    }
+    return null;
+  }
+
+  String? _buildContinueReadingProgressLabel(double ratio) {
+    final normalized = ratio.clamp(0.0, 1.0);
+    if (normalized <= 0) {
+      return null;
+    }
+    return '${(normalized * 100).round()}%';
   }
 
   String _formatRelativeReadTime(DateTime time) {
@@ -6682,6 +6786,36 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
         );
       },
     );
+  }
+}
+
+class _BookshelfPinnedHeaderDelegate extends SliverPersistentHeaderDelegate {
+  const _BookshelfPinnedHeaderDelegate({
+    required this.extent,
+    required this.child,
+  });
+
+  final double extent;
+  final Widget child;
+
+  @override
+  double get minExtent => extent;
+
+  @override
+  double get maxExtent => extent;
+
+  @override
+  Widget build(
+    BuildContext context,
+    double shrinkOffset,
+    bool overlapsContent,
+  ) {
+    return child;
+  }
+
+  @override
+  bool shouldRebuild(covariant _BookshelfPinnedHeaderDelegate oldDelegate) {
+    return oldDelegate.extent != extent || oldDelegate.child != child;
   }
 }
 
