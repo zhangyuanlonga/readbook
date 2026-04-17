@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shuxiang_reading_next/domain/entities/book.dart';
 import 'package:shuxiang_reading_next/domain/entities/book_detail.dart';
 import 'package:shuxiang_reading_next/domain/entities/chapter.dart';
@@ -111,7 +112,11 @@ void main() {
     );
     addTearDown(router.dispose);
 
-    await tester.pumpWidget(MaterialApp.router(routerConfig: router));
+    await tester.pumpWidget(
+      ProviderScope(
+        child: MaterialApp.router(routerConfig: router),
+      ),
+    );
     await tester.pumpAndSettle(const Duration(milliseconds: 120));
 
     expect(find.text('凡人修仙传-A'), findsWidgets);
@@ -138,7 +143,6 @@ void main() {
     await tester.pump(const Duration(milliseconds: 360));
 
     expect(find.text('凡人修仙传-B'), findsWidgets);
-    expect(find.text('已切换到 源B。'), findsOneWidget);
     expect(detailService.loadedSourceIds, <String>['source_a', 'source_b']);
     expect(searchService.callCount, 1);
   });

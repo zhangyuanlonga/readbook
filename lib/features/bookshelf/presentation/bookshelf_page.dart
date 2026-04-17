@@ -367,6 +367,7 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
     ref.watch(activeAdvancedThemeProvider);
     ref.watch(coverGalleriesProvider);
     final palette = _resolvedPalette(context);
+    final backdrop = _resolvedBackdrop(context);
     final horizontal = AppSpacing.pageHorizontal(context);
     final platform = Theme.of(context).platform;
     final effectiveNavigationStyle = resolveAppNavigationStyle(
@@ -515,6 +516,24 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
                 end: Alignment.bottomCenter,
                 colors: [palette.backgroundColor, palette.surfaceColor],
               ),
+              image:
+                  backdrop.wallpaperPath != null &&
+                          backdrop.wallpaperPath!.isNotEmpty &&
+                          File(backdrop.wallpaperPath!).existsSync()
+                      ? DecorationImage(
+                        image: FileImage(File(backdrop.wallpaperPath!)),
+                        fit: BoxFit.cover,
+                        colorFilter: ColorFilter.mode(
+                          backdrop.wallpaperOverlayColor.withValues(
+                            alpha: backdrop.wallpaperOverlayOpacity.clamp(
+                              0.0,
+                              1.0,
+                            ),
+                          ),
+                          BlendMode.srcOver,
+                        ),
+                      )
+                      : null,
             ),
             child: RefreshIndicator(
               onRefresh: () => _loadBookshelf(force: true),
@@ -587,6 +606,13 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
 
   ResolvedAdvancedThemePalette _resolvedPalette(BuildContext context) {
     return resolveAdvancedThemePalette(
+      Theme.of(context).colorScheme,
+      ref.read(activeAdvancedThemeProvider).valueOrNull,
+    );
+  }
+
+  ResolvedAdvancedThemeBackdrop _resolvedBackdrop(BuildContext context) {
+    return resolveAdvancedThemeBackdrop(
       Theme.of(context).colorScheme,
       ref.read(activeAdvancedThemeProvider).valueOrNull,
     );

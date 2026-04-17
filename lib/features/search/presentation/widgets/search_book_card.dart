@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../../../../app/widgets/disk_cached_cover_image.dart';
-import '../../../../app/widgets/text_cover_placeholder.dart';
+import '../../../../app/widgets/resolved_book_cover.dart';
 import '../../../../domain/entities/book.dart';
+import '../../../mine/application/advanced_theme_provider.dart';
+import '../../../mine/application/cover_gallery_provider.dart';
 
 class SearchBookCard extends StatelessWidget {
   const SearchBookCard({
@@ -46,6 +48,9 @@ class SearchBookCard extends StatelessWidget {
                 title: book.title,
                 author: book.author,
                 heroTag: heroTag,
+                bookId: book.id,
+                sourceId: book.sourceId,
+                detailUrl: book.detailUrl,
               ),
               const SizedBox(width: 12),
               Expanded(
@@ -136,55 +141,45 @@ class _CoverPreview extends StatelessWidget {
     required this.title,
     required this.heroTag,
     this.author,
+    this.bookId,
+    this.sourceId,
+    this.detailUrl,
   });
 
   final String? coverUrl;
   final String title;
   final String? author;
   final String heroTag;
+  final String? bookId;
+  final String? sourceId;
+  final String? detailUrl;
 
   @override
   Widget build(BuildContext context) {
-    final uri = Uri.tryParse(coverUrl ?? '');
-    if (uri == null || !uri.hasScheme) {
-      return Hero(
-        tag: heroTag,
-        child: _CoverFallback(title: title, author: author),
-      );
-    }
-
-    return Hero(
-      tag: heroTag,
-      child: ClipRRect(
-        borderRadius: BorderRadius.circular(8),
-        child: DiskCachedCoverImage(
-          imageUrl: coverUrl,
-          width: 56,
-          height: 80,
-          fit: BoxFit.cover,
-          cacheWidth: 112,
-          cacheHeight: 160,
-          fallback: _CoverFallback(title: title, author: author),
-        ),
-      ),
-    );
-  }
-}
-
-class _CoverFallback extends StatelessWidget {
-  const _CoverFallback({required this.title, this.author});
-
-  final String title;
-  final String? author;
-
-  @override
-  Widget build(BuildContext context) {
-    return TextCoverPlaceholder(
-      title: title,
-      author: author,
-      width: 56,
-      height: 80,
-      borderRadius: BorderRadius.circular(8),
+    return Consumer(
+      builder: (context, ref, _) {
+        ref.watch(activeAdvancedThemeProvider);
+        ref.watch(coverGalleriesProvider);
+        final resolvedCover = resolveBookCover(
+          realCoverUrl: coverUrl,
+          activeTheme: ref.read(activeAdvancedThemeProvider).valueOrNull,
+          galleries: ref.read(coverGalleriesProvider).valueOrNull ?? const [],
+          bookId: bookId,
+          sourceId: sourceId,
+          detailUrl: detailUrl,
+        );
+        return Hero(
+          tag: heroTag,
+          child: ResolvedBookCoverView(
+            cover: resolvedCover,
+            title: title,
+            author: author,
+            width: 56,
+            height: 80,
+            borderRadius: BorderRadius.circular(8),
+          ),
+        );
+      },
     );
   }
 }

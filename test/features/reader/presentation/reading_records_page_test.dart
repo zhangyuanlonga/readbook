@@ -1,6 +1,7 @@
 import 'package:drift/drift.dart' show driftRuntimeOptions;
 import 'package:drift/native.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shuxiang_reading_next/data/datasources/local/app_database.dart';
 import 'package:shuxiang_reading_next/domain/entities/local_book.dart';
 import 'package:shuxiang_reading_next/domain/entities/reading_book_status.dart';
@@ -44,13 +45,15 @@ void main() {
       addTearDown(() => tester.binding.setSurfaceSize(null));
 
       await tester.pumpWidget(
-        MaterialApp(
-          home: ReadingRecordsPage(
-            readingRecordService: readingRecordService,
-            preferencesService: preferencesService,
-            readerSystemSettingsService: systemSettingsService,
-            readingBookStatusService: readingBookStatusService,
-            initialPeriod: ReadingRecordsPeriod.all,
+        ProviderScope(
+          child: MaterialApp(
+            home: ReadingRecordsPage(
+              readingRecordService: readingRecordService,
+              preferencesService: preferencesService,
+              readerSystemSettingsService: systemSettingsService,
+              readingBookStatusService: readingBookStatusService,
+              initialPeriod: ReadingRecordsPeriod.all,
+            ),
           ),
         ),
       );
@@ -78,12 +81,14 @@ void main() {
         tester.view.devicePixelRatio = item.dpr;
         await tester.binding.setSurfaceSize(item.size);
         await tester.pumpWidget(
-          MaterialApp(
-            home: ReadingRecordsPage(
-              readingRecordService: readingRecordService,
-              preferencesService: preferencesService,
-              readerSystemSettingsService: systemSettingsService,
-              readingBookStatusService: readingBookStatusService,
+          ProviderScope(
+            child: MaterialApp(
+              home: ReadingRecordsPage(
+                readingRecordService: readingRecordService,
+                preferencesService: preferencesService,
+                readerSystemSettingsService: systemSettingsService,
+                readingBookStatusService: readingBookStatusService,
+              ),
             ),
           ),
         );
@@ -131,13 +136,15 @@ void main() {
       );
 
       await tester.pumpWidget(
-        MaterialApp(
-          home: ReadingRecordsPage(
-            readingRecordService: readingRecordService,
-            preferencesService: preferencesService,
-            readerSystemSettingsService: systemSettingsService,
-            readingBookStatusService: readingBookStatusService,
-            initialPeriod: ReadingRecordsPeriod.all,
+        ProviderScope(
+          child: MaterialApp(
+            home: ReadingRecordsPage(
+              readingRecordService: readingRecordService,
+              preferencesService: preferencesService,
+              readerSystemSettingsService: systemSettingsService,
+              readingBookStatusService: readingBookStatusService,
+              initialPeriod: ReadingRecordsPeriod.all,
+            ),
           ),
         ),
       );
@@ -193,13 +200,15 @@ void main() {
       );
 
       await tester.pumpWidget(
-        MaterialApp(
-          home: ReadingRecordsPage(
-            readingRecordService: readingRecordService,
-            preferencesService: preferencesService,
-            readerSystemSettingsService: systemSettingsService,
-            readingBookStatusService: readingBookStatusService,
-            initialPeriod: ReadingRecordsPeriod.month,
+        ProviderScope(
+          child: MaterialApp(
+            home: ReadingRecordsPage(
+              readingRecordService: readingRecordService,
+              preferencesService: preferencesService,
+              readerSystemSettingsService: systemSettingsService,
+              readingBookStatusService: readingBookStatusService,
+              initialPeriod: ReadingRecordsPeriod.month,
+            ),
           ),
         ),
       );

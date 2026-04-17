@@ -2,14 +2,16 @@ import 'dart:async';
 import 'dart:math';
 
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../app/layout/app_layout.dart';
 import '../../../app/layout/app_spacing.dart';
-import '../../../app/widgets/disk_cached_cover_image.dart';
-import '../../../app/widgets/text_cover_placeholder.dart';
+import '../../../app/widgets/resolved_book_cover.dart';
 import '../../../domain/entities/bookmark.dart';
 import '../../../domain/entities/chapter.dart';
 import '../../../domain/repositories/bookmark_repository.dart';
+import '../../mine/application/advanced_theme_provider.dart';
+import '../../mine/application/cover_gallery_provider.dart';
 import '../application/reader_catalog_search_service.dart';
 import '../application/reader_logical_position.dart';
 
@@ -551,6 +553,7 @@ Future<ReaderCatalogSheetResult?> showReaderCatalogSheet({
                           8,
                         ),
                         child: _ReaderCatalogHeaderCard(
+                          currentBookId: currentBookId,
                           bookTitle: bookTitle,
                           bookAuthor: bookAuthor,
                           bookCoverUrl: bookCoverUrl,
@@ -850,6 +853,7 @@ class _CatalogSearchResultList extends StatelessWidget {
 
 class _ReaderCatalogHeaderCard extends StatelessWidget {
   const _ReaderCatalogHeaderCard({
+    required this.currentBookId,
     required this.bookTitle,
     required this.bookAuthor,
     required this.bookCoverUrl,
@@ -858,6 +862,7 @@ class _ReaderCatalogHeaderCard extends StatelessWidget {
     required this.onMoreActions,
   });
 
+  final String currentBookId;
   final String bookTitle;
   final String? bookAuthor;
   final String? bookCoverUrl;
@@ -897,20 +902,28 @@ class _ReaderCatalogHeaderCard extends StatelessWidget {
             children: [
               ClipRRect(
                 borderRadius: BorderRadius.circular(10),
-                child: SizedBox(
-                  width: 44,
-                  height: 60,
-                  child: DiskCachedCoverImage(
-                    imageUrl: bookCoverUrl,
-                    fit: BoxFit.cover,
-                    fallback: TextCoverPlaceholder(
+                child: Consumer(
+                  builder: (context, ref, _) {
+                    ref.watch(activeAdvancedThemeProvider);
+                    ref.watch(coverGalleriesProvider);
+                    final resolvedCover = resolveBookCover(
+                      realCoverUrl: bookCoverUrl,
+                      activeTheme: ref.read(activeAdvancedThemeProvider).valueOrNull,
+                      galleries:
+                          ref.read(coverGalleriesProvider).valueOrNull ??
+                          const [],
+                      bookId: currentBookId,
+                    );
+                    return ResolvedBookCoverView(
+                      cover: resolvedCover,
                       title: normalizedTitle,
                       author:
                           normalizedAuthor.isEmpty ? null : normalizedAuthor,
                       width: 44,
                       height: 60,
-                    ),
-                  ),
+                      borderRadius: BorderRadius.circular(10),
+                    );
+                  },
                 ),
               ),
               const SizedBox(width: 8),

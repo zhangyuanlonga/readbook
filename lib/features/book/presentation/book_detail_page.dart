@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:io';
 
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
 import 'package:html/parser.dart' as html_parser;
@@ -9,10 +10,9 @@ import 'package:path/path.dart' as p;
 
 import '../../../app/layout/app_layout.dart';
 import '../../../app/layout/app_spacing.dart';
-import '../../../app/widgets/switch_source_candidate_sheet.dart';
-import '../../../app/widgets/disk_cached_cover_image.dart';
+import '../../../app/widgets/resolved_book_cover.dart';
 import '../../../app/widgets/runtime_feedback_card.dart';
-import '../../../app/widgets/text_cover_placeholder.dart';
+import '../../../app/widgets/switch_source_candidate_sheet.dart';
 
 import '../../../core/errors/app_exception.dart';
 import '../../../core/errors/error_codes.dart';
@@ -39,6 +39,8 @@ import '../../reader/application/switch_source_shared.dart';
 import '../../reader/presentation/chapter_cache_sheets.dart';
 import '../../search/application/search_hit_cache_service.dart';
 import '../../search/application/search_service.dart';
+import '../../mine/application/advanced_theme_provider.dart';
+import '../../mine/application/cover_gallery_provider.dart';
 import '../../source/application/source_runtime_facade.dart';
 import '../../source/application/source_runtime_task_conflict_service.dart';
 import '../../source/application/source_runtime_scheduler_service.dart';
@@ -424,6 +426,9 @@ class _BookDetailPageState extends State<BookDetailPage> {
         title: detail.title,
         author: detail.author,
         heroTag: heroTag,
+        bookId: detail.id,
+        sourceId: detail.sourceId,
+        detailUrl: detail.detailUrl,
       ),
       intro: intro,
       primaryActions: LayoutBuilder(
@@ -457,37 +462,35 @@ class _BookDetailPageState extends State<BookDetailPage> {
     required String title,
     String? author,
     required String heroTag,
+    String? bookId,
+    String? sourceId,
+    String? detailUrl,
   }) {
-    final uri = Uri.tryParse(coverUrl ?? '');
-    if (uri != null && uri.hasScheme) {
-      return Hero(
-        tag: heroTag,
-        child: ClipRRect(
-          borderRadius: BorderRadius.circular(14),
-          child: DiskCachedCoverImage(
-            imageUrl: coverUrl,
+    return Consumer(
+      builder: (context, ref, _) {
+        ref.watch(activeAdvancedThemeProvider);
+        ref.watch(coverGalleriesProvider);
+        final resolvedCover = resolveBookCover(
+          realCoverUrl: coverUrl,
+          customCoverPath: _localBookMeta?.coverPath,
+          activeTheme: ref.read(activeAdvancedThemeProvider).valueOrNull,
+          galleries: ref.read(coverGalleriesProvider).valueOrNull ?? const [],
+          bookId: bookId,
+          sourceId: sourceId,
+          detailUrl: detailUrl,
+        );
+        return Hero(
+          tag: heroTag,
+          child: ResolvedBookCoverView(
+            cover: resolvedCover,
+            title: title,
+            author: author,
             width: 84,
             height: 120,
-            fit: BoxFit.cover,
-            fallback: _buildCoverFallback(title: title, author: author),
+            borderRadius: BorderRadius.circular(14),
           ),
-        ),
-      );
-    }
-
-    return Hero(
-      tag: heroTag,
-      child: _buildCoverFallback(title: title, author: author),
-    );
-  }
-
-  Widget _buildCoverFallback({required String title, String? author}) {
-    return TextCoverPlaceholder(
-      title: title,
-      author: author,
-      width: 84,
-      height: 120,
-      borderRadius: BorderRadius.circular(14),
+        );
+      },
     );
   }
 

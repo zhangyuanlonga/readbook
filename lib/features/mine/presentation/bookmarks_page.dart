@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../app/layout/app_layout.dart';
@@ -8,30 +9,26 @@ import '../../../app/layout/app_spacing.dart';
 import '../../../app/widgets/resolved_book_cover.dart';
 import '../../../data/datasources/local/app_database.dart';
 import '../../../data/repositories/bookmark_repository_impl.dart';
-import '../../../domain/entities/app_advanced_theme.dart';
 import '../../../domain/entities/bookmark.dart';
 import '../../../domain/entities/bookshelf_book.dart';
-import '../../../domain/entities/cover_gallery.dart';
 import '../../../domain/repositories/bookmark_repository.dart';
 import '../../bookshelf/application/bookshelf_service.dart';
-import '../application/advanced_theme_service.dart';
-import '../application/cover_gallery_service.dart';
+import '../application/advanced_theme_provider.dart';
+import '../application/cover_gallery_provider.dart';
 import '../../reader/application/reader_entry_route_resolver.dart';
 
-class BookmarksPage extends StatefulWidget {
+class BookmarksPage extends ConsumerStatefulWidget {
   const BookmarksPage({super.key});
 
   @override
-  State<BookmarksPage> createState() => _BookmarksPageState();
+  ConsumerState<BookmarksPage> createState() => _BookmarksPageState();
 }
 
-class _BookmarksPageState extends State<BookmarksPage> {
+class _BookmarksPageState extends ConsumerState<BookmarksPage> {
   final BookmarkRepository _bookmarkRepository = BookmarkRepositoryImpl(
     AppDatabase.instance,
   );
   final BookshelfService _bookshelfService = BookshelfService();
-  final AdvancedThemeService _advancedThemeService = AdvancedThemeService();
-  final CoverGalleryService _coverGalleryService = CoverGalleryService();
   final ReaderEntryRouteResolver _readerEntryRouteResolver =
       const ReaderEntryRouteResolver();
 
@@ -39,8 +36,6 @@ class _BookmarksPageState extends State<BookmarksPage> {
   String? _errorText;
   List<Bookmark> _bookmarks = const [];
   Map<String, BookshelfBook> _bookshelfIndex = const <String, BookshelfBook>{};
-  AppAdvancedTheme? _activeTheme;
-  List<CoverGallery> _coverGalleries = const <CoverGallery>[];
 
   @override
   void initState() {
@@ -60,12 +55,8 @@ class _BookmarksPageState extends State<BookmarksPage> {
     try {
       final bookmarksFuture = _bookmarkRepository.listAllBookmarks();
       final booksFuture = _bookshelfService.getAll();
-      final activeThemeFuture = _advancedThemeService.loadActiveTheme();
-      final coverGalleriesFuture = _coverGalleryService.loadGalleries();
       final bookmarks = await bookmarksFuture;
       final books = await booksFuture;
-      final activeTheme = await activeThemeFuture;
-      final coverGalleries = await coverGalleriesFuture;
       final index = <String, BookshelfBook>{
         for (final book in books) book.bookId: book,
       };
@@ -75,8 +66,6 @@ class _BookmarksPageState extends State<BookmarksPage> {
       setState(() {
         _bookmarks = bookmarks;
         _bookshelfIndex = index;
-        _activeTheme = activeTheme;
-        _coverGalleries = coverGalleries;
       });
     } catch (_) {
       if (!mounted) {
@@ -96,6 +85,8 @@ class _BookmarksPageState extends State<BookmarksPage> {
 
   @override
   Widget build(BuildContext context) {
+    ref.watch(activeAdvancedThemeProvider);
+    ref.watch(coverGalleriesProvider);
     final horizontal = AppSpacing.pageHorizontal(context);
     final bottomSafe = MediaQuery.viewPaddingOf(context).bottom;
     final canPopRoute = context.canPop();
@@ -404,8 +395,8 @@ class _BookmarksPageState extends State<BookmarksPage> {
   }) {
     final resolvedCover = resolveBookCover(
       realCoverUrl: realCoverUrl,
-      activeTheme: _activeTheme,
-      galleries: _coverGalleries,
+      activeTheme: ref.read(activeAdvancedThemeProvider).valueOrNull,
+      galleries: ref.read(coverGalleriesProvider).valueOrNull ?? const [],
       bookId: bookId,
       sourceId: sourceId,
       detailUrl: detailUrl,

@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -107,6 +108,10 @@ class _MinePageState extends ConsumerState<MinePage> {
       context,
       activeAdvancedTheme.valueOrNull,
     );
+    final advancedBackdrop = _resolveAdvancedBackdrop(
+      context,
+      activeAdvancedTheme.valueOrNull,
+    );
     final navigationPreference = ref.watch(
       appNavigationStylePreferenceProvider,
     );
@@ -149,109 +154,138 @@ class _MinePageState extends ConsumerState<MinePage> {
             maxWidth: AppLayout.mineContentMaxWidth,
           );
 
-          return Align(
-            alignment: Alignment.topCenter,
-            child: ConstrainedBox(
-              constraints: BoxConstraints(maxWidth: maxWidth),
-              child: RefreshIndicator(
-                onRefresh: _refreshMine,
-                child: ListView(
-                  physics: const AlwaysScrollableScrollPhysics(),
-                  padding: EdgeInsets.fromLTRB(
-                    horizontal,
-                    12,
-                    horizontal,
-                    12 + bottomInset,
-                  ),
-                  children: [
-                    _buildPageEntrance(
-                      index: 0,
-                      child: _buildProfileCard(
-                        context,
-                        palette: advancedPalette,
-                      ),
+          return DecoratedBox(
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                begin: Alignment.topCenter,
+                end: Alignment.bottomCenter,
+                colors: <Color>[
+                  advancedBackdrop.backgroundColor,
+                  advancedBackdrop.surfaceColor,
+                ],
+              ),
+              image:
+                  advancedBackdrop.wallpaperPath != null &&
+                          advancedBackdrop.wallpaperPath!.isNotEmpty &&
+                          File(advancedBackdrop.wallpaperPath!).existsSync()
+                      ? DecorationImage(
+                        image: FileImage(File(advancedBackdrop.wallpaperPath!)),
+                        fit: BoxFit.cover,
+                        colorFilter: ColorFilter.mode(
+                          advancedBackdrop.wallpaperOverlayColor.withValues(
+                            alpha: advancedBackdrop.wallpaperOverlayOpacity
+                                .clamp(0.0, 1.0),
+                          ),
+                          BlendMode.srcOver,
+                        ),
+                      )
+                      : null,
+            ),
+            child: Align(
+              alignment: Alignment.topCenter,
+              child: ConstrainedBox(
+                constraints: BoxConstraints(maxWidth: maxWidth),
+                child: RefreshIndicator(
+                  onRefresh: _refreshMine,
+                  child: ListView(
+                    physics: const AlwaysScrollableScrollPhysics(),
+                    padding: EdgeInsets.fromLTRB(
+                      horizontal,
+                      12,
+                      horizontal,
+                      12 + bottomInset,
                     ),
-                    SizedBox(height: _primarySectionGap),
-                    _buildQuickAccessCards(context, palette: advancedPalette),
-                    SizedBox(height: _primarySectionGap),
-                    _buildPageEntrance(
-                      index: 1,
-                      child: _buildActionSection(
-                        context,
-                        palette: advancedPalette,
-                        title: '外观',
-                        actions: [
-                          _MineActionItem(
-                            icon: Icons.palette_outlined,
-                            label: '外观',
-                            subtitle:
-                                '${_themeModeLabel(themeMode)} · ${appThemeSeedLabel(seedColor)} · ${appNavigationStylePreferenceLabel(navigationPreference)}',
-                            colorDot: seedColor,
-                            onTap:
-                                () => context.push(
-                                  '/appearance?section=appearance',
-                                ),
-                          ),
-                          _MineActionItem(
-                            icon: Icons.auto_awesome_outlined,
-                            label: '高级主题',
-                            subtitle: activeAdvancedTheme.when(
-                              data:
-                                  (theme) =>
-                                      theme == null
-                                          ? '未启用'
-                                          : '当前：${theme.name}',
-                              loading: () => '读取中',
-                              error: (_, _) => '未启用',
-                            ),
-                            onTap:
-                                () =>
-                                    context.push('/appearance/advanced-themes'),
-                          ),
-                          _MineActionItem(
-                            icon: Icons.dashboard_outlined,
-                            label: '底栏',
-                            subtitle: activeBottomNavIconGallery.when(
-                              data:
-                                  (gallery) =>
-                                      gallery?.name.trim().isNotEmpty == true
-                                          ? gallery!.name
-                                          : null,
-                              loading: () => null,
-                              error: (_, _) => null,
-                            ),
-                            onTap:
-                                () =>
-                                    context.push('/bottom-nav-icon-galleries'),
-                          ),
-                          _MineActionItem(
-                            icon: Icons.photo_library_outlined,
-                            label: '封面',
-                            onTap: () => context.push('/cover-galleries'),
-                          ),
-                          _MineActionItem(
-                            icon: Icons.wallpaper_outlined,
-                            label: '背景',
-                            onTap:
-                                () => context.push(
-                                  '/appearance?section=background',
-                                ),
-                          ),
-                        ],
+                    children: [
+                      _buildPageEntrance(
+                        index: 0,
+                        child: _buildProfileCard(
+                          context,
+                          palette: advancedPalette,
+                        ),
                       ),
-                    ),
-                    SizedBox(height: _secondarySectionGap),
-                    _buildPageEntrance(
-                      index: 2,
-                      child: _buildActionSection(
-                        context,
-                        palette: advancedPalette,
-                        title: '常用',
-                        padding:
-                            _isListMode
-                                ? const EdgeInsets.fromLTRB(10, 2, 10, 2)
-                                : null,
-                        actions: [
+                      SizedBox(height: _primarySectionGap),
+                      _buildQuickAccessCards(context, palette: advancedPalette),
+                      SizedBox(height: _primarySectionGap),
+                      _buildPageEntrance(
+                        index: 1,
+                        child: _buildActionSection(
+                          context,
+                          palette: advancedPalette,
+                          title: '外观',
+                          actions: [
+                            _MineActionItem(
+                              icon: Icons.palette_outlined,
+                              label: '外观',
+                              subtitle:
+                                  '${_themeModeLabel(themeMode)} · ${appThemeSeedLabel(seedColor)} · ${appNavigationStylePreferenceLabel(navigationPreference)}',
+                              colorDot: seedColor,
+                              onTap:
+                                  () => context.push(
+                                    '/appearance?section=appearance',
+                                  ),
+                            ),
+                            _MineActionItem(
+                              icon: Icons.auto_awesome_outlined,
+                              label: '高级主题',
+                              subtitle: activeAdvancedTheme.when(
+                                data:
+                                    (theme) =>
+                                        theme == null
+                                            ? '未启用'
+                                            : '当前：${theme.name}',
+                                loading: () => '读取中',
+                                error: (_, _) => '未启用',
+                              ),
+                              onTap:
+                                  () => context.push(
+                                    '/appearance/advanced-themes',
+                                  ),
+                            ),
+                            _MineActionItem(
+                              icon: Icons.dashboard_outlined,
+                              label: '底栏',
+                              subtitle: activeBottomNavIconGallery.when(
+                                data:
+                                    (gallery) =>
+                                        gallery?.name.trim().isNotEmpty == true
+                                            ? gallery!.name
+                                            : null,
+                                loading: () => null,
+                                error: (_, _) => null,
+                              ),
+                              onTap:
+                                  () => context.push(
+                                    '/bottom-nav-icon-galleries',
+                                  ),
+                            ),
+                            _MineActionItem(
+                              icon: Icons.photo_library_outlined,
+                              label: '封面',
+                              onTap: () => context.push('/cover-galleries'),
+                            ),
+                            _MineActionItem(
+                              icon: Icons.wallpaper_outlined,
+                              label: '背景',
+                              onTap:
+                                  () => context.push(
+                                    '/appearance?section=background',
+                                  ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      SizedBox(height: _secondarySectionGap),
+                      _buildPageEntrance(
+                        index: 2,
+                        child: _buildActionSection(
+                          context,
+                          palette: advancedPalette,
+                          title: '常用',
+                          padding:
+                              _isListMode
+                                  ? const EdgeInsets.fromLTRB(10, 2, 10, 2)
+                                  : null,
+                          actions: [
                           _MineActionItem(
                             icon: Icons.sell_outlined,
                             label: '标签管理',
@@ -319,10 +353,11 @@ class _MinePageState extends ConsumerState<MinePage> {
                             label: '关于',
                             onTap: () => context.push('/about'),
                           ),
-                        ],
+                          ],
+                        ),
                       ),
-                    ),
-                  ],
+                    ],
+                  ),
                 ),
               ),
             ),
@@ -659,6 +694,16 @@ class _MinePageState extends ConsumerState<MinePage> {
       primaryColor: resolved.primaryColor,
       noticeAccentColor: resolved.noticeAccentColor,
       noticeSurfaceColor: resolved.noticeSurfaceColor,
+    );
+  }
+
+  ResolvedAdvancedThemeBackdrop _resolveAdvancedBackdrop(
+    BuildContext context,
+    AppAdvancedTheme? activeTheme,
+  ) {
+    return resolveAdvancedThemeBackdrop(
+      Theme.of(context).colorScheme,
+      activeTheme,
     );
   }
 

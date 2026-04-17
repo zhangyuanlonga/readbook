@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../app/layout/app_layout.dart';
@@ -8,33 +9,27 @@ import '../../../app/layout/app_spacing.dart';
 import '../../../app/widgets/resolved_book_cover.dart';
 import '../../../core/cache/cover_image_disk_cache.dart';
 import '../../../data/datasources/local/app_database.dart';
-import '../../../domain/entities/app_advanced_theme.dart';
-import '../../../domain/entities/cover_gallery.dart';
 import '../../bookshelf/application/bookshelf_service.dart';
-import '../application/advanced_theme_service.dart';
-import '../application/cover_gallery_service.dart';
+import '../application/advanced_theme_provider.dart';
+import '../application/cover_gallery_provider.dart';
 
-class CacheManagementPage extends StatefulWidget {
+class CacheManagementPage extends ConsumerStatefulWidget {
   const CacheManagementPage({super.key});
 
   @override
-  State<CacheManagementPage> createState() => _CacheManagementPageState();
+  ConsumerState<CacheManagementPage> createState() =>
+      _CacheManagementPageState();
 }
 
-class _CacheManagementPageState extends State<CacheManagementPage> {
+class _CacheManagementPageState extends ConsumerState<CacheManagementPage> {
   final BookshelfService _bookshelfService = BookshelfService();
-  final AdvancedThemeService _advancedThemeService = AdvancedThemeService();
-  final CoverGalleryService _coverGalleryService = CoverGalleryService();
   late Future<Map<String, _CachedBookPresentation>>
   _bookPresentationIndexFuture;
-  AppAdvancedTheme? _activeTheme;
-  List<CoverGallery> _coverGalleries = const <CoverGallery>[];
 
   @override
   void initState() {
     super.initState();
     _bookPresentationIndexFuture = _buildBookPresentationIndex();
-    unawaited(_loadCoverThemeContext());
   }
 
   Future<Map<String, _CachedBookPresentation>>
@@ -88,27 +83,16 @@ class _CacheManagementPageState extends State<CacheManagementPage> {
     return result;
   }
 
-  Future<void> _loadCoverThemeContext() async {
-    final activeTheme = await _advancedThemeService.loadActiveTheme();
-    final coverGalleries = await _coverGalleryService.loadGalleries();
-    if (!mounted) {
-      return;
-    }
-    setState(() {
-      _activeTheme = activeTheme;
-      _coverGalleries = coverGalleries;
-    });
-  }
-
   void _reloadBookPresentationIndex() {
     setState(() {
       _bookPresentationIndexFuture = _buildBookPresentationIndex();
     });
-    unawaited(_loadCoverThemeContext());
   }
 
   @override
   Widget build(BuildContext context) {
+    ref.watch(activeAdvancedThemeProvider);
+    ref.watch(coverGalleriesProvider);
     final horizontal = AppSpacing.pageHorizontal(context);
     final bottomSafe = MediaQuery.viewPaddingOf(context).bottom;
     final canPopRoute = context.canPop();
@@ -373,8 +357,8 @@ class _CacheManagementPageState extends State<CacheManagementPage> {
   }) {
     final resolvedCover = resolveBookCover(
       realCoverUrl: realCoverUrl,
-      activeTheme: _activeTheme,
-      galleries: _coverGalleries,
+      activeTheme: ref.read(activeAdvancedThemeProvider).valueOrNull,
+      galleries: ref.read(coverGalleriesProvider).valueOrNull ?? const [],
       bookId: bookId,
       sourceId: sourceId,
       detailUrl: detailUrl,

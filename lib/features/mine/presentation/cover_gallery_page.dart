@@ -52,7 +52,8 @@ class _CoverGalleryPageState extends State<CoverGalleryPage> {
       if (!mounted) {
         return;
       }
-      context.push('/cover-galleries/editor?id=${gallery.id}');
+      await context.push('/cover-galleries/editor?id=${gallery.id}');
+      await _load();
     } finally {
       if (mounted) {
         setState(() {
@@ -60,6 +61,11 @@ class _CoverGalleryPageState extends State<CoverGalleryPage> {
         });
       }
     }
+  }
+
+  Future<void> _openGalleryEditor(CoverGallery gallery) async {
+    await context.push('/cover-galleries/editor?id=${gallery.id}');
+    await _load();
   }
 
   @override
@@ -168,7 +174,7 @@ class _CoverGalleryPageState extends State<CoverGalleryPage> {
     const previewCount = 5;
     return InkWell(
       borderRadius: BorderRadius.circular(18),
-      onTap: () => context.push('/cover-galleries/editor?id=${gallery.id}'),
+      onTap: () => _openGalleryEditor(gallery),
       child: Container(
         padding: const EdgeInsets.fromLTRB(12, 12, 12, 12),
         decoration: BoxDecoration(

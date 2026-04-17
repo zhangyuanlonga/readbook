@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shuxiang_reading_next/domain/entities/book.dart';
 import 'package:shuxiang_reading_next/features/search/presentation/widgets/search_book_card.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -13,13 +14,15 @@ void main() {
     );
 
     await tester.pumpWidget(
-      MaterialApp(
-        home: Scaffold(
-          body: SearchBookCard(
-            book: book,
-            sourceName: '测试源',
-            heroTag: 'hero_book_1',
-            onTap: () {},
+      ProviderScope(
+        child: MaterialApp(
+          home: Scaffold(
+            body: SearchBookCard(
+              book: book,
+              sourceName: '测试源',
+              heroTag: 'hero_book_1',
+              onTap: () {},
+            ),
           ),
         ),
       ),

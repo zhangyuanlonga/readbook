@@ -30,6 +30,22 @@ class ResolvedAdvancedThemePalette {
   final Color noticeSurfaceColor;
 }
 
+class ResolvedAdvancedThemeBackdrop {
+  const ResolvedAdvancedThemeBackdrop({
+    required this.backgroundColor,
+    required this.surfaceColor,
+    required this.wallpaperPath,
+    required this.wallpaperOverlayColor,
+    required this.wallpaperOverlayOpacity,
+  });
+
+  final Color backgroundColor;
+  final Color surfaceColor;
+  final String? wallpaperPath;
+  final Color wallpaperOverlayColor;
+  final double wallpaperOverlayOpacity;
+}
+
 ResolvedAdvancedThemePalette resolveAdvancedThemePalette(
   ColorScheme colorScheme,
   AppAdvancedTheme? activeTheme,
@@ -89,5 +105,34 @@ ResolvedAdvancedThemePalette resolveAdvancedThemePalette(
         colors?.noticeSurfaceColorValue != null
             ? Color(colors!.noticeSurfaceColorValue!)
             : colorScheme.tertiaryContainer,
+  );
+}
+
+ResolvedAdvancedThemeBackdrop resolveAdvancedThemeBackdrop(
+  ColorScheme colorScheme,
+  AppAdvancedTheme? activeTheme,
+) {
+  final modeConfig = switch (activeTheme) {
+    null => null,
+    _ when colorScheme.brightness == Brightness.dark => activeTheme.darkConfig,
+    _ => activeTheme.lightConfig,
+  };
+  final colors = modeConfig?.colors;
+
+  return ResolvedAdvancedThemeBackdrop(
+    backgroundColor:
+        colors?.backgroundColorValue != null
+            ? Color(colors!.backgroundColorValue!)
+            : colorScheme.surface,
+    surfaceColor:
+        colors?.surfaceColorValue != null
+            ? Color(colors!.surfaceColorValue!)
+            : colorScheme.surfaceContainerLow,
+    wallpaperPath: modeConfig?.wallpaperPath?.trim(),
+    wallpaperOverlayColor:
+        colors?.wallpaperOverlayColorValue != null
+            ? Color(colors!.wallpaperOverlayColorValue!)
+            : colorScheme.surface,
+    wallpaperOverlayOpacity: modeConfig?.wallpaperOverlayOpacity ?? 0.32,
   );
 }
