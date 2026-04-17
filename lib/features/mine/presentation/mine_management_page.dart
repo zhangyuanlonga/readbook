@@ -1,8 +1,11 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../app/layout/app_layout.dart';
 import '../../../app/layout/app_spacing.dart';
+import '../../bookshelf/application/bookshelf_service.dart';
 
 enum MineManagementSection {
   tagManagement,
@@ -18,6 +21,17 @@ class MineManagementPage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    if (section == MineManagementSection.tagManagement) {
+      return const _BookshelfTaxonomyManagementPage(
+        kind: _BookshelfTaxonomyKind.tag,
+      );
+    }
+    if (section == MineManagementSection.categoryManagement) {
+      return const _BookshelfTaxonomyManagementPage(
+        kind: _BookshelfTaxonomyKind.category,
+      );
+    }
+
     final config = _MineManagementPageConfig.forSection(section);
     final horizontal = AppSpacing.pageHorizontal(context);
     final bottomSafe = MediaQuery.viewPaddingOf(context).bottom;
@@ -423,6 +437,704 @@ class MineManagementPage extends StatelessWidget {
         ),
       ),
     );
+  }
+}
+
+enum _BookshelfTaxonomyKind { tag, category }
+
+class _BookshelfTaxonomyItem {
+  const _BookshelfTaxonomyItem({
+    required this.name,
+    required this.count,
+  });
+
+  final String name;
+  final int count;
+}
+
+class _BookshelfTaxonomyManagementPage extends StatefulWidget {
+  const _BookshelfTaxonomyManagementPage({required this.kind});
+
+  final _BookshelfTaxonomyKind kind;
+
+  @override
+  State<_BookshelfTaxonomyManagementPage> createState() =>
+      _BookshelfTaxonomyManagementPageState();
+}
+
+class _BookshelfTaxonomyManagementPageState
+    extends State<_BookshelfTaxonomyManagementPage> {
+  final BookshelfService _bookshelfService = BookshelfService();
+  List<_BookshelfTaxonomyItem> _items = const <_BookshelfTaxonomyItem>[];
+  bool _isLoading = true;
+  bool _isSaving = false;
+  bool _showCreateInput = false;
+  String _createDraft = '';
+  String? _createErrorText;
+
+  bool get _isTag => widget.kind == _BookshelfTaxonomyKind.tag;
+
+  String get _title => _isTag ? '标签管理' : '分类管理';
+
+  IconData get _icon => _isTag ? Icons.sell_outlined : Icons.folder_copy_outlined;
+
+  String get _entityName => _isTag ? '标签' : '分类';
+
+  @override
+  void initState() {
+    super.initState();
+    _load();
+  }
+
+  Future<void> _load() async {
+    try {
+      final items = await _loadItems();
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _items = items;
+        _isLoading = false;
+      });
+    } catch (_) {
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _items = const <_BookshelfTaxonomyItem>[];
+        _isLoading = false;
+      });
+      _showMessage('$_entityName列表加载失败，请稍后重试。');
+    }
+  }
+
+  Future<List<_BookshelfTaxonomyItem>> _loadItems() async {
+    if (_isTag) {
+      final tagMap = await _bookshelfService.getTagMap();
+      final tagOrder = await _bookshelfService.getTagOrder();
+      final counts = <String, int>{};
+      for (final tags in tagMap.values) {
+        for (final tag in tags) {
+          counts[tag] = (counts[tag] ?? 0) + 1;
+        }
+      }
+      return _mergeOrderedItems(counts: counts, order: tagOrder);
+    }
+
+    final categoryMap = await _bookshelfService.getCategoryMap();
+    final categoryOrder = await _bookshelfService.getCategoryOrder();
+    final counts = <String, int>{};
+    for (final category in categoryMap.values) {
+      counts[category] = (counts[category] ?? 0) + 1;
+    }
+    return _mergeOrderedItems(counts: counts, order: categoryOrder);
+  }
+
+  List<_BookshelfTaxonomyItem> _mergeOrderedItems({
+    required Map<String, int> counts,
+    required List<String> order,
+  }) {
+    final names = <String>[];
+    for (final item in order) {
+      if (!names.contains(item)) {
+        names.add(item);
+      }
+    }
+    final remaining = counts.keys
+        .where((item) => !names.contains(item))
+        .toList(growable: false);
+    remaining.sort((a, b) {
+      final countCompare = (counts[b] ?? 0).compareTo(counts[a] ?? 0);
+      if (countCompare != 0) {
+        return countCompare;
+      }
+      return a.compareTo(b);
+    });
+
+    return <_BookshelfTaxonomyItem>[
+      for (final name in [...names, ...remaining])
+        _BookshelfTaxonomyItem(name: name, count: counts[name] ?? 0),
+    ];
+  }
+
+  Future<void> _createItem() async {
+    final normalized = _createDraft.trim();
+    if (!mounted) {
+      return;
+    }
+    if (normalized.isEmpty) {
+      setState(() {
+        _showCreateInput = true;
+        _createErrorText = '请输入$_entityName名称';
+      });
+      return;
+    }
+    if (normalized.length > 12) {
+      setState(() {
+        _showCreateInput = true;
+        _createErrorText = '$_entityName最多 12 个字';
+      });
+      return;
+    }
+    final exists = _items.any((item) => item.name == normalized);
+    if (exists) {
+      setState(() {
+        _showCreateInput = true;
+        _createErrorText = '该$_entityName已存在';
+      });
+      return;
+    }
+
+    setState(() {
+      _isSaving = true;
+    });
+    try {
+      if (_isTag) {
+        await _bookshelfService.saveTagOrder([
+          ..._items.map((item) => item.name),
+          normalized,
+        ]);
+      } else {
+        await _bookshelfService.saveCategoryOrder([
+          ..._items.map((item) => item.name),
+          normalized,
+        ]);
+      }
+      await _load();
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _showCreateInput = false;
+        _createDraft = '';
+        _createErrorText = null;
+      });
+      _showMessage('已新增$_entityName $normalized。');
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isSaving = false;
+        });
+      }
+    }
+  }
+
+  Future<void> _renameItem(_BookshelfTaxonomyItem item) async {
+    final name = await _showNameDialog(
+      title: '重命名$_entityName',
+      confirmText: '保存',
+      hintText: '输入新的$_entityName名称',
+      initialValue: item.name,
+      existing: _items.map((entry) => entry.name).toSet(),
+      original: item.name,
+    );
+    if (name == null || !mounted || name == item.name) {
+      return;
+    }
+
+    setState(() {
+      _isSaving = true;
+    });
+    try {
+      if (_isTag) {
+        await _bookshelfService.renameTag(fromTag: item.name, toTag: name);
+      } else {
+        await _bookshelfService.renameCategory(
+          fromCategory: item.name,
+          toCategory: name,
+        );
+      }
+      await _load();
+      _showMessage('$_entityName已重命名为 $name。');
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isSaving = false;
+        });
+      }
+    }
+  }
+
+  Future<void> _deleteItem(_BookshelfTaxonomyItem item) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder:
+          (dialogContext) => AlertDialog(
+            title: Text('删除$_entityName'),
+            content: Text(
+              item.count > 0
+                  ? '确定删除$_entityName ${item.name} 吗？会从 ${item.count} 本书中移除。'
+                  : '确定删除$_entityName ${item.name} 吗？',
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.of(dialogContext).pop(false),
+                child: const Text('取消'),
+              ),
+              FilledButton(
+                onPressed: () => Navigator.of(dialogContext).pop(true),
+                child: const Text('删除'),
+              ),
+            ],
+          ),
+    );
+    if (confirmed != true || !mounted) {
+      return;
+    }
+
+    setState(() {
+      _isSaving = true;
+    });
+    try {
+      if (_isTag) {
+        await _bookshelfService.deleteTag(item.name);
+      } else {
+        await _bookshelfService.deleteCategory(item.name);
+      }
+      await _load();
+      _showMessage('已删除$_entityName ${item.name}。');
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isSaving = false;
+        });
+      }
+    }
+  }
+
+  Future<void> _moveItem(_BookshelfTaxonomyItem item, int offset) async {
+    final currentIndex = _items.indexWhere((entry) => entry.name == item.name);
+    final nextIndex = currentIndex + offset;
+    if (currentIndex < 0 || nextIndex < 0 || nextIndex >= _items.length) {
+      return;
+    }
+
+    final nextItems = List<_BookshelfTaxonomyItem>.from(_items);
+    final moved = nextItems.removeAt(currentIndex);
+    nextItems.insert(nextIndex, moved);
+
+    setState(() {
+      _items = nextItems;
+      _isSaving = true;
+    });
+    try {
+      final nextOrder = nextItems.map((entry) => entry.name).toList(growable: false);
+      if (_isTag) {
+        await _bookshelfService.saveTagOrder(nextOrder);
+      } else {
+        await _bookshelfService.saveCategoryOrder(nextOrder);
+      }
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isSaving = false;
+        });
+      }
+    }
+  }
+
+  Future<String?> _showNameDialog({
+    required String title,
+    required String confirmText,
+    required String hintText,
+    required Set<String> existing,
+    required String initialValue,
+    String? original,
+  }) async {
+    var draftValue = initialValue;
+    String? errorText;
+
+    return showDialog<String>(
+      context: context,
+      builder: (dialogContext) {
+        return StatefulBuilder(
+          builder: (dialogContext, setDialogState) {
+            String? validate() {
+              final value = draftValue.trim();
+              if (value.isEmpty) {
+                return '请输入$_entityName名称';
+              }
+              if (value.length > 12) {
+                return '$_entityName最多 12 个字';
+              }
+              if (existing.contains(value) && value != original) {
+                return '该$_entityName已存在';
+              }
+              return null;
+            }
+
+            void submit() {
+              final validation = validate();
+              if (validation != null) {
+                setDialogState(() {
+                  errorText = validation;
+                });
+                return;
+              }
+              Navigator.of(dialogContext).pop(draftValue.trim());
+            }
+
+            return AlertDialog(
+              title: Text(title),
+              content: TextFormField(
+                initialValue: initialValue,
+                autofocus: true,
+                maxLength: 12,
+                decoration: InputDecoration(
+                  hintText: hintText,
+                  errorText: errorText,
+                ),
+                onChanged: (value) {
+                  draftValue = value;
+                  if (errorText == null) {
+                    return;
+                  }
+                  setDialogState(() {
+                    errorText = null;
+                  });
+                },
+                onFieldSubmitted: (_) => submit(),
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.of(dialogContext).pop(),
+                  child: const Text('取消'),
+                ),
+                FilledButton(
+                  onPressed: submit,
+                  child: Text(confirmText),
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final horizontal = AppSpacing.pageHorizontal(context);
+    final bottomSafe = MediaQuery.viewPaddingOf(context).bottom;
+
+    return PopScope<void>(
+      canPop: context.canPop(),
+      onPopInvokedWithResult: (didPop, _) {
+        if (didPop || !context.mounted) {
+          return;
+        }
+        context.go('/mine');
+      },
+      child: Scaffold(
+        appBar: AppBar(
+          title: Text(_title),
+          actions: [
+            IconButton(
+              tooltip: _showCreateInput ? '收起新增$_entityName' : '新增$_entityName',
+              onPressed:
+                  _isSaving
+                      ? null
+                      : () {
+                        setState(() {
+                          _showCreateInput = !_showCreateInput;
+                          _createErrorText = null;
+                          if (!_showCreateInput) {
+                            _createDraft = '';
+                          }
+                        });
+                      },
+              icon: Icon(
+                _showCreateInput
+                    ? Icons.keyboard_arrow_up_rounded
+                    : Icons.add_rounded,
+              ),
+            ),
+          ],
+        ),
+        body: LayoutBuilder(
+          builder: (context, _) {
+            final maxWidth = AppLayout.pageContentMaxWidth(
+              context,
+              maxWidth: AppLayout.settingsContentMaxWidth,
+            );
+
+            return Align(
+              alignment: Alignment.topCenter,
+              child: ConstrainedBox(
+                constraints: BoxConstraints(maxWidth: maxWidth),
+                child:
+                    _isLoading
+                        ? const Center(child: CircularProgressIndicator())
+                        : ListView(
+                          padding: EdgeInsets.fromLTRB(
+                            horizontal,
+                            12,
+                            horizontal,
+                            16 + bottomSafe,
+                          ),
+                          children: [
+                            _buildTaxonomyHeroCard(context),
+                            const SizedBox(height: 12),
+                            if (_showCreateInput) ...[
+                              _buildCreateInputCard(context),
+                              const SizedBox(height: 12),
+                            ],
+                            if (_items.isEmpty)
+                              _buildEmptyCard(context)
+                            else
+                              _buildListCard(context),
+                          ],
+                        ),
+              ),
+            );
+          },
+        ),
+      ),
+    );
+  }
+
+  Widget _buildTaxonomyHeroCard(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+    final accent = _isTag ? const Color(0xFFB26A00) : const Color(0xFF2B7A78);
+    return Container(
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [
+            accent.withValues(alpha: 0.22),
+            colorScheme.surfaceContainerLow,
+            colorScheme.surface,
+          ],
+        ),
+        borderRadius: BorderRadius.circular(22),
+        border: Border.all(
+          color: colorScheme.outlineVariant.withValues(alpha: 0.42),
+        ),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(16, 16, 16, 16),
+        child: Row(
+          children: [
+            Container(
+              width: 44,
+              height: 44,
+              decoration: BoxDecoration(
+                color: accent.withValues(alpha: 0.14),
+                shape: BoxShape.circle,
+              ),
+              child: Icon(_icon, color: accent, size: 24),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    _title,
+                    style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    _isTag
+                        ? '新增、重命名、删除与排序标签，书架视图切换器会即时刷新。'
+                        : '新增、重命名、删除与排序分类，书架视图切换器会即时刷新。',
+                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                      color: colorScheme.onSurfaceVariant,
+                      height: 1.4,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildEmptyCard(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+    return Container(
+      padding: const EdgeInsets.fromLTRB(16, 18, 16, 18),
+      decoration: BoxDecoration(
+        color: colorScheme.surfaceContainerLow,
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(
+          color: colorScheme.outlineVariant.withValues(alpha: 0.35),
+        ),
+      ),
+      child: Text(
+        '还没有$_entityName，点击右上角新增即可。',
+        style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+          color: colorScheme.onSurfaceVariant,
+        ),
+      ),
+    );
+  }
+
+  Widget _buildCreateInputCard(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+    return Container(
+      padding: const EdgeInsets.fromLTRB(14, 14, 14, 14),
+      decoration: BoxDecoration(
+        color: colorScheme.surface,
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(
+          color: colorScheme.outlineVariant.withValues(alpha: 0.46),
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            '新增$_entityName',
+            style: Theme.of(context).textTheme.titleSmall?.copyWith(
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+          const SizedBox(height: 10),
+          TextFormField(
+            initialValue: _createDraft,
+            autofocus: true,
+            maxLength: 12,
+            decoration: InputDecoration(
+              hintText: '输入$_entityName名称',
+              errorText: _createErrorText,
+            ),
+            onChanged: (value) {
+              _createDraft = value;
+              if (_createErrorText == null) {
+                return;
+              }
+              setState(() {
+                _createErrorText = null;
+              });
+            },
+            onFieldSubmitted: (_) => unawaited(_createItem()),
+          ),
+          const SizedBox(height: 4),
+          Align(
+            alignment: Alignment.centerRight,
+            child: FilledButton(
+              onPressed: _isSaving ? null : _createItem,
+              child: const Text('添加'),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildListCard(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+    return Container(
+      decoration: BoxDecoration(
+        color: colorScheme.surface,
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(
+          color: colorScheme.outlineVariant.withValues(alpha: 0.48),
+        ),
+      ),
+      child: Column(
+        children: [
+          for (var index = 0; index < _items.length; index++) ...[
+            _buildItemTile(context, item: _items[index], index: index),
+            if (index < _items.length - 1)
+              Divider(
+                height: 1,
+                indent: 56,
+                endIndent: 14,
+                color: colorScheme.outlineVariant.withValues(alpha: 0.45),
+              ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  Widget _buildItemTile(
+    BuildContext context, {
+    required _BookshelfTaxonomyItem item,
+    required int index,
+  }) {
+    final colorScheme = Theme.of(context).colorScheme;
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
+      child: Row(
+        children: [
+          Container(
+            width: 34,
+            height: 34,
+            decoration: BoxDecoration(
+              color: colorScheme.surfaceContainerHighest,
+              shape: BoxShape.circle,
+            ),
+            child: Icon(_icon, size: 18, color: colorScheme.onSurface),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  item.name,
+                  style: Theme.of(context).textTheme.bodyLarge?.copyWith(
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  '${item.count} 本书',
+                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                    color: colorScheme.onSurfaceVariant,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          IconButton(
+            tooltip: '上移',
+            onPressed: _isSaving || index == 0 ? null : () => _moveItem(item, -1),
+            icon: const Icon(Icons.arrow_upward_rounded, size: 18),
+          ),
+          IconButton(
+            tooltip: '下移',
+            onPressed:
+                _isSaving || index >= _items.length - 1
+                    ? null
+                    : () => _moveItem(item, 1),
+            icon: const Icon(Icons.arrow_downward_rounded, size: 18),
+          ),
+          PopupMenuButton<String>(
+            tooltip: '更多',
+            onSelected: (value) {
+              if (value == 'rename') {
+                unawaited(_renameItem(item));
+              } else if (value == 'delete') {
+                unawaited(_deleteItem(item));
+              }
+            },
+            itemBuilder:
+                (context) => const [
+                  PopupMenuItem<String>(value: 'rename', child: Text('重命名')),
+                  PopupMenuItem<String>(value: 'delete', child: Text('删除')),
+                ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _showMessage(String message) {
+    if (!mounted) {
+      return;
+    }
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: Text(message)));
   }
 }
 

@@ -882,7 +882,7 @@ class _StartupGuardPage extends StatelessWidget {
       child: SizedBox.expand(
         child: Image(
           image: AssetImage(_startupArtwork),
-          fit: BoxFit.cover,
+          fit: BoxFit.fill,
           alignment: Alignment.center,
           filterQuality: FilterQuality.high,
         ),

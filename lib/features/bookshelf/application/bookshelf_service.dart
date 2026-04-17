@@ -1,9 +1,34 @@
+import 'dart:async';
 import 'dart:isolate';
 import 'dart:convert';
 
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../../domain/entities/bookshelf_book.dart';
+
+enum BookshelfTaxonomyKind { tag, category }
+
+enum BookshelfTaxonomyAction {
+  create,
+  rename,
+  delete,
+  orderChanged,
+  assignmentChanged,
+}
+
+class BookshelfTaxonomyChange {
+  const BookshelfTaxonomyChange({
+    required this.kind,
+    required this.action,
+    this.previousName,
+    this.currentName,
+  });
+
+  final BookshelfTaxonomyKind kind;
+  final BookshelfTaxonomyAction action;
+  final String? previousName;
+  final String? currentName;
+}
 
 class BookshelfService {
   BookshelfService({SharedPreferences? preferences})
@@ -17,8 +42,11 @@ class BookshelfService {
   static const String _storageKey = 'bookshelf.books';
   static const String _tagStorageKey = 'bookshelf.book_tags';
   static const String _tagOrderStorageKey = 'bookshelf.tag_order';
+  static const String _categoryOrderStorageKey = 'bookshelf.category_order';
   static const String _baseFilterOrderStorageKey =
       'bookshelf.base_filter_order';
+  static const String _viewSelectionKindKey = 'bookshelf.view.selection.kind';
+  static const String _viewSelectionValueKey = 'bookshelf.view.selection.value';
   static const String _viewModeGridKey = 'bookshelf.view.useGrid';
   static const String _sortModeKey = 'bookshelf.sort.mode';
   static const String _gridAdaptiveColumnsKey =
@@ -57,6 +85,12 @@ class BookshelfService {
   static const bool defaultListShowAuthor = true;
   static const bool defaultListShowLatestChapter = true;
   static const bool defaultListShowProgressBar = true;
+  static final StreamController<BookshelfTaxonomyChange>
+  _taxonomyChangeController =
+      StreamController<BookshelfTaxonomyChange>.broadcast();
+
+  static Stream<BookshelfTaxonomyChange> get watchTaxonomyChanges =>
+      _taxonomyChangeController.stream;
 
   Future<List<BookshelfBook>> getAll() async {
     final prefs = await _preferencesFuture;
@@ -115,6 +149,17 @@ class BookshelfService {
     );
 
     final all = (await getAll()).toList(growable: true);
+    String? previousCategory;
+    for (final entry in all) {
+      final entryKey = _bookKey(
+        sourceId: entry.sourceId,
+        detailUrl: entry.detailUrl,
+      );
+      if (entryKey == previousKey) {
+        previousCategory = entry.category?.trim();
+        break;
+      }
+    }
     all.removeWhere((entry) {
       final entryKey = _bookKey(
         sourceId: entry.sourceId,
@@ -125,7 +170,18 @@ class BookshelfService {
       }
       return entryKey == previousKey || entryKey == nextKey;
     });
-    all.insert(0, nextBook.copyWith(addedAt: DateTime.now()));
+    all.insert(
+      0,
+      nextBook.copyWith(
+        addedAt: DateTime.now(),
+        category:
+            preserveTags &&
+                    (nextBook.category?.trim().isEmpty ?? true) &&
+                    (previousCategory?.isNotEmpty ?? false)
+                ? previousCategory
+                : nextBook.category,
+      ),
+    );
     await _save(all);
 
     final tagMap = Map<String, List<String>>.from(await getTagMap());
@@ -166,6 +222,7 @@ class BookshelfService {
         .toList(growable: false);
     await _save(all);
     await removeBookTags(sourceId: sourceId, detailUrl: detailUrl);
+    await removeBookCategory(sourceId: sourceId, detailUrl: detailUrl);
   }
 
   Future<bool> contains({
@@ -368,9 +425,21 @@ class BookshelfService {
     final normalized = _normalizeTags(orderedTags);
     if (normalized.isEmpty) {
       await prefs.remove(_tagOrderStorageKey);
+      _emitTaxonomyChange(
+        const BookshelfTaxonomyChange(
+          kind: BookshelfTaxonomyKind.tag,
+          action: BookshelfTaxonomyAction.orderChanged,
+        ),
+      );
       return;
     }
     await prefs.setString(_tagOrderStorageKey, jsonEncode(normalized));
+    _emitTaxonomyChange(
+      const BookshelfTaxonomyChange(
+        kind: BookshelfTaxonomyKind.tag,
+        action: BookshelfTaxonomyAction.orderChanged,
+      ),
+    );
   }
 
   Future<List<String>> getBaseFilterOrder() async {
@@ -391,6 +460,190 @@ class BookshelfService {
     }
   }
 
+  Future<Map<String, String>> getCategoryMap() async {
+    final all = await getAll();
+    final result = <String, String>{};
+    for (final book in all) {
+      final key = _bookKey(sourceId: book.sourceId, detailUrl: book.detailUrl);
+      final category = book.category?.trim() ?? '';
+      if (key.isEmpty || category.isEmpty) {
+        continue;
+      }
+      result[key] = category;
+    }
+    return result;
+  }
+
+  Future<List<String>> getCategoryOrder() async {
+    final prefs = await _preferencesFuture;
+    final raw = prefs.getString(_categoryOrderStorageKey);
+    if (raw == null || raw.trim().isEmpty) {
+      return const <String>[];
+    }
+
+    try {
+      final decoded = jsonDecode(raw);
+      if (decoded is! List) {
+        return const <String>[];
+      }
+      return _normalizeTags(decoded.map((value) => '$value'));
+    } catch (_) {
+      return const <String>[];
+    }
+  }
+
+  Future<void> saveCategoryOrder(List<String> orderedCategories) async {
+    final prefs = await _preferencesFuture;
+    final normalized = _normalizeTags(orderedCategories);
+    if (normalized.isEmpty) {
+      await prefs.remove(_categoryOrderStorageKey);
+      _emitTaxonomyChange(
+        const BookshelfTaxonomyChange(
+          kind: BookshelfTaxonomyKind.category,
+          action: BookshelfTaxonomyAction.orderChanged,
+        ),
+      );
+      return;
+    }
+    await prefs.setString(_categoryOrderStorageKey, jsonEncode(normalized));
+    _emitTaxonomyChange(
+      const BookshelfTaxonomyChange(
+        kind: BookshelfTaxonomyKind.category,
+        action: BookshelfTaxonomyAction.orderChanged,
+      ),
+    );
+  }
+
+  Future<void> setBookCategory({
+    required String sourceId,
+    required String detailUrl,
+    String? category,
+  }) async {
+    final key = _bookKey(sourceId: sourceId, detailUrl: detailUrl);
+    if (key.isEmpty) {
+      return;
+    }
+
+    final all = (await getAll()).toList(growable: true);
+    final index = all.indexWhere(
+      (entry) => entry.sourceId == sourceId && entry.detailUrl == detailUrl,
+    );
+    if (index < 0) {
+      return;
+    }
+
+    final normalized = _normalizeTags([category ?? '']);
+    final nextCategory = normalized.isEmpty ? null : normalized.first;
+    all[index] = all[index].copyWith(
+      category: nextCategory,
+      clearCategory: nextCategory == null,
+    );
+    await _save(all);
+    _emitTaxonomyChange(
+      const BookshelfTaxonomyChange(
+        kind: BookshelfTaxonomyKind.category,
+        action: BookshelfTaxonomyAction.assignmentChanged,
+      ),
+    );
+  }
+
+  Future<void> removeBookCategory({
+    required String sourceId,
+    required String detailUrl,
+  }) async {
+    await setBookCategory(sourceId: sourceId, detailUrl: detailUrl);
+  }
+
+  Future<int> renameCategory({
+    required String fromCategory,
+    required String toCategory,
+  }) async {
+    final fromValues = _normalizeTags([fromCategory]);
+    final toValues = _normalizeTags([toCategory]);
+    if (fromValues.isEmpty || toValues.isEmpty) {
+      return 0;
+    }
+
+    final from = fromValues.first;
+    final to = toValues.first;
+    if (from == to) {
+      return 0;
+    }
+
+    final all = (await getAll()).toList(growable: true);
+    var affectedCount = 0;
+    for (var index = 0; index < all.length; index += 1) {
+      final current = all[index].category?.trim() ?? '';
+      if (current != from) {
+        continue;
+      }
+      affectedCount += 1;
+      all[index] = all[index].copyWith(category: to);
+    }
+
+    final categoryOrder = List<String>.from(await getCategoryOrder());
+    final orderContains = categoryOrder.contains(from);
+    if (affectedCount <= 0 && !orderContains) {
+      return 0;
+    }
+
+    await _save(all);
+    await saveCategoryOrder(
+      categoryOrder
+          .map((category) => category == from ? to : category)
+          .toList(growable: false),
+    );
+    _emitTaxonomyChange(
+      BookshelfTaxonomyChange(
+        kind: BookshelfTaxonomyKind.category,
+        action: BookshelfTaxonomyAction.rename,
+        previousName: from,
+        currentName: to,
+      ),
+    );
+    return affectedCount > 0 || orderContains ? 1 : 0;
+  }
+
+  Future<int> deleteCategory(String categoryName) async {
+    final values = _normalizeTags([categoryName]);
+    if (values.isEmpty) {
+      return 0;
+    }
+    final target = values.first;
+
+    final all = (await getAll()).toList(growable: true);
+    var affectedCount = 0;
+    for (var index = 0; index < all.length; index += 1) {
+      final current = all[index].category?.trim() ?? '';
+      if (current != target) {
+        continue;
+      }
+      affectedCount += 1;
+      all[index] = all[index].copyWith(clearCategory: true);
+    }
+
+    final categoryOrder = List<String>.from(await getCategoryOrder());
+    final orderContains = categoryOrder.contains(target);
+    if (affectedCount <= 0 && !orderContains) {
+      return 0;
+    }
+
+    await _save(all);
+    await saveCategoryOrder(
+      categoryOrder
+          .where((category) => category != target)
+          .toList(growable: false),
+    );
+    _emitTaxonomyChange(
+      BookshelfTaxonomyChange(
+        kind: BookshelfTaxonomyKind.category,
+        action: BookshelfTaxonomyAction.delete,
+        previousName: target,
+      ),
+    );
+    return affectedCount > 0 || orderContains ? 1 : 0;
+  }
+
   Future<void> saveBaseFilterOrder(List<String> orderedFilters) async {
     final prefs = await _preferencesFuture;
     final normalized = _normalizeTags(orderedFilters);
@@ -399,6 +652,33 @@ class BookshelfService {
       return;
     }
     await prefs.setString(_baseFilterOrderStorageKey, jsonEncode(normalized));
+  }
+
+  Future<Map<String, String>?> loadViewSelection() async {
+    final prefs = await _preferencesFuture;
+    final kind = prefs.getString(_viewSelectionKindKey)?.trim();
+    final value = prefs.getString(_viewSelectionValueKey)?.trim();
+    if (kind == null || kind.isEmpty) {
+      return null;
+    }
+    return <String, String>{
+      'kind': kind,
+      if (value != null && value.isNotEmpty) 'value': value,
+    };
+  }
+
+  Future<void> saveViewSelection({
+    required String kind,
+    String? value,
+  }) async {
+    final prefs = await _preferencesFuture;
+    await prefs.setString(_viewSelectionKindKey, kind.trim());
+    final normalizedValue = value?.trim() ?? '';
+    if (normalizedValue.isEmpty) {
+      await prefs.remove(_viewSelectionValueKey);
+    } else {
+      await prefs.setString(_viewSelectionValueKey, normalizedValue);
+    }
   }
 
   Future<void> setBookTags({
@@ -420,6 +700,12 @@ class BookshelfService {
     }
 
     await _saveTagMap(map);
+    _emitTaxonomyChange(
+      const BookshelfTaxonomyChange(
+        kind: BookshelfTaxonomyKind.tag,
+        action: BookshelfTaxonomyAction.assignmentChanged,
+      ),
+    );
   }
 
   Future<void> removeBookTags({
@@ -462,13 +748,22 @@ class BookshelfService {
       }
     }
 
-    if (affectedCount <= 0) {
+    final orderContains = tagOrder.contains(from);
+    if (affectedCount <= 0 && !orderContains) {
       return 0;
     }
 
     await _saveTagMap(map);
     await saveTagOrder(tagOrder.map((tag) => tag == from ? to : tag).toList());
-    return affectedCount;
+    _emitTaxonomyChange(
+      BookshelfTaxonomyChange(
+        kind: BookshelfTaxonomyKind.tag,
+        action: BookshelfTaxonomyAction.rename,
+        previousName: from,
+        currentName: to,
+      ),
+    );
+    return affectedCount > 0 || orderContains ? 1 : 0;
   }
 
   Future<int> deleteTag(String tagName) async {
@@ -497,7 +792,8 @@ class BookshelfService {
       }
     }
 
-    if (affectedCount <= 0) {
+    final orderContains = tagOrder.contains(target);
+    if (affectedCount <= 0 && !orderContains) {
       return 0;
     }
 
@@ -505,7 +801,14 @@ class BookshelfService {
     await saveTagOrder(
       tagOrder.where((tag) => tag != target).toList(growable: false),
     );
-    return affectedCount;
+    _emitTaxonomyChange(
+      BookshelfTaxonomyChange(
+        kind: BookshelfTaxonomyKind.tag,
+        action: BookshelfTaxonomyAction.delete,
+        previousName: target,
+      ),
+    );
+    return affectedCount > 0 || orderContains ? 1 : 0;
   }
 
   Future<void> _save(List<BookshelfBook> books) async {
@@ -526,6 +829,14 @@ class BookshelfService {
     );
     await prefs.setString(_tagStorageKey, encoded);
   }
+
+  void _emitTaxonomyChange(BookshelfTaxonomyChange change) {
+    if (_taxonomyChangeController.isClosed) {
+      return;
+    }
+    _taxonomyChangeController.add(change);
+  }
+
 
   static String _bookKey({
     required String sourceId,

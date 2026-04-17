@@ -46,6 +46,7 @@ enum _BookshelfSheetAction {
   detail,
   repairLocal,
   select,
+  category,
   tag,
   customCover,
   delete,
@@ -55,7 +56,13 @@ enum _BookshelfFilter { all, local, novel, manga, custom }
 
 enum _TagManageSheetAction { rename, delete }
 
-enum _BookshelfMoreAction { selectBooks, sortBooks, settings, importLocal }
+enum _BookshelfMoreAction {
+  selectBooks,
+  sortBooks,
+  manageViews,
+  settings,
+  importLocal,
+}
 
 enum _BookshelfSortMode {
   defaultOrder,
@@ -64,6 +71,47 @@ enum _BookshelfSortMode {
   createdAt,
   author,
   title,
+}
+
+enum _BookshelfViewKind { base, tag, category }
+enum _BookshelfCategorySheetAction { rename, delete }
+
+class _BookshelfViewSelection {
+  const _BookshelfViewSelection.base(this.filter)
+    : kind = _BookshelfViewKind.base,
+      tag = null,
+      category = null;
+
+  const _BookshelfViewSelection.tag(this.tag)
+    : kind = _BookshelfViewKind.tag,
+      filter = _BookshelfFilter.custom,
+      category = null;
+
+  const _BookshelfViewSelection.category(this.category)
+    : kind = _BookshelfViewKind.category,
+      filter = _BookshelfFilter.custom,
+      tag = null;
+
+  final _BookshelfViewKind kind;
+  final _BookshelfFilter filter;
+  final String? tag;
+  final String? category;
+
+  bool get isTag => kind == _BookshelfViewKind.tag;
+  bool get isCategory => kind == _BookshelfViewKind.category;
+  bool get isUncategorized => isCategory && (category == null || category!.isEmpty);
+
+  @override
+  bool operator ==(Object other) {
+    return other is _BookshelfViewSelection &&
+        other.kind == kind &&
+        other.filter == filter &&
+        other.tag == tag &&
+        other.category == category;
+  }
+
+  @override
+  int get hashCode => Object.hash(kind, filter, tag, category);
 }
 
 enum _BookshelfSettingsTab { list, grid }
@@ -121,6 +169,7 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
   final SourceRuntimeTaskConflictService _taskConflictService =
       SourceRuntimeTaskConflictService.instance;
   StreamSubscription<IncomingExternalImportPayload>? _incomingImportSub;
+  StreamSubscription<BookshelfTaxonomyChange>? _taxonomyChangeSub;
 
   bool _isLoading = true;
   List<BookshelfBook> _books = const <BookshelfBook>[];
@@ -132,11 +181,15 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
   Map<String, LocalBook> _localBooksById = const <String, LocalBook>{};
   Map<String, List<String>> _bookTagsByKey = const <String, List<String>>{};
   List<String> _tagOrder = const <String>[];
+  Map<String, String> _bookCategoriesByKey = const <String, String>{};
+  List<String> _categoryOrder = const <String>[];
   List<_BookshelfFilter> _baseFilterOrder = _kDefaultBaseFilters;
   Object? _derivedBookshelfFingerprint;
   List<BookshelfBook> _filteredBooksCache = const <BookshelfBook>[];
   Map<String, int> _tagBookCountCache = const <String, int>{};
+  Map<String, int> _categoryBookCountCache = const <String, int>{};
   List<String> _userTagsCache = const <String>[];
+  List<String> _userCategoriesCache = const <String>[];
   List<_BookshelfFilter> _orderedBaseFiltersCache = _kDefaultBaseFilters;
   bool _useGridView = false;
   _BookshelfSortMode _sortMode = _BookshelfSortMode.defaultOrder;
@@ -152,8 +205,9 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
   bool _listShowAuthor = BookshelfService.defaultListShowAuthor;
   bool _listShowLatestChapter = BookshelfService.defaultListShowLatestChapter;
   bool _listShowProgressBar = BookshelfService.defaultListShowProgressBar;
-  _BookshelfFilter _activeFilter = _BookshelfFilter.all;
-  String? _activeCustomTag;
+  _BookshelfViewSelection _activeView = const _BookshelfViewSelection.base(
+    _BookshelfFilter.all,
+  );
   String? _openingBookId;
   String? _loadErrorText;
   bool _isConsumingExternalImportPayloads = false;
@@ -215,6 +269,9 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
       }
       unawaited(_consumePendingExternalImportPayloads());
     });
+    _taxonomyChangeSub = BookshelfService.watchTaxonomyChanges.listen(
+      _handleTaxonomyChange,
+    );
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) {
         return;
@@ -224,6 +281,7 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
       unawaited(_restoreListPreferences());
       unawaited(_restoreSortModePreference());
       unawaited(_restoreGridPreferences());
+      unawaited(_restoreViewSelection());
       unawaited(_loadBookshelf());
       if (widget.prefetchAnnouncementOnInit) {
         unawaited(_prefetchLatestAnnouncement());
@@ -252,6 +310,7 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
     _routeInformationProvider?.removeListener(_handleRouteLocationChanged);
     _routeInformationProvider = null;
     _incomingImportSub?.cancel();
+    _taxonomyChangeSub?.cancel();
     super.dispose();
   }
 
@@ -303,9 +362,10 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
                   icon: const Icon(Icons.close),
                 )
                 : null,
-        title: Text(
-          _isSelectionMode ? '已选择 ${_selectedBookKeys.length} 项' : '书架',
-        ),
+        title:
+            _isSelectionMode
+                ? Text('已选择 ${_selectedBookKeys.length} 项')
+                : _buildBookshelfViewTitle(),
         actions: [
           if (_isSelectionMode)
             if (_isBatchDeleting)
@@ -364,6 +424,17 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
                           Icon(Icons.sort_rounded, size: 18),
                           SizedBox(width: 10),
                           Text('书籍排序'),
+                        ],
+                      ),
+                    ),
+                    PopupMenuItem<_BookshelfMoreAction>(
+                      value: _BookshelfMoreAction.manageViews,
+                      enabled: !_isLoading && _books.isNotEmpty,
+                      child: const Row(
+                        children: [
+                          Icon(Icons.view_list_rounded, size: 18),
+                          SizedBox(width: 10),
+                          Text('管理视图'),
                         ],
                       ),
                     ),
@@ -428,21 +499,22 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
                     SliverPadding(
                       padding: EdgeInsets.fromLTRB(
                         horizontal,
-                        8,
+                        12,
                         horizontal,
-                        0,
+                        16 + navigationBottomInset + continueReadingReservedSpace,
                       ),
-                      sliver: SliverToBoxAdapter(child: _buildFilterBar()),
+                      sliver: _buildBooksContentSliver(filteredBooks),
+                    )
+                  else
+                    SliverPadding(
+                      padding: EdgeInsets.fromLTRB(
+                        horizontal,
+                        12,
+                        horizontal,
+                        16 + navigationBottomInset + continueReadingReservedSpace,
+                      ),
+                      sliver: _buildBooksContentSliver(filteredBooks),
                     ),
-                  SliverPadding(
-                    padding: EdgeInsets.fromLTRB(
-                      horizontal,
-                      12,
-                      horizontal,
-                      16 + navigationBottomInset + continueReadingReservedSpace,
-                    ),
-                    sliver: _buildBooksContentSliver(filteredBooks),
-                  ),
                 ],
               ),
             ),
@@ -507,6 +579,56 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
     return location.startsWith('/bookshelf');
   }
 
+  void _handleTaxonomyChange(BookshelfTaxonomyChange change) {
+    if (!mounted) {
+      return;
+    }
+
+    setState(() {
+      switch (change.kind) {
+        case BookshelfTaxonomyKind.tag:
+          if (_activeView.isTag && _activeView.tag == change.previousName) {
+            switch (change.action) {
+              case BookshelfTaxonomyAction.rename:
+                final nextName = change.currentName?.trim();
+                if (nextName != null && nextName.isNotEmpty) {
+                  _activeView = _BookshelfViewSelection.tag(nextName);
+                }
+              case BookshelfTaxonomyAction.delete:
+                _activeView = const _BookshelfViewSelection.base(
+                  _BookshelfFilter.all,
+                );
+              case BookshelfTaxonomyAction.create ||
+              BookshelfTaxonomyAction.orderChanged ||
+              BookshelfTaxonomyAction.assignmentChanged:
+                break;
+            }
+          }
+        case BookshelfTaxonomyKind.category:
+          if (_activeView.isCategory &&
+              _activeView.category == change.previousName) {
+            switch (change.action) {
+              case BookshelfTaxonomyAction.rename:
+                final nextName = change.currentName?.trim();
+                if (nextName != null && nextName.isNotEmpty) {
+                  _activeView = _BookshelfViewSelection.category(nextName);
+                }
+              case BookshelfTaxonomyAction.delete:
+                _activeView = const _BookshelfViewSelection.base(
+                  _BookshelfFilter.all,
+                );
+              case BookshelfTaxonomyAction.create ||
+              BookshelfTaxonomyAction.orderChanged ||
+              BookshelfTaxonomyAction.assignmentChanged:
+                break;
+            }
+          }
+      }
+    });
+
+    unawaited(_loadBookshelfMetadata(_books, ticket: _loadTicket));
+  }
+
   Future<void> _maybeAutoRefreshOnTabActivated() async {
     if (!mounted) {
       return;
@@ -524,6 +646,34 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
 
     _lastAutoRefreshAt = now;
     await _loadBookshelf(force: true);
+  }
+
+  Future<void> _restoreViewSelection() async {
+    final stored = await _bookshelfService.loadViewSelection();
+    if (!mounted || stored == null) {
+      return;
+    }
+
+    final kind = (stored['kind'] ?? '').trim();
+    final value = (stored['value'] ?? '').trim();
+    final next = switch (kind) {
+      'tag' when value.isNotEmpty => _BookshelfViewSelection.tag(value),
+      'category' =>
+        value.isEmpty
+            ? const _BookshelfViewSelection.category(null)
+            : _BookshelfViewSelection.category(value),
+      'local' => const _BookshelfViewSelection.base(_BookshelfFilter.local),
+      'novel' => const _BookshelfViewSelection.base(_BookshelfFilter.novel),
+      'manga' => const _BookshelfViewSelection.base(_BookshelfFilter.manga),
+      _ => const _BookshelfViewSelection.base(_BookshelfFilter.all),
+    };
+
+    if (next == _activeView) {
+      return;
+    }
+    setState(() {
+      _activeView = next;
+    });
   }
 
   Future<bool> _isAutoRefreshOnTabActiveEnabled() async {
@@ -660,6 +810,9 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
         break;
       case _BookshelfMoreAction.sortBooks:
         unawaited(_showSortModeSheet());
+        break;
+      case _BookshelfMoreAction.manageViews:
+        unawaited(_showFilterSheet());
         break;
       case _BookshelfMoreAction.settings:
         unawaited(_showBookshelfSettingsSheet());
@@ -1408,57 +1561,31 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
     return BookshelfViewModeEditBar(summaryText: summaryText);
   }
 
-  Widget _buildFilterBar() {
-    final baseFilters = _orderedBaseFilters;
-    final customTags = _userTags;
-    final visibleBaseFilters = baseFilters.take(3).toList(growable: false);
-    final visibleCustomTags = customTags.take(3).toList(growable: false);
-    final hasHiddenBaseFilterSelected =
-        _activeFilter != _BookshelfFilter.custom &&
-        !visibleBaseFilters.contains(_activeFilter);
-    final hasHiddenTagSelected =
-        _activeFilter == _BookshelfFilter.custom &&
-        (_activeCustomTag != null &&
-            !visibleCustomTags.contains(_activeCustomTag));
-    final highlightFilterAction =
-        hasHiddenBaseFilterSelected || hasHiddenTagSelected;
-
-    return BookshelfFilterBar(
-      baseChips: visibleBaseFilters
-          .map(
-            (filter) => BookshelfFilterChipData(
-              label: _filterLabel(filter),
-              selected: _activeFilter == filter,
-              onTap: _isBatchDeleting ? null : () => _activateFilter(filter),
-            ),
-          )
-          .toList(growable: false),
-      customChips: visibleCustomTags
-          .map(
-            (tag) => BookshelfFilterChipData(
-              label: tag,
-              selected:
-                  _activeFilter == _BookshelfFilter.custom &&
-                  _activeCustomTag == tag,
-              onTap:
-                  _isBatchDeleting
-                      ? null
-                      : () => _activateFilter(
-                        _BookshelfFilter.custom,
-                        customTag: tag,
-                      ),
-              onLongPress:
-                  _isBatchDeleting
-                      ? null
-                      : () => unawaited(_showTagManageSheet(tag)),
-            ),
-          )
-          .toList(growable: false),
-      highlightFilterAction: highlightFilterAction,
-      filterActionMessage:
-          highlightFilterAction ? '当前筛选：${_activeFilterLabel()}' : '打开完整筛选',
-      onOpenFilterSheet:
-          _isBatchDeleting ? null : () => unawaited(_showFilterSheet()),
+  Widget _buildBookshelfViewTitle() {
+    final title = _activeFilterLabel();
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        borderRadius: BorderRadius.circular(10),
+        onTap: () => unawaited(_showViewSwitcherSheet()),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 2, vertical: 2),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Flexible(
+                child: Text(
+                  title,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+              const SizedBox(width: 2),
+              const Icon(Icons.keyboard_arrow_down_rounded, size: 20),
+            ],
+          ),
+        ),
+      ),
     );
   }
 
@@ -1484,6 +1611,391 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
     final viewPadding = MediaQuery.viewPaddingOf(context).bottom;
     final gestureInsets = MediaQuery.systemGestureInsetsOf(context).bottom;
     return math.max(viewPadding, gestureInsets);
+  }
+
+  Future<void> _showViewSwitcherSheet() async {
+    if (_isBatchDeleting || !mounted) {
+      return;
+    }
+
+    final baseFilterBookCount = <_BookshelfFilter, int>{
+      _BookshelfFilter.all: _books.length,
+      _BookshelfFilter.local:
+          _books
+              .where(
+                (book) =>
+                    _bookMatchesStaticFilter(book, _BookshelfFilter.local),
+              )
+              .length,
+      _BookshelfFilter.novel:
+          _books
+              .where(
+                (book) =>
+                    _bookMatchesStaticFilter(book, _BookshelfFilter.novel),
+              )
+              .length,
+      _BookshelfFilter.manga:
+          _books
+              .where(
+                (book) =>
+                    _bookMatchesStaticFilter(book, _BookshelfFilter.manga),
+              )
+              .length,
+    };
+    final tagBookCount = _buildTagBookCount();
+    final categoryBookCount = _buildCategoryBookCount();
+    final customTags = _userTags;
+    final customCategories = _userCategories;
+    final uncategorizedCount =
+        _books.where((book) => (_categoryOfBook(book) ?? '').isEmpty).length;
+
+    final selected = await _showBookshelfBottomSheet<String>(
+      isScrollControlled: true,
+      builder: (sheetContext) {
+        final maxHeight = MediaQuery.sizeOf(sheetContext).height * 0.72;
+        final bottomInset = _bookshelfBottomSafeInset(sheetContext);
+        var searchKeyword = '';
+        var expandCategories = false;
+        var expandTags = false;
+        return StatefulBuilder(
+          builder: (sheetContext, setSheetState) {
+            final colorScheme = Theme.of(sheetContext).colorScheme;
+            final textTheme = Theme.of(sheetContext).textTheme;
+
+            Widget buildSectionTitle(String title) {
+              return Padding(
+                padding: const EdgeInsets.fromLTRB(16, 14, 16, 6),
+                child: Text(
+                  title,
+                  style: textTheme.titleSmall?.copyWith(
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              );
+            }
+
+            Widget buildOptionTile({
+              required String value,
+              required String label,
+              required String countText,
+              required bool selected,
+              VoidCallback? onTap,
+              IconData? icon,
+              String? subtitle,
+            }) {
+              return Material(
+                color:
+                    selected
+                        ? colorScheme.primaryContainer.withValues(alpha: 0.36)
+                        : Colors.transparent,
+                borderRadius: BorderRadius.circular(12),
+                child: InkWell(
+                  borderRadius: BorderRadius.circular(12),
+                  onTap:
+                      onTap ??
+                      () => _dismissBookshelfBottomSheet(sheetContext, value),
+                  child: Padding(
+                    padding: const EdgeInsets.fromLTRB(16, 10, 16, 10),
+                    child: Row(
+                      children: [
+                        if (icon != null) ...[
+                          Icon(
+                            icon,
+                            size: 18,
+                            color:
+                                selected
+                                    ? colorScheme.primary
+                                    : colorScheme.onSurfaceVariant,
+                          ),
+                          const SizedBox(width: 10),
+                        ],
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                label,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: textTheme.bodyMedium?.copyWith(
+                                  color:
+                                      selected
+                                          ? colorScheme.onPrimaryContainer
+                                          : colorScheme.onSurface,
+                                  fontWeight:
+                                      selected
+                                          ? FontWeight.w700
+                                          : FontWeight.w500,
+                                ),
+                              ),
+                              if (subtitle != null && subtitle.isNotEmpty) ...[
+                                const SizedBox(height: 3),
+                                Text(
+                                  subtitle,
+                                  style: textTheme.bodySmall?.copyWith(
+                                    color: colorScheme.onSurfaceVariant,
+                                  ),
+                                ),
+                              ],
+                            ],
+                          ),
+                        ),
+                        const SizedBox(width: 10),
+                        Text(
+                          countText,
+                          style: textTheme.bodySmall?.copyWith(
+                            color: colorScheme.onSurfaceVariant,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                        const SizedBox(width: 6),
+                        if (selected)
+                          Icon(
+                            Icons.check_rounded,
+                            size: 18,
+                            color: colorScheme.primary,
+                          ),
+                      ],
+                    ),
+                  ),
+                ),
+              );
+            }
+
+            bool matchesKeyword(String value) {
+              final keyword = searchKeyword.trim().toLowerCase();
+              if (keyword.isEmpty) {
+                return true;
+              }
+              return value.toLowerCase().contains(keyword);
+            }
+
+            final visibleCategories = customCategories
+                .where(matchesKeyword)
+                .toList(growable: false);
+            final visibleTags = customTags
+                .where(matchesKeyword)
+                .toList(growable: false);
+            final effectiveVisibleCategories =
+                searchKeyword.trim().isNotEmpty || expandCategories
+                    ? visibleCategories
+                    : visibleCategories.take(6).toList(growable: false);
+            final effectiveVisibleTags =
+                searchKeyword.trim().isNotEmpty || expandTags
+                    ? visibleTags
+                    : visibleTags.take(6).toList(growable: false);
+
+            return Padding(
+              padding: EdgeInsets.fromLTRB(8, 0, 8, 10 + bottomInset),
+              child: ConstrainedBox(
+                constraints: BoxConstraints(maxHeight: maxHeight),
+                child: ListView(
+                  shrinkWrap: true,
+                  children: [
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(12, 4, 12, 4),
+                      child: TextField(
+                        decoration: InputDecoration(
+                          isDense: true,
+                          hintText: '搜索分类或标签',
+                          prefixIcon: const Icon(Icons.search_rounded, size: 18),
+                          border: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(14),
+                          ),
+                        ),
+                        onChanged: (value) {
+                          setSheetState(() {
+                            searchKeyword = value;
+                          });
+                        },
+                      ),
+                    ),
+                    buildSectionTitle('默认'),
+                    buildOptionTile(
+                      value: 'all',
+                      label: '书架',
+                      countText: '${baseFilterBookCount[_BookshelfFilter.all] ?? 0}',
+                      selected:
+                          !_activeView.isTag &&
+                          !_activeView.isCategory &&
+                          _activeView.filter == _BookshelfFilter.all,
+                      icon: Icons.collections_bookmark_outlined,
+                    ),
+                    buildOptionTile(
+                      value: 'local',
+                      label: '本地',
+                      countText:
+                          '${baseFilterBookCount[_BookshelfFilter.local] ?? 0}',
+                      selected:
+                          !_activeView.isTag &&
+                          !_activeView.isCategory &&
+                          _activeView.filter == _BookshelfFilter.local,
+                      icon: Icons.folder_outlined,
+                    ),
+                    buildOptionTile(
+                      value: 'novel',
+                      label: '小说',
+                      countText:
+                          '${baseFilterBookCount[_BookshelfFilter.novel] ?? 0}',
+                      selected:
+                          !_activeView.isTag &&
+                          !_activeView.isCategory &&
+                          _activeView.filter == _BookshelfFilter.novel,
+                      icon: Icons.menu_book_outlined,
+                    ),
+                    buildOptionTile(
+                      value: 'manga',
+                      label: '漫画',
+                      countText:
+                          '${baseFilterBookCount[_BookshelfFilter.manga] ?? 0}',
+                      selected:
+                          !_activeView.isTag &&
+                          !_activeView.isCategory &&
+                          _activeView.filter == _BookshelfFilter.manga,
+                      icon: Icons.photo_library_outlined,
+                    ),
+                    buildSectionTitle('分类'),
+                    if (matchesKeyword('未分类'))
+                      buildOptionTile(
+                        value: 'category::__uncategorized__',
+                        label: '未分类',
+                        countText: '$uncategorizedCount',
+                        selected: _activeView.isUncategorized,
+                        icon: Icons.folder_off_outlined,
+                      ),
+                    ...effectiveVisibleCategories.map(
+                      (category) => buildOptionTile(
+                        value: 'category::$category',
+                        label: category,
+                        countText: '${categoryBookCount[category] ?? 0}',
+                        selected:
+                            _activeView.isCategory &&
+                            _activeView.category == category,
+                        icon: Icons.folder_copy_outlined,
+                      ),
+                    ),
+                    if (searchKeyword.trim().isEmpty &&
+                        visibleCategories.length > 6)
+                      Padding(
+                        padding: const EdgeInsets.fromLTRB(12, 2, 12, 4),
+                        child: Align(
+                          alignment: Alignment.centerLeft,
+                          child: TextButton.icon(
+                            onPressed: () {
+                              setSheetState(() {
+                                expandCategories = !expandCategories;
+                              });
+                            },
+                            icon: Icon(
+                              expandCategories
+                                  ? Icons.expand_less_rounded
+                                  : Icons.expand_more_rounded,
+                            ),
+                            label: Text(
+                              expandCategories
+                                  ? '收起分类'
+                                  : '展开全部分类',
+                            ),
+                          ),
+                        ),
+                      ),
+                    if (visibleTags.isNotEmpty || matchesKeyword('未打标签')) ...[
+                      buildSectionTitle('标签'),
+                      if (matchesKeyword('未打标签'))
+                        buildOptionTile(
+                          value: 'tag::__untagged__',
+                          label: '未打标签',
+                          countText:
+                              '${_books.where((book) => _tagsOfBook(book).isEmpty).length}',
+                          selected: _activeView.isTag && _activeView.tag == '',
+                          icon: Icons.sell_outlined,
+                        ),
+                      ...effectiveVisibleTags.map(
+                        (tag) => buildOptionTile(
+                          value: 'tag::$tag',
+                          label: tag,
+                          countText: '${tagBookCount[tag] ?? 0}',
+                          selected: _activeView.isTag && _activeView.tag == tag,
+                          icon: Icons.sell_outlined,
+                        ),
+                      ),
+                      if (searchKeyword.trim().isEmpty && visibleTags.length > 6)
+                        Padding(
+                          padding: const EdgeInsets.fromLTRB(12, 2, 12, 4),
+                          child: Align(
+                            alignment: Alignment.centerLeft,
+                            child: TextButton.icon(
+                              onPressed: () {
+                                setSheetState(() {
+                                  expandTags = !expandTags;
+                                });
+                              },
+                              icon: Icon(
+                                expandTags
+                                    ? Icons.expand_less_rounded
+                                    : Icons.expand_more_rounded,
+                              ),
+                              label: Text(
+                                expandTags ? '收起标签' : '展开全部标签',
+                              ),
+                            ),
+                          ),
+                        ),
+                    ],
+                  ],
+                ),
+              ),
+            );
+          },
+        );
+      },
+    );
+
+    if (!mounted || selected == null) {
+      return;
+    }
+
+    if (selected.startsWith('tag::')) {
+      final tag = selected.substring(5).trim();
+      if (tag.isNotEmpty) {
+        _activateView(_BookshelfViewSelection.tag(tag));
+      }
+      return;
+    }
+    if (selected == 'category::__uncategorized__') {
+      _activateView(const _BookshelfViewSelection.category(null));
+      return;
+    }
+    if (selected.startsWith('category::')) {
+      final category = selected.substring(10).trim();
+      if (category.isNotEmpty) {
+        _activateView(_BookshelfViewSelection.category(category));
+      }
+      return;
+    }
+
+    switch (selected) {
+      case 'all':
+        _activateView(const _BookshelfViewSelection.base(_BookshelfFilter.all));
+        break;
+      case 'local':
+        _activateView(
+          const _BookshelfViewSelection.base(_BookshelfFilter.local),
+        );
+        break;
+      case 'novel':
+        _activateView(
+          const _BookshelfViewSelection.base(_BookshelfFilter.novel),
+        );
+        break;
+      case 'manga':
+        _activateView(
+          const _BookshelfViewSelection.base(_BookshelfFilter.manga),
+        );
+        break;
+      default:
+        break;
+    }
   }
 
   Future<void> _showFilterSheet() async {
@@ -1565,7 +2077,8 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
                       final index = entry.key;
                       final filter = entry.value;
                       final value = filter.name;
-                      final isSelected = _activeFilter == filter;
+                      final isSelected =
+                          !_activeView.isTag && _activeView.filter == filter;
                       return Material(
                         color:
                             isSelected
@@ -1674,8 +2187,7 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
                         final tag = entry.value;
                         final value = 'tag::$tag';
                         final isSelected =
-                            _activeFilter == _BookshelfFilter.custom &&
-                            _activeCustomTag == tag;
+                            _activeView.isTag && _activeView.tag == tag;
                         return Material(
                           color:
                               isSelected
@@ -1686,6 +2198,8 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
                           borderRadius: BorderRadius.circular(12),
                           child: InkWell(
                             borderRadius: BorderRadius.circular(12),
+                            onLongPress:
+                                () => unawaited(_showTagManageSheet(tag)),
                             onTap:
                                 () => _dismissBookshelfBottomSheet(
                                   sheetContext,
@@ -1790,23 +2304,29 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
     if (selected.startsWith('tag::')) {
       final tag = selected.substring(5).trim();
       if (tag.isNotEmpty) {
-        _activateFilter(_BookshelfFilter.custom, customTag: tag);
+        _activateView(_BookshelfViewSelection.tag(tag));
       }
       return;
     }
 
     switch (selected) {
       case 'all':
-        _activateFilter(_BookshelfFilter.all);
+        _activateView(const _BookshelfViewSelection.base(_BookshelfFilter.all));
         break;
       case 'local':
-        _activateFilter(_BookshelfFilter.local);
+        _activateView(
+          const _BookshelfViewSelection.base(_BookshelfFilter.local),
+        );
         break;
       case 'novel':
-        _activateFilter(_BookshelfFilter.novel);
+        _activateView(
+          const _BookshelfViewSelection.base(_BookshelfFilter.novel),
+        );
         break;
       case 'manga':
-        _activateFilter(_BookshelfFilter.manga);
+        _activateView(
+          const _BookshelfViewSelection.base(_BookshelfFilter.manga),
+        );
         break;
       default:
         break;
@@ -2483,24 +3003,22 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
     return _filteredBooksCache;
   }
 
-  bool _bookMatchesFilter(BookshelfBook book, _BookshelfFilter filter) {
-    switch (filter) {
-      case _BookshelfFilter.all:
-        return true;
-      case _BookshelfFilter.local:
-        return book.sourceId == _kLocalBookSourceId;
-      case _BookshelfFilter.manga:
-        return book.sourceId != _kLocalBookSourceId &&
-            (_sourceTypeBySourceId[book.sourceId] ?? 0) == 2;
-      case _BookshelfFilter.novel:
-        return book.sourceId != _kLocalBookSourceId &&
-            (_sourceTypeBySourceId[book.sourceId] ?? 0) != 2;
-      case _BookshelfFilter.custom:
-        final tag = _activeCustomTag;
+  bool _bookMatchesView(BookshelfBook book, _BookshelfViewSelection view) {
+    switch (view.kind) {
+      case _BookshelfViewKind.base:
+        return _bookMatchesStaticFilter(book, view.filter);
+      case _BookshelfViewKind.tag:
+        final tag = view.tag;
         if (tag == null || tag.isEmpty) {
           return true;
         }
         return _tagsOfBook(book).contains(tag);
+      case _BookshelfViewKind.category:
+        final category = view.category;
+        if (category == null || category.isEmpty) {
+          return _categoryOfBook(book) == null;
+        }
+        return _categoryOfBook(book) == category;
     }
   }
 
@@ -2536,10 +3054,19 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
     return _tagBookCountCache;
   }
 
+  Map<String, int> _buildCategoryBookCount() {
+    _ensureDerivedBookshelfState();
+    return _categoryBookCountCache;
+  }
+
+  List<String> get _userCategories {
+    _ensureDerivedBookshelfState();
+    return _userCategoriesCache;
+  }
+
   void _ensureDerivedBookshelfState() {
     final fingerprint = Object.hash(
-      _activeFilter,
-      _activeCustomTag,
+      _activeView,
       _sortMode,
       identityHashCode(_books),
       identityHashCode(_progressByBookKey),
@@ -2547,6 +3074,8 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
       identityHashCode(_sourceTypeBySourceId),
       identityHashCode(_bookTagsByKey),
       identityHashCode(_tagOrder),
+      identityHashCode(_bookCategoriesByKey),
+      identityHashCode(_categoryOrder),
       identityHashCode(_baseFilterOrder),
     );
     if (_derivedBookshelfFingerprint == fingerprint) {
@@ -2554,9 +3083,14 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
     }
 
     final counts = <String, int>{};
+    final categoryCounts = <String, int>{};
     for (final book in _books) {
       for (final tag in _tagsOfBook(book)) {
         counts[tag] = (counts[tag] ?? 0) + 1;
+      }
+      final category = _categoryOfBook(book);
+      if (category != null && category.isNotEmpty) {
+        categoryCounts[category] = (categoryCounts[category] ?? 0) + 1;
       }
     }
 
@@ -2578,6 +3112,25 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
       return a.compareTo(b);
     });
 
+    final categories = <String>[];
+    for (final category in _categoryOrder) {
+      if ((categoryCounts[category] ?? 0) <= 0 || categories.contains(category)) {
+        continue;
+      }
+      categories.add(category);
+    }
+    final remainingCategories = categoryCounts.keys
+        .where((category) => !categories.contains(category))
+        .toList(growable: false);
+    remainingCategories.sort((a, b) {
+      final countCompare =
+          (categoryCounts[b] ?? 0).compareTo(categoryCounts[a] ?? 0);
+      if (countCompare != 0) {
+        return countCompare;
+      }
+      return a.compareTo(b);
+    });
+
     final orderedBaseFilters = <_BookshelfFilter>[];
     for (final filter in _baseFilterOrder) {
       if (!_kDefaultBaseFilters.contains(filter) ||
@@ -2593,12 +3146,17 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
     }
 
     _tagBookCountCache = Map<String, int>.unmodifiable(counts);
+    _categoryBookCountCache = Map<String, int>.unmodifiable(categoryCounts);
     _userTagsCache = List<String>.unmodifiable(<String>[...tags, ...remaining]);
+    _userCategoriesCache = List<String>.unmodifiable(<String>[
+      ...categories,
+      ...remainingCategories,
+    ]);
     _orderedBaseFiltersCache = List<_BookshelfFilter>.unmodifiable(
       orderedBaseFilters,
     );
     final filteredBooks = _books
-      .where((book) => _bookMatchesFilter(book, _activeFilter))
+      .where((book) => _bookMatchesView(book, _activeView))
       .toList(growable: true)..sort(_compareBookshelfBooks);
     _filteredBooksCache = List<BookshelfBook>.unmodifiable(filteredBooks);
     _derivedBookshelfFingerprint = fingerprint;
@@ -2780,6 +3338,10 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
     return _bookTagsByKey[_bookKey(book)] ?? const <String>[];
   }
 
+  String? _categoryOfBook(BookshelfBook book) {
+    return _bookCategoriesByKey[_bookKey(book)];
+  }
+
   String _filterLabel(_BookshelfFilter filter) {
     switch (filter) {
       case _BookshelfFilter.all:
@@ -2791,30 +3353,60 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
       case _BookshelfFilter.manga:
         return '漫画';
       case _BookshelfFilter.custom:
-        return _activeCustomTag ?? '标签';
+        return _activeView.tag ?? '标签';
     }
   }
 
   String _activeFilterLabel() {
-    if (_activeFilter == _BookshelfFilter.custom) {
-      final tag = _activeCustomTag;
+    if (_activeView.isTag) {
+      final tag = _activeView.tag;
       if (tag == null || tag.isEmpty) {
         return '标签';
       }
       return tag;
     }
-    return _filterLabel(_activeFilter);
+    if (_activeView.isCategory) {
+      final category = _activeView.category;
+      if (category == null || category.isEmpty) {
+        return '未分类';
+      }
+      return category;
+    }
+    return _filterLabel(_activeView.filter);
   }
 
-  void _activateFilter(_BookshelfFilter filter, {String? customTag}) {
+  void _activateView(_BookshelfViewSelection view) {
     setState(() {
-      _activeFilter = filter;
-      _activeCustomTag = filter == _BookshelfFilter.custom ? customTag : null;
+      _activeView = view;
       if (_isSelectionMode) {
         _isSelectionMode = false;
         _selectedBookKeys.clear();
       }
     });
+    unawaited(_persistViewSelection(view));
+  }
+
+  Future<void> _persistViewSelection(_BookshelfViewSelection view) async {
+    switch (view.kind) {
+      case _BookshelfViewKind.base:
+        final kind = switch (view.filter) {
+          _BookshelfFilter.local => 'local',
+          _BookshelfFilter.novel => 'novel',
+          _BookshelfFilter.manga => 'manga',
+          _BookshelfFilter.all || _BookshelfFilter.custom => 'all',
+        };
+        await _bookshelfService.saveViewSelection(kind: kind);
+      case _BookshelfViewKind.tag:
+        await _bookshelfService.saveViewSelection(
+          kind: 'tag',
+          value: view.tag,
+        );
+      case _BookshelfViewKind.category:
+        await _bookshelfService.saveViewSelection(
+          kind: 'category',
+          value: view.category,
+        );
+    }
   }
 
   List<String> _normalizeTags(Iterable<String> values) {
@@ -2864,13 +3456,16 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
   }
 
   void _ensureFilterStillValid() {
-    if (_activeFilter != _BookshelfFilter.custom) {
-      return;
+    var shouldReset = false;
+    if (_activeView.isTag) {
+      final tag = _activeView.tag;
+      shouldReset = tag == null || !_userTags.contains(tag);
+    } else if (_activeView.isCategory && !_activeView.isUncategorized) {
+      final category = _activeView.category;
+      shouldReset = category == null || !_userCategories.contains(category);
     }
-    final tag = _activeCustomTag;
-    if (tag == null || !_userTags.contains(tag)) {
-      _activeFilter = _BookshelfFilter.all;
-      _activeCustomTag = null;
+    if (shouldReset) {
+      _activeView = const _BookshelfViewSelection.base(_BookshelfFilter.all);
       if (_isSelectionMode) {
         _isSelectionMode = false;
         _selectedBookKeys.clear();
@@ -3110,10 +3705,14 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
               const SizedBox(height: 12),
               const Divider(height: 1),
               const SizedBox(height: 12),
-              Row(
+              Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                alignment: WrapAlignment.center,
                 children: [
-                  if (canRepairLocalBook) ...[
-                    Expanded(
+                  if (canRepairLocalBook)
+                    SizedBox(
+                      width: 84,
                       child: _BookSheetActionButton(
                         icon: Icons.refresh_rounded,
                         label: '重建目录',
@@ -3124,9 +3723,20 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
                             ).pop(_BookshelfSheetAction.repairLocal),
                       ),
                     ),
-                    const SizedBox(width: 8),
-                  ],
-                  Expanded(
+                  SizedBox(
+                    width: 84,
+                    child: _BookSheetActionButton(
+                      icon: Icons.folder_copy_outlined,
+                      label: '管理分类',
+                      onTap:
+                          () => Navigator.of(
+                            sheetContext,
+                            rootNavigator: true,
+                          ).pop(_BookshelfSheetAction.category),
+                    ),
+                  ),
+                  SizedBox(
+                    width: 84,
                     child: _BookSheetActionButton(
                       icon: Icons.label_rounded,
                       label: '管理标签',
@@ -3137,8 +3747,8 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
                           ).pop(_BookshelfSheetAction.tag),
                     ),
                   ),
-                  const SizedBox(width: 8),
-                  Expanded(
+                  SizedBox(
+                    width: 84,
                     child: _BookSheetActionButton(
                       icon: Icons.image_outlined,
                       label: '自定义封面',
@@ -3149,8 +3759,8 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
                           ).pop(_BookshelfSheetAction.customCover),
                     ),
                   ),
-                  const SizedBox(width: 8),
-                  Expanded(
+                  SizedBox(
+                    width: 84,
                     child: _BookSheetActionButton(
                       icon: Icons.delete_outline_rounded,
                       label: '删除',
@@ -3194,6 +3804,9 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
         break;
       case _BookshelfSheetAction.select:
         _enterSelectionMode(book);
+        break;
+      case _BookshelfSheetAction.category:
+        await _showBookCategorySheet(book);
         break;
       case _BookshelfSheetAction.tag:
         await _showBookTagSheet(book);
@@ -3239,6 +3852,431 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
 
   Future<void> _showBookTagSheet(BookshelfBook book) async {
     await _showBookTagEditorSheet(book);
+  }
+
+  Future<void> _showBookCategorySheet(BookshelfBook book) async {
+    await _showBookCategoryEditorSheet(book);
+  }
+
+  Future<void> _showBookCategoryEditorSheet(BookshelfBook book) async {
+    final bookKey = _bookKey(book);
+    var selectedCategory = _bookCategoriesByKey[bookKey];
+    var availableCategories = _normalizeTags(<String>[
+      ..._userCategories,
+      if (selectedCategory != null && selectedCategory.trim().isNotEmpty)
+        selectedCategory,
+    ]);
+    var createCategoryDraft = '';
+    var createCategoryFieldVersion = 0;
+    String? createCategoryErrorText;
+    var showCreateCategoryInput = false;
+
+    await _showBookshelfBottomSheet<void>(
+      isScrollControlled: true,
+      builder: (sheetContext) {
+        final maxHeight = MediaQuery.sizeOf(sheetContext).height * 0.72;
+        final bottomInset = _bookshelfBottomSafeInset(sheetContext);
+
+        return StatefulBuilder(
+          builder: (sheetContext, setSheetState) {
+            final colorScheme = Theme.of(sheetContext).colorScheme;
+            final textTheme = Theme.of(sheetContext).textTheme;
+
+            Future<void> saveSelectedCategory() async {
+              final normalized = _normalizeTags([
+                selectedCategory?.trim() ?? '',
+              ]);
+              final category = normalized.isEmpty ? null : normalized.first;
+              try {
+                await _bookshelfService.setBookCategory(
+                  sourceId: book.sourceId,
+                  detailUrl: book.detailUrl,
+                  category: category,
+                );
+                if (category != null && !_userCategories.contains(category)) {
+                  final nextOrder = _normalizeTags([
+                    ..._categoryOrder,
+                    category,
+                  ]);
+                  await _bookshelfService.saveCategoryOrder(nextOrder);
+                }
+                if (!mounted) {
+                  return;
+                }
+                setState(() {
+                  final nextCategories = Map<String, String>.from(
+                    _bookCategoriesByKey,
+                  );
+                  if (category == null) {
+                    nextCategories.remove(bookKey);
+                  } else {
+                    nextCategories[bookKey] = category;
+                  }
+                  _bookCategoriesByKey = nextCategories;
+                  if (category != null && !_categoryOrder.contains(category)) {
+                    _categoryOrder = _normalizeTags([..._categoryOrder, category]);
+                  }
+                  _ensureFilterStillValid();
+                });
+                if (!sheetContext.mounted) {
+                  return;
+                }
+                Navigator.of(sheetContext, rootNavigator: true).pop();
+                _showMessage(category == null ? '已清除分类。' : '分类已保存。');
+              } catch (_) {
+                if (!mounted) {
+                  return;
+                }
+                _showMessage('分类保存失败，请重试。');
+              }
+            }
+
+            Future<void> createCategoryInline() async {
+              final normalized = _normalizeTags([createCategoryDraft]);
+              if (normalized.isEmpty) {
+                setSheetState(() {
+                  createCategoryErrorText = '请输入分类名称';
+                });
+                return;
+              }
+              final nextCategory = normalized.first;
+              if (availableCategories.contains(nextCategory)) {
+                setSheetState(() {
+                  createCategoryErrorText = '该分类已存在';
+                });
+                return;
+              }
+              setSheetState(() {
+                availableCategories = _normalizeTags([
+                  ...availableCategories,
+                  nextCategory,
+                ]);
+                selectedCategory = nextCategory;
+                createCategoryDraft = '';
+                createCategoryErrorText = null;
+                createCategoryFieldVersion += 1;
+                showCreateCategoryInput = false;
+              });
+            }
+
+            return Padding(
+              padding: EdgeInsets.fromLTRB(8, 0, 8, 10 + bottomInset),
+              child: ConstrainedBox(
+                constraints: BoxConstraints(maxHeight: maxHeight),
+                child: ListView(
+                  shrinkWrap: true,
+                  children: [
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(16, 8, 16, 10),
+                      child: Text(
+                        '管理分类',
+                        style: textTheme.titleMedium?.copyWith(
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                    ),
+                    Material(
+                      color:
+                          selectedCategory == null
+                              ? colorScheme.primaryContainer.withValues(
+                                alpha: 0.36,
+                              )
+                              : Colors.transparent,
+                      borderRadius: BorderRadius.circular(12),
+                      child: InkWell(
+                        borderRadius: BorderRadius.circular(12),
+                        onTap: () {
+                          setSheetState(() {
+                            selectedCategory = null;
+                          });
+                        },
+                        child: Padding(
+                          padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
+                          child: Row(
+                            children: [
+                              const Expanded(child: Text('未分类')),
+                              if (selectedCategory == null)
+                                Icon(
+                                  Icons.check_rounded,
+                                  size: 18,
+                                  color: colorScheme.primary,
+                                ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ),
+                    if (availableCategories.isNotEmpty) ...[
+                      const SizedBox(height: 8),
+                      ...availableCategories.map((category) {
+                        final isSelected = selectedCategory == category;
+                        return Material(
+                          color:
+                              isSelected
+                                  ? colorScheme.secondaryContainer.withValues(
+                                    alpha: 0.42,
+                                  )
+                                  : Colors.transparent,
+                          borderRadius: BorderRadius.circular(12),
+                          child: InkWell(
+                            borderRadius: BorderRadius.circular(12),
+                            onTap: () {
+                              setSheetState(() {
+                                selectedCategory = category;
+                              });
+                            },
+                            onLongPress:
+                                () => unawaited(
+                                  _showCategoryManageSheet(category),
+                                ),
+                            child: Padding(
+                              padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
+                              child: Row(
+                                children: [
+                                  Expanded(
+                                    child: Text(
+                                      category,
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                    ),
+                                  ),
+                                  if (isSelected)
+                                    Icon(
+                                      Icons.check_rounded,
+                                      size: 18,
+                                      color: colorScheme.primary,
+                                    ),
+                                ],
+                              ),
+                            ),
+                          ),
+                        );
+                      }),
+                    ] else
+                      Padding(
+                        padding: const EdgeInsets.fromLTRB(16, 10, 16, 0),
+                        child: Text(
+                          '还没有分类，直接在下面新增一个即可。',
+                          style: textTheme.bodySmall?.copyWith(
+                            color: colorScheme.onSurfaceVariant,
+                          ),
+                        ),
+                      ),
+                    const SizedBox(height: 8),
+                    Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 16),
+                      child: TextButton.icon(
+                        onPressed: () {
+                          setSheetState(() {
+                            showCreateCategoryInput = !showCreateCategoryInput;
+                            createCategoryErrorText = null;
+                            if (showCreateCategoryInput) {
+                              createCategoryFieldVersion += 1;
+                            }
+                          });
+                        },
+                        icon: Icon(
+                          showCreateCategoryInput
+                              ? Icons.expand_less_rounded
+                              : Icons.add_rounded,
+                        ),
+                        label: Text(showCreateCategoryInput ? '收起新增分类' : '新增分类'),
+                      ),
+                    ),
+                    if (showCreateCategoryInput) ...[
+                      Padding(
+                        padding: const EdgeInsets.fromLTRB(16, 4, 16, 0),
+                        child: TextFormField(
+                          key: ValueKey<String>(
+                            'create_category_field_$createCategoryFieldVersion',
+                          ),
+                          initialValue: createCategoryDraft,
+                          autofocus: true,
+                          decoration: InputDecoration(
+                            labelText: '分类名称',
+                            errorText: createCategoryErrorText,
+                            suffixIcon: IconButton(
+                              tooltip: '添加分类',
+                              onPressed: createCategoryInline,
+                              icon: const Icon(Icons.check_rounded),
+                            ),
+                          ),
+                          onChanged: (value) {
+                            createCategoryDraft = value;
+                            if (createCategoryErrorText == null) {
+                              return;
+                            }
+                            setSheetState(() {
+                              createCategoryErrorText = null;
+                            });
+                          },
+                          onFieldSubmitted: (_) => createCategoryInline(),
+                        ),
+                      ),
+                    ],
+                    const SizedBox(height: 12),
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(16, 0, 16, 0),
+                      child: FilledButton(
+                        onPressed: saveSelectedCategory,
+                        child: const Text('保存分类'),
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                  ],
+                ),
+              ),
+            );
+          },
+        );
+      },
+    );
+  }
+
+  Future<void> _showCategoryManageSheet(String category) async {
+    if (!mounted) {
+      return;
+    }
+    final selected = await _showBookshelfBottomSheet<_BookshelfCategorySheetAction>(
+      builder: (sheetContext) {
+        return Padding(
+          padding: EdgeInsets.fromLTRB(
+            8,
+            0,
+            8,
+            10 + _bookshelfBottomSafeInset(sheetContext),
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              ListTile(
+                title: const Text('重命名分类'),
+                subtitle: Text(category),
+                onTap:
+                    () => Navigator.of(
+                      sheetContext,
+                      rootNavigator: true,
+                    ).pop(_BookshelfCategorySheetAction.rename),
+              ),
+              ListTile(
+                title: Text(
+                  '删除分类',
+                  style: TextStyle(
+                    color: Theme.of(sheetContext).colorScheme.error,
+                  ),
+                ),
+                subtitle: Text(category),
+                onTap:
+                    () => Navigator.of(
+                      sheetContext,
+                      rootNavigator: true,
+                    ).pop(_BookshelfCategorySheetAction.delete),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+    if (!mounted || selected == null) {
+      return;
+    }
+    switch (selected) {
+      case _BookshelfCategorySheetAction.rename:
+        await _renameCategory(category);
+      case _BookshelfCategorySheetAction.delete:
+        await _deleteCategory(category);
+    }
+  }
+
+  Future<void> _renameCategory(String category) async {
+    final nextCategory = await _showTagNameDialog(
+      context,
+      title: '重命名分类',
+      confirmText: '保存',
+      hintText: '输入新的分类名称',
+      existingTags: _userCategories.toSet(),
+      initialValue: category,
+      originalTag: category,
+    );
+    if (!mounted || nextCategory == null || nextCategory == category) {
+      return;
+    }
+
+    try {
+      final affectedCount = await _bookshelfService.renameCategory(
+        fromCategory: category,
+        toCategory: nextCategory,
+      );
+      if (!mounted) {
+        return;
+      }
+      if (affectedCount <= 0) {
+        _showMessage('未找到可重命名的分类。');
+        return;
+      }
+      setState(() {
+        final nextMap = <String, String>{};
+        for (final entry in _bookCategoriesByKey.entries) {
+          final value = entry.value == category ? nextCategory : entry.value;
+          if (value.isNotEmpty) {
+            nextMap[entry.key] = value;
+          }
+        }
+        _bookCategoriesByKey = nextMap;
+        _categoryOrder = _normalizeTags(
+          _categoryOrder.map((value) => value == category ? nextCategory : value),
+        );
+        if (_activeView.isCategory && _activeView.category == category) {
+          _activeView = _BookshelfViewSelection.category(nextCategory);
+        }
+        _ensureFilterStillValid();
+      });
+      _showMessage('分类已重命名为 $nextCategory。');
+    } catch (_) {
+      _showMessage('重命名失败，请重试。');
+    }
+  }
+
+  Future<void> _deleteCategory(String category) async {
+    final bindCount =
+        _bookCategoriesByKey.values.where((value) => value == category).length;
+    final confirmed = await _showConfirmDialog(
+      title: '删除分类',
+      content:
+          bindCount > 0
+              ? '确定删除分类 $category 吗？会从 $bindCount 本书中移除。'
+              : '确定删除分类 $category 吗？',
+      confirmText: '删除',
+    );
+    if (!mounted || confirmed != true) {
+      return;
+    }
+
+    try {
+      final affectedCount = await _bookshelfService.deleteCategory(category);
+      if (!mounted) {
+        return;
+      }
+      if (affectedCount <= 0) {
+        _showMessage('分类已不存在。');
+        return;
+      }
+      setState(() {
+        final nextMap = <String, String>{};
+        for (final entry in _bookCategoriesByKey.entries) {
+          if (entry.value != category) {
+            nextMap[entry.key] = entry.value;
+          }
+        }
+        _bookCategoriesByKey = nextMap;
+        _categoryOrder =
+            _categoryOrder.where((value) => value != category).toList();
+        _ensureFilterStillValid();
+      });
+      _showMessage('已删除分类 $category。');
+    } catch (_) {
+      _showMessage('删除分类失败，请重试。');
+    }
   }
 
   Future<void> _showBookTagEditorSheet(BookshelfBook book) async {
@@ -3726,9 +4764,8 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
         _tagOrder = _normalizeTags(
           _tagOrder.map((value) => value == tag ? nextTag : value),
         );
-        if (_activeFilter == _BookshelfFilter.custom &&
-            _activeCustomTag == tag) {
-          _activeCustomTag = nextTag;
+        if (_activeView.isTag && _activeView.tag == tag) {
+          _activeView = _BookshelfViewSelection.tag(nextTag);
         }
         _ensureFilterStillValid();
       });
@@ -4297,6 +5334,8 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
     final localBooksFuture = _loadLocalBookMap(books);
     final rawTagMapFuture = _bookshelfService.getTagMap();
     final tagOrderFuture = _bookshelfService.getTagOrder();
+    final rawCategoryMapFuture = _bookshelfService.getCategoryMap();
+    final categoryOrderFuture = _bookshelfService.getCategoryOrder();
     final baseFilterOrderNamesFuture = _bookshelfService.getBaseFilterOrder();
 
     try {
@@ -4305,6 +5344,8 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
         localBooksFuture,
         rawTagMapFuture,
         tagOrderFuture,
+        rawCategoryMapFuture,
+        categoryOrderFuture,
         baseFilterOrderNamesFuture,
       ]);
     } catch (_) {
@@ -4319,10 +5360,13 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
     final localBooksById = await localBooksFuture;
     final rawTagMap = await rawTagMapFuture;
     final tagOrder = await tagOrderFuture;
+    final rawCategoryMap = await rawCategoryMapFuture;
+    final categoryOrder = await categoryOrderFuture;
     final baseFilterOrderNames = await baseFilterOrderNamesFuture;
 
     final validBookKeys = books.map(_bookKey).toSet();
     final tagMap = <String, List<String>>{};
+    final categoryMap = <String, String>{};
     for (final entry in rawTagMap.entries) {
       if (!validBookKeys.contains(entry.key)) {
         continue;
@@ -4332,6 +5376,16 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
         continue;
       }
       tagMap[entry.key] = tags;
+    }
+    for (final entry in rawCategoryMap.entries) {
+      if (!validBookKeys.contains(entry.key)) {
+        continue;
+      }
+      final normalizedCategories = _normalizeTags([entry.value]);
+      if (normalizedCategories.isEmpty) {
+        continue;
+      }
+      categoryMap[entry.key] = normalizedCategories.first;
     }
 
     if (!mounted || ticket != _loadTicket) {
@@ -4343,6 +5397,8 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
       _localBooksById = localBooksById;
       _bookTagsByKey = tagMap;
       _tagOrder = _normalizeTags(tagOrder);
+      _bookCategoriesByKey = categoryMap;
+      _categoryOrder = _normalizeTags(categoryOrder);
       _baseFilterOrder = baseFilterOrderNames
           .map((name) {
             for (final filter in _kDefaultBaseFilters) {

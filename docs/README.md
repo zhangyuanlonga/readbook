@@ -34,6 +34,8 @@
   当前本地图文阅读链路的重构盘点与问题背景，适合在继续扩展本地阅读能力前先了解现状。
 - `docs/local_multi_format_reading_plan.md`
   本地多格式阅读开发方案，覆盖 `txt`、`epub`、`md`、`html`、`pdf`、`mobi`、`azw`、`azw3` 的架构原则、阶段计划与风险边界。
+- `docs/bookshelf_view_switch_plan.md`
+  书架分类与标签联动开发计划，覆盖 `书架 v` 入口、底部视图切换器、分类/标签视图状态统一和阶段任务清单。
 - `docs/product_features_guide.md`
   阅读记录、书签、缓存、自定义规则和本地阅读。
 - `docs/engineering_delivery_guide.md`

@@ -6,6 +6,7 @@ class BookshelfBook {
     required this.detailUrl,
     required this.addedAt,
     this.author,
+    this.category,
     this.coverUrl,
     this.latestChapter,
   });
@@ -16,6 +17,7 @@ class BookshelfBook {
   final String detailUrl;
   final DateTime addedAt;
   final String? author;
+  final String? category;
   final String? coverUrl;
   final String? latestChapter;
 
@@ -27,6 +29,8 @@ class BookshelfBook {
     DateTime? addedAt,
     String? author,
     bool clearAuthor = false,
+    String? category,
+    bool clearCategory = false,
     String? coverUrl,
     bool clearCoverUrl = false,
     String? latestChapter,
@@ -39,6 +43,7 @@ class BookshelfBook {
       detailUrl: detailUrl ?? this.detailUrl,
       addedAt: addedAt ?? this.addedAt,
       author: clearAuthor ? null : (author ?? this.author),
+      category: clearCategory ? null : (category ?? this.category),
       coverUrl: clearCoverUrl ? null : (coverUrl ?? this.coverUrl),
       latestChapter:
           clearLatestChapter ? null : (latestChapter ?? this.latestChapter),
@@ -53,6 +58,7 @@ class BookshelfBook {
       'detailUrl': detailUrl,
       'addedAt': addedAt.toIso8601String(),
       'author': author,
+      'category': category,
       'coverUrl': coverUrl,
       'latestChapter': latestChapter,
     };
@@ -66,6 +72,7 @@ class BookshelfBook {
       detailUrl: _requiredString(json, 'detailUrl'),
       addedAt: _requiredDateTime(json, 'addedAt'),
       author: _optionalString(json['author']),
+      category: _optionalString(json['category']),
       coverUrl: _optionalString(json['coverUrl']),
       latestChapter: _optionalString(json['latestChapter']),
     );
