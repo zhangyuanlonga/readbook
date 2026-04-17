@@ -11,6 +11,7 @@ import '../../../app/layout/app_spacing.dart';
 import '../../../app/navigation/bottom_nav_icon_gallery_provider.dart';
 import '../../../app/navigation/mobile_bottom_navigation_inset.dart';
 import '../../../app/navigation/app_navigation_style_provider.dart';
+import '../../../app/theme/app_advanced_theme_tokens.dart';
 import '../../../app/theme/app_theme_palette.dart';
 import '../../../app/theme/app_theme_provider.dart';
 import '../../../app/theme/app_theme_seed_provider.dart';
@@ -20,6 +21,8 @@ import '../../../core/auth/auth_event_bus.dart';
 import '../../../core/auth/auth_session_store.dart';
 import '../../../core/mobile_features/mobile_feature_module.dart';
 import '../../../core/mobile_features/mobile_feature_service.dart';
+import '../../../domain/entities/app_advanced_theme.dart';
+import '../application/advanced_theme_provider.dart';
 
 class MinePage extends ConsumerStatefulWidget {
   const MinePage({super.key});
@@ -97,7 +100,12 @@ class _MinePageState extends ConsumerState<MinePage> {
     final seedColor = ref.watch(appSeedColorProvider);
     final themeMode = ref.watch(appThemeModeProvider);
     final activeBottomNavIconGallery = ref.watch(
-      activeBottomNavIconGalleryProvider,
+      effectiveBottomNavIconGalleryProvider,
+    );
+    final activeAdvancedTheme = ref.watch(activeAdvancedThemeProvider);
+    final advancedPalette = _resolveAdvancedPalette(
+      context,
+      activeAdvancedTheme.valueOrNull,
     );
     final navigationPreference = ref.watch(
       appNavigationStylePreferenceProvider,
@@ -158,15 +166,19 @@ class _MinePageState extends ConsumerState<MinePage> {
                   children: [
                     _buildPageEntrance(
                       index: 0,
-                      child: _buildProfileCard(context),
+                      child: _buildProfileCard(
+                        context,
+                        palette: advancedPalette,
+                      ),
                     ),
                     SizedBox(height: _primarySectionGap),
-                    _buildQuickAccessCards(context),
+                    _buildQuickAccessCards(context, palette: advancedPalette),
                     SizedBox(height: _primarySectionGap),
                     _buildPageEntrance(
                       index: 1,
                       child: _buildActionSection(
                         context,
+                        palette: advancedPalette,
                         title: '外观',
                         actions: [
                           _MineActionItem(
@@ -179,6 +191,22 @@ class _MinePageState extends ConsumerState<MinePage> {
                                 () => context.push(
                                   '/appearance?section=appearance',
                                 ),
+                          ),
+                          _MineActionItem(
+                            icon: Icons.auto_awesome_outlined,
+                            label: '高级主题',
+                            subtitle: activeAdvancedTheme.when(
+                              data:
+                                  (theme) =>
+                                      theme == null
+                                          ? '未启用'
+                                          : '当前：${theme.name}',
+                              loading: () => '读取中',
+                              error: (_, _) => '未启用',
+                            ),
+                            onTap:
+                                () =>
+                                    context.push('/appearance/advanced-themes'),
                           ),
                           _MineActionItem(
                             icon: Icons.dashboard_outlined,
@@ -199,8 +227,7 @@ class _MinePageState extends ConsumerState<MinePage> {
                           _MineActionItem(
                             icon: Icons.photo_library_outlined,
                             label: '封面',
-                            onTap:
-                                () => context.push('/appearance?section=cover'),
+                            onTap: () => context.push('/cover-galleries'),
                           ),
                           _MineActionItem(
                             icon: Icons.wallpaper_outlined,
@@ -218,6 +245,7 @@ class _MinePageState extends ConsumerState<MinePage> {
                       index: 2,
                       child: _buildActionSection(
                         context,
+                        palette: advancedPalette,
                         title: '常用',
                         padding:
                             _isListMode
@@ -268,6 +296,7 @@ class _MinePageState extends ConsumerState<MinePage> {
                       index: 3,
                       child: _buildActionSection(
                         context,
+                        palette: advancedPalette,
                         title: '其他',
                         actions: [
                           _MineActionItem(
@@ -330,17 +359,21 @@ class _MinePageState extends ConsumerState<MinePage> {
     );
   }
 
-  Widget _buildQuickAccessCards(BuildContext context) {
+  Widget _buildQuickAccessCards(
+    BuildContext context, {
+    required _MineResolvedPalette palette,
+  }) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        _buildMembershipQuickCard(context),
+        _buildMembershipQuickCard(context, palette: palette),
         SizedBox(height: _quickAccessInnerGap),
         Row(
           children: [
             Expanded(
               child: _buildQuickCard(
                 context,
+                palette: palette,
                 icon: Icons.sync_rounded,
                 label: _isLoadingSession ? '同步中' : '同步',
                 onTap: _syncQuickAccess,
@@ -350,6 +383,7 @@ class _MinePageState extends ConsumerState<MinePage> {
             Expanded(
               child: _buildQuickCard(
                 context,
+                palette: palette,
                 icon: Icons.auto_awesome_outlined,
                 label: '灵感',
                 onTap: () => context.push('/bookmarks'),
@@ -361,8 +395,10 @@ class _MinePageState extends ConsumerState<MinePage> {
     );
   }
 
-  Widget _buildMembershipQuickCard(BuildContext context) {
-    final colorScheme = Theme.of(context).colorScheme;
+  Widget _buildMembershipQuickCard(
+    BuildContext context, {
+    required _MineResolvedPalette palette,
+  }) {
     return Material(
       color: Colors.transparent,
       child: InkWell(
@@ -371,10 +407,10 @@ class _MinePageState extends ConsumerState<MinePage> {
         child: Container(
           padding: _quickCardPadding,
           decoration: BoxDecoration(
-            color: colorScheme.surface,
+            color: palette.cardColor,
             borderRadius: BorderRadius.circular(16),
             border: Border.all(
-              color: colorScheme.outlineVariant.withValues(alpha: 0.35),
+              color: palette.cardBorderColor.withValues(alpha: 0.35),
             ),
           ),
           child: Row(
@@ -382,7 +418,7 @@ class _MinePageState extends ConsumerState<MinePage> {
               Icon(
                 Icons.workspace_premium_outlined,
                 size: 22,
-                color: colorScheme.primary,
+                color: palette.primaryColor,
               ),
               const SizedBox(width: 10),
               Expanded(
@@ -390,7 +426,7 @@ class _MinePageState extends ConsumerState<MinePage> {
                   '成为高级会员',
                   style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                     fontWeight: FontWeight.w700,
-                    color: colorScheme.onSurface,
+                    color: palette.textPrimaryColor,
                   ),
                 ),
               ),
@@ -398,14 +434,14 @@ class _MinePageState extends ConsumerState<MinePage> {
                 '立即开通',
                 style: Theme.of(context).textTheme.bodySmall?.copyWith(
                   fontWeight: FontWeight.w700,
-                  color: colorScheme.primary,
+                  color: palette.primaryColor,
                 ),
               ),
               const SizedBox(width: 2),
               Icon(
                 Icons.chevron_right_rounded,
                 size: 18,
-                color: colorScheme.primary,
+                color: palette.primaryColor,
               ),
             ],
           ),
@@ -416,11 +452,11 @@ class _MinePageState extends ConsumerState<MinePage> {
 
   Widget _buildQuickCard(
     BuildContext context, {
+    required _MineResolvedPalette palette,
     required IconData icon,
     required String label,
     required VoidCallback onTap,
   }) {
-    final colorScheme = Theme.of(context).colorScheme;
     return Material(
       color: Colors.transparent,
       child: InkWell(
@@ -429,22 +465,22 @@ class _MinePageState extends ConsumerState<MinePage> {
         child: Container(
           padding: _quickCardPadding,
           decoration: BoxDecoration(
-            color: colorScheme.surface,
+            color: palette.cardColor,
             borderRadius: BorderRadius.circular(16),
             border: Border.all(
-              color: colorScheme.outlineVariant.withValues(alpha: 0.35),
+              color: palette.cardBorderColor.withValues(alpha: 0.35),
             ),
           ),
           child: Row(
             mainAxisSize: MainAxisSize.min,
             children: [
-              Icon(icon, size: 22, color: colorScheme.primary),
+              Icon(icon, size: 22, color: palette.primaryColor),
               const SizedBox(width: 10),
               Text(
                 label,
                 style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                   fontWeight: FontWeight.w600,
-                  color: colorScheme.onSurface,
+                  color: palette.textPrimaryColor,
                 ),
               ),
             ],
@@ -454,8 +490,10 @@ class _MinePageState extends ConsumerState<MinePage> {
     );
   }
 
-  Widget _buildProfileCard(BuildContext context) {
-    final colorScheme = Theme.of(context).colorScheme;
+  Widget _buildProfileCard(
+    BuildContext context, {
+    required _MineResolvedPalette palette,
+  }) {
     final displayName =
         _userId == null
             ? '登录 / 注册'
@@ -463,10 +501,7 @@ class _MinePageState extends ConsumerState<MinePage> {
     final signature = _buildProfileSignature();
     final statusLabel = _buildProfileStatusLabel();
     final avatarLabel = _buildProfileAvatarLabel(displayName);
-    final avatarFill = Color.alphaBlend(
-      colorScheme.primary.withValues(alpha: 0.12),
-      colorScheme.surface,
-    );
+    final avatarFill = palette.iconBackgroundColor;
 
     return Card(
       child: InkWell(
@@ -492,7 +527,7 @@ class _MinePageState extends ConsumerState<MinePage> {
                     avatarLabel == null
                         ? Icon(
                           Icons.person_outline_rounded,
-                          color: colorScheme.onSurface,
+                          color: palette.textPrimaryColor,
                           size: 24,
                         )
                         : Text(
@@ -501,7 +536,7 @@ class _MinePageState extends ConsumerState<MinePage> {
                             context,
                           ).textTheme.titleMedium?.copyWith(
                             fontWeight: FontWeight.w800,
-                            color: colorScheme.onSurface,
+                            color: palette.textPrimaryColor,
                           ),
                         ),
               ),
@@ -526,10 +561,10 @@ class _MinePageState extends ConsumerState<MinePage> {
                             vertical: 4,
                           ),
                           decoration: BoxDecoration(
-                            color: colorScheme.surfaceContainerLow,
+                            color: palette.noticeSurfaceColor,
                             borderRadius: BorderRadius.circular(999),
                             border: Border.all(
-                              color: colorScheme.outlineVariant.withValues(
+                              color: palette.noticeAccentColor.withValues(
                                 alpha: 0.55,
                               ),
                             ),
@@ -540,7 +575,7 @@ class _MinePageState extends ConsumerState<MinePage> {
                               context,
                             ).textTheme.labelSmall?.copyWith(
                               fontWeight: FontWeight.w700,
-                              color: colorScheme.onSurfaceVariant,
+                              color: palette.noticeAccentColor,
                             ),
                           ),
                         ),
@@ -552,7 +587,7 @@ class _MinePageState extends ConsumerState<MinePage> {
                       maxLines: 2,
                       overflow: TextOverflow.ellipsis,
                       style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                        color: colorScheme.onSurfaceVariant,
+                        color: palette.textSecondaryColor,
                         height: 1.35,
                       ),
                     ),
@@ -562,7 +597,7 @@ class _MinePageState extends ConsumerState<MinePage> {
               const SizedBox(width: 12),
               Icon(
                 Icons.chevron_right_rounded,
-                color: colorScheme.onSurfaceVariant,
+                color: palette.textSecondaryColor,
               ),
             ],
           ),
@@ -605,6 +640,26 @@ class _MinePageState extends ConsumerState<MinePage> {
       ThemeMode.dark => '夜间',
       ThemeMode.system => '跟随系统',
     };
+  }
+
+  _MineResolvedPalette _resolveAdvancedPalette(
+    BuildContext context,
+    AppAdvancedTheme? activeTheme,
+  ) {
+    final resolved = resolveAdvancedThemePalette(
+      Theme.of(context).colorScheme,
+      activeTheme,
+    );
+    return _MineResolvedPalette(
+      cardColor: resolved.cardColor,
+      cardBorderColor: resolved.cardBorderColor,
+      iconBackgroundColor: resolved.iconBackgroundColor,
+      textPrimaryColor: resolved.textPrimaryColor,
+      textSecondaryColor: resolved.textSecondaryColor,
+      primaryColor: resolved.primaryColor,
+      noticeAccentColor: resolved.noticeAccentColor,
+      noticeSurfaceColor: resolved.noticeSurfaceColor,
+    );
   }
 
   Future<void> _loadSession() async {
@@ -690,6 +745,7 @@ class _MinePageState extends ConsumerState<MinePage> {
 
   Widget _buildActionSection(
     BuildContext context, {
+    required _MineResolvedPalette palette,
     required String title,
     required List<_MineActionItem> actions,
     EdgeInsetsGeometry? padding,
@@ -698,14 +754,13 @@ class _MinePageState extends ConsumerState<MinePage> {
     if (_layoutMode == _MineLayoutMode.list) {
       return _buildActionListSection(
         context,
+        palette: palette,
         title: title,
         actions: actions,
         padding: padding,
         trailing: trailing,
       );
     }
-
-    final colorScheme = Theme.of(context).colorScheme;
 
     return _buildSectionCardShell(
       context,
@@ -763,9 +818,10 @@ class _MinePageState extends ConsumerState<MinePage> {
                       denseGrid: denseGrid,
                       tileId: tileId,
                       highlighted: _highlightedTileId == tileId,
-                      borderColor: colorScheme.outlineVariant.withValues(
+                      borderColor: palette.cardBorderColor.withValues(
                         alpha: denseGrid ? 0.34 : 0.42,
                       ),
+                      palette: palette,
                     ),
                   );
                 },
@@ -779,13 +835,12 @@ class _MinePageState extends ConsumerState<MinePage> {
 
   Widget _buildActionListSection(
     BuildContext context, {
+    required _MineResolvedPalette palette,
     required String title,
     required List<_MineActionItem> actions,
     EdgeInsetsGeometry? padding,
     Widget? trailing,
   }) {
-    final colorScheme = Theme.of(context).colorScheme;
-
     return _buildSectionCardShell(
       context,
       padding: padding ?? _actionSectionPadding,
@@ -808,22 +863,26 @@ class _MinePageState extends ConsumerState<MinePage> {
           SizedBox(height: _isListMode ? 8 : 10),
           Container(
             decoration: BoxDecoration(
-              color: colorScheme.surface,
+              color: palette.cardColor,
               borderRadius: BorderRadius.circular(_isListMode ? 16 : 18),
               border: Border.all(
-                color: colorScheme.outlineVariant.withValues(alpha: 0.48),
+                color: palette.cardBorderColor.withValues(alpha: 0.48),
               ),
             ),
             child: Column(
               children: [
                 for (var index = 0; index < actions.length; index++) ...[
-                  _buildActionListTile(context, item: actions[index]),
+                  _buildActionListTile(
+                    context,
+                    item: actions[index],
+                    palette: palette,
+                  ),
                   if (index < actions.length - 1)
                     Divider(
                       height: 1,
                       indent: 56,
                       endIndent: 14,
-                      color: colorScheme.outlineVariant.withValues(alpha: 0.45),
+                      color: palette.cardBorderColor.withValues(alpha: 0.45),
                     ),
                 ],
               ],
@@ -837,12 +896,9 @@ class _MinePageState extends ConsumerState<MinePage> {
   Widget _buildActionListTile(
     BuildContext context, {
     required _MineActionItem item,
+    required _MineResolvedPalette palette,
   }) {
-    final colorScheme = Theme.of(context).colorScheme;
-    final iconFill = Color.alphaBlend(
-      colorScheme.onSurface.withValues(alpha: 0.04),
-      colorScheme.surface,
-    );
+    final iconFill = palette.iconBackgroundColor;
 
     return Material(
       color: Colors.transparent,
@@ -866,7 +922,7 @@ class _MinePageState extends ConsumerState<MinePage> {
                     child: Icon(
                       item.icon,
                       size: _isListMode ? 17 : 18,
-                      color: colorScheme.onSurface,
+                      color: palette.textPrimaryColor,
                     ),
                   ),
                   if (item.colorDot != null)
@@ -880,7 +936,7 @@ class _MinePageState extends ConsumerState<MinePage> {
                           color: item.colorDot,
                           shape: BoxShape.circle,
                           border: Border.all(
-                            color: colorScheme.surface,
+                            color: palette.cardColor,
                             width: 1.2,
                           ),
                         ),
@@ -907,7 +963,7 @@ class _MinePageState extends ConsumerState<MinePage> {
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                         style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                          color: colorScheme.onSurfaceVariant,
+                          color: palette.textSecondaryColor,
                         ),
                       ),
                     ],
@@ -916,7 +972,7 @@ class _MinePageState extends ConsumerState<MinePage> {
               ),
               Icon(
                 Icons.chevron_right_rounded,
-                color: colorScheme.onSurfaceVariant,
+                color: palette.textSecondaryColor,
               ),
             ],
           ),
@@ -932,13 +988,10 @@ class _MinePageState extends ConsumerState<MinePage> {
     required String tileId,
     required bool highlighted,
     required Color borderColor,
+    required _MineResolvedPalette palette,
   }) {
     final theme = Theme.of(context);
-    final colorScheme = theme.colorScheme;
-    final iconFill = Color.alphaBlend(
-      colorScheme.onSurface.withValues(alpha: denseGrid ? 0.035 : 0.045),
-      colorScheme.surface,
-    );
+    final iconFill = palette.iconBackgroundColor;
     final iconSize = denseGrid ? 30.0 : 34.0;
     final iconGlyphSize = denseGrid ? 17.0 : 19.0;
     final labelTextStyle =
@@ -1005,7 +1058,7 @@ class _MinePageState extends ConsumerState<MinePage> {
                               child: Icon(
                                 item.icon,
                                 size: iconGlyphSize,
-                                color: colorScheme.onSurface,
+                                color: palette.textPrimaryColor,
                               ),
                             ),
                             if (item.colorDot != null)
@@ -1019,7 +1072,7 @@ class _MinePageState extends ConsumerState<MinePage> {
                                     color: item.colorDot,
                                     shape: BoxShape.circle,
                                     border: Border.all(
-                                      color: colorScheme.surface,
+                                      color: palette.cardColor,
                                       width: 1.2,
                                     ),
                                   ),
@@ -1179,4 +1232,26 @@ class _MineActionItem {
   final VoidCallback onTap;
   final String? subtitle;
   final Color? colorDot;
+}
+
+class _MineResolvedPalette {
+  const _MineResolvedPalette({
+    required this.cardColor,
+    required this.cardBorderColor,
+    required this.iconBackgroundColor,
+    required this.textPrimaryColor,
+    required this.textSecondaryColor,
+    required this.primaryColor,
+    required this.noticeAccentColor,
+    required this.noticeSurfaceColor,
+  });
+
+  final Color cardColor;
+  final Color cardBorderColor;
+  final Color iconBackgroundColor;
+  final Color textPrimaryColor;
+  final Color textSecondaryColor;
+  final Color primaryColor;
+  final Color noticeAccentColor;
+  final Color noticeSurfaceColor;
 }

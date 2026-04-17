@@ -10,6 +10,7 @@ import '../../../app/layout/app_layout.dart';
 import '../../../app/layout/app_spacing.dart';
 import '../../../app/navigation/app_navigation_style_provider.dart';
 import '../../../app/navigation/mobile_bottom_navigation_inset.dart';
+import '../../../app/theme/app_advanced_theme_tokens.dart';
 import '../../../app/widgets/disk_cached_cover_image.dart';
 import '../../../app/widgets/runtime_feedback_card.dart';
 import '../../../app/widgets/text_cover_placeholder.dart';
@@ -19,6 +20,7 @@ import '../../../domain/entities/book.dart';
 import '../../book/presentation/book_detail_route.dart';
 import '../application/discover_preferences_service.dart';
 import '../application/explore_service.dart';
+import '../../mine/application/advanced_theme_provider.dart';
 import '../../source/application/source_health_service.dart';
 import '../../source/application/source_runtime_task_conflict_service.dart';
 import '../../source/application/source_runtime_scheduler_service.dart';
@@ -151,7 +153,8 @@ class _DiscoverPageState extends ConsumerState<DiscoverPage>
   @override
   Widget build(BuildContext context) {
     super.build(context);
-    final colorScheme = Theme.of(context).colorScheme;
+    ref.watch(activeAdvancedThemeProvider);
+    final palette = _resolvedPalette(context);
     final horizontal = AppSpacing.pageHorizontal(context);
     final platform = Theme.of(context).platform;
     final effectiveNavigationStyle = resolveAppNavigationStyle(
@@ -175,10 +178,7 @@ class _DiscoverPageState extends ConsumerState<DiscoverPage>
           gradient: LinearGradient(
             begin: Alignment.topCenter,
             end: Alignment.bottomCenter,
-            colors: <Color>[
-              colorScheme.surface,
-              colorScheme.surfaceContainerLow,
-            ],
+            colors: <Color>[palette.backgroundColor, palette.surfaceColor],
           ),
         ),
         child: SafeArea(
@@ -212,6 +212,21 @@ class _DiscoverPageState extends ConsumerState<DiscoverPage>
 
   @override
   bool get wantKeepAlive => true;
+
+  ResolvedAdvancedThemePalette _resolvedPalette(BuildContext context) {
+    return resolveAdvancedThemePalette(
+      Theme.of(context).colorScheme,
+      ref.read(activeAdvancedThemeProvider).valueOrNull,
+    );
+  }
+
+  RoundedRectangleBorder _cardShape(BuildContext context) {
+    final palette = _resolvedPalette(context);
+    return RoundedRectangleBorder(
+      borderRadius: BorderRadius.circular(16),
+      side: BorderSide(color: palette.cardBorderColor.withValues(alpha: 0.4)),
+    );
+  }
 
   void _onBookListScroll() {
     if (!_booksScrollController.hasClients ||
@@ -320,11 +335,13 @@ class _DiscoverPageState extends ConsumerState<DiscoverPage>
     final categoryName = _selectedCategory?.title ?? '未选分类';
     final status = _resolveSourceStatus(source?.id);
     final statusDetail = _sourceStatusDetail(source?.id);
-    final colorScheme = Theme.of(context).colorScheme;
+    final palette = _resolvedPalette(context);
     final textTheme = Theme.of(context).textTheme;
     final hasMultipleSources = _discoverSources.length > 1;
 
     return Card(
+      color: palette.cardColor,
+      shape: _cardShape(context),
       child: Padding(
         padding: const EdgeInsets.fromLTRB(12, 10, 12, 12),
         child: Column(
@@ -340,7 +357,7 @@ class _DiscoverPageState extends ConsumerState<DiscoverPage>
                     '当前书源',
                     style: textTheme.labelLarge?.copyWith(
                       fontWeight: FontWeight.w700,
-                      color: colorScheme.onSurfaceVariant,
+                      color: palette.textSecondaryColor,
                     ),
                   ),
                 const Spacer(),
@@ -379,7 +396,7 @@ class _DiscoverPageState extends ConsumerState<DiscoverPage>
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
               style: textTheme.labelLarge?.copyWith(
-                color: colorScheme.onSurfaceVariant,
+                color: palette.textSecondaryColor,
               ),
             ),
 
@@ -415,7 +432,7 @@ class _DiscoverPageState extends ConsumerState<DiscoverPage>
                   vertical: 7,
                 ),
                 decoration: BoxDecoration(
-                  color: colorScheme.surfaceContainerHigh,
+                  color: palette.elevatedSurfaceColor,
                   borderRadius: BorderRadius.circular(10),
                 ),
                 child: Text(
@@ -423,7 +440,7 @@ class _DiscoverPageState extends ConsumerState<DiscoverPage>
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   style: textTheme.labelLarge?.copyWith(
-                    color: colorScheme.onSurfaceVariant,
+                    color: palette.textSecondaryColor,
                     height: 1.3,
                   ),
                 ),
@@ -494,6 +511,8 @@ class _DiscoverPageState extends ConsumerState<DiscoverPage>
       _compactCategoryPreviewCount,
     );
     return Card(
+      color: _resolvedPalette(context).cardColor,
+      shape: _cardShape(context),
       child: Padding(
         padding: const EdgeInsets.fromLTRB(12, 10, 12, 12),
         child: Column(
@@ -548,6 +567,7 @@ class _DiscoverPageState extends ConsumerState<DiscoverPage>
     ExploreCategoryItem item,
   ) {
     final colorScheme = Theme.of(context).colorScheme;
+    final palette = _resolvedPalette(context);
     final isSelected = index == _selectedCategoryIndex;
     if (item.isActionable) {
       return Tooltip(
@@ -557,16 +577,15 @@ class _DiscoverPageState extends ConsumerState<DiscoverPage>
           label: Text(item.title, maxLines: 1, overflow: TextOverflow.ellipsis),
           selected: isSelected,
           showCheckmark: false,
-          selectedColor: colorScheme.secondaryContainer,
+          selectedColor: palette.noticeSurfaceColor,
           side: BorderSide(
             color:
-                isSelected ? colorScheme.secondary : colorScheme.outlineVariant,
+                isSelected
+                    ? palette.noticeAccentColor
+                    : palette.cardBorderColor,
           ),
           labelStyle: Theme.of(context).textTheme.labelLarge?.copyWith(
-            color:
-                isSelected
-                    ? colorScheme.onSecondaryContainer
-                    : colorScheme.onSurface,
+            color: palette.textPrimaryColor,
             fontWeight: isSelected ? FontWeight.w700 : FontWeight.w500,
           ),
           visualDensity: VisualDensity.compact,
@@ -589,10 +608,10 @@ class _DiscoverPageState extends ConsumerState<DiscoverPage>
         label: Text(item.title, maxLines: 1, overflow: TextOverflow.ellipsis),
         labelStyle: Theme.of(
           context,
-        ).textTheme.labelLarge?.copyWith(color: colorScheme.onSurfaceVariant),
-        side: BorderSide(color: colorScheme.outlineVariant),
+        ).textTheme.labelLarge?.copyWith(color: palette.textSecondaryColor),
+        side: BorderSide(color: palette.cardBorderColor),
         visualDensity: VisualDensity.compact,
-        backgroundColor: colorScheme.surfaceContainerHighest,
+        backgroundColor: palette.elevatedSurfaceColor,
       ),
     );
   }
@@ -607,6 +626,8 @@ class _DiscoverPageState extends ConsumerState<DiscoverPage>
     final actionableCount = _actionableCategoryEntries.length;
 
     return Card(
+      color: _resolvedPalette(context).cardColor,
+      shape: _cardShape(context),
       clipBehavior: Clip.antiAlias,
       child: Column(
         children: <Widget>[
@@ -887,6 +908,8 @@ class _DiscoverPageState extends ConsumerState<DiscoverPage>
         final compactPill = useCondensedPhoneDensity;
 
         return Card(
+          color: _resolvedPalette(context).cardColor,
+          shape: _cardShape(context),
           margin: EdgeInsets.only(bottom: cardBottomMargin),
           clipBehavior: Clip.antiAlias,
           child: InkWell(
@@ -968,9 +991,9 @@ class _DiscoverPageState extends ConsumerState<DiscoverPage>
                               ),
                               decoration: BoxDecoration(
                                 color:
-                                    Theme.of(
+                                    _resolvedPalette(
                                       context,
-                                    ).colorScheme.surfaceContainerHigh,
+                                    ).elevatedSurfaceColor,
                                 borderRadius: BorderRadius.circular(8),
                               ),
                               child: Text(
@@ -981,9 +1004,9 @@ class _DiscoverPageState extends ConsumerState<DiscoverPage>
                                   context,
                                 ).textTheme.bodySmall?.copyWith(
                                   color:
-                                      Theme.of(
+                                      _resolvedPalette(
                                         context,
-                                      ).colorScheme.onSurfaceVariant,
+                                      ).textSecondaryColor,
                                   height: 1.35,
                                 ),
                               ),
@@ -995,7 +1018,7 @@ class _DiscoverPageState extends ConsumerState<DiscoverPage>
                   const SizedBox(width: 8),
                   Icon(
                     Icons.chevron_right_rounded,
-                    color: Theme.of(context).colorScheme.onSurfaceVariant,
+                    color: _resolvedPalette(context).textSecondaryColor,
                   ),
                 ],
               ),
@@ -1081,11 +1104,11 @@ class _DiscoverPageState extends ConsumerState<DiscoverPage>
     required String value,
     bool compact = false,
   }) {
-    final colorScheme = Theme.of(context).colorScheme;
+    final palette = _resolvedPalette(context);
     return DecoratedBox(
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(999),
-        color: colorScheme.secondaryContainer,
+        color: palette.noticeSurfaceColor,
       ),
       child: Padding(
         padding: EdgeInsets.symmetric(
@@ -1094,9 +1117,9 @@ class _DiscoverPageState extends ConsumerState<DiscoverPage>
         ),
         child: Text(
           '$label: $value',
-          style: Theme.of(context).textTheme.labelSmall?.copyWith(
-            color: colorScheme.onSecondaryContainer,
-          ),
+          style: Theme.of(
+            context,
+          ).textTheme.labelSmall?.copyWith(color: palette.noticeAccentColor),
         ),
       ),
     );
@@ -1139,7 +1162,10 @@ class _DiscoverPageState extends ConsumerState<DiscoverPage>
   }
 
   Widget _buildNoSourceCard(BuildContext context) {
+    final palette = _resolvedPalette(context);
     return Card(
+      color: palette.cardColor,
+      shape: _cardShape(context),
       child: Padding(
         padding: const EdgeInsets.all(16),
         child: Column(
@@ -1161,7 +1187,7 @@ class _DiscoverPageState extends ConsumerState<DiscoverPage>
               Text(
                 '当前已启用：$_enabledSourceCount，支持发现：$_discoverCapableCount',
                 style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                  color: Theme.of(context).colorScheme.onSurfaceVariant,
+                  color: palette.textSecondaryColor,
                 ),
               ),
             ],
@@ -1198,7 +1224,7 @@ class _DiscoverPageState extends ConsumerState<DiscoverPage>
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
               style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                color: Theme.of(context).colorScheme.onSurfaceVariant,
+                color: _resolvedPalette(context).textSecondaryColor,
               ),
             ),
           );
@@ -1210,16 +1236,13 @@ class _DiscoverPageState extends ConsumerState<DiscoverPage>
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: <Widget>[
-                Icon(
-                  icon,
-                  color: Theme.of(context).colorScheme.onSurfaceVariant,
-                ),
+                Icon(icon, color: _resolvedPalette(context).textSecondaryColor),
                 const SizedBox(height: 8),
                 Text(
                   message,
                   textAlign: TextAlign.center,
                   style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                    color: Theme.of(context).colorScheme.onSurfaceVariant,
+                    color: _resolvedPalette(context).textSecondaryColor,
                   ),
                 ),
               ],

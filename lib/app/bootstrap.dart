@@ -11,6 +11,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'app.dart';
 import '../features/source/application/source_health_service.dart';
 import '../features/source/application/source_runtime_diagnostics_service.dart';
+import '../features/mine/application/advanced_theme_provider.dart';
 import '../features/reader/application/reader_font_registry_service.dart';
 import '../core/logging/app_logger.dart';
 import 'navigation/app_navigation_style_provider.dart';
@@ -27,6 +28,7 @@ Future<void> bootstrap() async {
   AppNavigationLabelVisibilityNotifier.prime(prefs);
   AppThemeModeNotifier.prime(prefs);
   AppSeedColorNotifier.prime(prefs);
+  ActiveAdvancedThemeIdNotifier.prime(prefs);
   AppInterfaceFontSettingsNotifier.prime(prefs);
   AppInterfaceTextScaleNotifier.prime(prefs);
   AppInterfaceFontWeightNotifier.prime(prefs);

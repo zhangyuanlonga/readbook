@@ -112,7 +112,7 @@ class _ShellScaffoldState extends ConsumerState<ShellScaffold>
     final navigationState = ref.watch(appShellNavigationProvider);
     final visibleDestinations = visibleAppShellDestinations(navigationState);
     final activeIconGallery =
-        ref.watch(activeBottomNavIconGalleryProvider).value;
+        ref.watch(effectiveBottomNavIconGalleryProvider).value;
     final effectiveNavigationStyle = resolveAppNavigationStyle(
       navigationStylePreference,
       isWeb: kIsWeb,

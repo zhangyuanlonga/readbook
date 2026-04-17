@@ -16,9 +16,13 @@ import '../features/mine/presentation/cache_management_page.dart';
 import '../features/mine/presentation/mine_management_page.dart';
 import '../features/mine/presentation/membership_center_page.dart';
 import '../features/mine/presentation/about_page.dart';
+import '../features/mine/presentation/advanced_theme_editor_page.dart';
+import '../features/mine/presentation/advanced_theme_list_page.dart';
 import '../features/mine/presentation/bookmarks_page.dart';
 import '../features/mine/presentation/bottom_nav_icon_gallery_page.dart';
 import '../features/mine/presentation/bottom_nav_icon_gallery_editor_page.dart';
+import '../features/mine/presentation/cover_gallery_editor_page.dart';
+import '../features/mine/presentation/cover_gallery_page.dart';
 import '../features/mine/presentation/feedback_page.dart';
 import '../features/mine/presentation/system_settings_page.dart';
 import '../features/auth/presentation/auth_page.dart';
@@ -108,6 +112,19 @@ final GoRouter appRouter = GoRouter(
       },
     ),
     GoRoute(
+      path: '/appearance/advanced-themes',
+      name: 'advanced-themes',
+      builder: (context, state) => const AdvancedThemeListPage(),
+    ),
+    GoRoute(
+      path: '/appearance/advanced-themes/editor',
+      name: 'advanced-theme-editor',
+      builder: (context, state) {
+        final themeId = state.uri.queryParameters['id'];
+        return AdvancedThemeEditorPage(themeId: themeId);
+      },
+    ),
+    GoRoute(
       path: '/bottom-nav-icon-galleries',
       name: 'bottom-nav-icon-galleries',
       builder: (context, state) => const BottomNavIconGalleryPage(),
@@ -118,6 +135,19 @@ final GoRouter appRouter = GoRouter(
       builder: (context, state) {
         final galleryId = state.uri.queryParameters['id'] ?? '';
         return BottomNavIconGalleryEditorPage(galleryId: galleryId);
+      },
+    ),
+    GoRoute(
+      path: '/cover-galleries',
+      name: 'cover-galleries',
+      builder: (context, state) => const CoverGalleryPage(),
+    ),
+    GoRoute(
+      path: '/cover-galleries/editor',
+      name: 'cover-gallery-editor',
+      builder: (context, state) {
+        final galleryId = state.uri.queryParameters['id'] ?? '';
+        return CoverGalleryEditorPage(galleryId: galleryId);
       },
     ),
     GoRoute(

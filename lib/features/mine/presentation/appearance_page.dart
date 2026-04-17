@@ -18,17 +18,16 @@ import '../../../app/theme/app_theme_provider.dart';
 import '../../../app/theme/app_theme_seed_provider.dart';
 import '../../../app/widgets/text_cover_placeholder.dart';
 import '../../../core/media/image_selection_service.dart';
+import '../application/advanced_theme_provider.dart';
 import '../../reader/application/reader_font_registry_service.dart';
 
-enum AppearanceSection {
-  appearance,
-  tabBar,
-  cover,
-  background,
-}
+enum AppearanceSection { appearance, tabBar, cover, background }
 
 class AppearancePage extends ConsumerStatefulWidget {
-  const AppearancePage({super.key, this.section = AppearanceSection.appearance});
+  const AppearancePage({
+    super.key,
+    this.section = AppearanceSection.appearance,
+  });
 
   final AppearanceSection section;
 
@@ -65,12 +64,18 @@ class _AppearancePageState extends ConsumerState<AppearancePage> {
     final bgDir = Directory('${dir.path}/backgrounds');
     final paths = <String>[];
     if (await bgDir.exists()) {
-      final files = bgDir
-          .listSync()
-          .whereType<File>()
-          .where((f) => f.path.endsWith('.jpg') || f.path.endsWith('.jpeg') || f.path.endsWith('.png'))
-          .map((f) => f.path)
-          .toList();
+      final files =
+          bgDir
+              .listSync()
+              .whereType<File>()
+              .where(
+                (f) =>
+                    f.path.endsWith('.jpg') ||
+                    f.path.endsWith('.jpeg') ||
+                    f.path.endsWith('.png'),
+              )
+              .map((f) => f.path)
+              .toList();
       paths.addAll(files);
     }
     if (!mounted) return;
@@ -113,8 +118,7 @@ class _AppearancePageState extends ConsumerState<AppearancePage> {
       }
 
       final extension = _imageExtensionForName(picked.name);
-      final fileName =
-          '${DateTime.now().millisecondsSinceEpoch}_bg.$extension';
+      final fileName = '${DateTime.now().millisecondsSinceEpoch}_bg.$extension';
       final destPath = '${bgDir.path}/$fileName';
       final destFile = File(destPath);
       await destFile.writeAsBytes(picked.bytes, flush: true);
@@ -175,9 +179,8 @@ class _AppearancePageState extends ConsumerState<AppearancePage> {
                   title: const Text('文件'),
                   subtitle: const Text('从文件 App 或本地目录选择图片'),
                   onTap:
-                      () => Navigator.of(
-                        context,
-                      ).pop(ImageSelectionSource.files),
+                      () =>
+                          Navigator.of(context).pop(ImageSelectionSource.files),
                 ),
               ],
             ),
@@ -201,20 +204,21 @@ class _AppearancePageState extends ConsumerState<AppearancePage> {
   Future<void> _confirmDeleteBackground(String path) async {
     final confirmed = await showDialog<bool>(
       context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('删除背景'),
-        content: const Text('确定要删除这个背景图吗？'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context, false),
-            child: const Text('取消'),
+      builder:
+          (context) => AlertDialog(
+            title: const Text('删除背景'),
+            content: const Text('确定要删除这个背景图吗？'),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(context, false),
+                child: const Text('取消'),
+              ),
+              TextButton(
+                onPressed: () => Navigator.pop(context, true),
+                child: const Text('删除', style: TextStyle(color: Colors.red)),
+              ),
+            ],
           ),
-          TextButton(
-            onPressed: () => Navigator.pop(context, true),
-            child: const Text('删除', style: TextStyle(color: Colors.red)),
-          ),
-        ],
-      ),
     );
     if (confirmed == true) {
       await _deleteBackground(path);
@@ -342,6 +346,8 @@ class _AppearancePageState extends ConsumerState<AppearancePage> {
         _buildThemeColorSection(context, selectedSeedColor: selectedSeedColor),
       );
       sections.add(const SizedBox(height: 10));
+      sections.add(_buildAdvancedThemeSummarySection(context));
+      sections.add(const SizedBox(height: 10));
       sections.add(
         _buildNavigationStyleSection(
           context,
@@ -360,9 +366,7 @@ class _AppearancePageState extends ConsumerState<AppearancePage> {
         ),
       );
       sections.add(const SizedBox(height: 10));
-      sections.add(
-        _buildFontSection(context),
-      );
+      sections.add(_buildFontSection(context));
     }
 
     if (widget.section == AppearanceSection.tabBar) {
@@ -406,9 +410,9 @@ class _AppearancePageState extends ConsumerState<AppearancePage> {
             Expanded(
               child: Text(
                 '打开图集管理',
-                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                  fontWeight: FontWeight.w600,
-                ),
+                style: Theme.of(
+                  context,
+                ).textTheme.bodyMedium?.copyWith(fontWeight: FontWeight.w600),
               ),
             ),
             Icon(
@@ -432,80 +436,82 @@ class _AppearancePageState extends ConsumerState<AppearancePage> {
       title: '模式',
       subtitle: '日间、夜间或跟随系统。',
       child: Row(
-        children: _themeModeOptions.map((option) {
-          final selected = option.mode == selectedThemeMode;
-          final colorScheme = Theme.of(context).colorScheme;
-          return Expanded(
-            child: Padding(
-              padding: EdgeInsets.only(
-                right: option == _themeModeOptions.last ? 0 : 6,
-              ),
-              child: InkWell(
-                borderRadius: BorderRadius.circular(10),
-                onTap: () {
-                  if (selected) return;
-                  unawaited(
-                    ref
-                        .read(appThemeModeProvider.notifier)
-                        .setThemeMode(option.mode),
-                  );
-                },
-                child: AnimatedContainer(
-                  duration: const Duration(milliseconds: 150),
-                  curve: Curves.easeOutCubic,
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 6,
-                    vertical: 9,
+        children: _themeModeOptions
+            .map((option) {
+              final selected = option.mode == selectedThemeMode;
+              final colorScheme = Theme.of(context).colorScheme;
+              return Expanded(
+                child: Padding(
+                  padding: EdgeInsets.only(
+                    right: option == _themeModeOptions.last ? 0 : 6,
                   ),
-                  decoration: BoxDecoration(
-                    color:
-                        selected
-                            ? colorScheme.secondaryContainer
-                            : colorScheme.surface,
+                  child: InkWell(
                     borderRadius: BorderRadius.circular(10),
-                    border: Border.all(
-                      color:
-                          selected
-                              ? colorScheme.primary
-                              : colorScheme.outlineVariant.withValues(
-                                  alpha: 0.5,
-                                ),
-                      width: selected ? 1.4 : 1,
-                    ),
-                  ),
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Icon(
-                        option.icon,
-                        size: 16,
+                    onTap: () {
+                      if (selected) return;
+                      unawaited(
+                        ref
+                            .read(appThemeModeProvider.notifier)
+                            .setThemeMode(option.mode),
+                      );
+                    },
+                    child: AnimatedContainer(
+                      duration: const Duration(milliseconds: 150),
+                      curve: Curves.easeOutCubic,
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 6,
+                        vertical: 9,
+                      ),
+                      decoration: BoxDecoration(
                         color:
                             selected
-                                ? colorScheme.primary
-                                : colorScheme.onSurfaceVariant,
-                      ),
-                      const SizedBox(height: 5),
-                      Text(
-                        option.label,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: Theme.of(
-                          context,
-                        ).textTheme.labelSmall?.copyWith(
-                          fontWeight: FontWeight.w700,
+                                ? colorScheme.secondaryContainer
+                                : colorScheme.surface,
+                        borderRadius: BorderRadius.circular(10),
+                        border: Border.all(
                           color:
                               selected
                                   ? colorScheme.primary
-                                  : colorScheme.onSurfaceVariant,
+                                  : colorScheme.outlineVariant.withValues(
+                                    alpha: 0.5,
+                                  ),
+                          width: selected ? 1.4 : 1,
                         ),
                       ),
-                    ],
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(
+                            option.icon,
+                            size: 16,
+                            color:
+                                selected
+                                    ? colorScheme.primary
+                                    : colorScheme.onSurfaceVariant,
+                          ),
+                          const SizedBox(height: 5),
+                          Text(
+                            option.label,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: Theme.of(
+                              context,
+                            ).textTheme.labelSmall?.copyWith(
+                              fontWeight: FontWeight.w700,
+                              color:
+                                  selected
+                                      ? colorScheme.primary
+                                      : colorScheme.onSurfaceVariant,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
                   ),
                 ),
-              ),
-            ),
-          );
-        }).toList(growable: false),
+              );
+            })
+            .toList(growable: false),
       ),
     );
   }
@@ -523,65 +529,116 @@ class _AppearancePageState extends ConsumerState<AppearancePage> {
       child: Wrap(
         spacing: 10,
         runSpacing: 10,
-        children: appThemeSeedOptions.map((option) {
-          final selected =
-              option.color.toARGB32() == selectedSeedColor.toARGB32();
-          return GestureDetector(
-            onTap: () {
-              if (selected) return;
-              unawaited(
-                ref
-                    .read(appSeedColorProvider.notifier)
-                    .setSeedColor(option.color),
-              );
-            },
-            child: Tooltip(
-              message: option.label,
-              child: AnimatedContainer(
-                duration: const Duration(milliseconds: 150),
-                width: 30,
-                height: 30,
-                decoration: BoxDecoration(
-                  color: option.color,
-                  shape: BoxShape.circle,
-                  border: selected
-                      ? Border.all(
-                          color: colorScheme.primary,
-                          width: 2.5,
-                          strokeAlign: BorderSide.strokeAlignOutside,
-                        )
-                      : Border.all(
-                          color: colorScheme.outlineVariant.withValues(
-                            alpha: 0.4,
-                          ),
-                          width: 0.5,
-                        ),
-                  boxShadow: selected
-                      ? [
-                          BoxShadow(
-                            color: option.color.withValues(alpha: 0.4),
-                            blurRadius: 6,
-                            offset: const Offset(0, 2),
-                          ),
-                        ]
-                      : null,
+        children: appThemeSeedOptions
+            .map((option) {
+              final selected =
+                  option.color.toARGB32() == selectedSeedColor.toARGB32();
+              return GestureDetector(
+                onTap: () {
+                  if (selected) return;
+                  unawaited(
+                    ref
+                        .read(appSeedColorProvider.notifier)
+                        .setSeedColor(option.color),
+                  );
+                },
+                child: Tooltip(
+                  message: option.label,
+                  child: AnimatedContainer(
+                    duration: const Duration(milliseconds: 150),
+                    width: 30,
+                    height: 30,
+                    decoration: BoxDecoration(
+                      color: option.color,
+                      shape: BoxShape.circle,
+                      border:
+                          selected
+                              ? Border.all(
+                                color: colorScheme.primary,
+                                width: 2.5,
+                                strokeAlign: BorderSide.strokeAlignOutside,
+                              )
+                              : Border.all(
+                                color: colorScheme.outlineVariant.withValues(
+                                  alpha: 0.4,
+                                ),
+                                width: 0.5,
+                              ),
+                      boxShadow:
+                          selected
+                              ? [
+                                BoxShadow(
+                                  color: option.color.withValues(alpha: 0.4),
+                                  blurRadius: 6,
+                                  offset: const Offset(0, 2),
+                                ),
+                              ]
+                              : null,
+                    ),
+                    child:
+                        selected
+                            ? Icon(
+                              Icons.check_rounded,
+                              size: 16,
+                              color:
+                                  ThemeData.estimateBrightnessForColor(
+                                            option.color,
+                                          ) ==
+                                          Brightness.dark
+                                      ? Colors.white
+                                      : Colors.black.withValues(alpha: 0.7),
+                            )
+                            : null,
+                  ),
                 ),
-                child: selected
-                    ? Icon(
-                        Icons.check_rounded,
-                        size: 16,
-                        color: ThemeData.estimateBrightnessForColor(
-                                  option.color,
-                                ) ==
-                                Brightness.dark
-                            ? Colors.white
-                            : Colors.black.withValues(alpha: 0.7),
-                      )
-                    : null,
+              );
+            })
+            .toList(growable: false),
+      ),
+    );
+  }
+
+  Widget _buildAdvancedThemeSummarySection(BuildContext context) {
+    final activeAdvancedTheme = ref.watch(activeAdvancedThemeProvider);
+    final colorScheme = Theme.of(context).colorScheme;
+    return _buildSectionCard(
+      context,
+      icon: Icons.auto_awesome_outlined,
+      title: '高级主题',
+      subtitle: '查看当前状态并前往主题列表管理。',
+      child: InkWell(
+        borderRadius: BorderRadius.circular(10),
+        onTap: () => context.push('/appearance/advanced-themes'),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 2, vertical: 8),
+          child: Row(
+            children: [
+              Icon(
+                Icons.palette_outlined,
+                size: 18,
+                color: colorScheme.onSurfaceVariant,
               ),
-            ),
-          );
-        }).toList(growable: false),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Text(
+                  activeAdvancedTheme.when(
+                    data: (theme) => theme == null ? '未启用' : '当前：${theme.name}',
+                    loading: () => '读取中',
+                    error: (_, _) => '未启用',
+                  ),
+                  style: Theme.of(
+                    context,
+                  ).textTheme.bodyMedium?.copyWith(fontWeight: FontWeight.w600),
+                ),
+              ),
+              Icon(
+                Icons.chevron_right_rounded,
+                size: 18,
+                color: colorScheme.onSurfaceVariant,
+              ),
+            ],
+          ),
+        ),
       ),
     );
   }
@@ -673,14 +730,18 @@ class _AppearancePageState extends ConsumerState<AppearancePage> {
         padding: const EdgeInsets.symmetric(horizontal: 2, vertical: 8),
         child: Row(
           children: [
-            Icon(Icons.font_download_outlined, size: 18, color: colorScheme.onSurfaceVariant),
+            Icon(
+              Icons.font_download_outlined,
+              size: 18,
+              color: colorScheme.onSurfaceVariant,
+            ),
             const SizedBox(width: 10),
             Expanded(
               child: Text(
                 '界面字体',
-                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                  fontWeight: FontWeight.w600,
-                ),
+                style: Theme.of(
+                  context,
+                ).textTheme.bodyMedium?.copyWith(fontWeight: FontWeight.w600),
               ),
             ),
             Text(
@@ -690,7 +751,11 @@ class _AppearancePageState extends ConsumerState<AppearancePage> {
               ),
             ),
             const SizedBox(width: 6),
-            Icon(Icons.chevron_right_rounded, size: 18, color: colorScheme.onSurfaceVariant),
+            Icon(
+              Icons.chevron_right_rounded,
+              size: 18,
+              color: colorScheme.onSurfaceVariant,
+            ),
           ],
         ),
       ),
@@ -706,14 +771,18 @@ class _AppearancePageState extends ConsumerState<AppearancePage> {
         padding: const EdgeInsets.symmetric(horizontal: 2, vertical: 8),
         child: Row(
           children: [
-            Icon(Icons.zoom_in_outlined, size: 18, color: colorScheme.onSurfaceVariant),
+            Icon(
+              Icons.zoom_in_outlined,
+              size: 18,
+              color: colorScheme.onSurfaceVariant,
+            ),
             const SizedBox(width: 10),
             Expanded(
               child: Text(
                 '界面缩放',
-                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                  fontWeight: FontWeight.w600,
-                ),
+                style: Theme.of(
+                  context,
+                ).textTheme.bodyMedium?.copyWith(fontWeight: FontWeight.w600),
               ),
             ),
             Text(
@@ -723,7 +792,11 @@ class _AppearancePageState extends ConsumerState<AppearancePage> {
               ),
             ),
             const SizedBox(width: 6),
-            Icon(Icons.chevron_right_rounded, size: 18, color: colorScheme.onSurfaceVariant),
+            Icon(
+              Icons.chevron_right_rounded,
+              size: 18,
+              color: colorScheme.onSurfaceVariant,
+            ),
           ],
         ),
       ),
@@ -739,14 +812,18 @@ class _AppearancePageState extends ConsumerState<AppearancePage> {
         padding: const EdgeInsets.symmetric(horizontal: 2, vertical: 8),
         child: Row(
           children: [
-            Icon(Icons.format_bold, size: 18, color: colorScheme.onSurfaceVariant),
+            Icon(
+              Icons.format_bold,
+              size: 18,
+              color: colorScheme.onSurfaceVariant,
+            ),
             const SizedBox(width: 10),
             Expanded(
               child: Text(
                 '界面字重',
-                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                  fontWeight: FontWeight.w600,
-                ),
+                style: Theme.of(
+                  context,
+                ).textTheme.bodyMedium?.copyWith(fontWeight: FontWeight.w600),
               ),
             ),
             Text(
@@ -756,7 +833,11 @@ class _AppearancePageState extends ConsumerState<AppearancePage> {
               ),
             ),
             const SizedBox(width: 6),
-            Icon(Icons.chevron_right_rounded, size: 18, color: colorScheme.onSurfaceVariant),
+            Icon(
+              Icons.chevron_right_rounded,
+              size: 18,
+              color: colorScheme.onSurfaceVariant,
+            ),
           ],
         ),
       ),
@@ -797,7 +878,10 @@ class _AppearancePageState extends ConsumerState<AppearancePage> {
                   children: [
                     const Text(
                       '界面缩放',
-                      style: TextStyle(fontWeight: FontWeight.w700, fontSize: 16),
+                      style: TextStyle(
+                        fontWeight: FontWeight.w700,
+                        fontSize: 16,
+                      ),
                     ),
                     const SizedBox(height: 8),
                     Text(
@@ -873,7 +957,10 @@ class _AppearancePageState extends ConsumerState<AppearancePage> {
                   children: [
                     const Text(
                       '界面字重',
-                      style: TextStyle(fontWeight: FontWeight.w700, fontSize: 16),
+                      style: TextStyle(
+                        fontWeight: FontWeight.w700,
+                        fontSize: 16,
+                      ),
                     ),
                     const SizedBox(height: 8),
                     Text(
@@ -899,9 +986,10 @@ class _AppearancePageState extends ConsumerState<AppearancePage> {
                       label: '$displayWeight',
                       value: draftValue,
                       onChanged: (value) {
-                        final normalized = ((value / 100).round() * 100)
-                            .clamp(100, 900)
-                            .toDouble();
+                        final normalized =
+                            ((value / 100).round() * 100)
+                                .clamp(100, 900)
+                                .toDouble();
                         setSheetState(() {
                           draftValue = normalized;
                         });
@@ -917,7 +1005,17 @@ class _AppearancePageState extends ConsumerState<AppearancePage> {
                       spacing: 8,
                       runSpacing: 8,
                       alignment: WrapAlignment.center,
-                      children: const [100, 200, 300, 400, 500, 600, 700, 800, 900]
+                      children: const [
+                            100,
+                            200,
+                            300,
+                            400,
+                            500,
+                            600,
+                            700,
+                            800,
+                            900,
+                          ]
                           .map(
                             (weight) => Chip(
                               label: Text('$weight'),
@@ -960,169 +1058,171 @@ class _AppearancePageState extends ConsumerState<AppearancePage> {
       icon: Icons.wallpaper_outlined,
       title: '背景',
       subtitle: '移动端可选相册或文件，桌面端从文件选择。长按图片可删除。',
-      child: _isLoadingBackgrounds
-          ? const SizedBox(
-              height: 80,
-              child: Center(child: CircularProgressIndicator()),
-            )
-          : LayoutBuilder(
-              builder: (context, constraints) {
-                const spacing = 8.0;
-                final columns = AppLayout.optionGridColumnsForWidth(
-                  constraints.maxWidth,
-                ).clamp(3, 5);
-                final itemWidth =
-                    (constraints.maxWidth - ((columns - 1) * spacing)) /
-                    columns;
+      child:
+          _isLoadingBackgrounds
+              ? const SizedBox(
+                height: 80,
+                child: Center(child: CircularProgressIndicator()),
+              )
+              : LayoutBuilder(
+                builder: (context, constraints) {
+                  const spacing = 8.0;
+                  final columns = AppLayout.optionGridColumnsForWidth(
+                    constraints.maxWidth,
+                  ).clamp(3, 5);
+                  final itemWidth =
+                      (constraints.maxWidth - ((columns - 1) * spacing)) /
+                      columns;
 
-                return Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    InkWell(
-                      borderRadius: BorderRadius.circular(14),
-                      onTap: _uploadBackground,
-                      child: Ink(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 12,
-                          vertical: 12,
-                        ),
-                        decoration: BoxDecoration(
-                          color: colorScheme.surface,
-                          borderRadius: BorderRadius.circular(14),
-                          border: Border.all(
-                            color: colorScheme.outlineVariant.withValues(
-                              alpha: 0.42,
-                            ),
+                  return Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      InkWell(
+                        borderRadius: BorderRadius.circular(14),
+                        onTap: _uploadBackground,
+                        child: Ink(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 12,
+                            vertical: 12,
                           ),
-                        ),
-                        child: Row(
-                          children: [
-                            Container(
-                              width: 34,
-                              height: 34,
-                              decoration: BoxDecoration(
-                                color: colorScheme.secondaryContainer,
-                                borderRadius: BorderRadius.circular(12),
-                              ),
-                              child: Icon(
-                                Icons.add_photo_alternate_outlined,
-                                size: 18,
-                                color: colorScheme.onSecondaryContainer,
+                          decoration: BoxDecoration(
+                            color: colorScheme.surface,
+                            borderRadius: BorderRadius.circular(14),
+                            border: Border.all(
+                              color: colorScheme.outlineVariant.withValues(
+                                alpha: 0.42,
                               ),
                             ),
-                            const SizedBox(width: 10),
-                            Expanded(
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Text(
-                                    '添加背景',
-                                    style: Theme.of(context)
-                                        .textTheme
-                                        .bodyMedium
-                                        ?.copyWith(
-                                          fontWeight: FontWeight.w700,
-                                        ),
-                                  ),
-                                  const SizedBox(height: 2),
-                                  Text(
-                                    '支持 JPG、PNG、WEBP、GIF',
-                                    style: Theme.of(context)
-                                        .textTheme
-                                        .bodySmall
-                                        ?.copyWith(
-                                          color:
-                                              colorScheme.onSurfaceVariant,
-                                        ),
-                                  ),
-                                ],
-                              ),
-                            ),
-                            Icon(
-                              Icons.chevron_right_rounded,
-                              color: colorScheme.onSurfaceVariant,
-                            ),
-                          ],
-                        ),
-                      ),
-                    ),
-                    const SizedBox(height: 10),
-                    if (_backgroundPaths.isEmpty)
-                      Container(
-                        width: double.infinity,
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 12,
-                          vertical: 18,
-                        ),
-                        decoration: BoxDecoration(
-                          color: colorScheme.surfaceContainerLow,
-                          borderRadius: BorderRadius.circular(14),
-                          border: Border.all(
-                            color: colorScheme.outlineVariant.withValues(
-                              alpha: 0.35,
-                            ),
                           ),
-                        ),
-                        child: Text(
-                          '还没有自定义背景，点上方“添加背景”开始。',
-                          style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                            color: colorScheme.onSurfaceVariant,
-                          ),
-                        ),
-                      )
-                    else
-                      Wrap(
-                        spacing: spacing,
-                        runSpacing: spacing,
-                        children: _backgroundPaths.map((path) {
-                          return GestureDetector(
-                            onLongPress: () => _confirmDeleteBackground(path),
-                            child: Stack(
-                              children: [
-                                ClipRRect(
+                          child: Row(
+                            children: [
+                              Container(
+                                width: 34,
+                                height: 34,
+                                decoration: BoxDecoration(
+                                  color: colorScheme.secondaryContainer,
                                   borderRadius: BorderRadius.circular(12),
-                                  child: SizedBox(
-                                    width: itemWidth,
-                                    height: itemWidth * 1.28,
-                                    child: Image.file(
-                                      File(path),
-                                      fit: BoxFit.cover,
-                                    ),
-                                  ),
                                 ),
-                                Positioned(
-                                  right: 6,
-                                  top: 6,
-                                  child: Container(
-                                    padding: const EdgeInsets.symmetric(
-                                      horizontal: 6,
-                                      vertical: 3,
-                                    ),
-                                    decoration: BoxDecoration(
-                                      color: Colors.black.withValues(
-                                        alpha: 0.45,
-                                      ),
-                                      borderRadius: BorderRadius.circular(999),
-                                    ),
-                                    child: const Text(
-                                      '长按删除',
-                                      style: TextStyle(
-                                        color: Colors.white,
-                                        fontSize: 10,
-                                        fontWeight: FontWeight.w600,
+                                child: Icon(
+                                  Icons.add_photo_alternate_outlined,
+                                  size: 18,
+                                  color: colorScheme.onSecondaryContainer,
+                                ),
+                              ),
+                              const SizedBox(width: 10),
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(
+                                      '添加背景',
+                                      style: Theme.of(
+                                        context,
+                                      ).textTheme.bodyMedium?.copyWith(
+                                        fontWeight: FontWeight.w700,
                                       ),
                                     ),
-                                  ),
+                                    const SizedBox(height: 2),
+                                    Text(
+                                      '支持 JPG、PNG、WEBP、GIF',
+                                      style: Theme.of(
+                                        context,
+                                      ).textTheme.bodySmall?.copyWith(
+                                        color: colorScheme.onSurfaceVariant,
+                                      ),
+                                    ),
+                                  ],
                                 ),
-                              ],
-                            ),
-                          );
-                        }).toList(growable: false),
+                              ),
+                              Icon(
+                                Icons.chevron_right_rounded,
+                                color: colorScheme.onSurfaceVariant,
+                              ),
+                            ],
+                          ),
+                        ),
                       ),
-                  ],
-                );
-              },
-            ),
+                      const SizedBox(height: 10),
+                      if (_backgroundPaths.isEmpty)
+                        Container(
+                          width: double.infinity,
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 12,
+                            vertical: 18,
+                          ),
+                          decoration: BoxDecoration(
+                            color: colorScheme.surfaceContainerLow,
+                            borderRadius: BorderRadius.circular(14),
+                            border: Border.all(
+                              color: colorScheme.outlineVariant.withValues(
+                                alpha: 0.35,
+                              ),
+                            ),
+                          ),
+                          child: Text(
+                            '还没有自定义背景，点上方“添加背景”开始。',
+                            style: Theme.of(context).textTheme.bodySmall
+                                ?.copyWith(color: colorScheme.onSurfaceVariant),
+                          ),
+                        )
+                      else
+                        Wrap(
+                          spacing: spacing,
+                          runSpacing: spacing,
+                          children: _backgroundPaths
+                              .map((path) {
+                                return GestureDetector(
+                                  onLongPress:
+                                      () => _confirmDeleteBackground(path),
+                                  child: Stack(
+                                    children: [
+                                      ClipRRect(
+                                        borderRadius: BorderRadius.circular(12),
+                                        child: SizedBox(
+                                          width: itemWidth,
+                                          height: itemWidth * 1.28,
+                                          child: Image.file(
+                                            File(path),
+                                            fit: BoxFit.cover,
+                                          ),
+                                        ),
+                                      ),
+                                      Positioned(
+                                        right: 6,
+                                        top: 6,
+                                        child: Container(
+                                          padding: const EdgeInsets.symmetric(
+                                            horizontal: 6,
+                                            vertical: 3,
+                                          ),
+                                          decoration: BoxDecoration(
+                                            color: Colors.black.withValues(
+                                              alpha: 0.45,
+                                            ),
+                                            borderRadius: BorderRadius.circular(
+                                              999,
+                                            ),
+                                          ),
+                                          child: const Text(
+                                            '长按删除',
+                                            style: TextStyle(
+                                              color: Colors.white,
+                                              fontSize: 10,
+                                              fontWeight: FontWeight.w600,
+                                            ),
+                                          ),
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                );
+                              })
+                              .toList(growable: false),
+                        ),
+                    ],
+                  );
+                },
+              ),
     );
   }
 
@@ -1156,78 +1256,84 @@ class _AppearancePageState extends ConsumerState<AppearancePage> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
-            children: _navigationStyleOptions.map((option) {
-              final selected = option.preference == selectedNavigationStyle;
-              final colorScheme = Theme.of(context).colorScheme;
-              return Expanded(
-                child: Padding(
-                  padding: EdgeInsets.only(
-                    right: option == _navigationStyleOptions.last ? 0 : 6,
-                  ),
-                  child: InkWell(
-                    borderRadius: BorderRadius.circular(10),
-                    onTap: () {
-                      if (selected) return;
-                      unawaited(
-                        ref
-                            .read(
-                              appNavigationStylePreferenceProvider.notifier,
-                            )
-                            .setPreference(option.preference),
-                      );
-                    },
-                    child: AnimatedContainer(
-                      duration: const Duration(milliseconds: 150),
-                      curve: Curves.easeOutCubic,
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 6,
-                        vertical: 9,
+            children: _navigationStyleOptions
+                .map((option) {
+                  final selected = option.preference == selectedNavigationStyle;
+                  final colorScheme = Theme.of(context).colorScheme;
+                  return Expanded(
+                    child: Padding(
+                      padding: EdgeInsets.only(
+                        right: option == _navigationStyleOptions.last ? 0 : 6,
                       ),
-                      decoration: BoxDecoration(
-                        color: selected
-                            ? colorScheme.secondaryContainer
-                            : colorScheme.surface,
+                      child: InkWell(
                         borderRadius: BorderRadius.circular(10),
-                        border: Border.all(
-                          color: selected
-                              ? colorScheme.primary
-                              : colorScheme.outlineVariant
-                                  .withValues(alpha: 0.5),
-                          width: selected ? 1.4 : 1,
+                        onTap: () {
+                          if (selected) return;
+                          unawaited(
+                            ref
+                                .read(
+                                  appNavigationStylePreferenceProvider.notifier,
+                                )
+                                .setPreference(option.preference),
+                          );
+                        },
+                        child: AnimatedContainer(
+                          duration: const Duration(milliseconds: 150),
+                          curve: Curves.easeOutCubic,
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 6,
+                            vertical: 9,
+                          ),
+                          decoration: BoxDecoration(
+                            color:
+                                selected
+                                    ? colorScheme.secondaryContainer
+                                    : colorScheme.surface,
+                            borderRadius: BorderRadius.circular(10),
+                            border: Border.all(
+                              color:
+                                  selected
+                                      ? colorScheme.primary
+                                      : colorScheme.outlineVariant.withValues(
+                                        alpha: 0.5,
+                                      ),
+                              width: selected ? 1.4 : 1,
+                            ),
+                          ),
+                          child: Column(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Icon(
+                                option.icon,
+                                size: 16,
+                                color:
+                                    selected
+                                        ? colorScheme.primary
+                                        : colorScheme.onSurfaceVariant,
+                              ),
+                              const SizedBox(height: 5),
+                              Text(
+                                option.label,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: Theme.of(
+                                  context,
+                                ).textTheme.labelSmall?.copyWith(
+                                  fontWeight: FontWeight.w700,
+                                  color:
+                                      selected
+                                          ? colorScheme.primary
+                                          : colorScheme.onSurfaceVariant,
+                                ),
+                              ),
+                            ],
+                          ),
                         ),
                       ),
-                      child: Column(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Icon(
-                            option.icon,
-                            size: 16,
-                            color: selected
-                                ? colorScheme.primary
-                                : colorScheme.onSurfaceVariant,
-                          ),
-                          const SizedBox(height: 5),
-                          Text(
-                            option.label,
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: Theme.of(context)
-                                .textTheme
-                                .labelSmall
-                                ?.copyWith(
-                                  fontWeight: FontWeight.w700,
-                                  color: selected
-                                      ? colorScheme.primary
-                                      : colorScheme.onSurfaceVariant,
-                                ),
-                          ),
-                        ],
-                      ),
                     ),
-                  ),
-                ),
-              );
-            }).toList(growable: false),
+                  );
+                })
+                .toList(growable: false),
           ),
           const SizedBox(height: 8),
           _buildNavigationLabelVisibilityTile(
@@ -1245,6 +1351,7 @@ class _AppearancePageState extends ConsumerState<AppearancePage> {
       ),
     );
   }
+
   Widget _buildSectionCard(
     BuildContext context, {
     required IconData icon,
@@ -1430,9 +1537,7 @@ class _AppearanceNavigationVisibilityPanelState
 
     return Expanded(
       child: Padding(
-        padding: EdgeInsets.only(
-          right: tab == AppShellTab.mine ? 0 : 6,
-        ),
+        padding: EdgeInsets.only(right: tab == AppShellTab.mine ? 0 : 6),
         child: InkWell(
           borderRadius: BorderRadius.circular(10),
           onTap: locked || _isSaving ? null : () => _toggle(tab, !active),
@@ -1442,9 +1547,7 @@ class _AppearanceNavigationVisibilityPanelState
             padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 9),
             decoration: BoxDecoration(
               color:
-                  active
-                      ? colorScheme.secondaryContainer
-                      : colorScheme.surface,
+                  active ? colorScheme.secondaryContainer : colorScheme.surface,
               borderRadius: BorderRadius.circular(10),
               border: Border.all(
                 color:
@@ -1676,7 +1779,8 @@ class _FontFamilyPickerDialogState
                       AppInterfaceSystemFontPreset.defaultSans,
                     ),
                     selected:
-                        selectedFont.fontSource == AppInterfaceFontSource.system &&
+                        selectedFont.fontSource ==
+                            AppInterfaceFontSource.system &&
                         selectedFont.systemFontPreset ==
                             AppInterfaceSystemFontPreset.defaultSans,
                     icon: Icons.text_fields_rounded,
@@ -1690,7 +1794,8 @@ class _FontFamilyPickerDialogState
                       AppInterfaceSystemFontPreset.serif,
                     ),
                     selected:
-                        selectedFont.fontSource == AppInterfaceFontSource.system &&
+                        selectedFont.fontSource ==
+                            AppInterfaceFontSource.system &&
                         selectedFont.systemFontPreset ==
                             AppInterfaceSystemFontPreset.serif,
                     icon: Icons.format_shapes_rounded,
@@ -1704,7 +1809,8 @@ class _FontFamilyPickerDialogState
                       AppInterfaceSystemFontPreset.monospace,
                     ),
                     selected:
-                        selectedFont.fontSource == AppInterfaceFontSource.system &&
+                        selectedFont.fontSource ==
+                            AppInterfaceFontSource.system &&
                         selectedFont.systemFontPreset ==
                             AppInterfaceSystemFontPreset.monospace,
                     icon: Icons.code_rounded,
@@ -1758,18 +1864,18 @@ class _FontFamilyPickerDialogState
   }
 
   Future<void> _selectSystemFont(AppInterfaceSystemFontPreset preset) async {
-    await ref.read(appInterfaceFontSettingsProvider.notifier).setSystemFont(
-      preset,
-    );
+    await ref
+        .read(appInterfaceFontSettingsProvider.notifier)
+        .setSystemFont(preset);
     if (mounted) {
       Navigator.of(context).pop();
     }
   }
 
   Future<void> _selectCustomFont(ReaderCustomFontEntry entry) async {
-    await ref.read(appInterfaceFontSettingsProvider.notifier).setCustomFont(
-      entry,
-    );
+    await ref
+        .read(appInterfaceFontSettingsProvider.notifier)
+        .setCustomFont(entry);
     if (mounted) {
       Navigator.of(context).pop();
     }
@@ -1788,7 +1894,8 @@ class _FontFamilyPickerDialogState
       if (imported == null) {
         return;
       }
-      final refreshedFonts = await widget.fontRegistryService.listRegisteredFonts();
+      final refreshedFonts =
+          await widget.fontRegistryService.listRegisteredFonts();
       if (!mounted) {
         return;
       }
