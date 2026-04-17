@@ -1,13 +1,18 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../app/layout/app_layout.dart';
 import '../../../app/layout/app_spacing.dart';
-import '../../../app/widgets/disk_cached_cover_image.dart';
-import '../../../app/widgets/text_cover_placeholder.dart';
+import '../../../app/widgets/resolved_book_cover.dart';
 import '../../../core/cache/cover_image_disk_cache.dart';
 import '../../../data/datasources/local/app_database.dart';
+import '../../../domain/entities/app_advanced_theme.dart';
+import '../../../domain/entities/cover_gallery.dart';
 import '../../bookshelf/application/bookshelf_service.dart';
+import '../application/advanced_theme_service.dart';
+import '../application/cover_gallery_service.dart';
 
 class CacheManagementPage extends StatefulWidget {
   const CacheManagementPage({super.key});
@@ -18,13 +23,18 @@ class CacheManagementPage extends StatefulWidget {
 
 class _CacheManagementPageState extends State<CacheManagementPage> {
   final BookshelfService _bookshelfService = BookshelfService();
+  final AdvancedThemeService _advancedThemeService = AdvancedThemeService();
+  final CoverGalleryService _coverGalleryService = CoverGalleryService();
   late Future<Map<String, _CachedBookPresentation>>
   _bookPresentationIndexFuture;
+  AppAdvancedTheme? _activeTheme;
+  List<CoverGallery> _coverGalleries = const <CoverGallery>[];
 
   @override
   void initState() {
     super.initState();
     _bookPresentationIndexFuture = _buildBookPresentationIndex();
+    unawaited(_loadCoverThemeContext());
   }
 
   Future<Map<String, _CachedBookPresentation>>
@@ -40,6 +50,9 @@ class _CacheManagementPageState extends State<CacheManagementPage> {
       }
       final title = record.bookTitle.trim();
       result[bookId] = _CachedBookPresentation(
+        bookId: record.bookId,
+        sourceId: record.sourceId,
+        detailUrl: record.detailUrl,
         title: title.isEmpty ? null : title,
         author: record.bookAuthor?.trim(),
         coverUrl: record.coverUrl?.trim(),
@@ -53,6 +66,9 @@ class _CacheManagementPageState extends State<CacheManagementPage> {
         continue;
       }
       result[bookId] = _CachedBookPresentation(
+        bookId: item.bookId,
+        sourceId: item.sourceId,
+        detailUrl: item.detailUrl,
         title:
             item.title.trim().isEmpty
                 ? result[bookId]?.title
@@ -72,10 +88,23 @@ class _CacheManagementPageState extends State<CacheManagementPage> {
     return result;
   }
 
+  Future<void> _loadCoverThemeContext() async {
+    final activeTheme = await _advancedThemeService.loadActiveTheme();
+    final coverGalleries = await _coverGalleryService.loadGalleries();
+    if (!mounted) {
+      return;
+    }
+    setState(() {
+      _activeTheme = activeTheme;
+      _coverGalleries = coverGalleries;
+    });
+  }
+
   void _reloadBookPresentationIndex() {
     setState(() {
       _bookPresentationIndexFuture = _buildBookPresentationIndex();
     });
+    unawaited(_loadCoverThemeContext());
   }
 
   @override
@@ -309,9 +338,12 @@ class _CacheManagementPageState extends State<CacheManagementPage> {
         return Card(
           child: ListTile(
             leading: _buildCover(
-              presentation?.coverUrl,
-              title,
+              realCoverUrl: presentation?.coverUrl,
+              title: title,
               author: presentation?.author,
+              bookId: presentation?.bookId ?? summary.bookId,
+              sourceId: presentation?.sourceId,
+              detailUrl: presentation?.detailUrl,
             ),
             title: Text(title, maxLines: 1, overflow: TextOverflow.ellipsis),
             subtitle: Text(
@@ -331,26 +363,24 @@ class _CacheManagementPageState extends State<CacheManagementPage> {
     );
   }
 
-  Widget _buildCover(String? coverUrl, String title, {String? author}) {
-    final uri = Uri.tryParse(coverUrl ?? '');
-    if (uri != null && uri.hasScheme) {
-      return ClipRRect(
-        borderRadius: BorderRadius.circular(12),
-        child: DiskCachedCoverImage(
-          imageUrl: coverUrl,
-          width: 42,
-          height: 56,
-          fit: BoxFit.cover,
-          fallback: _buildCoverFallback(title, author: author),
-        ),
-      );
-    }
-
-    return _buildCoverFallback(title, author: author);
-  }
-
-  Widget _buildCoverFallback(String title, {String? author}) {
-    return TextCoverPlaceholder(
+  Widget _buildCover({
+    String? realCoverUrl,
+    required String title,
+    String? author,
+    String? bookId,
+    String? sourceId,
+    String? detailUrl,
+  }) {
+    final resolvedCover = resolveBookCover(
+      realCoverUrl: realCoverUrl,
+      activeTheme: _activeTheme,
+      galleries: _coverGalleries,
+      bookId: bookId,
+      sourceId: sourceId,
+      detailUrl: detailUrl,
+    );
+    return ResolvedBookCoverView(
+      cover: resolvedCover,
       title: title,
       author: author,
       width: 42,
@@ -450,12 +480,18 @@ class _CacheManagementPageState extends State<CacheManagementPage> {
 
 class _CachedBookPresentation {
   const _CachedBookPresentation({
+    this.bookId,
+    this.sourceId,
+    this.detailUrl,
     this.title,
     this.author,
     this.coverUrl,
     required this.inBookshelf,
   });
 
+  final String? bookId;
+  final String? sourceId;
+  final String? detailUrl;
   final String? title;
   final String? author;
   final String? coverUrl;

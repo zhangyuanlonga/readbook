@@ -2,10 +2,14 @@ import 'package:drift/drift.dart' show driftRuntimeOptions;
 import 'package:drift/native.dart';
 import 'package:flutter/material.dart';
 import 'package:shuxiang_reading_next/data/datasources/local/app_database.dart';
+import 'package:shuxiang_reading_next/domain/entities/local_book.dart';
+import 'package:shuxiang_reading_next/domain/entities/reading_book_status.dart';
 import 'package:shuxiang_reading_next/domain/entities/reading_record.dart';
 import 'package:shuxiang_reading_next/domain/entities/reading_record_day.dart';
 import 'package:shuxiang_reading_next/domain/entities/reading_record_session.dart';
+import 'package:shuxiang_reading_next/features/reader/application/reading_book_status_service.dart';
 import 'package:shuxiang_reading_next/features/reader/application/reader_preferences_service.dart';
+import 'package:shuxiang_reading_next/features/reader/application/reading_stats_models.dart';
 import 'package:shuxiang_reading_next/features/reader/application/reader_system_settings_service.dart';
 import 'package:shuxiang_reading_next/features/reader/application/reading_record_service.dart';
 import 'package:shuxiang_reading_next/features/reader/presentation/reading_records_page.dart';
@@ -17,6 +21,7 @@ void main() {
     late ReadingRecordService readingRecordService;
     late ReaderPreferencesService preferencesService;
     late ReaderSystemSettingsService systemSettingsService;
+    late ReadingBookStatusService readingBookStatusService;
 
     setUpAll(() {
       driftRuntimeOptions.dontWarnAboutMultipleDatabases = true;
@@ -31,6 +36,7 @@ void main() {
       readingRecordService = _FakeReadingRecordService();
       preferencesService = ReaderPreferencesService();
       systemSettingsService = ReaderSystemSettingsService();
+      readingBookStatusService = _FakeReadingBookStatusService();
     });
 
     testWidgets('在小屏设备上保持空热力图面板足够宽', (tester) async {
@@ -43,12 +49,11 @@ void main() {
             readingRecordService: readingRecordService,
             preferencesService: preferencesService,
             readerSystemSettingsService: systemSettingsService,
+            readingBookStatusService: readingBookStatusService,
+            initialPeriod: ReadingRecordsPeriod.all,
           ),
         ),
       );
-      await tester.pumpAndSettle();
-
-      await tester.tap(find.byTooltip('热力图'));
       await tester.pumpAndSettle();
 
       final emptyText = find.text('还没有可以展示的阅读热力图。');
@@ -78,6 +83,7 @@ void main() {
               readingRecordService: readingRecordService,
               preferencesService: preferencesService,
               readerSystemSettingsService: systemSettingsService,
+              readingBookStatusService: readingBookStatusService,
             ),
           ),
         );
@@ -92,16 +98,21 @@ void main() {
       }
     });
 
-    testWidgets('热力图指标菜单展示真实语义名称', (tester) async {
+    testWidgets('总览周期可作为初始周期稳定启动', (tester) async {
+      final today = DateTime.now();
+      final todayKey =
+          '${today.year.toString().padLeft(4, '0')}-'
+          '${today.month.toString().padLeft(2, '0')}-'
+          '${today.day.toString().padLeft(2, '0')}';
       readingRecordService = _FakeReadingRecordService(
         dailyRecords: <ReadingRecordDay>[
           ReadingRecordDay(
             bookId: 'book_1',
-            dateKey: '2026-04-04',
+            dateKey: todayKey,
             bookTitle: '测试书',
             readMillis: const Duration(minutes: 30).inMilliseconds,
-            firstReadAt: DateTime.parse('2026-04-04T10:00:00.000Z'),
-            lastReadAt: DateTime.parse('2026-04-04T10:30:00.000Z'),
+            firstReadAt: today,
+            lastReadAt: today.add(const Duration(minutes: 30)),
           ),
         ],
         sessions: <ReadingRecordSession>[
@@ -112,8 +123,8 @@ void main() {
             detailUrl: 'https://example.com/book/1',
             bookTitle: '测试书',
             chapterTitle: '第一章',
-            startAt: DateTime.parse('2026-04-04T10:00:00.000Z'),
-            endAt: DateTime.parse('2026-04-04T10:30:00.000Z'),
+            startAt: today,
+            endAt: today.add(const Duration(minutes: 30)),
             durationMillis: const Duration(minutes: 30).inMilliseconds,
           ),
         ],
@@ -125,22 +136,36 @@ void main() {
             readingRecordService: readingRecordService,
             preferencesService: preferencesService,
             readerSystemSettingsService: systemSettingsService,
+            readingBookStatusService: readingBookStatusService,
+            initialPeriod: ReadingRecordsPeriod.all,
           ),
         ),
       );
       await tester.pumpAndSettle();
 
-      await tester.tap(find.byTooltip('热力图'));
-      await tester.pumpAndSettle();
-      await tester.tap(find.text('按时长').first);
-      await tester.pumpAndSettle();
-
-      expect(find.text('按会话数'), findsOneWidget);
-      expect(find.text('按作品数'), findsOneWidget);
+      expect(find.text('统计'), findsOneWidget);
+      expect(find.text('当前周期内的阅读时长变化'), findsOneWidget);
+      expect(tester.takeException(), isNull);
     });
 
-    testWidgets('时间线展示真实会话而不是临时合并结果', (tester) async {
+    testWidgets('月周期可作为初始周期稳定启动', (tester) async {
+      final today = DateTime.now();
+      final todayKey =
+          '${today.year.toString().padLeft(4, '0')}-'
+          '${today.month.toString().padLeft(2, '0')}-'
+          '${today.day.toString().padLeft(2, '0')}';
       readingRecordService = _FakeReadingRecordService(
+        dailyRecords: <ReadingRecordDay>[
+          ReadingRecordDay(
+            bookId: 'book_1',
+            dateKey: todayKey,
+            bookTitle: '测试书',
+            readMillis: const Duration(minutes: 20).inMilliseconds,
+            readChars: 1200,
+            firstReadAt: today,
+            lastReadAt: today.add(const Duration(minutes: 25)),
+          ),
+        ],
         sessions: <ReadingRecordSession>[
           ReadingRecordSession(
             id: 1,
@@ -149,8 +174,8 @@ void main() {
             detailUrl: 'https://example.com/book/1',
             bookTitle: '测试书',
             chapterTitle: '第一章',
-            startAt: DateTime.parse('2026-04-04T10:00:00.000Z'),
-            endAt: DateTime.parse('2026-04-04T10:10:00.000Z'),
+            startAt: today,
+            endAt: today.add(const Duration(minutes: 10)),
             durationMillis: const Duration(minutes: 10).inMilliseconds,
           ),
           ReadingRecordSession(
@@ -160,8 +185,8 @@ void main() {
             detailUrl: 'https://example.com/book/1',
             bookTitle: '测试书',
             chapterTitle: '第二章',
-            startAt: DateTime.parse('2026-04-04T10:15:00.000Z'),
-            endAt: DateTime.parse('2026-04-04T10:25:00.000Z'),
+            startAt: today.add(const Duration(minutes: 15)),
+            endAt: today.add(const Duration(minutes: 25)),
             durationMillis: const Duration(minutes: 10).inMilliseconds,
           ),
         ],
@@ -173,18 +198,16 @@ void main() {
             readingRecordService: readingRecordService,
             preferencesService: preferencesService,
             readerSystemSettingsService: systemSettingsService,
+            readingBookStatusService: readingBookStatusService,
+            initialPeriod: ReadingRecordsPeriod.month,
           ),
         ),
       );
       await tester.pumpAndSettle();
 
-      await tester.tap(find.byTooltip('切换视图'));
-      await tester.pumpAndSettle();
-      await tester.tap(find.byTooltip('切换视图'));
-      await tester.pumpAndSettle();
-
-      expect(find.text('第一章'), findsOneWidget);
-      expect(find.text('第二章'), findsOneWidget);
+      expect(find.text('统计'), findsOneWidget);
+      expect(find.text('当前周期内的阅读时长变化'), findsOneWidget);
+      expect(tester.takeException(), isNull);
     });
   });
 }
@@ -223,5 +246,21 @@ class _FakeReadingRecordService extends ReadingRecordService {
   @override
   Stream<List<ReadingRecordSession>> watchSessions({String query = ''}) {
     return Stream<List<ReadingRecordSession>>.value(sessions);
+  }
+}
+
+class _FakeReadingBookStatusService extends ReadingBookStatusService {
+  _FakeReadingBookStatusService();
+
+  @override
+  Stream<List<ReadingBookStatusEntry>> watchManualStatuses() {
+    return Stream<List<ReadingBookStatusEntry>>.value(
+      const <ReadingBookStatusEntry>[],
+    );
+  }
+
+  @override
+  Stream<List<LocalBook>> watchLocalBooks() {
+    return Stream<List<LocalBook>>.value(const <LocalBook>[]);
   }
 }

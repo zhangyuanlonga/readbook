@@ -13,8 +13,7 @@ import '../../../app/layout/app_spacing.dart';
 import '../../../app/navigation/mobile_bottom_navigation_inset.dart';
 import '../../../app/navigation/app_navigation_style_provider.dart';
 import '../../../app/theme/app_advanced_theme_tokens.dart';
-import '../../../app/widgets/disk_cached_cover_image.dart';
-import '../../../app/widgets/text_cover_placeholder.dart';
+import '../../../app/widgets/resolved_book_cover.dart';
 import '../../../core/errors/app_exception.dart';
 import '../../../core/media/image_selection_service.dart';
 import '../../../data/datasources/local/app_database.dart';
@@ -35,6 +34,7 @@ import '../../book/presentation/book_detail_route.dart';
 import '../../announcement/application/announcement_service.dart';
 import '../../announcement/application/announcement_read_state_service.dart';
 import '../../mine/application/advanced_theme_provider.dart';
+import '../../mine/application/cover_gallery_provider.dart';
 import '../../source/application/external_source_import_bridge.dart';
 import '../../source/application/source_runtime_facade.dart';
 import '../../source/application/source_runtime_task_conflict_service.dart';
@@ -213,6 +213,7 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
   Map<String, String> _bookCategoriesByKey = const <String, String>{};
   List<String> _categoryOrder = const <String>[];
   List<_BookshelfFilter> _baseFilterOrder = _kDefaultBaseFilters;
+  bool _bookshelfMetadataReady = false;
   Object? _derivedBookshelfFingerprint;
   List<BookshelfBook> _filteredBooksCache = const <BookshelfBook>[];
   Map<String, int> _tagBookCountCache = const <String, int>{};
@@ -364,6 +365,7 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
   Widget build(BuildContext context) {
     super.build(context);
     ref.watch(activeAdvancedThemeProvider);
+    ref.watch(coverGalleriesProvider);
     final palette = _resolvedPalette(context);
     final horizontal = AppSpacing.pageHorizontal(context);
     final platform = Theme.of(context).platform;
@@ -2685,7 +2687,6 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
     final isSelected = _isBookSelected(book);
     final displayTitle = _displayBookTitle(book, localBook: localBook);
     final displayAuthor = _displayBookAuthor(book, localBook: localBook);
-    final displayCoverUrl = _displayBookCoverUrl(book, localBook: localBook);
     final titleText = _toSingleLineText(displayTitle);
     final authorText = _toSingleLineText(displayAuthor ?? '');
     final latestChapterText = _toSingleLineText(
@@ -2740,9 +2741,13 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
                       child: LayoutBuilder(
                         builder: (context, constraints) {
                           return _buildCover(
-                            displayCoverUrl,
+                            realCoverUrl: book.coverUrl,
+                            customCoverPath: localBook?.coverPath,
                             title: displayTitle,
                             author: displayAuthor,
+                            bookId: book.bookId,
+                            sourceId: book.sourceId,
+                            detailUrl: book.detailUrl,
                             width: constraints.maxWidth,
                             height: constraints.maxHeight,
                           );
@@ -2912,7 +2917,6 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
     final isSelected = _isBookSelected(book);
     final displayTitle = _displayBookTitle(book, localBook: localBook);
     final displayAuthor = _displayBookAuthor(book, localBook: localBook);
-    final displayCoverUrl = _displayBookCoverUrl(book, localBook: localBook);
     final titleText = _toSingleLineText(displayTitle);
     final authorText = _toSingleLineText(displayAuthor ?? '');
     final latestChapterText = _toSingleLineText(
@@ -2984,9 +2988,13 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
                     children: [
                       Positioned.fill(
                         child: _buildCover(
-                          displayCoverUrl,
+                          realCoverUrl: book.coverUrl,
+                          customCoverPath: localBook?.coverPath,
                           title: displayTitle,
                           author: displayAuthor,
+                          bookId: book.bookId,
+                          sourceId: book.sourceId,
+                          detailUrl: book.detailUrl,
                           width: 68,
                           height: 96,
                         ),
@@ -3528,6 +3536,10 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
   }
 
   void _ensureFilterStillValid() {
+    if ((_activeView.isTag || _activeView.isCategory) &&
+        !_bookshelfMetadataReady) {
+      return;
+    }
     var shouldReset = false;
     if (_activeView.isTag) {
       final tag = _activeView.tag;
@@ -3602,7 +3614,6 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
     final localBook = _bookshelfLocalBook(book);
     final displayTitle = _displayBookTitle(book, localBook: localBook);
     final displayAuthor = _displayBookAuthor(book, localBook: localBook);
-    final displayCoverUrl = _displayBookCoverUrl(book, localBook: localBook);
     final localStatusText =
         localBook == null ? null : _localBookStatusActionText(localBook);
     final canRepairLocalBook =
@@ -3641,9 +3652,13 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       _buildCover(
-                        displayCoverUrl,
+                        realCoverUrl: book.coverUrl,
+                        customCoverPath: localBook?.coverPath,
                         title: displayTitle,
                         author: displayAuthor,
+                        bookId: book.bookId,
+                        sourceId: book.sourceId,
+                        detailUrl: book.detailUrl,
                         width: 56,
                         height: 82,
                       ),
@@ -4968,48 +4983,29 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
     return _normalizedBookshelfSearchKeyword.isNotEmpty;
   }
 
-  Widget _buildCover(
-    String? coverUrl, {
+  Widget _buildCover({
+    String? realCoverUrl,
+    String? customCoverPath,
     String? title,
     String? author,
+    String? bookId,
+    String? sourceId,
+    String? detailUrl,
     double width = 78,
     double height = 108,
   }) {
-    final uri = Uri.tryParse(coverUrl ?? '');
-    if (uri == null || !uri.hasScheme) {
-      return _buildCoverFallback(
-        title: title,
-        author: author,
-        width: width,
-        height: height,
-      );
-    }
-
-    return ClipRRect(
-      borderRadius: BorderRadius.circular(12),
-      child: DiskCachedCoverImage(
-        imageUrl: coverUrl,
-        width: width,
-        height: height,
-        fit: BoxFit.cover,
-        fallback: _buildCoverFallback(
-          title: title,
-          author: author,
-          width: width,
-          height: height,
-        ),
-      ),
+    final resolvedCover = resolveBookCover(
+      realCoverUrl: realCoverUrl,
+      customCoverPath: customCoverPath,
+      activeTheme: ref.read(activeAdvancedThemeProvider).valueOrNull,
+      galleries: ref.read(coverGalleriesProvider).valueOrNull ?? const [],
+      bookId: bookId,
+      sourceId: sourceId,
+      detailUrl: detailUrl,
     );
-  }
-
-  Widget _buildCoverFallback({
-    String? title,
-    String? author,
-    double width = 78,
-    double height = 108,
-  }) {
-    return TextCoverPlaceholder(
-      title: title,
+    return ResolvedBookCoverView(
+      cover: resolvedCover,
+      title: title ?? '',
       author: author,
       width: width,
       height: height,
@@ -5040,15 +5036,6 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
       return localAuthor;
     }
     return book.author;
-  }
-
-  String? _displayBookCoverUrl(BookshelfBook book, {LocalBook? localBook}) {
-    final resolvedLocalBook = localBook ?? _bookshelfLocalBook(book);
-    final localCoverPath = resolvedLocalBook?.coverPath?.trim() ?? '';
-    if (localCoverPath.isNotEmpty) {
-      return Uri.file(localCoverPath).toString();
-    }
-    return book.coverUrl;
   }
 
   Widget _buildSourceBadge(BookshelfBook book, {bool compact = false}) {
@@ -5206,6 +5193,7 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
           source: _cachedChapterCountByBookKey,
           books: books,
         );
+        _bookshelfMetadataReady = false;
         _isLoading = false;
         _ensureFilterStillValid();
       });
@@ -5336,6 +5324,7 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
           })
           .whereType<_BookshelfFilter>()
           .toList(growable: false);
+      _bookshelfMetadataReady = true;
       _ensureFilterStillValid();
     });
     _syncSelectionWithBooks();
@@ -6266,9 +6255,12 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
                 ClipRRect(
                   borderRadius: BorderRadius.circular(12),
                   child: _buildCover(
-                    record.coverUrl,
+                    realCoverUrl: record.coverUrl,
                     title: record.bookTitle,
                     author: record.bookAuthor,
+                    bookId: record.bookId,
+                    sourceId: record.sourceId,
+                    detailUrl: record.detailUrl,
                     width: 44,
                     height: 62,
                   ),

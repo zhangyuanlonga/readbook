@@ -327,6 +327,7 @@ class AppAdvancedTheme {
     required this.lightConfig,
     required this.darkConfig,
     this.bottomNavGalleryId,
+    this.coverGalleryId,
   });
 
   final String id;
@@ -336,6 +337,8 @@ class AppAdvancedTheme {
   final AppAdvancedThemeModeConfig lightConfig;
   final AppAdvancedThemeModeConfig darkConfig;
   final String? bottomNavGalleryId;
+  // Fallback cover gallery used when a book has neither real nor custom cover.
+  final String? coverGalleryId;
 
   Map<String, dynamic> toJson() {
     return {
@@ -347,6 +350,8 @@ class AppAdvancedTheme {
       'darkConfig': darkConfig.toJson(),
       if (bottomNavGalleryId != null && bottomNavGalleryId!.trim().isNotEmpty)
         'bottomNavGalleryId': bottomNavGalleryId,
+      if (coverGalleryId != null && coverGalleryId!.trim().isNotEmpty)
+        'coverGalleryId': coverGalleryId,
     };
   }
 
@@ -382,6 +387,7 @@ class AppAdvancedTheme {
         fallbackWallpaperPath: legacyWallpaperPath,
       ),
       bottomNavGalleryId: _readNullableString(json, 'bottomNavGalleryId'),
+      coverGalleryId: _readNullableString(json, 'coverGalleryId'),
     );
   }
 
@@ -394,6 +400,8 @@ class AppAdvancedTheme {
     AppAdvancedThemeModeConfig? darkConfig,
     String? bottomNavGalleryId,
     bool clearBottomNavGalleryId = false,
+    String? coverGalleryId,
+    bool clearCoverGalleryId = false,
   }) {
     return AppAdvancedTheme(
       id: id ?? this.id,
@@ -406,6 +414,8 @@ class AppAdvancedTheme {
           clearBottomNavGalleryId
               ? null
               : (bottomNavGalleryId ?? this.bottomNavGalleryId),
+      coverGalleryId:
+          clearCoverGalleryId ? null : (coverGalleryId ?? this.coverGalleryId),
     );
   }
 

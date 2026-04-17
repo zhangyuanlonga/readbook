@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:io';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_colorpicker/flutter_colorpicker.dart';
 import 'package:go_router/go_router.dart';
@@ -16,7 +17,9 @@ import '../../../app/widgets/text_cover_placeholder.dart';
 import '../../../core/media/image_selection_service.dart';
 import '../../../domain/entities/app_advanced_theme.dart';
 import '../../../domain/entities/bottom_nav_icon_gallery.dart';
+import '../../../domain/entities/cover_gallery.dart';
 import '../application/advanced_theme_service.dart';
+import '../application/cover_gallery_service.dart';
 
 class AdvancedThemeEditorPage extends ConsumerStatefulWidget {
   const AdvancedThemeEditorPage({super.key, this.themeId});
@@ -34,6 +37,7 @@ class _AdvancedThemeEditorPageState
   final AdvancedThemeService _service = AdvancedThemeService();
   final BottomNavIconGalleryService _bottomNavIconGalleryService =
       BottomNavIconGalleryService();
+  final CoverGalleryService _coverGalleryService = CoverGalleryService();
   final TextEditingController _nameController = TextEditingController();
   late final TabController _modeTabController = TabController(
     length: AppAdvancedThemeMode.values.length,
@@ -56,6 +60,7 @@ class _AdvancedThemeEditorPageState
   List<String> _backgroundLibraryPaths = const <String>[];
   List<BottomNavIconGallery> _bottomNavGalleries =
       const <BottomNavIconGallery>[];
+  List<CoverGallery> _coverGalleries = const <CoverGallery>[];
   String? _activeBottomNavGalleryName;
   bool _isEditingName = false;
   bool _isLoading = true;
@@ -196,12 +201,14 @@ class _AdvancedThemeEditorPageState
     final activeGallery =
         await _bottomNavIconGalleryService.loadActiveGallery();
     final galleries = await _bottomNavIconGalleryService.loadGalleries();
+    final coverGalleries = await _coverGalleryService.loadGalleries();
     if (!mounted) {
       return;
     }
     setState(() {
       _backgroundLibraryPaths = backgroundPaths;
       _bottomNavGalleries = galleries;
+      _coverGalleries = coverGalleries;
       _activeBottomNavGalleryName = activeGallery?.name;
     });
   }
@@ -579,6 +586,171 @@ class _AdvancedThemeEditorPageState
     });
   }
 
+  Future<void> _pickCoverGallery() async {
+    if (_isSaving) {
+      return;
+    }
+    if (_coverGalleries.isEmpty) {
+      if (!mounted) {
+        return;
+      }
+      _showMessage('请先在封面图集里准备素材');
+      unawaited(context.push('/appearance?section=cover'));
+      return;
+    }
+
+    String? selectedId = _draft?.coverGalleryId?.trim();
+    final result = await showModalBottomSheet<_CoverGallerySelectionResult>(
+      context: context,
+      showDragHandle: true,
+      useSafeArea: true,
+      builder: (context) {
+        final colorScheme = Theme.of(context).colorScheme;
+        return StatefulBuilder(
+          builder: (context, setSheetState) {
+            return Padding(
+              padding: const EdgeInsets.fromLTRB(12, 0, 12, 16),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    '选择封面图集',
+                    style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                  const SizedBox(height: 10),
+                  Flexible(
+                    child: ListView.separated(
+                      shrinkWrap: true,
+                      itemCount: _coverGalleries.length,
+                      separatorBuilder: (_, __) => const Divider(height: 1),
+                      itemBuilder: (context, index) {
+                        final gallery = _coverGalleries[index];
+                        final selected = gallery.id == selectedId;
+                        final previewPath = _firstExistingGalleryImagePath(
+                          gallery,
+                        );
+                        final imageCount = gallery.imagePaths.length;
+                        return InkWell(
+                          borderRadius: BorderRadius.circular(12),
+                          onTap: () {
+                            setSheetState(() {
+                              selectedId = gallery.id;
+                            });
+                          },
+                          child: Padding(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 4,
+                              vertical: 12,
+                            ),
+                            child: Row(
+                              children: [
+                                _buildGalleryPreviewThumb(
+                                  context,
+                                  previewPath: previewPath,
+                                  title: gallery.name,
+                                ),
+                                const SizedBox(width: 12),
+                                Expanded(
+                                  child: Column(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
+                                    children: [
+                                      Text(
+                                        gallery.name,
+                                        style: Theme.of(context)
+                                            .textTheme
+                                            .labelLarge
+                                            ?.copyWith(
+                                              fontWeight: FontWeight.w700,
+                                            ),
+                                      ),
+                                      const SizedBox(height: 2),
+                                      Text(
+                                        imageCount <= 0
+                                            ? '暂无图片'
+                                            : '$imageCount 张图片',
+                                        style: Theme.of(
+                                          context,
+                                        ).textTheme.bodySmall?.copyWith(
+                                          color: colorScheme.onSurfaceVariant,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                                if (selected)
+                                  Icon(
+                                    Icons.check_rounded,
+                                    color: colorScheme.primary,
+                                    size: 18,
+                                  ),
+                              ],
+                            ),
+                          ),
+                        );
+                      },
+                    ),
+                  ),
+                  const SizedBox(height: 10),
+                  Row(
+                    children: [
+                      TextButton(
+                        onPressed: () => Navigator.of(context).pop(),
+                        child: const Text('取消'),
+                      ),
+                      const Spacer(),
+                      TextButton(
+                        onPressed:
+                            selectedId == null
+                                ? null
+                                : () => Navigator.of(context).pop(
+                                  const _CoverGallerySelectionResult(
+                                    applied: true,
+                                    galleryId: null,
+                                  ),
+                                ),
+                        child: const Text('取消绑定'),
+                      ),
+                      const SizedBox(width: 8),
+                      FilledButton(
+                        onPressed:
+                            selectedId == null
+                                ? null
+                                : () => Navigator.of(context).pop(
+                                  _CoverGallerySelectionResult(
+                                    applied: true,
+                                    galleryId: selectedId,
+                                  ),
+                                ),
+                        child: const Text('应用'),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            );
+          },
+        );
+      },
+    );
+    if (result == null || !result.applied || !mounted) {
+      return;
+    }
+    final draft = _draft;
+    if (draft == null) {
+      return;
+    }
+    setState(() {
+      _draft =
+          result.galleryId == null
+              ? draft.copyWith(clearCoverGalleryId: true)
+              : draft.copyWith(coverGalleryId: result.galleryId);
+    });
+  }
+
   String? get _activeGalleryId {
     if ((_draft?.bottomNavGalleryId?.trim().isNotEmpty ?? false)) {
       return _draft!.bottomNavGalleryId;
@@ -605,6 +777,97 @@ class _AdvancedThemeEditorPageState
       return fallback;
     }
     return '默认图集';
+  }
+
+  CoverGallery? _selectedCoverGallery() {
+    final selectedId = _draft?.coverGalleryId?.trim();
+    if (selectedId == null || selectedId.isEmpty) {
+      return null;
+    }
+    for (final gallery in _coverGalleries) {
+      if (gallery.id == selectedId) {
+        return gallery;
+      }
+    }
+    return null;
+  }
+
+  String _resolvedCoverGalleryName() {
+    final selectedGallery = _selectedCoverGallery();
+    if (selectedGallery != null) {
+      return selectedGallery.name;
+    }
+    final selectedId = _draft?.coverGalleryId?.trim();
+    if (selectedId != null && selectedId.isNotEmpty) {
+      return '已绑定图集不可用';
+    }
+    if (_coverGalleries.isEmpty) {
+      return '暂无封面图集，点击前往管理';
+    }
+    return '未绑定封面图集';
+  }
+
+  String? _selectedCoverGalleryPreviewPath() {
+    final gallery = _selectedCoverGallery();
+    if (gallery == null) {
+      return null;
+    }
+    return _firstExistingGalleryImagePath(gallery);
+  }
+
+  String? _firstExistingGalleryImagePath(CoverGallery gallery) {
+    for (final rawPath in gallery.imagePaths) {
+      final normalized = rawPath.trim();
+      if (normalized.isEmpty) {
+        continue;
+      }
+      final file = File(normalized);
+      if (file.existsSync()) {
+        return normalized;
+      }
+    }
+    return null;
+  }
+
+  Widget _buildGalleryPreviewThumb(
+    BuildContext context, {
+    required String? previewPath,
+    required String title,
+    double width = 34,
+    double height = 48,
+    double borderRadius = 8,
+  }) {
+    final colorScheme = Theme.of(context).colorScheme;
+    if (previewPath == null || previewPath.isEmpty) {
+      return SizedBox(
+        width: width,
+        height: height,
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(borderRadius),
+          child: TextCoverPlaceholder(
+            title: title,
+            width: width,
+            height: height,
+            borderRadius: BorderRadius.circular(borderRadius),
+          ),
+        ),
+      );
+    }
+    return Container(
+      width: width,
+      height: height,
+      decoration: BoxDecoration(
+        color: colorScheme.surface,
+        borderRadius: BorderRadius.circular(borderRadius),
+        border: Border.all(
+          color: colorScheme.outlineVariant.withValues(alpha: 0.4),
+        ),
+        image: DecorationImage(
+          image: FileImage(File(previewPath)),
+          fit: BoxFit.cover,
+        ),
+      ),
+    );
   }
 
   Future<void> _clearWallpaper() async {
@@ -725,8 +988,11 @@ class _AdvancedThemeEditorPageState
     required int initialColorValue,
   }) async {
     Color draftColor = Color(initialColorValue);
+    final hexController = TextEditingController(
+      text: _formatHex(draftColor.toARGB32()),
+    );
 
-    return showDialog<int>(
+    final result = await showDialog<int>(
       context: context,
       builder: (dialogContext) {
         return StatefulBuilder(
@@ -753,11 +1019,27 @@ class _AdvancedThemeEditorPageState
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     TextField(
-                      controller: TextEditingController(
-                        text: _formatHex(draftColor.toARGB32()),
+                      controller: hexController,
+                      keyboardType: TextInputType.text,
+                      textCapitalization: TextCapitalization.characters,
+                      inputFormatters: [
+                        FilteringTextInputFormatter.allow(
+                          RegExp(r'[#0-9a-fA-F]'),
+                        ),
+                      ],
+                      onChanged: (value) {
+                        final parsed = _parseHexColor(value);
+                        if (parsed == null) {
+                          return;
+                        }
+                        setDialogState(() {
+                          draftColor = Color(parsed);
+                        });
+                      },
+                      decoration: const InputDecoration(
+                        isDense: true,
+                        hintText: '#RRGGBB / #AARRGGBB',
                       ),
-                      readOnly: true,
-                      decoration: const InputDecoration(isDense: true),
                     ),
                     const SizedBox(height: 12),
                     ColorPicker(
@@ -765,6 +1047,10 @@ class _AdvancedThemeEditorPageState
                       onColorChanged: (color) {
                         setDialogState(() {
                           draftColor = color;
+                          hexController.text = _formatHex(color.toARGB32());
+                          hexController.selection = TextSelection.collapsed(
+                            offset: hexController.text.length,
+                          );
                         });
                       },
                       enableAlpha: false,
@@ -789,6 +1075,8 @@ class _AdvancedThemeEditorPageState
         );
       },
     );
+    hexController.dispose();
+    return result;
   }
 
   void _showMessage(String message) {
@@ -1200,20 +1488,17 @@ class _AdvancedThemeEditorPageState
                 context,
                 icon: Icons.photo_library_outlined,
                 title: '封面',
-                subtitle: '当前项目暂未提供可配置封面样式',
-                onTap: () => context.push('/appearance?section=cover'),
+                subtitle: _resolvedCoverGalleryName(),
+                onTap: _pickCoverGallery,
                 trailing: SizedBox(
                   width: 30,
                   height: 42,
-                  child: ClipRRect(
-                    borderRadius: BorderRadius.circular(8),
-                    child: TextCoverPlaceholder(
-                      title: '三体',
-                      author: '刘慈欣',
-                      width: 30,
-                      height: 42,
-                      borderRadius: BorderRadius.circular(8),
-                    ),
+                  child: _buildGalleryPreviewThumb(
+                    context,
+                    previewPath: _selectedCoverGalleryPreviewPath(),
+                    title: _selectedCoverGallery()?.name ?? '封面图集',
+                    width: 30,
+                    height: 42,
                   ),
                 ),
               ),
@@ -1239,6 +1524,7 @@ class _AdvancedThemeEditorPageState
     required String subtitle,
     required VoidCallback onTap,
     Widget? trailing,
+    IconData trailingIcon = Icons.chevron_right_rounded,
   }) {
     final colorScheme = Theme.of(context).colorScheme;
     return InkWell(
@@ -1284,7 +1570,7 @@ class _AdvancedThemeEditorPageState
             if (trailing != null) ...[const SizedBox(width: 10), trailing],
             const SizedBox(width: 6),
             Icon(
-              title == '底栏' ? Icons.add_rounded : Icons.chevron_right_rounded,
+              trailingIcon,
               size: 18,
               color: colorScheme.onSurfaceVariant,
             ),
@@ -1703,45 +1989,64 @@ class _AdvancedThemeEditorPageState
             ),
           ),
           const SizedBox(width: 12),
-          InkWell(
-            borderRadius: BorderRadius.circular(10),
-            onTap: _isSaving ? null : () => _pickColorForSlot(slot),
-            child: Container(
-              constraints: const BoxConstraints(minWidth: 116),
-              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-              decoration: BoxDecoration(
-                color: colorScheme.surface,
-                borderRadius: BorderRadius.circular(10),
-                border: Border.all(
-                  color: colorScheme.outlineVariant.withValues(alpha: 0.55),
+          SizedBox(
+            width: 164,
+            child: TextField(
+              controller: controller,
+              enabled: !_isSaving,
+              keyboardType: TextInputType.text,
+              textCapitalization: TextCapitalization.characters,
+              inputFormatters: [
+                FilteringTextInputFormatter.allow(
+                  RegExp(r'[#0-9a-fA-F]'),
                 ),
-              ),
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Text(
-                    controller.text.isEmpty
-                        ? _formatHex(fallback.toARGB32())
-                        : controller.text,
-                    style: Theme.of(context).textTheme.labelMedium?.copyWith(
-                      fontWeight: FontWeight.w700,
-                    ),
+              ],
+              onChanged: (_) => setState(() {}),
+              decoration: InputDecoration(
+                isDense: true,
+                hintText: _formatHex(fallback.toARGB32()),
+                filled: true,
+                fillColor: colorScheme.surface,
+                contentPadding: const EdgeInsets.symmetric(
+                  horizontal: 10,
+                  vertical: 10,
+                ),
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(10),
+                  borderSide: BorderSide(
+                    color: colorScheme.outlineVariant.withValues(alpha: 0.55),
                   ),
-                  const SizedBox(width: 8),
-                  Container(
-                    width: 18,
-                    height: 18,
-                    decoration: BoxDecoration(
-                      color: previewColor,
-                      borderRadius: BorderRadius.circular(5),
-                      border: Border.all(
-                        color: colorScheme.outlineVariant.withValues(
-                          alpha: 0.45,
+                ),
+                enabledBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(10),
+                  borderSide: BorderSide(
+                    color: colorScheme.outlineVariant.withValues(alpha: 0.55),
+                  ),
+                ),
+                focusedBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(10),
+                  borderSide: BorderSide(color: colorScheme.primary, width: 1.2),
+                ),
+                suffixIcon: InkWell(
+                  borderRadius: BorderRadius.circular(8),
+                  onTap: _isSaving ? null : () => _pickColorForSlot(slot),
+                  child: Padding(
+                    padding: const EdgeInsets.fromLTRB(6, 6, 10, 6),
+                    child: Container(
+                      width: 22,
+                      height: 22,
+                      decoration: BoxDecoration(
+                        color: previewColor,
+                        borderRadius: BorderRadius.circular(6),
+                        border: Border.all(
+                          color: colorScheme.outlineVariant.withValues(
+                            alpha: 0.45,
+                          ),
                         ),
                       ),
                     ),
                   ),
-                ],
+                ),
               ),
             ),
           ),
@@ -1920,4 +2225,14 @@ enum _ThemeColorSlot {
 
   final String label;
   final String description;
+}
+
+class _CoverGallerySelectionResult {
+  const _CoverGallerySelectionResult({
+    required this.applied,
+    required this.galleryId,
+  });
+
+  final bool applied;
+  final String? galleryId;
 }

@@ -6,14 +6,17 @@ import 'package:go_router/go_router.dart';
 
 import '../../../app/layout/app_layout.dart';
 import '../../../app/layout/app_spacing.dart';
-import '../../../app/widgets/disk_cached_cover_image.dart';
-import '../../../app/widgets/text_cover_placeholder.dart';
+import '../../../app/widgets/resolved_book_cover.dart';
+import '../../../domain/entities/app_advanced_theme.dart';
+import '../../../domain/entities/cover_gallery.dart';
 import '../../../domain/entities/local_book.dart';
 import '../../../domain/entities/reading_book_status.dart';
 import '../../../domain/entities/reading_record.dart';
 import '../../../domain/entities/reading_record_day.dart';
 import '../../../domain/entities/reading_record_session.dart';
 import '../../book/presentation/book_detail_route.dart';
+import '../../mine/application/advanced_theme_service.dart';
+import '../../mine/application/cover_gallery_service.dart';
 import '../application/reading_book_status_service.dart';
 import '../application/reader_entry_route_resolver.dart';
 import '../application/reader_preferences_service.dart';
@@ -29,13 +32,18 @@ class ReadingRecordsPage extends StatefulWidget {
     ReadingRecordService? readingRecordService,
     ReaderPreferencesService? preferencesService,
     ReaderSystemSettingsService? readerSystemSettingsService,
+    ReadingBookStatusService? readingBookStatusService,
+    this.initialPeriod,
   }) : _readingRecordService = readingRecordService,
        _preferencesService = preferencesService,
-       _readerSystemSettingsService = readerSystemSettingsService;
+       _readerSystemSettingsService = readerSystemSettingsService,
+       _readingBookStatusService = readingBookStatusService;
 
   final ReadingRecordService? _readingRecordService;
   final ReaderPreferencesService? _preferencesService;
   final ReaderSystemSettingsService? _readerSystemSettingsService;
+  final ReadingBookStatusService? _readingBookStatusService;
+  final ReadingRecordsPeriod? initialPeriod;
 
   @override
   State<ReadingRecordsPage> createState() => _ReadingRecordsPageState();
@@ -51,6 +59,10 @@ class _ReadingRecordsPageState extends State<ReadingRecordsPage> {
   late final ReaderSystemSettingsService _readerSystemSettingsService;
   late final ReadingBookStatusService _readingBookStatusService;
   late final Stream<bool> _readRecordEnabledStream;
+  final AdvancedThemeService _advancedThemeService = AdvancedThemeService();
+  final CoverGalleryService _coverGalleryService = CoverGalleryService();
+  AppAdvancedTheme? _activeTheme;
+  List<CoverGallery> _coverGalleries = const <CoverGallery>[];
 
   ReadingRecordsPeriod _period = ReadingRecordsPeriod.day;
   DateTime _periodAnchor = DateTime.now();
@@ -66,14 +78,29 @@ class _ReadingRecordsPageState extends State<ReadingRecordsPage> {
         widget._preferencesService ?? ReaderPreferencesService();
     _readerSystemSettingsService =
         widget._readerSystemSettingsService ?? ReaderSystemSettingsService();
-    _readingBookStatusService = ReadingBookStatusService();
+    _readingBookStatusService =
+        widget._readingBookStatusService ?? ReadingBookStatusService();
+    _period = widget.initialPeriod ?? _period;
     _readRecordEnabledStream =
         _readerSystemSettingsService.watchReadRecordEnabled();
+    unawaited(_loadCoverThemeContext());
   }
 
   @override
   void dispose() {
     super.dispose();
+  }
+
+  Future<void> _loadCoverThemeContext() async {
+    final activeTheme = await _advancedThemeService.loadActiveTheme();
+    final coverGalleries = await _coverGalleryService.loadGalleries();
+    if (!mounted) {
+      return;
+    }
+    setState(() {
+      _activeTheme = activeTheme;
+      _coverGalleries = coverGalleries;
+    });
   }
 
   ReadingRecordsPeriodRange get _currentPeriodRange =>
@@ -902,6 +929,7 @@ class _ReadingRecordsPageState extends State<ReadingRecordsPage> {
                               constraints.maxWidth,
                             ) +
                             8;
+                        final chartHeight = constraints.maxHeight;
                         return SingleChildScrollView(
                           scrollDirection: Axis.horizontal,
                           child: SizedBox(
@@ -922,7 +950,7 @@ class _ReadingRecordsPageState extends State<ReadingRecordsPage> {
                                                   ? 0
                                                   : (index /
                                                           axisValues.length) *
-                                                      180,
+                                                      chartHeight,
                                           child: Align(
                                             alignment: Alignment.topCenter,
                                             child: _DashedHorizontalLine(
@@ -949,11 +977,13 @@ class _ReadingRecordsPageState extends State<ReadingRecordsPage> {
                                               child: Tooltip(
                                                 message:
                                                     '${bucket.label}\n${_formatDuration(bucket.readMillis)}',
-                                                child: Column(
-                                                  mainAxisAlignment:
-                                                      MainAxisAlignment.end,
-                                                  children: [
-                                                    Container(
+                                                child: SizedBox(
+                                                  width: barWidth,
+                                                  height: chartHeight,
+                                                  child: Align(
+                                                    alignment:
+                                                        Alignment.bottomCenter,
+                                                    child: Container(
                                                       width: barWidth,
                                                       height:
                                                           maxValue <= 0
@@ -964,7 +994,7 @@ class _ReadingRecordsPageState extends State<ReadingRecordsPage> {
                                                                         0.0,
                                                                         1.0,
                                                                       ) *
-                                                                  180,
+                                                                  chartHeight,
                                                       decoration: BoxDecoration(
                                                         color:
                                                             colorScheme.primary,
@@ -974,7 +1004,7 @@ class _ReadingRecordsPageState extends State<ReadingRecordsPage> {
                                                             ),
                                                       ),
                                                     ),
-                                                  ],
+                                                  ),
                                                 ),
                                               ),
                                             ),
@@ -1635,9 +1665,10 @@ class _ReadingRecordsPageState extends State<ReadingRecordsPage> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     _buildCover(
-                      book.coverUrl,
+                      realCoverUrl: book.coverUrl,
                       title: book.title,
                       author: book.author,
+                      bookId: book.bookId,
                       width: 28,
                       height: 40,
                     ),
@@ -1834,9 +1865,12 @@ class _ReadingRecordsPageState extends State<ReadingRecordsPage> {
                     ),
                     const SizedBox(width: 4),
                     _buildCover(
-                      visibleItems[index].record.coverUrl,
+                      realCoverUrl: visibleItems[index].record.coverUrl,
                       title: visibleItems[index].record.bookTitle,
                       author: visibleItems[index].record.bookAuthor,
+                      bookId: visibleItems[index].record.bookId,
+                      sourceId: visibleItems[index].record.sourceId,
+                      detailUrl: visibleItems[index].record.detailUrl,
                       width: 42,
                       height: 58,
                     ),
@@ -2374,9 +2408,12 @@ class _ReadingRecordsPageState extends State<ReadingRecordsPage> {
                 elevation: 2,
                 borderRadius: BorderRadius.circular(10),
                 child: _buildCover(
-                  visible[index].coverUrl,
+                  realCoverUrl: visible[index].coverUrl,
                   title: visible[index].bookTitle,
                   author: visible[index].bookAuthor,
+                  bookId: visible[index].bookId,
+                  sourceId: visible[index].sourceId,
+                  detailUrl: visible[index].detailUrl,
                   width: 44,
                   height: 62,
                 ),
@@ -2387,48 +2424,27 @@ class _ReadingRecordsPageState extends State<ReadingRecordsPage> {
     );
   }
 
-  Widget _buildCover(
-    String? coverUrl, {
+  Widget _buildCover({
+    String? realCoverUrl,
     String? title,
     String? author,
+    String? bookId,
+    String? sourceId,
+    String? detailUrl,
     double width = 54,
     double height = 74,
   }) {
-    final uri = Uri.tryParse(coverUrl ?? '');
-    if (uri == null || !uri.hasScheme) {
-      return _buildCoverFallback(
-        title: title,
-        author: author,
-        width: width,
-        height: height,
-      );
-    }
-
-    return ClipRRect(
-      borderRadius: BorderRadius.circular(10),
-      child: DiskCachedCoverImage(
-        imageUrl: coverUrl,
-        width: width,
-        height: height,
-        fit: BoxFit.cover,
-        fallback: _buildCoverFallback(
-          title: title,
-          author: author,
-          width: width,
-          height: height,
-        ),
-      ),
+    final resolvedCover = resolveBookCover(
+      realCoverUrl: realCoverUrl,
+      activeTheme: _activeTheme,
+      galleries: _coverGalleries,
+      bookId: bookId,
+      sourceId: sourceId,
+      detailUrl: detailUrl,
     );
-  }
-
-  Widget _buildCoverFallback({
-    String? title,
-    String? author,
-    required double width,
-    required double height,
-  }) {
-    return TextCoverPlaceholder(
-      title: title,
+    return ResolvedBookCoverView(
+      cover: resolvedCover,
+      title: title ?? '',
       author: author,
       width: width,
       height: height,

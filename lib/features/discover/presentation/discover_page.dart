@@ -11,9 +11,8 @@ import '../../../app/layout/app_spacing.dart';
 import '../../../app/navigation/app_navigation_style_provider.dart';
 import '../../../app/navigation/mobile_bottom_navigation_inset.dart';
 import '../../../app/theme/app_advanced_theme_tokens.dart';
-import '../../../app/widgets/disk_cached_cover_image.dart';
+import '../../../app/widgets/resolved_book_cover.dart';
 import '../../../app/widgets/runtime_feedback_card.dart';
-import '../../../app/widgets/text_cover_placeholder.dart';
 import '../../../core/errors/app_exception.dart';
 import '../../../domain/entities/source_health.dart';
 import '../../../domain/entities/book.dart';
@@ -21,6 +20,7 @@ import '../../book/presentation/book_detail_route.dart';
 import '../application/discover_preferences_service.dart';
 import '../application/explore_service.dart';
 import '../../mine/application/advanced_theme_provider.dart';
+import '../../mine/application/cover_gallery_provider.dart';
 import '../../source/application/source_health_service.dart';
 import '../../source/application/source_runtime_task_conflict_service.dart';
 import '../../source/application/source_runtime_scheduler_service.dart';
@@ -154,6 +154,7 @@ class _DiscoverPageState extends ConsumerState<DiscoverPage>
   Widget build(BuildContext context) {
     super.build(context);
     ref.watch(activeAdvancedThemeProvider);
+    ref.watch(coverGalleriesProvider);
     final palette = _resolvedPalette(context);
     final horizontal = AppSpacing.pageHorizontal(context);
     final platform = Theme.of(context).platform;
@@ -931,9 +932,12 @@ class _DiscoverPageState extends ConsumerState<DiscoverPage>
                 crossAxisAlignment: CrossAxisAlignment.center,
                 children: <Widget>[
                   _buildCoverPreview(
-                    book.coverUrl,
+                    realCoverUrl: book.coverUrl,
                     title: book.title,
                     author: book.author,
+                    bookId: book.id,
+                    sourceId: book.sourceId,
+                    detailUrl: book.detailUrl,
                     heroTag: heroTag,
                     width: coverWidth,
                     height: coverHeight,
@@ -1029,72 +1033,36 @@ class _DiscoverPageState extends ConsumerState<DiscoverPage>
     );
   }
 
-  Widget _buildCoverPreview(
-    String? coverUrl, {
+  Widget _buildCoverPreview({
+    String? realCoverUrl,
     required String title,
     String? author,
+    String? bookId,
+    String? sourceId,
+    String? detailUrl,
     required String heroTag,
     required double width,
     required double height,
   }) {
-    final trimmed = coverUrl?.trim();
-    if (trimmed == null || trimmed.isEmpty) {
-      return Hero(
-        tag: heroTag,
-        child: _buildCoverFallback(
-          title: title,
-          author: author,
-          width: width,
-          height: height,
-        ),
-      );
-    }
-
-    final uri = Uri.tryParse(trimmed);
-    if (uri == null || !uri.hasScheme) {
-      return Hero(
-        tag: heroTag,
-        child: _buildCoverFallback(
-          title: title,
-          author: author,
-          width: width,
-          height: height,
-        ),
-      );
-    }
+    final resolvedCover = resolveBookCover(
+      realCoverUrl: realCoverUrl,
+      activeTheme: ref.read(activeAdvancedThemeProvider).valueOrNull,
+      galleries: ref.read(coverGalleriesProvider).valueOrNull ?? const [],
+      bookId: bookId,
+      sourceId: sourceId,
+      detailUrl: detailUrl,
+    );
 
     return Hero(
       tag: heroTag,
-      child: ClipRRect(
+      child: ResolvedBookCoverView(
+        cover: resolvedCover,
+        title: title,
+        author: author,
+        width: width,
+        height: height,
         borderRadius: BorderRadius.circular(8),
-        child: DiskCachedCoverImage(
-          imageUrl: trimmed,
-          width: width,
-          height: height,
-          fit: BoxFit.cover,
-          fallback: _buildCoverFallback(
-            title: title,
-            author: author,
-            width: width,
-            height: height,
-          ),
-        ),
       ),
-    );
-  }
-
-  Widget _buildCoverFallback({
-    required String title,
-    String? author,
-    required double width,
-    required double height,
-  }) {
-    return TextCoverPlaceholder(
-      title: title,
-      author: author,
-      width: width,
-      height: height,
-      borderRadius: BorderRadius.circular(8),
     );
   }
 
