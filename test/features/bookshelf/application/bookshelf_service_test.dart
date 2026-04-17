@@ -197,6 +197,151 @@ void main() {
       expect(map['src_2::detail_2'], orderedEquals(const ['收藏']));
     });
 
+    test('setBookTags preserves multiple book entries', () async {
+      final service = BookshelfService();
+      await service.setBookTags(
+        sourceId: 'src_1',
+        detailUrl: 'detail_1',
+        tags: const ['在读', '收藏'],
+      );
+      await service.setBookTags(
+        sourceId: 'src_2',
+        detailUrl: 'detail_2',
+        tags: const ['在读', '已读'],
+      );
+      await service.setBookTags(
+        sourceId: 'src_3',
+        detailUrl: 'detail_3',
+        tags: const ['追更', '在读'],
+      );
+
+      final map = await service.getTagMap();
+      expect(
+        map.keys,
+        containsAll(const [
+          'src_1::detail_1',
+          'src_2::detail_2',
+          'src_3::detail_3',
+        ]),
+      );
+    });
+
+    test('renameCategory returns affected book count', () async {
+      final service = BookshelfService();
+      await service.upsert(
+        BookshelfBook(
+          bookId: 'book_1',
+          sourceId: 'src_1',
+          title: 'A',
+          detailUrl: 'detail_1',
+          addedAt: DateTime.parse('2026-02-12T12:00:00.000Z'),
+          category: '玄幻',
+        ),
+      );
+      await service.upsert(
+        BookshelfBook(
+          bookId: 'book_2',
+          sourceId: 'src_2',
+          title: 'B',
+          detailUrl: 'detail_2',
+          addedAt: DateTime.parse('2026-02-12T12:00:01.000Z'),
+          category: '玄幻',
+        ),
+      );
+      await service.upsert(
+        BookshelfBook(
+          bookId: 'book_3',
+          sourceId: 'src_3',
+          title: 'C',
+          detailUrl: 'detail_3',
+          addedAt: DateTime.parse('2026-02-12T12:00:02.000Z'),
+          category: '科幻',
+        ),
+      );
+
+      final affectedCount = await service.renameCategory(
+        fromCategory: '玄幻',
+        toCategory: '仙侠',
+      );
+
+      expect(affectedCount, 2);
+      final categoryMap = await service.getCategoryMap();
+      expect(categoryMap['src_1::detail_1'], '仙侠');
+      expect(categoryMap['src_2::detail_2'], '仙侠');
+      expect(categoryMap['src_3::detail_3'], '科幻');
+    });
+
+    test('deleteCategory returns affected book count', () async {
+      final service = BookshelfService();
+      await service.upsert(
+        BookshelfBook(
+          bookId: 'book_1',
+          sourceId: 'src_1',
+          title: 'A',
+          detailUrl: 'detail_1',
+          addedAt: DateTime.parse('2026-02-12T12:00:00.000Z'),
+          category: '玄幻',
+        ),
+      );
+      await service.upsert(
+        BookshelfBook(
+          bookId: 'book_2',
+          sourceId: 'src_2',
+          title: 'B',
+          detailUrl: 'detail_2',
+          addedAt: DateTime.parse('2026-02-12T12:00:01.000Z'),
+          category: '玄幻',
+        ),
+      );
+      await service.upsert(
+        BookshelfBook(
+          bookId: 'book_3',
+          sourceId: 'src_3',
+          title: 'C',
+          detailUrl: 'detail_3',
+          addedAt: DateTime.parse('2026-02-12T12:00:02.000Z'),
+          category: '科幻',
+        ),
+      );
+
+      final affectedCount = await service.deleteCategory('玄幻');
+
+      expect(affectedCount, 2);
+      final categoryMap = await service.getCategoryMap();
+      expect(categoryMap.containsKey('src_1::detail_1'), isFalse);
+      expect(categoryMap.containsKey('src_2::detail_2'), isFalse);
+      expect(categoryMap['src_3::detail_3'], '科幻');
+    });
+
+    test(
+      'renameTag returns success when only tag order contains target',
+      () async {
+        final service = BookshelfService();
+        await service.saveTagOrder(const ['在读']);
+
+        final affectedCount = await service.renameTag(
+          fromTag: '在读',
+          toTag: '追更',
+        );
+
+        expect(affectedCount, 1);
+        expect(await service.getTagOrder(), orderedEquals(const ['追更']));
+      },
+    );
+
+    test(
+      'deleteCategory returns success when only category order contains target',
+      () async {
+        final service = BookshelfService();
+        await service.saveCategoryOrder(const ['玄幻']);
+
+        final affectedCount = await service.deleteCategory('玄幻');
+
+        expect(affectedCount, 1);
+        expect(await service.getCategoryOrder(), isEmpty);
+      },
+    );
+
     test(
       'replace swaps old entry and migrates tags to new source entry',
       () async {

@@ -15,20 +15,31 @@ enum MineManagementSection {
 }
 
 class MineManagementPage extends StatelessWidget {
-  const MineManagementPage({super.key, required this.section});
+  const MineManagementPage({
+    super.key,
+    required this.section,
+    this.bookshelfService,
+    this.loadTimeout = const Duration(seconds: 8),
+  });
 
   final MineManagementSection section;
+  final BookshelfService? bookshelfService;
+  final Duration loadTimeout;
 
   @override
   Widget build(BuildContext context) {
     if (section == MineManagementSection.tagManagement) {
-      return const _BookshelfTaxonomyManagementPage(
+      return _BookshelfTaxonomyManagementPage(
         kind: _BookshelfTaxonomyKind.tag,
+        bookshelfService: bookshelfService,
+        loadTimeout: loadTimeout,
       );
     }
     if (section == MineManagementSection.categoryManagement) {
-      return const _BookshelfTaxonomyManagementPage(
+      return _BookshelfTaxonomyManagementPage(
         kind: _BookshelfTaxonomyKind.category,
+        bookshelfService: bookshelfService,
+        loadTimeout: loadTimeout,
       );
     }
 
@@ -443,19 +454,22 @@ class MineManagementPage extends StatelessWidget {
 enum _BookshelfTaxonomyKind { tag, category }
 
 class _BookshelfTaxonomyItem {
-  const _BookshelfTaxonomyItem({
-    required this.name,
-    required this.count,
-  });
+  const _BookshelfTaxonomyItem({required this.name, required this.count});
 
   final String name;
   final int count;
 }
 
 class _BookshelfTaxonomyManagementPage extends StatefulWidget {
-  const _BookshelfTaxonomyManagementPage({required this.kind});
+  const _BookshelfTaxonomyManagementPage({
+    required this.kind,
+    this.bookshelfService,
+    required this.loadTimeout,
+  });
 
   final _BookshelfTaxonomyKind kind;
+  final BookshelfService? bookshelfService;
+  final Duration loadTimeout;
 
   @override
   State<_BookshelfTaxonomyManagementPage> createState() =>
@@ -464,54 +478,74 @@ class _BookshelfTaxonomyManagementPage extends StatefulWidget {
 
 class _BookshelfTaxonomyManagementPageState
     extends State<_BookshelfTaxonomyManagementPage> {
-  final BookshelfService _bookshelfService = BookshelfService();
+  late final BookshelfService _bookshelfService;
   List<_BookshelfTaxonomyItem> _items = const <_BookshelfTaxonomyItem>[];
   bool _isLoading = true;
   bool _isSaving = false;
   bool _showCreateInput = false;
   String _createDraft = '';
   String? _createErrorText;
+  String? _loadErrorText;
 
   bool get _isTag => widget.kind == _BookshelfTaxonomyKind.tag;
 
   String get _title => _isTag ? '标签管理' : '分类管理';
 
-  IconData get _icon => _isTag ? Icons.sell_outlined : Icons.folder_copy_outlined;
+  IconData get _icon =>
+      _isTag ? Icons.sell_outlined : Icons.folder_copy_outlined;
 
   String get _entityName => _isTag ? '标签' : '分类';
 
   @override
   void initState() {
     super.initState();
+    _bookshelfService = widget.bookshelfService ?? BookshelfService();
     _load();
   }
 
-  Future<void> _load() async {
+  Future<void> _load({bool showLoading = false}) async {
+    if (showLoading && mounted) {
+      setState(() {
+        _isLoading = true;
+        _loadErrorText = null;
+      });
+    }
+
     try {
-      final items = await _loadItems();
+      final items = await _loadItems().timeout(widget.loadTimeout);
       if (!mounted) {
         return;
       }
       setState(() {
         _items = items;
         _isLoading = false;
+        _loadErrorText = null;
+      });
+    } on TimeoutException {
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _isLoading = false;
+        _loadErrorText = '$_entityName加载超时，请点击重试。';
       });
     } catch (_) {
       if (!mounted) {
         return;
       }
       setState(() {
-        _items = const <_BookshelfTaxonomyItem>[];
         _isLoading = false;
+        _loadErrorText = '$_entityName列表加载失败，请点击重试。';
       });
-      _showMessage('$_entityName列表加载失败，请稍后重试。');
     }
   }
 
   Future<List<_BookshelfTaxonomyItem>> _loadItems() async {
     if (_isTag) {
-      final tagMap = await _bookshelfService.getTagMap();
-      final tagOrder = await _bookshelfService.getTagOrder();
+      final tagMapFuture = _bookshelfService.getTagMap();
+      final tagOrderFuture = _bookshelfService.getTagOrder();
+      final tagMap = await tagMapFuture;
+      final tagOrder = await tagOrderFuture;
       final counts = <String, int>{};
       for (final tags in tagMap.values) {
         for (final tag in tags) {
@@ -521,8 +555,10 @@ class _BookshelfTaxonomyManagementPageState
       return _mergeOrderedItems(counts: counts, order: tagOrder);
     }
 
-    final categoryMap = await _bookshelfService.getCategoryMap();
-    final categoryOrder = await _bookshelfService.getCategoryOrder();
+    final categoryMapFuture = _bookshelfService.getCategoryMap();
+    final categoryOrderFuture = _bookshelfService.getCategoryOrder();
+    final categoryMap = await categoryMapFuture;
+    final categoryOrder = await categoryOrderFuture;
     final counts = <String, int>{};
     for (final category in categoryMap.values) {
       counts[category] = (counts[category] ?? 0) + 1;
@@ -702,37 +738,6 @@ class _BookshelfTaxonomyManagementPageState
     }
   }
 
-  Future<void> _moveItem(_BookshelfTaxonomyItem item, int offset) async {
-    final currentIndex = _items.indexWhere((entry) => entry.name == item.name);
-    final nextIndex = currentIndex + offset;
-    if (currentIndex < 0 || nextIndex < 0 || nextIndex >= _items.length) {
-      return;
-    }
-
-    final nextItems = List<_BookshelfTaxonomyItem>.from(_items);
-    final moved = nextItems.removeAt(currentIndex);
-    nextItems.insert(nextIndex, moved);
-
-    setState(() {
-      _items = nextItems;
-      _isSaving = true;
-    });
-    try {
-      final nextOrder = nextItems.map((entry) => entry.name).toList(growable: false);
-      if (_isTag) {
-        await _bookshelfService.saveTagOrder(nextOrder);
-      } else {
-        await _bookshelfService.saveCategoryOrder(nextOrder);
-      }
-    } finally {
-      if (mounted) {
-        setState(() {
-          _isSaving = false;
-        });
-      }
-    }
-  }
-
   Future<String?> _showNameDialog({
     required String title,
     required String confirmText,
@@ -800,10 +805,7 @@ class _BookshelfTaxonomyManagementPageState
                   onPressed: () => Navigator.of(dialogContext).pop(),
                   child: const Text('取消'),
                 ),
-                FilledButton(
-                  onPressed: submit,
-                  child: Text(confirmText),
-                ),
+                FilledButton(onPressed: submit, child: Text(confirmText)),
               ],
             );
           },
@@ -875,14 +877,19 @@ class _BookshelfTaxonomyManagementPageState
                           children: [
                             _buildTaxonomyHeroCard(context),
                             const SizedBox(height: 12),
+                            if (_loadErrorText != null) ...[
+                              _buildErrorCard(context),
+                              if (_items.isNotEmpty) const SizedBox(height: 12),
+                            ],
                             if (_showCreateInput) ...[
                               _buildCreateInputCard(context),
                               const SizedBox(height: 12),
                             ],
-                            if (_items.isEmpty)
-                              _buildEmptyCard(context)
-                            else
-                              _buildListCard(context),
+                            if (_loadErrorText == null || _items.isNotEmpty)
+                              if (_items.isEmpty)
+                                _buildEmptyCard(context)
+                              else
+                                _buildListCard(context),
                           ],
                         ),
               ),
@@ -939,8 +946,8 @@ class _BookshelfTaxonomyManagementPageState
                   const SizedBox(height: 4),
                   Text(
                     _isTag
-                        ? '新增、重命名、删除与排序标签，书架视图切换器会即时刷新。'
-                        : '新增、重命名、删除与排序分类，书架视图切换器会即时刷新。',
+                        ? '新增、重命名、删除标签后，书架视图切换器会即时刷新。'
+                        : '新增、重命名、删除分类后，书架视图切换器会即时刷新。',
                     style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                       color: colorScheme.onSurfaceVariant,
                       height: 1.4,
@@ -968,9 +975,43 @@ class _BookshelfTaxonomyManagementPageState
       ),
       child: Text(
         '还没有$_entityName，点击右上角新增即可。',
-        style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-          color: colorScheme.onSurfaceVariant,
-        ),
+        style: Theme.of(
+          context,
+        ).textTheme.bodyMedium?.copyWith(color: colorScheme.onSurfaceVariant),
+      ),
+    );
+  }
+
+  Widget _buildErrorCard(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+    return Container(
+      padding: const EdgeInsets.fromLTRB(16, 16, 16, 16),
+      decoration: BoxDecoration(
+        color: colorScheme.errorContainer.withValues(alpha: 0.42),
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: colorScheme.error.withValues(alpha: 0.28)),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(Icons.error_outline_rounded, color: colorScheme.error, size: 20),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Text(
+              _loadErrorText ?? '',
+              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                color: colorScheme.onErrorContainer,
+                height: 1.35,
+              ),
+            ),
+          ),
+          const SizedBox(width: 12),
+          FilledButton.tonal(
+            onPressed:
+                _isSaving ? null : () => unawaited(_load(showLoading: true)),
+            child: const Text('重试'),
+          ),
+        ],
       ),
     );
   }
@@ -991,9 +1032,9 @@ class _BookshelfTaxonomyManagementPageState
         children: [
           Text(
             '新增$_entityName',
-            style: Theme.of(context).textTheme.titleSmall?.copyWith(
-              fontWeight: FontWeight.w700,
-            ),
+            style: Theme.of(
+              context,
+            ).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w700),
           ),
           const SizedBox(height: 10),
           TextFormField(
@@ -1041,7 +1082,7 @@ class _BookshelfTaxonomyManagementPageState
       child: Column(
         children: [
           for (var index = 0; index < _items.length; index++) ...[
-            _buildItemTile(context, item: _items[index], index: index),
+            _buildItemTile(context, item: _items[index]),
             if (index < _items.length - 1)
               Divider(
                 height: 1,
@@ -1058,7 +1099,6 @@ class _BookshelfTaxonomyManagementPageState
   Widget _buildItemTile(
     BuildContext context, {
     required _BookshelfTaxonomyItem item,
-    required int index,
   }) {
     final colorScheme = Theme.of(context).colorScheme;
     return Padding(
@@ -1081,9 +1121,9 @@ class _BookshelfTaxonomyManagementPageState
               children: [
                 Text(
                   item.name,
-                  style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                    fontWeight: FontWeight.w600,
-                  ),
+                  style: Theme.of(
+                    context,
+                  ).textTheme.bodyLarge?.copyWith(fontWeight: FontWeight.w600),
                 ),
                 const SizedBox(height: 2),
                 Text(
@@ -1094,19 +1134,6 @@ class _BookshelfTaxonomyManagementPageState
                 ),
               ],
             ),
-          ),
-          IconButton(
-            tooltip: '上移',
-            onPressed: _isSaving || index == 0 ? null : () => _moveItem(item, -1),
-            icon: const Icon(Icons.arrow_upward_rounded, size: 18),
-          ),
-          IconButton(
-            tooltip: '下移',
-            onPressed:
-                _isSaving || index >= _items.length - 1
-                    ? null
-                    : () => _moveItem(item, 1),
-            icon: const Icon(Icons.arrow_downward_rounded, size: 18),
           ),
           PopupMenuButton<String>(
             tooltip: '更多',
@@ -1163,10 +1190,10 @@ class _MineManagementPageConfig {
     return switch (section) {
       MineManagementSection.tagManagement => const _MineManagementPageConfig(
         title: '标签管理',
-        subtitle: '管理阅读标签、展示顺序与常用筛选入口，先把结构铺好，后续可直接接入批量编辑能力。',
+        subtitle: '管理阅读标签与常用筛选入口，先把结构铺好，后续可直接接入批量编辑能力。',
         icon: Icons.sell_outlined,
         accent: Color(0xFFB26A00),
-        tags: ['标签分组', '排序预留', '书架筛选'],
+        tags: ['标签分组', '快速筛选', '书架筛选'],
         previewItems: [
           _MinePreviewItem(
             icon: Icons.label_outline_rounded,
@@ -1174,9 +1201,9 @@ class _MineManagementPageConfig {
             subtitle: '预留标签名称、数量、颜色与启停状态展示。',
           ),
           _MinePreviewItem(
-            icon: Icons.swap_vert_rounded,
-            title: '排序与置顶',
-            subtitle: '后续可接拖拽排序、常用标签置顶与推荐展示。',
+            icon: Icons.push_pin_outlined,
+            title: '常用入口',
+            subtitle: '后续可接常用标签推荐与最近使用入口展示。',
           ),
           _MinePreviewItem(
             icon: Icons.auto_awesome_mosaic_outlined,
@@ -1194,10 +1221,10 @@ class _MineManagementPageConfig {
       MineManagementSection.categoryManagement =>
         const _MineManagementPageConfig(
           title: '分类管理',
-          subtitle: '整理书架分类、展示顺序与归档方式，适合后续承接分组视图和筛选面板。',
+          subtitle: '整理书架分类与归档方式，适合后续承接分组视图和筛选面板。',
           icon: Icons.folder_copy_outlined,
           accent: Color(0xFF2B7A78),
-          tags: ['分类分组', '排序预留', '归档结构'],
+          tags: ['分类分组', '归档结构', '书架筛选'],
           previewItems: [
             _MinePreviewItem(
               icon: Icons.folder_open_rounded,
@@ -1215,7 +1242,7 @@ class _MineManagementPageConfig {
               subtitle: '预留自动归类、手动移动和批量管理入口。',
             ),
           ],
-          todoItems: ['接入分类增删改查与排序能力。', '支持分类封面、描述和智能推荐。', '补齐书架页分类筛选和批量移动交互。'],
+          todoItems: ['接入分类增删改查能力。', '支持分类封面、描述和智能推荐。', '补齐书架页分类筛选和批量移动交互。'],
           statusText: '当前以“分类结构”展示为主，后续可自然接上真实书架分类管理逻辑。',
         ),
       MineManagementSection.chapterRuleManagement =>

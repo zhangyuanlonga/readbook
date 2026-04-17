@@ -601,7 +601,7 @@ class BookshelfService {
         currentName: to,
       ),
     );
-    return affectedCount > 0 || orderContains ? 1 : 0;
+    return affectedCount > 0 ? affectedCount : (orderContains ? 1 : 0);
   }
 
   Future<int> deleteCategory(String categoryName) async {
@@ -641,7 +641,7 @@ class BookshelfService {
         previousName: target,
       ),
     );
-    return affectedCount > 0 || orderContains ? 1 : 0;
+    return affectedCount > 0 ? affectedCount : (orderContains ? 1 : 0);
   }
 
   Future<void> saveBaseFilterOrder(List<String> orderedFilters) async {
@@ -667,10 +667,7 @@ class BookshelfService {
     };
   }
 
-  Future<void> saveViewSelection({
-    required String kind,
-    String? value,
-  }) async {
+  Future<void> saveViewSelection({required String kind, String? value}) async {
     final prefs = await _preferencesFuture;
     await prefs.setString(_viewSelectionKindKey, kind.trim());
     final normalizedValue = value?.trim() ?? '';
@@ -763,7 +760,7 @@ class BookshelfService {
         currentName: to,
       ),
     );
-    return affectedCount > 0 || orderContains ? 1 : 0;
+    return affectedCount > 0 ? affectedCount : (orderContains ? 1 : 0);
   }
 
   Future<int> deleteTag(String tagName) async {
@@ -808,7 +805,7 @@ class BookshelfService {
         previousName: target,
       ),
     );
-    return affectedCount > 0 || orderContains ? 1 : 0;
+    return affectedCount > 0 ? affectedCount : (orderContains ? 1 : 0);
   }
 
   Future<void> _save(List<BookshelfBook> books) async {
@@ -836,7 +833,6 @@ class BookshelfService {
     }
     _taxonomyChangeController.add(change);
   }
-
 
   static String _bookKey({
     required String sourceId,
