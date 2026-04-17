@@ -7,14 +7,18 @@ import '../../../../core/errors/error_stage.dart';
 import '../../../../core/logging/app_logger.dart';
 import '../../../../data/datasources/local/app_database.dart';
 import '../../../../data/repositories/local_book_repository_impl.dart';
+import '../../../../domain/entities/bookshelf_book.dart';
 import '../../../../domain/entities/local_book.dart';
 import '../../../../domain/entities/local_chapter.dart';
 import '../../../../domain/repositories/local_book_repository.dart';
+import '../../../bookshelf/application/bookshelf_service.dart';
+import '../reading_record_service.dart';
 import '../reader_system_settings_service.dart';
 import 'epub_local_book_parser.dart';
 import 'html_local_book_parser.dart';
 import 'kindle_local_book_parser.dart';
 import 'local_book_parser.dart';
+import 'local_reader_identity.dart';
 import 'local_book_storage_service.dart';
 import 'markdown_local_book_parser.dart';
 import 'pdf_local_book_parser.dart';
@@ -27,6 +31,8 @@ class LocalBookIndexService {
     AppLogger? logger,
     ReaderSystemSettingsService? readerSystemSettingsService,
     LocalBookStorageService? storageService,
+    BookshelfService? bookshelfService,
+    ReadingRecordService? readingRecordService,
   }) : _localBookRepository =
            localBookRepository ?? LocalBookRepositoryImpl(AppDatabase.instance),
        _parsers =
@@ -43,12 +49,16 @@ class LocalBookIndexService {
            readerSystemSettingsService ?? ReaderSystemSettingsService(),
        _storageService =
            storageService ?? LocalBookStorageService(logger: logger),
+       _bookshelfService = bookshelfService ?? BookshelfService(),
+       _readingRecordService = readingRecordService ?? ReadingRecordService(),
        _logger = logger ?? AppLogger.instance;
 
   final LocalBookRepository _localBookRepository;
   final List<LocalBookParser> _parsers;
   final ReaderSystemSettingsService _readerSystemSettingsService;
   final LocalBookStorageService _storageService;
+  final BookshelfService _bookshelfService;
+  final ReadingRecordService _readingRecordService;
   final AppLogger _logger;
   static final Map<String, Future<List<LocalChapter>>> _activeIndexTasks =
       <String, Future<List<LocalChapter>>>{};
@@ -473,7 +483,74 @@ class LocalBookIndexService {
       chapterCount: chapters.length,
       clearLastError: true,
     );
+    await _syncBookPresentation(previous: book, next: updatedBook);
     return chapters;
+  }
+
+  Future<void> _syncBookPresentation({
+    required LocalBook previous,
+    required LocalBook next,
+  }) async {
+    final previousTitle = previous.title.trim();
+    final nextTitle = next.title.trim();
+    final previousAuthor = (previous.author ?? '').trim();
+    final nextAuthor = (next.author ?? '').trim();
+    final previousCoverPath = (previous.coverPath ?? '').trim();
+    final nextCoverPath = (next.coverPath ?? '').trim();
+    final changed =
+        previousTitle != nextTitle ||
+        previousAuthor != nextAuthor ||
+        previousCoverPath != nextCoverPath;
+    if (!changed) {
+      return;
+    }
+
+    final nextCoverUrl =
+        nextCoverPath.isEmpty ? null : Uri.file(nextCoverPath).toString();
+
+    await _syncBookshelfBookCover(nextBook: next, nextCoverUrl: nextCoverUrl);
+    await _readingRecordService.syncBookPresentation(
+      bookId: next.id,
+      bookTitle: next.title,
+      bookAuthor: next.author,
+      coverUrl: nextCoverUrl,
+    );
+  }
+
+  Future<void> _syncBookshelfBookCover({
+    required LocalBook nextBook,
+    required String? nextCoverUrl,
+  }) async {
+    final allBooks = await _bookshelfService.getAll();
+    BookshelfBook? matched;
+    final expectedDetailUrl = LocalReaderIdentity.buildBookDetailUrl(nextBook.id);
+    for (final book in allBooks) {
+      if (book.bookId == nextBook.id &&
+          book.sourceId == LocalReaderIdentity.localSourceId &&
+          book.detailUrl.trim() == expectedDetailUrl) {
+        matched = book;
+        break;
+      }
+    }
+    if (matched == null) {
+      return;
+    }
+
+    final currentCoverUrl = matched.coverUrl?.trim();
+    final normalizedNextCoverUrl = nextCoverUrl?.trim();
+    if (currentCoverUrl == normalizedNextCoverUrl) {
+      return;
+    }
+
+    await _bookshelfService.upsert(
+      matched.copyWith(
+        title: nextBook.title,
+        author: nextBook.author,
+        coverUrl: normalizedNextCoverUrl,
+        clearCoverUrl:
+            normalizedNextCoverUrl == null || normalizedNextCoverUrl.isEmpty,
+      ),
+    );
   }
 
   bool _hasLegacyDeferredChapterContent({
@@ -481,7 +558,8 @@ class LocalBookIndexService {
     required LocalChapter chapter,
   }) {
     return switch (format) {
-      LocalBookFormat.txt => chapter.content.trim().isEmpty,
+      LocalBookFormat.txt =>
+        chapter.content.trim().isEmpty && !_hasReadableTxtOffsets(chapter),
       LocalBookFormat.epub =>
         chapter.content.trim().isEmpty && chapter.imageUrls.isEmpty,
       LocalBookFormat.md => false,
@@ -491,6 +569,15 @@ class LocalBookIndexService {
       LocalBookFormat.azw => false,
       LocalBookFormat.azw3 => false,
     };
+  }
+
+  bool _hasReadableTxtOffsets(LocalChapter chapter) {
+    final startOffset = chapter.startOffset;
+    final endOffset = chapter.endOffset;
+    if (startOffset == null || endOffset == null) {
+      return false;
+    }
+    return startOffset >= 0 && endOffset > startOffset;
   }
 
   void _emitIndexEvent({

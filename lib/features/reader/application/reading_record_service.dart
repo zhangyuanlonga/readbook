@@ -550,6 +550,99 @@ class ReadingRecordService {
     });
   }
 
+  Future<void> syncBookPresentation({
+    required String bookId,
+    required String bookTitle,
+    String? bookAuthor,
+    String? coverUrl,
+  }) async {
+    final normalizedBookId = bookId.trim();
+    final normalizedTitle = bookTitle.trim();
+    final normalizedAuthor = _normalizeOptionalText(bookAuthor);
+    final normalizedCoverUrl = _normalizeOptionalText(coverUrl);
+    if (normalizedBookId.isEmpty || normalizedTitle.isEmpty) {
+      return;
+    }
+
+    final existingRecord = await _database.getReadingRecordByBookId(
+      normalizedBookId,
+    );
+    final existingDays = await _database.listReadingRecordDaysByBookId(
+      normalizedBookId,
+    );
+    final existingSessions = await _database.listReadingRecordSessionsByBookId(
+      normalizedBookId,
+    );
+    if (existingRecord == null &&
+        existingDays.isEmpty &&
+        existingSessions.isEmpty) {
+      return;
+    }
+
+    await _database.transaction(() async {
+      if (existingRecord != null) {
+        await _database.upsertReadingRecord(
+          ReadingRecord(
+            bookId: existingRecord.bookId,
+            sourceId: existingRecord.sourceId,
+            detailUrl: existingRecord.detailUrl,
+            bookTitle: normalizedTitle,
+            bookAuthor: normalizedAuthor,
+            coverUrl: normalizedCoverUrl,
+            lastChapterId: existingRecord.lastChapterId,
+            lastChapterTitle: existingRecord.lastChapterTitle,
+            lastChapterIndex: existingRecord.lastChapterIndex,
+            lastChapterUrl: existingRecord.lastChapterUrl,
+            lastPositionRatio: existingRecord.lastPositionRatio,
+            totalReadMillis: existingRecord.totalReadMillis,
+            totalReadChars: existingRecord.totalReadChars,
+            lastReadAt: existingRecord.lastReadAt,
+          ),
+        );
+      }
+
+      for (final day in existingDays) {
+        await _database.upsertReadingRecordDay(
+          ReadingRecordDay(
+            bookId: day.bookId,
+            dateKey: day.dateKey,
+            bookTitle: normalizedTitle,
+            bookAuthor: normalizedAuthor,
+            coverUrl: normalizedCoverUrl,
+            readMillis: day.readMillis,
+            readChars: day.readChars,
+            firstReadAt: day.firstReadAt,
+            lastReadAt: day.lastReadAt,
+          ),
+        );
+      }
+
+      for (final session in existingSessions) {
+        await _database.updateReadingRecordSession(
+          ReadingRecordSession(
+            id: session.id,
+            bookId: session.bookId,
+            sourceId: session.sourceId,
+            detailUrl: session.detailUrl,
+            bookTitle: normalizedTitle,
+            bookAuthor: normalizedAuthor,
+            coverUrl: normalizedCoverUrl,
+            chapterId: session.chapterId,
+            chapterTitle: session.chapterTitle,
+            chapterIndex: session.chapterIndex,
+            chapterUrl: session.chapterUrl,
+            startAt: session.startAt,
+            endAt: session.endAt,
+            durationMillis: session.durationMillis,
+            readChars: session.readChars,
+            startPositionRatio: session.startPositionRatio,
+            endPositionRatio: session.endPositionRatio,
+          ),
+        );
+      }
+    });
+  }
+
   double _readingProgressDelta(ReadingRecordCommitInput input) {
     final start = input.startPositionRatio.clamp(0.0, 1.0).toDouble();
     final end = input.endPositionRatio.clamp(0.0, 1.0).toDouble();
