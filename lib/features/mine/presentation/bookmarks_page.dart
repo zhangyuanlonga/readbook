@@ -5,14 +5,17 @@ import 'package:go_router/go_router.dart';
 
 import '../../../app/layout/app_layout.dart';
 import '../../../app/layout/app_spacing.dart';
-import '../../../app/widgets/disk_cached_cover_image.dart';
-import '../../../app/widgets/text_cover_placeholder.dart';
+import '../../../app/widgets/resolved_book_cover.dart';
 import '../../../data/datasources/local/app_database.dart';
 import '../../../data/repositories/bookmark_repository_impl.dart';
+import '../../../domain/entities/app_advanced_theme.dart';
 import '../../../domain/entities/bookmark.dart';
 import '../../../domain/entities/bookshelf_book.dart';
+import '../../../domain/entities/cover_gallery.dart';
 import '../../../domain/repositories/bookmark_repository.dart';
 import '../../bookshelf/application/bookshelf_service.dart';
+import '../application/advanced_theme_service.dart';
+import '../application/cover_gallery_service.dart';
 import '../../reader/application/reader_entry_route_resolver.dart';
 
 class BookmarksPage extends StatefulWidget {
@@ -27,6 +30,8 @@ class _BookmarksPageState extends State<BookmarksPage> {
     AppDatabase.instance,
   );
   final BookshelfService _bookshelfService = BookshelfService();
+  final AdvancedThemeService _advancedThemeService = AdvancedThemeService();
+  final CoverGalleryService _coverGalleryService = CoverGalleryService();
   final ReaderEntryRouteResolver _readerEntryRouteResolver =
       const ReaderEntryRouteResolver();
 
@@ -34,6 +39,8 @@ class _BookmarksPageState extends State<BookmarksPage> {
   String? _errorText;
   List<Bookmark> _bookmarks = const [];
   Map<String, BookshelfBook> _bookshelfIndex = const <String, BookshelfBook>{};
+  AppAdvancedTheme? _activeTheme;
+  List<CoverGallery> _coverGalleries = const <CoverGallery>[];
 
   @override
   void initState() {
@@ -51,8 +58,14 @@ class _BookmarksPageState extends State<BookmarksPage> {
     });
 
     try {
-      final bookmarks = await _bookmarkRepository.listAllBookmarks();
-      final books = await _bookshelfService.getAll();
+      final bookmarksFuture = _bookmarkRepository.listAllBookmarks();
+      final booksFuture = _bookshelfService.getAll();
+      final activeThemeFuture = _advancedThemeService.loadActiveTheme();
+      final coverGalleriesFuture = _coverGalleryService.loadGalleries();
+      final bookmarks = await bookmarksFuture;
+      final books = await booksFuture;
+      final activeTheme = await activeThemeFuture;
+      final coverGalleries = await coverGalleriesFuture;
       final index = <String, BookshelfBook>{
         for (final book in books) book.bookId: book,
       };
@@ -62,13 +75,15 @@ class _BookmarksPageState extends State<BookmarksPage> {
       setState(() {
         _bookmarks = bookmarks;
         _bookshelfIndex = index;
+        _activeTheme = activeTheme;
+        _coverGalleries = coverGalleries;
       });
     } catch (_) {
       if (!mounted) {
         return;
       }
       setState(() {
-        _errorText = '书签加载失败，请稍后重试。';
+        _errorText = '灵感加载失败，请稍后重试。';
       });
     } finally {
       if (mounted) {
@@ -100,7 +115,7 @@ class _BookmarksPageState extends State<BookmarksPage> {
             tooltip: '返回',
             icon: const Icon(Icons.arrow_back),
           ),
-          title: const Text('书签'),
+          title: const Text('灵感'),
         ),
         body: LayoutBuilder(
           builder: (context, _) {
@@ -167,8 +182,8 @@ class _BookmarksPageState extends State<BookmarksPage> {
         context,
         horizontal: horizontal,
         bottomSafe: bottomSafe,
-        title: '还没有书签',
-        message: '在阅读页选中文本后点击“保存书签”即可添加。',
+        title: '还没有灵感',
+        message: '在阅读页选中文本后点击“保存灵感”即可添加。',
         actionLabel: '刷新',
         onAction: () => unawaited(_reload()),
       );
@@ -266,7 +281,14 @@ class _BookmarksPageState extends State<BookmarksPage> {
             Row(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                _buildCover(book?.coverUrl, title: title, author: rawAuthor),
+                _buildCover(
+                  realCoverUrl: book?.coverUrl,
+                  title: title,
+                  author: rawAuthor,
+                  bookId: book?.bookId,
+                  sourceId: book?.sourceId,
+                  detailUrl: book?.detailUrl,
+                ),
                 const SizedBox(width: 12),
                 Expanded(
                   child: Column(
@@ -352,7 +374,7 @@ class _BookmarksPageState extends State<BookmarksPage> {
       dense: true,
       contentPadding: EdgeInsets.zero,
       title: Text(
-        snippet.isEmpty ? '（空书签）' : snippet,
+        snippet.isEmpty ? '（空灵感）' : snippet,
         maxLines: 2,
         overflow: TextOverflow.ellipsis,
         style: textTheme.bodyMedium,
@@ -364,7 +386,7 @@ class _BookmarksPageState extends State<BookmarksPage> {
         ),
       ),
       trailing: IconButton(
-        tooltip: '删除书签',
+        tooltip: '删除灵感',
         icon: const Icon(Icons.delete_outline_rounded),
         onPressed: () => unawaited(_deleteBookmark(bookmark)),
       ),
@@ -372,27 +394,25 @@ class _BookmarksPageState extends State<BookmarksPage> {
     );
   }
 
-  Widget _buildCover(String? coverUrl, {String? title, String? author}) {
-    final uri = Uri.tryParse(coverUrl ?? '');
-    if (uri == null || !uri.hasScheme) {
-      return _buildCoverFallback(title: title, author: author);
-    }
-
-    return ClipRRect(
-      borderRadius: BorderRadius.circular(10),
-      child: DiskCachedCoverImage(
-        imageUrl: coverUrl,
-        width: 54,
-        height: 74,
-        fit: BoxFit.cover,
-        fallback: _buildCoverFallback(title: title, author: author),
-      ),
+  Widget _buildCover({
+    String? realCoverUrl,
+    String? title,
+    String? author,
+    String? bookId,
+    String? sourceId,
+    String? detailUrl,
+  }) {
+    final resolvedCover = resolveBookCover(
+      realCoverUrl: realCoverUrl,
+      activeTheme: _activeTheme,
+      galleries: _coverGalleries,
+      bookId: bookId,
+      sourceId: sourceId,
+      detailUrl: detailUrl,
     );
-  }
-
-  Widget _buildCoverFallback({String? title, String? author}) {
-    return TextCoverPlaceholder(
-      title: title,
+    return ResolvedBookCoverView(
+      cover: resolvedCover,
+      title: title ?? '',
       author: author,
       width: 54,
       height: 74,
@@ -520,7 +540,7 @@ class _BookmarksPageState extends State<BookmarksPage> {
 
   void _openBookmark(Bookmark bookmark, BookshelfBook? book) {
     if (!_canOpenBookmark(book)) {
-      _showMessage('书籍已移出书架，暂无法定位书签。');
+      _showMessage('书籍已移出书架，暂无法定位灵感。');
       return;
     }
 
@@ -544,7 +564,7 @@ class _BookmarksPageState extends State<BookmarksPage> {
             .where((item) => item.id != bookmark.id)
             .toList(growable: false);
       });
-      _showMessage('已删除书签。');
+      _showMessage('已删除灵感。');
     } catch (_) {
       _showMessage('删除失败，请稍后重试。');
     }

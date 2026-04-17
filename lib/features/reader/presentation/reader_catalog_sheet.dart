@@ -195,6 +195,15 @@ Future<ReaderCatalogSheetResult?> showReaderCatalogSheet({
             );
             final sheetHorizontal = AppSpacing.pageHorizontal(context);
 
+            if (!hasBookmarkRequested) {
+              WidgetsBinding.instance.addPostFrameCallback((_) {
+                if (!context.mounted) {
+                  return;
+                }
+                unawaited(ensureBookmarksLoaded(setModalState, context));
+              });
+            }
+
             Future<void> openCatalogMoreActions() async {
               final action = await showModalBottomSheet<String>(
                 context: context,

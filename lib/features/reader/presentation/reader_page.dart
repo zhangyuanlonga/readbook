@@ -131,6 +131,9 @@ class ReaderPage extends ConsumerStatefulWidget {
 
 class _ReaderPageState extends ConsumerState<ReaderPage>
     with TickerProviderStateMixin, WidgetsBindingObserver {
+  static const String _kBookmarkNoHighlightToken = '__none__';
+  static const String _kBookmarkDefaultHighlightToken = '__highlight__';
+
   final ContentProviderRegistry _contentProviderRegistry =
       ContentProviderRegistry(
         providers: [LocalContentProvider(), SourceContentProvider()],
@@ -260,6 +263,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
   bool _selectionBold = false;
   bool _selectionUnderline = true;
   bool _selectionWavy = false;
+  bool _selectionHighlight = false;
   List<ReaderCustomFontEntry> _customFonts = const [];
   final Map<String, int> _mangaImageRetryNonce = <String, int>{};
   final Map<int, TransformationController> _mangaTransformControllers =
@@ -2618,6 +2622,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
         current = _BookmarkRange(
           current.start,
           max(current.end, next.end),
+          hasHighlight: current.hasHighlight,
           isBold: current.isBold,
           isUnderline: current.isUnderline,
           isWavy: current.isWavy,
@@ -2635,7 +2640,8 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
     if (b.start > a.end) {
       return false;
     }
-    return a.isBold == b.isBold &&
+    return a.hasHighlight == b.hasHighlight &&
+        a.isBold == b.isBold &&
         a.isUnderline == b.isUnderline &&
         a.isWavy == b.isWavy;
   }
@@ -2647,8 +2653,10 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
   }) {
     final decorationEnabled = range.isUnderline && !range.isWavy;
     final preserveBaseDecoration = !decorationEnabled && !range.isWavy;
+    final shouldShowBackground = range.hasHighlight;
     return baseStyle.copyWith(
-      backgroundColor: colors.text.withValues(alpha: 0.12),
+      backgroundColor:
+          shouldShowBackground ? colors.text.withValues(alpha: 0.12) : null,
       fontWeight: range.isBold ? FontWeight.w800 : baseStyle.fontWeight,
       decoration:
           decorationEnabled
@@ -2891,21 +2899,13 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
       paragraphIndex: paragraphIndex,
       paragraphOffset: resolvedRange.end,
     );
-    final renderBox = paragraphContext.findRenderObject() as RenderBox?;
-    final globalPosition =
-        renderBox?.localToGlobal(localPosition) ?? Offset.zero;
 
-    setState(() {
-      _isTextSelectionActive = true;
-      _selectionStartOffset = startOffset;
-      _selectionEndOffset = endOffset;
-      _selectedSnippet = snippet;
-      _selectionBold = resolvedRange.isBold;
-      _selectionUnderline = resolvedRange.isUnderline && !resolvedRange.isWavy;
-      _selectionWavy = resolvedRange.isWavy;
-    });
-    unawaited(_syncVolumeKeyPageInterception());
-    _showBookmarkToolbar(globalPosition);
+    _activateSelectionFromBookmarkRange(
+      startOffset: startOffset,
+      endOffset: endOffset,
+      snippet: snippet,
+      range: resolvedRange,
+    );
     return true;
   }
 
@@ -2972,22 +2972,34 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
       paragraphIndex: slice.paragraphIndex,
       paragraphOffset: resolvedRange.end,
     );
-    final renderBox = paragraphContext.findRenderObject() as RenderBox?;
-    final globalPosition =
-        renderBox?.localToGlobal(localPosition) ?? Offset.zero;
 
+    _activateSelectionFromBookmarkRange(
+      startOffset: startOffset,
+      endOffset: endOffset,
+      snippet: snippet,
+      range: resolvedRange,
+    );
+    return true;
+  }
+
+  void _activateSelectionFromBookmarkRange({
+    required int startOffset,
+    required int endOffset,
+    required String snippet,
+    required _BookmarkRange range,
+  }) {
     setState(() {
       _isTextSelectionActive = true;
       _selectionStartOffset = startOffset;
       _selectionEndOffset = endOffset;
       _selectedSnippet = snippet;
-      _selectionBold = resolvedRange.isBold;
-      _selectionUnderline = resolvedRange.isUnderline && !resolvedRange.isWavy;
-      _selectionWavy = resolvedRange.isWavy;
+      _selectionHighlight = range.hasHighlight;
+      _selectionBold = range.isBold;
+      _selectionUnderline = range.isUnderline && !range.isWavy;
+      _selectionWavy = range.isWavy;
     });
     unawaited(_syncVolumeKeyPageInterception());
-    _showBookmarkToolbar(globalPosition);
-    return true;
+    _showBookmarkToolbar();
   }
 
   void _handleSelectionChanged(SelectedContent? content) {
@@ -3000,9 +3012,15 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
     required int endOffset,
   }) {
     if (_chapterBookmarks.isEmpty) {
-      return const _SelectionStyle(bold: false, underline: false, wavy: false);
+      return const _SelectionStyle(
+        highlight: false,
+        bold: false,
+        underline: false,
+        wavy: false,
+      );
     }
 
+    var hasHighlight = false;
     var hasBold = false;
     var hasUnderline = false;
     var hasWavy = false;
@@ -3014,6 +3032,9 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
           endOffset > bookmark.startOffset && startOffset < bookmark.endOffset;
       if (!overlaps) {
         continue;
+      }
+      if (_bookmarkHasHighlight(bookmark)) {
+        hasHighlight = true;
       }
       if (bookmark.isBold) {
         hasBold = true;
@@ -3031,6 +3052,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
     }
 
     return _SelectionStyle(
+      highlight: hasHighlight,
       bold: hasBold,
       underline: hasUnderline,
       wavy: hasWavy,
@@ -3106,6 +3128,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
       _isTextSelectionActive = true;
       _selectionStartOffset = safeStart;
       _selectionEndOffset = safeEnd;
+      _selectionHighlight = overlapStyle.highlight;
       _selectionBold = nextBold;
       _selectionUnderline = nextUnderline;
       _selectionWavy = nextWavy;
@@ -3132,6 +3155,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
       _selectionStartOffset = 0;
       _selectionEndOffset = 0;
       _selectedSnippet = '';
+      _selectionHighlight = false;
     });
     unawaited(_syncVolumeKeyPageInterception());
     _hideBookmarkToolbar();
@@ -3139,64 +3163,17 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
     _selectionStatus = SelectionStatus.none;
   }
 
-  void _showBookmarkToolbar(Offset globalPosition) {
+  void _showBookmarkToolbar() {
     if (!mounted) {
       return;
     }
     _hideBookmarkToolbar();
 
-    final anchors = TextSelectionToolbarAnchors(
-      primaryAnchor: globalPosition,
-      secondaryAnchor: globalPosition,
-    );
-
     _bookmarkToolbarEntry = OverlayEntry(
       builder: (context) {
-        return Stack(
-          children: [
-            Positioned.fill(
-              child: GestureDetector(
-                behavior: HitTestBehavior.translucent,
-                onTap: _clearSelectionState,
-                child: const SizedBox.shrink(),
-              ),
-            ),
-            AdaptiveTextSelectionToolbar.buttonItems(
-              anchors: anchors,
-              buttonItems: [
-                ContextMenuButtonItem(
-                  label: '删除收藏',
-                  onPressed: () {
-                    _hideBookmarkToolbar();
-                    final existing = _currentSelectionBookmark();
-                    if (existing != null) {
-                      unawaited(_onRemoveBookmarkPressed(existing));
-                    } else {
-                      _clearSelectionState();
-                    }
-                  },
-                ),
-                ContextMenuButtonItem(
-                  label: _selectionBold ? '取消加粗' : '加粗',
-                  onPressed: () {
-                    unawaited(_toggleSelectionBold());
-                  },
-                ),
-                ContextMenuButtonItem(
-                  label: _selectionUnderline ? '取消下划线' : '下划线',
-                  onPressed: () {
-                    unawaited(_toggleSelectionUnderline());
-                  },
-                ),
-                ContextMenuButtonItem(
-                  label: _selectionWavy ? '取消波浪线' : '波浪线',
-                  onPressed: () {
-                    unawaited(_toggleSelectionWavy());
-                  },
-                ),
-              ],
-            ),
-          ],
+        return _buildInspirationActionPanel(
+          dismiss: _clearSelectionState,
+          actions: _buildInspirationActionItems(clearSelectionState: null),
         );
       },
     );
@@ -3218,91 +3195,208 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
       return const SizedBox.shrink();
     }
 
-    final hasSelection = _isTextSelectionActive && _selectedSnippet.isNotEmpty;
-    final existingBookmark = _currentSelectionBookmark();
-    final isBookmarked = existingBookmark != null;
+    return _buildInspirationActionPanel(
+      dismiss: () {
+        selectableRegionState.hideToolbar();
+        selectableRegionState.clearSelection();
+        _clearSelectionState();
+      },
+      actions: _buildInspirationActionItems(
+        clearSelectionState: selectableRegionState,
+        hideToolbar: selectableRegionState.hideToolbar,
+      ),
+    );
+  }
 
-    TextSelectionToolbarAnchors anchors;
-    try {
-      anchors = selectableRegionState.contextMenuAnchors;
-    } catch (_) {
+  List<_ReaderInspirationActionItem> _buildInspirationActionItems({
+    required SelectableRegionState? clearSelectionState,
+    VoidCallback? hideToolbar,
+  }) {
+    final selectionState = _currentInspirationSelectionState();
+    if (!selectionState.hasSelection) {
+      return const <_ReaderInspirationActionItem>[];
+    }
+
+    void closeMenus() {
+      hideToolbar?.call();
+      _hideBookmarkToolbar();
+    }
+
+    return <_ReaderInspirationActionItem>[
+      _ReaderInspirationActionItem(
+        icon: Icons.copy_all_rounded,
+        label: '复制',
+        onPressed: () {
+          closeMenus();
+          unawaited(
+            _copySelectedSnippet(clearSelectionState: clearSelectionState),
+          );
+        },
+      ),
+      _ReaderInspirationActionItem(
+        icon:
+            selectionState.hasExistingBookmark
+                ? Icons.delete_outline_rounded
+                : Icons.lightbulb_outline_rounded,
+        label: selectionState.hasExistingBookmark ? '删除灵感' : '保存灵感',
+        onPressed: () {
+          closeMenus();
+          if (selectionState.existingBookmark case final bookmark?) {
+            unawaited(
+              _onRemoveBookmarkPressed(
+                bookmark,
+                clearSelectionState: clearSelectionState,
+              ),
+            );
+            return;
+          }
+          unawaited(
+            _onSaveBookmarkPressed(clearSelectionState: clearSelectionState),
+          );
+        },
+      ),
+      _ReaderInspirationActionItem(
+        icon: Icons.highlight_alt_rounded,
+        label: selectionState.isHighlight ? '取消高亮' : '高亮',
+        isActive: selectionState.isHighlight,
+        onPressed: () {
+          unawaited(_toggleSelectionHighlight());
+        },
+      ),
+      _ReaderInspirationActionItem(
+        icon: Icons.format_bold_rounded,
+        label: selectionState.isBold ? '取消加粗重点' : '加粗重点',
+        isActive: selectionState.isBold,
+        onPressed: () {
+          unawaited(_toggleSelectionBold());
+        },
+      ),
+      _ReaderInspirationActionItem(
+        icon: Icons.format_underlined_rounded,
+        label: selectionState.isUnderline ? '取消划线' : '划线',
+        isActive: selectionState.isUnderline,
+        onPressed: () {
+          unawaited(_toggleSelectionUnderline());
+        },
+      ),
+      _ReaderInspirationActionItem(
+        icon: Icons.multiline_chart_rounded,
+        label: selectionState.isWavy ? '取消波浪线' : '波浪线',
+        isActive: selectionState.isWavy,
+        onPressed: () {
+          unawaited(_toggleSelectionWavy());
+        },
+      ),
+      _ReaderInspirationActionItem(
+        icon: Icons.close_rounded,
+        label: '取消选择',
+        onPressed: () {
+          closeMenus();
+          clearSelectionState?.clearSelection();
+          _clearSelectionState();
+        },
+      ),
+    ];
+  }
+
+  Widget _buildInspirationActionPanel({
+    required VoidCallback dismiss,
+    required List<_ReaderInspirationActionItem> actions,
+  }) {
+    if (actions.isEmpty) {
       return const SizedBox.shrink();
     }
 
-    void hideToolbar() {
-      selectableRegionState.hideToolbar();
-    }
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
+    final preview = _selectedSnippet.trim();
+    final bottomInset = MediaQuery.viewPaddingOf(context).bottom;
 
-    final customItems = <ContextMenuButtonItem>[
-      ContextMenuButtonItem(
-        label: isBookmarked ? '删除收藏' : '保存收藏',
-        onPressed:
-            hasSelection
-                ? () {
-                  hideToolbar();
-                  if (isBookmarked) {
-                    unawaited(
-                      _onRemoveBookmarkPressed(
-                        existingBookmark,
-                        clearSelectionState: selectableRegionState,
+    return Stack(
+      children: [
+        Positioned.fill(
+          child: GestureDetector(
+            behavior: HitTestBehavior.translucent,
+            onTap: dismiss,
+            child: const SizedBox.shrink(),
+          ),
+        ),
+        Positioned(
+          left: 12,
+          right: 12,
+          bottom: 12 + bottomInset,
+          child: Material(
+            color: colorScheme.surface,
+            elevation: 8,
+            borderRadius: BorderRadius.circular(22),
+            child: Container(
+              padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(22),
+                border: Border.all(
+                  color: colorScheme.outlineVariant.withValues(alpha: 0.55),
+                ),
+              ),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  if (preview.isNotEmpty) ...[
+                    Text(
+                      '所选内容',
+                      style: theme.textTheme.labelMedium?.copyWith(
+                        color: colorScheme.onSurfaceVariant,
+                        fontWeight: FontWeight.w700,
                       ),
-                    );
-                  } else {
-                    unawaited(
-                      _onSaveBookmarkPressed(
-                        clearSelectionState: selectableRegionState,
+                    ),
+                    const SizedBox(height: 6),
+                    Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.fromLTRB(12, 10, 12, 10),
+                      decoration: BoxDecoration(
+                        color: colorScheme.surfaceContainerLow,
+                        borderRadius: BorderRadius.circular(16),
                       ),
-                    );
-                  }
-                }
-                : null,
-      ),
-      ContextMenuButtonItem(
-        label: _selectionBold ? '取消加粗' : '加粗',
-        onPressed:
-            hasSelection
-                ? () {
-                  unawaited(_toggleSelectionBold());
-                }
-                : null,
-      ),
-      ContextMenuButtonItem(
-        label: _selectionUnderline ? '取消下划线' : '下划线',
-        onPressed:
-            hasSelection
-                ? () {
-                  unawaited(_toggleSelectionUnderline());
-                }
-                : null,
-      ),
-      ContextMenuButtonItem(
-        label: _selectionWavy ? '取消波浪线' : '波浪线',
-        onPressed:
-            hasSelection
-                ? () {
-                  unawaited(_toggleSelectionWavy());
-                }
-                : null,
-      ),
-      ContextMenuButtonItem(
-        label: '取消选择',
-        onPressed:
-            hasSelection
-                ? () {
-                  hideToolbar();
-                  selectableRegionState.clearSelection();
-                  _clearSelectionState();
-                }
-                : null,
-      ),
-    ];
-
-    return AdaptiveTextSelectionToolbar.buttonItems(
-      anchors: anchors,
-      buttonItems: [
-        ...customItems,
-        ...selectableRegionState.contextMenuButtonItems,
+                      child: Text(
+                        preview,
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                        style: theme.textTheme.bodyMedium?.copyWith(
+                          height: 1.35,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                  ],
+                  Wrap(
+                    spacing: 8,
+                    runSpacing: 10,
+                    children: [
+                      for (final action in actions)
+                        _ReaderInspirationActionChip(
+                          action: action,
+                          colorScheme: colorScheme,
+                        ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
       ],
+    );
+  }
+
+  _ReaderInspirationSelectionState _currentInspirationSelectionState() {
+    final existingBookmark = _currentSelectionBookmark();
+    return _ReaderInspirationSelectionState(
+      hasSelection: _isTextSelectionActive && _selectedSnippet.isNotEmpty,
+      existingBookmark: existingBookmark,
+      isHighlight: _selectionHighlight,
+      isBold: _selectionBold,
+      isUnderline: _selectionUnderline,
+      isWavy: _selectionWavy,
     );
   }
 
@@ -3314,7 +3408,19 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
       _selectionBold = !_selectionBold;
     });
     await _persistSelectionStyleForSelection(
-      createdMessage: _selectionBold ? '已保存收藏并加粗' : '已保存收藏',
+      createdMessage: _selectionBold ? '已保存灵感并加粗重点' : '已保存灵感',
+    );
+  }
+
+  Future<void> _toggleSelectionHighlight() async {
+    if (!_isTextSelectionActive) {
+      return;
+    }
+    setState(() {
+      _selectionHighlight = !_selectionHighlight;
+    });
+    await _persistSelectionStyleForSelection(
+      createdMessage: _selectionHighlight ? '已保存灵感并高亮' : '已保存灵感',
     );
   }
 
@@ -3329,8 +3435,24 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
       }
     });
     await _persistSelectionStyleForSelection(
-      createdMessage: _selectionUnderline ? '已保存收藏并添加下划线' : '已保存收藏',
+      createdMessage: _selectionUnderline ? '已保存灵感并添加划线' : '已保存灵感',
     );
+  }
+
+  Future<void> _copySelectedSnippet({
+    SelectableRegionState? clearSelectionState,
+  }) async {
+    final snippet = _selectedSnippet.trim();
+    if (snippet.isEmpty) {
+      return;
+    }
+    await Clipboard.setData(ClipboardData(text: snippet));
+    if (!mounted) {
+      return;
+    }
+    _showMessage('已复制所选内容');
+    _clearSelectionState();
+    clearSelectionState?.clearSelection();
   }
 
   Future<void> _toggleSelectionWavy() async {
@@ -3344,7 +3466,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
       }
     });
     await _persistSelectionStyleForSelection(
-      createdMessage: _selectionWavy ? '已保存收藏并添加波浪线' : '已保存收藏',
+      createdMessage: _selectionWavy ? '已保存灵感并添加波浪线' : '已保存灵感',
     );
   }
 
@@ -3357,14 +3479,17 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
 
     final existing = _currentSelectionBookmark();
     if (existing != null) {
-      _showMessage('收藏已存在');
+      _showMessage('灵感已存在');
       _clearSelectionState();
       clearSelectionState?.clearSelection();
       return;
     }
 
-    await _saveSelectionBookmark(clearSelectionState: clearSelectionState);
-    _showMessage('已保存收藏');
+    await _saveSelectionBookmark(
+      clearSelectionState: clearSelectionState,
+      forceHighlight: false,
+    );
+    _showMessage('已保存灵感');
     _clearSelectionState();
   }
 
@@ -3373,7 +3498,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
     SelectableRegionState? clearSelectionState,
   }) async {
     await _bookmarkRepository.removeBookmark(bookmark.id);
-    _showMessage('已删除收藏');
+    _showMessage('已删除灵感');
     unawaited(_refreshChapterBookmarks());
     _clearSelectionState();
     clearSelectionState?.clearSelection();
@@ -3396,6 +3521,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
   Future<void> _saveSelectionBookmark({
     Bookmark? existing,
     SelectableRegionState? clearSelectionState,
+    bool? forceHighlight,
   }) async {
     if (!_isTextSelectionActive || _selectedSnippet.isEmpty) {
       return;
@@ -3409,6 +3535,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
 
     final isWavy = _selectionWavy;
     final isUnderline = isWavy ? false : _selectionUnderline;
+    final hasHighlight = forceHighlight ?? _selectionHighlight;
     final bookmark = Bookmark(
       id: existing?.id ?? _uuid.v4().replaceAll('-', ''),
       bookId: _currentBookId,
@@ -3422,7 +3549,10 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
       isBold: _selectionBold,
       isUnderline: isUnderline,
       isWavy: isWavy,
-      color: existing?.color,
+      color:
+          hasHighlight
+              ? _kBookmarkDefaultHighlightToken
+              : _kBookmarkNoHighlightToken,
     );
 
     await _bookmarkRepository.addBookmark(bookmark);
@@ -4398,6 +4528,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
               _BookmarkRange(
                 overlapStart - slice.start,
                 overlapEnd - slice.start,
+                hasHighlight: range.hasHighlight,
                 isBold: range.isBold,
                 isUnderline: range.isUnderline,
                 isWavy: range.isWavy,
@@ -8407,6 +8538,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
           _BookmarkRange(
             localStart,
             localEnd,
+            hasHighlight: _bookmarkHasHighlight(bookmark),
             isBold: bookmark.isBold,
             isUnderline: bookmark.isUnderline,
             isWavy: bookmark.isWavy,
@@ -8416,6 +8548,14 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
     }
 
     return result;
+  }
+
+  bool _bookmarkHasHighlight(Bookmark bookmark) {
+    final color = bookmark.color?.trim();
+    if (color == null || color.isEmpty) {
+      return !bookmark.isUnderline && !bookmark.isWavy;
+    }
+    return color != _kBookmarkNoHighlightToken;
   }
 
   int _findParagraphIndexByOffset(
@@ -8453,12 +8593,12 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
         }
       }
       if (target == null) {
-        _showMessage('未找到对应书签。');
+        _showMessage('未找到对应灵感。');
         return;
       }
       await _jumpToBookmark(target);
     } catch (_) {
-      _showMessage('书签定位失败，请稍后重试。');
+      _showMessage('灵感定位失败，请稍后重试。');
     }
   }
 
@@ -8470,7 +8610,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
     if (targetIndex == null ||
         targetIndex < 0 ||
         targetIndex >= _chapters.length) {
-      _showMessage('未找到书签所在章节。');
+      _showMessage('未找到灵感所在章节。');
       return;
     }
 
@@ -8479,7 +8619,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
       return;
     }
     if (_content.trim().isEmpty) {
-      _showMessage('章节内容为空，无法定位书签。');
+      _showMessage('章节内容为空，无法定位灵感。');
       return;
     }
 
@@ -8505,7 +8645,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
       return;
     }
 
-    _showMessage('未找到书签位置，已定位到章节开头。');
+    _showMessage('未找到灵感位置，已定位到章节开头。');
   }
 
   Bookmark? _currentSelectionBookmark() {
@@ -16615,6 +16755,7 @@ class _BookmarkRange {
   const _BookmarkRange(
     this.start,
     this.end, {
+    required this.hasHighlight,
     required this.isBold,
     required this.isUnderline,
     required this.isWavy,
@@ -16622,6 +16763,7 @@ class _BookmarkRange {
 
   final int start;
   final int end;
+  final bool hasHighlight;
   final bool isBold;
   final bool isUnderline;
   final bool isWavy;
@@ -16801,14 +16943,99 @@ class _WavyUnderlinePainter extends CustomPainter {
 
 class _SelectionStyle {
   const _SelectionStyle({
+    required this.highlight,
     required this.bold,
     required this.underline,
     required this.wavy,
   });
 
+  final bool highlight;
   final bool bold;
   final bool underline;
   final bool wavy;
+}
+
+class _ReaderInspirationSelectionState {
+  const _ReaderInspirationSelectionState({
+    required this.hasSelection,
+    required this.existingBookmark,
+    required this.isHighlight,
+    required this.isBold,
+    required this.isUnderline,
+    required this.isWavy,
+  });
+
+  final bool hasSelection;
+  final Bookmark? existingBookmark;
+  final bool isHighlight;
+  final bool isBold;
+  final bool isUnderline;
+  final bool isWavy;
+
+  bool get hasExistingBookmark => existingBookmark != null;
+}
+
+class _ReaderInspirationActionItem {
+  const _ReaderInspirationActionItem({
+    required this.icon,
+    required this.label,
+    required this.onPressed,
+    this.isActive = false,
+  });
+
+  final IconData icon;
+  final String label;
+  final VoidCallback onPressed;
+  final bool isActive;
+}
+
+class _ReaderInspirationActionChip extends StatelessWidget {
+  const _ReaderInspirationActionChip({
+    required this.action,
+    required this.colorScheme,
+  });
+
+  final _ReaderInspirationActionItem action;
+  final ColorScheme colorScheme;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final backgroundColor =
+        action.isActive
+            ? colorScheme.primaryContainer
+            : colorScheme.surfaceContainerLow;
+    final foregroundColor =
+        action.isActive
+            ? colorScheme.onPrimaryContainer
+            : colorScheme.onSurface;
+
+    return Material(
+      color: backgroundColor,
+      borderRadius: BorderRadius.circular(16),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(16),
+        onTap: action.onPressed,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(action.icon, size: 18, color: foregroundColor),
+              const SizedBox(width: 6),
+              Text(
+                action.label,
+                style: theme.textTheme.labelLarge?.copyWith(
+                  color: foregroundColor,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
 }
 
 class _DecodedDataUriImage {
