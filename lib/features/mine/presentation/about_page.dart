@@ -14,15 +14,15 @@ class AboutPage extends StatefulWidget {
 
   static const String _appVersion = '1.06';
   static const List<String> _projectFocus = [
-    '聚焦个人阅读场景的稳定体验',
-    '强化本地文档导入、整理与阅读闭环',
+    '打造稳定顺手的跨平台阅读体验',
+    '强化文档导入、整理与沉浸式阅读闭环',
     '保持可维护、可扩展的工程架构与数据安全',
   ];
   static const List<String> _mvpScope = [
-    'TXT / EPUB 文档阅读',
-    '书架、书签、阅读记录',
-    '用户自备配置导入与基础校验',
-    '错误可定位与可观测',
+    'TXT / EPUB / PDF / Markdown / HTML 阅读',
+    '书架、书签、阅读记录与进度管理',
+    '主题排版、自定义配置与基础校验',
+    '错误定位、诊断与可观测反馈',
   ];
   static const List<String> _techStack = [
     'Flutter 3',
@@ -222,7 +222,7 @@ class _AboutPageState extends State<AboutPage> {
               ),
               const SizedBox(height: 10),
               Text(
-                '一个基于 Flutter 的个人阅读应用，面向本地文档整理与日常阅读场景，支持 TXT / EPUB 导入、书架管理、阅读记录与基础内容配置扩展。当前版本不内置书库内容，也不提供内容分发服务。',
+                'Selune 是一款基于 Flutter 构建的跨平台阅读应用，面向日常阅读与个人文档整理场景，支持 TXT、EPUB、PDF、Markdown、HTML 等内容导入，提供书架管理、书签、阅读记录、排版主题与多端一致的阅读体验。',
                 style: theme.textTheme.bodySmall?.copyWith(
                   height: 1.4,
                   color: colorScheme.onSurfaceVariant,
@@ -233,9 +233,9 @@ class _AboutPageState extends State<AboutPage> {
                 builder: (context, constraints) {
                   final useRow = AppLayout.isMediumWidth(constraints.maxWidth);
                   final items = <Widget>[
-                    _buildMetricPill(context, '定位', '个人阅读'),
-                    _buildMetricPill(context, '文档', 'TXT / EPUB'),
-                    _buildMetricPill(context, '原则', '不内置内容'),
+                    _buildMetricPill(context, '定位', '跨平台阅读'),
+                    _buildMetricPill(context, '文档', 'TXT / EPUB / PDF'),
+                    _buildMetricPill(context, '体验', '书架与沉浸阅读'),
                   ];
 
                   if (useRow) {
@@ -521,7 +521,7 @@ class _AboutPageState extends State<AboutPage> {
             ),
             const SizedBox(height: 6),
             Text(
-              '本应用定位为个人阅读工具，默认用于阅读用户合法获取、拥有授权或自行整理的 TXT / EPUB 等内容。应用不内置书库，不提供内容分发或聚合服务；如需导入扩展配置，请确保内容来源、访问方式与使用目的符合目标站点规则及当地法律法规。',
+              '本应用定位为跨平台阅读工具，适用于阅读用户合法获取、拥有授权或自行整理的 TXT、EPUB、PDF、Markdown、HTML 等内容。使用过程中请确保内容来源、访问方式与使用目的符合相关规则及当地法律法规。',
               style: theme.textTheme.bodySmall?.copyWith(
                 height: 1.4,
                 color: colorScheme.onSurfaceVariant,

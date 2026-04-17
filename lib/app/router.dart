@@ -13,6 +13,7 @@ import '../features/announcement/presentation/announcement_list_page.dart';
 import '../features/mine/presentation/mine_page.dart';
 import '../features/mine/presentation/appearance_page.dart';
 import '../features/mine/presentation/cache_management_page.dart';
+import '../features/mine/presentation/mine_management_page.dart';
 import '../features/mine/presentation/membership_center_page.dart';
 import '../features/mine/presentation/about_page.dart';
 import '../features/mine/presentation/bookmarks_page.dart';
@@ -123,6 +124,38 @@ final GoRouter appRouter = GoRouter(
       path: '/cache',
       name: 'cache',
       builder: (context, state) => const CacheManagementPage(),
+    ),
+    GoRoute(
+      path: '/mine/tags',
+      name: 'mine-tags',
+      builder:
+          (context, state) => const MineManagementPage(
+            section: MineManagementSection.tagManagement,
+          ),
+    ),
+    GoRoute(
+      path: '/mine/categories',
+      name: 'mine-categories',
+      builder:
+          (context, state) => const MineManagementPage(
+            section: MineManagementSection.categoryManagement,
+          ),
+    ),
+    GoRoute(
+      path: '/mine/chapter-rules',
+      name: 'mine-chapter-rules',
+      builder:
+          (context, state) => const MineManagementPage(
+            section: MineManagementSection.chapterRuleManagement,
+          ),
+    ),
+    GoRoute(
+      path: '/mine/content-cleanup',
+      name: 'mine-content-cleanup',
+      builder:
+          (context, state) => const MineManagementPage(
+            section: MineManagementSection.contentCleanup,
+          ),
     ),
     GoRoute(
       path: '/membership',
@@ -341,13 +374,10 @@ final GoRouter appRouter = GoRouter(
         final bookmarkId = state.uri.queryParameters['bookmarkId'];
         return Consumer(
           builder: (context, ref, _) {
-            final interfaceTextScale = ref.watch(
-              appInterfaceTextScaleProvider,
-            );
+            final interfaceTextScale = ref.watch(appInterfaceTextScaleProvider);
             final currentScale = MediaQuery.textScalerOf(context).scale(1);
-            final baseScale = (currentScale / interfaceTextScale)
-                .clamp(0.6, 1.5)
-                .toDouble();
+            final baseScale =
+                (currentScale / interfaceTextScale).clamp(0.6, 1.5).toDouble();
             return MediaQuery(
               data: MediaQuery.of(
                 context,
@@ -405,13 +435,10 @@ final GoRouter appRouter = GoRouter(
 
         return Consumer(
           builder: (context, ref, _) {
-            final interfaceTextScale = ref.watch(
-              appInterfaceTextScaleProvider,
-            );
+            final interfaceTextScale = ref.watch(appInterfaceTextScaleProvider);
             final currentScale = MediaQuery.textScalerOf(context).scale(1);
-            final baseScale = (currentScale / interfaceTextScale)
-                .clamp(0.6, 1.5)
-                .toDouble();
+            final baseScale =
+                (currentScale / interfaceTextScale).clamp(0.6, 1.5).toDouble();
             return MediaQuery(
               data: MediaQuery.of(
                 context,

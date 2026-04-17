@@ -99,7 +99,7 @@ class _CacheManagementPageState extends State<CacheManagementPage> {
             tooltip: '返回',
             icon: const Icon(Icons.arrow_back),
           ),
-          title: const Text('缓存'),
+          title: const Text('本地缓存'),
           actions: [
             IconButton(
               onPressed: () {

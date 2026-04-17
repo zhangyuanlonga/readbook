@@ -33,12 +33,6 @@ enum _MineLayoutMode { grid, list }
 class _MinePageState extends ConsumerState<MinePage> {
   static const String _layoutModeKey = 'mine.page.layoutMode';
   String? _highlightedTileId;
-  static const EdgeInsets _actionSectionPadding = EdgeInsets.fromLTRB(
-    14,
-    8,
-    14,
-    8,
-  );
 
   static final Uri _sourceFeedbackUri = Uri.parse(
     'https://qun.qq.com/universal-share/share?ac=1&authKey=Tabvg05EAafVbER7E8%2BzAQ18yErg2a%2B5PoqQH41t6dbPjcZIfDSnNX%2F4KCAXhzVh&busi_data=eyJncm91cENvZGUiOiIxMDgyODI3MjI0IiwidG9rZW4iOiIzam5tVFQ0cUs1T3VlMytzVk9iOXB1Zk40Q1RaUXJiQytzd2JlZUx3NDhXQTJscy9ZZGE5WW1hQXhPdGFwMHU1IiwidWluIjoiNzgyMDQ1MDExIn0%3D&data=PHNA5IOU4A3ujR5i9rmpWqWn4Qc-L9MNr8ByREa7IfvpXTo1utwnHVIfjkB7Rlk4x3yE9dfMR5_ZjOfsQ9wYcA&svctype=4&tempid=h5_group_info',
@@ -54,6 +48,34 @@ class _MinePageState extends ConsumerState<MinePage> {
   bool _isCheckingUpdate = false;
   bool _showSourceEntry = false;
   _MineLayoutMode _layoutMode = _MineLayoutMode.list;
+
+  bool get _isListMode => _layoutMode == _MineLayoutMode.list;
+
+  EdgeInsets get _actionSectionPadding =>
+      _isListMode
+          ? const EdgeInsets.fromLTRB(12, 4, 12, 4)
+          : const EdgeInsets.fromLTRB(14, 8, 14, 8);
+
+  double get _primarySectionGap => _isListMode ? 6 : 8;
+
+  double get _secondarySectionGap => _isListMode ? 2 : 4;
+
+  double get _quickAccessInnerGap => _isListMode ? 6 : 8;
+
+  EdgeInsets get _profileCardPadding =>
+      _isListMode
+          ? const EdgeInsets.fromLTRB(12, 9, 12, 9)
+          : const EdgeInsets.fromLTRB(16, 14, 16, 14);
+
+  EdgeInsets get _quickCardPadding =>
+      _isListMode
+          ? const EdgeInsets.fromLTRB(10, 8, 10, 8)
+          : const EdgeInsets.fromLTRB(14, 12, 14, 12);
+
+  EdgeInsets get _actionListTilePadding =>
+      _isListMode
+          ? const EdgeInsets.fromLTRB(12, 10, 12, 10)
+          : const EdgeInsets.fromLTRB(14, 12, 14, 12);
 
   @override
   void initState() {
@@ -138,9 +160,9 @@ class _MinePageState extends ConsumerState<MinePage> {
                       index: 0,
                       child: _buildProfileCard(context),
                     ),
-                    const SizedBox(height: 8),
+                    SizedBox(height: _primarySectionGap),
                     _buildQuickAccessCards(context),
-                    const SizedBox(height: 8),
+                    SizedBox(height: _primarySectionGap),
                     _buildPageEntrance(
                       index: 1,
                       child: _buildActionSection(
@@ -171,15 +193,14 @@ class _MinePageState extends ConsumerState<MinePage> {
                               error: (_, _) => null,
                             ),
                             onTap:
-                                () => context.push('/bottom-nav-icon-galleries'),
+                                () =>
+                                    context.push('/bottom-nav-icon-galleries'),
                           ),
                           _MineActionItem(
                             icon: Icons.photo_library_outlined,
                             label: '封面',
                             onTap:
-                                () => context.push(
-                                  '/appearance?section=cover',
-                                ),
+                                () => context.push('/appearance?section=cover'),
                           ),
                           _MineActionItem(
                             icon: Icons.wallpaper_outlined,
@@ -192,13 +213,37 @@ class _MinePageState extends ConsumerState<MinePage> {
                         ],
                       ),
                     ),
-                    const SizedBox(height: 4),
+                    SizedBox(height: _secondarySectionGap),
                     _buildPageEntrance(
                       index: 2,
                       child: _buildActionSection(
                         context,
                         title: '常用',
+                        padding:
+                            _isListMode
+                                ? const EdgeInsets.fromLTRB(10, 2, 10, 2)
+                                : null,
                         actions: [
+                          _MineActionItem(
+                            icon: Icons.sell_outlined,
+                            label: '标签管理',
+                            onTap: () => context.push('/mine/tags'),
+                          ),
+                          _MineActionItem(
+                            icon: Icons.folder_copy_outlined,
+                            label: '分类管理',
+                            onTap: () => context.push('/mine/categories'),
+                          ),
+                          _MineActionItem(
+                            icon: Icons.rule_rounded,
+                            label: '分章规则',
+                            onTap: () => context.push('/mine/chapter-rules'),
+                          ),
+                          _MineActionItem(
+                            icon: Icons.cleaning_services_outlined,
+                            label: '正文净化',
+                            onTap: () => context.push('/mine/content-cleanup'),
+                          ),
                           _MineActionItem(
                             icon: Icons.tune_rounded,
                             label: '系统',
@@ -212,13 +257,13 @@ class _MinePageState extends ConsumerState<MinePage> {
                             ),
                           _MineActionItem(
                             icon: Icons.cloud_outlined,
-                            label: '缓存',
+                            label: '本地缓存',
                             onTap: () => context.push('/cache'),
                           ),
                         ],
                       ),
                     ),
-                    const SizedBox(height: 4),
+                    SizedBox(height: _secondarySectionGap),
                     _buildPageEntrance(
                       index: 3,
                       child: _buildActionSection(
@@ -290,7 +335,7 @@ class _MinePageState extends ConsumerState<MinePage> {
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         _buildMembershipQuickCard(context),
-        const SizedBox(height: 8),
+        SizedBox(height: _quickAccessInnerGap),
         Row(
           children: [
             Expanded(
@@ -301,7 +346,7 @@ class _MinePageState extends ConsumerState<MinePage> {
                 onTap: _syncQuickAccess,
               ),
             ),
-            const SizedBox(width: 8),
+            SizedBox(width: _quickAccessInnerGap),
             Expanded(
               child: _buildQuickCard(
                 context,
@@ -324,7 +369,7 @@ class _MinePageState extends ConsumerState<MinePage> {
         borderRadius: BorderRadius.circular(16),
         onTap: () => context.push('/membership'),
         child: Container(
-          padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
+          padding: _quickCardPadding,
           decoration: BoxDecoration(
             color: colorScheme.surface,
             borderRadius: BorderRadius.circular(16),
@@ -382,7 +427,7 @@ class _MinePageState extends ConsumerState<MinePage> {
         borderRadius: BorderRadius.circular(16),
         onTap: onTap,
         child: Container(
-          padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
+          padding: _quickCardPadding,
           decoration: BoxDecoration(
             color: colorScheme.surface,
             borderRadius: BorderRadius.circular(16),
@@ -393,11 +438,7 @@ class _MinePageState extends ConsumerState<MinePage> {
           child: Row(
             mainAxisSize: MainAxisSize.min,
             children: [
-              Icon(
-                icon,
-                size: 22,
-                color: colorScheme.primary,
-              ),
+              Icon(icon, size: 22, color: colorScheme.primary),
               const SizedBox(width: 10),
               Text(
                 label,
@@ -435,7 +476,7 @@ class _MinePageState extends ConsumerState<MinePage> {
           context.push(target).then((_) => _loadSession());
         },
         child: Padding(
-          padding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
+          padding: _profileCardPadding,
           child: Row(
             crossAxisAlignment: CrossAxisAlignment.center,
             children: [
@@ -651,6 +692,7 @@ class _MinePageState extends ConsumerState<MinePage> {
     BuildContext context, {
     required String title,
     required List<_MineActionItem> actions,
+    EdgeInsetsGeometry? padding,
     Widget? trailing,
   }) {
     if (_layoutMode == _MineLayoutMode.list) {
@@ -658,6 +700,7 @@ class _MinePageState extends ConsumerState<MinePage> {
         context,
         title: title,
         actions: actions,
+        padding: padding,
         trailing: trailing,
       );
     }
@@ -666,7 +709,7 @@ class _MinePageState extends ConsumerState<MinePage> {
 
     return _buildSectionCardShell(
       context,
-      padding: _actionSectionPadding,
+      padding: padding ?? _actionSectionPadding,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -738,13 +781,14 @@ class _MinePageState extends ConsumerState<MinePage> {
     BuildContext context, {
     required String title,
     required List<_MineActionItem> actions,
+    EdgeInsetsGeometry? padding,
     Widget? trailing,
   }) {
     final colorScheme = Theme.of(context).colorScheme;
 
     return _buildSectionCardShell(
       context,
-      padding: _actionSectionPadding,
+      padding: padding ?? _actionSectionPadding,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -761,11 +805,11 @@ class _MinePageState extends ConsumerState<MinePage> {
               if (trailing != null) trailing,
             ],
           ),
-          const SizedBox(height: 10),
+          SizedBox(height: _isListMode ? 8 : 10),
           Container(
             decoration: BoxDecoration(
               color: colorScheme.surface,
-              borderRadius: BorderRadius.circular(18),
+              borderRadius: BorderRadius.circular(_isListMode ? 16 : 18),
               border: Border.all(
                 color: colorScheme.outlineVariant.withValues(alpha: 0.48),
               ),
@@ -803,25 +847,25 @@ class _MinePageState extends ConsumerState<MinePage> {
     return Material(
       color: Colors.transparent,
       child: InkWell(
-        borderRadius: BorderRadius.circular(18),
+        borderRadius: BorderRadius.circular(_isListMode ? 16 : 18),
         onTap: item.onTap,
         child: Padding(
-          padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
+          padding: _actionListTilePadding,
           child: Row(
             children: [
               Stack(
                 clipBehavior: Clip.none,
                 children: [
                   Container(
-                    width: 34,
-                    height: 34,
+                    width: _isListMode ? 32 : 34,
+                    height: _isListMode ? 32 : 34,
                     decoration: BoxDecoration(
                       color: iconFill,
                       shape: BoxShape.circle,
                     ),
                     child: Icon(
                       item.icon,
-                      size: 18,
+                      size: _isListMode ? 17 : 18,
                       color: colorScheme.onSurface,
                     ),
                   ),
@@ -851,12 +895,13 @@ class _MinePageState extends ConsumerState<MinePage> {
                   children: [
                     Text(
                       item.label,
-                      style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                        fontWeight: FontWeight.w600,
-                      ),
+                      style: (_isListMode
+                              ? Theme.of(context).textTheme.bodyMedium
+                              : Theme.of(context).textTheme.bodyLarge)
+                          ?.copyWith(fontWeight: FontWeight.w600),
                     ),
                     if (item.subtitle case final subtitle?) ...[
-                      const SizedBox(height: 2),
+                      SizedBox(height: _isListMode ? 1 : 2),
                       Text(
                         subtitle,
                         maxLines: 1,
