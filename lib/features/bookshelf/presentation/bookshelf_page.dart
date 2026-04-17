@@ -5423,11 +5423,6 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
         return;
       }
 
-      if (book.sourceId == _kLocalBookSourceId) {
-        _openReaderFallbackForSourceSwitch(book);
-        return;
-      }
-
       final detailResult = await _bookDetailService.load(
         sourceId: book.sourceId,
         bookId: book.bookId,

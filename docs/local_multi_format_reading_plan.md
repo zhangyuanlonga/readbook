@@ -111,6 +111,12 @@
 
 不能再作为本地图书正式阅读主路径。
 
+当前实现补充：
+
+- EPUB 阅读时静默 fallback 已关闭，`ready` 状态下若章节正文缺失，会直接提示重新索引
+- TXT `bootstrap` 预览已迁移到独立 `LocalBookPreviewService`
+- `LocalChapterContentService` 现在只服务正式章节，不再承担 `bootstrap` 预览职责
+
 ### 3.3 `ready` 状态必须收口
 
 后续约束：
@@ -215,6 +221,16 @@
 
 - 原始导入文件缺失后，托管副本仍可阅读
 - 阅读页只消费稳定的本地资源 URL 或相对路径
+
+当前实现补充：
+
+- `md/html/kindle` 的封面判定已从“首图即封面”升级为“显式来源优先 + 候选评分 + 低置信度不设封面”
+- 当前显式来源优先级包括：
+  - HTML `og:image` / `twitter:image` / `image_src`
+  - Markdown front matter `cover`
+  - EPUB OPF cover
+  - Kindle EXTH cover
+- 当只有正文插图且置信度不足时，不再把正文首图误判成书架封面
 
 ### 5.4 书籍信息提取要求
 

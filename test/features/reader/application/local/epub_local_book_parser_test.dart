@@ -49,7 +49,7 @@ void main() {
       expect(encoded, isNotNull);
 
       final file = File('${tempDir.path}/sample.epub');
-      await file.writeAsBytes(encoded!);
+      await file.writeAsBytes(encoded);
 
       final now = DateTime.parse('2026-02-23T12:00:00.000Z');
       final book = LocalBook(
@@ -67,11 +67,8 @@ void main() {
       expect(result.chapters.first.title, contains('第一章'));
       expect(result.chapters.last.title, contains('第二章'));
       expect(result.chapters.first.content, contains('第一章内容'));
-      expect(result.chapters.first.document, isNotNull);
-      expect(
-        result.chapters.first.document!.blocks.first,
-        isA<ReaderTitleBlock>(),
-      );
+      final document = _expectDocument(result.chapters.first.document);
+      expect(document.blocks.first, isA<ReaderTitleBlock>());
     });
 
     test('extracts epub metadata and cover during parse', () async {
@@ -132,7 +129,7 @@ void main() {
       expect(encoded, isNotNull);
 
       final file = File('${tempDir.path}/metadata.epub');
-      await file.writeAsBytes(encoded!);
+      await file.writeAsBytes(encoded);
 
       final now = DateTime.parse('2026-02-23T12:00:00.000Z');
       final result = await parser.parse(
@@ -150,8 +147,8 @@ void main() {
       expect(result.title, '元数据测试');
       expect(result.author, '测试作者');
       expect(result.description, '这是一段 EPUB 简介。');
-      expect(result.coverPath, isNotNull);
-      expect(File(result.coverPath!).existsSync(), isTrue);
+      final coverPath = _expectString(result.coverPath);
+      expect(File(coverPath).existsSync(), isTrue);
     });
 
     test('uses spine order instead of filename order and skips nav docs', () async {
@@ -227,7 +224,7 @@ void main() {
       expect(encoded, isNotNull);
 
       final file = File('${tempDir.path}/sample_spine.epub');
-      await file.writeAsBytes(encoded!);
+      await file.writeAsBytes(encoded);
 
       final now = DateTime.parse('2026-02-23T12:00:00.000Z');
       final result = await parser.parse(
@@ -309,7 +306,7 @@ void main() {
         expect(encoded, isNotNull);
 
         final file = File('${tempDir.path}/short_body.epub');
-        await file.writeAsBytes(encoded!);
+        await file.writeAsBytes(encoded);
 
         final now = DateTime.parse('2026-02-23T12:00:00.000Z');
         final result = await parser.parse(
@@ -326,11 +323,8 @@ void main() {
 
         expect(result.chapters, hasLength(2));
         expect(result.chapters.first.title, '其一');
-        expect(result.chapters.first.document, isNotNull);
-        expect(
-          result.chapters.first.document!.blocks.first,
-          isA<ReaderTitleBlock>(),
-        );
+        final document = _expectDocument(result.chapters.first.document);
+        expect(document.blocks.first, isA<ReaderTitleBlock>());
       },
     );
 
@@ -395,7 +389,7 @@ void main() {
         expect(encoded, isNotNull);
 
         final file = File('${tempDir.path}/metadata_filter.epub');
-        await file.writeAsBytes(encoded!);
+        await file.writeAsBytes(encoded);
 
         final now = DateTime.parse('2026-02-23T12:00:00.000Z');
         final result = await parser.parse(
@@ -433,7 +427,7 @@ void main() {
       expect(encoded, isNotNull);
 
       final file = File('${tempDir.path}/sample_image.epub');
-      await file.writeAsBytes(encoded!);
+      await file.writeAsBytes(encoded);
 
       final now = DateTime.parse('2026-02-23T12:00:00.000Z');
       final result = await parser.parse(
@@ -505,7 +499,7 @@ void main() {
       expect(encoded, isNotNull);
 
       final file = File('${tempDir.path}/sample_svg.epub');
-      await file.writeAsBytes(encoded!);
+      await file.writeAsBytes(encoded);
 
       final now = DateTime.parse('2026-02-23T12:00:00.000Z');
       final result = await parser.parse(
@@ -567,7 +561,7 @@ void main() {
       expect(encoded, isNotNull);
 
       final file = File('${tempDir.path}/sample_mixed.epub');
-      await file.writeAsBytes(encoded!);
+      await file.writeAsBytes(encoded);
 
       final now = DateTime.parse('2026-02-23T12:00:00.000Z');
       final result = await parser.parse(
@@ -631,7 +625,7 @@ void main() {
         expect(encoded, isNotNull);
 
         final file = File('${tempDir.path}/structured.epub');
-        await file.writeAsBytes(encoded!);
+        await file.writeAsBytes(encoded);
         final now = DateTime.parse('2026-02-23T12:00:00.000Z');
         final book = LocalBook(
           id: 'local_epub_structured_1',
@@ -656,9 +650,9 @@ void main() {
             updatedAt: now,
           ),
         );
-        expect(chapter.document, isNotNull);
+        final document = _expectDocument(chapter.document);
         expect(
-          chapter.document!.blocks,
+          document.blocks,
           containsAllInOrder(<Matcher>[
             isA<ReaderTitleBlock>(),
             isA<ReaderTextBlock>(),
@@ -684,7 +678,7 @@ void main() {
       expect(encoded, isNotNull);
 
       final file = File('${tempDir.path}/preview_document.epub');
-      await file.writeAsBytes(encoded!);
+      await file.writeAsBytes(encoded);
 
       final now = DateTime.parse('2026-02-23T12:00:00.000Z');
       final result = await parser.parse(
@@ -700,9 +694,9 @@ void main() {
       );
 
       expect(result.chapters, hasLength(1));
-      expect(result.chapters.first.document, isNotNull);
+      final document = _expectDocument(result.chapters.first.document);
       expect(
-        result.chapters.first.document!.blocks,
+        document.blocks,
         containsAllInOrder(<Matcher>[
           isA<ReaderTitleBlock>(),
           isA<ReaderTextBlock>(),
@@ -726,7 +720,7 @@ void main() {
         expect(encoded, isNotNull);
 
         final file = File('${tempDir.path}/fallback_title.epub');
-        await file.writeAsBytes(encoded!);
+        await file.writeAsBytes(encoded);
         final now = DateTime.parse('2026-02-23T12:00:00.000Z');
         final chapter = await parser.parseChapter(
           book: LocalBook(
@@ -750,12 +744,9 @@ void main() {
           ),
         );
 
-        expect(chapter.document, isNotNull);
-        expect(chapter.document!.blocks.first, isA<ReaderTitleBlock>());
-        expect(
-          (chapter.document!.blocks.first as ReaderTitleBlock).text,
-          '外部章节标题',
-        );
+        final document = _expectDocument(chapter.document);
+        expect(document.blocks.first, isA<ReaderTitleBlock>());
+        expect((document.blocks.first as ReaderTitleBlock).text, '外部章节标题');
       },
     );
 
@@ -775,7 +766,7 @@ void main() {
       expect(encoded, isNotNull);
 
       final file = File('${tempDir.path}/list_items.epub');
-      await file.writeAsBytes(encoded!);
+      await file.writeAsBytes(encoded);
       final now = DateTime.parse('2026-02-23T12:00:00.000Z');
       final chapter = await parser.parseChapter(
         book: LocalBook(
@@ -799,10 +790,10 @@ void main() {
         ),
       );
 
-      final textBlocks = chapter.document!.blocks.whereType<ReaderTextBlock>();
+      final document = _expectDocument(chapter.document);
+      final textBlocks = document.blocks.whereType<ReaderTextBlock>();
       expect(textBlocks, isEmpty);
-      final listBlocks =
-          chapter.document!.blocks.whereType<ReaderListItemBlock>();
+      final listBlocks = document.blocks.whereType<ReaderListItemBlock>();
       expect(listBlocks.map((block) => block.text), contains('第一项'));
       expect(listBlocks.map((block) => block.text), contains('第二项'));
     });
@@ -825,7 +816,7 @@ void main() {
       expect(encoded, isNotNull);
 
       final file = File('${tempDir.path}/quote_caption.epub');
-      await file.writeAsBytes(encoded!);
+      await file.writeAsBytes(encoded);
       final now = DateTime.parse('2026-02-23T12:00:00.000Z');
       final chapter = await parser.parseChapter(
         book: LocalBook(
@@ -849,15 +840,9 @@ void main() {
         ),
       );
 
-      expect(chapter.document, isNotNull);
-      expect(
-        chapter.document!.blocks.whereType<ReaderQuoteBlock>(),
-        isNotEmpty,
-      );
-      expect(
-        chapter.document!.blocks.whereType<ReaderCaptionBlock>(),
-        isNotEmpty,
-      );
+      final document = _expectDocument(chapter.document);
+      expect(document.blocks.whereType<ReaderQuoteBlock>(), isNotEmpty);
+      expect(document.blocks.whereType<ReaderCaptionBlock>(), isNotEmpty);
     });
 
     test('parses footnotes into dedicated structured blocks', () async {
@@ -883,7 +868,7 @@ void main() {
       expect(encoded, isNotNull);
 
       final file = File('${tempDir.path}/footnote.epub');
-      await file.writeAsBytes(encoded!);
+      await file.writeAsBytes(encoded);
       final now = DateTime.parse('2026-02-23T12:00:00.000Z');
       final chapter = await parser.parseChapter(
         book: LocalBook(
@@ -907,11 +892,8 @@ void main() {
         ),
       );
 
-      expect(chapter.document, isNotNull);
-      expect(
-        chapter.document!.blocks.whereType<ReaderFootnoteBlock>(),
-        isNotEmpty,
-      );
+      final document = _expectDocument(chapter.document);
+      expect(document.blocks.whereType<ReaderFootnoteBlock>(), isNotEmpty);
       expect(chapter.content, contains('注: 脚注一：补充说明。'));
     });
 
@@ -956,7 +938,7 @@ void main() {
       expect(encoded, isNotNull);
 
       final file = File('${tempDir.path}/mixed_media.epub');
-      await file.writeAsBytes(encoded!);
+      await file.writeAsBytes(encoded);
       final now = DateTime.parse('2026-02-23T12:00:00.000Z');
       final chapter = await parser.parseChapter(
         book: LocalBook(
@@ -980,9 +962,9 @@ void main() {
         ),
       );
 
-      expect(chapter.document, isNotNull);
+      final document = _expectDocument(chapter.document);
       expect(
-        chapter.document!.blocks,
+        document.blocks,
         containsAllInOrder(<Matcher>[
           isA<ReaderTitleBlock>(),
           isA<ReaderTextBlock>(),
@@ -996,4 +978,20 @@ void main() {
       expect(chapter.imageUrls, hasLength(2));
     });
   });
+}
+
+ReaderDocument _expectDocument(ReaderDocument? document) {
+  expect(document, isNotNull);
+  if (document == null) {
+    throw StateError('Expected document to be non-null.');
+  }
+  return document;
+}
+
+String _expectString(String? value) {
+  expect(value, isNotNull);
+  if (value == null) {
+    throw StateError('Expected string to be non-null.');
+  }
+  return value;
 }

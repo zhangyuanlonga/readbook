@@ -24,6 +24,10 @@ class LocalMarkupBookParserSupport {
     required LocalBook book,
     required String html,
     String? title,
+    bool preferProvidedTitle = false,
+    String? preferredAuthor,
+    String? preferredDescription,
+    String? preferredCoverSource,
     List<Directory> additionalBaseDirectories = const <Directory>[],
     bool resetAssetDirectory = true,
   }) async {
@@ -53,13 +57,23 @@ class LocalMarkupBookParserSupport {
     final parsedTitle = _resolveBookTitle(
       document: document,
       fallback: title ?? book.title,
+      preferFallback: preferProvidedTitle,
     );
-    final parsedAuthor = _resolveBookAuthor(document);
-    final parsedDescription = _resolveBookDescription(
+    final parsedAuthor =
+        _normalizeOptional(preferredAuthor) ?? _resolveBookAuthor(document);
+    final parsedDescription =
+        _normalizeOptional(preferredDescription) ??
+        _resolveBookDescription(
+          document: document,
+          structuredDocument: structured.document,
+        );
+    final coverSelection = await _resolveCoverSelection(
       document: document,
-      structuredDocument: structured.document,
+      structured: structured,
+      assetRootDir: assetRootDir,
+      baseDirectories: baseDirectories,
+      preferredCoverSource: preferredCoverSource,
     );
-    final coverPath = _resolveCoverPath(structured.document);
     final chapters = _splitChapters(
       document: structured.document,
       fallbackTitle: parsedTitle,
@@ -70,7 +84,7 @@ class LocalMarkupBookParserSupport {
       title: parsedTitle,
       author: parsedAuthor,
       description: parsedDescription,
-      coverPath: coverPath,
+      coverPath: coverSelection?.path,
     );
   }
 
@@ -172,6 +186,7 @@ class LocalMarkupBookParserSupport {
     }
 
     final blocks = <ReaderBlock>[];
+    final imageCandidates = <_CoverCandidate>[];
     var buffer = StringBuffer();
 
     void flushBuffer() {
@@ -182,7 +197,10 @@ class LocalMarkupBookParserSupport {
       buffer = StringBuffer();
     }
 
-    Future<void> addImage(Map<String, String> attributes) async {
+    Future<void> addImage(
+      dom.Element element,
+      Map<String, String> attributes,
+    ) async {
       final imageUrl = await _resolveImageUrl(
         attributes: attributes,
         assetRootDir: assetRootDir,
@@ -190,6 +208,15 @@ class LocalMarkupBookParserSupport {
       );
       if (imageUrl != null && imageUrl.isNotEmpty) {
         blocks.add(ReaderImageBlock(imageUrl: imageUrl));
+        final candidate = _buildCoverCandidate(
+          element: element,
+          imageUrl: imageUrl,
+          blockIndex: blocks.length - 1,
+          blocks: blocks,
+        );
+        if (candidate != null) {
+          imageCandidates.add(candidate);
+        }
       }
     }
 
@@ -213,6 +240,7 @@ class LocalMarkupBookParserSupport {
       if (_isImageTag(tagName)) {
         flushBuffer();
         await addImage(
+          node,
           node.attributes.map(
             (key, value) => MapEntry(key.toString(), value.toString()),
           ),
@@ -279,7 +307,10 @@ class LocalMarkupBookParserSupport {
     }
     flushBuffer();
 
-    return _StructuredDocumentResult(document: ReaderDocument(blocks: blocks));
+    return _StructuredDocumentResult(
+      document: ReaderDocument(blocks: blocks),
+      imageCandidates: List<_CoverCandidate>.unmodifiable(imageCandidates),
+    );
   }
 
   Future<String?> _resolveImageUrl({
@@ -438,7 +469,11 @@ class LocalMarkupBookParserSupport {
   String _resolveBookTitle({
     required dom.Document document,
     required String fallback,
+    bool preferFallback = false,
   }) {
+    if (preferFallback) {
+      return fallback;
+    }
     final raw =
         document.querySelector('title')?.text ??
         document.querySelector('h1')?.text ??
@@ -511,6 +546,119 @@ class LocalMarkupBookParserSupport {
     return null;
   }
 
+  Future<_CoverSelection?> _resolveCoverSelection({
+    required dom.Document document,
+    required _StructuredDocumentResult structured,
+    required Directory assetRootDir,
+    required List<Directory> baseDirectories,
+    required String? preferredCoverSource,
+  }) async {
+    final explicitSources = <_CoverSelection>[];
+
+    final preferred = await _resolveExplicitCoverSelection(
+      rawSource: preferredCoverSource,
+      source: _CoverSource.frontMatter,
+      assetRootDir: assetRootDir,
+      baseDirectories: baseDirectories,
+    );
+    if (preferred != null) {
+      explicitSources.add(preferred);
+    }
+
+    for (final rawSource in _resolveExplicitHtmlCoverSources(document)) {
+      final selection = await _resolveExplicitCoverSelection(
+        rawSource: rawSource,
+        source: _CoverSource.meta,
+        assetRootDir: assetRootDir,
+        baseDirectories: baseDirectories,
+      );
+      if (selection != null) {
+        explicitSources.add(selection);
+      }
+    }
+
+    if (explicitSources.isNotEmpty) {
+      explicitSources.sort((a, b) => b.confidence.compareTo(a.confidence));
+      return explicitSources.first;
+    }
+
+    final candidates = structured.imageCandidates;
+    if (candidates.isEmpty) {
+      return null;
+    }
+    final ranked = List<_CoverCandidate>.from(candidates)
+      ..sort((a, b) => b.score.compareTo(a.score));
+    final best = ranked.first;
+    if (best.score >= 70) {
+      return _CoverSelection(
+        path: best.path,
+        confidence: best.score / 100,
+        source: best.source,
+      );
+    }
+
+    if (candidates.length == 1 && best.score >= 35) {
+      return _CoverSelection(
+        path: best.path,
+        confidence: best.score / 100,
+        source: _CoverSource.weakFallback,
+      );
+    }
+    return null;
+  }
+
+  Future<_CoverSelection?> _resolveExplicitCoverSelection({
+    required String? rawSource,
+    required _CoverSource source,
+    required Directory assetRootDir,
+    required List<Directory> baseDirectories,
+  }) async {
+    final normalized = _normalizeOptional(rawSource);
+    if (normalized == null) {
+      return null;
+    }
+    final imageUrl = await _resolveImageUrl(
+      attributes: <String, String>{'src': normalized},
+      assetRootDir: assetRootDir,
+      baseDirectories: baseDirectories,
+    );
+    final path = _filePathFromImageUrl(imageUrl);
+    if (path == null) {
+      return null;
+    }
+    return _CoverSelection(
+      path: path,
+      confidence: source == _CoverSource.frontMatter ? 1.0 : 0.98,
+      source: source,
+    );
+  }
+
+  Iterable<String> _resolveExplicitHtmlCoverSources(
+    dom.Document document,
+  ) sync* {
+    for (final key in const <String>[
+      'og:image',
+      'twitter:image',
+      'image',
+      'thumbnail',
+    ]) {
+      final content = _extractMetaContent(document, keys: <String>[key]);
+      if (content != null && content.isNotEmpty) {
+        yield content;
+      }
+    }
+
+    for (final link in document.querySelectorAll('link')) {
+      final rel = (link.attributes['rel'] ?? '').trim().toLowerCase();
+      if (rel == 'image_src') {
+        final href = _normalizeOptional(link.attributes['href']);
+        if (href != null) {
+          yield href;
+        }
+      }
+    }
+  }
+
   String _resolveChapterTitle(
     ReaderDocument document, {
     required String fallbackTitle,
@@ -546,14 +694,75 @@ class LocalMarkupBookParserSupport {
     return null;
   }
 
-  String? _resolveCoverPath(ReaderDocument document) {
-    for (final imageUrl in document.imageUrls) {
-      final uri = Uri.tryParse(imageUrl);
-      if (uri != null && uri.scheme == 'file') {
-        return File.fromUri(uri).path;
-      }
+  _CoverCandidate? _buildCoverCandidate({
+    required dom.Element element,
+    required String imageUrl,
+    required int blockIndex,
+    required List<ReaderBlock> blocks,
+  }) {
+    final filePath = _filePathFromImageUrl(imageUrl);
+    if (filePath == null) {
+      return null;
+    }
+    var score = 10;
+    final normalizedPath = filePath.toLowerCase();
+    final signals = <String>[
+      normalizedPath,
+      (element.id).toLowerCase(),
+      (element.className).toLowerCase(),
+      (element.attributes['alt'] ?? '').toLowerCase(),
+      (element.attributes['title'] ?? '').toLowerCase(),
+    ].join(' ');
+
+    if (_coverKeywordPattern.hasMatch(signals)) {
+      score += 70;
+    }
+    if (blockIndex == 0) {
+      score += 25;
+    } else if (blockIndex <= 2) {
+      score += 10;
+    }
+    final hasTextBefore = blocks
+        .take(blockIndex)
+        .any(
+          (block) =>
+              block is ReaderTextBlock ||
+              block is ReaderListItemBlock ||
+              block is ReaderQuoteBlock ||
+              block is ReaderCaptionBlock,
+        );
+    if (hasTextBefore) {
+      score -= 20;
+    }
+
+    return _CoverCandidate(
+      path: filePath,
+      score: score.clamp(0, 100),
+      source:
+          _coverKeywordPattern.hasMatch(signals)
+              ? _CoverSource.heuristicKeyword
+              : _CoverSource.heuristicPosition,
+    );
+  }
+
+  String? _filePathFromImageUrl(String? imageUrl) {
+    final normalized = _normalizeOptional(imageUrl);
+    if (normalized == null) {
+      return null;
+    }
+    final uri = Uri.tryParse(normalized);
+    if (uri != null && uri.scheme == 'file') {
+      return File.fromUri(uri).path;
     }
     return null;
+  }
+
+  String? _normalizeOptional(String? value) {
+    final normalized = value?.trim();
+    if (normalized == null || normalized.isEmpty) {
+      return null;
+    }
+    return normalized;
   }
 
   bool _isImageTag(String tagName) => tagName == 'img' || tagName == 'image';
@@ -663,10 +872,51 @@ class LocalMarkupBookParserSupport {
     'th',
     'figure',
   };
+
+  static final RegExp _coverKeywordPattern = RegExp(
+    r'(?:^|[^a-z])(cover|poster|hero|titlepage|title_page|封面)(?:[^a-z]|$)',
+    caseSensitive: false,
+  );
 }
 
 class _StructuredDocumentResult {
-  const _StructuredDocumentResult({required this.document});
+  const _StructuredDocumentResult({
+    required this.document,
+    this.imageCandidates = const <_CoverCandidate>[],
+  });
 
   final ReaderDocument document;
+  final List<_CoverCandidate> imageCandidates;
+}
+
+class _CoverSelection {
+  const _CoverSelection({
+    required this.path,
+    required this.confidence,
+    required this.source,
+  });
+
+  final String path;
+  final double confidence;
+  final _CoverSource source;
+}
+
+class _CoverCandidate {
+  const _CoverCandidate({
+    required this.path,
+    required this.score,
+    required this.source,
+  });
+
+  final String path;
+  final int score;
+  final _CoverSource source;
+}
+
+enum _CoverSource {
+  frontMatter,
+  meta,
+  heuristicKeyword,
+  heuristicPosition,
+  weakFallback,
 }

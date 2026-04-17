@@ -11,8 +11,6 @@ import '../../../../data/repositories/local_book_repository_impl.dart';
 import '../../../../domain/entities/local_book.dart';
 import '../../../../domain/entities/local_chapter.dart';
 import '../../../../domain/repositories/local_book_repository.dart';
-import 'epub_local_book_parser.dart';
-import 'local_book_parser.dart';
 import 'local_book_index_service.dart';
 import 'local_book_storage_service.dart';
 
@@ -20,7 +18,6 @@ class LocalChapterContentService {
   LocalChapterContentService({
     LocalBookRepository? localBookRepository,
     LocalBookIndexService? indexService,
-    EpubLocalBookParser? epubParser,
     LocalBookStorageService? storageService,
   }) : _localBookRepository =
            localBookRepository ?? LocalBookRepositoryImpl(AppDatabase.instance),
@@ -31,14 +28,11 @@ class LocalChapterContentService {
                  localBookRepository ??
                  LocalBookRepositoryImpl(AppDatabase.instance),
            ),
-       _epubParser = epubParser ?? const EpubLocalBookParser(),
        _storageService = storageService ?? LocalBookStorageService();
 
   final LocalBookRepository _localBookRepository;
   final LocalBookIndexService _indexService;
-  final EpubLocalBookParser _epubParser;
   final LocalBookStorageService _storageService;
-  static const int _txtBootstrapReadBytes = 64 * 1024;
 
   Future<LocalChapter> load({
     required String bookId,
@@ -69,14 +63,15 @@ class LocalChapterContentService {
     if (refreshedBook != null) {
       book = refreshedBook;
     }
-    final allowTxtBootstrap = _shouldAllowTxtBootstrapRead(
-      book: book,
-      chapterId: chapterId,
-      chapterIndex: chapterIndex,
-    );
-    if (!allowTxtBootstrap) {
-      _ensureBookReadyForReading(book);
+    final normalizedChapterId = (chapterId ?? '').trim().toLowerCase();
+    if (normalizedChapterId == 'bootstrap') {
+      throw AppException(
+        code: ErrorCode.validation,
+        stage: ErrorStage.content,
+        briefMessage: 'TXT 预览已迁移到独立预览服务，请通过预览入口打开。',
+      );
     }
+    _ensureBookReadyForReading(book);
 
     final chapter = await _resolveChapter(
       book: book,
@@ -84,10 +79,6 @@ class LocalChapterContentService {
       chapterIndex: chapterIndex,
     );
     if (chapter == null) {
-      if (allowTxtBootstrap) {
-        final readableBook = await _hydrateReadableBook(book);
-        return _loadTxtBootstrapChapter(book: readableBook);
-      }
       throw AppException(
         code: ErrorCode.ruleMatchEmpty,
         stage: ErrorStage.content,
@@ -99,15 +90,8 @@ class LocalChapterContentService {
       return chapter;
     }
 
-    final readableBook = await _hydrateReadableBook(book);
-
     if (book.format == LocalBookFormat.txt) {
-      if (allowTxtBootstrap &&
-          (chapter.startOffset == null ||
-              chapter.endOffset == null ||
-              chapter.endOffset! <= chapter.startOffset!)) {
-        return _loadTxtBootstrapChapter(book: readableBook, chapter: chapter);
-      }
+      final readableBook = await _hydrateReadableBook(book);
       final hydratedContent = await _loadTxtChapterContentByOffsets(
         chapter: chapter,
         book: readableBook,
@@ -122,39 +106,16 @@ class LocalChapterContentService {
         briefMessage: '本地章节内容缺失，请重新索引后重试。',
       );
     }
-
-    final hydrated = await _loadEpubChapterContent(
-      chapter: chapter,
-      book: readableBook,
-    );
-    await _localBookRepository.updateChapterContent(
-      chapterId: chapter.id,
-      content: hydrated.content,
-      imageUrls: hydrated.imageUrls,
-      document: hydrated.document,
-    );
-    return chapter.copyWith(
-      content: hydrated.content,
-      imageUrls: hydrated.imageUrls,
-      document: hydrated.document,
+    throw AppException(
+      code: ErrorCode.ruleMatchEmpty,
+      stage: ErrorStage.content,
+      briefMessage: 'EPUB 章节内容缺失，请重新索引后重试。',
     );
   }
 
   bool _needsReindex(LocalBook book) {
     return book.indexStatus != LocalBookIndexStatus.ready ||
         book.chapterCount <= 0;
-  }
-
-  bool _shouldAllowTxtBootstrapRead({
-    required LocalBook book,
-    required String? chapterId,
-    required int? chapterIndex,
-  }) {
-    if (book.format != LocalBookFormat.txt) {
-      return false;
-    }
-    final normalizedChapterId = (chapterId ?? '').trim().toLowerCase();
-    return normalizedChapterId == 'bootstrap';
   }
 
   void _ensureBookReadyForReading(LocalBook book) {
@@ -268,13 +229,6 @@ class LocalChapterContentService {
     return document != null && document.blocks.isNotEmpty;
   }
 
-  Future<LocalParsedChapter> _loadEpubChapterContent({
-    required LocalChapter chapter,
-    required LocalBook book,
-  }) {
-    return _epubParser.parseChapter(book: book, chapter: chapter);
-  }
-
   Future<LocalBook> _hydrateReadableBook(LocalBook book) async {
     final resolvedStoragePath = await _storageService.resolveStoragePath(
       book.storagePath,
@@ -343,74 +297,6 @@ class LocalChapterContentService {
         );
       }
       return text;
-    } finally {
-      await handle.close();
-    }
-  }
-
-  Future<LocalChapter> _loadTxtBootstrapChapter({
-    required LocalBook book,
-    LocalChapter? chapter,
-  }) async {
-    final file = File(book.storagePath);
-    if (!await file.exists()) {
-      throw AppException(
-        code: ErrorCode.validation,
-        stage: ErrorStage.content,
-        briefMessage: '本地文件不存在：${book.storagePath}',
-      );
-    }
-
-    final fileLength = await file.length();
-    if (fileLength <= 0) {
-      throw AppException(
-        code: ErrorCode.ruleMatchEmpty,
-        stage: ErrorStage.content,
-        briefMessage: '文本文件为空，无法读取正文。',
-      );
-    }
-
-    var end =
-        fileLength < _txtBootstrapReadBytes
-            ? fileLength
-            : _txtBootstrapReadBytes;
-    final normalizedCharset = _normalizeCharsetName(book.charset);
-    if ((normalizedCharset == 'utf-16' ||
-            normalizedCharset == 'utf-16le' ||
-            normalizedCharset == 'utf-16be') &&
-        end.isOdd) {
-      end -= 1;
-    }
-
-    final handle = await file.open(mode: FileMode.read);
-    try {
-      await handle.setPosition(0);
-      final bytes = await handle.read(end);
-      final content =
-          _decodeBytes(bytes, preferredCharset: book.charset).trim();
-      if (content.isEmpty) {
-        throw AppException(
-          code: ErrorCode.ruleMatchEmpty,
-          stage: ErrorStage.content,
-          briefMessage: '本地章节内容为空，请检查编码或重新导入。',
-        );
-      }
-
-      final now = DateTime.now();
-      return LocalChapter(
-        id: chapter?.id ?? '${book.id}_bootstrap',
-        bookId: book.id,
-        chapterIndex: chapter?.chapterIndex ?? 0,
-        title: chapter?.title ?? '开始阅读',
-        content: content,
-        imageUrls: chapter?.imageUrls ?? const <String>[],
-        sourceRef: chapter?.sourceRef,
-        createdAt: chapter?.createdAt ?? now,
-        updatedAt: now,
-        startOffset: 0,
-        endOffset: end,
-        document: chapter?.document,
-      );
     } finally {
       await handle.close();
     }

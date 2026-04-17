@@ -8,20 +8,24 @@ import '../../book/application/local_book_detail_service.dart';
 import 'chapter_content_service.dart';
 import 'content_provider.dart';
 import 'local/local_chapter_content_service.dart';
+import 'local/local_book_preview_service.dart';
 import 'local/local_reader_identity.dart';
 
 class LocalContentProvider extends ContentProvider {
   LocalContentProvider({
     LocalBookDetailService? detailService,
     LocalChapterContentService? chapterContentService,
+    LocalBookPreviewService? previewService,
   }) : _detailService = detailService ?? LocalBookDetailService(),
        _chapterContentService =
-           chapterContentService ?? LocalChapterContentService();
+           chapterContentService ?? LocalChapterContentService(),
+       _previewService = previewService ?? LocalBookPreviewService();
 
   static const String sourceName = '本地导入';
 
   final LocalBookDetailService _detailService;
   final LocalChapterContentService _chapterContentService;
+  final LocalBookPreviewService _previewService;
 
   @override
   ContentCapabilities get capabilities => const ContentCapabilities(
@@ -137,11 +141,16 @@ class LocalContentProvider extends ContentProvider {
       );
     }
 
-    final chapter = await _chapterContentService.load(
-      bookId: resolvedBookId,
-      chapterId: resolvedChapterId,
-      chapterIndex: chapterIndex,
-    );
+    final chapter =
+        (resolvedChapterId?.trim().toLowerCase() == 'bootstrap')
+            ? await _previewService.loadTxtBootstrapPreview(
+              bookId: resolvedBookId,
+            )
+            : await _chapterContentService.load(
+              bookId: resolvedBookId,
+              chapterId: resolvedChapterId,
+              chapterIndex: chapterIndex,
+            );
 
     return ChapterContentResult(
       content: chapter.content,

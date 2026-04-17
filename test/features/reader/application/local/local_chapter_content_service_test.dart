@@ -187,7 +187,7 @@ void main() {
               ),
             )
             ..addFile(ArchiveFile('OPS/images/p1.jpg', 3, [1, 2, 3]));
-      final encoded = ZipEncoder().encode(archive)!;
+      final encoded = ZipEncoder().encode(archive);
       final file = File('${tempDir.path}/lazy.epub');
       await file.writeAsBytes(encoded, flush: true);
 
@@ -204,16 +204,14 @@ void main() {
         ),
       );
 
-      final epubParser = const EpubLocalBookParser();
       indexService = LocalBookIndexService(
         localBookRepository: repository,
-        parsers: <LocalBookParser>[epubParser],
+        parsers: const <LocalBookParser>[EpubLocalBookParser()],
         storageService: storageService,
       );
       contentService = LocalChapterContentService(
         localBookRepository: repository,
         indexService: indexService,
-        epubParser: epubParser,
         storageService: storageService,
       );
 
@@ -231,17 +229,61 @@ void main() {
       );
       expect(chapter.content, contains('第一章正文。'));
       expect(chapter.imageUrls, isNotEmpty);
-      expect(chapter.document, isNotNull);
-      expect(
-        chapter.document!.blocks.whereType<ReaderImageBlock>(),
-        isNotEmpty,
-      );
+      final document = chapter.document;
+      expect(document, isNotNull);
+      expect(document?.blocks.whereType<ReaderImageBlock>(), isNotEmpty);
 
       final persisted = await repository.getChapterById(metas.first.id);
       expect(persisted, isNotNull);
       expect(persisted!.content, contains('第一章正文。'));
       expect(persisted.imageUrls, isNotEmpty);
       expect(persisted.document, isNotNull);
+    });
+
+    test('rejects ready epub chapters with missing stored content', () async {
+      final now = DateTime.parse('2026-03-21T12:00:00.000Z');
+      final file = File('${tempDir.path}/broken_ready.epub');
+      await file.writeAsBytes(const <int>[1, 2, 3], flush: true);
+      await repository.upsertBook(
+        LocalBook(
+          id: 'local_epub_broken_1',
+          title: '损坏 EPUB',
+          format: LocalBookFormat.epub,
+          storagePath: file.path,
+          fileSize: await file.length(),
+          indexStatus: LocalBookIndexStatus.ready,
+          chapterCount: 1,
+          createdAt: now,
+          updatedAt: now,
+        ),
+      );
+      await repository.replaceChapters(
+        bookId: 'local_epub_broken_1',
+        chapters: <LocalChapter>[
+          LocalChapter(
+            id: 'local_epub_broken_1_0',
+            bookId: 'local_epub_broken_1',
+            chapterIndex: 0,
+            title: '第一章',
+            content: '',
+            sourceRef: 'OPS/ch1.xhtml',
+            createdAt: now,
+            updatedAt: now,
+          ),
+        ],
+      );
+
+      await expectLater(
+        () =>
+            contentService.load(bookId: 'local_epub_broken_1', chapterIndex: 0),
+        throwsA(
+          isA<AppException>().having(
+            (error) => error.briefMessage,
+            'briefMessage',
+            contains('重新索引'),
+          ),
+        ),
+      );
     });
 
     test('does not auto index while local book is still pending', () async {
@@ -286,16 +328,10 @@ void main() {
     });
 
     test(
-      'allows bootstrap reading for pending local txt before index is ready',
+      'rejects bootstrap chapter because preview moved to preview service',
       () async {
         final file = File('${tempDir.path}/pending_bootstrap_book.txt');
-        await file.writeAsString('''
-第1章 开始
-第一章正文内容。
-
-第2章 继续
-第二章正文内容。
-''');
+        await file.writeAsString('第1章 开始\n第一章正文内容。');
 
         final now = DateTime.parse('2026-03-21T12:00:00.000Z');
         final pendingBook = LocalBook(
@@ -310,25 +346,19 @@ void main() {
         );
         await repository.upsertBook(pendingBook);
 
-        final fakeIndexService = _TrackingLocalBookIndexService(
-          localBookRepository: repository,
-          storageService: storageService,
-          refreshedBook: pendingBook,
+        await expectLater(
+          () => contentService.load(
+            bookId: 'local_pending_bootstrap_1',
+            chapterId: 'bootstrap',
+          ),
+          throwsA(
+            isA<AppException>().having(
+              (error) => error.briefMessage,
+              'briefMessage',
+              contains('独立预览服务'),
+            ),
+          ),
         );
-        contentService = LocalChapterContentService(
-          localBookRepository: repository,
-          indexService: fakeIndexService,
-          storageService: storageService,
-        );
-
-        final chapter = await contentService.load(
-          bookId: 'local_pending_bootstrap_1',
-          chapterId: 'bootstrap',
-        );
-
-        expect(chapter.content, contains('第一章正文内容'));
-        expect(chapter.chapterIndex, 0);
-        expect(fakeIndexService.ensureIndexedCallCount, 0);
       },
     );
 

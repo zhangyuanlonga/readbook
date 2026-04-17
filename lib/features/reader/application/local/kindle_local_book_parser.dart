@@ -140,9 +140,10 @@ class KindleLocalBookParser implements LocalBookParser {
       return normalized;
     }
     final fallbackNormalized = fallback?.trim();
-    return (fallbackNormalized == null || fallbackNormalized.isEmpty)
-        ? ''
-        : fallbackNormalized;
+    if (fallbackNormalized == null || fallbackNormalized.isEmpty) {
+      return null;
+    }
+    return fallbackNormalized;
   }
 }
 

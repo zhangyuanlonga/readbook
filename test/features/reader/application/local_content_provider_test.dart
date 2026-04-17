@@ -1,6 +1,7 @@
 import 'package:shuxiang_reading_next/domain/entities/local_chapter.dart';
 import 'package:shuxiang_reading_next/domain/entities/reader_document.dart';
 import 'package:shuxiang_reading_next/features/reader/application/local/local_chapter_content_service.dart';
+import 'package:shuxiang_reading_next/features/reader/application/local/local_book_preview_service.dart';
 import 'package:shuxiang_reading_next/features/reader/application/local/local_reader_identity.dart';
 import 'package:shuxiang_reading_next/features/reader/application/local_content_provider.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -24,6 +25,19 @@ class _FakeLocalChapterContentService extends LocalChapterContentService {
     this.bookId = bookId;
     this.chapterId = chapterId;
     this.chapterIndex = chapterIndex;
+    return chapter;
+  }
+}
+
+class _FakeLocalBookPreviewService extends LocalBookPreviewService {
+  _FakeLocalBookPreviewService(this.chapter);
+
+  final LocalChapter chapter;
+  String? bookId;
+
+  @override
+  Future<LocalChapter> loadTxtBootstrapPreview({required String bookId}) async {
+    this.bookId = bookId;
     return chapter;
   }
 }
@@ -135,4 +149,47 @@ void main() {
     expect(result.content, contains('第三章'));
     expect(result.content, contains('结构化正文'));
   });
+
+  test(
+    'routes bootstrap chapter to preview service instead of chapter service',
+    () async {
+      final fakeContentService = _FakeLocalChapterContentService(
+        LocalChapter(
+          id: 'chapter_unused',
+          bookId: 'book_1',
+          chapterIndex: 9,
+          title: 'unused',
+          content: 'unused',
+          createdAt: now,
+          updatedAt: now,
+        ),
+      );
+      final fakePreviewService = _FakeLocalBookPreviewService(
+        LocalChapter(
+          id: 'book_1_bootstrap',
+          bookId: 'book_1',
+          chapterIndex: 0,
+          title: '开始阅读',
+          content: '预览正文',
+          createdAt: now,
+          updatedAt: now,
+        ),
+      );
+      final provider = LocalContentProvider(
+        chapterContentService: fakeContentService,
+        previewService: fakePreviewService,
+      );
+
+      final result = await provider.loadChapterContent(
+        sourceId: LocalReaderIdentity.localSourceId,
+        bookId: 'book_1',
+        chapterUrl: '',
+        chapterId: 'bootstrap',
+      );
+
+      expect(result.content, contains('预览正文'));
+      expect(fakePreviewService.bookId, 'book_1');
+      expect(fakeContentService.bookId, isNull);
+    },
+  );
 }
