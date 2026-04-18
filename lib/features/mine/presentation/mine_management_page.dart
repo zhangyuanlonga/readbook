@@ -5,6 +5,7 @@ import 'package:go_router/go_router.dart';
 
 import '../../../app/layout/app_layout.dart';
 import '../../../app/layout/app_spacing.dart';
+import '../../../app/platform/app_input_focus_behavior.dart';
 import 'chapter_rule_management_page.dart';
 import '../../bookshelf/application/bookshelf_service.dart';
 
@@ -787,7 +788,7 @@ class _BookshelfTaxonomyManagementPageState
               title: Text(title),
               content: TextFormField(
                 initialValue: initialValue,
-                autofocus: true,
+                autofocus: appEnableAutoFocusForTextInput,
                 maxLength: 12,
                 decoration: InputDecoration(
                   hintText: hintText,
@@ -1043,7 +1044,7 @@ class _BookshelfTaxonomyManagementPageState
           const SizedBox(height: 10),
           TextFormField(
             initialValue: _createDraft,
-            autofocus: true,
+            autofocus: appEnableAutoFocusForTextInput,
             maxLength: 12,
             decoration: InputDecoration(
               hintText: '输入$_entityName名称',

@@ -5,16 +5,14 @@ import 'package:go_router/go_router.dart';
 import '../../../app/layout/app_layout.dart';
 import '../../../app/layout/app_spacing.dart';
 import '../../../app/navigation/bottom_nav_icon_gallery_service.dart';
+import '../../../app/platform/app_input_focus_behavior.dart';
 import '../../../app/shell_navigation_provider.dart';
 import '../../../app/widgets/bottom_nav_icon_view.dart';
 import '../../../app/navigation/bottom_nav_icon_resolver.dart';
 import '../../../domain/entities/bottom_nav_icon_gallery.dart';
 
 class BottomNavIconGalleryEditorPage extends StatefulWidget {
-  const BottomNavIconGalleryEditorPage({
-    super.key,
-    required this.galleryId,
-  });
+  const BottomNavIconGalleryEditorPage({super.key, required this.galleryId});
 
   final String galleryId;
 
@@ -182,42 +180,43 @@ class _BottomNavIconGalleryEditorPageState
       },
       child: Scaffold(
         appBar: AppBar(
-          title: _isEditingName
-              ? ConstrainedBox(
-                  constraints: const BoxConstraints(maxWidth: 200),
-                  child: TextField(
-                    controller: _nameController,
-                    autofocus: true,
-                    decoration: const InputDecoration(
-                      border: OutlineInputBorder(),
-                      isDense: true,
-                      contentPadding: EdgeInsets.symmetric(
-                        horizontal: 10,
-                        vertical: 6,
+          title:
+              _isEditingName
+                  ? ConstrainedBox(
+                    constraints: const BoxConstraints(maxWidth: 200),
+                    child: TextField(
+                      controller: _nameController,
+                      autofocus: appEnableAutoFocusForTextInput,
+                      decoration: const InputDecoration(
+                        border: OutlineInputBorder(),
+                        isDense: true,
+                        contentPadding: EdgeInsets.symmetric(
+                          horizontal: 10,
+                          vertical: 6,
+                        ),
                       ),
+                      onSubmitted: (_) => _saveName(),
                     ),
-                    onSubmitted: (_) => _saveName(),
+                  )
+                  : GestureDetector(
+                    onTap: _startEditingName,
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text(
+                          _gallery?.name ?? '编辑底栏图集',
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                        const SizedBox(width: 4),
+                        Icon(
+                          Icons.edit_outlined,
+                          size: 16,
+                          color: Theme.of(context).colorScheme.onSurfaceVariant,
+                        ),
+                      ],
+                    ),
                   ),
-                )
-              : GestureDetector(
-                  onTap: _startEditingName,
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Text(
-                        _gallery?.name ?? '编辑底栏图集',
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                      const SizedBox(width: 4),
-                      Icon(
-                        Icons.edit_outlined,
-                        size: 16,
-                        color: Theme.of(context).colorScheme.onSurfaceVariant,
-                      ),
-                    ],
-                  ),
-                ),
           actions: [
             if (_isEditingName)
               IconButton(
@@ -260,11 +259,15 @@ class _BottomNavIconGalleryEditorPageState
                             const SizedBox(height: 10),
                             _buildHeaderRow(),
                             const SizedBox(height: 8),
-                            for (var index = 0;
-                                index < BottomNavIconGalleryTab.values.length;
-                                index++) ...[
+                            for (
+                              var index = 0;
+                              index < BottomNavIconGalleryTab.values.length;
+                              index++
+                            ) ...[
                               if (index > 0) const SizedBox(height: 8),
-                              _buildTabSection(BottomNavIconGalleryTab.values[index]),
+                              _buildTabSection(
+                                BottomNavIconGalleryTab.values[index],
+                              ),
                             ],
                           ],
                         ),
@@ -355,9 +358,21 @@ class _BottomNavIconGalleryEditorPageState
             child: Row(
               mainAxisAlignment: MainAxisAlignment.spaceEvenly,
               children: [
-                Icon(Icons.light_mode_outlined, size: 14, color: Theme.of(context).colorScheme.onSurfaceVariant.withValues(alpha: 0.4)),
-                const SizedBox(width: 48, child: Text('未选中', textAlign: TextAlign.center)),
-                const SizedBox(width: 48, child: Text('已选中', textAlign: TextAlign.center)),
+                Icon(
+                  Icons.light_mode_outlined,
+                  size: 14,
+                  color: Theme.of(
+                    context,
+                  ).colorScheme.onSurfaceVariant.withValues(alpha: 0.4),
+                ),
+                const SizedBox(
+                  width: 48,
+                  child: Text('未选中', textAlign: TextAlign.center),
+                ),
+                const SizedBox(
+                  width: 48,
+                  child: Text('已选中', textAlign: TextAlign.center),
+                ),
               ],
             ),
           ),
@@ -366,9 +381,21 @@ class _BottomNavIconGalleryEditorPageState
             child: Row(
               mainAxisAlignment: MainAxisAlignment.spaceEvenly,
               children: [
-                Icon(Icons.dark_mode_outlined, size: 14, color: Theme.of(context).colorScheme.onSurfaceVariant.withValues(alpha: 0.4)),
-                const SizedBox(width: 48, child: Text('未选中', textAlign: TextAlign.center)),
-                const SizedBox(width: 48, child: Text('已选中', textAlign: TextAlign.center)),
+                Icon(
+                  Icons.dark_mode_outlined,
+                  size: 14,
+                  color: Theme.of(
+                    context,
+                  ).colorScheme.onSurfaceVariant.withValues(alpha: 0.4),
+                ),
+                const SizedBox(
+                  width: 48,
+                  child: Text('未选中', textAlign: TextAlign.center),
+                ),
+                const SizedBox(
+                  width: 48,
+                  child: Text('已选中', textAlign: TextAlign.center),
+                ),
               ],
             ),
           ),
@@ -379,12 +406,10 @@ class _BottomNavIconGalleryEditorPageState
 
   Widget _buildBatchToolbar() {
     final colorScheme = Theme.of(context).colorScheme;
-    final allLightConfigured = BottomNavIconGalleryTab.values.every(
-      (tab) {
-        final set = _gallery?.items[tab] ?? const BottomNavIconSet();
-        return set.lightUnselected != null && set.lightSelected != null;
-      },
-    );
+    final allLightConfigured = BottomNavIconGalleryTab.values.every((tab) {
+      final set = _gallery?.items[tab] ?? const BottomNavIconSet();
+      return set.lightUnselected != null && set.lightSelected != null;
+    });
 
     return InkWell(
       borderRadius: BorderRadius.circular(14),
@@ -457,9 +482,9 @@ class _BottomNavIconGalleryEditorPageState
             width: 42,
             child: Text(
               _tabLabel(tab),
-              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                fontWeight: FontWeight.w700,
-              ),
+              style: Theme.of(
+                context,
+              ).textTheme.bodyMedium?.copyWith(fontWeight: FontWeight.w700),
             ),
           ),
           const SizedBox(width: 8),
@@ -525,12 +550,14 @@ class _BottomNavIconGalleryEditorPageState
     required BottomNavIconAssetRef? asset,
     required IconData brightnessIcon,
   }) {
-    final isSelectedSlot = slot == BottomNavIconVariantSlot.lightSelected ||
+    final isSelectedSlot =
+        slot == BottomNavIconVariantSlot.lightSelected ||
         slot == BottomNavIconVariantSlot.darkSelected;
-    final brightness = slot == BottomNavIconVariantSlot.darkSelected ||
-            slot == BottomNavIconVariantSlot.darkUnselected
-        ? Brightness.dark
-        : Brightness.light;
+    final brightness =
+        slot == BottomNavIconVariantSlot.darkSelected ||
+                slot == BottomNavIconVariantSlot.darkUnselected
+            ? Brightness.dark
+            : Brightness.light;
     final fallback = resolveCupertinoBottomNavIcon(
       tab: switch (tab) {
         BottomNavIconGalleryTab.bookshelf => AppShellTab.bookshelf,
@@ -546,7 +573,8 @@ class _BottomNavIconGalleryEditorPageState
     return InkWell(
       onTap: _isSaving ? null : () => _pickForSlot(tab, slot),
       borderRadius: BorderRadius.circular(10),
-      onLongPress: asset == null || _isSaving ? null : () => _clearSlot(tab, slot),
+      onLongPress:
+          asset == null || _isSaving ? null : () => _clearSlot(tab, slot),
       child: Container(
         width: 48,
         height: 44,
@@ -561,11 +589,14 @@ class _BottomNavIconGalleryEditorPageState
         child:
             asset == null
                 ? Icon(
-                    Icons.add_rounded,
-                    size: 20,
-                    color: colorScheme.onSurfaceVariant.withValues(alpha: 0.4),
-                  )
-                : BottomNavIconView(icon: fallback.copyWith(assetRef: asset), size: 24),
+                  Icons.add_rounded,
+                  size: 20,
+                  color: colorScheme.onSurfaceVariant.withValues(alpha: 0.4),
+                )
+                : BottomNavIconView(
+                  icon: fallback.copyWith(assetRef: asset),
+                  size: 24,
+                ),
       ),
     );
   }

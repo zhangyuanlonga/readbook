@@ -11,6 +11,7 @@ import 'package:path_provider/path_provider.dart';
 import '../../../app/navigation/bottom_nav_icon_gallery_service.dart';
 import '../../../app/layout/app_layout.dart';
 import '../../../app/layout/app_spacing.dart';
+import '../../../app/platform/app_input_focus_behavior.dart';
 import '../../../app/theme/app_advanced_theme_tokens.dart';
 import '../../../app/theme/app_border_tokens.dart';
 import '../../../app/theme/app_theme_palette.dart';
@@ -1226,7 +1227,7 @@ class _AdvancedThemeEditorPageState
                   constraints: const BoxConstraints(maxWidth: 220),
                   child: TextField(
                     controller: _nameController,
-                    autofocus: true,
+                    autofocus: appEnableAutoFocusForTextInput,
                     decoration: const InputDecoration(
                       border: OutlineInputBorder(),
                       isDense: true,

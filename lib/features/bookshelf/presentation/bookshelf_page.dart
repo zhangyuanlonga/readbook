@@ -12,6 +12,7 @@ import 'package:path_provider/path_provider.dart';
 import '../../../app/layout/app_spacing.dart';
 import '../../../app/navigation/mobile_bottom_navigation_inset.dart';
 import '../../../app/navigation/app_navigation_style_provider.dart';
+import '../../../app/platform/app_input_focus_behavior.dart';
 import '../../../app/theme/app_advanced_theme_tokens.dart';
 import '../../../app/widgets/advanced_theme_backdrop_decoration.dart';
 import '../../../app/widgets/resolved_book_cover.dart';
@@ -188,6 +189,7 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
   final TextEditingController _bookshelfSearchController =
       TextEditingController();
   final FocusNode _bookshelfSearchFocusNode = FocusNode();
+  final ScrollController _bookshelfScrollController = ScrollController();
   final LocalBookImportService _localBookImportService =
       LocalBookImportService();
   final LocalBookRepositoryImpl _localBookRepository = LocalBookRepositoryImpl(
@@ -292,7 +294,7 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
   static const Duration _kContinueReadingPromptDuration = Duration(seconds: 6);
   static const double _kContinueReadingCardHeight = 84;
   static const double _kContinueReadingDockGap = 12;
-  static const double _kContinueReadingStandardGap = 0;
+  static const double _kContinueReadingStandardGap = 12;
   static const Set<String> _kMangaCapabilityKeywords = <String>{
     'manga',
     'comic',
@@ -357,6 +359,7 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
     _bookshelfSearchFocusNode.removeListener(
       _handleBookshelfSearchFocusChanged,
     );
+    _bookshelfScrollController.dispose();
     _bookshelfSearchFocusNode.dispose();
     _bookshelfSearchController.dispose();
     super.dispose();
@@ -388,20 +391,17 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
     final filteredBooks = _filteredBooks;
     final continueReadingVisible =
         _continueReadingRecord != null && !_isSelectionMode;
-    final continueReadingBottomGap = _continueReadingBottomGap(
-      effectiveNavigationStyle,
-    );
-    final continueReadingOverlayInset = _continueReadingOverlayInset(
+    final continueReadingBottomInset = _continueReadingBottomInset(
       effectiveNavigationStyle,
       navigationBottomInset: navigationBottomInset,
     );
     final topInset = MediaQuery.paddingOf(context).top + kToolbarHeight;
     final continueReadingReservedSpace =
         continueReadingVisible
-            ? _kContinueReadingCardHeight +
-                continueReadingBottomGap +
-                continueReadingOverlayInset
+            ? _kContinueReadingCardHeight + continueReadingBottomInset
             : 0.0;
+    final contentTopPadding =
+        _shouldShowBookshelfSearchSliver ? 12.0 : topInset + 12;
 
     return Scaffold(
       extendBodyBehindAppBar: true,
@@ -452,7 +452,7 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
             if (showTopSearchAction)
               IconButton(
                 tooltip: '搜索书籍',
-                onPressed: () => context.go('/search'),
+                onPressed: () => context.push('/search'),
                 icon: const Icon(Icons.search_rounded),
               ),
             PopupMenuButton<_BookshelfMoreAction>(
@@ -519,21 +519,23 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
             child: RefreshIndicator(
               onRefresh: () => _loadBookshelf(force: true),
               child: CustomScrollView(
+                controller: _bookshelfScrollController,
                 keyboardDismissBehavior:
                     ScrollViewKeyboardDismissBehavior.onDrag,
                 physics: const AlwaysScrollableScrollPhysics(),
                 slivers: [
-                  if (_books.isNotEmpty)
-                    _buildBookshelfSearchSliver(horizontal: horizontal),
+                  if (_shouldShowBookshelfSearchSliver)
+                    _buildBookshelfSearchSliver(
+                      horizontal: horizontal,
+                      topInset: topInset + 12,
+                    ),
                   if (_books.isNotEmpty)
                     SliverPadding(
                       padding: EdgeInsets.fromLTRB(
                         horizontal,
-                        topInset + 12,
+                        contentTopPadding,
                         horizontal,
-                        16 +
-                            navigationBottomInset +
-                            continueReadingReservedSpace,
+                        16 + continueReadingReservedSpace,
                       ),
                       sliver: _buildBooksContentSliver(filteredBooks),
                     )
@@ -541,11 +543,9 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
                     SliverPadding(
                       padding: EdgeInsets.fromLTRB(
                         horizontal,
-                        topInset + 12,
+                        contentTopPadding,
                         horizontal,
-                        16 +
-                            navigationBottomInset +
-                            continueReadingReservedSpace,
+                        16 + continueReadingReservedSpace,
                       ),
                       sliver: _buildBooksContentSliver(filteredBooks),
                     ),
@@ -556,7 +556,7 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
           Positioned(
             left: horizontal,
             right: horizontal,
-            bottom: continueReadingBottomGap + continueReadingOverlayInset,
+            bottom: continueReadingBottomInset,
             child: _buildContinueReadingPromptCard(),
           ),
         ],
@@ -564,21 +564,15 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
     );
   }
 
-  double _continueReadingBottomGap(AppNavigationStyle style) {
-    return switch (style) {
-      AppNavigationStyle.standard => _kContinueReadingStandardGap,
-      AppNavigationStyle.cupertinoDock => _kContinueReadingDockGap,
-    };
-  }
-
-  double _continueReadingOverlayInset(
+  double _continueReadingBottomInset(
     AppNavigationStyle style, {
     required double navigationBottomInset,
   }) {
     return switch (style) {
-      // Standard NavigationBar already sits outside the scaffold body.
-      AppNavigationStyle.standard => 0,
-      AppNavigationStyle.cupertinoDock => navigationBottomInset,
+      AppNavigationStyle.standard =>
+        navigationBottomInset + _kContinueReadingStandardGap,
+      AppNavigationStyle.cupertinoDock =>
+        navigationBottomInset + _kContinueReadingDockGap,
     };
   }
 
@@ -900,6 +894,36 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
     return _alwaysShowBookshelfSearchBar ||
         _hasBookshelfSearchKeyword ||
         _isBookshelfSearchExpanded;
+  }
+
+  bool get _shouldShowBookshelfSearchSliver {
+    return _books.isNotEmpty ||
+        _alwaysShowBookshelfSearchBar ||
+        _hasBookshelfSearchKeyword ||
+        _isBookshelfSearchExpanded;
+  }
+
+  void _updateBookshelfLayoutPreservingScroll(VoidCallback mutation) {
+    final controller = _bookshelfScrollController;
+    final previousOffset = controller.hasClients ? controller.offset : null;
+    mutation();
+    if (previousOffset == null) {
+      return;
+    }
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted || !controller.hasClients) {
+        return;
+      }
+      final position = controller.position;
+      final target = previousOffset.clamp(
+        position.minScrollExtent,
+        position.maxScrollExtent,
+      );
+      if ((position.pixels - target).abs() < 0.5) {
+        return;
+      }
+      controller.jumpTo(target);
+    });
   }
 
   void _expandBookshelfSearch() {
@@ -1459,11 +1483,13 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
                         setSheetState(() {
                           draftGridAlwaysShowSearchBar = value;
                         });
-                        setState(() {
-                          _gridAlwaysShowSearchBar = value;
-                          if (value) {
-                            _isBookshelfSearchExpanded = false;
-                          }
+                        _updateBookshelfLayoutPreservingScroll(() {
+                          setState(() {
+                            _gridAlwaysShowSearchBar = value;
+                            if (value) {
+                              _isBookshelfSearchExpanded = false;
+                            }
+                          });
                         });
                         unawaited(persistGridSettings());
                       },
@@ -1471,8 +1497,10 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
                         setSheetState(() {
                           draftGridPinSearchBar = value;
                         });
-                        setState(() {
-                          _gridPinSearchBar = value;
+                        _updateBookshelfLayoutPreservingScroll(() {
+                          setState(() {
+                            _gridPinSearchBar = value;
+                          });
                         });
                         unawaited(persistGridSettings());
                       },
@@ -1480,8 +1508,10 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
                         setSheetState(() {
                           draftGridQuickFilterContent = value;
                         });
-                        setState(() {
-                          _gridQuickFilterContent = value;
+                        _updateBookshelfLayoutPreservingScroll(() {
+                          setState(() {
+                            _gridQuickFilterContent = value;
+                          });
                         });
                         unawaited(persistGridSettings());
                       },
@@ -1584,11 +1614,13 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
                         setSheetState(() {
                           draftListAlwaysShowSearchBar = value;
                         });
-                        setState(() {
-                          _listAlwaysShowSearchBar = value;
-                          if (value) {
-                            _isBookshelfSearchExpanded = false;
-                          }
+                        _updateBookshelfLayoutPreservingScroll(() {
+                          setState(() {
+                            _listAlwaysShowSearchBar = value;
+                            if (value) {
+                              _isBookshelfSearchExpanded = false;
+                            }
+                          });
                         });
                         unawaited(persistListSettings());
                       },
@@ -1596,8 +1628,10 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
                         setSheetState(() {
                           draftListPinSearchBar = value;
                         });
-                        setState(() {
-                          _listPinSearchBar = value;
+                        _updateBookshelfLayoutPreservingScroll(() {
+                          setState(() {
+                            _listPinSearchBar = value;
+                          });
                         });
                         unawaited(persistListSettings());
                       },
@@ -1605,8 +1639,10 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
                         setSheetState(() {
                           draftListQuickFilterContent = value;
                         });
-                        setState(() {
-                          _listQuickFilterContent = value;
+                        _updateBookshelfLayoutPreservingScroll(() {
+                          setState(() {
+                            _listQuickFilterContent = value;
+                          });
                         });
                         unawaited(persistListSettings());
                       },
@@ -1929,9 +1965,15 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
     return '${_activeFilterLabel()} ${_filteredBooks.length} 本';
   }
 
-  Widget _buildBookshelfSearchSliver({required double horizontal}) {
-    final height = _bookshelfSearchSectionHeight;
-    final child = _buildBookshelfSearchSection(horizontal: horizontal);
+  Widget _buildBookshelfSearchSliver({
+    required double horizontal,
+    required double topInset,
+  }) {
+    final height = _bookshelfSearchSectionHeight + topInset;
+    final child = _buildBookshelfSearchSection(
+      horizontal: horizontal,
+      topInset: topInset,
+    );
     if (_pinBookshelfSearchBar) {
       return SliverPersistentHeader(
         pinned: true,
@@ -1947,11 +1989,14 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
     return 12 + quickFilterHeight + searchHeight;
   }
 
-  Widget _buildBookshelfSearchSection({required double horizontal}) {
+  Widget _buildBookshelfSearchSection({
+    required double horizontal,
+    required double topInset,
+  }) {
     final palette = _resolvedPalette(context);
     return Container(
       color: palette.backgroundColor,
-      padding: EdgeInsets.fromLTRB(horizontal, 12, horizontal, 0),
+      padding: EdgeInsets.fromLTRB(horizontal, topInset, horizontal, 0),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -4204,7 +4249,7 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
                             'create_category_field_$createCategoryFieldVersion',
                           ),
                           initialValue: createCategoryDraft,
-                          autofocus: true,
+                          autofocus: appEnableAutoFocusForTextInput,
                           decoration: InputDecoration(
                             labelText: '分类名称',
                             errorText: createCategoryErrorText,
@@ -4593,7 +4638,7 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
                                 'create_tag_field_$createTagFieldVersion',
                               ),
                               initialValue: createTagDraft,
-                              autofocus: true,
+                              autofocus: appEnableAutoFocusForTextInput,
                               maxLength: 12,
                               decoration: InputDecoration(
                                 labelText: '标签名称',
@@ -4832,7 +4877,7 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
               title: Text(title),
               content: TextFormField(
                 initialValue: initialValue,
-                autofocus: true,
+                autofocus: appEnableAutoFocusForTextInput,
                 maxLength: 12,
                 decoration: InputDecoration(
                   hintText: hintText,
@@ -4873,11 +4918,24 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
     if (!mounted || confirmed != true) {
       return;
     }
+    _removeBooksFromLocalState([book]);
     try {
-      await _removeBook(book);
+      await _removeBook(book, reload: false, showFeedback: false);
+      if (!mounted) {
+        return;
+      }
+      _showMessage('已从书架移除。');
     } on AppException catch (error) {
+      await _loadBookshelf(force: true);
+      if (!mounted) {
+        return;
+      }
       _showMessage(error.briefMessage);
     } catch (_) {
+      await _loadBookshelf(force: true);
+      if (!mounted) {
+        return;
+      }
       _showMessage('删除失败，请稍后重试。');
     }
   }
@@ -4957,21 +5015,29 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
       return;
     }
 
+    _removeBooksFromLocalState(
+      selected,
+      clearSelection: true,
+      exitSelectionMode: true,
+    );
     setState(() {
       _isBatchDeleting = true;
     });
 
     var removedCount = 0;
+    var failureCount = 0;
     for (final book in selected) {
       try {
         await _removeBook(book, reload: false, showFeedback: false);
         removedCount += 1;
       } catch (_) {
-        // Continue deleting remaining selected books.
+        failureCount += 1;
       }
     }
 
-    await _loadBookshelf(force: true);
+    if (failureCount > 0) {
+      await _loadBookshelf(force: true);
+    }
 
     if (!mounted) {
       return;
@@ -4983,7 +5049,87 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
       _selectedBookKeys.clear();
     });
 
+    if (failureCount > 0) {
+      _showMessage('已删除 $removedCount 本书，失败 $failureCount 本。');
+      return;
+    }
     _showMessage('已删除 $removedCount 本书。');
+  }
+
+  void _removeBooksFromLocalState(
+    Iterable<BookshelfBook> books, {
+    bool clearSelection = false,
+    bool exitSelectionMode = false,
+  }) {
+    final removalList = books.toList(growable: false);
+    if (removalList.isEmpty || !mounted) {
+      return;
+    }
+    final removedKeys = removalList.map(_bookKey).toSet();
+    final removedRecordKeys =
+        removalList
+            .map(
+              (book) =>
+                  '${book.bookId.trim()}::${book.sourceId.trim()}::${book.detailUrl.trim()}',
+            )
+            .toSet();
+    final removedLocalIds =
+        removalList
+            .where((book) => book.sourceId == _kLocalBookSourceId)
+            .map((book) => book.bookId.trim())
+            .where((id) => id.isNotEmpty)
+            .toSet();
+
+    setState(() {
+      _books = _books
+          .where((book) => !removedKeys.contains(_bookKey(book)))
+          .toList(growable: false);
+      _progressByBookKey = Map<String, ReadingProgress>.fromEntries(
+        _progressByBookKey.entries.where(
+          (entry) => !removedKeys.contains(entry.key),
+        ),
+      );
+      _latestCachedChapterByBookKey = Map<String, String>.fromEntries(
+        _latestCachedChapterByBookKey.entries.where(
+          (entry) => !removedKeys.contains(entry.key),
+        ),
+      );
+      _cachedChapterCountByBookKey = Map<String, int>.fromEntries(
+        _cachedChapterCountByBookKey.entries.where(
+          (entry) => !removedKeys.contains(entry.key),
+        ),
+      );
+      _bookTagsByKey = Map<String, List<String>>.fromEntries(
+        _bookTagsByKey.entries.where(
+          (entry) => !removedKeys.contains(entry.key),
+        ),
+      );
+      _bookCategoriesByKey = Map<String, String>.fromEntries(
+        _bookCategoriesByKey.entries.where(
+          (entry) => !removedKeys.contains(entry.key),
+        ),
+      );
+      _localBooksById = Map<String, LocalBook>.fromEntries(
+        _localBooksById.entries.where(
+          (entry) => !removedLocalIds.contains(entry.key),
+        ),
+      );
+      if (clearSelection) {
+        _selectedBookKeys.clear();
+      } else {
+        _selectedBookKeys.removeWhere(removedKeys.contains);
+      }
+      if (exitSelectionMode || _selectedBookKeys.isEmpty) {
+        _isSelectionMode = false;
+      }
+      if (_continueReadingRecord != null &&
+          removedRecordKeys.contains(
+            '${_continueReadingRecord!.bookId.trim()}::${_continueReadingRecord!.sourceId.trim()}::${_continueReadingRecord!.detailUrl.trim()}',
+          )) {
+        _continueReadingRecord = null;
+      }
+      _derivedBookshelfFingerprint = null;
+    });
   }
 
   String _toSingleLineText(String text) {

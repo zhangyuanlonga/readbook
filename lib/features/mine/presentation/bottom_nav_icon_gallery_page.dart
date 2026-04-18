@@ -3,6 +3,7 @@ import 'package:go_router/go_router.dart';
 
 import '../../../app/layout/app_layout.dart';
 import '../../../app/layout/app_spacing.dart';
+import '../../../app/platform/app_input_focus_behavior.dart';
 import '../../../app/navigation/bottom_nav_icon_gallery_service.dart';
 import '../../../domain/entities/bottom_nav_icon_gallery.dart';
 
@@ -83,7 +84,7 @@ class _BottomNavIconGalleryPageState extends State<BottomNavIconGalleryPage> {
           title: Text(title),
           content: TextFormField(
             initialValue: initialValue,
-            autofocus: true,
+            autofocus: appEnableAutoFocusForTextInput,
             decoration: const InputDecoration(labelText: '图集名称'),
             onChanged: (value) {
               draftValue = value;

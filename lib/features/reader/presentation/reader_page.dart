@@ -22,6 +22,7 @@ import 'package:uuid/uuid.dart';
 
 import '../../../app/layout/app_layout.dart';
 import '../../../app/layout/app_spacing.dart';
+import '../../../app/platform/app_input_focus_behavior.dart';
 import '../../../app/theme/app_theme.dart';
 import '../../../app/theme/app_theme_palette.dart';
 import '../../../app/theme/app_theme_provider.dart';
@@ -386,10 +387,10 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
   static const Duration _kAutoReadStepDuration = Duration(milliseconds: 520);
   static const Duration _kAutoReadResumeDelay = Duration(milliseconds: 420);
   static const Duration _kChapterLoadingIndicatorDelay = Duration(
-    milliseconds: 150,
+    milliseconds: 260,
   );
   static const Duration _kBlockingLoadingCardDelay = Duration(
-    milliseconds: 180,
+    milliseconds: 520,
   );
   static const Duration _kReaderSnackDuration = Duration(milliseconds: 1800);
   static const Duration _kReaderBoundarySnackDuration = Duration(
@@ -410,6 +411,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
   static const int _kAutoSwitchSourceTryLimit = 3;
   static const int _kForwardPreloadChapterCount = 2;
   static const int _kBackwardPreloadChapterCount = 1;
+  static const int _kBookshelfForwardCacheChapterCount = 10;
   static const double _kScrollAdvanceOverscrollTrigger = 56;
   static const double _kScrollAdvanceEdgeTolerance = 2;
   static const double _kScrollAdvanceNearEdgeThreshold = 24;
@@ -7545,7 +7547,6 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
 
   Future<void> _bootstrap() async {
     _cancelBackgroundRefreshConflictForCurrentBook();
-    _scheduleBlockingLoadingCard();
     try {
       final loadedSettings = await _preferencesService.loadSettings();
       var normalizedSettings = loadedSettings;
@@ -9404,14 +9405,23 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
       return false;
     }
 
+    final suppressLoadingUi = await _shouldSuppressChapterLoadingUi(
+      sourceId: request.sourceId,
+      chapterUrl: request.chapterUrl,
+    );
+
     _stopAutoRead();
     _commitReadingRecordSession();
     setState(() {
       _isLoadingContent = true;
       _errorText = null;
     });
-    _scheduleBlockingLoadingCard();
-    _scheduleChapterLoadingIndicator();
+    if (suppressLoadingUi) {
+      _clearDelayedLoadingUi();
+    } else {
+      _scheduleBlockingLoadingCard();
+      _scheduleChapterLoadingIndicator();
+    }
 
     try {
       final resolvedIndex = _chapterLoadPlanner.resolveFetchChapterIndex(
@@ -9495,6 +9505,28 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
 
   bool _isActiveChapterContentRequest(int requestToken) {
     return mounted && requestToken == _chapterContentRequestToken;
+  }
+
+  Future<bool> _shouldSuppressChapterLoadingUi({
+    required String sourceId,
+    required String chapterUrl,
+  }) async {
+    final normalizedSourceId = sourceId.trim();
+    final normalizedChapterUrl = chapterUrl.trim();
+    if (normalizedSourceId.isEmpty || normalizedChapterUrl.isEmpty) {
+      return false;
+    }
+    if (LocalReaderIdentity.isLocalSourceId(normalizedSourceId)) {
+      return true;
+    }
+    try {
+      final cached = await AppDatabase.instance.getChapterCache(
+        '$normalizedSourceId|$normalizedChapterUrl',
+      );
+      return (cached?.content.trim().isNotEmpty ?? false);
+    } catch (_) {
+      return false;
+    }
   }
 
   Future<void> _refreshBookshelfState() async {
@@ -9645,6 +9677,13 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
     if (normalizedSourceId.isEmpty) {
       return;
     }
+    final isLocalSource = LocalReaderIdentity.isLocalSourceId(
+      normalizedSourceId,
+    );
+    final forwardPreloadCount =
+        !isLocalSource && _isInBookshelf
+            ? _kBookshelfForwardCacheChapterCount
+            : _kForwardPreloadChapterCount;
 
     final preloadIndexes = <int>{};
 
@@ -9655,7 +9694,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
       }
     }
 
-    for (var offset = 1; offset <= _kForwardPreloadChapterCount; offset++) {
+    for (var offset = 1; offset <= forwardPreloadCount; offset++) {
       final index = currentIndex + offset;
       if (index < _chapters.length) {
         preloadIndexes.add(index);
@@ -11562,7 +11601,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
                                     title: Text('$label 精确输入'),
                                     content: TextFormField(
                                       initialValue: draftValue,
-                                      autofocus: true,
+                                      autofocus: appEnableAutoFocusForTextInput,
                                       keyboardType:
                                           const TextInputType.numberWithOptions(
                                             decimal: true,

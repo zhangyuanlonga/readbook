@@ -7,6 +7,7 @@ import 'package:go_router/go_router.dart';
 
 import '../../../app/layout/app_layout.dart';
 import '../../../app/layout/app_spacing.dart';
+import '../../../app/platform/app_input_focus_behavior.dart';
 import '../../../core/media/image_selection_service.dart';
 import '../../../domain/entities/cover_gallery.dart';
 import '../application/cover_gallery_service.dart';
@@ -366,7 +367,7 @@ class _CoverGalleryEditorPageState extends State<CoverGalleryEditorPage> {
                     constraints: const BoxConstraints(maxWidth: 220),
                     child: TextField(
                       controller: _nameController,
-                      autofocus: true,
+                      autofocus: appEnableAutoFocusForTextInput,
                       decoration: const InputDecoration(
                         border: OutlineInputBorder(),
                         isDense: true,

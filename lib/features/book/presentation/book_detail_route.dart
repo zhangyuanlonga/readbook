@@ -22,9 +22,10 @@ String buildBookDetailRoute({
   putIfNotBlank('detailUrl', detailUrl);
   putIfNotBlank('title', title);
   putIfNotBlank('heroTag', heroTag);
+  final encodedBookId = Uri.encodeComponent(effectiveBookId);
 
   return Uri(
-    pathSegments: ['book', effectiveBookId],
+    path: '/book/$encodedBookId',
     queryParameters: query.isEmpty ? null : query,
   ).toString();
 }

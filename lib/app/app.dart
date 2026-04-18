@@ -132,7 +132,7 @@ class _SystemUiOverlayWrapperState extends State<_SystemUiOverlayWrapper>
     'serif',
   ];
 
-  static const Duration _kStartupMinDuration = Duration(milliseconds: 480);
+  static const Duration _kStartupMinDuration = Duration(seconds: 1);
   static const Duration _kStartupDeferredTasksDelay = Duration(
     milliseconds: 1800,
   );
@@ -173,7 +173,8 @@ class _SystemUiOverlayWrapperState extends State<_SystemUiOverlayWrapper>
 
   Future<void> _prepareStartup() async {
     await _startupFirstFrameCompleter.future;
-    await _waitStartupDelay(_kStartupMinDuration);
+    final remainingDelay = _kStartupMinDuration - _startupStopwatch.elapsed;
+    await _waitStartupDelay(remainingDelay);
 
     if (!mounted) {
       return;

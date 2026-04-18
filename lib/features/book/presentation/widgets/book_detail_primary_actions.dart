@@ -77,8 +77,8 @@ class BookDetailPrimaryActions extends StatelessWidget {
               isInBookshelf
                   ? Icons.bookmark_remove_outlined
                   : Icons.bookmark_add_outlined,
-          label: isShelfActionLoading ? '处理中' : shelfLabel,
-          hideIcon: isShelfActionLoading || hideActionIcons,
+          label: shelfLabel,
+          hideIcon: hideActionIcons,
         ),
       ),
     );

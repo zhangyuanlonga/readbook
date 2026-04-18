@@ -8,6 +8,7 @@ import 'package:go_router/go_router.dart';
 
 import '../../../app/layout/app_layout.dart';
 import '../../../app/layout/app_spacing.dart';
+import '../../../app/platform/app_input_focus_behavior.dart';
 import '../../../core/auth/auth_event_bus.dart';
 import '../../../core/auth/auth_session_store.dart';
 import '../../../core/mobile_features/mobile_feature_module.dart';
@@ -155,7 +156,7 @@ class _CheckRequestDialogState<T> extends State<_CheckRequestDialog<T>> {
           const SizedBox(height: 12),
           TextField(
             controller: _controller,
-            autofocus: true,
+            autofocus: appEnableAutoFocusForTextInput,
             decoration: const InputDecoration(
               labelText: '检测关键词',
               hintText: '留空时自动使用书源默认检测词',
@@ -1858,7 +1859,7 @@ class _SourcePageState extends State<SourcePage> {
         return AlertDialog(
           title: const Text('网络导入书源'),
           content: TextFormField(
-            autofocus: true,
+            autofocus: appEnableAutoFocusForTextInput,
             keyboardType: TextInputType.url,
             decoration: const InputDecoration(
               labelText: '书源 URL',

@@ -98,7 +98,9 @@ class _BookDetailPageState extends State<BookDetailPage> {
   late final BookDetailSwitchSourceHelper _switchSourceHelper;
 
   static const int _tocPreviewLimit = 10;
+  static const Duration _kLoadingIndicatorDelay = Duration(milliseconds: 260);
   bool _isLoading = false;
+  bool _showLoadingIndicator = false;
   bool _isSwitchingSource = false;
   bool _manualTocReversed = false;
   bool _isShelfActionLoading = false;
@@ -134,6 +136,7 @@ class _BookDetailPageState extends State<BookDetailPage> {
       SourceRuntimeTaskConflictService.instance;
   final SourceRuntimeSchedulerService _taskScheduler =
       SourceRuntimeSchedulerService.instance;
+  Timer? _loadingIndicatorTimer;
 
   @override
   void initState() {
@@ -179,6 +182,7 @@ class _BookDetailPageState extends State<BookDetailPage> {
   @override
   void dispose() {
     _detailLoadRequestToken += 1;
+    _loadingIndicatorTimer?.cancel();
     _cancelActiveSwitchSourceSearch();
     _localIndexEventSubscription?.cancel();
     final sourceId = (_activeSourceId ?? '').trim();
@@ -248,7 +252,7 @@ class _BookDetailPageState extends State<BookDetailPage> {
                         16 + bottomSafe,
                       ),
                       children: [
-                        if (_isLoading)
+                        if (_showLoadingIndicator)
                           const Padding(
                             padding: EdgeInsets.only(bottom: 12),
                             child: LinearProgressIndicator(minHeight: 2),
@@ -1390,6 +1394,7 @@ class _BookDetailPageState extends State<BookDetailPage> {
     setState(() {
       if (shouldShowLoading) {
         _isLoading = true;
+        _scheduleLoadingIndicator();
       }
       if (!backgroundRefresh) {
         _errorText = null;
@@ -1468,10 +1473,25 @@ class _BookDetailPageState extends State<BookDetailPage> {
       if (_isActiveDetailLoadRequest(requestToken) && shouldShowLoading) {
         setState(() {
           _isLoading = false;
+          _showLoadingIndicator = false;
         });
       }
+      _loadingIndicatorTimer?.cancel();
       lease.release();
     }
+  }
+
+  void _scheduleLoadingIndicator() {
+    _loadingIndicatorTimer?.cancel();
+    _showLoadingIndicator = false;
+    _loadingIndicatorTimer = Timer(_kLoadingIndicatorDelay, () {
+      if (!mounted || !_isLoading) {
+        return;
+      }
+      setState(() {
+        _showLoadingIndicator = true;
+      });
+    });
   }
 
   List<String> _currentConflictKeys() {
@@ -2303,14 +2323,15 @@ class _BookDetailPageState extends State<BookDetailPage> {
       return;
     }
 
+    final wasInBookshelf = _isInBookshelf;
     setState(() {
       _isShelfActionLoading = true;
+      _isInBookshelf = !wasInBookshelf;
     });
     _bookshelfStateSyncToken++;
 
     try {
       final detail = result.detail;
-      final wasInBookshelf = _isInBookshelf;
       if (wasInBookshelf) {
         await _bookshelfService.remove(
           sourceId: detail.sourceId,
@@ -2336,12 +2357,13 @@ class _BookDetailPageState extends State<BookDetailPage> {
         return;
       }
 
-      setState(() {
-        _isInBookshelf = !wasInBookshelf;
-      });
-
       _showMessage(wasInBookshelf ? '已从书架移除。' : '已加入书架。');
     } catch (_) {
+      if (mounted) {
+        setState(() {
+          _isInBookshelf = wasInBookshelf;
+        });
+      }
       _showMessage('操作失败，请重试。');
     } finally {
       if (mounted) {
