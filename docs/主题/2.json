@@ -1,0 +1,41 @@
+{
+  "type": "advanced_theme_colors",
+  "version": 1,
+  "name": "森雾纸本",
+  "lightColors": {
+    "primaryColorValue": 4282153559,
+    "secondaryColorValue": 4288310584,
+    "noticeAccentColorValue": 4289944639,
+    "noticeSurfaceColorValue": 4294504419,
+    "primaryContainerColorValue": 4292734690,
+    "backgroundColorValue": 4294244338,
+    "surfaceColorValue": 4294967295,
+    "elevatedSurfaceColorValue": 4293587435,
+    "cardColorValue": 4294967295,
+    "cardBorderColorValue": 4291680719,
+    "iconBackgroundColorValue": 4293324519,
+    "textPrimaryColorValue": 4280561958,
+    "textSecondaryColorValue": 4284904298,
+    "buttonTextColorValue": 4294967295,
+    "outlineColorValue": 4289641906,
+    "wallpaperOverlayColorValue": 4294244338
+  },
+  "darkColors": {
+    "primaryColorValue": 4287484072,
+    "secondaryColorValue": 4291404446,
+    "noticeAccentColorValue": 4292654807,
+    "noticeSurfaceColorValue": 4280959051,
+    "primaryContainerColorValue": 4281944385,
+    "backgroundColorValue": 4279179026,
+    "surfaceColorValue": 4279640090,
+    "elevatedSurfaceColorValue": 4280166683,
+    "cardColorValue": 4279640090,
+    "cardBorderColorValue": 4281221429,
+    "iconBackgroundColorValue": 4280560160,
+    "textPrimaryColorValue": 4293390824,
+    "textSecondaryColorValue": 4289312940,
+    "buttonTextColorValue": 4279179026,
+    "outlineColorValue": 4285623891,
+    "wallpaperOverlayColorValue": 4279179026
+  }
+}

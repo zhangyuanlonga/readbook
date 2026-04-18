@@ -1,5 +1,7 @@
+import 'dart:async';
 import 'dart:io';
 
+import 'package:file_selector/file_selector.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -7,6 +9,7 @@ import 'package:go_router/go_router.dart';
 import '../../../app/layout/app_layout.dart';
 import '../../../app/layout/app_spacing.dart';
 import '../../../domain/entities/app_advanced_theme.dart';
+import '../../source/application/external_source_import_bridge.dart';
 import '../application/advanced_theme_provider.dart';
 
 class AdvancedThemeListPage extends ConsumerStatefulWidget {
@@ -17,17 +20,43 @@ class AdvancedThemeListPage extends ConsumerStatefulWidget {
       _AdvancedThemeListPageState();
 }
 
-enum _AdvancedThemeAction { edit, duplicate, delete }
+enum _AdvancedThemeAction { edit, duplicate, export, delete }
 
 class _AdvancedThemeListPageState extends ConsumerState<AdvancedThemeListPage> {
+  static const XTypeGroup _themeJsonTypeGroup = XTypeGroup(
+    label: 'Advanced theme JSON',
+    extensions: <String>['json'],
+    mimeTypes: <String>['application/json', 'text/json', 'text/plain'],
+    uniformTypeIdentifiers: <String>['public.json'],
+  );
+
   List<AppAdvancedTheme> _themes = const <AppAdvancedTheme>[];
   bool _isLoading = true;
   bool _isSaving = false;
+  bool _isConsumingExternalImportPayloads = false;
+  StreamSubscription<IncomingExternalImportPayload>? _incomingImportSub;
 
   @override
   void initState() {
     super.initState();
+    _incomingImportSub = ExternalImportBridge.instance.payloadStream.listen((
+      payload,
+    ) {
+      if (payload.type != ExternalImportPayloadType.advancedTheme) {
+        return;
+      }
+      unawaited(_consumePendingExternalImportPayloads());
+    });
     _load();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      unawaited(_consumePendingExternalImportPayloads());
+    });
+  }
+
+  @override
+  void dispose() {
+    _incomingImportSub?.cancel();
+    super.dispose();
   }
 
   Future<void> _load() async {
@@ -76,6 +105,149 @@ class _AdvancedThemeListPageState extends ConsumerState<AdvancedThemeListPage> {
           _isSaving = false;
         });
       }
+    }
+  }
+
+  Future<void> _exportTheme(AppAdvancedTheme theme) async {
+    if (_isSaving) {
+      return;
+    }
+    final location = await getSaveLocation(
+      acceptedTypeGroups: const <XTypeGroup>[_themeJsonTypeGroup],
+      suggestedName: '${_normalizedFileName(theme.name)}.json',
+      confirmButtonText: '导出',
+    );
+    if (location == null) {
+      return;
+    }
+
+    setState(() {
+      _isSaving = true;
+    });
+    try {
+      final service = ref.read(advancedThemeServiceProvider);
+      final file = File(location.path);
+      await file.writeAsString(
+        service.encodeThemeColorJson(theme),
+        flush: true,
+      );
+      if (!mounted) {
+        return;
+      }
+      _showMessage('已导出主题「${theme.name}」');
+    } on FormatException catch (error) {
+      if (!mounted) {
+        return;
+      }
+      _showMessage(error.message);
+    } catch (_) {
+      if (!mounted) {
+        return;
+      }
+      _showMessage('导出失败，请重试。');
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isSaving = false;
+        });
+      }
+    }
+  }
+
+  Future<void> _importTheme() async {
+    if (_isSaving) {
+      return;
+    }
+    final picked = await openFile(
+      acceptedTypeGroups: const <XTypeGroup>[_themeJsonTypeGroup],
+      confirmButtonText: '导入主题',
+    );
+    if (picked == null) {
+      return;
+    }
+
+    setState(() {
+      _isSaving = true;
+    });
+    try {
+      final rawJson = await File(picked.path).readAsString();
+      final service = ref.read(advancedThemeServiceProvider);
+      final importedTheme = await service.importThemeColorJson(rawJson);
+      await _load();
+      if (!mounted) {
+        return;
+      }
+      _showMessage('已导入主题「${importedTheme.name}」');
+    } on FormatException catch (error) {
+      if (!mounted) {
+        return;
+      }
+      _showMessage(error.message);
+    } catch (_) {
+      if (!mounted) {
+        return;
+      }
+      _showMessage('导入失败，请确认 JSON 格式正确。');
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isSaving = false;
+        });
+      }
+    }
+  }
+
+  Future<void> _consumePendingExternalImportPayloads() async {
+    if (_isConsumingExternalImportPayloads || !mounted) {
+      return;
+    }
+
+    _isConsumingExternalImportPayloads = true;
+    try {
+      while (mounted) {
+        final payload = ExternalImportBridge.instance.consumePendingPayload(
+          type: ExternalImportPayloadType.advancedTheme,
+        );
+        if (payload == null) {
+          break;
+        }
+        await _importFromExternalPayload(payload);
+      }
+    } finally {
+      _isConsumingExternalImportPayloads = false;
+    }
+  }
+
+  Future<void> _importFromExternalPayload(
+    IncomingExternalImportPayload payload,
+  ) async {
+    final cached = await ExternalImportBridge.instance.cacheExternalFileFromUri(
+      payload,
+    );
+    if (cached == null) {
+      _showMessage('读取外部主题失败：${payload.label}');
+      return;
+    }
+
+    try {
+      final rawJson = await File(cached.path).readAsString();
+      final service = ref.read(advancedThemeServiceProvider);
+      final importedTheme = await service.importThemeColorJson(rawJson);
+      await _load();
+      if (!mounted) {
+        return;
+      }
+      _showMessage('已导入主题「${importedTheme.name}」');
+    } on FormatException catch (error) {
+      if (!mounted) {
+        return;
+      }
+      _showMessage(error.message);
+    } catch (_) {
+      if (!mounted) {
+        return;
+      }
+      _showMessage('导入外部主题失败：${payload.label}');
     }
   }
 
@@ -178,6 +350,11 @@ class _AdvancedThemeListPageState extends ConsumerState<AdvancedThemeListPage> {
     ).showSnackBar(SnackBar(content: Text(message)));
   }
 
+  String _normalizedFileName(String name) {
+    final normalized = name.trim().replaceAll(RegExp(r'[\\/:*?"<>|]+'), '_');
+    return normalized.isEmpty ? 'advanced_theme_colors' : normalized;
+  }
+
   @override
   Widget build(BuildContext context) {
     final horizontal = AppSpacing.pageHorizontal(context);
@@ -202,6 +379,11 @@ class _AdvancedThemeListPageState extends ConsumerState<AdvancedThemeListPage> {
                 onPressed: _isLoading || _isSaving ? null : _disableActiveTheme,
                 child: const Text('停用'),
               ),
+            IconButton(
+              tooltip: '导入主题',
+              onPressed: _isLoading || _isSaving ? null : _importTheme,
+              icon: const Icon(Icons.file_upload_outlined),
+            ),
             IconButton(
               tooltip: '新增高级主题',
               onPressed: _isLoading || _isSaving ? null : () => _openEditor(),
@@ -437,6 +619,8 @@ class _AdvancedThemeListPageState extends ConsumerState<AdvancedThemeListPage> {
                         _openEditor(theme);
                       case _AdvancedThemeAction.duplicate:
                         _duplicateTheme(theme);
+                      case _AdvancedThemeAction.export:
+                        _exportTheme(theme);
                       case _AdvancedThemeAction.delete:
                         _deleteTheme(theme);
                     }
@@ -450,6 +634,10 @@ class _AdvancedThemeListPageState extends ConsumerState<AdvancedThemeListPage> {
                         PopupMenuItem(
                           value: _AdvancedThemeAction.duplicate,
                           child: Text('复制'),
+                        ),
+                        PopupMenuItem(
+                          value: _AdvancedThemeAction.export,
+                          child: Text('导出 JSON'),
                         ),
                         PopupMenuItem(
                           value: _AdvancedThemeAction.delete,

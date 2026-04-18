@@ -13,6 +13,7 @@ import '../../../app/layout/app_spacing.dart';
 import '../../../app/navigation/mobile_bottom_navigation_inset.dart';
 import '../../../app/navigation/app_navigation_style_provider.dart';
 import '../../../app/theme/app_advanced_theme_tokens.dart';
+import '../../../app/widgets/advanced_theme_backdrop_decoration.dart';
 import '../../../app/widgets/resolved_book_cover.dart';
 import '../../../core/errors/app_exception.dart';
 import '../../../core/media/image_selection_service.dart';
@@ -366,7 +367,6 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
     super.build(context);
     ref.watch(activeAdvancedThemeProvider);
     ref.watch(coverGalleriesProvider);
-    final palette = _resolvedPalette(context);
     final backdrop = _resolvedBackdrop(context);
     final horizontal = AppSpacing.pageHorizontal(context);
     final platform = Theme.of(context).platform;
@@ -395,6 +395,7 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
       effectiveNavigationStyle,
       navigationBottomInset: navigationBottomInset,
     );
+    final topInset = MediaQuery.paddingOf(context).top + kToolbarHeight;
     final continueReadingReservedSpace =
         continueReadingVisible
             ? _kContinueReadingCardHeight +
@@ -403,7 +404,11 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
             : 0.0;
 
     return Scaffold(
+      extendBodyBehindAppBar: true,
       appBar: AppBar(
+        backgroundColor: Colors.transparent,
+        surfaceTintColor: Colors.transparent,
+        shadowColor: Colors.transparent,
         leading:
             _isSelectionMode
                 ? IconButton(
@@ -510,31 +515,7 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
       body: Stack(
         children: [
           DecoratedBox(
-            decoration: BoxDecoration(
-              gradient: LinearGradient(
-                begin: Alignment.topCenter,
-                end: Alignment.bottomCenter,
-                colors: [palette.backgroundColor, palette.surfaceColor],
-              ),
-              image:
-                  backdrop.wallpaperPath != null &&
-                          backdrop.wallpaperPath!.isNotEmpty &&
-                          File(backdrop.wallpaperPath!).existsSync()
-                      ? DecorationImage(
-                        image: FileImage(File(backdrop.wallpaperPath!)),
-                        fit: BoxFit.cover,
-                        colorFilter: ColorFilter.mode(
-                          backdrop.wallpaperOverlayColor.withValues(
-                            alpha: backdrop.wallpaperOverlayOpacity.clamp(
-                              0.0,
-                              1.0,
-                            ),
-                          ),
-                          BlendMode.srcOver,
-                        ),
-                      )
-                      : null,
-            ),
+            decoration: buildAdvancedThemeBackdropDecoration(backdrop),
             child: RefreshIndicator(
               onRefresh: () => _loadBookshelf(force: true),
               child: CustomScrollView(
@@ -548,7 +529,7 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
                     SliverPadding(
                       padding: EdgeInsets.fromLTRB(
                         horizontal,
-                        12,
+                        topInset + 12,
                         horizontal,
                         16 +
                             navigationBottomInset +
@@ -560,7 +541,7 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
                     SliverPadding(
                       padding: EdgeInsets.fromLTRB(
                         horizontal,
-                        12,
+                        topInset + 12,
                         horizontal,
                         16 +
                             navigationBottomInset +

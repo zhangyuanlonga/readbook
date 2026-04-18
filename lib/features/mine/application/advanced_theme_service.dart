@@ -10,6 +10,8 @@ import '../../../domain/entities/app_advanced_theme.dart';
 
 class AdvancedThemeService {
   static const String _activeThemeIdKey = 'app.advancedThemes.activeId';
+  static const String _colorExportType = 'advanced_theme_colors';
+  static const int _colorExportVersion = 1;
 
   AdvancedThemeService({SharedPreferences? preferences})
     : _preferencesFuture =
@@ -186,6 +188,51 @@ class AdvancedThemeService {
     return 'advanced_theme_${_uuid.v4()}';
   }
 
+  String encodeThemeColorJson(AppAdvancedTheme theme) {
+    return const JsonEncoder.withIndent('  ').convert(<String, dynamic>{
+      'type': _colorExportType,
+      'version': _colorExportVersion,
+      'name': theme.name,
+      'lightColors': theme.lightConfig.colors.toJson(),
+      'darkColors': theme.darkConfig.colors.toJson(),
+    });
+  }
+
+  Future<AppAdvancedTheme> importThemeColorJson(String rawJson) async {
+    final decoded = jsonDecode(rawJson);
+    if (decoded is! Map) {
+      throw const FormatException('Invalid theme JSON.');
+    }
+    final payload = decoded.map(
+      (key, value) => MapEntry(key.toString(), value),
+    );
+    final type = payload['type']?.toString().trim() ?? '';
+    if (type != _colorExportType) {
+      throw const FormatException('Unsupported theme JSON type.');
+    }
+    final version = payload['version'];
+    final normalizedVersion =
+        version is num ? version.toInt() : int.tryParse('$version');
+    if (normalizedVersion != _colorExportVersion) {
+      throw const FormatException('Unsupported theme JSON version.');
+    }
+
+    final rawName = payload['name']?.toString().trim() ?? '';
+    final now = DateTime.now().toUtc();
+    final lightColors = _readExportedColors(payload, 'lightColors');
+    final darkColors = _readExportedColors(payload, 'darkColors');
+
+    final importedTheme = AppAdvancedTheme(
+      id: createThemeId(),
+      name: rawName.isEmpty ? '导入主题' : rawName,
+      createdAt: now,
+      updatedAt: now,
+      lightConfig: AppAdvancedThemeModeConfig(colors: lightColors),
+      darkConfig: AppAdvancedThemeModeConfig(colors: darkColors),
+    );
+    return saveTheme(importedTheme);
+  }
+
   Future<String> saveWallpaper({
     required String themeId,
     required AppAdvancedThemeMode mode,
@@ -252,5 +299,21 @@ class AdvancedThemeService {
       return 'png';
     }
     return extension.toLowerCase();
+  }
+
+  AppAdvancedThemeColors _readExportedColors(
+    Map<String, dynamic> payload,
+    String key,
+  ) {
+    final rawColors = payload[key];
+    if (rawColors is! Map) {
+      throw FormatException('Missing or invalid field: $key');
+    }
+    return AppAdvancedThemeColors.fromJson(
+      rawColors.map(
+        (nestedKey, nestedValue) =>
+            MapEntry(nestedKey.toString(), nestedValue),
+      ),
+    );
   }
 }

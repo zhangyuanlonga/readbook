@@ -7,6 +7,8 @@ import 'package:go_router/go_router.dart';
 
 import '../../../app/layout/app_layout.dart';
 import '../../../app/layout/app_spacing.dart';
+import '../../../app/theme/app_advanced_theme_tokens.dart';
+import '../../../app/widgets/advanced_theme_backdrop_decoration.dart';
 import '../../../app/widgets/resolved_book_cover.dart';
 import '../../../domain/entities/local_book.dart';
 import '../../../domain/entities/reading_book_status.dart';
@@ -245,149 +247,164 @@ class _ReadingRecordsPageState extends ConsumerState<ReadingRecordsPage> {
     ref.watch(coverGalleriesProvider);
     final horizontal = AppSpacing.pageHorizontal(context);
     final bottomSafe = MediaQuery.viewPaddingOf(context).bottom;
+    final backdrop = resolveAdvancedThemeBackdrop(
+      Theme.of(context).colorScheme,
+      ref.read(activeAdvancedThemeProvider).valueOrNull,
+    );
+    final topInset = MediaQuery.paddingOf(context).top + kToolbarHeight;
 
     return Scaffold(
-      appBar: AppBar(title: const Text('统计')),
-      body: LayoutBuilder(
-        builder: (context, _) {
-          final maxWidth = AppLayout.pageContentMaxWidth(
-            context,
-            maxWidth: AppLayout.settingsContentMaxWidth,
-          );
-          return Align(
-            alignment: Alignment.topCenter,
-            child: ConstrainedBox(
-              constraints: BoxConstraints(maxWidth: maxWidth),
-              child: StreamBuilder<List<ReadingRecord>>(
-                stream: _readingRecordService.watchLatestRecords(),
-                builder: (context, latestSnapshot) {
-                  final latestRecords =
-                      latestSnapshot.data ?? const <ReadingRecord>[];
-                  return StreamBuilder<List<ReadingRecordDay>>(
-                    stream: _readingRecordService.watchDailyRecords(),
-                    builder: (context, dailySnapshot) {
-                      final dailyRecords =
-                          dailySnapshot.data ?? const <ReadingRecordDay>[];
-                      return StreamBuilder<List<ReadingRecordSession>>(
-                        stream: _readingRecordService.watchSessions(),
-                        builder: (context, sessionSnapshot) {
-                          final sessions =
-                              sessionSnapshot.data ??
-                              const <ReadingRecordSession>[];
-                          return StreamBuilder<List<LocalBook>>(
-                            stream: _readingBookStatusService.watchLocalBooks(),
-                            builder: (context, localBooksSnapshot) {
-                              final localBooks =
-                                  localBooksSnapshot.data ??
-                                  const <LocalBook>[];
-                              return StreamBuilder<
-                                List<ReadingBookStatusEntry>
-                              >(
-                                stream:
-                                    _readingBookStatusService
-                                        .watchManualStatuses(),
-                                builder: (context, statusSnapshot) {
-                                  final manualStatuses =
-                                      statusSnapshot.data ??
-                                      const <ReadingBookStatusEntry>[];
-                                  final resolvedStatusesByBookId =
-                                      _readingBookStatusService.resolveStatuses(
-                                        latestRecords: latestRecords,
-                                        localBooks: localBooks,
-                                        manualStatuses: manualStatuses,
-                                      );
-                                  final queryView = _readingRecordsQueryService
-                                      .buildQueryView(
-                                        latestRecords: latestRecords,
-                                        dailyRecords: dailyRecords,
-                                        sessions: sessions,
-                                        period: _period,
-                                        anchor: _periodAnchor,
-                                        resolvedStatusesByBookId:
-                                            resolvedStatusesByBookId,
-                                      );
-                                  final showRanking =
-                                      _period == ReadingRecordsPeriod.day ||
-                                      _period == ReadingRecordsPeriod.week ||
-                                      _period == ReadingRecordsPeriod.month ||
-                                      _period == ReadingRecordsPeriod.year ||
-                                      _period == ReadingRecordsPeriod.all;
-                                  final showWeekActivity =
-                                      _period == ReadingRecordsPeriod.week;
-                                  final showCalendar =
-                                      _period == ReadingRecordsPeriod.month;
-                                  final showHeatmap =
-                                      _period == ReadingRecordsPeriod.year ||
-                                      _period == ReadingRecordsPeriod.all;
+      extendBodyBehindAppBar: true,
+      appBar: AppBar(
+        title: const Text('统计'),
+        backgroundColor: Colors.transparent,
+        surfaceTintColor: Colors.transparent,
+        shadowColor: Colors.transparent,
+      ),
+      body: DecoratedBox(
+        decoration: buildAdvancedThemeBackdropDecoration(backdrop),
+        child: LayoutBuilder(
+          builder: (context, _) {
+            final maxWidth = AppLayout.pageContentMaxWidth(
+              context,
+              maxWidth: AppLayout.settingsContentMaxWidth,
+            );
+            return Align(
+              alignment: Alignment.topCenter,
+              child: ConstrainedBox(
+                constraints: BoxConstraints(maxWidth: maxWidth),
+                child: StreamBuilder<List<ReadingRecord>>(
+                  stream: _readingRecordService.watchLatestRecords(),
+                  builder: (context, latestSnapshot) {
+                    final latestRecords =
+                        latestSnapshot.data ?? const <ReadingRecord>[];
+                    return StreamBuilder<List<ReadingRecordDay>>(
+                      stream: _readingRecordService.watchDailyRecords(),
+                      builder: (context, dailySnapshot) {
+                        final dailyRecords =
+                            dailySnapshot.data ?? const <ReadingRecordDay>[];
+                        return StreamBuilder<List<ReadingRecordSession>>(
+                          stream: _readingRecordService.watchSessions(),
+                          builder: (context, sessionSnapshot) {
+                            final sessions =
+                                sessionSnapshot.data ??
+                                const <ReadingRecordSession>[];
+                            return StreamBuilder<List<LocalBook>>(
+                              stream: _readingBookStatusService.watchLocalBooks(),
+                              builder: (context, localBooksSnapshot) {
+                                final localBooks =
+                                    localBooksSnapshot.data ??
+                                    const <LocalBook>[];
+                                return StreamBuilder<
+                                  List<ReadingBookStatusEntry>
+                                >(
+                                  stream:
+                                      _readingBookStatusService
+                                          .watchManualStatuses(),
+                                  builder: (context, statusSnapshot) {
+                                    final manualStatuses =
+                                        statusSnapshot.data ??
+                                        const <ReadingBookStatusEntry>[];
+                                    final resolvedStatusesByBookId =
+                                        _readingBookStatusService.resolveStatuses(
+                                          latestRecords: latestRecords,
+                                          localBooks: localBooks,
+                                          manualStatuses: manualStatuses,
+                                        );
+                                    final queryView =
+                                        _readingRecordsQueryService
+                                            .buildQueryView(
+                                              latestRecords: latestRecords,
+                                              dailyRecords: dailyRecords,
+                                              sessions: sessions,
+                                              period: _period,
+                                              anchor: _periodAnchor,
+                                              resolvedStatusesByBookId:
+                                                  resolvedStatusesByBookId,
+                                            );
+                                    final showRanking =
+                                        _period == ReadingRecordsPeriod.day ||
+                                        _period == ReadingRecordsPeriod.week ||
+                                        _period == ReadingRecordsPeriod.month ||
+                                        _period == ReadingRecordsPeriod.year ||
+                                        _period == ReadingRecordsPeriod.all;
+                                    final showWeekActivity =
+                                        _period == ReadingRecordsPeriod.week;
+                                    final showCalendar =
+                                        _period == ReadingRecordsPeriod.month;
+                                    final showHeatmap =
+                                        _period == ReadingRecordsPeriod.year ||
+                                        _period == ReadingRecordsPeriod.all;
 
-                                  return ListView(
-                                    padding: EdgeInsets.fromLTRB(
-                                      horizontal,
-                                      12,
-                                      horizontal,
-                                      12 + bottomSafe,
-                                    ),
-                                    children: [
-                                      _buildControlsCard(),
-                                      const SizedBox(height: 6),
-                                      _buildSummaryCard(
-                                        summary: queryView.summary,
+                                    return ListView(
+                                      padding: EdgeInsets.fromLTRB(
+                                        horizontal,
+                                        topInset + 12,
+                                        horizontal,
+                                        12 + bottomSafe,
                                       ),
-                                      const SizedBox(height: 10),
-                                      _buildSectionHeading(
-                                        queryView.distribution.title,
-                                        subtitle: '当前周期内的阅读时长变化',
-                                      ),
-                                      _buildDurationDistributionCard(
-                                        queryView.distribution,
-                                        calendar:
+                                      children: [
+                                        _buildControlsCard(),
+                                        const SizedBox(height: 6),
+                                        _buildSummaryCard(
+                                          summary: queryView.summary,
+                                        ),
+                                        const SizedBox(height: 10),
+                                        _buildSectionHeading(
+                                          queryView.distribution.title,
+                                          subtitle: '当前周期内的阅读时长变化',
+                                        ),
+                                        _buildDurationDistributionCard(
+                                          queryView.distribution,
+                                          calendar:
+                                              queryView.distributionCalendar,
+                                        ),
+                                        if (showWeekActivity) ...[
+                                          const SizedBox(height: 10),
+                                          _buildWeeklyActivityCard(
+                                            periodRange: queryView.periodRange,
+                                            dailyRecords: dailyRecords,
+                                            sessions: sessions,
+                                          ),
+                                        ],
+                                        if (showCalendar) ...[
+                                          const SizedBox(height: 10),
+                                          _buildReadingCalendarCard(
                                             queryView.distributionCalendar,
-                                      ),
-                                      if (showWeekActivity) ...[
-                                        const SizedBox(height: 10),
-                                        _buildWeeklyActivityCard(
-                                          periodRange: queryView.periodRange,
-                                          dailyRecords: dailyRecords,
-                                          sessions: sessions,
-                                        ),
+                                            dailyRecords: dailyRecords,
+                                            sessions: sessions,
+                                          ),
+                                        ],
+                                        if (showRanking) ...[
+                                          const SizedBox(height: 10),
+                                          _buildDurationRankingSection(
+                                            queryView.rankings,
+                                          ),
+                                        ],
+                                        if (showHeatmap) ...[
+                                          const SizedBox(height: 10),
+                                          _buildHeatmapCard(
+                                            dailyRecords,
+                                            sessions: sessions,
+                                            periodRange: queryView.periodRange,
+                                          ),
+                                        ],
                                       ],
-                                      if (showCalendar) ...[
-                                        const SizedBox(height: 10),
-                                        _buildReadingCalendarCard(
-                                          queryView.distributionCalendar,
-                                          dailyRecords: dailyRecords,
-                                          sessions: sessions,
-                                        ),
-                                      ],
-                                      if (showRanking) ...[
-                                        const SizedBox(height: 10),
-                                        _buildDurationRankingSection(
-                                          queryView.rankings,
-                                        ),
-                                      ],
-                                      if (showHeatmap) ...[
-                                        const SizedBox(height: 10),
-                                        _buildHeatmapCard(
-                                          dailyRecords,
-                                          sessions: sessions,
-                                          periodRange: queryView.periodRange,
-                                        ),
-                                      ],
-                                    ],
-                                  );
-                                },
-                              );
-                            },
-                          );
-                        },
-                      );
-                    },
-                  );
-                },
+                                    );
+                                  },
+                                );
+                              },
+                            );
+                          },
+                        );
+                      },
+                    );
+                  },
+                ),
               ),
-            ),
-          );
-        },
+            );
+          },
+        ),
       ),
     );
   }

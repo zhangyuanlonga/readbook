@@ -1,5 +1,4 @@
 import 'dart:async';
-import 'dart:io';
 import 'dart:math' as math;
 
 import 'package:flutter/gestures.dart';
@@ -12,6 +11,7 @@ import '../../../app/layout/app_spacing.dart';
 import '../../../app/navigation/app_navigation_style_provider.dart';
 import '../../../app/navigation/mobile_bottom_navigation_inset.dart';
 import '../../../app/theme/app_advanced_theme_tokens.dart';
+import '../../../app/widgets/advanced_theme_backdrop_decoration.dart';
 import '../../../app/widgets/resolved_book_cover.dart';
 import '../../../app/widgets/runtime_feedback_card.dart';
 import '../../../core/errors/app_exception.dart';
@@ -156,7 +156,6 @@ class _DiscoverPageState extends ConsumerState<DiscoverPage>
     super.build(context);
     ref.watch(activeAdvancedThemeProvider);
     ref.watch(coverGalleriesProvider);
-    final palette = _resolvedPalette(context);
     final backdrop = _resolvedBackdrop(context);
     final horizontal = AppSpacing.pageHorizontal(context);
     final platform = Theme.of(context).platform;
@@ -173,36 +172,27 @@ class _DiscoverPageState extends ConsumerState<DiscoverPage>
       style: effectiveNavigationStyle,
       showNavigationLabels: showNavigationLabels,
     );
+    final topInset = MediaQuery.paddingOf(context).top + kToolbarHeight;
 
     return Scaffold(
-      appBar: AppBar(title: const Text('发现')),
+      extendBodyBehindAppBar: true,
+      appBar: AppBar(
+        title: const Text('发现'),
+        backgroundColor: Colors.transparent,
+        surfaceTintColor: Colors.transparent,
+        shadowColor: Colors.transparent,
+      ),
       body: DecoratedBox(
-        decoration: BoxDecoration(
-          gradient: LinearGradient(
-            begin: Alignment.topCenter,
-            end: Alignment.bottomCenter,
-            colors: <Color>[palette.backgroundColor, palette.surfaceColor],
-          ),
-          image:
-              backdrop.wallpaperPath != null &&
-                      backdrop.wallpaperPath!.isNotEmpty &&
-                      File(backdrop.wallpaperPath!).existsSync()
-                  ? DecorationImage(
-                    image: FileImage(File(backdrop.wallpaperPath!)),
-                    fit: BoxFit.cover,
-                    colorFilter: ColorFilter.mode(
-                      backdrop.wallpaperOverlayColor.withValues(
-                        alpha: backdrop.wallpaperOverlayOpacity.clamp(0.0, 1.0),
-                      ),
-                      BlendMode.srcOver,
-                    ),
-                  )
-                  : null,
-        ),
+        decoration: buildAdvancedThemeBackdropDecoration(backdrop),
         child: SafeArea(
           top: false,
           child: Padding(
-            padding: EdgeInsets.fromLTRB(horizontal, 12, horizontal, 12),
+            padding: EdgeInsets.fromLTRB(
+              horizontal,
+              topInset + 12,
+              horizontal,
+              12,
+            ),
             child: LayoutBuilder(
               builder: (context, constraints) {
                 if (AppLayout.isExpandedWidth(constraints.maxWidth)) {

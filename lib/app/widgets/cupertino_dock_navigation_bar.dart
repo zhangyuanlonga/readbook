@@ -9,6 +9,24 @@ import '../navigation/search_entry_transition.dart';
 import '../shell_navigation_provider.dart';
 import 'bottom_nav_icon_view.dart';
 
+class DockThemePalette {
+  const DockThemePalette({
+    required this.containerColor,
+    required this.borderColor,
+    required this.selectedIconColor,
+    required this.unselectedIconColor,
+    required this.selectedLabelColor,
+    required this.unselectedLabelColor,
+  });
+
+  final Color containerColor;
+  final Color borderColor;
+  final Color selectedIconColor;
+  final Color unselectedIconColor;
+  final Color selectedLabelColor;
+  final Color unselectedLabelColor;
+}
+
 class CupertinoDockNavigationBar extends StatelessWidget {
   static const double _kDockHeightWithLabels = 78;
   static const double _kDockHeightIconOnly = 64;
@@ -21,6 +39,7 @@ class CupertinoDockNavigationBar extends StatelessWidget {
     required this.selectedIndex,
     required this.showLabels,
     this.activeIconGallery,
+    this.themePalette,
     required this.onDestinationSelected,
     required this.onSearchPressed,
   });
@@ -29,6 +48,7 @@ class CupertinoDockNavigationBar extends StatelessWidget {
   final int selectedIndex;
   final bool showLabels;
   final BottomNavIconGallery? activeIconGallery;
+  final DockThemePalette? themePalette;
   final ValueChanged<int> onDestinationSelected;
   final VoidCallback onSearchPressed;
 
@@ -44,7 +64,7 @@ class CupertinoDockNavigationBar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final palette = _Md3DockPalette.from(context);
+    final palette = _Md3DockPalette.from(context, override: themePalette);
     final dockHeight =
         showLabels ? _kDockHeightWithLabels : _kDockHeightIconOnly;
     final dockRadius = dockHeight / 2;
@@ -333,7 +353,20 @@ class _Md3DockPalette {
     required this.unselectedLabelColor,
   });
 
-  factory _Md3DockPalette.from(BuildContext context) {
+  factory _Md3DockPalette.from(
+    BuildContext context, {
+    DockThemePalette? override,
+  }) {
+    if (override != null) {
+      return _Md3DockPalette(
+        containerColor: override.containerColor,
+        borderColor: override.borderColor,
+        selectedIconColor: override.selectedIconColor,
+        unselectedIconColor: override.unselectedIconColor,
+        selectedLabelColor: override.selectedLabelColor,
+        unselectedLabelColor: override.unselectedLabelColor,
+      );
+    }
     final theme = Theme.of(context);
     final colorScheme = theme.colorScheme;
     final navigationBarTheme = NavigationBarTheme.of(context);

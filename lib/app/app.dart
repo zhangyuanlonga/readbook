@@ -809,9 +809,12 @@ class _SystemUiOverlayWrapperState extends State<_SystemUiOverlayWrapper>
         return;
       }
       final target =
-          payload.type == ExternalImportPayloadType.scriptSource
-              ? '/source'
-              : '/bookshelf';
+          switch (payload.type) {
+            ExternalImportPayloadType.scriptSource => '/source',
+            ExternalImportPayloadType.localBook => '/bookshelf',
+            ExternalImportPayloadType.advancedTheme =>
+              '/appearance/advanced-themes',
+          };
       _safeGo(target);
     });
   }

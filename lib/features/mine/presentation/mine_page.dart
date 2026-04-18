@@ -1,5 +1,4 @@
 import 'dart:async';
-import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -16,6 +15,7 @@ import '../../../app/theme/app_advanced_theme_tokens.dart';
 import '../../../app/theme/app_theme_palette.dart';
 import '../../../app/theme/app_theme_provider.dart';
 import '../../../app/theme/app_theme_seed_provider.dart';
+import '../../../app/widgets/advanced_theme_backdrop_decoration.dart';
 import '../../../core/app_update/app_update_dialog.dart';
 import '../../../core/app_update/app_update_service.dart';
 import '../../../core/auth/auth_event_bus.dart';
@@ -129,6 +129,7 @@ class _MinePageState extends ConsumerState<MinePage> {
       style: effectiveNavigationStyle,
       showNavigationLabels: showNavigationLabels,
     );
+    final topInset = MediaQuery.paddingOf(context).top + kToolbarHeight;
     final toggleTooltip =
         _layoutMode == _MineLayoutMode.grid ? '切换为列表' : '切换为网格';
     final toggleIcon =
@@ -137,8 +138,12 @@ class _MinePageState extends ConsumerState<MinePage> {
             : Icons.grid_view_rounded;
 
     return Scaffold(
+      extendBodyBehindAppBar: true,
       appBar: AppBar(
         title: const Text('我的'),
+        backgroundColor: Colors.transparent,
+        surfaceTintColor: Colors.transparent,
+        shadowColor: Colors.transparent,
         actions: [
           IconButton(
             tooltip: toggleTooltip,
@@ -155,32 +160,7 @@ class _MinePageState extends ConsumerState<MinePage> {
           );
 
           return DecoratedBox(
-            decoration: BoxDecoration(
-              gradient: LinearGradient(
-                begin: Alignment.topCenter,
-                end: Alignment.bottomCenter,
-                colors: <Color>[
-                  advancedBackdrop.backgroundColor,
-                  advancedBackdrop.surfaceColor,
-                ],
-              ),
-              image:
-                  advancedBackdrop.wallpaperPath != null &&
-                          advancedBackdrop.wallpaperPath!.isNotEmpty &&
-                          File(advancedBackdrop.wallpaperPath!).existsSync()
-                      ? DecorationImage(
-                        image: FileImage(File(advancedBackdrop.wallpaperPath!)),
-                        fit: BoxFit.cover,
-                        colorFilter: ColorFilter.mode(
-                          advancedBackdrop.wallpaperOverlayColor.withValues(
-                            alpha: advancedBackdrop.wallpaperOverlayOpacity
-                                .clamp(0.0, 1.0),
-                          ),
-                          BlendMode.srcOver,
-                        ),
-                      )
-                      : null,
-            ),
+            decoration: buildAdvancedThemeBackdropDecoration(advancedBackdrop),
             child: Align(
               alignment: Alignment.topCenter,
               child: ConstrainedBox(
@@ -191,7 +171,7 @@ class _MinePageState extends ConsumerState<MinePage> {
                     physics: const AlwaysScrollableScrollPhysics(),
                     padding: EdgeInsets.fromLTRB(
                       horizontal,
-                      12,
+                      topInset + 12,
                       horizontal,
                       12 + bottomInset,
                     ),

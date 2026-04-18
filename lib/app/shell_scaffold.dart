@@ -1,4 +1,4 @@
-import 'dart:ui' show lerpDouble;
+import 'dart:ui' show ImageFilter, lerpDouble;
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
@@ -6,6 +6,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../domain/entities/bottom_nav_icon_gallery.dart';
+import '../features/mine/application/advanced_theme_provider.dart';
+import 'theme/app_advanced_theme_tokens.dart';
 import 'layout/app_layout.dart';
 import 'navigation/bottom_nav_icon_gallery_provider.dart';
 import 'navigation/bottom_nav_icon_resolver.dart';
@@ -113,6 +115,7 @@ class _ShellScaffoldState extends ConsumerState<ShellScaffold>
     final visibleDestinations = visibleAppShellDestinations(navigationState);
     final activeIconGallery =
         ref.watch(effectiveBottomNavIconGalleryProvider).value;
+    ref.watch(activeAdvancedThemeProvider);
     final effectiveNavigationStyle = resolveAppNavigationStyle(
       navigationStylePreference,
       isWeb: kIsWeb,
@@ -210,7 +213,7 @@ class _ShellScaffoldState extends ConsumerState<ShellScaffold>
     }
 
     return Scaffold(
-      extendBody: effectiveNavigationStyle == AppNavigationStyle.cupertinoDock,
+      extendBody: true,
       body: body,
       bottomNavigationBar: _buildMobileBottomNavigationBar(
         context,
@@ -236,55 +239,136 @@ class _ShellScaffoldState extends ConsumerState<ShellScaffold>
     required BottomNavIconGallery? activeIconGallery,
   }) {
     final brightness = Theme.of(context).brightness;
+    final backdrop = resolveAdvancedThemeBackdrop(
+      Theme.of(context).colorScheme,
+      ref.read(activeAdvancedThemeProvider).valueOrNull,
+    );
+    final advancedPalette = resolveAdvancedThemePalette(
+      Theme.of(context).colorScheme,
+      ref.read(activeAdvancedThemeProvider).valueOrNull,
+    );
+    final hasWallpaper =
+        backdrop.wallpaperPath != null && backdrop.wallpaperPath!.isNotEmpty;
 
     switch (style) {
       case AppNavigationStyle.standard:
-        return NavigationBar(
-          indicatorColor: Colors.transparent,
-          labelBehavior:
-              showNavigationLabels
-                  ? NavigationDestinationLabelBehavior.alwaysShow
-                  : NavigationDestinationLabelBehavior.alwaysHide,
-          selectedIndex: selectedIndex,
-          onDestinationSelected: (index) {
-            _goToDestination(context, destinations[index]);
-          },
-          destinations: [
-            for (final destination in destinations)
-              NavigationDestination(
-                icon: BottomNavIconView(
-                  icon: resolveStandardBottomNavIcon(
-                    destination: destination,
-                    selected: false,
-                    brightness: brightness,
-                    gallery: activeIconGallery,
-                  ),
-                  size: 24,
+        return DecoratedBox(
+          decoration: BoxDecoration(
+            color:
+                hasWallpaper
+                    ? advancedPalette.cardColor.withValues(alpha: 0.48)
+                    : advancedPalette.cardColor.withValues(alpha: 0.92),
+            border: Border(
+              top: BorderSide(
+                color: advancedPalette.cardBorderColor.withValues(
+                  alpha: 0.72,
                 ),
-                selectedIcon: BottomNavIconView(
-                  icon: resolveStandardBottomNavIcon(
-                    destination: destination,
-                    selected: true,
-                    brightness: brightness,
-                    gallery: activeIconGallery,
-                  ),
-                  size: 24,
-                ),
-                label: destination.label,
               ),
-          ],
+            ),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withValues(alpha: 0.03),
+                blurRadius: 16,
+                offset: const Offset(0, -4),
+              ),
+            ],
+          ),
+          child: NavigationBarTheme(
+            data: NavigationBarThemeData(
+              backgroundColor: Colors.transparent,
+              surfaceTintColor: Colors.transparent,
+              shadowColor: Colors.transparent,
+              indicatorColor: Colors.transparent,
+              labelTextStyle: WidgetStateProperty.resolveWith((states) {
+                final selected = states.contains(WidgetState.selected);
+                return Theme.of(context).textTheme.labelSmall?.copyWith(
+                      color:
+                          selected
+                              ? advancedPalette.textPrimaryColor
+                              : advancedPalette.textSecondaryColor,
+                      fontWeight:
+                          selected ? FontWeight.w700 : FontWeight.w600,
+                    ) ??
+                    TextStyle(
+                      color:
+                          selected
+                              ? advancedPalette.textPrimaryColor
+                              : advancedPalette.textSecondaryColor,
+                      fontWeight:
+                          selected ? FontWeight.w700 : FontWeight.w600,
+                    );
+              }),
+            ),
+            child: IconTheme(
+              data: IconThemeData(color: advancedPalette.textSecondaryColor),
+              child: NavigationBar(
+                labelBehavior:
+                    showNavigationLabels
+                        ? NavigationDestinationLabelBehavior.alwaysShow
+                        : NavigationDestinationLabelBehavior.alwaysHide,
+                selectedIndex: selectedIndex,
+                onDestinationSelected: (index) {
+                  _goToDestination(context, destinations[index]);
+                },
+                destinations: [
+                  for (final destination in destinations)
+                    NavigationDestination(
+                      icon: BottomNavIconView(
+                        icon: resolveStandardBottomNavIcon(
+                          destination: destination,
+                          selected: false,
+                          brightness: brightness,
+                          gallery: activeIconGallery,
+                        ),
+                        size: 24,
+                        fallbackColor: advancedPalette.textSecondaryColor,
+                      ),
+                      selectedIcon: BottomNavIconView(
+                        icon: resolveStandardBottomNavIcon(
+                          destination: destination,
+                          selected: true,
+                          brightness: brightness,
+                          gallery: activeIconGallery,
+                        ),
+                        size: 24,
+                        fallbackColor: advancedPalette.primaryColor,
+                      ),
+                      label: destination.label,
+                    ),
+                ],
+              ),
+            ),
+          ),
         );
       case AppNavigationStyle.cupertinoDock:
-        return CupertinoDockNavigationBar(
-          destinations: destinations,
-          selectedIndex: selectedIndex,
-          showLabels: showNavigationLabels,
-          activeIconGallery: activeIconGallery,
-          onDestinationSelected:
-              (index) => _goToDestination(context, destinations[index]),
-          onSearchPressed: () {
-            context.push('/search?entry=dock');
-          },
+        return ClipRect(
+          child: BackdropFilter(
+            filter: ImageFilter.blur(sigmaX: 18, sigmaY: 18),
+            child: CupertinoDockNavigationBar(
+              destinations: destinations,
+              selectedIndex: selectedIndex,
+              showLabels: showNavigationLabels,
+              activeIconGallery: activeIconGallery,
+              themePalette: DockThemePalette(
+                containerColor:
+                    hasWallpaper
+                        ? advancedPalette.cardColor.withValues(alpha: 0.68)
+                        : advancedPalette.cardColor,
+                borderColor: advancedPalette.cardBorderColor.withValues(
+                  alpha: 0.92,
+                ),
+                selectedIconColor: advancedPalette.primaryColor,
+                unselectedIconColor: advancedPalette.textSecondaryColor,
+                selectedLabelColor: advancedPalette.textPrimaryColor,
+                unselectedLabelColor: advancedPalette.textSecondaryColor,
+              ),
+              onDestinationSelected:
+                  (index) => _goToDestination(context, destinations[index]),
+              onSearchPressed: () {
+                context.push('/search?entry=dock');
+              },
+            ),
+          ),
         );
     }
   }

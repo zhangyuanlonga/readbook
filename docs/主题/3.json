@@ -1,0 +1,41 @@
+{
+  "type": "advanced_theme_colors",
+  "version": 1,
+  "name": "桃汽夜色",
+  "lightColors": {
+    "primaryColorValue": 4294929259,
+    "secondaryColorValue": 4294942531,
+    "noticeAccentColorValue": 4286336511,
+    "noticeSurfaceColorValue": 4294438399,
+    "primaryContainerColorValue": 4294959837,
+    "backgroundColorValue": 4294965494,
+    "surfaceColorValue": 4294967295,
+    "elevatedSurfaceColorValue": 4294963694,
+    "cardColorValue": 4294967295,
+    "cardBorderColorValue": 4293972428,
+    "iconBackgroundColorValue": 4294760187,
+    "textPrimaryColorValue": 4281408296,
+    "textSecondaryColorValue": 4286210416,
+    "buttonTextColorValue": 4294967295,
+    "outlineColorValue": 4292393155,
+    "wallpaperOverlayColorValue": 4294965494
+  },
+  "darkColors": {
+    "primaryColorValue": 4294937216,
+    "secondaryColorValue": 4294948685,
+    "noticeAccentColorValue": 4289956015,
+    "noticeSurfaceColorValue": 4281542221,
+    "primaryContainerColorValue": 4283247412,
+    "backgroundColorValue": 4279635990,
+    "surfaceColorValue": 4280424738,
+    "elevatedSurfaceColorValue": 4281016363,
+    "cardColorValue": 4280424738,
+    "cardBorderColorValue": 4284302936,
+    "iconBackgroundColorValue": 4281479003,
+    "textPrimaryColorValue": 4294503075,
+    "textSecondaryColorValue": 4291409524,
+    "buttonTextColorValue": 4279635990,
+    "outlineColorValue": 4287328899,
+    "wallpaperOverlayColorValue": 4279635990
+  }
+}

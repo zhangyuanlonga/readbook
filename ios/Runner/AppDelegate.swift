@@ -16,6 +16,7 @@ import UniformTypeIdentifiers
   private let defaultPayloadLabel = "外部导入"
   private let payloadTypeLocalBook = "localBook"
   private let payloadTypeScriptSource = "scriptSource"
+  private let payloadTypeAdvancedTheme = "advancedTheme"
   private let readerVolumeBaseline: Float = 0.5
 
   private var sourceImportMethodChannel: FlutterMethodChannel?
@@ -289,6 +290,13 @@ import UniformTypeIdentifiers
         "label": label,
         "mimeType": mimeType ?? "",
       ]
+    case payloadTypeAdvancedTheme:
+      return [
+        "type": payloadTypeAdvancedTheme,
+        "uri": url.absoluteString,
+        "label": label,
+        "mimeType": mimeType ?? "",
+      ]
     case payloadTypeScriptSource:
       return [
         "type": payloadTypeScriptSource,
@@ -323,6 +331,10 @@ import UniformTypeIdentifiers
       normalizedMimeType == "text/javascript" ||
       normalizedMimeType == "application/javascript" {
       return payloadTypeScriptSource
+    }
+    if extensionName == "json" ||
+      normalizedMimeType == "application/json" {
+      return payloadTypeAdvancedTheme
     }
     return nil
   }

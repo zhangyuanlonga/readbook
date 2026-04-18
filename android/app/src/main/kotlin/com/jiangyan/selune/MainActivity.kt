@@ -27,6 +27,7 @@ class MainActivity : FlutterActivity() {
         private const val DEFAULT_PAYLOAD_LABEL = "外部导入"
         private const val PAYLOAD_TYPE_LOCAL_BOOK = "localBook"
         private const val PAYLOAD_TYPE_SCRIPT_SOURCE = "scriptSource"
+        private const val PAYLOAD_TYPE_ADVANCED_THEME = "advancedTheme"
     }
 
     private var sourceImportMethodChannel: MethodChannel? = null
@@ -213,6 +214,12 @@ class MainActivity : FlutterActivity() {
                 "label" to label,
                 "mimeType" to (mimeType ?: ""),
             )
+            PAYLOAD_TYPE_ADVANCED_THEME -> mapOf(
+                "type" to PAYLOAD_TYPE_ADVANCED_THEME,
+                "uri" to uri.toString(),
+                "label" to label,
+                "mimeType" to (mimeType ?: ""),
+            )
             PAYLOAD_TYPE_SCRIPT_SOURCE -> mapOf(
                 "type" to PAYLOAD_TYPE_SCRIPT_SOURCE,
                 "uri" to uri.toString(),
@@ -256,13 +263,14 @@ class MainActivity : FlutterActivity() {
         if (
             extension == "js" ||
             extension == "mjs" ||
-            extension == "json" ||
             normalizedMimeType == "application/javascript" ||
             normalizedMimeType == "text/javascript" ||
-            normalizedMimeType == "application/x-javascript" ||
-            normalizedMimeType == "application/json"
+            normalizedMimeType == "application/x-javascript"
         ) {
             return PAYLOAD_TYPE_SCRIPT_SOURCE
+        }
+        if (extension == "json" || normalizedMimeType == "application/json") {
+            return PAYLOAD_TYPE_ADVANCED_THEME
         }
         if (extension == "epub" || normalizedMimeType == "application/epub+zip") {
             return PAYLOAD_TYPE_LOCAL_BOOK
@@ -320,7 +328,9 @@ class MainActivity : FlutterActivity() {
         return when (type?.trim()) {
             PAYLOAD_TYPE_SCRIPT_SOURCE -> resolveScriptSourceExtension(label, mimeType)
             PAYLOAD_TYPE_LOCAL_BOOK -> resolveLocalBookExtension(label, mimeType)
+            PAYLOAD_TYPE_ADVANCED_THEME -> resolveAdvancedThemeExtension(label, mimeType)
             else -> resolveScriptSourceExtension(label, mimeType)
+                ?: resolveAdvancedThemeExtension(label, mimeType)
                 ?: resolveLocalBookExtension(label, mimeType)
         }
     }
@@ -342,11 +352,18 @@ class MainActivity : FlutterActivity() {
         return when {
             lowerLabel.endsWith(".mjs") -> ".mjs"
             lowerLabel.endsWith(".js") -> ".js"
-            lowerLabel.endsWith(".json") -> ".json"
             lowerLabel.endsWith(".txt") -> ".txt"
             mimeType.equals("application/javascript", ignoreCase = true) ||
                 mimeType.equals("text/javascript", ignoreCase = true) ||
                 mimeType.equals("application/x-javascript", ignoreCase = true) -> ".js"
+            else -> null
+        }
+    }
+
+    private fun resolveAdvancedThemeExtension(label: String, mimeType: String?): String? {
+        val lowerLabel = label.lowercase(Locale.ROOT)
+        return when {
+            lowerLabel.endsWith(".json") -> ".json"
             mimeType.equals("application/json", ignoreCase = true) -> ".json"
             else -> null
         }
