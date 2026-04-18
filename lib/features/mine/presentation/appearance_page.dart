@@ -1058,6 +1058,11 @@ class _AppearancePageState extends ConsumerState<AppearancePage> {
       icon: Icons.wallpaper_outlined,
       title: '背景',
       subtitle: '移动端可选相册或文件，桌面端从文件选择。长按图片可删除。',
+      trailing: IconButton(
+        tooltip: '新增背景',
+        onPressed: _uploadBackground,
+        icon: const Icon(Icons.add_rounded),
+      ),
       child:
           _isLoadingBackgrounds
               ? const SizedBox(
@@ -1077,72 +1082,6 @@ class _AppearancePageState extends ConsumerState<AppearancePage> {
                   return Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      InkWell(
-                        borderRadius: BorderRadius.circular(14),
-                        onTap: _uploadBackground,
-                        child: Ink(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 12,
-                            vertical: 12,
-                          ),
-                          decoration: BoxDecoration(
-                            color: colorScheme.surface,
-                            borderRadius: BorderRadius.circular(14),
-                            border: Border.all(
-                              color: colorScheme.outlineVariant.withValues(
-                                alpha: 0.42,
-                              ),
-                            ),
-                          ),
-                          child: Row(
-                            children: [
-                              Container(
-                                width: 34,
-                                height: 34,
-                                decoration: BoxDecoration(
-                                  color: colorScheme.secondaryContainer,
-                                  borderRadius: BorderRadius.circular(12),
-                                ),
-                                child: Icon(
-                                  Icons.add_photo_alternate_outlined,
-                                  size: 18,
-                                  color: colorScheme.onSecondaryContainer,
-                                ),
-                              ),
-                              const SizedBox(width: 10),
-                              Expanded(
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    Text(
-                                      '添加背景',
-                                      style: Theme.of(
-                                        context,
-                                      ).textTheme.bodyMedium?.copyWith(
-                                        fontWeight: FontWeight.w700,
-                                      ),
-                                    ),
-                                    const SizedBox(height: 2),
-                                    Text(
-                                      '支持 JPG、PNG、WEBP、GIF',
-                                      style: Theme.of(
-                                        context,
-                                      ).textTheme.bodySmall?.copyWith(
-                                        color: colorScheme.onSurfaceVariant,
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                              ),
-                              Icon(
-                                Icons.chevron_right_rounded,
-                                color: colorScheme.onSurfaceVariant,
-                              ),
-                            ],
-                          ),
-                        ),
-                      ),
-                      const SizedBox(height: 10),
                       if (_backgroundPaths.isEmpty)
                         Container(
                           width: double.infinity,
@@ -1160,7 +1099,7 @@ class _AppearancePageState extends ConsumerState<AppearancePage> {
                             ),
                           ),
                           child: Text(
-                            '还没有自定义背景，点上方“添加背景”开始。',
+                            '还没有自定义背景，点击右上角 + 号开始。',
                             style: Theme.of(context).textTheme.bodySmall
                                 ?.copyWith(color: colorScheme.onSurfaceVariant),
                           ),
@@ -1358,6 +1297,7 @@ class _AppearancePageState extends ConsumerState<AppearancePage> {
     required String title,
     required String subtitle,
     required Widget child,
+    Widget? trailing,
   }) {
     final colorScheme = Theme.of(context).colorScheme;
     final textTheme = Theme.of(context).textTheme;
@@ -1411,6 +1351,7 @@ class _AppearancePageState extends ConsumerState<AppearancePage> {
                   ],
                 ),
               ),
+              if (trailing != null) ...[const SizedBox(width: 10), trailing],
             ],
           ),
           const SizedBox(height: 10),

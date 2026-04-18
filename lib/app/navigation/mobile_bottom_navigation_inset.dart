@@ -3,7 +3,8 @@ import 'package:flutter/widgets.dart';
 import '../widgets/cupertino_dock_navigation_bar.dart';
 import 'app_navigation_style_provider.dart';
 
-const double _kStandardNavigationBarHeight = 64;
+const double _kStandardNavigationBarHeightWithLabels = 80;
+const double _kStandardNavigationBarHeightIconOnly = 64;
 
 double mobileBottomNavigationContentInset(
   BuildContext context, {
@@ -12,7 +13,11 @@ double mobileBottomNavigationContentInset(
 }) {
   final bottomSafe = MediaQuery.viewPaddingOf(context).bottom;
   return switch (style) {
-    AppNavigationStyle.standard => _kStandardNavigationBarHeight + bottomSafe,
+    AppNavigationStyle.standard =>
+      (showNavigationLabels
+              ? _kStandardNavigationBarHeightWithLabels
+              : _kStandardNavigationBarHeightIconOnly) +
+          bottomSafe,
     AppNavigationStyle.cupertinoDock =>
       CupertinoDockNavigationBar.contentBottomInset(
         context,

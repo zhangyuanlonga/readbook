@@ -1,4 +1,4 @@
-const SOURCE_HOST = 'http://www.gdbzkz.com';
+const SOURCE_HOST = 'http://www.gdbzkz.info';
 const DEFAULT_USER_AGENT = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36';
 
 export default {
@@ -8,7 +8,7 @@ export default {
     author: 'converted',
     description: '鬼吹灯网书源，支持搜索、详情、目录、正文',
     checkKeyword: '凡人修仙传',
-    domains: ['www.gdbzkz.com'],
+    domains: ['www.gdbzkz.info', 'www.gdbzkz.com'],
     homepage: SOURCE_HOST,
     capabilities: ['search', 'detail', 'chapters', 'content', 'discover'],
     rateLimits: {

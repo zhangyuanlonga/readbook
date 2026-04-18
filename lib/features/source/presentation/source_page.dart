@@ -98,6 +98,138 @@ class _BatchCheckProgressState {
 
 const Object _batchCheckSentinel = Object();
 
+class _SingleCheckRequestSheet extends StatefulWidget {
+  const _SingleCheckRequestSheet({
+    required this.title,
+    required this.helperText,
+    required this.initialKeyword,
+    required this.levelLabelBuilder,
+    required this.onSubmit,
+  });
+
+  final String title;
+  final String helperText;
+  final String initialKeyword;
+  final String Function(SourceCheckLevel level) levelLabelBuilder;
+  final _SingleCheckRequest Function(String keyword, SourceCheckLevel level)
+  onSubmit;
+
+  @override
+  State<_SingleCheckRequestSheet> createState() =>
+      _SingleCheckRequestSheetState();
+}
+
+class _SingleCheckRequestSheetState extends State<_SingleCheckRequestSheet> {
+  late final TextEditingController _controller;
+  SourceCheckLevel _selectedLevel = SourceCheckLevel.searchOnly;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = TextEditingController(text: widget.initialKeyword);
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Card(
+      margin: EdgeInsets.zero,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(18, 18, 18, 18),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Center(
+              child: Container(
+                width: 42,
+                height: 4,
+                margin: const EdgeInsets.only(bottom: 16),
+                decoration: BoxDecoration(
+                  color: Theme.of(context).colorScheme.outlineVariant,
+                  borderRadius: BorderRadius.circular(999),
+                ),
+              ),
+            ),
+            Text(
+              widget.title,
+              style: Theme.of(
+                context,
+              ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              widget.helperText,
+              style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                color: Theme.of(context).colorScheme.onSurfaceVariant,
+                height: 1.45,
+              ),
+            ),
+            const SizedBox(height: 12),
+            TextField(
+              controller: _controller,
+              autofocus: appEnableAutoFocusForTextInput,
+              decoration: const InputDecoration(
+                labelText: '检测关键词',
+                hintText: '留空时自动使用书源默认检测词',
+                border: OutlineInputBorder(),
+              ),
+            ),
+            const SizedBox(height: 12),
+            DropdownButtonFormField<SourceCheckLevel>(
+              initialValue: _selectedLevel,
+              decoration: const InputDecoration(
+                labelText: '检测级别',
+                border: OutlineInputBorder(),
+              ),
+              items: SourceCheckLevel.values
+                  .map(
+                    (level) => DropdownMenuItem<SourceCheckLevel>(
+                      value: level,
+                      child: Text(widget.levelLabelBuilder(level)),
+                    ),
+                  )
+                  .toList(growable: false),
+              onChanged: (value) {
+                if (value == null) {
+                  return;
+                }
+                setState(() {
+                  _selectedLevel = value;
+                });
+              },
+            ),
+            const SizedBox(height: 16),
+            Row(
+              children: [
+                TextButton(
+                  onPressed: () => Navigator.of(context).pop(),
+                  child: const Text('取消'),
+                ),
+                const Spacer(),
+                FilledButton(
+                  onPressed: () {
+                    Navigator.of(context).pop(
+                      widget.onSubmit(_controller.text.trim(), _selectedLevel),
+                    );
+                  },
+                  child: const Text('开始检测'),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
 class _CheckRequestDialog<T> extends StatefulWidget {
   const _CheckRequestDialog({
     required this.title,
@@ -2034,34 +2166,84 @@ class _SourcePageState extends State<SourcePage> {
       return;
     }
     setState(() {});
-    await showDialog<void>(
+    await _showSingleCheckResultSheet(sourceName: source.name, result: result);
+  }
+
+  Future<void> _showSingleCheckResultSheet({
+    required String sourceName,
+    required SourceCheckResult result,
+  }) {
+    return showModalBottomSheet<void>(
       context: context,
-      builder: (context) {
-        return AlertDialog(
-          title: Text('检测结果 · ${source.name}'),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text('状态：${_checkStatusLabel(result.status)}'),
-              const SizedBox(height: 8),
-              Text('关键词：${result.usedKeyword}'),
-              const SizedBox(height: 8),
-              Text('级别：${_checkLevelLabel(result.checkedLevel)}'),
-              const SizedBox(height: 8),
-              Text('步骤：${_checkStepLabel(result.stepReached)}'),
-              const SizedBox(height: 8),
-              Text('耗时：${result.duration.inMilliseconds} ms'),
-              const SizedBox(height: 8),
-              Text(result.message),
-            ],
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.of(context).pop(),
-              child: const Text('关闭'),
+      isScrollControlled: true,
+      useSafeArea: true,
+      showDragHandle: false,
+      builder: (sheetContext) {
+        final bottomInset = MediaQuery.viewInsetsOf(sheetContext).bottom;
+        return AnimatedPadding(
+          duration: const Duration(milliseconds: 180),
+          curve: Curves.easeOutCubic,
+          padding: EdgeInsets.only(bottom: bottomInset),
+          child: SingleChildScrollView(
+            padding: const EdgeInsets.fromLTRB(12, 12, 12, 12),
+            child: Card(
+              margin: EdgeInsets.zero,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(24),
+              ),
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(18, 18, 18, 18),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Center(
+                      child: Container(
+                        width: 42,
+                        height: 4,
+                        margin: const EdgeInsets.only(bottom: 16),
+                        decoration: BoxDecoration(
+                          color:
+                              Theme.of(sheetContext).colorScheme.outlineVariant,
+                          borderRadius: BorderRadius.circular(999),
+                        ),
+                      ),
+                    ),
+                    Text(
+                      '检测结果 · $sourceName',
+                      style: Theme.of(sheetContext).textTheme.titleMedium
+                          ?.copyWith(fontWeight: FontWeight.w700),
+                    ),
+                    const SizedBox(height: 12),
+                    Text('状态：${_checkStatusLabel(result.status)}'),
+                    const SizedBox(height: 8),
+                    Text('关键词：${result.usedKeyword}'),
+                    const SizedBox(height: 8),
+                    Text('级别：${_checkLevelLabel(result.checkedLevel)}'),
+                    const SizedBox(height: 8),
+                    Text('步骤：${_checkStepLabel(result.stepReached)}'),
+                    const SizedBox(height: 8),
+                    Text('耗时：${result.duration.inMilliseconds} ms'),
+                    const SizedBox(height: 12),
+                    Text(
+                      result.message,
+                      style: Theme.of(
+                        sheetContext,
+                      ).textTheme.bodyMedium?.copyWith(height: 1.45),
+                    ),
+                    const SizedBox(height: 16),
+                    Align(
+                      alignment: Alignment.centerRight,
+                      child: FilledButton(
+                        onPressed: () => Navigator.of(sheetContext).pop(),
+                        child: const Text('关闭'),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
             ),
-          ],
+          ),
         );
       },
     );
@@ -2433,15 +2615,32 @@ class _SourcePageState extends State<SourcePage> {
   }
 
   Future<_SingleCheckRequest?> _promptSingleCheckRequest(ScriptSource source) {
-    return _showCheckRequestDialog<_SingleCheckRequest>(
-      title: '单源检测',
-      helperText: '默认建议先执行 searchOnly。留空时优先使用该书源的 checkKeyword，未配置则回退到系统默认关键词。',
-      initialKeyword:
-          source.checkKeyword ?? SourceCheckService.defaultCheckKeyword,
-      allowEmptyKeyword: true,
-      includeScope: false,
-      onSubmit: (keyword, level, _) {
-        return _SingleCheckRequest(keyword: keyword, level: level);
+    return showModalBottomSheet<_SingleCheckRequest>(
+      context: context,
+      isScrollControlled: true,
+      useSafeArea: true,
+      showDragHandle: false,
+      builder: (sheetContext) {
+        final bottomInset = MediaQuery.viewInsetsOf(sheetContext).bottom;
+        return AnimatedPadding(
+          duration: const Duration(milliseconds: 180),
+          curve: Curves.easeOutCubic,
+          padding: EdgeInsets.only(bottom: bottomInset),
+          child: SingleChildScrollView(
+            padding: const EdgeInsets.fromLTRB(12, 12, 12, 12),
+            child: _SingleCheckRequestSheet(
+              title: '单源检测',
+              helperText:
+                  '默认建议先执行 searchOnly。留空时优先使用该书源的 checkKeyword，未配置则回退到系统默认关键词。',
+              initialKeyword:
+                  source.checkKeyword ?? SourceCheckService.defaultCheckKeyword,
+              levelLabelBuilder: _checkLevelLabel,
+              onSubmit: (keyword, level) {
+                return _SingleCheckRequest(keyword: keyword, level: level);
+              },
+            ),
+          ),
+        );
       },
     );
   }

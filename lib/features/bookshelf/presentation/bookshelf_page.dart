@@ -295,6 +295,7 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
   static const double _kContinueReadingCardHeight = 84;
   static const double _kContinueReadingDockGap = 12;
   static const double _kContinueReadingStandardGap = 12;
+  static const double _kContinueReadingIosExtraGap = 10;
   static const Set<String> _kMangaCapabilityKeywords = <String>{
     'manga',
     'comic',
@@ -394,6 +395,7 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
     final continueReadingBottomInset = _continueReadingBottomInset(
       effectiveNavigationStyle,
       navigationBottomInset: navigationBottomInset,
+      platform: platform,
     );
     final topInset = MediaQuery.paddingOf(context).top + kToolbarHeight;
     final continueReadingReservedSpace =
@@ -567,12 +569,15 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
   double _continueReadingBottomInset(
     AppNavigationStyle style, {
     required double navigationBottomInset,
+    required TargetPlatform platform,
   }) {
+    final platformExtraGap =
+        platform == TargetPlatform.iOS ? _kContinueReadingIosExtraGap : 0.0;
     return switch (style) {
       AppNavigationStyle.standard =>
-        navigationBottomInset + _kContinueReadingStandardGap,
+        navigationBottomInset + _kContinueReadingStandardGap + platformExtraGap,
       AppNavigationStyle.cupertinoDock =>
-        navigationBottomInset + _kContinueReadingDockGap,
+        navigationBottomInset + _kContinueReadingDockGap + platformExtraGap,
     };
   }
 
