@@ -6,6 +6,7 @@ import 'package:path_provider/path_provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:uuid/uuid.dart';
 
+import '../../../app/images/file_image_cache.dart';
 import '../../../domain/entities/app_advanced_theme.dart';
 
 class AdvancedThemeService {
@@ -247,7 +248,9 @@ class AdvancedThemeService {
     final target = File(
       p.join(directory.path, 'wallpaper_${mode.name}.$extension'),
     );
+    await evictFileImagePath(target.path);
     await target.writeAsBytes(bytes, flush: true);
+    await evictFileImagePath(target.path);
     return target.path;
   }
 
@@ -256,6 +259,7 @@ class AdvancedThemeService {
     if (normalized.isEmpty) {
       return;
     }
+    await evictFileImagePath(normalized);
     final file = File(normalized);
     if (await file.exists()) {
       await file.delete();
@@ -311,8 +315,7 @@ class AdvancedThemeService {
     }
     return AppAdvancedThemeColors.fromJson(
       rawColors.map(
-        (nestedKey, nestedValue) =>
-            MapEntry(nestedKey.toString(), nestedValue),
+        (nestedKey, nestedValue) => MapEntry(nestedKey.toString(), nestedValue),
       ),
     );
   }

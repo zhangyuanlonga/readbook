@@ -1,10 +1,12 @@
 import 'dart:io';
 
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../app/layout/app_layout.dart';
 import '../../../app/layout/app_spacing.dart';
+import '../application/cover_gallery_provider.dart';
 import '../../../domain/entities/cover_gallery.dart';
 import '../application/cover_gallery_service.dart';
 
@@ -43,11 +45,13 @@ class _CoverGalleryPageState extends State<CoverGalleryPage> {
     if (_isSaving) {
       return;
     }
+    final container = ProviderScope.containerOf(context);
     setState(() {
       _isSaving = true;
     });
     try {
       final gallery = await _service.createGallery();
+      container.read(coverGalleryRevisionProvider.notifier).markChanged();
       await _load();
       if (!mounted) {
         return;

@@ -3,6 +3,7 @@ import 'dart:io';
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../app/layout/app_layout.dart';
@@ -10,6 +11,7 @@ import '../../../app/layout/app_spacing.dart';
 import '../../../app/platform/app_input_focus_behavior.dart';
 import '../../../core/media/image_selection_service.dart';
 import '../../../domain/entities/cover_gallery.dart';
+import '../application/cover_gallery_provider.dart';
 import '../application/cover_gallery_service.dart';
 
 class CoverGalleryEditorPage extends StatefulWidget {
@@ -110,6 +112,7 @@ class _CoverGalleryEditorPageState extends State<CoverGalleryEditorPage> {
     if (gallery == null || _isSaving) {
       return;
     }
+    final container = ProviderScope.containerOf(context);
     try {
       final source = await _selectImageSource();
       if (source == null || !mounted) {
@@ -131,6 +134,7 @@ class _CoverGalleryEditorPageState extends State<CoverGalleryEditorPage> {
         bytes: picked.bytes,
         fileName: picked.name,
       );
+      container.read(coverGalleryRevisionProvider.notifier).markChanged();
       if (!mounted) {
         return;
       }
@@ -216,6 +220,7 @@ class _CoverGalleryEditorPageState extends State<CoverGalleryEditorPage> {
     if (gallery == null || _selectedPaths.isEmpty || _isSaving) {
       return;
     }
+    final container = ProviderScope.containerOf(context);
     setState(() {
       _isSaving = true;
     });
@@ -224,6 +229,7 @@ class _CoverGalleryEditorPageState extends State<CoverGalleryEditorPage> {
         galleryId: gallery.id,
         paths: _selectedPaths.toList(growable: false),
       );
+      container.read(coverGalleryRevisionProvider.notifier).markChanged();
       if (!mounted) {
         return;
       }

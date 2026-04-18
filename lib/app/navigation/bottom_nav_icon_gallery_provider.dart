@@ -9,13 +9,20 @@ final bottomNavIconGalleryServiceProvider =
       (ref) => BottomNavIconGalleryService(),
     );
 
+final bottomNavIconGalleryRevisionProvider =
+    NotifierProvider<BottomNavIconGalleryRevisionNotifier, int>(
+      BottomNavIconGalleryRevisionNotifier.new,
+    );
+
 final activeBottomNavIconGalleryProvider =
     FutureProvider<BottomNavIconGallery?>((ref) async {
+      ref.watch(bottomNavIconGalleryRevisionProvider);
       return ref.watch(bottomNavIconGalleryServiceProvider).loadActiveGallery();
     });
 
 final effectiveBottomNavIconGalleryProvider =
     FutureProvider<BottomNavIconGallery?>((ref) async {
+      ref.watch(bottomNavIconGalleryRevisionProvider);
       final service = ref.watch(bottomNavIconGalleryServiceProvider);
       final activeAdvancedTheme = await ref.watch(
         activeAdvancedThemeProvider.future,
@@ -31,3 +38,12 @@ final effectiveBottomNavIconGalleryProvider =
       }
       return service.loadActiveGallery();
     });
+
+class BottomNavIconGalleryRevisionNotifier extends Notifier<int> {
+  @override
+  int build() => 0;
+
+  void markChanged() {
+    state += 1;
+  }
+}

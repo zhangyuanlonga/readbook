@@ -6,6 +6,7 @@ import 'package:path_provider/path_provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:uuid/uuid.dart';
 
+import '../images/file_image_cache.dart';
 import 'bottom_nav_icon_gallery_defaults.dart';
 import '../../domain/entities/bottom_nav_icon_gallery.dart';
 
@@ -229,7 +230,8 @@ class BottomNavIconGalleryService {
     final updated = <BottomNavIconGallery>[
       for (final item in galleries)
         if (item.id == updatedGallery.id) updatedGallery else item,
-      if (!galleries.any((item) => item.id == updatedGallery.id)) updatedGallery,
+      if (!galleries.any((item) => item.id == updatedGallery.id))
+        updatedGallery,
     ];
     await saveGalleries(updated);
     return updatedGallery;
@@ -256,6 +258,7 @@ class BottomNavIconGalleryService {
         '${tab.name}_${slot.name}_${DateTime.now().millisecondsSinceEpoch}.${format.name}';
     final destination = File(p.join(directory.path, filename));
     await sourceFile.copy(destination.path);
+    await evictFileImagePath(destination.path);
 
     return BottomNavIconAssetRef(
       path: destination.path,
@@ -268,6 +271,7 @@ class BottomNavIconGalleryService {
     if (assetRef.isAsset) {
       return;
     }
+    await evictFileImagePath(assetRef.path);
     final file = File(assetRef.path);
     if (await file.exists()) {
       await file.delete();

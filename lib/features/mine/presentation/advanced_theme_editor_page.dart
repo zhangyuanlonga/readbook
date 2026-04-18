@@ -22,6 +22,7 @@ import '../../../core/media/image_selection_service.dart';
 import '../../../domain/entities/app_advanced_theme.dart';
 import '../../../domain/entities/bottom_nav_icon_gallery.dart';
 import '../../../domain/entities/cover_gallery.dart';
+import '../application/advanced_theme_provider.dart';
 import '../application/advanced_theme_service.dart';
 import '../application/cover_gallery_service.dart';
 
@@ -272,6 +273,7 @@ class _AdvancedThemeEditorPageState
           darkConfig: draft.darkConfig.copyWith(colors: parsedDarkColors),
         ),
       );
+      ref.read(advancedThemeRevisionProvider.notifier).markChanged();
       if (!mounted) {
         return;
       }
@@ -337,165 +339,173 @@ class _AdvancedThemeEditorPageState
       useSafeArea: true,
       builder: (context) {
         final colorScheme = Theme.of(context).colorScheme;
+        final maxHeight = MediaQuery.sizeOf(context).height * 0.78;
         return StatefulBuilder(
           builder: (context, setSheetState) {
             return Padding(
               padding: const EdgeInsets.fromLTRB(12, 0, 12, 16),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    '选择背景库图片',
-                    style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                      fontWeight: FontWeight.w700,
+              child: ConstrainedBox(
+                constraints: BoxConstraints(maxHeight: maxHeight),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      '选择背景库图片',
+                      style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                        fontWeight: FontWeight.w700,
+                      ),
                     ),
-                  ),
-                  const SizedBox(height: 10),
-                  if (_backgroundLibraryPaths.isEmpty)
-                    Container(
-                      width: double.infinity,
-                      padding: const EdgeInsets.fromLTRB(12, 18, 12, 18),
-                      decoration: BoxDecoration(
-                        color: colorScheme.surfaceContainerLow,
-                        borderRadius: BorderRadius.circular(12),
-                        border: Border.all(
-                          color: colorScheme.outlineVariant.withValues(
-                            alpha: 0.4,
+                    const SizedBox(height: 10),
+                    if (_backgroundLibraryPaths.isEmpty)
+                      Container(
+                        width: double.infinity,
+                        padding: const EdgeInsets.fromLTRB(12, 18, 12, 18),
+                        decoration: BoxDecoration(
+                          color: colorScheme.surfaceContainerLow,
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(
+                            color: colorScheme.outlineVariant.withValues(
+                              alpha: 0.4,
+                            ),
                           ),
                         ),
-                      ),
-                      child: Column(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Icon(
-                            Icons.wallpaper_outlined,
-                            color: colorScheme.onSurfaceVariant,
-                          ),
-                          const SizedBox(height: 8),
-                          Text(
-                            '还没有背景素材',
-                            style: Theme.of(context).textTheme.labelLarge
-                                ?.copyWith(fontWeight: FontWeight.w700),
-                          ),
-                          const SizedBox(height: 4),
-                          Text(
-                            '先去背景页添加图片，再回来选择。',
-                            textAlign: TextAlign.center,
-                            style: Theme.of(context).textTheme.bodySmall
-                                ?.copyWith(color: colorScheme.onSurfaceVariant),
-                          ),
-                        ],
-                      ),
-                    )
-                  else
-                    Flexible(
-                      child: LayoutBuilder(
-                        builder: (context, constraints) {
-                          const spacing = 8.0;
-                          final columns = AppLayout.optionGridColumnsForWidth(
-                            constraints.maxWidth,
-                          ).clamp(3, 5);
-                          final itemWidth =
-                              (constraints.maxWidth -
-                                  ((columns - 1) * spacing)) /
-                              columns;
-                          return SingleChildScrollView(
-                            child: Wrap(
-                              spacing: spacing,
-                              runSpacing: spacing,
-                              children: _backgroundLibraryPaths
-                                  .map((path) {
-                                    final selected = path == selectedPath;
-                                    return InkWell(
-                                      borderRadius: BorderRadius.circular(12),
-                                      onTap: () {
-                                        setSheetState(() {
-                                          selectedPath = path;
-                                        });
-                                      },
-                                      child: Stack(
-                                        children: [
-                                          Container(
-                                            width: itemWidth,
-                                            height: itemWidth * 1.28,
-                                            decoration: BoxDecoration(
-                                              borderRadius:
-                                                  BorderRadius.circular(12),
-                                              border: Border.all(
-                                                color:
-                                                    selected
-                                                        ? colorScheme.primary
-                                                        : colorScheme
-                                                            .outlineVariant
-                                                            .withValues(
-                                                              alpha: 0.45,
-                                                            ),
-                                                width: selected ? 2 : 1,
-                                              ),
-                                              image: DecorationImage(
-                                                image: FileImage(File(path)),
-                                                fit: BoxFit.cover,
-                                              ),
-                                            ),
-                                          ),
-                                          if (selected)
-                                            Positioned(
-                                              top: 8,
-                                              right: 8,
-                                              child: Container(
-                                                width: 24,
-                                                height: 24,
-                                                decoration: BoxDecoration(
-                                                  color: colorScheme.primary,
-                                                  shape: BoxShape.circle,
-                                                ),
-                                                child: const Icon(
-                                                  Icons.check_rounded,
-                                                  size: 16,
-                                                  color: Colors.white,
-                                                ),
-                                              ),
-                                            ),
-                                        ],
-                                      ),
-                                    );
-                                  })
-                                  .toList(growable: false),
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(
+                              Icons.wallpaper_outlined,
+                              color: colorScheme.onSurfaceVariant,
                             ),
-                          );
-                        },
-                      ),
-                    ),
-                  const SizedBox(height: 12),
-                  Row(
-                    children: [
-                      TextButton(
-                        onPressed: () => Navigator.of(context).pop(),
-                        child: const Text('取消'),
-                      ),
-                      const Spacer(),
-                      TextButton(
-                        onPressed:
-                            () => unawaited(
-                              _openRouteFromSheet(
+                            const SizedBox(height: 8),
+                            Text(
+                              '还没有背景素材',
+                              style: Theme.of(context).textTheme.labelLarge
+                                  ?.copyWith(fontWeight: FontWeight.w700),
+                            ),
+                            const SizedBox(height: 4),
+                            Text(
+                              '先去背景页添加图片，再回来选择。',
+                              textAlign: TextAlign.center,
+                              style: Theme.of(
                                 context,
-                                '/appearance?section=background',
+                              ).textTheme.bodySmall?.copyWith(
+                                color: colorScheme.onSurfaceVariant,
                               ),
                             ),
-                        child: const Text('去管理'),
+                          ],
+                        ),
+                      )
+                    else
+                      Flexible(
+                        child: LayoutBuilder(
+                          builder: (context, constraints) {
+                            const spacing = 8.0;
+                            final columns = AppLayout.optionGridColumnsForWidth(
+                              constraints.maxWidth,
+                            ).clamp(3, 5);
+                            final itemWidth =
+                                (constraints.maxWidth -
+                                    ((columns - 1) * spacing)) /
+                                columns;
+                            return SingleChildScrollView(
+                              child: Wrap(
+                                spacing: spacing,
+                                runSpacing: spacing,
+                                children: _backgroundLibraryPaths
+                                    .map((path) {
+                                      final selected = path == selectedPath;
+                                      return InkWell(
+                                        borderRadius: BorderRadius.circular(12),
+                                        onTap: () {
+                                          setSheetState(() {
+                                            selectedPath = path;
+                                          });
+                                        },
+                                        child: Stack(
+                                          children: [
+                                            Container(
+                                              width: itemWidth,
+                                              height: itemWidth * 1.28,
+                                              decoration: BoxDecoration(
+                                                borderRadius:
+                                                    BorderRadius.circular(12),
+                                                border: Border.all(
+                                                  color:
+                                                      selected
+                                                          ? colorScheme.primary
+                                                          : colorScheme
+                                                              .outlineVariant
+                                                              .withValues(
+                                                                alpha: 0.45,
+                                                              ),
+                                                  width: selected ? 2 : 1,
+                                                ),
+                                                image: DecorationImage(
+                                                  image: FileImage(File(path)),
+                                                  fit: BoxFit.cover,
+                                                ),
+                                              ),
+                                            ),
+                                            if (selected)
+                                              Positioned(
+                                                top: 8,
+                                                right: 8,
+                                                child: Container(
+                                                  width: 24,
+                                                  height: 24,
+                                                  decoration: BoxDecoration(
+                                                    color: colorScheme.primary,
+                                                    shape: BoxShape.circle,
+                                                  ),
+                                                  child: const Icon(
+                                                    Icons.check_rounded,
+                                                    size: 16,
+                                                    color: Colors.white,
+                                                  ),
+                                                ),
+                                              ),
+                                          ],
+                                        ),
+                                      );
+                                    })
+                                    .toList(growable: false),
+                              ),
+                            );
+                          },
+                        ),
                       ),
-                      const SizedBox(width: 8),
-                      FilledButton(
-                        onPressed:
-                            selectedPath == null
-                                ? null
-                                : () => Navigator.of(context).pop(selectedPath),
-                        child: const Text('应用'),
-                      ),
-                    ],
-                  ),
-                ],
+                    const SizedBox(height: 12),
+                    Row(
+                      children: [
+                        TextButton(
+                          onPressed: () => Navigator.of(context).pop(),
+                          child: const Text('取消'),
+                        ),
+                        const Spacer(),
+                        TextButton(
+                          onPressed:
+                              () => unawaited(
+                                _openRouteFromSheet(
+                                  context,
+                                  '/appearance?section=background',
+                                ),
+                              ),
+                          child: const Text('去管理'),
+                        ),
+                        const SizedBox(width: 8),
+                        FilledButton(
+                          onPressed:
+                              selectedPath == null
+                                  ? null
+                                  : () =>
+                                      Navigator.of(context).pop(selectedPath),
+                          child: const Text('应用'),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
               ),
             );
           },
@@ -683,174 +693,185 @@ class _AdvancedThemeEditorPageState
       useSafeArea: true,
       builder: (context) {
         final colorScheme = Theme.of(context).colorScheme;
+        final maxHeight = MediaQuery.sizeOf(context).height * 0.78;
         return StatefulBuilder(
           builder: (context, setSheetState) {
             return Padding(
               padding: const EdgeInsets.fromLTRB(12, 0, 12, 16),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    '选择封面图集',
-                    style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                      fontWeight: FontWeight.w700,
+              child: ConstrainedBox(
+                constraints: BoxConstraints(maxHeight: maxHeight),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      '选择封面图集',
+                      style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                        fontWeight: FontWeight.w700,
+                      ),
                     ),
-                  ),
-                  const SizedBox(height: 10),
-                  if (_coverGalleries.isEmpty)
-                    Container(
-                      width: double.infinity,
-                      padding: const EdgeInsets.fromLTRB(12, 18, 12, 18),
-                      decoration: BoxDecoration(
-                        color: colorScheme.surfaceContainerLow,
-                        borderRadius: BorderRadius.circular(12),
-                        border: Border.all(
-                          color: colorScheme.outlineVariant.withValues(
-                            alpha: 0.4,
+                    const SizedBox(height: 10),
+                    if (_coverGalleries.isEmpty)
+                      Container(
+                        width: double.infinity,
+                        padding: const EdgeInsets.fromLTRB(12, 18, 12, 18),
+                        decoration: BoxDecoration(
+                          color: colorScheme.surfaceContainerLow,
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(
+                            color: colorScheme.outlineVariant.withValues(
+                              alpha: 0.4,
+                            ),
                           ),
                         ),
-                      ),
-                      child: Column(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Icon(
-                            Icons.photo_library_outlined,
-                            color: colorScheme.onSurfaceVariant,
-                          ),
-                          const SizedBox(height: 8),
-                          Text(
-                            '还没有封面图集',
-                            style: Theme.of(context).textTheme.labelLarge
-                                ?.copyWith(fontWeight: FontWeight.w700),
-                          ),
-                          const SizedBox(height: 4),
-                          Text(
-                            '先去封面图集页准备素材，再回来绑定。',
-                            textAlign: TextAlign.center,
-                            style: Theme.of(context).textTheme.bodySmall
-                                ?.copyWith(color: colorScheme.onSurfaceVariant),
-                          ),
-                        ],
-                      ),
-                    )
-                  else
-                    Flexible(
-                      child: ListView.separated(
-                        shrinkWrap: true,
-                        itemCount: _coverGalleries.length,
-                        separatorBuilder: (_, __) => const Divider(height: 1),
-                        itemBuilder: (context, index) {
-                          final gallery = _coverGalleries[index];
-                          final selected = gallery.id == selectedId;
-                          final previewPath = _firstExistingGalleryImagePath(
-                            gallery,
-                          );
-                          final imageCount = gallery.imagePaths.length;
-                          return InkWell(
-                            borderRadius: BorderRadius.circular(12),
-                            onTap: () {
-                              setSheetState(() {
-                                selectedId = gallery.id;
-                              });
-                            },
-                            child: Padding(
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 4,
-                                vertical: 12,
-                              ),
-                              child: Row(
-                                children: [
-                                  _buildGalleryPreviewThumb(
-                                    context,
-                                    previewPath: previewPath,
-                                    title: gallery.name,
-                                  ),
-                                  const SizedBox(width: 12),
-                                  Expanded(
-                                    child: Column(
-                                      crossAxisAlignment:
-                                          CrossAxisAlignment.start,
-                                      children: [
-                                        Text(
-                                          gallery.name,
-                                          style: Theme.of(
-                                            context,
-                                          ).textTheme.labelLarge?.copyWith(
-                                            fontWeight: FontWeight.w700,
-                                          ),
-                                        ),
-                                        const SizedBox(height: 2),
-                                        Text(
-                                          imageCount <= 0
-                                              ? '暂无图片'
-                                              : '$imageCount 张图片',
-                                          style: Theme.of(
-                                            context,
-                                          ).textTheme.bodySmall?.copyWith(
-                                            color: colorScheme.onSurfaceVariant,
-                                          ),
-                                        ),
-                                      ],
-                                    ),
-                                  ),
-                                  if (selected)
-                                    Icon(
-                                      Icons.check_rounded,
-                                      color: colorScheme.primary,
-                                      size: 18,
-                                    ),
-                                ],
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(
+                              Icons.photo_library_outlined,
+                              color: colorScheme.onSurfaceVariant,
+                            ),
+                            const SizedBox(height: 8),
+                            Text(
+                              '还没有封面图集',
+                              style: Theme.of(context).textTheme.labelLarge
+                                  ?.copyWith(fontWeight: FontWeight.w700),
+                            ),
+                            const SizedBox(height: 4),
+                            Text(
+                              '先去封面图集页准备素材，再回来绑定。',
+                              textAlign: TextAlign.center,
+                              style: Theme.of(
+                                context,
+                              ).textTheme.bodySmall?.copyWith(
+                                color: colorScheme.onSurfaceVariant,
                               ),
                             ),
-                          );
-                        },
+                          ],
+                        ),
+                      )
+                    else
+                      Flexible(
+                        child: ListView.separated(
+                          shrinkWrap: true,
+                          itemCount: _coverGalleries.length,
+                          separatorBuilder: (_, __) => const Divider(height: 1),
+                          itemBuilder: (context, index) {
+                            final gallery = _coverGalleries[index];
+                            final selected = gallery.id == selectedId;
+                            final previewPath = _firstExistingGalleryImagePath(
+                              gallery,
+                            );
+                            final imageCount = gallery.imagePaths.length;
+                            return InkWell(
+                              borderRadius: BorderRadius.circular(12),
+                              onTap: () {
+                                setSheetState(() {
+                                  selectedId = gallery.id;
+                                });
+                              },
+                              child: Padding(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 4,
+                                  vertical: 12,
+                                ),
+                                child: Row(
+                                  children: [
+                                    _buildGalleryPreviewThumb(
+                                      context,
+                                      previewPath: previewPath,
+                                      title: gallery.name,
+                                    ),
+                                    const SizedBox(width: 12),
+                                    Expanded(
+                                      child: Column(
+                                        crossAxisAlignment:
+                                            CrossAxisAlignment.start,
+                                        children: [
+                                          Text(
+                                            gallery.name,
+                                            style: Theme.of(
+                                              context,
+                                            ).textTheme.labelLarge?.copyWith(
+                                              fontWeight: FontWeight.w700,
+                                            ),
+                                          ),
+                                          const SizedBox(height: 2),
+                                          Text(
+                                            imageCount <= 0
+                                                ? '暂无图片'
+                                                : '$imageCount 张图片',
+                                            style: Theme.of(
+                                              context,
+                                            ).textTheme.bodySmall?.copyWith(
+                                              color:
+                                                  colorScheme.onSurfaceVariant,
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                    if (selected)
+                                      Icon(
+                                        Icons.check_rounded,
+                                        color: colorScheme.primary,
+                                        size: 18,
+                                      ),
+                                  ],
+                                ),
+                              ),
+                            );
+                          },
+                        ),
                       ),
+                    const SizedBox(height: 10),
+                    Row(
+                      children: [
+                        TextButton(
+                          onPressed: () => Navigator.of(context).pop(),
+                          child: const Text('取消'),
+                        ),
+                        const Spacer(),
+                        TextButton(
+                          onPressed:
+                              () => unawaited(
+                                _openRouteFromSheet(
+                                  context,
+                                  '/cover-galleries',
+                                ),
+                              ),
+                          child: const Text('去管理'),
+                        ),
+                        const SizedBox(width: 8),
+                        TextButton(
+                          onPressed:
+                              selectedId == null
+                                  ? null
+                                  : () => Navigator.of(context).pop(
+                                    const _CoverGallerySelectionResult(
+                                      applied: true,
+                                      galleryId: null,
+                                    ),
+                                  ),
+                          child: const Text('取消绑定'),
+                        ),
+                        const SizedBox(width: 8),
+                        FilledButton(
+                          onPressed:
+                              selectedId == null
+                                  ? null
+                                  : () => Navigator.of(context).pop(
+                                    _CoverGallerySelectionResult(
+                                      applied: true,
+                                      galleryId: selectedId,
+                                    ),
+                                  ),
+                          child: const Text('应用'),
+                        ),
+                      ],
                     ),
-                  const SizedBox(height: 10),
-                  Row(
-                    children: [
-                      TextButton(
-                        onPressed: () => Navigator.of(context).pop(),
-                        child: const Text('取消'),
-                      ),
-                      const Spacer(),
-                      TextButton(
-                        onPressed:
-                            () => unawaited(
-                              _openRouteFromSheet(context, '/cover-galleries'),
-                            ),
-                        child: const Text('去管理'),
-                      ),
-                      const SizedBox(width: 8),
-                      TextButton(
-                        onPressed:
-                            selectedId == null
-                                ? null
-                                : () => Navigator.of(context).pop(
-                                  const _CoverGallerySelectionResult(
-                                    applied: true,
-                                    galleryId: null,
-                                  ),
-                                ),
-                        child: const Text('取消绑定'),
-                      ),
-                      const SizedBox(width: 8),
-                      FilledButton(
-                        onPressed:
-                            selectedId == null
-                                ? null
-                                : () => Navigator.of(context).pop(
-                                  _CoverGallerySelectionResult(
-                                    applied: true,
-                                    galleryId: selectedId,
-                                  ),
-                                ),
-                        child: const Text('应用'),
-                      ),
-                    ],
-                  ),
-                ],
+                  ],
+                ),
               ),
             );
           },
@@ -973,9 +994,28 @@ class _AdvancedThemeEditorPageState
     double width = 34,
     double height = 48,
     double borderRadius = 8,
+    bool useAddPlaceholder = false,
   }) {
     final colorScheme = Theme.of(context).colorScheme;
     if (previewPath == null || previewPath.isEmpty) {
+      if (useAddPlaceholder) {
+        return Container(
+          width: width,
+          height: height,
+          decoration: BoxDecoration(
+            color: colorScheme.surface,
+            borderRadius: BorderRadius.circular(borderRadius),
+            border: Border.all(
+              color: colorScheme.outlineVariant.withValues(alpha: 0.4),
+            ),
+          ),
+          child: Icon(
+            Icons.add_rounded,
+            size: width >= 40 ? 22 : 18,
+            color: colorScheme.onSurfaceVariant,
+          ),
+        );
+      }
       return SizedBox(
         width: width,
         height: height,
@@ -1035,28 +1075,6 @@ class _AdvancedThemeEditorPageState
         });
       }
     }
-  }
-
-  void _fillFromCurrentTheme() {
-    final draft = _draft;
-    if (draft == null) {
-      return;
-    }
-    final seedColor = ref.read(appSeedColorProvider);
-    final next = _applySeedPresetToDraft(draft, seedColor);
-    setState(() {
-      _draft = next;
-    });
-    _syncControllersFromDraft(next);
-  }
-
-  AppAdvancedTheme _applySeedPresetToDraft(AppAdvancedTheme draft, Color seed) {
-    final lightBase = _modeConfigFromScheme(buildAppLightColorScheme(seed));
-    final darkBase = _modeConfigFromScheme(buildAppDarkColorScheme(seed));
-    return draft.copyWith(
-      lightConfig: draft.lightConfig.copyWith(colors: lightBase.colors),
-      darkConfig: draft.darkConfig.copyWith(colors: darkBase.colors),
-    );
   }
 
   void _selectMode(AppAdvancedThemeMode mode) {
@@ -1218,6 +1236,13 @@ class _AdvancedThemeEditorPageState
     final draft = _draft;
     final theme = Theme.of(context);
     const sectionGap = 10.0;
+    final editorBackdrop =
+        draft == null
+            ? null
+            : resolveAdvancedThemeBackdropFromModeConfig(
+              theme.colorScheme,
+              _previewModeConfig(context, draft, _selectedMode),
+            );
 
     return Scaffold(
       appBar: AppBar(
@@ -1331,50 +1356,51 @@ class _AdvancedThemeEditorPageState
               icon: const Icon(Icons.check_rounded),
             ),
           IconButton(
-            tooltip: '回填基础主题结果',
-            onPressed: _isLoading || _isSaving ? null : _fillFromCurrentTheme,
-            icon: const Icon(Icons.color_lens_outlined),
-          ),
-          IconButton(
             tooltip: '保存主题',
             onPressed: _isLoading || _isSaving ? null : _saveTheme,
             icon: const Icon(Icons.save_outlined),
           ),
         ],
       ),
-      body: LayoutBuilder(
-        builder: (context, _) {
-          final maxWidth = AppLayout.pageContentMaxWidth(
-            context,
-            maxWidth: AppLayout.settingsContentMaxWidth,
-          );
-          return Align(
-            alignment: Alignment.topCenter,
-            child: ConstrainedBox(
-              constraints: BoxConstraints(maxWidth: maxWidth),
-              child:
-                  _isLoading
-                      ? const Center(child: CircularProgressIndicator())
-                      : draft == null
-                      ? const Center(child: Text('高级主题不存在'))
-                      : ListView(
-                        padding: EdgeInsets.fromLTRB(
-                          horizontal,
-                          8,
-                          horizontal,
-                          12 + bottomSafe,
+      body: DecoratedBox(
+        decoration:
+            editorBackdrop == null
+                ? const BoxDecoration()
+                : buildAdvancedThemeBackdropDecoration(editorBackdrop),
+        child: LayoutBuilder(
+          builder: (context, _) {
+            final maxWidth = AppLayout.pageContentMaxWidth(
+              context,
+              maxWidth: AppLayout.settingsContentMaxWidth,
+            );
+            return Align(
+              alignment: Alignment.topCenter,
+              child: ConstrainedBox(
+                constraints: BoxConstraints(maxWidth: maxWidth),
+                child:
+                    _isLoading
+                        ? const Center(child: CircularProgressIndicator())
+                        : draft == null
+                        ? const Center(child: Text('高级主题不存在'))
+                        : ListView(
+                          padding: EdgeInsets.fromLTRB(
+                            horizontal,
+                            8,
+                            horizontal,
+                            12 + bottomSafe,
+                          ),
+                          children: [
+                            _buildColorsSection(context),
+                            const SizedBox(height: sectionGap),
+                            _buildResourceSection(context, draft),
+                            const SizedBox(height: sectionGap),
+                            _buildPreviewSection(context, draft),
+                          ],
                         ),
-                        children: [
-                          _buildColorsSection(context),
-                          const SizedBox(height: sectionGap),
-                          _buildResourceSection(context, draft),
-                          const SizedBox(height: sectionGap),
-                          _buildPreviewSection(context, draft),
-                        ],
-                      ),
-            ),
-          );
-        },
+              ),
+            );
+          },
+        ),
       ),
     );
   }
@@ -1627,6 +1653,7 @@ class _AdvancedThemeEditorPageState
                     width: 46,
                     height: 46,
                     borderRadius: 10,
+                    useAddPlaceholder: true,
                   ),
                 ),
               ),
@@ -1658,6 +1685,7 @@ class _AdvancedThemeEditorPageState
                     title: _selectedCoverGallery()?.name ?? '封面图集',
                     width: 30,
                     height: 42,
+                    useAddPlaceholder: true,
                   ),
                 ),
               ),

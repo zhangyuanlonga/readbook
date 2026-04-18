@@ -129,35 +129,48 @@ SESSION_DIR="${OUTPUT_DIR}/${TIMESTAMP}-${BUILD_MODE}"
 mkdir -p "${SESSION_DIR}"
 
 artifact_base_name() {
-  local base="${ARTIFACT_NAME}"
-  if [[ -n "${BUILD_NAME}" ]]; then
-    base="${base} v${BUILD_NAME}"
+  echo "${ARTIFACT_NAME}"
+}
+
+artifact_version_suffix() {
+  local version_label=""
+  if [[ -n "${BUILD_NAME}" && -n "${BUILD_NUMBER}" ]]; then
+    version_label="${BUILD_NAME}-${BUILD_NUMBER}"
+  elif [[ -n "${BUILD_NAME}" ]]; then
+    version_label="${BUILD_NAME}"
+  elif [[ -n "${BUILD_NUMBER}" ]]; then
+    version_label="${BUILD_NUMBER}"
   fi
-  echo "${base}"
+
+  if [[ -n "${version_label}" ]]; then
+    echo "-${version_label}"
+  else
+    echo ""
+  fi
 }
 
 artifact_mode_suffix() {
   if [[ "${BUILD_MODE}" == "release" ]]; then
     echo ""
   else
-    echo " ${BUILD_MODE}"
+    echo "-${BUILD_MODE}"
   fi
 }
 
 android_apk_name() {
   local abi_label="$1"
   local name
-  name="$(artifact_base_name) 安卓"
+  name="$(artifact_base_name)-Android"
   if [[ -n "${abi_label}" ]]; then
-    name="${name} ${abi_label}"
+    name="${name}-${abi_label}"
   fi
-  name="${name}$(artifact_mode_suffix).apk"
+  name="${name}$(artifact_version_suffix)$(artifact_mode_suffix).apk"
   echo "${name}"
 }
 
 android_aab_name() {
   local name
-  name="$(artifact_base_name) 安卓$(artifact_mode_suffix).aab"
+  name="$(artifact_base_name)-Android$(artifact_version_suffix)$(artifact_mode_suffix).aab"
   echo "${name}"
 }
 

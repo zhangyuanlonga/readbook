@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../app/layout/app_layout.dart';
 import '../../../app/layout/app_spacing.dart';
+import '../../../app/navigation/bottom_nav_icon_gallery_provider.dart';
 import '../../../app/platform/app_input_focus_behavior.dart';
 import '../../../app/navigation/bottom_nav_icon_gallery_service.dart';
 import '../../../domain/entities/bottom_nav_icon_gallery.dart';
@@ -48,11 +50,15 @@ class _BottomNavIconGalleryPageState extends State<BottomNavIconGalleryPage> {
     if (_isSaving || _activeGalleryId == id) {
       return;
     }
+    final container = ProviderScope.containerOf(context);
     setState(() {
       _isSaving = true;
     });
     try {
       await _service.saveActiveGalleryId(id);
+      container
+          .read(bottomNavIconGalleryRevisionProvider.notifier)
+          .markChanged();
       if (!mounted) {
         return;
       }
@@ -109,11 +115,15 @@ class _BottomNavIconGalleryPageState extends State<BottomNavIconGalleryPage> {
 
   Future<void> _createGallery() async {
     if (_isSaving || !mounted) return;
+    final container = ProviderScope.containerOf(context);
     setState(() {
       _isSaving = true;
     });
     try {
       final gallery = await _service.createGallery(name: '未命名图集');
+      container
+          .read(bottomNavIconGalleryRevisionProvider.notifier)
+          .markChanged();
       await _load();
       if (!mounted) return;
       context.push('/bottom-nav-icon-galleries/editor?id=${gallery.id}');
@@ -134,11 +144,15 @@ class _BottomNavIconGalleryPageState extends State<BottomNavIconGalleryPage> {
     if (name == null || !mounted) {
       return;
     }
+    final container = ProviderScope.containerOf(context);
     setState(() {
       _isSaving = true;
     });
     try {
       await _service.renameGallery(galleryId: gallery.id, name: name);
+      container
+          .read(bottomNavIconGalleryRevisionProvider.notifier)
+          .markChanged();
       await _load();
     } finally {
       if (mounted) {
@@ -157,6 +171,7 @@ class _BottomNavIconGalleryPageState extends State<BottomNavIconGalleryPage> {
     if (name == null || !mounted) {
       return;
     }
+    final container = ProviderScope.containerOf(context);
     setState(() {
       _isSaving = true;
     });
@@ -165,6 +180,9 @@ class _BottomNavIconGalleryPageState extends State<BottomNavIconGalleryPage> {
         sourceGalleryId: gallery.id,
         name: name,
       );
+      container
+          .read(bottomNavIconGalleryRevisionProvider.notifier)
+          .markChanged();
       await _load();
       if (!mounted) {
         return;
@@ -201,11 +219,15 @@ class _BottomNavIconGalleryPageState extends State<BottomNavIconGalleryPage> {
     if (confirmed != true || !mounted) {
       return;
     }
+    final container = ProviderScope.containerOf(context);
     setState(() {
       _isSaving = true;
     });
     try {
       await _service.deleteGallery(gallery.id);
+      container
+          .read(bottomNavIconGalleryRevisionProvider.notifier)
+          .markChanged();
       await _load();
     } finally {
       if (mounted) {

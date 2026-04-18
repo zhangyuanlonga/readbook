@@ -1,9 +1,11 @@
 import 'package:file_selector/file_selector.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../app/layout/app_layout.dart';
 import '../../../app/layout/app_spacing.dart';
+import '../../../app/navigation/bottom_nav_icon_gallery_provider.dart';
 import '../../../app/navigation/bottom_nav_icon_gallery_service.dart';
 import '../../../app/platform/app_input_focus_behavior.dart';
 import '../../../app/shell_navigation_provider.dart';
@@ -69,6 +71,7 @@ class _BottomNavIconGalleryEditorPageState
     if (gallery == null || _isSaving) {
       return;
     }
+    final container = ProviderScope.containerOf(context);
 
     final picked = await openFile(
       acceptedTypeGroups: const [
@@ -76,6 +79,7 @@ class _BottomNavIconGalleryEditorPageState
           label: 'Bottom nav icons',
           extensions: ['svg', 'png'],
           mimeTypes: ['image/svg+xml', 'image/png'],
+          uniformTypeIdentifiers: ['public.svg-image', 'public.png'],
         ),
       ],
       confirmButtonText: '选择图标',
@@ -111,6 +115,9 @@ class _BottomNavIconGalleryEditorPageState
         currentSet.copyWithSlot(slot, asset: asset),
       );
       final saved = await _service.saveGallery(updatedGallery);
+      container
+          .read(bottomNavIconGalleryRevisionProvider.notifier)
+          .markChanged();
       if (!mounted) {
         return;
       }
@@ -134,6 +141,7 @@ class _BottomNavIconGalleryEditorPageState
     if (gallery == null || _isSaving) {
       return;
     }
+    final container = ProviderScope.containerOf(context);
 
     final currentSet = gallery.items[tab] ?? const BottomNavIconSet();
     final previousAsset = currentSet.assetForSlot(slot);
@@ -150,6 +158,9 @@ class _BottomNavIconGalleryEditorPageState
         currentSet.copyWithSlot(slot, clear: true),
       );
       final saved = await _service.saveGallery(updatedGallery);
+      container
+          .read(bottomNavIconGalleryRevisionProvider.notifier)
+          .markChanged();
       if (!mounted) {
         return;
       }
@@ -293,6 +304,7 @@ class _BottomNavIconGalleryEditorPageState
     if (gallery == null || _isSaving) return;
     final newName = _nameController.text.trim();
     if (newName.isEmpty) return;
+    final container = ProviderScope.containerOf(context);
 
     setState(() {
       _isSaving = true;
@@ -301,6 +313,9 @@ class _BottomNavIconGalleryEditorPageState
       final saved = await _service.saveGallery(
         gallery.copyWith(name: newName, updatedAt: DateTime.now()),
       );
+      container
+          .read(bottomNavIconGalleryRevisionProvider.notifier)
+          .markChanged();
       if (!mounted) return;
       setState(() {
         _gallery = saved;
@@ -318,6 +333,7 @@ class _BottomNavIconGalleryEditorPageState
   Future<void> _saveGallery() async {
     final gallery = _gallery;
     if (gallery == null || _isSaving) return;
+    final container = ProviderScope.containerOf(context);
 
     setState(() {
       _isSaving = true;
@@ -325,6 +341,9 @@ class _BottomNavIconGalleryEditorPageState
     try {
       final updated = gallery.copyWith(updatedAt: DateTime.now());
       final saved = await _service.saveGallery(updated);
+      container
+          .read(bottomNavIconGalleryRevisionProvider.notifier)
+          .markChanged();
       if (!mounted) return;
       setState(() {
         _gallery = saved;
@@ -604,6 +623,7 @@ class _BottomNavIconGalleryEditorPageState
   Future<void> _copyLightToDark(BottomNavIconGalleryTab tab) async {
     final gallery = _gallery;
     if (gallery == null || _isSaving) return;
+    final container = ProviderScope.containerOf(context);
 
     final lightSet = gallery.items[tab] ?? const BottomNavIconSet();
     if (lightSet.lightUnselected == null && lightSet.lightSelected == null) {
@@ -642,6 +662,9 @@ class _BottomNavIconGalleryEditorPageState
 
       final updatedGallery = gallery.copyWithItem(tab, darkSet);
       final saved = await _service.saveGallery(updatedGallery);
+      container
+          .read(bottomNavIconGalleryRevisionProvider.notifier)
+          .markChanged();
       if (!mounted) return;
       setState(() {
         _gallery = saved;

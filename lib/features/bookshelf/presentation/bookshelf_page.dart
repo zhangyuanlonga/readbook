@@ -3599,6 +3599,19 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
         .toString();
   }
 
+  bool _hasUsableLocalCustomCover(String? url) {
+    final normalized = url?.trim() ?? '';
+    if (normalized.isEmpty) {
+      return false;
+    }
+    final uri = Uri.tryParse(normalized);
+    if (uri == null || uri.scheme != 'file') {
+      return false;
+    }
+    final file = File.fromUri(uri);
+    return file.existsSync();
+  }
+
   void _ensureFilterStillValid() {
     if ((_activeView.isTag || _activeView.isCategory) &&
         !_bookshelfMetadataReady) {
@@ -5695,8 +5708,13 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
         final currentLatestChapter = book.latestChapter?.trim();
         final currentAuthor = book.author?.trim();
         final currentCoverUrl = book.coverUrl?.trim();
+        final preserveLocalCustomCover = _hasUsableLocalCustomCover(
+          currentCoverUrl,
+        );
+        final effectiveNextCoverUrl =
+            preserveLocalCustomCover ? currentCoverUrl : normalizedCoverUrl;
         final normalizedCoverCompareKey = _coverUrlCompareKey(
-          normalizedCoverUrl,
+          effectiveNextCoverUrl,
         );
         final currentCoverCompareKey = _coverUrlCompareKey(currentCoverUrl);
 
@@ -5714,9 +5732,9 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
             clearLatestChapter: normalizedLatestChapter == null,
             author: normalizedAuthor,
             clearAuthor: normalizedAuthor == null,
-            coverUrl: normalizedCoverUrl,
+            coverUrl: effectiveNextCoverUrl,
             clearCoverUrl:
-                normalizedCoverUrl == null || normalizedCoverUrl.isEmpty,
+                effectiveNextCoverUrl == null || effectiveNextCoverUrl.isEmpty,
           ),
         );
         changed = true;

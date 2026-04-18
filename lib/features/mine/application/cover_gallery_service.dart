@@ -6,6 +6,7 @@ import 'package:path_provider/path_provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:uuid/uuid.dart';
 
+import '../../../app/images/file_image_cache.dart';
 import '../../../domain/entities/cover_gallery.dart';
 
 class CoverGalleryService {
@@ -145,6 +146,7 @@ class CoverGalleryService {
       'cover_${DateTime.now().millisecondsSinceEpoch}.$extension',
     );
     await File(targetPath).writeAsBytes(bytes, flush: true);
+    await evictFileImagePath(targetPath);
     return saveGallery(
       gallery.copyWith(imagePaths: <String>[...gallery.imagePaths, targetPath]),
     );
@@ -166,6 +168,7 @@ class CoverGalleryService {
             .toSet();
 
     for (final path in normalizedTargets) {
+      await evictFileImagePath(path);
       final file = File(path);
       if (await file.exists()) {
         await file.delete();

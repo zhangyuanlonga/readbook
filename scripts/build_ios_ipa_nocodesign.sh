@@ -111,18 +111,31 @@ if [[ "${SKIP_POD_INSTALL}" != "1" ]]; then
 fi
 
 artifact_base_name() {
-  local base="${ARTIFACT_NAME}"
-  if [[ -n "${BUILD_NAME}" ]]; then
-    base="${base} v${BUILD_NAME}"
+  echo "${ARTIFACT_NAME}"
+}
+
+artifact_version_suffix() {
+  local version_label=""
+  if [[ -n "${BUILD_NAME}" && -n "${BUILD_NUMBER}" ]]; then
+    version_label="${BUILD_NAME}-${BUILD_NUMBER}"
+  elif [[ -n "${BUILD_NAME}" ]]; then
+    version_label="${BUILD_NAME}"
+  elif [[ -n "${BUILD_NUMBER}" ]]; then
+    version_label="${BUILD_NUMBER}"
   fi
-  echo "${base}"
+
+  if [[ -n "${version_label}" ]]; then
+    echo "-${version_label}"
+  else
+    echo ""
+  fi
 }
 
 artifact_mode_suffix() {
   if [[ "${BUILD_MODE}" == "release" ]]; then
     echo ""
   else
-    echo " ${BUILD_MODE}"
+    echo "-${BUILD_MODE}"
   fi
 }
 
@@ -147,7 +160,7 @@ fi
 echo "==> iOS intermediate output (.app): ${APP_PATH}"
 
 TIMESTAMP="$(date +%Y%m%d-%H%M%S)"
-IPA_PATH="${OUTPUT_DIR}/$(artifact_base_name) iOS$(artifact_mode_suffix) ${TIMESTAMP}.ipa"
+IPA_PATH="${OUTPUT_DIR}/$(artifact_base_name)-iOS$(artifact_version_suffix)$(artifact_mode_suffix).ipa"
 TMP_DIR="${PROJECT_ROOT}/build/ios/ipa/.tmp-${TIMESTAMP}"
 
 mkdir -p "${OUTPUT_DIR}"

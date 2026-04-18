@@ -155,6 +155,7 @@ class _AdvancedThemeListPageState extends ConsumerState<AdvancedThemeListPage> {
     try {
       final service = ref.read(advancedThemeServiceProvider);
       final duplicated = await service.duplicateTheme(theme);
+      ref.read(advancedThemeRevisionProvider.notifier).markChanged();
       await _load();
       if (!mounted) {
         return;
@@ -234,6 +235,7 @@ class _AdvancedThemeListPageState extends ConsumerState<AdvancedThemeListPage> {
       final rawJson = await File(picked.path).readAsString();
       final service = ref.read(advancedThemeServiceProvider);
       final importedTheme = await service.importThemeColorJson(rawJson);
+      ref.read(advancedThemeRevisionProvider.notifier).markChanged();
       await _load();
       if (!mounted) {
         return;
@@ -342,6 +344,7 @@ class _AdvancedThemeListPageState extends ConsumerState<AdvancedThemeListPage> {
       final wasActive = ref.read(activeAdvancedThemeIdProvider) == theme.id;
       final service = ref.read(advancedThemeServiceProvider);
       await service.deleteTheme(theme.id);
+      ref.read(advancedThemeRevisionProvider.notifier).markChanged();
       if (wasActive) {
         await ref.read(activeAdvancedThemeIdProvider.notifier).disable();
       }

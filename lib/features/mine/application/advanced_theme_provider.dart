@@ -13,9 +13,15 @@ final activeAdvancedThemeIdProvider =
       ActiveAdvancedThemeIdNotifier.new,
     );
 
+final advancedThemeRevisionProvider =
+    NotifierProvider<AdvancedThemeRevisionNotifier, int>(
+      AdvancedThemeRevisionNotifier.new,
+    );
+
 final activeAdvancedThemeProvider = FutureProvider<AppAdvancedTheme?>((
   ref,
 ) async {
+  ref.watch(advancedThemeRevisionProvider);
   final activeId = ref.watch(activeAdvancedThemeIdProvider);
   if (activeId == null || activeId.trim().isEmpty) {
     return null;
@@ -80,4 +86,13 @@ class ActiveAdvancedThemeIdNotifier extends Notifier<String?> {
   }
 
   Future<void> disable() => setActiveThemeId(null);
+}
+
+class AdvancedThemeRevisionNotifier extends Notifier<int> {
+  @override
+  int build() => 0;
+
+  void markChanged() {
+    state += 1;
+  }
 }
