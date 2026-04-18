@@ -273,7 +273,7 @@ class _AuthPageState extends State<AuthPage> {
       }
       _showMessage(_isRegister ? '注册成功，已登录。' : '登录成功。');
       if (context.canPop()) {
-        context.pushReplacement('/profile');
+        context.pop(true);
       } else {
         context.go('/profile');
       }

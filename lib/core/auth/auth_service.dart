@@ -152,6 +152,7 @@ class AuthService {
   Future<void> _persistAuthenticatedSession(AuthSession session) async {
     await _sessionStore.saveSession(session);
     await _runPostAuthBootstrap();
+    AuthEventBus.instance.emitLoggedIn();
   }
 
   Future<void> _runPostAuthBootstrap() async {

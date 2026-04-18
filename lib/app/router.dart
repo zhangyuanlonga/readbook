@@ -320,6 +320,14 @@ final GoRouter appRouter = GoRouter(
       builder: (context, state) => const FeedbackPage(),
     ),
     GoRoute(
+      path: '/feedback/:id',
+      name: 'feedback-detail',
+      builder: (context, state) {
+        final id = state.pathParameters['id'] ?? '';
+        return FeedbackDetailPage(feedbackId: id);
+      },
+    ),
+    GoRoute(
       path: '/feedback/compose',
       name: 'feedback-compose',
       builder: (context, state) => const FeedbackComposePage(),

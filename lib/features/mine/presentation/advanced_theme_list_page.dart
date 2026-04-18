@@ -8,6 +8,13 @@ import 'package:go_router/go_router.dart';
 
 import '../../../app/layout/app_layout.dart';
 import '../../../app/layout/app_spacing.dart';
+import '../../../app/theme/app_advanced_theme_tokens.dart';
+import '../../../app/theme/app_border_tokens.dart';
+import '../../../app/widgets/advanced_theme_backdrop_decoration.dart';
+import '../../../core/auth/auth_event_bus.dart';
+import '../../../core/auth/auth_session_store.dart';
+import '../../../core/membership/membership_features.dart';
+import '../../../core/membership/membership_service.dart';
 import '../../../domain/entities/app_advanced_theme.dart';
 import '../../source/application/external_source_import_bridge.dart';
 import '../application/advanced_theme_provider.dart';
@@ -30,11 +37,16 @@ class _AdvancedThemeListPageState extends ConsumerState<AdvancedThemeListPage> {
     uniformTypeIdentifiers: <String>['public.json'],
   );
 
+  final AuthSessionStore _sessionStore = AuthSessionStore();
+  final MembershipService _membershipService = MembershipService();
   List<AppAdvancedTheme> _themes = const <AppAdvancedTheme>[];
   bool _isLoading = true;
   bool _isSaving = false;
   bool _isConsumingExternalImportPayloads = false;
+  bool _isAccessLoading = true;
+  bool _canUseAdvancedThemes = false;
   StreamSubscription<IncomingExternalImportPayload>? _incomingImportSub;
+  StreamSubscription<AuthEvent>? _authEventSub;
 
   @override
   void initState() {
@@ -47,16 +59,65 @@ class _AdvancedThemeListPageState extends ConsumerState<AdvancedThemeListPage> {
       }
       unawaited(_consumePendingExternalImportPayloads());
     });
+    _authEventSub = AuthEventBus.instance.stream.listen(_handleAuthEvent);
+    _loadAccess();
     _load();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       unawaited(_consumePendingExternalImportPayloads());
     });
   }
 
+  Future<void> _loadAccess() async {
+    final session = await _sessionStore.getSession();
+    if (!mounted) {
+      return;
+    }
+    if (session == null) {
+      setState(() {
+        _canUseAdvancedThemes = false;
+        _isAccessLoading = false;
+      });
+      return;
+    }
+
+    try {
+      final entitlement = await _membershipService.fetchEntitlement();
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _canUseAdvancedThemes = MembershipFeatures.hasFeature(
+          entitlement,
+          MembershipFeatures.themeCustom,
+        );
+        _isAccessLoading = false;
+      });
+    } catch (_) {
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _canUseAdvancedThemes = false;
+        _isAccessLoading = false;
+      });
+    }
+  }
+
   @override
   void dispose() {
     _incomingImportSub?.cancel();
+    _authEventSub?.cancel();
     super.dispose();
+  }
+
+  void _handleAuthEvent(AuthEvent event) {
+    switch (event.type) {
+      case AuthEventType.loggedIn:
+      case AuthEventType.loggedOut:
+      case AuthEventType.sessionExpired:
+        unawaited(_loadAccess());
+        break;
+    }
   }
 
   Future<void> _load() async {
@@ -402,8 +463,10 @@ class _AdvancedThemeListPageState extends ConsumerState<AdvancedThemeListPage> {
               child: ConstrainedBox(
                 constraints: BoxConstraints(maxWidth: maxWidth),
                 child:
-                    _isLoading
+                    _isAccessLoading || _isLoading
                         ? const Center(child: CircularProgressIndicator())
+                        : !_canUseAdvancedThemes
+                        ? _buildVipLockedState(context)
                         : ListView(
                           padding: EdgeInsets.fromLTRB(
                             horizontal,
@@ -437,6 +500,71 @@ class _AdvancedThemeListPageState extends ConsumerState<AdvancedThemeListPage> {
     );
   }
 
+  Widget _buildVipLockedState(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+    return ListView(
+      padding: const EdgeInsets.fromLTRB(16, 18, 16, 24),
+      children: [
+        Container(
+          padding: const EdgeInsets.fromLTRB(18, 18, 18, 18),
+          decoration: BoxDecoration(
+            color: colorScheme.surfaceContainerLow,
+            borderRadius: BorderRadius.circular(22),
+            border: Border.all(
+              color: colorScheme.outlineVariant.withValues(alpha: 0.5),
+            ),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 8,
+                      vertical: 5,
+                    ),
+                    decoration: BoxDecoration(
+                      color: colorScheme.primary.withValues(alpha: 0.14),
+                      borderRadius: BorderRadius.circular(999),
+                    ),
+                    child: Text(
+                      'VIP',
+                      style: Theme.of(context).textTheme.labelMedium?.copyWith(
+                        fontWeight: FontWeight.w800,
+                        color: colorScheme.primary,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 14),
+              Text(
+                '高级主题为会员专属功能',
+                style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+                  fontWeight: FontWeight.w900,
+                ),
+              ),
+              const SizedBox(height: 8),
+              Text(
+                '开通会员后可创建、导入、导出并管理高级主题，打造更完整的阅读界面风格。',
+                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                  color: colorScheme.onSurfaceVariant,
+                  height: 1.5,
+                ),
+              ),
+              const SizedBox(height: 16),
+              FilledButton(
+                onPressed: () => context.push('/membership'),
+                child: const Text('前往会员页'),
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
   Widget _buildIntroCard(
     BuildContext context,
     AsyncValue<AppAdvancedTheme?> activeThemeAsync,
@@ -462,12 +590,12 @@ class _AdvancedThemeListPageState extends ConsumerState<AdvancedThemeListPage> {
             width: 34,
             height: 34,
             decoration: BoxDecoration(
-              color: colorScheme.primaryContainer,
+              color: colorScheme.primary.withValues(alpha: 0.14),
               borderRadius: BorderRadius.circular(12),
             ),
             child: Icon(
               Icons.palette_rounded,
-              color: colorScheme.onPrimaryContainer,
+              color: colorScheme.primary,
               size: 18,
             ),
           ),
@@ -549,7 +677,7 @@ class _AdvancedThemeListPageState extends ConsumerState<AdvancedThemeListPage> {
         decoration: BoxDecoration(
           color:
               isActive
-                  ? colorScheme.primaryContainer.withValues(alpha: 0.22)
+                  ? colorScheme.primary.withValues(alpha: 0.08)
                   : colorScheme.surfaceContainerLow,
           borderRadius: BorderRadius.circular(18),
           border: Border.all(
@@ -716,40 +844,27 @@ class _AdvancedThemeListPageState extends ConsumerState<AdvancedThemeListPage> {
     required AppAdvancedThemeModeConfig config,
   }) {
     final defaultScheme = _defaultSchemeFor(context, mode);
-    final backgroundColor =
-        _colorFrom(config.colors.backgroundColorValue) ?? defaultScheme.surface;
-    final cardColor =
-        _colorFrom(config.colors.cardColorValue) ?? defaultScheme.surface;
-    final textPrimaryColor =
-        _colorFrom(config.colors.textPrimaryColorValue) ??
-        defaultScheme.onSurface;
-    final textSecondaryColor =
-        _colorFrom(config.colors.textSecondaryColorValue) ??
-        defaultScheme.onSurfaceVariant;
-    final borderColor =
-        _colorFrom(config.colors.cardBorderColorValue) ??
-        defaultScheme.outlineVariant;
-    final primaryColor =
-        _colorFrom(config.colors.primaryColorValue) ?? defaultScheme.primary;
-    final wallpaperPath = config.wallpaperPath?.trim() ?? '';
+    final palette = resolveAdvancedThemePaletteFromModeConfig(
+      defaultScheme,
+      config,
+    );
+    final backdrop = resolveAdvancedThemeBackdropFromModeConfig(
+      defaultScheme,
+      config,
+    );
 
     return Container(
       height: 118,
-      decoration: BoxDecoration(
-        color: backgroundColor,
+      decoration: buildAdvancedThemeBackdropDecoration(
+        backdrop,
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: borderColor.withValues(alpha: 0.4)),
-        image:
-            wallpaperPath.isNotEmpty && File(wallpaperPath).existsSync()
-                ? DecorationImage(
-                  image: FileImage(File(wallpaperPath)),
-                  fit: BoxFit.cover,
-                  colorFilter: ColorFilter.mode(
-                    backgroundColor.withValues(alpha: 0.72),
-                    BlendMode.srcOver,
-                  ),
-                )
-                : null,
+        border: Border.all(
+          color: resolveAppBorderColor(
+            defaultScheme,
+            baseColor: palette.cardBorderColor,
+            containerColor: backdrop.backgroundColor,
+          ),
+        ),
       ),
       child: Padding(
         padding: const EdgeInsets.all(12),
@@ -763,13 +878,13 @@ class _AdvancedThemeListPageState extends ConsumerState<AdvancedThemeListPage> {
                       ? Icons.light_mode_outlined
                       : Icons.dark_mode_outlined,
                   size: 14,
-                  color: textSecondaryColor,
+                  color: palette.textSecondaryColor,
                 ),
                 const SizedBox(width: 4),
                 Text(
                   mode == AppAdvancedThemeMode.light ? '浅色' : '深色',
                   style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                    color: textSecondaryColor,
+                    color: palette.textSecondaryColor,
                     fontWeight: FontWeight.w700,
                   ),
                 ),
@@ -780,7 +895,7 @@ class _AdvancedThemeListPageState extends ConsumerState<AdvancedThemeListPage> {
               width: 74,
               height: 10,
               decoration: BoxDecoration(
-                color: primaryColor,
+                color: palette.primaryColor,
                 borderRadius: BorderRadius.circular(999),
               ),
             ),
@@ -790,11 +905,22 @@ class _AdvancedThemeListPageState extends ConsumerState<AdvancedThemeListPage> {
                 width: double.infinity,
                 padding: const EdgeInsets.all(8),
                 decoration: BoxDecoration(
-                  color: cardColor.withValues(alpha: 0.96),
+                  color: palette.cardColor.withValues(alpha: 0.96),
                   borderRadius: BorderRadius.circular(14),
                   border: Border.all(
-                    color: borderColor.withValues(alpha: 0.56),
+                    color: resolveAppBorderColor(
+                      defaultScheme,
+                      baseColor: palette.cardBorderColor,
+                      containerColor: palette.cardColor,
+                    ),
                   ),
+                  boxShadow: [
+                    BoxShadow(
+                      color: palette.shadowColor,
+                      blurRadius: 12,
+                      offset: const Offset(0, 4),
+                    ),
+                  ],
                 ),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -804,7 +930,7 @@ class _AdvancedThemeListPageState extends ConsumerState<AdvancedThemeListPage> {
                       width: 64,
                       height: 8,
                       decoration: BoxDecoration(
-                        color: textPrimaryColor.withValues(alpha: 0.85),
+                        color: palette.cardTextColor.withValues(alpha: 0.85),
                         borderRadius: BorderRadius.circular(999),
                       ),
                     ),
@@ -813,9 +939,54 @@ class _AdvancedThemeListPageState extends ConsumerState<AdvancedThemeListPage> {
                       width: 96,
                       height: 6,
                       decoration: BoxDecoration(
-                        color: textSecondaryColor.withValues(alpha: 0.72),
+                        color: palette.textSecondaryColor.withValues(
+                          alpha: 0.72,
+                        ),
                         borderRadius: BorderRadius.circular(999),
                       ),
+                    ),
+                    const SizedBox(height: 8),
+                    Row(
+                      children: [
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 7,
+                            vertical: 4,
+                          ),
+                          decoration: BoxDecoration(
+                            color: palette.primaryContainerColor,
+                            borderRadius: BorderRadius.circular(999),
+                          ),
+                          child: Text(
+                            '标签',
+                            style: Theme.of(
+                              context,
+                            ).textTheme.labelSmall?.copyWith(
+                              color: palette.textPrimaryColor,
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
+                        ),
+                        const Spacer(),
+                        Container(
+                          width: 46,
+                          height: 22,
+                          decoration: BoxDecoration(
+                            color: palette.primaryColor,
+                            borderRadius: BorderRadius.circular(999),
+                          ),
+                          alignment: Alignment.center,
+                          child: Text(
+                            '按钮',
+                            style: Theme.of(
+                              context,
+                            ).textTheme.labelSmall?.copyWith(
+                              color: palette.buttonTextColor,
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
+                        ),
+                      ],
                     ),
                   ],
                 ),
@@ -896,13 +1067,6 @@ class _AdvancedThemeListPageState extends ConsumerState<AdvancedThemeListPage> {
       primary: const Color(0xFF1677FF),
       outlineVariant: const Color(0xFFE5EAF2),
     );
-  }
-
-  Color? _colorFrom(int? value) {
-    if (value == null) {
-      return null;
-    }
-    return Color(value);
   }
 
   String _formatDateTime(DateTime value) {

@@ -9,8 +9,10 @@ class AppAdvancedThemeColors {
     this.primaryContainerColorValue,
     this.backgroundColorValue,
     this.surfaceColorValue,
+    this.searchFieldBackgroundColorValue,
     this.elevatedSurfaceColorValue,
     this.cardColorValue,
+    this.cardTextColorValue,
     this.cardBorderColorValue,
     this.iconBackgroundColorValue,
     this.textPrimaryColorValue,
@@ -28,8 +30,10 @@ class AppAdvancedThemeColors {
   final int? primaryContainerColorValue;
   final int? backgroundColorValue;
   final int? surfaceColorValue;
+  final int? searchFieldBackgroundColorValue;
   final int? elevatedSurfaceColorValue;
   final int? cardColorValue;
+  final int? cardTextColorValue;
   final int? cardBorderColorValue;
   final int? iconBackgroundColorValue;
   final int? textPrimaryColorValue;
@@ -53,9 +57,12 @@ class AppAdvancedThemeColors {
       if (backgroundColorValue != null)
         'backgroundColorValue': backgroundColorValue,
       if (surfaceColorValue != null) 'surfaceColorValue': surfaceColorValue,
+      if (searchFieldBackgroundColorValue != null)
+        'searchFieldBackgroundColorValue': searchFieldBackgroundColorValue,
       if (elevatedSurfaceColorValue != null)
         'elevatedSurfaceColorValue': elevatedSurfaceColorValue,
       if (cardColorValue != null) 'cardColorValue': cardColorValue,
+      if (cardTextColorValue != null) 'cardTextColorValue': cardTextColorValue,
       if (cardBorderColorValue != null)
         'cardBorderColorValue': cardBorderColorValue,
       if (iconBackgroundColorValue != null)
@@ -82,8 +89,13 @@ class AppAdvancedThemeColors {
       primaryContainerColorValue: _readInt(json, 'primaryContainerColorValue'),
       backgroundColorValue: _readInt(json, 'backgroundColorValue'),
       surfaceColorValue: _readInt(json, 'surfaceColorValue'),
+      searchFieldBackgroundColorValue: _readInt(
+        json,
+        'searchFieldBackgroundColorValue',
+      ),
       elevatedSurfaceColorValue: _readInt(json, 'elevatedSurfaceColorValue'),
       cardColorValue: _readInt(json, 'cardColorValue'),
+      cardTextColorValue: _readInt(json, 'cardTextColorValue'),
       cardBorderColorValue: _readInt(json, 'cardBorderColorValue'),
       iconBackgroundColorValue: _readInt(json, 'iconBackgroundColorValue'),
       textPrimaryColorValue: _readInt(json, 'textPrimaryColorValue'),
@@ -110,10 +122,14 @@ class AppAdvancedThemeColors {
     bool clearBackgroundColorValue = false,
     int? surfaceColorValue,
     bool clearSurfaceColorValue = false,
+    int? searchFieldBackgroundColorValue,
+    bool clearSearchFieldBackgroundColorValue = false,
     int? elevatedSurfaceColorValue,
     bool clearElevatedSurfaceColorValue = false,
     int? cardColorValue,
     bool clearCardColorValue = false,
+    int? cardTextColorValue,
+    bool clearCardTextColorValue = false,
     int? cardBorderColorValue,
     bool clearCardBorderColorValue = false,
     int? iconBackgroundColorValue,
@@ -160,12 +176,21 @@ class AppAdvancedThemeColors {
           clearSurfaceColorValue
               ? null
               : (surfaceColorValue ?? this.surfaceColorValue),
+      searchFieldBackgroundColorValue:
+          clearSearchFieldBackgroundColorValue
+              ? null
+              : (searchFieldBackgroundColorValue ??
+                  this.searchFieldBackgroundColorValue),
       elevatedSurfaceColorValue:
           clearElevatedSurfaceColorValue
               ? null
               : (elevatedSurfaceColorValue ?? this.elevatedSurfaceColorValue),
       cardColorValue:
           clearCardColorValue ? null : (cardColorValue ?? this.cardColorValue),
+      cardTextColorValue:
+          clearCardTextColorValue
+              ? null
+              : (cardTextColorValue ?? this.cardTextColorValue),
       cardBorderColorValue:
           clearCardBorderColorValue
               ? null
@@ -210,8 +235,10 @@ class AppAdvancedThemeColors {
       primaryContainerColorValue,
       backgroundColorValue,
       surfaceColorValue,
+      searchFieldBackgroundColorValue,
       elevatedSurfaceColorValue,
       cardColorValue,
+      cardTextColorValue,
       cardBorderColorValue,
       iconBackgroundColorValue,
       textPrimaryColorValue,

@@ -14,10 +14,45 @@ ARTIFACT_NAME="${ARTIFACT_NAME:-书享阅读 Next}"
 BUILD_MODE="${BUILD_MODE:-release}"
 BUILD_NAME="${BUILD_NAME:-}"
 BUILD_NUMBER="${BUILD_NUMBER:-}"
+APPREAD_API_BASE_URL="${APPREAD_API_BASE_URL:-}"
+APPREAD_APP_NAME="${APPREAD_APP_NAME:-}"
 SKIP_CLEAN="${SKIP_CLEAN:-0}"
 SKIP_PUB_GET="${SKIP_PUB_GET:-0}"
 SKIP_POD_INSTALL="${SKIP_POD_INSTALL:-0}"
 PREPARE_APPLE_PODS="${PREPARE_APPLE_PODS:-1}"
+
+trim_whitespace() {
+  local value="$1"
+  value="${value#"${value%%[![:space:]]*}"}"
+  value="${value%"${value##*[![:space:]]}"}"
+  echo "${value}"
+}
+
+validate_version_overrides() {
+  BUILD_NAME="$(trim_whitespace "${BUILD_NAME}")"
+  BUILD_NUMBER="$(trim_whitespace "${BUILD_NUMBER}")"
+
+  if [[ -n "${BUILD_NAME}" && ! "${BUILD_NAME}" =~ ^[0-9]+(\.[0-9]+){0,2}$ ]]; then
+    echo "Error: BUILD_NAME must look like 1.1 or 1.1.0. Current: ${BUILD_NAME}" >&2
+    exit 1
+  fi
+
+  if [[ -n "${BUILD_NUMBER}" && ! "${BUILD_NUMBER}" =~ ^[0-9]+$ ]]; then
+    echo "Error: BUILD_NUMBER must be an integer build code like 26041801. Current: ${BUILD_NUMBER}" >&2
+    exit 1
+  fi
+}
+
+append_dart_defines() {
+  local -n args_ref=$1
+
+  if [[ -n "${APPREAD_API_BASE_URL}" ]]; then
+    args_ref+=("--dart-define=APPREAD_API_BASE_URL=${APPREAD_API_BASE_URL}")
+  fi
+  if [[ -n "${APPREAD_APP_NAME}" ]]; then
+    args_ref+=("--dart-define=APPREAD_APP_NAME=${APPREAD_APP_NAME}")
+  fi
+}
 
 if [[ "${BUILD_MODE}" != "release" && "${BUILD_MODE}" != "profile" ]]; then
   echo "Error: BUILD_MODE must be 'release' or 'profile'. Current: ${BUILD_MODE}" >&2
@@ -34,11 +69,15 @@ if ! command -v zip >/dev/null 2>&1; then
   exit 1
 fi
 
+validate_version_overrides
+
 echo "==> Project root: ${PROJECT_ROOT}"
 echo "==> Flutter cmd: ${FLUTTER_CMD}"
 echo "==> Build mode : ${BUILD_MODE}"
 echo "==> Build name : ${BUILD_NAME:-pubspec default}"
 echo "==> Build number: ${BUILD_NUMBER:-pubspec default}"
+echo "==> API base   : ${APPREAD_API_BASE_URL:-dart default}"
+echo "==> App name   : ${APPREAD_APP_NAME:-dart default}"
 echo "==> App name   : ${APP_NAME}"
 echo "==> Output dir : ${OUTPUT_DIR}"
 
@@ -92,6 +131,7 @@ fi
 if [[ -n "${BUILD_NUMBER}" ]]; then
   CMD+=(--build-number="${BUILD_NUMBER}")
 fi
+append_dart_defines CMD
 "${CMD[@]}"
 
 APP_PATH="${PROJECT_ROOT}/build/ios/iphoneos/${APP_NAME}.app"

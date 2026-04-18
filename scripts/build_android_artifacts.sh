@@ -16,8 +16,43 @@ OUTPUT_DIR="${OUTPUT_DIR:-${PROJECT_ROOT}/artifacts/android}"
 ARTIFACT_NAME="${ARTIFACT_NAME:-书享阅读 Next}"
 BUILD_NAME="${BUILD_NAME:-}"
 BUILD_NUMBER="${BUILD_NUMBER:-}"
+APPREAD_API_BASE_URL="${APPREAD_API_BASE_URL:-}"
+APPREAD_APP_NAME="${APPREAD_APP_NAME:-}"
 SKIP_CLEAN="${SKIP_CLEAN:-0}"
 SKIP_PUB_GET="${SKIP_PUB_GET:-0}"
+
+trim_whitespace() {
+  local value="$1"
+  value="${value#"${value%%[![:space:]]*}"}"
+  value="${value%"${value##*[![:space:]]}"}"
+  echo "${value}"
+}
+
+validate_version_overrides() {
+  BUILD_NAME="$(trim_whitespace "${BUILD_NAME}")"
+  BUILD_NUMBER="$(trim_whitespace "${BUILD_NUMBER}")"
+
+  if [[ -n "${BUILD_NAME}" && ! "${BUILD_NAME}" =~ ^[0-9]+(\.[0-9]+){0,2}$ ]]; then
+    echo "Error: BUILD_NAME must look like 1.1 or 1.1.0. Current: ${BUILD_NAME}" >&2
+    exit 1
+  fi
+
+  if [[ -n "${BUILD_NUMBER}" && ! "${BUILD_NUMBER}" =~ ^[0-9]+$ ]]; then
+    echo "Error: BUILD_NUMBER must be an integer build code like 26041801. Current: ${BUILD_NUMBER}" >&2
+    exit 1
+  fi
+}
+
+append_dart_defines() {
+  local -n args_ref=$1
+
+  if [[ -n "${APPREAD_API_BASE_URL}" ]]; then
+    args_ref+=("--dart-define=APPREAD_API_BASE_URL=${APPREAD_API_BASE_URL}")
+  fi
+  if [[ -n "${APPREAD_APP_NAME}" ]]; then
+    args_ref+=("--dart-define=APPREAD_APP_NAME=${APPREAD_APP_NAME}")
+  fi
+}
 
 usage() {
   cat <<USAGE
@@ -44,6 +79,7 @@ Examples:
   APK_PROFILE=split ./scripts/build_android_artifacts.sh apk release
   APK_PROFILE=universal ./scripts/build_android_artifacts.sh apk release
   ./scripts/build_android_artifacts.sh both release
+  BUILD_NAME=1.1.0 BUILD_NUMBER=26041801 ./scripts/build_android_artifacts.sh apk release
 USAGE
 }
 
@@ -82,6 +118,8 @@ if ! command -v "${FLUTTER_CMD}" >/dev/null 2>&1; then
   echo "Error: Flutter command not found: ${FLUTTER_CMD}" >&2
   exit 1
 fi
+
+validate_version_overrides
 
 TIMESTAMP="$(date +%Y%m%d-%H%M%S)"
 SESSION_DIR="${OUTPUT_DIR}/${TIMESTAMP}-${BUILD_MODE}"
@@ -127,6 +165,8 @@ echo "==> Build mode  : ${BUILD_MODE}"
 echo "==> APK profile : ${APK_PROFILE}"
 echo "==> Build name  : ${BUILD_NAME:-pubspec default}"
 echo "==> Build number: ${BUILD_NUMBER:-pubspec default}"
+echo "==> API base    : ${APPREAD_API_BASE_URL:-dart default}"
+echo "==> App name    : ${APPREAD_APP_NAME:-dart default}"
 echo "==> Output dir  : ${SESSION_DIR}"
 
 cd "${PROJECT_ROOT}"
@@ -155,6 +195,7 @@ build_apk() {
   if [[ -n "${BUILD_NUMBER}" ]]; then
     cmd+=(--build-number="${BUILD_NUMBER}")
   fi
+  append_dart_defines cmd
   "${cmd[@]}"
 
   local apk_dir="${PROJECT_ROOT}/build/app/outputs/flutter-apk"
@@ -199,6 +240,7 @@ build_appbundle() {
   if [[ -n "${BUILD_NUMBER}" ]]; then
     cmd+=(--build-number="${BUILD_NUMBER}")
   fi
+  append_dart_defines cmd
   "${cmd[@]}"
 
   local aab_file="${PROJECT_ROOT}/build/app/outputs/bundle/${BUILD_MODE}/app-${BUILD_MODE}.aab"

@@ -22,7 +22,13 @@ void main() {
           'id': 'rel_xxx',
           'app_name': 'reader-app',
           'version_code': 10023,
-          'download_url': 'https://example.com/app.apk',
+          'downloads': [
+            {
+              'platform': 'android',
+              'label': 'Android',
+              'download_url': 'https://example.com/app.apk',
+            },
+          ],
           'changelog': '修复已知问题，优化体验',
         },
       }, currentVersionCode: 10012);
@@ -34,7 +40,7 @@ void main() {
       expect(result.release?.appName, 'reader-app');
       expect(result.release?.versionCode, 10023);
       expect(result.release?.forceUpdate, isTrue);
-      expect(result.release?.downloadUrl, 'https://example.com/app.apk');
+      expect(result.release?.downloads.first.downloadUrl, 'https://example.com/app.apk');
       expect(result.release?.changelog, '修复已知问题，优化体验');
     });
 
@@ -47,7 +53,13 @@ void main() {
           'app_name': 'reader-app',
           'version_code': 10023,
           'force_update': true,
-          'download_url': 'https://example.com/app.apk',
+          'downloads': [
+            {
+              'platform': 'android',
+              'label': 'Android',
+              'download_url': 'https://example.com/app.apk',
+            },
+          ],
           'changelog': '修复已知问题，优化体验',
         },
       }, currentVersionCode: 10012);

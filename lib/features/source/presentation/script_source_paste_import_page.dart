@@ -100,49 +100,40 @@ class _ScriptSourcePasteImportPageState
     // 获取当前书源数量
     final currentSources = await _sourceRuntimeFacade.listScriptSources();
     final currentCount = currentSources.length;
-
-    // 如果当前数量已经达到默认限制，直接拒绝
-    if (currentCount >= defaultQuotaLimit) {
-      _showMessage('最多只能导入 $defaultQuotaLimit 个书源。');
-      return false;
-    }
+    var quotaLimit = defaultQuotaLimit;
 
     // 尝试获取已登录用户的权限配置（网络请求可能失败）
     final session = await _authSessionStore.getSession();
-    if (session == null) {
-      // 未登录用户：使用默认限制
-      return true;
-    }
-
-    // 已登录用户：尝试获取会员配置，失败时使用默认限制
     try {
-      final modules = await _mobileFeatureService.fetchMyModules().timeout(
-        const Duration(seconds: 5),
-        onTimeout: () {
-          // 超时时抛出异常，走 catch 分支
-          throw TimeoutException('Request timeout');
-        },
-      );
+      final modules = await (session == null
+              ? _mobileFeatureService.fetchPublicModules()
+              : _mobileFeatureService.fetchMyModules())
+          .timeout(
+            const Duration(seconds: 5),
+            onTimeout: () {
+              // 超时时抛出异常，走 catch 分支
+              throw TimeoutException('Request timeout');
+            },
+          );
 
-      var quotaLimit = defaultQuotaLimit;
       for (final item in modules) {
         if (item.code == 'source_import') {
           quotaLimit = item.quotaLimit;
           break;
         }
       }
-
-      if (quotaLimit >= 0 && currentCount >= quotaLimit) {
-        _showMessage('已达到书源导入上限（最多 $quotaLimit 个）。');
-        return false;
-      }
     } catch (e) {
       // 网络异常或超时，使用默认限制
       debugPrint('获取会员权限失败，使用默认限制: $e');
-      if (currentCount >= defaultQuotaLimit) {
-        _showMessage('最多只能导入 $defaultQuotaLimit 个书源。');
-        return false;
-      }
+    }
+
+    if (quotaLimit >= 0 && currentCount >= quotaLimit) {
+      _showMessage(
+        quotaLimit == defaultQuotaLimit
+            ? '最多只能导入 $defaultQuotaLimit 个书源。'
+            : '已达到书源导入上限（最多 $quotaLimit 个）。',
+      );
+      return false;
     }
 
     return true;

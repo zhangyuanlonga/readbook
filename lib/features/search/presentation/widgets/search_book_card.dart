@@ -112,7 +112,7 @@ class SearchBookCard extends ConsumerWidget {
                             vertical: 6,
                           ),
                           decoration: BoxDecoration(
-                            color: colorScheme.surfaceContainerHigh,
+                            color: palette.elevatedSurfaceColor,
                             borderRadius: BorderRadius.circular(8),
                           ),
                           child: Text(
@@ -120,7 +120,7 @@ class SearchBookCard extends ConsumerWidget {
                             maxLines: 2,
                             overflow: TextOverflow.ellipsis,
                             style: theme.textTheme.bodySmall?.copyWith(
-                              color: colorScheme.onSurfaceVariant,
+                              color: palette.textSecondaryColor,
                               height: 1.35,
                             ),
                           ),

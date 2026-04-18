@@ -8,6 +8,7 @@ import 'package:go_router/go_router.dart';
 
 import '../../../app/layout/app_layout.dart';
 import '../../../app/layout/app_spacing.dart';
+import '../../../core/auth/auth_event_bus.dart';
 import '../../../core/auth/auth_session_store.dart';
 import '../../../core/mobile_features/mobile_feature_module.dart';
 import '../../../core/mobile_features/mobile_feature_service.dart';
@@ -302,6 +303,7 @@ class _SourcePageState extends State<SourcePage> {
   late final TextEditingController _searchController;
   final AuthSessionStore _authSessionStore = AuthSessionStore();
   final MobileFeatureService _mobileFeatureService = MobileFeatureService();
+  StreamSubscription<AuthEvent>? _authEventSub;
   List<ScriptSource> _lastRawSources = const <ScriptSource>[];
   List<ScriptSource> _lastVisibleSources = const <ScriptSource>[];
 
@@ -336,6 +338,7 @@ class _SourcePageState extends State<SourcePage> {
       }
       unawaited(_consumePendingExternalImportPayloads());
     });
+    _authEventSub = AuthEventBus.instance.stream.listen(_handleAuthEvent);
     if (widget.bootstrapOnInit) {
       unawaited(_reloadScriptSourcesSilently());
     }
@@ -351,8 +354,19 @@ class _SourcePageState extends State<SourcePage> {
   @override
   void dispose() {
     _incomingImportSub?.cancel();
+    _authEventSub?.cancel();
     _searchController.dispose();
     super.dispose();
+  }
+
+  void _handleAuthEvent(AuthEvent event) {
+    switch (event.type) {
+      case AuthEventType.loggedIn:
+      case AuthEventType.loggedOut:
+      case AuthEventType.sessionExpired:
+        unawaited(_loadFeatureAccess());
+        break;
+    }
   }
 
   Future<void> _loadFeatureAccess() async {
@@ -372,33 +386,24 @@ class _SourcePageState extends State<SourcePage> {
       return;
     }
 
-    // 未登录用户：直接使用默认配置
-    if (session == null) {
-      setState(() {
-        _canAccessSourcePage = true;
-        _sourceImportLimit = 10;
-        _isFeatureAccessLoading = false;
-      });
-      return;
-    }
-
-    // 已登录用户：尝试获取权限配置，失败时使用默认值
     try {
-      final modules = await _mobileFeatureService.fetchMyModules().timeout(
-        const Duration(seconds: 5),
-        onTimeout: () {
-          // 超时时抛出异常，走 catch 分支
-          throw TimeoutException('Request timeout');
-        },
-      );
+      final modules = await (session == null
+              ? _mobileFeatureService.fetchPublicModules()
+              : _mobileFeatureService.fetchMyModules())
+          .timeout(
+            const Duration(seconds: 5),
+            onTimeout: () {
+              // 超时时抛出异常，走 catch 分支
+              throw TimeoutException('Request timeout');
+            },
+          );
       final sourceEntry = _findFeatureModule(modules, 'source_entry');
       final sourceImport = _findFeatureModule(modules, 'source_import');
       if (!mounted) {
         return;
       }
       setState(() {
-        _canAccessSourcePage =
-            sourceEntry?.visible == true && sourceEntry?.enabled != false;
+        _canAccessSourcePage = _isSourceEntryAccessible(sourceEntry);
         _sourceImportLimit = sourceImport?.quotaLimit ?? 10;
         _isFeatureAccessLoading = false;
       });
@@ -409,7 +414,7 @@ class _SourcePageState extends State<SourcePage> {
       }
       debugPrint('获取功能权限失败，使用默认配置: $e');
       setState(() {
-        _canAccessSourcePage = true; // 允许访问
+        _canAccessSourcePage = true;
         _sourceImportLimit = 10; // 默认限制
         _isFeatureAccessLoading = false;
       });
@@ -426,6 +431,13 @@ class _SourcePageState extends State<SourcePage> {
       }
     }
     return null;
+  }
+
+  bool _isSourceEntryAccessible(MobileFeatureModule? sourceEntry) {
+    if (sourceEntry == null) {
+      return true;
+    }
+    return sourceEntry.visible && sourceEntry.enabled;
   }
 
   Future<bool> _ensureCanAddSource() async {
@@ -481,7 +493,7 @@ class _SourcePageState extends State<SourcePage> {
                 ),
                 const SizedBox(height: 8),
                 Text(
-                  '请联系管理员或稍后再试。',
+                  '当前设备上的书源入口暂未开放，请稍后再试。',
                   style: Theme.of(context).textTheme.bodyMedium,
                   textAlign: TextAlign.center,
                 ),

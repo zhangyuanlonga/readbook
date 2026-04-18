@@ -1,3 +1,31 @@
+class AppUpdateReleaseDownload {
+  const AppUpdateReleaseDownload({
+    required this.platform,
+    required this.label,
+    required this.downloadUrl,
+    required this.fileName,
+  });
+
+  final String? platform;
+  final String? label;
+  final String? downloadUrl;
+  final String? fileName;
+
+  factory AppUpdateReleaseDownload.fromJson(Map<String, dynamic> json) {
+    String? readString(String key) {
+      final value = json[key]?.toString().trim() ?? '';
+      return value.isEmpty ? null : value;
+    }
+
+    return AppUpdateReleaseDownload(
+      platform: readString('platform'),
+      label: readString('label'),
+      downloadUrl: readString('download_url'),
+      fileName: readString('file_name'),
+    );
+  }
+}
+
 class AppUpdateRelease {
   const AppUpdateRelease({
     required this.id,
@@ -6,6 +34,7 @@ class AppUpdateRelease {
     required this.versionCode,
     required this.forceUpdate,
     required this.downloadUrl,
+    required this.downloads,
     required this.changelog,
   });
 
@@ -15,6 +44,7 @@ class AppUpdateRelease {
   final int? versionCode;
   final bool? forceUpdate;
   final String? downloadUrl;
+  final List<AppUpdateReleaseDownload> downloads;
   final String? changelog;
 
   factory AppUpdateRelease.fromJson(Map<String, dynamic> json) {
@@ -57,6 +87,21 @@ class AppUpdateRelease {
       return value.isEmpty ? null : value;
     }
 
+    List<AppUpdateReleaseDownload> readDownloads(String key) {
+      final value = json[key];
+      if (value is! List) {
+        return const [];
+      }
+      return value
+          .whereType<Map>()
+          .map(
+            (item) => AppUpdateReleaseDownload.fromJson(
+              item.map((key, value) => MapEntry(key.toString(), value)),
+            ),
+          )
+          .toList(growable: false);
+    }
+
     return AppUpdateRelease(
       id: readString('id'),
       appName: readString('app_name'),
@@ -64,6 +109,7 @@ class AppUpdateRelease {
       versionCode: readInt('version_code'),
       forceUpdate: readBool('force_update'),
       downloadUrl: readString('download_url'),
+      downloads: readDownloads('downloads'),
       changelog: readString('changelog'),
     );
   }

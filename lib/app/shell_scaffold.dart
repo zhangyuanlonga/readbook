@@ -8,6 +8,7 @@ import 'package:go_router/go_router.dart';
 import '../domain/entities/bottom_nav_icon_gallery.dart';
 import '../features/mine/application/advanced_theme_provider.dart';
 import 'theme/app_advanced_theme_tokens.dart';
+import 'theme/app_border_tokens.dart';
 import 'layout/app_layout.dart';
 import 'navigation/bottom_nav_icon_gallery_provider.dart';
 import 'navigation/bottom_nav_icon_resolver.dart';
@@ -260,8 +261,10 @@ class _ShellScaffoldState extends ConsumerState<ShellScaffold>
                     : advancedPalette.cardColor.withValues(alpha: 0.92),
             border: Border(
               top: BorderSide(
-                color: advancedPalette.cardBorderColor.withValues(
-                  alpha: 0.72,
+                color: resolveAppBorderColor(
+                  Theme.of(context).colorScheme,
+                  baseColor: advancedPalette.cardBorderColor,
+                  containerColor: advancedPalette.cardColor,
                 ),
               ),
             ),
@@ -286,16 +289,14 @@ class _ShellScaffoldState extends ConsumerState<ShellScaffold>
                           selected
                               ? advancedPalette.textPrimaryColor
                               : advancedPalette.textSecondaryColor,
-                      fontWeight:
-                          selected ? FontWeight.w700 : FontWeight.w600,
+                      fontWeight: selected ? FontWeight.w700 : FontWeight.w600,
                     ) ??
                     TextStyle(
                       color:
                           selected
                               ? advancedPalette.textPrimaryColor
                               : advancedPalette.textSecondaryColor,
-                      fontWeight:
-                          selected ? FontWeight.w700 : FontWeight.w600,
+                      fontWeight: selected ? FontWeight.w700 : FontWeight.w600,
                     );
               }),
             ),
@@ -331,7 +332,7 @@ class _ShellScaffoldState extends ConsumerState<ShellScaffold>
                           gallery: activeIconGallery,
                         ),
                         size: 24,
-                        fallbackColor: advancedPalette.primaryColor,
+                        fallbackColor: advancedPalette.textPrimaryColor,
                       ),
                       label: destination.label,
                     ),
@@ -357,7 +358,7 @@ class _ShellScaffoldState extends ConsumerState<ShellScaffold>
                 borderColor: advancedPalette.cardBorderColor.withValues(
                   alpha: 0.92,
                 ),
-                selectedIconColor: advancedPalette.primaryColor,
+                selectedIconColor: advancedPalette.textPrimaryColor,
                 unselectedIconColor: advancedPalette.textSecondaryColor,
                 selectedLabelColor: advancedPalette.textPrimaryColor,
                 unselectedLabelColor: advancedPalette.textSecondaryColor,

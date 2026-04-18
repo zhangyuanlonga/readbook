@@ -24,6 +24,7 @@ class AppUpdateService {
   Future<AppUpdateCheckResult> checkUpdate({String? appName}) async {
     _ensureBaseUrl();
     final versionCode = await _identityService.getAppVersionCode();
+    final identity = await _identityService.loadIdentity();
     final resolvedAppName =
         (appName ?? AppApiConfig.appName).trim().isEmpty
             ? AppApiConfig.appName
@@ -32,7 +33,11 @@ class AppUpdateService {
     final data = await _client.request<Map<String, dynamic>>(
       method: ApiMethod.post,
       path: '/v1/app-updates/check',
-      body: {'app_name': resolvedAppName, 'version_code': versionCode},
+      body: {
+        'app_name': resolvedAppName,
+        'version_code': versionCode,
+        'platform': identity.platform,
+      },
       stage: ErrorStage.unknown,
       decoder: _decodeMap,
     );

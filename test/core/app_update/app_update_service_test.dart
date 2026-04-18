@@ -1,4 +1,5 @@
 import 'package:shuxiang_reading_next/core/app_update/app_update_service.dart';
+import 'package:shuxiang_reading_next/core/device/device_identity.dart';
 import 'package:shuxiang_reading_next/core/device/device_identity_service.dart';
 import 'package:shuxiang_reading_next/core/network/api_client.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -8,33 +9,49 @@ void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
   group('AppUpdateService', () {
-    test('sends only app_name and version_code to check endpoint', () async {
-      SharedPreferences.setMockInitialValues({});
-      final client = _FakeAppUpdateApiClient();
+    test(
+      'sends app_name, version_code and platform to check endpoint',
+      () async {
+        SharedPreferences.setMockInitialValues({});
+        final client = _FakeAppUpdateApiClient();
 
-      final service = AppUpdateService(
-        client: client,
-        baseUrl: 'http://localhost:8080',
-        identityService: _FakeAppUpdateIdentityService(),
-      );
+        final service = AppUpdateService(
+          client: client,
+          baseUrl: 'http://localhost:8080',
+          identityService: _FakeAppUpdateIdentityService(),
+        );
 
-      final result = await service.checkUpdate();
+        final result = await service.checkUpdate();
 
-      expect(client.capturedPath, '/v1/app-updates/check');
-      expect(client.capturedBody, {
-        'app_name': 'reader-app',
-        'version_code': 10006,
-      });
-      expect(result.hasUpdate, isTrue);
-      expect(result.forceUpdate, isFalse);
-      expect(result.release?.versionCode, 10012);
-    });
+        expect(client.capturedPath, '/v1/app-updates/check');
+        expect(client.capturedBody, {
+          'app_name': 'selune',
+          'version_code': 10006,
+          'platform': 'android',
+        });
+        expect(result.hasUpdate, isTrue);
+        expect(result.forceUpdate, isFalse);
+        expect(result.release?.versionCode, 10012);
+      },
+    );
   });
 }
 
 class _FakeAppUpdateIdentityService extends DeviceIdentityService {
   @override
   Future<int> getAppVersionCode() async => 10006;
+
+  @override
+  Future<DeviceIdentity> loadIdentity() async => const DeviceIdentity(
+    installId: 'ins_xxx',
+    deviceUid: 'dev_xxx',
+    deviceFingerprint: 'fp_xxx',
+    platform: 'android',
+    deviceBrand: 'Google',
+    deviceModel: 'Pixel',
+    osVersion: '14',
+    appVersion: '1.0.0',
+  );
 }
 
 class _FakeAppUpdateApiClient extends ApiClient {
@@ -66,9 +83,15 @@ class _FakeAppUpdateApiClient extends ApiClient {
       'force_update': false,
       'latest_version': {
         'id': 'rel_xxx',
-        'app_name': 'reader-app',
+        'app_name': 'selune',
         'version_code': 10012,
-        'download_url': 'https://example.com/app.apk',
+        'downloads': [
+          {
+            'platform': 'android',
+            'label': 'Android',
+            'download_url': 'https://example.com/app.apk',
+          },
+        ],
         'changelog': '优化体验',
       },
     };

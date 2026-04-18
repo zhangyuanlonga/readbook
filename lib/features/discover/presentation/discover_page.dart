@@ -697,13 +697,14 @@ class _DiscoverPageState extends ConsumerState<DiscoverPage>
         final index = entry.key;
         final item = entry.value;
         final selected = index == _selectedCategoryIndex;
-        final textColor = Theme.of(context).colorScheme.onSurface;
+        final palette = _resolvedPalette(context);
+        final textColor =
+            selected
+                ? palette.textPrimaryColor
+                : Theme.of(context).colorScheme.onSurface;
 
         return Material(
-          color:
-              selected
-                  ? Theme.of(context).colorScheme.secondaryContainer
-                  : Colors.transparent,
+          color: selected ? palette.primaryContainerColor : Colors.transparent,
           child: InkWell(
             onTap: () => _selectCategory(index),
             child: Padding(
@@ -751,7 +752,7 @@ class _DiscoverPageState extends ConsumerState<DiscoverPage>
                     Icon(
                       Icons.check_rounded,
                       size: 18,
-                      color: Theme.of(context).colorScheme.onSecondaryContainer,
+                      color: palette.textPrimaryColor,
                     ),
                   ],
                 ],
@@ -906,6 +907,7 @@ class _DiscoverPageState extends ConsumerState<DiscoverPage>
     Book book, {
     required int listIndex,
   }) {
+    final palette = _resolvedPalette(context);
     final author = _normalizeSnippet(book.author);
     final latestChapter = _normalizeSnippet(book.latestChapter);
     final intro = _normalizeSnippet(book.intro);
@@ -925,7 +927,7 @@ class _DiscoverPageState extends ConsumerState<DiscoverPage>
         final compactPill = useCondensedPhoneDensity;
 
         return Card(
-          color: _resolvedPalette(context).cardColor,
+          color: palette.cardColor,
           shape: _cardShape(context),
           margin: EdgeInsets.only(bottom: cardBottomMargin),
           clipBehavior: Clip.antiAlias,
@@ -933,12 +935,8 @@ class _DiscoverPageState extends ConsumerState<DiscoverPage>
             onTap: () => _openBookDetail(book, heroTag: heroTag),
             borderRadius: BorderRadius.circular(12),
             mouseCursor: SystemMouseCursors.click,
-            hoverColor: Theme.of(
-              context,
-            ).colorScheme.primary.withValues(alpha: 0.06),
-            focusColor: Theme.of(
-              context,
-            ).colorScheme.primary.withValues(alpha: 0.1),
+            hoverColor: palette.primaryColor.withValues(alpha: 0.06),
+            focusColor: palette.primaryColor.withValues(alpha: 0.1),
             child: Padding(
               padding: EdgeInsets.symmetric(
                 horizontal: cardHorizontalPadding,
@@ -971,7 +969,7 @@ class _DiscoverPageState extends ConsumerState<DiscoverPage>
                             context,
                           ).textTheme.titleSmall?.copyWith(
                             fontWeight: FontWeight.w700,
-                            color: _resolvedPalette(context).cardTextColor,
+                            color: palette.cardTextColor,
                           ),
                         ),
                         SizedBox(height: useCondensedPhoneDensity ? 3 : 4),
@@ -1014,10 +1012,7 @@ class _DiscoverPageState extends ConsumerState<DiscoverPage>
                                 vertical: useCondensedPhoneDensity ? 5 : 6,
                               ),
                               decoration: BoxDecoration(
-                                color:
-                                    _resolvedPalette(
-                                      context,
-                                    ).elevatedSurfaceColor,
+                                color: palette.elevatedSurfaceColor,
                                 borderRadius: BorderRadius.circular(8),
                               ),
                               child: Text(
@@ -1027,10 +1022,7 @@ class _DiscoverPageState extends ConsumerState<DiscoverPage>
                                 style: Theme.of(
                                   context,
                                 ).textTheme.bodySmall?.copyWith(
-                                  color:
-                                      _resolvedPalette(
-                                        context,
-                                      ).textSecondaryColor,
+                                  color: palette.textSecondaryColor,
                                   height: 1.35,
                                 ),
                               ),
@@ -1042,7 +1034,7 @@ class _DiscoverPageState extends ConsumerState<DiscoverPage>
                   const SizedBox(width: 8),
                   Icon(
                     Icons.chevron_right_rounded,
-                    color: _resolvedPalette(context).textSecondaryColor,
+                    color: palette.textSecondaryColor,
                   ),
                 ],
               ),
@@ -1985,7 +1977,7 @@ class _DiscoverPageState extends ConsumerState<DiscoverPage>
   }
 }
 
-class _SourcePickerSheet extends StatefulWidget {
+class _SourcePickerSheet extends ConsumerStatefulWidget {
   const _SourcePickerSheet({
     required this.sources,
     required this.selectedSourceId,
@@ -1997,10 +1989,10 @@ class _SourcePickerSheet extends StatefulWidget {
   final Map<String, SourceHealthSnapshot> healthBySourceId;
 
   @override
-  State<_SourcePickerSheet> createState() => _SourcePickerSheetState();
+  ConsumerState<_SourcePickerSheet> createState() => _SourcePickerSheetState();
 }
 
-class _SourcePickerSheetState extends State<_SourcePickerSheet> {
+class _SourcePickerSheetState extends ConsumerState<_SourcePickerSheet> {
   final TextEditingController _searchController = TextEditingController();
   _SourceTypeFilter _sourceTypeFilter = _SourceTypeFilter.all;
 
@@ -2158,16 +2150,20 @@ class _SourcePickerSheetState extends State<_SourcePickerSheet> {
                             status,
                           );
                           final colorScheme = Theme.of(context).colorScheme;
+                          final palette = resolveAdvancedThemePalette(
+                            colorScheme,
+                            ref.read(activeAdvancedThemeProvider).valueOrNull,
+                          );
                           final summary = _buildSourceSummary(source);
                           final statusHint = _buildSourceStatusHint(status);
 
                           return Material(
                             color:
                                 selected
-                                    ? colorScheme.secondaryContainer.withValues(
+                                    ? palette.primaryContainerColor.withValues(
                                       alpha: 0.42,
                                     )
-                                    : colorScheme.surfaceContainerLowest,
+                                    : palette.surfaceColor,
                             borderRadius: BorderRadius.circular(16),
                             child: InkWell(
                               borderRadius: BorderRadius.circular(16),
@@ -2209,9 +2205,9 @@ class _SourcePickerSheetState extends State<_SourcePickerSheet> {
                                                 _DiscoverSourceTag(
                                                   label: '当前源',
                                                   background:
-                                                      colorScheme.primary,
+                                                      palette.primaryColor,
                                                   foreground:
-                                                      colorScheme.onPrimary,
+                                                      palette.buttonTextColor,
                                                 ),
                                               ],
                                             ],
@@ -2268,7 +2264,7 @@ class _SourcePickerSheetState extends State<_SourcePickerSheet> {
                                           : Icons.chevron_right_rounded,
                                       color:
                                           selected
-                                              ? colorScheme.primary
+                                              ? palette.primaryColor
                                               : colorScheme.onSurfaceVariant,
                                     ),
                                   ],

@@ -54,7 +54,7 @@ const List<AppShellDestination> appShellDestinations = [
 class AppShellNavigationState {
   const AppShellNavigationState({
     this.showBookshelf = true,
-    this.showDiscover = true,
+    this.showDiscover = false,
     this.showStats = true,
   });
 
@@ -149,7 +149,7 @@ class AppShellNavigationNotifier extends Notifier<AppShellNavigationState> {
     final prefs = await SharedPreferences.getInstance();
     final loaded = AppShellNavigationState(
       showBookshelf: prefs.getBool(_bookshelfVisibleKey) ?? true,
-      showDiscover: prefs.getBool(_discoverVisibleKey) ?? true,
+      showDiscover: prefs.getBool(_discoverVisibleKey) ?? false,
       showStats: prefs.getBool(_statsVisibleKey) ?? true,
     );
     final normalized = _normalizeState(loaded);

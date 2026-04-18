@@ -402,6 +402,9 @@ class _SystemUiOverlayWrapperState extends State<_SystemUiOverlayWrapper>
     if (!mounted) {
       return;
     }
+    if (event.type == AuthEventType.loggedIn) {
+      return;
+    }
     final messenger = ScaffoldMessenger.of(context);
     if (!mounted) {
       return;
@@ -808,13 +811,12 @@ class _SystemUiOverlayWrapperState extends State<_SystemUiOverlayWrapper>
       if (!mounted) {
         return;
       }
-      final target =
-          switch (payload.type) {
-            ExternalImportPayloadType.scriptSource => '/source',
-            ExternalImportPayloadType.localBook => '/bookshelf',
-            ExternalImportPayloadType.advancedTheme =>
-              '/appearance/advanced-themes',
-          };
+      final target = switch (payload.type) {
+        ExternalImportPayloadType.scriptSource => '/source',
+        ExternalImportPayloadType.localBook => '/bookshelf',
+        ExternalImportPayloadType.advancedTheme =>
+          '/appearance/advanced-themes',
+      };
       _safeGo(target);
     });
   }
@@ -876,7 +878,8 @@ class _SystemUiOverlayWrapperState extends State<_SystemUiOverlayWrapper>
 
 class _StartupGuardPage extends StatelessWidget {
   const _StartupGuardPage();
-  static const String _startupArtwork = 'assets/branding/selune_launch_scene.png';
+  static const String _startupArtwork =
+      'assets/branding/selune_launch_scene.png';
 
   @override
   Widget build(BuildContext context) {

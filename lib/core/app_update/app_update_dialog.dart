@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
 
@@ -7,11 +8,58 @@ class AppUpdateDialog {
   const AppUpdateDialog._();
 
   static Uri? resolveUpdateUrl(AppUpdateRelease release) {
-    final candidate = (release.downloadUrl ?? '').trim();
+    final candidate = _resolvePreferredDownloadUrl(release);
     if (candidate.isEmpty) {
       return null;
     }
     return Uri.tryParse(candidate);
+  }
+
+  static String _resolvePreferredDownloadUrl(AppUpdateRelease release) {
+    final currentPlatform = _currentPlatform();
+    if (release.downloads.isNotEmpty) {
+      final priorities = <String>[
+        currentPlatform,
+        if (currentPlatform == 'windows' ||
+            currentPlatform == 'macos' ||
+            currentPlatform == 'linux')
+          'desktop',
+        'default',
+      ];
+      for (final platform in priorities) {
+        for (final item in release.downloads) {
+          final itemPlatform = (item.platform ?? '').trim().toLowerCase();
+          final url = (item.downloadUrl ?? '').trim();
+          if (itemPlatform == platform && url.isNotEmpty) {
+            return url;
+          }
+        }
+      }
+      for (final item in release.downloads) {
+        final url = (item.downloadUrl ?? '').trim();
+        if (url.isNotEmpty) {
+          return url;
+        }
+      }
+    }
+    return (release.downloadUrl ?? '').trim();
+  }
+
+  static String _currentPlatform() {
+    switch (defaultTargetPlatform) {
+      case TargetPlatform.android:
+        return 'android';
+      case TargetPlatform.iOS:
+        return 'ios';
+      case TargetPlatform.macOS:
+        return 'macos';
+      case TargetPlatform.windows:
+        return 'windows';
+      case TargetPlatform.linux:
+        return 'linux';
+      case TargetPlatform.fuchsia:
+        return 'default';
+    }
   }
 
   static Future<void> openUpdateUrl(BuildContext context, Uri url) async {

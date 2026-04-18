@@ -68,7 +68,6 @@ class _AdvancedThemeEditorPageState
   bool _isEditingName = false;
   bool _isLoading = true;
   bool _isSaving = false;
-  bool _showAdvancedColorSlots = false;
   bool _didInitialize = false;
 
   @override
@@ -900,6 +899,22 @@ class _AdvancedThemeEditorPageState
     return '默认图集';
   }
 
+  String _resolvedWallpaperName(AppAdvancedTheme draft) {
+    final path = _selectedWallpaperPreviewPath(draft);
+    if (path != null && path.isNotEmpty) {
+      return '当前模式已设置壁纸';
+    }
+    return '未设置壁纸';
+  }
+
+  String? _selectedWallpaperPreviewPath(AppAdvancedTheme draft) {
+    final path = draft.configFor(_selectedMode).wallpaperPath?.trim();
+    if (path == null || path.isEmpty) {
+      return null;
+    }
+    return File(path).existsSync() ? path : null;
+  }
+
   CoverGallery? _selectedCoverGallery() {
     final selectedId = _draft?.coverGalleryId?.trim();
     if (selectedId == null || selectedId.isEmpty) {
@@ -1027,31 +1042,20 @@ class _AdvancedThemeEditorPageState
       return;
     }
     final seedColor = ref.read(appSeedColorProvider);
-    final currentConfig =
-        _selectedMode == AppAdvancedThemeMode.light
-            ? _modeConfigFromScheme(buildAppLightColorScheme(seedColor))
-            : _modeConfigFromScheme(buildAppDarkColorScheme(seedColor));
-    final next = draft.copyWithModeConfig(_selectedMode, currentConfig);
+    final next = _applySeedPresetToDraft(draft, seedColor);
     setState(() {
       _draft = next;
     });
     _syncControllersFromDraft(next);
   }
 
-  void _setWallpaperOverlayOpacity(double value) {
-    final draft = _draft;
-    if (draft == null) {
-      return;
-    }
-    final normalized = value.clamp(0.0, 1.0);
-    setState(() {
-      _draft = draft.copyWithModeConfig(
-        _selectedMode,
-        draft
-            .configFor(_selectedMode)
-            .copyWith(wallpaperOverlayOpacity: normalized),
-      );
-    });
+  AppAdvancedTheme _applySeedPresetToDraft(AppAdvancedTheme draft, Color seed) {
+    final lightBase = _modeConfigFromScheme(buildAppLightColorScheme(seed));
+    final darkBase = _modeConfigFromScheme(buildAppDarkColorScheme(seed));
+    return draft.copyWith(
+      lightConfig: draft.lightConfig.copyWith(colors: lightBase.colors),
+      darkConfig: draft.darkConfig.copyWith(colors: darkBase.colors),
+    );
   }
 
   void _selectMode(AppAdvancedThemeMode mode) {
@@ -1326,7 +1330,7 @@ class _AdvancedThemeEditorPageState
               icon: const Icon(Icons.check_rounded),
             ),
           IconButton(
-            tooltip: '回填当前主题',
+            tooltip: '回填基础主题结果',
             onPressed: _isLoading || _isSaving ? null : _fillFromCurrentTheme,
             icon: const Icon(Icons.color_lens_outlined),
           ),
@@ -1362,9 +1366,7 @@ class _AdvancedThemeEditorPageState
                         children: [
                           _buildColorsSection(context),
                           const SizedBox(height: sectionGap),
-                          _buildWallpaperSection(context, draft),
-                          const SizedBox(height: sectionGap),
-                          _buildAppearanceLinkSection(context),
+                          _buildResourceSection(context, draft),
                           const SizedBox(height: sectionGap),
                           _buildPreviewSection(context, draft),
                         ],
@@ -1380,7 +1382,12 @@ class _AdvancedThemeEditorPageState
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        _buildSectionLabel(context, '页面'),
+        _buildSectionLabel(context, '基础主题层'),
+        const SizedBox(height: 4),
+        _buildSectionDescription(
+          context,
+          '这一层决定整体风格，会影响大面积背景、输入区、选中态、文字层级和通用边框。',
+        ),
         const SizedBox(height: 6),
         _buildPanel(
           context,
@@ -1402,6 +1409,16 @@ class _AdvancedThemeEditorPageState
                 description: '搜索区、分割区域和次级面板底色',
               ),
               _ThemeColorFieldSpec(
+                slot: _ThemeColorSlot.searchFieldBackground,
+                label: '搜索框背景',
+                description: '搜索框和搜索触发条的填充颜色',
+              ),
+              _ThemeColorFieldSpec(
+                slot: _ThemeColorSlot.elevatedSurface,
+                label: '高层级背景',
+                description: '弹层和高层级面板背景',
+              ),
+              _ThemeColorFieldSpec(
                 slot: _ThemeColorSlot.textPrimary,
                 label: '主要文字',
                 description: '正文和标题的颜色',
@@ -1416,11 +1433,26 @@ class _AdvancedThemeEditorPageState
                 label: '通用边框',
                 description: '输入框、分隔线和通用描边颜色',
               ),
+              _ThemeColorFieldSpec(
+                slot: _ThemeColorSlot.primaryContainer,
+                label: '强调背景',
+                description: '标签、筛选和选中态背景色',
+              ),
+              _ThemeColorFieldSpec(
+                slot: _ThemeColorSlot.secondary,
+                label: '辅助强调',
+                description: '次级徽标和辅助操作的强调色',
+              ),
             ]),
           ),
         ),
         const SizedBox(height: 10),
-        _buildSectionLabel(context, '卡片'),
+        _buildSectionLabel(context, '精细覆盖层'),
+        const SizedBox(height: 4),
+        _buildSectionDescription(
+          context,
+          '这一层负责局部精修，主要影响卡片、提示块、图标承托、按钮文字和阴影等具体视觉块。',
+        ),
         const SizedBox(height: 6),
         _buildPanel(
           context,
@@ -1443,6 +1475,26 @@ class _AdvancedThemeEditorPageState
                   description: '卡片和面板描边颜色',
                 ),
                 _ThemeColorFieldSpec(
+                  slot: _ThemeColorSlot.noticeAccent,
+                  label: '提示强调',
+                  description: '重要提示和通知强调色',
+                ),
+                _ThemeColorFieldSpec(
+                  slot: _ThemeColorSlot.noticeSurface,
+                  label: '提示底色',
+                  description: '重要提示块和状态标签的背景色',
+                ),
+                _ThemeColorFieldSpec(
+                  slot: _ThemeColorSlot.iconBackground,
+                  label: '图标底色',
+                  description: '图标圆底和辅助视觉底色',
+                ),
+                _ThemeColorFieldSpec(
+                  slot: _ThemeColorSlot.buttonText,
+                  label: '按钮文字',
+                  description: '主按钮和高亮按钮上的文字颜色',
+                ),
+                _ThemeColorFieldSpec(
                   slot: _ThemeColorSlot.shadow,
                   label: '阴影',
                   description: '卡片和浮层的阴影或光晕颜色',
@@ -1457,94 +1509,6 @@ class _AdvancedThemeEditorPageState
             ],
           ),
         ),
-        const SizedBox(height: 10),
-        _buildSectionLabel(context, '搜索框'),
-        const SizedBox(height: 6),
-        _buildPanel(
-          context,
-          child: Column(
-            children: _buildColorFieldRows(context, const [
-              _ThemeColorFieldSpec(
-                slot: _ThemeColorSlot.searchFieldBackground,
-                label: '背景颜色',
-                description: '搜索框和搜索触发条的填充颜色',
-              ),
-            ]),
-          ),
-        ),
-        const SizedBox(height: 10),
-        _buildSectionLabel(context, '标签与状态'),
-        const SizedBox(height: 6),
-        _buildPanel(
-          context,
-          child: Column(
-            children: [
-              ..._buildColorFieldRows(context, const [
-                _ThemeColorFieldSpec(
-                  slot: _ThemeColorSlot.primaryContainer,
-                  label: '强调背景',
-                  description: '标签、筛选和选中态背景色',
-                ),
-                _ThemeColorFieldSpec(
-                  slot: _ThemeColorSlot.secondary,
-                  label: '辅助强调',
-                  description: '次级徽标和辅助操作的强调色',
-                ),
-                _ThemeColorFieldSpec(
-                  slot: _ThemeColorSlot.noticeAccent,
-                  label: '提示强调',
-                  description: '重要提示和通知强调色',
-                ),
-                _ThemeColorFieldSpec(
-                  slot: _ThemeColorSlot.noticeSurface,
-                  label: '提示底色',
-                  description: '重要提示块和状态标签的背景色',
-                ),
-              ]),
-            ],
-          ),
-        ),
-        const SizedBox(height: 8),
-        TextButton.icon(
-          onPressed: () {
-            setState(() {
-              _showAdvancedColorSlots = !_showAdvancedColorSlots;
-            });
-          },
-          icon: Icon(
-            _showAdvancedColorSlots
-                ? Icons.expand_less_rounded
-                : Icons.expand_more_rounded,
-          ),
-          label: Text(_showAdvancedColorSlots ? '收起高级颜色' : '展开高级颜色'),
-        ),
-        if (_showAdvancedColorSlots) ...[
-          const SizedBox(height: 4),
-          _buildSectionLabel(context, '高级颜色'),
-          const SizedBox(height: 6),
-          _buildPanel(
-            context,
-            child: Column(
-              children: _buildColorFieldRows(context, const [
-                _ThemeColorFieldSpec(
-                  slot: _ThemeColorSlot.elevatedSurface,
-                  label: '高层级背景',
-                  description: '弹层和高层级面板背景',
-                ),
-                _ThemeColorFieldSpec(
-                  slot: _ThemeColorSlot.iconBackground,
-                  label: '图标底色',
-                  description: '图标圆底和辅助视觉底色',
-                ),
-                _ThemeColorFieldSpec(
-                  slot: _ThemeColorSlot.buttonText,
-                  label: '按钮文字',
-                  description: '主按钮和高亮按钮上的文字颜色',
-                ),
-              ]),
-            ),
-          ),
-        ],
       ],
     );
   }
@@ -1602,134 +1566,41 @@ class _AdvancedThemeEditorPageState
     );
   }
 
-  Widget _buildWallpaperSection(BuildContext context, AppAdvancedTheme draft) {
-    final colorScheme = Theme.of(context).colorScheme;
-    final currentConfig = draft.configFor(_selectedMode);
-    final wallpaperPath = currentConfig.wallpaperPath?.trim();
-    final hasWallpaper =
-        wallpaperPath != null &&
-        wallpaperPath.isNotEmpty &&
-        File(wallpaperPath).existsSync();
+  Widget _buildSectionDescription(BuildContext context, String description) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 2),
+      child: Text(
+        description,
+        style: Theme.of(context).textTheme.bodySmall?.copyWith(
+          color: Theme.of(context).colorScheme.onSurfaceVariant,
+          height: 1.45,
+        ),
+      ),
+    );
+  }
 
+  Widget _buildResourceSection(BuildContext context, AppAdvancedTheme draft) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        _buildSectionLabel(context, '壁纸'),
-        const SizedBox(height: 6),
-        _buildPanel(
+        _buildSectionLabel(context, '资源层'),
+        const SizedBox(height: 4),
+        _buildSectionDescription(
           context,
-          child: Column(
-            children: [
-              InkWell(
-                borderRadius: BorderRadius.circular(12),
-                onTap: _isSaving ? null : _pickWallpaperFromBackgroundLibrary,
-                child: Container(
-                  height: 108,
-                  width: double.infinity,
-                  decoration: BoxDecoration(
-                    color: colorScheme.surface,
-                    borderRadius: BorderRadius.circular(12),
-                    border: Border.all(
-                      color: colorScheme.outlineVariant.withValues(alpha: 0.4),
-                    ),
-                    image:
-                        hasWallpaper
-                            ? DecorationImage(
-                              image: FileImage(File(wallpaperPath)),
-                              fit: BoxFit.cover,
-                            )
-                            : null,
-                  ),
-                  child: Stack(
-                    children: [
-                      if (!hasWallpaper)
-                        Center(
-                          child: Column(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              Container(
-                                width: 42,
-                                height: 42,
-                                decoration: BoxDecoration(
-                                  color: colorScheme.surfaceContainerLow,
-                                  borderRadius: BorderRadius.circular(12),
-                                  border: Border.all(
-                                    color: colorScheme.outlineVariant
-                                        .withValues(alpha: 0.45),
-                                  ),
-                                ),
-                                child: Icon(
-                                  Icons.add_rounded,
-                                  size: 24,
-                                  color: colorScheme.onSurfaceVariant,
-                                ),
-                              ),
-                              const SizedBox(height: 8),
-                              Text(
-                                '点击选择背景',
-                                style: Theme.of(
-                                  context,
-                                ).textTheme.bodySmall?.copyWith(
-                                  color: colorScheme.onSurfaceVariant,
-                                ),
-                              ),
-                            ],
-                          ),
-                        )
-                      else
-                        Positioned(
-                          top: 10,
-                          right: 10,
-                          child: Container(
-                            width: 34,
-                            height: 34,
-                            decoration: BoxDecoration(
-                              color: colorScheme.surface.withValues(
-                                alpha: 0.88,
-                              ),
-                              borderRadius: BorderRadius.circular(10),
-                              border: Border.all(
-                                color: colorScheme.outlineVariant.withValues(
-                                  alpha: 0.45,
-                                ),
-                              ),
-                            ),
-                            child: Icon(
-                              Icons.add_rounded,
-                              size: 20,
-                              color: colorScheme.onSurfaceVariant,
-                            ),
-                          ),
-                        ),
-                    ],
-                  ),
-                ),
-              ),
-              const SizedBox(height: 10),
-              ..._buildColorRows(context, const [
-                _ThemeColorSlot.wallpaperOverlay,
-              ]),
-              const Divider(height: 1),
-              _buildWallpaperOverlayOpacityRow(context),
-              if (hasWallpaper) ...[
-                const SizedBox(height: 8),
-                Align(
-                  alignment: Alignment.centerRight,
-                  child: TextButton.icon(
-                    onPressed: _isSaving ? null : _clearWallpaper,
-                    icon: const Icon(Icons.delete_outline, size: 16),
-                    label: const Text('移除'),
-                  ),
-                ),
-              ],
-            ],
-          ),
+          '资源层统一管理壁纸、封面图集和底栏图集等素材，不参与基础主题层和精细覆盖层的颜色计算。',
         ),
+        const SizedBox(height: 6),
+        _buildAppearanceLinkSection(context, draft),
       ],
     );
   }
 
-  Widget _buildAppearanceLinkSection(BuildContext context) {
+  Widget _buildAppearanceLinkSection(
+    BuildContext context,
+    AppAdvancedTheme draft,
+  ) {
+    final wallpaperPath = _selectedWallpaperPreviewPath(draft);
+    final hasWallpaper = wallpaperPath != null && wallpaperPath.isNotEmpty;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -1739,6 +1610,38 @@ class _AdvancedThemeEditorPageState
           context,
           child: Column(
             children: [
+              _buildAppearanceLinkTile(
+                context,
+                icon: Icons.wallpaper_outlined,
+                title: '壁纸',
+                subtitle: _resolvedWallpaperName(draft),
+                onTap: _isSaving ? () {} : _pickWallpaperFromBackgroundLibrary,
+                trailing: SizedBox(
+                  width: 46,
+                  height: 46,
+                  child: _buildGalleryPreviewThumb(
+                    context,
+                    previewPath: wallpaperPath,
+                    title: '壁纸',
+                    width: 46,
+                    height: 46,
+                    borderRadius: 10,
+                  ),
+                ),
+              ),
+              if (hasWallpaper) ...[
+                const Divider(height: 1),
+                Align(
+                  alignment: Alignment.centerRight,
+                  child: TextButton.icon(
+                    onPressed: _isSaving ? null : _clearWallpaper,
+                    icon: const Icon(Icons.delete_outline, size: 16),
+                    label: const Text('移除当前壁纸'),
+                  ),
+                ),
+                const Divider(height: 1),
+              ] else
+                const Divider(height: 1),
               _buildAppearanceLinkTile(
                 context,
                 icon: Icons.photo_library_outlined,
@@ -1827,48 +1730,6 @@ class _AdvancedThemeEditorPageState
             Icon(trailingIcon, size: 18, color: colorScheme.onSurfaceVariant),
           ],
         ),
-      ),
-    );
-  }
-
-  Widget _buildWallpaperOverlayOpacityRow(BuildContext context) {
-    final colorScheme = Theme.of(context).colorScheme;
-    final opacity = (_draft?.configFor(_selectedMode).wallpaperOverlayOpacity ??
-            0.32)
-        .clamp(0.0, 1.0);
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 10),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Expanded(
-                child: Text(
-                  '壁纸遮罩强度',
-                  style: Theme.of(
-                    context,
-                  ).textTheme.labelLarge?.copyWith(fontWeight: FontWeight.w700),
-                ),
-              ),
-              Text(
-                '${(opacity * 100).round()}%',
-                style: Theme.of(context).textTheme.labelMedium?.copyWith(
-                  color: colorScheme.onSurfaceVariant,
-                  fontWeight: FontWeight.w700,
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 8),
-          Slider(
-            value: opacity,
-            min: 0,
-            max: 1,
-            divisions: 20,
-            onChanged: _isSaving ? null : _setWallpaperOverlayOpacity,
-          ),
-        ],
       ),
     );
   }
@@ -2104,18 +1965,6 @@ class _AdvancedThemeEditorPageState
     );
   }
 
-  List<Widget> _buildColorRows(
-    BuildContext context,
-    List<_ThemeColorSlot> slots,
-  ) {
-    return [
-      for (var index = 0; index < slots.length; index++) ...[
-        _buildColorRow(context, slots[index]),
-        if (index != slots.length - 1) const Divider(height: 1),
-      ],
-    ];
-  }
-
   List<Widget> _buildColorFieldRows(
     BuildContext context,
     List<_ThemeColorFieldSpec> fields,
@@ -2153,117 +2002,6 @@ class _AdvancedThemeEditorPageState
                 const SizedBox(height: 2),
                 Text(
                   field.description,
-                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                    color: colorScheme.onSurfaceVariant,
-                  ),
-                ),
-              ],
-            ),
-          ),
-          const SizedBox(width: 12),
-          SizedBox(
-            width: 164,
-            child: TextField(
-              controller: controller,
-              enabled: !_isSaving,
-              keyboardType: TextInputType.text,
-              textCapitalization: TextCapitalization.characters,
-              inputFormatters: [
-                FilteringTextInputFormatter.allow(RegExp(r'[#0-9a-fA-F]')),
-              ],
-              onChanged: (_) => setState(() {}),
-              decoration: InputDecoration(
-                isDense: true,
-                hintText: _formatHex(fallback.toARGB32()),
-                filled: true,
-                fillColor: colorScheme.surface,
-                contentPadding: const EdgeInsets.symmetric(
-                  horizontal: 10,
-                  vertical: 10,
-                ),
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(10),
-                  borderSide: BorderSide(
-                    color: colorScheme.outlineVariant.withValues(alpha: 0.55),
-                  ),
-                ),
-                enabledBorder: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(10),
-                  borderSide: BorderSide(
-                    color: colorScheme.outlineVariant.withValues(alpha: 0.55),
-                  ),
-                ),
-                focusedBorder: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(10),
-                  borderSide: BorderSide(
-                    color: colorScheme.primary,
-                    width: 1.2,
-                  ),
-                ),
-                suffixIcon: InkWell(
-                  borderRadius: BorderRadius.circular(8),
-                  onTap: _isSaving ? null : () => _pickColorForSlot(slot),
-                  child: Padding(
-                    padding: const EdgeInsets.fromLTRB(6, 6, 10, 6),
-                    child: Container(
-                      width: 22,
-                      height: 22,
-                      decoration: BoxDecoration(
-                        color: previewColor,
-                        borderRadius: BorderRadius.circular(6),
-                        border: Border.all(
-                          color: colorScheme.outlineVariant.withValues(
-                            alpha: 0.45,
-                          ),
-                        ),
-                      ),
-                    ),
-                  ),
-                ),
-              ),
-            ),
-          ),
-          IconButton(
-            visualDensity: VisualDensity.compact,
-            tooltip: '恢复默认',
-            onPressed:
-                _isSaving
-                    ? null
-                    : () {
-                      controller.text = _formatHex(fallback.toARGB32());
-                      setState(() {});
-                    },
-            icon: const Icon(Icons.restart_alt_rounded, size: 18),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildColorRow(BuildContext context, _ThemeColorSlot slot) {
-    final colorScheme = Theme.of(context).colorScheme;
-    final controller = _currentControllers[slot]!;
-    final parsed = _parseHexColor(controller.text.trim());
-    final fallback = _fallbackColorForSlot(context, _selectedMode, slot);
-    final previewColor = _resolvedColor(parsed, fallback);
-
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 10),
-      child: Row(
-        children: [
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  slot.label,
-                  style: Theme.of(
-                    context,
-                  ).textTheme.labelLarge?.copyWith(fontWeight: FontWeight.w700),
-                ),
-                const SizedBox(height: 2),
-                Text(
-                  slot.description,
                   style: Theme.of(context).textTheme.bodySmall?.copyWith(
                     color: colorScheme.onSurfaceVariant,
                   ),

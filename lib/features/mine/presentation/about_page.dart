@@ -12,7 +12,7 @@ class AboutPage extends StatefulWidget {
   @override
   State<AboutPage> createState() => _AboutPageState();
 
-  static const String _appVersion = '1.06';
+  static const String _appVersion = '1.1.0';
   static const List<String> _projectFocus = [
     '打造稳定顺手的跨平台阅读体验',
     '强化文档导入、整理与沉浸式阅读闭环',
@@ -33,6 +33,9 @@ class AboutPage extends StatefulWidget {
     'html / json_path',
   ];
   static final Uri _officialSiteUri = Uri.parse('https://www.sxyd.lltask.top');
+  static final Uri _updatesPageUri = Uri.parse(
+    'https://www.sxyd.lltask.top/updates.html',
+  );
 }
 
 class _AboutPageState extends State<AboutPage> {
@@ -285,7 +288,7 @@ class _AboutPageState extends State<AboutPage> {
             ),
             const SizedBox(height: 6),
             Text(
-              '访问官网获取产品介绍、版本动态与使用说明。',
+              '访问官网获取产品介绍、版本动态、更新说明与下载入口。',
               style: theme.textTheme.bodySmall?.copyWith(
                 color: colorScheme.onSurfaceVariant,
               ),
@@ -309,9 +312,19 @@ class _AboutPageState extends State<AboutPage> {
               ),
             ),
             const SizedBox(height: 10),
-            FilledButton(
-              onPressed: _openOfficialSite,
-              child: const Text('打开官网'),
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: [
+                FilledButton(
+                  onPressed: _openOfficialSite,
+                  child: const Text('打开官网'),
+                ),
+                OutlinedButton(
+                  onPressed: _openUpdatesPage,
+                  child: const Text('更新日志'),
+                ),
+              ],
             ),
           ],
         ),
@@ -328,6 +341,17 @@ class _AboutPageState extends State<AboutPage> {
       return;
     }
     _showMessage('跳转失败，请稍后重试。');
+  }
+
+  Future<void> _openUpdatesPage() async {
+    final launched = await launchUrl(
+      AboutPage._updatesPageUri,
+      mode: LaunchMode.externalApplication,
+    );
+    if (launched || !mounted) {
+      return;
+    }
+    _showMessage('打开更新日志失败，请稍后重试。');
   }
 
   void _showMessage(String message) {

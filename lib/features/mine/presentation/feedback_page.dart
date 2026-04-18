@@ -391,75 +391,84 @@ class _FeedbackPageState extends State<FeedbackPage>
   Widget _buildEntryTile(BuildContext context, FeedbackListItem entry) {
     final colorScheme = Theme.of(context).colorScheme;
 
-    return Container(
-      padding: const EdgeInsets.symmetric(vertical: 12),
-      decoration: BoxDecoration(
-        border: Border(
-          bottom: BorderSide(
-            color: colorScheme.outlineVariant.withValues(alpha: 0.55),
+    return InkWell(
+      onTap: () => context.push('/feedback/${entry.id}'),
+      borderRadius: BorderRadius.circular(14),
+      child: Container(
+        padding: const EdgeInsets.symmetric(vertical: 12),
+        decoration: BoxDecoration(
+          border: Border(
+            bottom: BorderSide(
+              color: colorScheme.outlineVariant.withValues(alpha: 0.55),
+            ),
           ),
         ),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              _buildPill(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            _buildPill(
+              context,
+              label: entry.typeLabel,
+              backgroundColor: colorScheme.primaryContainer,
+              foregroundColor: colorScheme.onPrimaryContainer,
+            ),
+            const SizedBox(height: 10),
+            Text(
+              entry.title,
+              style: Theme.of(
                 context,
-                label: entry.typeLabel,
-                backgroundColor: colorScheme.primaryContainer,
-                foregroundColor: colorScheme.onPrimaryContainer,
+              ).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w700),
+            ),
+            const SizedBox(height: 6),
+            Text(
+              entry.content,
+              maxLines: 3,
+              overflow: TextOverflow.ellipsis,
+              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                color: colorScheme.onSurfaceVariant,
+                height: 1.45,
               ),
-              const SizedBox(width: 8),
-              _buildPill(
-                context,
-                label: entry.statusLabel,
-                backgroundColor: colorScheme.surfaceContainerHighest,
-                foregroundColor: colorScheme.onSurfaceVariant,
-              ),
-              const Spacer(),
-              Text(
-                _formatTime(entry.createdAt),
-                style: Theme.of(context).textTheme.bodySmall?.copyWith(
+            ),
+            const SizedBox(height: 10),
+            Row(
+              children: [
+                _buildPill(
+                  context,
+                  label: entry.statusLabel,
+                  backgroundColor: colorScheme.surfaceContainerHighest,
+                  foregroundColor: colorScheme.onSurfaceVariant,
+                ),
+                if (entry.labels.isNotEmpty) ...[
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      entry.labels.join(' · '),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                        color: colorScheme.onSurfaceVariant,
+                      ),
+                    ),
+                  ),
+                ] else
+                  const Spacer(),
+                const SizedBox(width: 8),
+                Text(
+                  _formatTime(entry.createdAt),
+                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                    color: colorScheme.onSurfaceVariant,
+                  ),
+                ),
+                const SizedBox(width: 2),
+                Icon(
+                  Icons.chevron_right_rounded,
+                  size: 18,
                   color: colorScheme.onSurfaceVariant,
                 ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 10),
-          Text(
-            entry.title,
-            style: Theme.of(
-              context,
-            ).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w700),
-          ),
-          const SizedBox(height: 6),
-          Text(
-            entry.content,
-            maxLines: 3,
-            overflow: TextOverflow.ellipsis,
-            style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-              color: colorScheme.onSurfaceVariant,
-              height: 1.45,
-            ),
-          ),
-          if (entry.labels.isNotEmpty) ...[
-            const SizedBox(height: 10),
-            Wrap(
-              spacing: 8,
-              runSpacing: 6,
-              children: entry.labels
-                  .map(
-                    (label) => Chip(
-                      label: Text(label),
-                      visualDensity: VisualDensity.compact,
-                    ),
-                  )
-                  .toList(growable: false),
+              ],
             ),
           ],
-        ],
+        ),
       ),
     );
   }
@@ -502,6 +511,310 @@ class FeedbackComposePage extends StatefulWidget {
 
   @override
   State<FeedbackComposePage> createState() => _FeedbackComposePageState();
+}
+
+class FeedbackDetailPage extends StatefulWidget {
+  const FeedbackDetailPage({super.key, required this.feedbackId});
+
+  final String feedbackId;
+
+  @override
+  State<FeedbackDetailPage> createState() => _FeedbackDetailPageState();
+}
+
+class _FeedbackDetailPageState extends State<FeedbackDetailPage> {
+  final FeedbackService _feedbackService = FeedbackService();
+
+  bool _isLoading = true;
+  String? _errorText;
+  FeedbackListItem? _entry;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadDetail();
+  }
+
+  Future<void> _loadDetail() async {
+    setState(() {
+      _isLoading = true;
+      _errorText = null;
+    });
+    try {
+      final entry = await _feedbackService.fetchFeedbackDetail(
+        widget.feedbackId,
+      );
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _entry = entry;
+        _isLoading = false;
+      });
+    } catch (error) {
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _isLoading = false;
+        _errorText =
+            error is AppException ? error.briefMessage : '反馈详情加载失败，请稍后重试。';
+      });
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final horizontal = AppSpacing.pageHorizontal(context);
+    final bottomSafe = MediaQuery.viewPaddingOf(context).bottom;
+
+    return Scaffold(
+      appBar: AppBar(title: const Text('反馈详情')),
+      body: LayoutBuilder(
+        builder: (context, _) {
+          final maxWidth = AppLayout.pageContentMaxWidth(
+            context,
+            maxWidth: AppLayout.systemSettingsContentMaxWidth,
+          );
+
+          return Align(
+            alignment: Alignment.topCenter,
+            child: ConstrainedBox(
+              constraints: BoxConstraints(maxWidth: maxWidth),
+              child: RefreshIndicator(
+                onRefresh: _loadDetail,
+                child: ListView(
+                  physics: const AlwaysScrollableScrollPhysics(),
+                  padding: EdgeInsets.fromLTRB(
+                    horizontal,
+                    12,
+                    horizontal,
+                    20 + bottomSafe,
+                  ),
+                  children: [
+                    if (_isLoading)
+                      const Padding(
+                        padding: EdgeInsets.symmetric(vertical: 48),
+                        child: Center(child: CircularProgressIndicator()),
+                      ),
+                    if (!_isLoading && _errorText != null)
+                      _FeedbackStateCard(
+                        title: '加载失败',
+                        message: _errorText!,
+                        isError: true,
+                        actionLabel: '重试',
+                        onAction: _loadDetail,
+                      ),
+                    if (!_isLoading && _errorText == null && _entry != null)
+                      _FeedbackDetailCard(entry: _entry!),
+                  ],
+                ),
+              ),
+            ),
+          );
+        },
+      ),
+    );
+  }
+}
+
+class _FeedbackDetailCard extends StatelessWidget {
+  const _FeedbackDetailCard({required this.entry});
+
+  final FeedbackListItem entry;
+
+  @override
+  Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+    return Container(
+      padding: const EdgeInsets.fromLTRB(16, 16, 16, 16),
+      decoration: BoxDecoration(
+        color: colorScheme.surfaceContainerLow,
+        borderRadius: BorderRadius.circular(18),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              _feedbackPill(
+                context,
+                label: entry.typeLabel,
+                backgroundColor: colorScheme.primaryContainer,
+                foregroundColor: colorScheme.onPrimaryContainer,
+              ),
+              const SizedBox(width: 8),
+              _feedbackPill(
+                context,
+                label: entry.statusLabel,
+                backgroundColor: colorScheme.surfaceContainerHighest,
+                foregroundColor: colorScheme.onSurfaceVariant,
+              ),
+            ],
+          ),
+          const SizedBox(height: 14),
+          Text(
+            entry.title,
+            style: Theme.of(
+              context,
+            ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w800),
+          ),
+          const SizedBox(height: 10),
+          _FeedbackDetailRow(
+            label: '提交时间',
+            value: _formatFeedbackTime(entry.createdAt),
+          ),
+          _FeedbackDetailRow(
+            label: '更新时间',
+            value: _formatFeedbackTime(entry.updatedAt),
+          ),
+          if (entry.labels.isNotEmpty)
+            _FeedbackDetailRow(label: '标签', value: entry.labels.join('、')),
+          const SizedBox(height: 14),
+          Text(
+            '反馈内容',
+            style: Theme.of(
+              context,
+            ).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w700),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            entry.content,
+            style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+              color: colorScheme.onSurfaceVariant,
+              height: 1.6,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _FeedbackDetailRow extends StatelessWidget {
+  const _FeedbackDetailRow({required this.label, required this.value});
+
+  final String label;
+  final String value;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 8),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          SizedBox(
+            width: 72,
+            child: Text(
+              label,
+              style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                color: Theme.of(context).colorScheme.onSurfaceVariant,
+              ),
+            ),
+          ),
+          Expanded(
+            child: Text(
+              value,
+              style: Theme.of(
+                context,
+              ).textTheme.bodySmall?.copyWith(fontWeight: FontWeight.w600),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _FeedbackStateCard extends StatelessWidget {
+  const _FeedbackStateCard({
+    required this.title,
+    required this.message,
+    required this.isError,
+    this.actionLabel,
+    this.onAction,
+  });
+
+  final String title;
+  final String message;
+  final bool isError;
+  final String? actionLabel;
+  final VoidCallback? onAction;
+
+  @override
+  Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+    final background =
+        isError
+            ? colorScheme.errorContainer.withValues(alpha: 0.7)
+            : colorScheme.surfaceContainerLow;
+    final foreground =
+        isError ? colorScheme.onErrorContainer : colorScheme.onSurface;
+
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: background,
+        borderRadius: BorderRadius.circular(16),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            title,
+            style: Theme.of(context).textTheme.titleSmall?.copyWith(
+              color: foreground,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+          const SizedBox(height: 6),
+          Text(
+            message,
+            style: Theme.of(
+              context,
+            ).textTheme.bodySmall?.copyWith(color: foreground),
+          ),
+          if (actionLabel != null && onAction != null) ...[
+            const SizedBox(height: 10),
+            FilledButton.tonal(onPressed: onAction, child: Text(actionLabel!)),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+Widget _feedbackPill(
+  BuildContext context, {
+  required String label,
+  required Color backgroundColor,
+  required Color foregroundColor,
+}) {
+  return Container(
+    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+    decoration: BoxDecoration(
+      color: backgroundColor,
+      borderRadius: BorderRadius.circular(999),
+    ),
+    child: Text(
+      label,
+      style: Theme.of(context).textTheme.labelSmall?.copyWith(
+        color: foregroundColor,
+        fontWeight: FontWeight.w700,
+      ),
+    ),
+  );
+}
+
+String _formatFeedbackTime(DateTime time) {
+  final local = time.toLocal();
+  final year = local.year.toString().padLeft(4, '0');
+  final month = local.month.toString().padLeft(2, '0');
+  final day = local.day.toString().padLeft(2, '0');
+  final hour = local.hour.toString().padLeft(2, '0');
+  final minute = local.minute.toString().padLeft(2, '0');
+  return '$year-$month-$day $hour:$minute';
 }
 
 class _FeedbackComposePageState extends State<FeedbackComposePage> {

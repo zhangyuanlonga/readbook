@@ -1492,12 +1492,12 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
                       child: Container(
                         padding: const EdgeInsets.all(14),
                         decoration: BoxDecoration(
-                          color: colorScheme.surfaceContainerLow,
+                          color: _resolvedPalette(sheetContext).surfaceColor,
                           borderRadius: BorderRadius.circular(16),
                           border: Border.all(
-                            color: colorScheme.outlineVariant.withValues(
-                              alpha: 0.55,
-                            ),
+                            color: _resolvedPalette(
+                              sheetContext,
+                            ).cardBorderColor.withValues(alpha: 0.55),
                           ),
                         ),
                         child: Text(
@@ -1632,12 +1632,12 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
                       child: Container(
                         padding: const EdgeInsets.all(14),
                         decoration: BoxDecoration(
-                          color: colorScheme.surfaceContainerLow,
+                          color: _resolvedPalette(sheetContext).surfaceColor,
                           borderRadius: BorderRadius.circular(16),
                           border: Border.all(
-                            color: colorScheme.outlineVariant.withValues(
-                              alpha: 0.55,
-                            ),
+                            color: _resolvedPalette(
+                              sheetContext,
+                            ).cardBorderColor.withValues(alpha: 0.55),
                           ),
                         ),
                         child: Text(
@@ -1678,7 +1678,7 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
                       Container(
                         margin: const EdgeInsets.symmetric(horizontal: 12),
                         decoration: BoxDecoration(
-                          color: colorScheme.surfaceContainerLow,
+                          color: _resolvedPalette(sheetContext).surfaceColor,
                           borderRadius: BorderRadius.circular(13),
                         ),
                         child: TabBar(
@@ -2524,7 +2524,7 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
   Widget _buildSelectionActionBar({
     required List<BookshelfBook> filteredBooks,
   }) {
-    final colorScheme = Theme.of(context).colorScheme;
+    final palette = _resolvedPalette(context);
     final selectedCount = _selectedBookKeys.length;
 
     return SafeArea(
@@ -2533,14 +2533,14 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
         padding: const EdgeInsets.fromLTRB(10, 6, 10, 10),
         child: DecoratedBox(
           decoration: BoxDecoration(
-            color: colorScheme.surface,
+            color: palette.cardColor,
             borderRadius: const BorderRadius.vertical(top: Radius.circular(18)),
             border: Border.all(
-              color: colorScheme.outlineVariant.withValues(alpha: 0.55),
+              color: palette.cardBorderColor.withValues(alpha: 0.55),
             ),
             boxShadow: [
               BoxShadow(
-                color: Colors.black.withValues(alpha: 0.04),
+                color: palette.shadowColor,
                 blurRadius: 14,
                 offset: const Offset(0, -2),
               ),
@@ -2556,13 +2556,13 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
                     Icon(
                       Icons.checklist_rounded,
                       size: 18,
-                      color: colorScheme.primary,
+                      color: palette.primaryColor,
                     ),
                     const SizedBox(width: 6),
                     Text(
                       '已选 $selectedCount / ${filteredBooks.length}',
                       style: Theme.of(context).textTheme.labelLarge?.copyWith(
-                        color: colorScheme.onSurfaceVariant,
+                        color: palette.textSecondaryColor,
                         fontWeight: FontWeight.w700,
                       ),
                     ),
@@ -2821,7 +2821,7 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
                             decoration: BoxDecoration(
                               color:
                                   isSelected
-                                      ? colorScheme.primary
+                                      ? palette.primaryColor
                                       : palette.cardColor.withValues(
                                         alpha: 0.9,
                                       ),
@@ -2829,7 +2829,7 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
                               border: Border.all(
                                 color:
                                     isSelected
-                                        ? colorScheme.primary
+                                        ? palette.primaryColor
                                         : palette.cardBorderColor.withValues(
                                           alpha: 0.7,
                                         ),
@@ -2840,7 +2840,7 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
                               size: 14,
                               color:
                                   isSelected
-                                      ? colorScheme.onPrimary
+                                      ? palette.buttonTextColor
                                       : palette.textSecondaryColor,
                             ),
                           ),
@@ -3150,6 +3150,7 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
     required VoidCallback onTap,
   }) {
     final colorScheme = Theme.of(context).colorScheme;
+    final palette = _resolvedPalette(context);
     return Material(
       color: Colors.transparent,
       child: InkWell(
@@ -3164,14 +3165,14 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
             decoration: BoxDecoration(
               color:
                   selected
-                      ? colorScheme.primary
+                      ? palette.primaryColor
                       : colorScheme.surface.withValues(alpha: 0.9),
               shape: BoxShape.circle,
               border: Border.all(
                 color:
                     selected
-                        ? colorScheme.primary
-                        : colorScheme.outline.withValues(alpha: 0.68),
+                        ? palette.primaryColor
+                        : palette.outlineColor.withValues(alpha: 0.68),
               ),
             ),
             child: Icon(
@@ -3179,7 +3180,7 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
               size: 14,
               color:
                   selected
-                      ? colorScheme.onPrimary
+                      ? palette.buttonTextColor
                       : colorScheme.onSurfaceVariant.withValues(alpha: 0.7),
             ),
           ),
@@ -3641,6 +3642,7 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
     final selected = await _showBookshelfBottomSheet<_BookshelfSheetAction>(
       builder: (sheetContext) {
         final colorScheme = Theme.of(sheetContext).colorScheme;
+        final palette = _resolvedPalette(sheetContext);
         final horizontal = AppSpacing.pageHorizontal(sheetContext);
         final bottomInset = _bookshelfBottomSafeInset(sheetContext);
         final progressDisplay = _resolveBookshelfProgressDisplay(
@@ -3816,6 +3818,7 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
                       child: _BookSheetActionButton(
                         icon: Icons.refresh_rounded,
                         label: '重建目录',
+                        backgroundColor: palette.elevatedSurfaceColor,
                         onTap:
                             () => Navigator.of(
                               sheetContext,
@@ -3828,6 +3831,7 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
                     child: _BookSheetActionButton(
                       icon: Icons.folder_copy_outlined,
                       label: '管理分类',
+                      backgroundColor: palette.elevatedSurfaceColor,
                       onTap:
                           () => Navigator.of(
                             sheetContext,
@@ -3840,6 +3844,7 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
                     child: _BookSheetActionButton(
                       icon: Icons.label_rounded,
                       label: '管理标签',
+                      backgroundColor: palette.elevatedSurfaceColor,
                       onTap:
                           () => Navigator.of(
                             sheetContext,
@@ -3852,6 +3857,7 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
                     child: _BookSheetActionButton(
                       icon: Icons.image_outlined,
                       label: '自定义封面',
+                      backgroundColor: palette.elevatedSurfaceColor,
                       onTap:
                           () => Navigator.of(
                             sheetContext,
@@ -3864,6 +3870,7 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
                     child: _BookSheetActionButton(
                       icon: Icons.delete_outline_rounded,
                       label: '删除',
+                      backgroundColor: palette.elevatedSurfaceColor,
                       onTap:
                           () => Navigator.of(
                             sheetContext,
@@ -4117,7 +4124,7 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
                         return Material(
                           color:
                               isSelected
-                                  ? colorScheme.secondaryContainer.withValues(
+                                  ? palette.primaryContainerColor.withValues(
                                     alpha: 0.42,
                                   )
                                   : Colors.transparent,
@@ -4520,9 +4527,7 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
                               ),
                               decoration: BoxDecoration(
                                 color:
-                                    Theme.of(
-                                      sheetContext,
-                                    ).colorScheme.surfaceContainerLow,
+                                    _resolvedPalette(sheetContext).surfaceColor,
                                 borderRadius: BorderRadius.circular(14),
                               ),
                               child: Text(
@@ -5096,22 +5101,23 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
     ColorScheme colorScheme,
     LocalBook? localBook,
   ) {
+    final palette = _resolvedPalette(context);
     final status = localBook?.indexStatus;
     return switch (status) {
       LocalBookIndexStatus.pending => (
         '待建立',
-        colorScheme.secondaryContainer.withValues(alpha: 0.94),
-        colorScheme.onSecondaryContainer,
+        palette.primaryContainerColor.withValues(alpha: 0.94),
+        palette.textPrimaryColor,
       ),
       LocalBookIndexStatus.indexing => (
         '解析中',
-        colorScheme.tertiaryContainer.withValues(alpha: 0.94),
-        colorScheme.onTertiaryContainer,
+        palette.elevatedSurfaceColor.withValues(alpha: 0.94),
+        palette.textPrimaryColor,
       ),
       LocalBookIndexStatus.stale => (
         '需重建',
-        colorScheme.secondaryContainer.withValues(alpha: 0.94),
-        colorScheme.onSecondaryContainer,
+        palette.primaryContainerColor.withValues(alpha: 0.94),
+        palette.textPrimaryColor,
       ),
       LocalBookIndexStatus.failed => (
         '失败',
@@ -5120,8 +5126,8 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
       ),
       _ => (
         '本地',
-        colorScheme.secondaryContainer.withValues(alpha: 0.94),
-        colorScheme.onSecondaryContainer,
+        palette.primaryContainerColor.withValues(alpha: 0.94),
+        palette.textPrimaryColor,
       ),
     };
   }
@@ -6833,11 +6839,13 @@ class _BookSheetActionButton extends StatelessWidget {
   const _BookSheetActionButton({
     required this.icon,
     required this.label,
+    required this.backgroundColor,
     required this.onTap,
   });
 
   final IconData icon;
   final String label;
+  final Color backgroundColor;
   final VoidCallback onTap;
 
   @override
@@ -6856,7 +6864,7 @@ class _BookSheetActionButton extends StatelessWidget {
               width: 46,
               height: 46,
               decoration: BoxDecoration(
-                color: colorScheme.surfaceContainerHighest,
+                color: backgroundColor,
                 shape: BoxShape.circle,
               ),
               child: Icon(icon, color: fg),

@@ -24,7 +24,7 @@ String buildBookDetailRoute({
   putIfNotBlank('heroTag', heroTag);
 
   return Uri(
-    path: '/book/$effectiveBookId',
+    pathSegments: ['book', effectiveBookId],
     queryParameters: query.isEmpty ? null : query,
   ).toString();
 }
