@@ -15,11 +15,12 @@ ANDROID_APK_PROFILE="${ANDROID_APK_PROFILE:-arm64}" # arm64 | split | universal
 SPLIT_PER_ABI="${SPLIT_PER_ABI:-}"       # legacy alias for ANDROID_APK_PROFILE=split
 APP_NAME="${APP_NAME:-Runner}"           # iOS APP_NAME
 MACOS_APP_NAME="${MACOS_APP_NAME:-}"     # macOS APP_NAME
-ARTIFACT_NAME="${ARTIFACT_NAME:-书享阅读 Next}"
+ARTIFACT_NAME="${ARTIFACT_NAME:-Selune}"
 BUILD_NAME="${BUILD_NAME:-}"
 BUILD_NUMBER="${BUILD_NUMBER:-}"
+FULL_VERSION="${FULL_VERSION:-}"
 APPREAD_API_BASE_URL="${APPREAD_API_BASE_URL:-}"
-APPREAD_APP_NAME="${APPREAD_APP_NAME:-}"
+APPREAD_APP_NAME="${APPREAD_APP_NAME:-selune}"
 VERSION_PROMPT="${VERSION_PROMPT:-1}"
 SKIP_CLEAN="${SKIP_CLEAN:-0}"
 SKIP_PUB_GET="${SKIP_PUB_GET:-0}"
@@ -49,6 +50,7 @@ Environment variables:
   SPLIT_PER_ABI    Legacy alias. Set to 1 for ANDROID_APK_PROFILE=split
   APP_NAME         iOS app bundle name (default: Runner)
   MACOS_APP_NAME   Optional macOS .app name without .app
+  FULL_VERSION     Full Flutter version like 1.1.0+26041801
   BUILD_NAME       Override Flutter --build-name
   BUILD_NUMBER     Override Flutter --build-number
   VERSION_PROMPT   1 to ask interactively before build when TTY is available
@@ -63,6 +65,7 @@ Examples:
   ./scripts/build_unified_artifacts.sh android,ios,macos release
   ANDROID_APK_PROFILE=split ./scripts/build_unified_artifacts.sh android release
   ANDROID_TARGET=both ANDROID_APK_PROFILE=universal ./scripts/build_unified_artifacts.sh android release
+  FULL_VERSION=1.1.0+26041802 ./scripts/build_unified_artifacts.sh android,ios release
 USAGE
 }
 
@@ -139,13 +142,23 @@ trim_whitespace() {
 }
 
 resolve_version_overrides() {
-  local pubspec_version current_name current_number input
+  local pubspec_version current_name current_number current_full_version input
 
   pubspec_version="$(read_pubspec_version)"
   current_name="${pubspec_version%%+*}"
   current_number=""
   if [[ "${pubspec_version}" == *"+"* ]]; then
     current_number="${pubspec_version##*+}"
+  fi
+
+  if [[ -n "${FULL_VERSION}" ]]; then
+    FULL_VERSION="$(trim_whitespace "${FULL_VERSION}")"
+    if [[ "${FULL_VERSION}" == *"+"* ]]; then
+      BUILD_NAME="${FULL_VERSION%%+*}"
+      BUILD_NUMBER="${FULL_VERSION##*+}"
+    else
+      BUILD_NAME="${FULL_VERSION}"
+    fi
   fi
 
   if [[ -z "${BUILD_NAME}" ]]; then
@@ -155,17 +168,23 @@ resolve_version_overrides() {
     BUILD_NUMBER="${current_number}"
   fi
 
+  current_full_version="${BUILD_NAME:-none}"
+  if [[ -n "${BUILD_NUMBER}" ]]; then
+    current_full_version="${BUILD_NAME}+${BUILD_NUMBER}"
+  fi
+
   if [[ "${VERSION_PROMPT}" == "1" && -t 0 ]]; then
     echo "==> Current pubspec version: ${pubspec_version:-unknown}"
-    read -r -p "==> Confirm build name [${BUILD_NAME:-none}]: " input
+    read -r -p "==> Confirm full version [${current_full_version}]: " input
     input="$(trim_whitespace "${input}")"
     if [[ -n "${input}" ]]; then
-      BUILD_NAME="${input}"
-    fi
-    read -r -p "==> Confirm build number [${BUILD_NUMBER:-none}]: " input
-    input="$(trim_whitespace "${input}")"
-    if [[ -n "${input}" ]]; then
-      BUILD_NUMBER="${input}"
+      FULL_VERSION="${input}"
+      if [[ "${FULL_VERSION}" == *"+"* ]]; then
+        BUILD_NAME="${FULL_VERSION%%+*}"
+        BUILD_NUMBER="${FULL_VERSION##*+}"
+      else
+        BUILD_NAME="${FULL_VERSION}"
+      fi
     fi
   fi
 

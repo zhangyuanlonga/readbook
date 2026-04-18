@@ -13,11 +13,11 @@ BUILD_MODE="${2:-${BUILD_MODE:-release}}" # debug | profile | release
 SPLIT_PER_ABI="${SPLIT_PER_ABI:-}"       # legacy alias for APK_PROFILE=split
 APK_PROFILE="${APK_PROFILE:-}"           # arm64 | split | universal
 OUTPUT_DIR="${OUTPUT_DIR:-${PROJECT_ROOT}/artifacts/android}"
-ARTIFACT_NAME="${ARTIFACT_NAME:-书享阅读 Next}"
+ARTIFACT_NAME="${ARTIFACT_NAME:-Selune}"
 BUILD_NAME="${BUILD_NAME:-}"
 BUILD_NUMBER="${BUILD_NUMBER:-}"
 APPREAD_API_BASE_URL="${APPREAD_API_BASE_URL:-}"
-APPREAD_APP_NAME="${APPREAD_APP_NAME:-}"
+APPREAD_APP_NAME="${APPREAD_APP_NAME:-selune}"
 SKIP_CLEAN="${SKIP_CLEAN:-0}"
 SKIP_PUB_GET="${SKIP_PUB_GET:-0}"
 
@@ -44,13 +44,16 @@ validate_version_overrides() {
 }
 
 append_dart_defines() {
-  local -n args_ref=$1
+  local array_name="$1"
+  local define_value
 
   if [[ -n "${APPREAD_API_BASE_URL}" ]]; then
-    args_ref+=("--dart-define=APPREAD_API_BASE_URL=${APPREAD_API_BASE_URL}")
+    printf -v define_value '%q' "--dart-define=APPREAD_API_BASE_URL=${APPREAD_API_BASE_URL}"
+    eval "${array_name}+=(${define_value})"
   fi
   if [[ -n "${APPREAD_APP_NAME}" ]]; then
-    args_ref+=("--dart-define=APPREAD_APP_NAME=${APPREAD_APP_NAME}")
+    printf -v define_value '%q' "--dart-define=APPREAD_APP_NAME=${APPREAD_APP_NAME}"
+    eval "${array_name}+=(${define_value})"
   fi
 }
 
@@ -68,7 +71,7 @@ Environment variables:
   APK_PROFILE   APK output profile: arm64 | split | universal (default: arm64)
   SPLIT_PER_ABI Legacy alias. Set to 1 for APK_PROFILE=split
   OUTPUT_DIR    Output artifacts folder (default: artifacts/android)
-  ARTIFACT_NAME Final artifact display name prefix (default: 书享阅读 Next)
+  ARTIFACT_NAME Final artifact display name prefix (default: Selune)
   BUILD_NAME    Override Flutter --build-name
   BUILD_NUMBER  Override Flutter --build-number
   SKIP_CLEAN    1 to skip flutter clean
