@@ -3,16 +3,21 @@ import 'dart:async';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
-import '../../../app/navigation/search_entry_transition.dart';
 import '../../../app/layout/app_layout.dart';
 import '../../../app/layout/app_spacing.dart';
+import '../../../app/navigation/search_entry_transition.dart';
+import '../../../app/theme/app_advanced_theme_tokens.dart';
+import '../../../app/theme/app_border_tokens.dart';
+import '../../../app/widgets/advanced_theme_backdrop_decoration.dart';
 
 import '../../../core/errors/app_exception.dart';
 import '../../../domain/entities/book.dart';
 import '../../../runtime/sources/source_registry.dart';
 import '../../book/presentation/book_detail_route.dart';
+import '../../mine/application/advanced_theme_provider.dart';
 import '../../source/application/source_runtime_facade.dart';
 import '../application/search_history_service.dart';
 import '../application/search_service.dart';
@@ -26,16 +31,16 @@ import 'widgets/search_input_card.dart';
 import 'widgets/search_progress_card.dart';
 import 'widgets/search_report_summary.dart';
 
-class SearchPage extends StatefulWidget {
+class SearchPage extends ConsumerStatefulWidget {
   const SearchPage({super.key, this.hideTopSearchBar = false});
 
   final bool hideTopSearchBar;
 
   @override
-  State<SearchPage> createState() => _SearchPageState();
+  ConsumerState<SearchPage> createState() => _SearchPageState();
 }
 
-class _SearchPageState extends State<SearchPage> {
+class _SearchPageState extends ConsumerState<SearchPage> {
   final TextEditingController _keywordController = TextEditingController();
   final FocusNode _searchFocusNode = FocusNode();
   final SourceRuntimeFacade _sourceRuntimeFacade = SourceRuntimeFacade.instance;
@@ -120,10 +125,19 @@ class _SearchPageState extends State<SearchPage> {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final colorScheme = theme.colorScheme;
+    ref.watch(activeAdvancedThemeProvider);
+    final palette = resolveAdvancedThemePalette(
+      theme.colorScheme,
+      ref.read(activeAdvancedThemeProvider).valueOrNull,
+    );
+    final backdrop = resolveAdvancedThemeBackdrop(
+      theme.colorScheme,
+      ref.read(activeAdvancedThemeProvider).valueOrNull,
+    );
     final horizontal = AppSpacing.pageHorizontal(context);
     final bottomSafe = MediaQuery.viewPaddingOf(context).bottom;
     final canPopRoute = context.canPop();
+    final topInset = MediaQuery.paddingOf(context).top + kToolbarHeight;
 
     return PopScope<void>(
       canPop: canPopRoute,
@@ -132,7 +146,11 @@ class _SearchPageState extends State<SearchPage> {
         context.go('/bookshelf');
       },
       child: Scaffold(
+        extendBodyBehindAppBar: true,
         appBar: AppBar(
+          backgroundColor: Colors.transparent,
+          surfaceTintColor: Colors.transparent,
+          shadowColor: Colors.transparent,
           leading: IconButton(
             onPressed: _handleBackNavigation,
             tooltip: '返回',
@@ -143,16 +161,10 @@ class _SearchPageState extends State<SearchPage> {
           title:
               widget.hideTopSearchBar
                   ? const Text('搜索')
-                  : _buildSearchBar(context),
+                  : _buildSearchBar(context, palette),
         ),
         body: DecoratedBox(
-          decoration: BoxDecoration(
-            gradient: LinearGradient(
-              begin: Alignment.topCenter,
-              end: Alignment.bottomCenter,
-              colors: [colorScheme.surface, colorScheme.surfaceContainerLow],
-            ),
-          ),
+          decoration: buildAdvancedThemeBackdropDecoration(backdrop),
           child: LayoutBuilder(
             builder: (context, _) {
               final maxWidth = AppLayout.pageContentMaxWidth(
@@ -178,7 +190,7 @@ class _SearchPageState extends State<SearchPage> {
                           SliverPadding(
                             padding: EdgeInsets.fromLTRB(
                               horizontal,
-                              12,
+                              topInset + 12,
                               horizontal,
                               0,
                             ),
@@ -190,6 +202,13 @@ class _SearchPageState extends State<SearchPage> {
                                 selectedSourceCount: _selectedSourceIds.length,
                                 availableSourceCount: _availableSourceCount,
                                 isLoadingSourceCount: _isLoadingSourceCount,
+                                modeActiveBackgroundColor: palette.primaryColor,
+                                modeActiveForegroundColor:
+                                    palette.buttonTextColor,
+                                optionActiveBackgroundColor:
+                                    palette.primaryContainerColor,
+                                optionActiveForegroundColor:
+                                    palette.textPrimaryColor,
                                 onClearResults: _clearResults,
                                 onContentModeChanged: _onContentModeChanged,
                                 onPreciseMatchChanged: _onPreciseMatchChanged,
@@ -390,9 +409,11 @@ class _SearchPageState extends State<SearchPage> {
     context.go('/bookshelf');
   }
 
-  Widget _buildSearchBar(BuildContext context) {
+  Widget _buildSearchBar(
+    BuildContext context,
+    ResolvedAdvancedThemePalette palette,
+  ) {
     final theme = Theme.of(context);
-    final colorScheme = theme.colorScheme;
     final isMangaMode = _searchContentMode == SearchContentMode.manga;
     final hintText = isMangaMode ? '输入漫画名或作者' : '输入书名或作者';
 
@@ -422,10 +443,10 @@ class _SearchPageState extends State<SearchPage> {
                 hintStyle: theme.textTheme.bodyMedium?.copyWith(
                   fontSize: 14,
                   height: 1.2,
-                  color: colorScheme.onSurfaceVariant,
+                  color: palette.textSecondaryColor,
                 ),
                 filled: true,
-                fillColor: colorScheme.surfaceContainerHighest,
+                fillColor: palette.searchFieldBackgroundColor,
                 border: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(14),
                   borderSide: BorderSide.none,
@@ -436,8 +457,11 @@ class _SearchPageState extends State<SearchPage> {
                 ),
                 focusedBorder: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(14),
-                  borderSide: BorderSide(
-                    color: colorScheme.primary.withValues(alpha: 0.45),
+                  borderSide: resolveAppBorderSide(
+                    theme.colorScheme,
+                    baseColor: palette.outlineColor,
+                    containerColor: palette.searchFieldBackgroundColor,
+                    tone: AppBorderTone.strong,
                     width: 1.2,
                   ),
                 ),

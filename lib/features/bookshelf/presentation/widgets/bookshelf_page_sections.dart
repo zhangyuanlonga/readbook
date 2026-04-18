@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../../../app/theme/app_advanced_theme_tokens.dart';
+import '../../../../app/theme/app_border_tokens.dart';
 
 class BookshelfFilterChipData {
   const BookshelfFilterChipData({
@@ -57,7 +58,7 @@ class BookshelfInlineSearchBar extends StatelessWidget {
             color: palette.textSecondaryColor,
           ),
           filled: true,
-          fillColor: palette.elevatedSurfaceColor,
+          fillColor: palette.searchFieldBackgroundColor,
           border: OutlineInputBorder(
             borderRadius: BorderRadius.circular(14),
             borderSide: BorderSide.none,
@@ -68,8 +69,11 @@ class BookshelfInlineSearchBar extends StatelessWidget {
           ),
           focusedBorder: OutlineInputBorder(
             borderRadius: BorderRadius.circular(14),
-            borderSide: BorderSide(
-              color: palette.primaryColor.withValues(alpha: 0.45),
+            borderSide: resolveAppBorderSide(
+              Theme.of(context).colorScheme,
+              baseColor: palette.outlineColor,
+              containerColor: palette.searchFieldBackgroundColor,
+              tone: AppBorderTone.strong,
               width: 1.2,
             ),
           ),
@@ -156,7 +160,7 @@ class BookshelfInlineSearchTrigger extends StatelessWidget {
     return SizedBox(
       height: 40,
       child: Material(
-        color: palette.elevatedSurfaceColor,
+        color: palette.searchFieldBackgroundColor,
         borderRadius: BorderRadius.circular(14),
         child: InkWell(
           borderRadius: BorderRadius.circular(14),
@@ -271,8 +275,17 @@ class BookshelfFilterBar extends StatelessWidget {
                   selected
                       ? (secondary
                           ? palette.noticeAccentColor.withValues(alpha: 0.26)
-                          : palette.primaryColor.withValues(alpha: 0.26))
-                      : palette.cardBorderColor.withValues(alpha: 0.72),
+                          : resolveAppBorderColor(
+                            Theme.of(context).colorScheme,
+                            baseColor: palette.cardBorderColor,
+                            containerColor: palette.noticeSurfaceColor,
+                            tone: AppBorderTone.strong,
+                          ))
+                      : resolveAppBorderColor(
+                        Theme.of(context).colorScheme,
+                        baseColor: palette.cardBorderColor,
+                        containerColor: palette.surfaceColor,
+                      ),
               width: 0.8,
             ),
           ),
@@ -411,7 +424,10 @@ class BookshelfStepperSettingRow extends StatelessWidget {
               color: colorScheme.surfaceContainerLow,
               borderRadius: BorderRadius.circular(12),
               border: Border.all(
-                color: colorScheme.outlineVariant.withValues(alpha: 0.7),
+                color: resolveAppBorderColor(
+                  colorScheme,
+                  containerColor: colorScheme.surfaceContainerLow,
+                ),
               ),
             ),
             alignment: Alignment.center,
@@ -451,7 +467,11 @@ class BookshelfEmptyCard extends StatelessWidget {
       color: palette.cardColor,
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(12),
-        side: BorderSide(color: palette.cardBorderColor.withValues(alpha: 0.4)),
+        side: resolveAppBorderSide(
+          Theme.of(context).colorScheme,
+          baseColor: palette.cardBorderColor,
+          containerColor: palette.cardColor,
+        ),
       ),
       child: Padding(
         padding: const EdgeInsets.all(18),
@@ -479,6 +499,10 @@ class BookshelfEmptyCard extends StatelessWidget {
             const SizedBox(height: 14),
             FilledButton.icon(
               onPressed: onImportLocal,
+              style: FilledButton.styleFrom(
+                backgroundColor: palette.primaryColor,
+                foregroundColor: palette.buttonTextColor,
+              ),
               icon: const Icon(Icons.library_add_rounded),
               label: const Text('导入本地图书'),
             ),
@@ -509,7 +533,11 @@ class BookshelfFilterEmptyCard extends StatelessWidget {
       color: palette.cardColor,
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(12),
-        side: BorderSide(color: palette.cardBorderColor.withValues(alpha: 0.4)),
+        side: resolveAppBorderSide(
+          Theme.of(context).colorScheme,
+          baseColor: palette.cardBorderColor,
+          containerColor: palette.cardColor,
+        ),
       ),
       child: Padding(
         padding: const EdgeInsets.all(16),

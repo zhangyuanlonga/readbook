@@ -11,6 +11,7 @@ import '../../../app/layout/app_spacing.dart';
 import '../../../app/navigation/app_navigation_style_provider.dart';
 import '../../../app/navigation/mobile_bottom_navigation_inset.dart';
 import '../../../app/theme/app_advanced_theme_tokens.dart';
+import '../../../app/theme/app_border_tokens.dart';
 import '../../../app/widgets/advanced_theme_backdrop_decoration.dart';
 import '../../../app/widgets/resolved_book_cover.dart';
 import '../../../app/widgets/runtime_feedback_card.dart';
@@ -239,7 +240,11 @@ class _DiscoverPageState extends ConsumerState<DiscoverPage>
     final palette = _resolvedPalette(context);
     return RoundedRectangleBorder(
       borderRadius: BorderRadius.circular(16),
-      side: BorderSide(color: palette.cardBorderColor.withValues(alpha: 0.4)),
+      side: resolveAppBorderSide(
+        Theme.of(context).colorScheme,
+        baseColor: palette.cardBorderColor,
+        containerColor: palette.cardColor,
+      ),
     );
   }
 
@@ -592,12 +597,9 @@ class _DiscoverPageState extends ConsumerState<DiscoverPage>
           label: Text(item.title, maxLines: 1, overflow: TextOverflow.ellipsis),
           selected: isSelected,
           showCheckmark: false,
-          selectedColor: palette.noticeSurfaceColor,
+          selectedColor: palette.primaryContainerColor,
           side: BorderSide(
-            color:
-                isSelected
-                    ? palette.noticeAccentColor
-                    : palette.cardBorderColor,
+            color: isSelected ? palette.primaryColor : palette.cardBorderColor,
           ),
           labelStyle: Theme.of(context).textTheme.labelLarge?.copyWith(
             color: palette.textPrimaryColor,
@@ -965,8 +967,12 @@ class _DiscoverPageState extends ConsumerState<DiscoverPage>
                           book.title,
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
-                          style: Theme.of(context).textTheme.titleSmall
-                              ?.copyWith(fontWeight: FontWeight.w700),
+                          style: Theme.of(
+                            context,
+                          ).textTheme.titleSmall?.copyWith(
+                            fontWeight: FontWeight.w700,
+                            color: _resolvedPalette(context).cardTextColor,
+                          ),
                         ),
                         SizedBox(height: useCondensedPhoneDensity ? 3 : 4),
                         Wrap(
@@ -1176,6 +1182,10 @@ class _DiscoverPageState extends ConsumerState<DiscoverPage>
             const SizedBox(height: 12),
             FilledButton.icon(
               onPressed: () => context.push('/source'),
+              style: FilledButton.styleFrom(
+                backgroundColor: palette.primaryColor,
+                foregroundColor: palette.buttonTextColor,
+              ),
               icon: const Icon(Icons.storage_rounded),
               label: const Text('前往书源页'),
             ),

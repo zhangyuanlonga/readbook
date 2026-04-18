@@ -54,6 +54,7 @@ void main() {
     expect(lightScheme.surface, const Color(0xFFFFFFFF));
     expect(lightScheme.surfaceContainerLow, const Color(0xFFFFFFFF));
     expect(lightScheme.surfaceContainerHighest, const Color(0xFFFFFFFF));
+    expect(lightScheme.outlineVariant, const Color(0xFFE6E6E6));
     expect(lightScheme.surfaceTint, Colors.transparent);
   });
 

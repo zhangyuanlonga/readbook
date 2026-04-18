@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
+import 'app_border_tokens.dart';
+
 class AppTheme {
   const AppTheme._();
 
@@ -32,8 +34,9 @@ class AppTheme {
         elevation: 0,
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(20),
-          side: BorderSide(
-            color: colorScheme.outlineVariant.withValues(alpha: 0.45),
+          side: resolveAppBorderSide(
+            colorScheme,
+            containerColor: colorScheme.surface,
           ),
         ),
       ),
@@ -48,7 +51,7 @@ class AppTheme {
         style: OutlinedButton.styleFrom(
           minimumSize: const Size(0, 40),
           shape: const StadiumBorder(),
-          side: BorderSide(color: colorScheme.outline),
+          side: resolveAppBorderSide(colorScheme, tone: AppBorderTone.strong),
           textStyle: const TextStyle(fontWeight: FontWeight.w600),
         ),
       ),
@@ -57,12 +60,16 @@ class AppTheme {
         fillColor: Colors.transparent,
         border: OutlineInputBorder(
           borderRadius: BorderRadius.circular(14),
-          borderSide: BorderSide(color: colorScheme.outlineVariant),
+          borderSide: resolveAppBorderSide(
+            colorScheme,
+            tone: AppBorderTone.subtle,
+          ),
         ),
         enabledBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(14),
-          borderSide: BorderSide(
-            color: colorScheme.outlineVariant.withValues(alpha: 0.82),
+          borderSide: resolveAppBorderSide(
+            colorScheme,
+            tone: AppBorderTone.defaultTone,
           ),
         ),
         focusedBorder: OutlineInputBorder(
@@ -112,9 +119,8 @@ class AppTheme {
     if (fontWeight == null) {
       return theme;
     }
-    TextStyle? withWeight(TextStyle? style) => style?.copyWith(
-      fontWeight: fontWeight,
-    );
+    TextStyle? withWeight(TextStyle? style) =>
+        style?.copyWith(fontWeight: fontWeight);
 
     return TextTheme(
       displayLarge: withWeight(theme.displayLarge),

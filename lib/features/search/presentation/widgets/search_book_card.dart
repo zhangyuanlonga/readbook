@@ -1,12 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../../app/theme/app_advanced_theme_tokens.dart';
 import '../../../../app/widgets/resolved_book_cover.dart';
 import '../../../../domain/entities/book.dart';
 import '../../../mine/application/advanced_theme_provider.dart';
 import '../../../mine/application/cover_gallery_provider.dart';
 
-class SearchBookCard extends StatelessWidget {
+class SearchBookCard extends ConsumerWidget {
   const SearchBookCard({
     super.key,
     required this.book,
@@ -27,9 +28,14 @@ class SearchBookCard extends StatelessWidget {
   final VoidCallback onTap;
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final theme = Theme.of(context);
     final colorScheme = theme.colorScheme;
+    ref.watch(activeAdvancedThemeProvider);
+    final palette = resolveAdvancedThemePalette(
+      colorScheme,
+      ref.read(activeAdvancedThemeProvider).valueOrNull,
+    );
     final author = book.author?.trim();
     final showHitCount = sourceHitCount > 1;
 
@@ -70,9 +76,19 @@ class SearchBookCard extends StatelessWidget {
                       spacing: 6,
                       runSpacing: 6,
                       children: [
-                        _InfoPill(label: '来源', value: sourceName),
+                        _InfoPill(
+                          label: '来源',
+                          value: sourceName,
+                          backgroundColor: palette.primaryContainerColor,
+                          textColor: palette.textPrimaryColor,
+                        ),
                         if (author != null && author.isNotEmpty)
-                          _InfoPill(label: '作者', value: author),
+                          _InfoPill(
+                            label: '作者',
+                            value: author,
+                            backgroundColor: palette.primaryContainerColor,
+                            textColor: palette.textPrimaryColor,
+                          ),
                       ],
                     ),
                     if (normalizedLatestChapter != null &&
@@ -118,7 +134,11 @@ class SearchBookCard extends StatelessWidget {
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
                   if (showHitCount)
-                    _SourceHitBadge(count: sourceHitCount)
+                    _SourceHitBadge(
+                      count: sourceHitCount,
+                      backgroundColor: palette.secondaryColor,
+                      textColor: palette.buttonTextColor,
+                    )
                   else
                     const SizedBox(height: 20),
                   Icon(
@@ -185,48 +205,62 @@ class _CoverPreview extends StatelessWidget {
 }
 
 class _InfoPill extends StatelessWidget {
-  const _InfoPill({required this.label, required this.value});
+  const _InfoPill({
+    required this.label,
+    required this.value,
+    required this.backgroundColor,
+    required this.textColor,
+  });
 
   final String label;
   final String value;
+  final Color backgroundColor;
+  final Color textColor;
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final colorScheme = theme.colorScheme;
 
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
       decoration: BoxDecoration(
-        color: colorScheme.surfaceContainerHighest,
+        color: backgroundColor,
         borderRadius: BorderRadius.circular(8),
       ),
-      child: Text('$label: $value', style: theme.textTheme.labelSmall),
+      child: Text(
+        '$label: $value',
+        style: theme.textTheme.labelSmall?.copyWith(color: textColor),
+      ),
     );
   }
 }
 
 class _SourceHitBadge extends StatelessWidget {
-  const _SourceHitBadge({required this.count});
+  const _SourceHitBadge({
+    required this.count,
+    required this.backgroundColor,
+    required this.textColor,
+  });
 
   final int count;
+  final Color backgroundColor;
+  final Color textColor;
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final colorScheme = theme.colorScheme;
     return Container(
       constraints: const BoxConstraints(minWidth: 24),
       padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
       decoration: BoxDecoration(
-        color: colorScheme.primary,
+        color: backgroundColor,
         borderRadius: BorderRadius.circular(999),
       ),
       alignment: Alignment.center,
       child: Text(
         '$count',
         style: theme.textTheme.labelSmall?.copyWith(
-          color: colorScheme.onPrimary,
+          color: textColor,
           fontWeight: FontWeight.w700,
         ),
       ),

@@ -11,8 +11,11 @@ import 'package:path_provider/path_provider.dart';
 import '../../../app/navigation/bottom_nav_icon_gallery_service.dart';
 import '../../../app/layout/app_layout.dart';
 import '../../../app/layout/app_spacing.dart';
+import '../../../app/theme/app_advanced_theme_tokens.dart';
+import '../../../app/theme/app_border_tokens.dart';
 import '../../../app/theme/app_theme_palette.dart';
 import '../../../app/theme/app_theme_seed_provider.dart';
+import '../../../app/widgets/advanced_theme_backdrop_decoration.dart';
 import '../../../app/widgets/text_cover_placeholder.dart';
 import '../../../core/media/image_selection_service.dart';
 import '../../../domain/entities/app_advanced_theme.dart';
@@ -159,8 +162,11 @@ class _AdvancedThemeEditorPageState
         primaryContainerColorValue: colorScheme.primaryContainer.toARGB32(),
         backgroundColorValue: colorScheme.surface.toARGB32(),
         surfaceColorValue: colorScheme.surfaceContainerLow.toARGB32(),
+        searchFieldBackgroundColorValue:
+            colorScheme.surfaceContainerHighest.toARGB32(),
         elevatedSurfaceColorValue: colorScheme.surfaceContainerHigh.toARGB32(),
         cardColorValue: colorScheme.surface.toARGB32(),
+        cardTextColorValue: colorScheme.onSurface.toARGB32(),
         cardBorderColorValue: colorScheme.outlineVariant.toARGB32(),
         iconBackgroundColorValue:
             Color.alphaBlend(
@@ -304,8 +310,11 @@ class _AdvancedThemeEditorPageState
       primaryContainerColorValue: values[_ThemeColorSlot.primaryContainer],
       backgroundColorValue: values[_ThemeColorSlot.background],
       surfaceColorValue: values[_ThemeColorSlot.surface],
+      searchFieldBackgroundColorValue:
+          values[_ThemeColorSlot.searchFieldBackground],
       elevatedSurfaceColorValue: values[_ThemeColorSlot.elevatedSurface],
       cardColorValue: values[_ThemeColorSlot.card],
+      cardTextColorValue: values[_ThemeColorSlot.cardText],
       cardBorderColorValue: values[_ThemeColorSlot.cardBorder],
       iconBackgroundColorValue: values[_ThemeColorSlot.iconBackground],
       textPrimaryColorValue: values[_ThemeColorSlot.textPrimary],
@@ -1390,7 +1399,7 @@ class _AdvancedThemeEditorPageState
               _ThemeColorFieldSpec(
                 slot: _ThemeColorSlot.surface,
                 label: '次级背景',
-                description: '输入框和分割区域的底色',
+                description: '搜索区、分割区域和次级面板底色',
               ),
               _ThemeColorFieldSpec(
                 slot: _ThemeColorSlot.textPrimary,
@@ -1404,8 +1413,8 @@ class _AdvancedThemeEditorPageState
               ),
               _ThemeColorFieldSpec(
                 slot: _ThemeColorSlot.outline,
-                label: '边框',
-                description: '分割线和边框的颜色',
+                label: '通用边框',
+                description: '输入框、分隔线和通用描边颜色',
               ),
             ]),
           ),
@@ -1424,17 +1433,21 @@ class _AdvancedThemeEditorPageState
                   description: '列表项和弹框的底色',
                 ),
                 _ThemeColorFieldSpec(
+                  slot: _ThemeColorSlot.cardText,
+                  label: '卡片文字',
+                  description: '卡片内主要文字的颜色',
+                ),
+                _ThemeColorFieldSpec(
+                  slot: _ThemeColorSlot.cardBorder,
+                  label: '卡片边框',
+                  description: '卡片和面板描边颜色',
+                ),
+                _ThemeColorFieldSpec(
                   slot: _ThemeColorSlot.shadow,
                   label: '阴影',
-                  description: '卡片的阴影效果强度',
+                  description: '卡片和浮层的阴影或光晕颜色',
                 ),
               ]),
-              const Divider(height: 1),
-              _buildInfoRow(
-                context,
-                label: '卡片文字',
-                description: '当前先跟随“主要文字”，后续再拆成独立项',
-              ),
               const Divider(height: 1),
               _buildInfoRow(
                 context,
@@ -1449,14 +1462,18 @@ class _AdvancedThemeEditorPageState
         const SizedBox(height: 6),
         _buildPanel(
           context,
-          child: _buildInfoRow(
-            context,
-            label: '背景颜色',
-            description: '当前先跟随“次级背景”，后续再拆成独立项',
+          child: Column(
+            children: _buildColorFieldRows(context, const [
+              _ThemeColorFieldSpec(
+                slot: _ThemeColorSlot.searchFieldBackground,
+                label: '背景颜色',
+                description: '搜索框和搜索触发条的填充颜色',
+              ),
+            ]),
           ),
         ),
         const SizedBox(height: 10),
-        _buildSectionLabel(context, '选项卡'),
+        _buildSectionLabel(context, '标签与状态'),
         const SizedBox(height: 6),
         _buildPanel(
           context,
@@ -1465,13 +1482,23 @@ class _AdvancedThemeEditorPageState
               ..._buildColorFieldRows(context, const [
                 _ThemeColorFieldSpec(
                   slot: _ThemeColorSlot.primaryContainer,
-                  label: '选项卡背景色',
-                  description: '选中或强调态的背景色',
+                  label: '强调背景',
+                  description: '标签、筛选和选中态背景色',
                 ),
                 _ThemeColorFieldSpec(
-                  slot: _ThemeColorSlot.cardBorder,
-                  label: '边框线',
-                  description: '为选项卡添加边框线',
+                  slot: _ThemeColorSlot.secondary,
+                  label: '辅助强调',
+                  description: '次级徽标和辅助操作的强调色',
+                ),
+                _ThemeColorFieldSpec(
+                  slot: _ThemeColorSlot.noticeAccent,
+                  label: '提示强调',
+                  description: '重要提示和通知强调色',
+                ),
+                _ThemeColorFieldSpec(
+                  slot: _ThemeColorSlot.noticeSurface,
+                  label: '提示底色',
+                  description: '重要提示块和状态标签的背景色',
                 ),
               ]),
             ],
@@ -1500,21 +1527,6 @@ class _AdvancedThemeEditorPageState
             child: Column(
               children: _buildColorFieldRows(context, const [
                 _ThemeColorFieldSpec(
-                  slot: _ThemeColorSlot.secondary,
-                  label: '辅助强调',
-                  description: '次级操作的强调色',
-                ),
-                _ThemeColorFieldSpec(
-                  slot: _ThemeColorSlot.noticeAccent,
-                  label: '提示强调',
-                  description: '重要提示和通知强调色',
-                ),
-                _ThemeColorFieldSpec(
-                  slot: _ThemeColorSlot.noticeSurface,
-                  label: '提示底色',
-                  description: '重要提示块的背景色',
-                ),
-                _ThemeColorFieldSpec(
                   slot: _ThemeColorSlot.elevatedSurface,
                   label: '高层级背景',
                   description: '弹层和高层级面板背景',
@@ -1527,7 +1539,7 @@ class _AdvancedThemeEditorPageState
                 _ThemeColorFieldSpec(
                   slot: _ThemeColorSlot.buttonText,
                   label: '按钮文字',
-                  description: '主按钮上的文字颜色',
+                  description: '主按钮和高亮按钮上的文字颜色',
                 ),
               ]),
             ),
@@ -1898,106 +1910,16 @@ class _AdvancedThemeEditorPageState
   }
 
   Widget _buildPreviewSection(BuildContext context, AppAdvancedTheme draft) {
-    final currentConfig = draft.configFor(_selectedMode);
-    final backgroundColor = _resolvedColor(
-      _parseHexColor(
-        _currentControllers[_ThemeColorSlot.background]!.text.trim(),
-      ),
-      _fallbackColorForSlot(context, _selectedMode, _ThemeColorSlot.background),
+    final previewConfig = _previewModeConfig(context, draft, _selectedMode);
+    final colorScheme = _colorSchemeForMode(_selectedMode);
+    final palette = resolveAdvancedThemePaletteFromModeConfig(
+      colorScheme,
+      previewConfig,
     );
-    final surfaceColor = _resolvedColor(
-      _parseHexColor(_currentControllers[_ThemeColorSlot.surface]!.text.trim()),
-      _fallbackColorForSlot(context, _selectedMode, _ThemeColorSlot.surface),
+    final backdrop = resolveAdvancedThemeBackdropFromModeConfig(
+      colorScheme,
+      previewConfig,
     );
-    final elevatedSurfaceColor = _resolvedColor(
-      _parseHexColor(
-        _currentControllers[_ThemeColorSlot.elevatedSurface]!.text.trim(),
-      ),
-      _fallbackColorForSlot(
-        context,
-        _selectedMode,
-        _ThemeColorSlot.elevatedSurface,
-      ),
-    );
-    final cardColor = _resolvedColor(
-      _parseHexColor(_currentControllers[_ThemeColorSlot.card]!.text.trim()),
-      _fallbackColorForSlot(context, _selectedMode, _ThemeColorSlot.card),
-    );
-    final primaryColor = _resolvedColor(
-      _parseHexColor(_currentControllers[_ThemeColorSlot.primary]!.text.trim()),
-      _fallbackColorForSlot(context, _selectedMode, _ThemeColorSlot.primary),
-    );
-    final noticeAccentColor = _resolvedColor(
-      _parseHexColor(
-        _currentControllers[_ThemeColorSlot.noticeAccent]!.text.trim(),
-      ),
-      _fallbackColorForSlot(
-        context,
-        _selectedMode,
-        _ThemeColorSlot.noticeAccent,
-      ),
-    );
-    final noticeSurfaceColor = _resolvedColor(
-      _parseHexColor(
-        _currentControllers[_ThemeColorSlot.noticeSurface]!.text.trim(),
-      ),
-      _fallbackColorForSlot(
-        context,
-        _selectedMode,
-        _ThemeColorSlot.noticeSurface,
-      ),
-    );
-    final iconBackgroundColor = _resolvedColor(
-      _parseHexColor(
-        _currentControllers[_ThemeColorSlot.iconBackground]!.text.trim(),
-      ),
-      _fallbackColorForSlot(
-        context,
-        _selectedMode,
-        _ThemeColorSlot.iconBackground,
-      ),
-    );
-    final textPrimaryColor = _resolvedColor(
-      _parseHexColor(
-        _currentControllers[_ThemeColorSlot.textPrimary]!.text.trim(),
-      ),
-      _fallbackColorForSlot(
-        context,
-        _selectedMode,
-        _ThemeColorSlot.textPrimary,
-      ),
-    );
-    final textSecondaryColor = _resolvedColor(
-      _parseHexColor(
-        _currentControllers[_ThemeColorSlot.textSecondary]!.text.trim(),
-      ),
-      _fallbackColorForSlot(
-        context,
-        _selectedMode,
-        _ThemeColorSlot.textSecondary,
-      ),
-    );
-    final cardBorderColor = _resolvedColor(
-      _parseHexColor(
-        _currentControllers[_ThemeColorSlot.cardBorder]!.text.trim(),
-      ),
-      _fallbackColorForSlot(context, _selectedMode, _ThemeColorSlot.cardBorder),
-    );
-    final wallpaperOverlayColor = _resolvedColor(
-      _parseHexColor(
-        _currentControllers[_ThemeColorSlot.wallpaperOverlay]!.text.trim(),
-      ),
-      _fallbackColorForSlot(
-        context,
-        _selectedMode,
-        _ThemeColorSlot.wallpaperOverlay,
-      ),
-    );
-    final wallpaperOverlayOpacity = currentConfig.wallpaperOverlayOpacity.clamp(
-      0.0,
-      1.0,
-    );
-    final wallpaperPath = currentConfig.wallpaperPath?.trim();
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -2006,30 +1928,19 @@ class _AdvancedThemeEditorPageState
         const SizedBox(height: 6),
         _buildPanel(
           context,
-          backgroundColor: surfaceColor,
+          backgroundColor: palette.surfaceColor,
           child: Container(
             constraints: const BoxConstraints(minHeight: 180),
-            decoration: BoxDecoration(
-              color: backgroundColor,
+            decoration: buildAdvancedThemeBackdropDecoration(
+              backdrop,
               borderRadius: BorderRadius.circular(14),
               border: Border.all(
-                color: cardBorderColor.withValues(alpha: 0.45),
+                color: resolveAppBorderColor(
+                  colorScheme,
+                  baseColor: palette.cardBorderColor,
+                  containerColor: backdrop.backgroundColor,
+                ),
               ),
-              image:
-                  wallpaperPath != null &&
-                          wallpaperPath.isNotEmpty &&
-                          File(wallpaperPath).existsSync()
-                      ? DecorationImage(
-                        image: FileImage(File(wallpaperPath)),
-                        fit: BoxFit.cover,
-                        colorFilter: ColorFilter.mode(
-                          wallpaperOverlayColor.withValues(
-                            alpha: wallpaperOverlayOpacity,
-                          ),
-                          BlendMode.srcOver,
-                        ),
-                      )
-                      : null,
             ),
             child: Padding(
               padding: const EdgeInsets.all(14),
@@ -2040,7 +1951,7 @@ class _AdvancedThemeEditorPageState
                     width: 86,
                     height: 10,
                     decoration: BoxDecoration(
-                      color: primaryColor,
+                      color: palette.primaryColor,
                       borderRadius: BorderRadius.circular(999),
                     ),
                   ),
@@ -2049,14 +1960,18 @@ class _AdvancedThemeEditorPageState
                     width: double.infinity,
                     padding: const EdgeInsets.all(12),
                     decoration: BoxDecoration(
-                      color: cardColor.withValues(alpha: 0.96),
+                      color: palette.cardColor.withValues(alpha: 0.96),
                       borderRadius: BorderRadius.circular(14),
                       border: Border.all(
-                        color: cardBorderColor.withValues(alpha: 0.72),
+                        color: resolveAppBorderColor(
+                          colorScheme,
+                          baseColor: palette.cardBorderColor,
+                          containerColor: palette.cardColor,
+                        ),
                       ),
                       boxShadow: [
                         BoxShadow(
-                          color: primaryColor.withValues(alpha: 0.08),
+                          color: palette.shadowColor,
                           blurRadius: 14,
                           offset: const Offset(0, 6),
                         ),
@@ -2070,7 +1985,9 @@ class _AdvancedThemeEditorPageState
                           width: 80,
                           height: 9,
                           decoration: BoxDecoration(
-                            color: textPrimaryColor.withValues(alpha: 0.88),
+                            color: palette.cardTextColor.withValues(
+                              alpha: 0.88,
+                            ),
                             borderRadius: BorderRadius.circular(999),
                           ),
                         ),
@@ -2079,7 +1996,9 @@ class _AdvancedThemeEditorPageState
                           width: 122,
                           height: 6,
                           decoration: BoxDecoration(
-                            color: textSecondaryColor.withValues(alpha: 0.74),
+                            color: palette.textSecondaryColor.withValues(
+                              alpha: 0.74,
+                            ),
                             borderRadius: BorderRadius.circular(999),
                           ),
                         ),
@@ -2091,22 +2010,36 @@ class _AdvancedThemeEditorPageState
                             _buildPreviewTokenChip(
                               context,
                               label: '高层级',
-                              backgroundColor: elevatedSurfaceColor,
-                              borderColor: cardBorderColor.withValues(
-                                alpha: 0.35,
+                              backgroundColor: palette.elevatedSurfaceColor,
+                              borderColor: resolveAppBorderColor(
+                                colorScheme,
+                                baseColor: palette.cardBorderColor,
+                                containerColor: palette.elevatedSurfaceColor,
+                                tone: AppBorderTone.subtle,
                               ),
-                              dotColor: primaryColor,
-                              textColor: textPrimaryColor,
+                              dotColor: palette.primaryColor,
+                              textColor: palette.cardTextColor,
                             ),
                             _buildPreviewTokenChip(
                               context,
                               label: '提示',
-                              backgroundColor: noticeSurfaceColor,
-                              borderColor: noticeAccentColor.withValues(
-                                alpha: 0.45,
+                              backgroundColor: palette.noticeSurfaceColor,
+                              borderColor: palette.noticeAccentColor,
+                              dotColor: palette.noticeAccentColor,
+                              textColor: palette.cardTextColor,
+                            ),
+                            _buildPreviewTokenChip(
+                              context,
+                              label: '标签',
+                              backgroundColor: palette.primaryContainerColor,
+                              borderColor: resolveAppBorderColor(
+                                colorScheme,
+                                baseColor: palette.outlineColor,
+                                containerColor: palette.primaryContainerColor,
+                                tone: AppBorderTone.subtle,
                               ),
-                              dotColor: noticeAccentColor,
-                              textColor: textPrimaryColor,
+                              dotColor: palette.secondaryColor,
+                              textColor: palette.textPrimaryColor,
                             ),
                             Container(
                               padding: const EdgeInsets.symmetric(
@@ -2114,7 +2047,7 @@ class _AdvancedThemeEditorPageState
                                 vertical: 5,
                               ),
                               decoration: BoxDecoration(
-                                color: iconBackgroundColor,
+                                color: palette.iconBackgroundColor,
                                 borderRadius: BorderRadius.circular(999),
                               ),
                               child: Row(
@@ -2123,7 +2056,7 @@ class _AdvancedThemeEditorPageState
                                   Icon(
                                     Icons.palette_outlined,
                                     size: 12,
-                                    color: textPrimaryColor,
+                                    color: palette.textPrimaryColor,
                                   ),
                                   const SizedBox(width: 4),
                                   Text(
@@ -2131,7 +2064,7 @@ class _AdvancedThemeEditorPageState
                                     style: Theme.of(
                                       context,
                                     ).textTheme.labelSmall?.copyWith(
-                                      color: textPrimaryColor,
+                                      color: palette.cardTextColor,
                                       fontWeight: FontWeight.w700,
                                     ),
                                   ),
@@ -2145,7 +2078,7 @@ class _AdvancedThemeEditorPageState
                           width: 78,
                           height: 26,
                           decoration: BoxDecoration(
-                            color: primaryColor,
+                            color: palette.primaryColor,
                             borderRadius: BorderRadius.circular(999),
                           ),
                           alignment: Alignment.center,
@@ -2154,19 +2087,7 @@ class _AdvancedThemeEditorPageState
                             style: Theme.of(
                               context,
                             ).textTheme.labelMedium?.copyWith(
-                              color: _resolvedColor(
-                                _parseHexColor(
-                                  _currentControllers[_ThemeColorSlot
-                                          .buttonText]!
-                                      .text
-                                      .trim(),
-                                ),
-                                _fallbackColorForSlot(
-                                  context,
-                                  _selectedMode,
-                                  _ThemeColorSlot.buttonText,
-                                ),
-                              ),
+                              color: palette.buttonTextColor,
                               fontWeight: FontWeight.w700,
                             ),
                           ),
@@ -2207,10 +2128,7 @@ class _AdvancedThemeEditorPageState
     ];
   }
 
-  Widget _buildColorFieldRow(
-    BuildContext context,
-    _ThemeColorFieldSpec field,
-  ) {
+  Widget _buildColorFieldRow(BuildContext context, _ThemeColorFieldSpec field) {
     final slot = field.slot;
     final colorScheme = Theme.of(context).colorScheme;
     final controller = _currentControllers[slot]!;
@@ -2477,16 +2395,76 @@ class _AdvancedThemeEditorPageState
     };
   }
 
+  ColorScheme _colorSchemeForMode(AppAdvancedThemeMode mode) {
+    final seedColor = ref.read(appSeedColorProvider);
+    return mode == AppAdvancedThemeMode.light
+        ? buildAppLightColorScheme(seedColor)
+        : buildAppDarkColorScheme(seedColor);
+  }
+
+  AppAdvancedThemeModeConfig _previewModeConfig(
+    BuildContext context,
+    AppAdvancedTheme draft,
+    AppAdvancedThemeMode mode,
+  ) {
+    final currentConfig = draft.configFor(mode);
+
+    Color resolvedSlotColor(_ThemeColorSlot slot) {
+      final raw = _colorControllersByMode[mode]![slot]!.text.trim();
+      return _resolvedColor(
+        _parseHexColor(raw),
+        _fallbackColorForSlot(context, mode, slot),
+      );
+    }
+
+    return currentConfig.copyWith(
+      colors: AppAdvancedThemeColors(
+        primaryColorValue:
+            resolvedSlotColor(_ThemeColorSlot.primary).toARGB32(),
+        secondaryColorValue:
+            resolvedSlotColor(_ThemeColorSlot.secondary).toARGB32(),
+        noticeAccentColorValue:
+            resolvedSlotColor(_ThemeColorSlot.noticeAccent).toARGB32(),
+        noticeSurfaceColorValue:
+            resolvedSlotColor(_ThemeColorSlot.noticeSurface).toARGB32(),
+        primaryContainerColorValue:
+            resolvedSlotColor(_ThemeColorSlot.primaryContainer).toARGB32(),
+        backgroundColorValue:
+            resolvedSlotColor(_ThemeColorSlot.background).toARGB32(),
+        surfaceColorValue:
+            resolvedSlotColor(_ThemeColorSlot.surface).toARGB32(),
+        searchFieldBackgroundColorValue:
+            resolvedSlotColor(_ThemeColorSlot.searchFieldBackground).toARGB32(),
+        elevatedSurfaceColorValue:
+            resolvedSlotColor(_ThemeColorSlot.elevatedSurface).toARGB32(),
+        cardColorValue: resolvedSlotColor(_ThemeColorSlot.card).toARGB32(),
+        cardTextColorValue:
+            resolvedSlotColor(_ThemeColorSlot.cardText).toARGB32(),
+        cardBorderColorValue:
+            resolvedSlotColor(_ThemeColorSlot.cardBorder).toARGB32(),
+        iconBackgroundColorValue:
+            resolvedSlotColor(_ThemeColorSlot.iconBackground).toARGB32(),
+        textPrimaryColorValue:
+            resolvedSlotColor(_ThemeColorSlot.textPrimary).toARGB32(),
+        textSecondaryColorValue:
+            resolvedSlotColor(_ThemeColorSlot.textSecondary).toARGB32(),
+        buttonTextColorValue:
+            resolvedSlotColor(_ThemeColorSlot.buttonText).toARGB32(),
+        outlineColorValue:
+            resolvedSlotColor(_ThemeColorSlot.outline).toARGB32(),
+        shadowColorValue: resolvedSlotColor(_ThemeColorSlot.shadow).toARGB32(),
+        wallpaperOverlayColorValue:
+            resolvedSlotColor(_ThemeColorSlot.wallpaperOverlay).toARGB32(),
+      ),
+    );
+  }
+
   Color _fallbackColorForSlot(
     BuildContext context,
     AppAdvancedThemeMode mode,
     _ThemeColorSlot slot,
   ) {
-    final seedColor = ref.read(appSeedColorProvider);
-    final colorScheme =
-        mode == AppAdvancedThemeMode.light
-            ? buildAppLightColorScheme(seedColor)
-            : buildAppDarkColorScheme(seedColor);
+    final colorScheme = _colorSchemeForMode(mode);
     return switch (slot) {
       _ThemeColorSlot.primary => colorScheme.primary,
       _ThemeColorSlot.secondary => colorScheme.secondary,
@@ -2495,8 +2473,11 @@ class _AdvancedThemeEditorPageState
       _ThemeColorSlot.primaryContainer => colorScheme.primaryContainer,
       _ThemeColorSlot.background => colorScheme.surface,
       _ThemeColorSlot.surface => colorScheme.surfaceContainerLow,
+      _ThemeColorSlot.searchFieldBackground =>
+        colorScheme.surfaceContainerHighest,
       _ThemeColorSlot.elevatedSurface => colorScheme.surfaceContainerHigh,
       _ThemeColorSlot.card => colorScheme.surface,
+      _ThemeColorSlot.cardText => colorScheme.onSurface,
       _ThemeColorSlot.cardBorder => colorScheme.outlineVariant,
       _ThemeColorSlot.iconBackground => Color.alphaBlend(
         colorScheme.onSurface.withValues(alpha: 0.04),
@@ -2520,8 +2501,11 @@ class _AdvancedThemeEditorPageState
       _ThemeColorSlot.primaryContainer => colors.primaryContainerColorValue,
       _ThemeColorSlot.background => colors.backgroundColorValue,
       _ThemeColorSlot.surface => colors.surfaceColorValue,
+      _ThemeColorSlot.searchFieldBackground =>
+        colors.searchFieldBackgroundColorValue,
       _ThemeColorSlot.elevatedSurface => colors.elevatedSurfaceColorValue,
       _ThemeColorSlot.card => colors.cardColorValue,
+      _ThemeColorSlot.cardText => colors.cardTextColorValue,
       _ThemeColorSlot.cardBorder => colors.cardBorderColorValue,
       _ThemeColorSlot.iconBackground => colors.iconBackgroundColorValue,
       _ThemeColorSlot.textPrimary => colors.textPrimaryColorValue,
@@ -2571,20 +2555,22 @@ class _AdvancedThemeEditorPageState
 enum _ThemeColorSlot {
   primary('强调色', '按钮和链接接的颜色'),
   noticeAccent('提示强调', '重要提示和通知强调色'),
-  noticeSurface('提示底色', '重要提示块的背景色'),
+  noticeSurface('提示底色', '重要提示块和状态标签的背景色'),
   background('页面背景', '页面底色'),
-  surface('次级背景', '输入框和分隔区域的底色'),
+  surface('次级背景', '搜索区、分割区域和次级面板底色'),
+  searchFieldBackground('搜索框背景', '搜索框和搜索触发条的填充颜色'),
   elevatedSurface('高层级背景', '弹层和高层级面板背景'),
   textPrimary('主要文字', '正文和标题的颜色'),
   textSecondary('辅助文字', '提示和说明的颜色'),
-  outline('边框', '分隔线和边框的颜色'),
+  outline('通用边框', '输入框、分隔线和通用描边颜色'),
   card('卡片背景', '列表项和弹窗的底色'),
-  cardBorder('卡片边框', '卡片描边颜色'),
+  cardText('卡片文字', '卡片内主要文字的颜色'),
+  cardBorder('卡片边框', '卡片和面板描边颜色'),
   iconBackground('图标底色', '我的页小卡片图标圆底背景'),
-  primaryContainer('选中底色', '标签和选中区域底色'),
-  secondary('辅助强调', '次级操作的强调色'),
-  buttonText('按钮文字', '主按钮上的文字'),
-  shadow('阴影', '卡片阴影或光晕色'),
+  primaryContainer('强调背景', '标签、筛选和选中态背景色'),
+  secondary('辅助强调', '次级徽标和辅助操作的强调色'),
+  buttonText('按钮文字', '主按钮和高亮按钮上的文字'),
+  shadow('阴影', '卡片和浮层的阴影或光晕颜色'),
   wallpaperOverlay('壁纸遮罩色', '壁纸上层覆盖的颜色');
 
   const _ThemeColorSlot(this.label, this.description);

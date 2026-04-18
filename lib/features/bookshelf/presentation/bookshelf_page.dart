@@ -2184,6 +2184,7 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
           builder: (sheetContext, setSheetState) {
             final colorScheme = Theme.of(sheetContext).colorScheme;
             final textTheme = Theme.of(sheetContext).textTheme;
+            final palette = _resolvedPalette(sheetContext);
 
             Widget buildSectionTitle(String title) {
               return Padding(
@@ -2209,7 +2210,7 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
               return Material(
                 color:
                     selected
-                        ? colorScheme.primaryContainer.withValues(alpha: 0.36)
+                        ? palette.primaryContainerColor.withValues(alpha: 0.42)
                         : Colors.transparent,
                 borderRadius: BorderRadius.circular(12),
                 child: InkWell(
@@ -2243,7 +2244,7 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
                                 style: textTheme.bodyMedium?.copyWith(
                                   color:
                                       selected
-                                          ? colorScheme.onPrimaryContainer
+                                          ? palette.textPrimaryColor
                                           : colorScheme.onSurface,
                                   fontWeight:
                                       selected
@@ -2739,7 +2740,7 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
                         borderRadius: BorderRadius.circular(14),
                         boxShadow: [
                           BoxShadow(
-                            color: colorScheme.shadow.withValues(alpha: 0.12),
+                            color: palette.shadowColor,
                             blurRadius: 10,
                             offset: const Offset(0, 4),
                           ),
@@ -2860,6 +2861,7 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
                   overflow: TextOverflow.ellipsis,
                   style: Theme.of(context).textTheme.labelMedium?.copyWith(
                     fontWeight: FontWeight.w700,
+                    color: palette.cardTextColor,
                   ),
                 ),
               ],
@@ -3039,8 +3041,12 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
                             Expanded(
                               child: Text(
                                 titleText,
-                                style: Theme.of(context).textTheme.titleMedium
-                                    ?.copyWith(fontWeight: FontWeight.w700),
+                                style: Theme.of(
+                                  context,
+                                ).textTheme.titleMedium?.copyWith(
+                                  fontWeight: FontWeight.w700,
+                                  color: palette.cardTextColor,
+                                ),
                                 maxLines: 1,
                                 overflow: TextOverflow.ellipsis,
                               ),
@@ -3975,6 +3981,7 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
           builder: (sheetContext, setSheetState) {
             final colorScheme = Theme.of(sheetContext).colorScheme;
             final textTheme = Theme.of(sheetContext).textTheme;
+            final palette = _resolvedPalette(sheetContext);
 
             Future<void> saveSelectedCategory() async {
               final normalized = _normalizeTags([
@@ -4075,7 +4082,7 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
                     Material(
                       color:
                           selectedCategory == null
-                              ? colorScheme.primaryContainer.withValues(
+                              ? palette.primaryContainerColor.withValues(
                                 alpha: 0.36,
                               )
                               : Colors.transparent,
@@ -5047,16 +5054,13 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
 
   Widget _buildSourceBadge(BookshelfBook book, {bool compact = false}) {
     final colorScheme = Theme.of(context).colorScheme;
+    final palette = _resolvedPalette(context);
     final isLocal = book.sourceId == _kLocalBookSourceId;
     final localBook = isLocal ? _localBooksById[book.bookId.trim()] : null;
     final (label, background, foreground) =
         isLocal
             ? _localSourceBadgePresentation(colorScheme, localBook)
-            : (
-              '在线',
-              colorScheme.primaryContainer.withValues(alpha: 0.94),
-              colorScheme.onPrimaryContainer,
-            );
+            : ('在线', palette.secondaryColor, palette.buttonTextColor);
     final borderRadius = compact ? 6.0 : 7.0;
     final horizontalPadding = compact ? 8.0 : 10.0;
     final minWidth = compact ? 30.0 : 36.0;
@@ -6250,6 +6254,13 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
           border: Border.all(
             color: palette.cardBorderColor.withValues(alpha: 0.42),
           ),
+          boxShadow: [
+            BoxShadow(
+              color: palette.shadowColor,
+              blurRadius: 14,
+              offset: const Offset(0, 4),
+            ),
+          ],
         ),
         child: InkWell(
           borderRadius: BorderRadius.circular(18),

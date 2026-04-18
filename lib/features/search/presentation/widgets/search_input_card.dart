@@ -16,6 +16,10 @@ class SearchInputCard extends StatelessWidget {
     required this.onPreciseMatchChanged,
     required this.onOpenSourceFilter,
     required this.onClearSourceFilter,
+    this.modeActiveBackgroundColor,
+    this.modeActiveForegroundColor,
+    this.optionActiveBackgroundColor,
+    this.optionActiveForegroundColor,
   });
 
   final bool isSearching;
@@ -29,6 +33,10 @@ class SearchInputCard extends StatelessWidget {
   final ValueChanged<bool> onPreciseMatchChanged;
   final VoidCallback onOpenSourceFilter;
   final VoidCallback onClearSourceFilter;
+  final Color? modeActiveBackgroundColor;
+  final Color? modeActiveForegroundColor;
+  final Color? optionActiveBackgroundColor;
+  final Color? optionActiveForegroundColor;
 
   @override
   Widget build(BuildContext context) {
@@ -41,6 +49,8 @@ class SearchInputCard extends StatelessWidget {
             icon: Icons.menu_book_rounded,
             label: '小说',
             isActive: searchContentMode == SearchContentMode.novel,
+            activeBackgroundColor: modeActiveBackgroundColor,
+            activeForegroundColor: modeActiveForegroundColor,
             onTap:
                 isSearching
                     ? null
@@ -51,6 +61,8 @@ class SearchInputCard extends StatelessWidget {
             icon: Icons.auto_stories_rounded,
             label: '漫画',
             isActive: searchContentMode == SearchContentMode.manga,
+            activeBackgroundColor: modeActiveBackgroundColor,
+            activeForegroundColor: modeActiveForegroundColor,
             onTap:
                 isSearching
                     ? null
@@ -62,6 +74,8 @@ class SearchInputCard extends StatelessWidget {
             label: _buildSourceLabel(),
             isActive: selectedSourceCount > 0,
             isLoading: isLoadingSourceCount,
+            activeBackgroundColor: optionActiveBackgroundColor,
+            activeForegroundColor: optionActiveForegroundColor,
             onTap:
                 (isSearching || availableSourceCount == 0)
                     ? null
@@ -79,6 +93,8 @@ class SearchInputCard extends StatelessWidget {
                     : Icons.check_box_outline_blank_rounded,
             label: '精准',
             isActive: isPreciseBookMatch,
+            activeBackgroundColor: optionActiveBackgroundColor,
+            activeForegroundColor: optionActiveForegroundColor,
             onTap:
                 isSearching
                     ? null
@@ -115,12 +131,16 @@ class _ModeChip extends StatelessWidget {
     required this.label,
     required this.isActive,
     required this.onTap,
+    this.activeBackgroundColor,
+    this.activeForegroundColor,
   });
 
   final IconData icon;
   final String label;
   final bool isActive;
   final VoidCallback? onTap;
+  final Color? activeBackgroundColor;
+  final Color? activeForegroundColor;
 
   @override
   Widget build(BuildContext context) {
@@ -128,11 +148,11 @@ class _ModeChip extends StatelessWidget {
     final colorScheme = theme.colorScheme;
     final bgColor =
         isActive
-            ? colorScheme.primary
+            ? (activeBackgroundColor ?? colorScheme.primary)
             : colorScheme.surfaceContainerHigh;
     final fgColor =
         isActive
-            ? colorScheme.onPrimary
+            ? (activeForegroundColor ?? colorScheme.onPrimary)
             : colorScheme.onSurfaceVariant;
 
     return Material(
@@ -171,6 +191,8 @@ class _OptionChip extends StatelessWidget {
     this.isLoading = false,
     this.onTap,
     this.onClear,
+    this.activeBackgroundColor,
+    this.activeForegroundColor,
   });
 
   final IconData icon;
@@ -179,6 +201,8 @@ class _OptionChip extends StatelessWidget {
   final bool isLoading;
   final VoidCallback? onTap;
   final VoidCallback? onClear;
+  final Color? activeBackgroundColor;
+  final Color? activeForegroundColor;
 
   @override
   Widget build(BuildContext context) {
@@ -187,11 +211,11 @@ class _OptionChip extends StatelessWidget {
 
     final bgColor =
         isActive
-            ? colorScheme.primaryContainer
+            ? (activeBackgroundColor ?? colorScheme.primaryContainer)
             : colorScheme.surfaceContainerHigh;
     final fgColor =
         isActive
-            ? colorScheme.onPrimaryContainer
+            ? (activeForegroundColor ?? colorScheme.onPrimaryContainer)
             : colorScheme.onSurfaceVariant;
 
     return Material(
