@@ -442,7 +442,7 @@ class _MinePageState extends ConsumerState<MinePage> {
       color: Colors.transparent,
       child: InkWell(
         borderRadius: BorderRadius.circular(16),
-        onTap: () => context.push('/membership'),
+        onTap: _openMembershipCenter,
         child: Container(
           padding: _quickCardPadding,
           decoration: BoxDecoration(
@@ -1302,6 +1302,11 @@ class _MinePageState extends ConsumerState<MinePage> {
     await context.push('/source');
   }
 
+  Future<void> _openMembershipCenter() async {
+    await context.push('/membership');
+    await _refreshMine();
+  }
+
   Future<void> _showMembershipPrompt(String message) async {
     final goMembership = await showDialog<bool>(
       context: context,
@@ -1323,8 +1328,7 @@ class _MinePageState extends ConsumerState<MinePage> {
       },
     );
     if (goMembership == true && mounted) {
-      await context.push('/membership');
-      await _refreshMine();
+      await _openMembershipCenter();
     }
   }
 
