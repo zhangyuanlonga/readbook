@@ -283,6 +283,51 @@ void main() {
     expect(find.text('B记忆源'), findsWidgets);
   });
 
+  testWidgets('shows cached discover sources and categories before refresh completes', (
+    tester,
+  ) async {
+    _registerDiscoverPageTearDown(tester);
+    SharedPreferences.setMockInitialValues(<String, Object>{});
+    final prefs = await SharedPreferences.getInstance();
+    final preferencesService = DiscoverPreferencesService(preferences: prefs);
+    await preferencesService.saveSelectedSourceId('cached_s2');
+    await preferencesService.saveSourceSnapshot(const <DiscoverSource>[
+      DiscoverSource(
+        id: 'cached_s1',
+        name: '缓存源A',
+        baseUrl: 'https://a.example.com',
+      ),
+      DiscoverSource(
+        id: 'cached_s2',
+        name: '缓存源B',
+        baseUrl: 'https://b.example.com',
+      ),
+    ]);
+    await preferencesService.saveCategorySnapshot(
+      'cached_s2',
+      const <ExploreCategoryItem>[
+        ExploreCategoryItem(title: '推荐', url: '/discover?page={{page}}'),
+      ],
+    );
+
+    final delayedService = _DelayedExploreService();
+
+    await tester.pumpWidget(
+      _TestHarness(
+        width: 900,
+        child: DiscoverPage(
+          exploreService: delayedService,
+          discoverPreferencesService: preferencesService,
+        ),
+      ),
+    );
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 10));
+
+    expect(find.text('缓存源B'), findsWidgets);
+    expect(find.text('推荐'), findsWidgets);
+  });
+
   testWidgets('source picker can filter novel and manga sources', (
     tester,
   ) async {
@@ -595,6 +640,20 @@ class _FakeRuntimeFacade extends SourceRuntimeFacade {
     required int pageSize,
   }) async {
     return booksBySourceId[sourceId] ?? const <runtime_models.Book>[];
+  }
+}
+
+class _DelayedExploreService extends ExploreService {
+  _DelayedExploreService() : super(sourceRuntimeFacade: _FakeRuntimeFacade(sources: const <RegisteredSource>[]));
+
+  @override
+  Future<DiscoverSourceSummary> loadDiscoverSourceSummary() async {
+    await Future<void>.delayed(const Duration(seconds: 5));
+    return const DiscoverSourceSummary(
+      enabledSourceCount: 0,
+      discoverCapableCount: 0,
+      discoverSources: <DiscoverSource>[],
+    );
   }
 }
 

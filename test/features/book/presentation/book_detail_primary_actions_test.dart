@@ -4,7 +4,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:shuxiang_reading_next/features/book/presentation/widgets/book_detail_primary_actions.dart';
 
 void main() {
-  testWidgets('uses short copy and hides icons on very narrow width', (
+  testWidgets('uses compact two-row layout on very narrow width', (
     tester,
   ) async {
     await _pumpPrimaryActions(
@@ -14,15 +14,17 @@ void main() {
       isShelfActionLoading: false,
     );
 
-    expect(find.text('阅读'), findsOneWidget);
-    expect(find.text('移出'), findsOneWidget);
-    expect(find.text('开始阅读'), findsNothing);
-    expect(find.text('移出书架'), findsNothing);
-    expect(find.byIcon(Icons.chrome_reader_mode_outlined), findsNothing);
-    expect(find.byIcon(Icons.bookmark_remove_outlined), findsNothing);
+    expect(find.text('书架'), findsOneWidget);
+    expect(find.text('目录'), findsOneWidget);
+    expect(find.text('书源'), findsOneWidget);
+    expect(find.text('归类'), findsOneWidget);
+    expect(find.byIcon(Icons.favorite_rounded), findsOneWidget);
+    expect(find.byIcon(Icons.menu_book_rounded), findsOneWidget);
+    expect(find.byIcon(Icons.swap_horiz_rounded), findsOneWidget);
+    expect(find.byIcon(Icons.category_outlined), findsOneWidget);
   });
 
-  testWidgets('uses long copy and shows icons on large-phone width', (
+  testWidgets('uses single-row four-action layout on large width', (
     tester,
   ) async {
     await _pumpPrimaryActions(
@@ -32,15 +34,17 @@ void main() {
       isShelfActionLoading: false,
     );
 
-    expect(find.text('开始阅读'), findsOneWidget);
-    expect(find.text('移出书架'), findsOneWidget);
-    expect(find.text('阅读'), findsNothing);
-    expect(find.text('移出'), findsNothing);
-    expect(find.byIcon(Icons.chrome_reader_mode_outlined), findsOneWidget);
-    expect(find.byIcon(Icons.bookmark_remove_outlined), findsOneWidget);
+    expect(find.text('书架'), findsOneWidget);
+    expect(find.text('目录'), findsOneWidget);
+    expect(find.text('书源'), findsOneWidget);
+    expect(find.text('归类'), findsOneWidget);
+    expect(find.byIcon(Icons.favorite_rounded), findsOneWidget);
+    expect(find.byIcon(Icons.menu_book_rounded), findsOneWidget);
+    expect(find.byIcon(Icons.swap_horiz_rounded), findsOneWidget);
+    expect(find.byIcon(Icons.category_outlined), findsOneWidget);
   });
 
-  testWidgets('keeps short copy but still shows icons between 186-210', (
+  testWidgets('keeps four actions visible at medium width', (
     tester,
   ) async {
     await _pumpPrimaryActions(
@@ -50,13 +54,14 @@ void main() {
       isShelfActionLoading: false,
     );
 
-    expect(find.text('阅读'), findsOneWidget);
-    expect(find.text('移出'), findsOneWidget);
-    expect(find.byIcon(Icons.chrome_reader_mode_outlined), findsOneWidget);
-    expect(find.byIcon(Icons.bookmark_remove_outlined), findsOneWidget);
+    expect(find.text('书架'), findsOneWidget);
+    expect(find.text('目录'), findsOneWidget);
+    expect(find.text('书源'), findsOneWidget);
+    expect(find.text('归类'), findsOneWidget);
+    expect(find.byIcon(Icons.favorite_rounded), findsOneWidget);
   });
 
-  testWidgets('loading state disables shelf button and hides shelf icon', (
+  testWidgets('loading state disables shelf button', (
     tester,
   ) async {
     await _pumpPrimaryActions(
@@ -66,21 +71,13 @@ void main() {
       isShelfActionLoading: true,
     );
 
-    expect(find.text('处理中'), findsOneWidget);
-    expect(find.byIcon(Icons.bookmark_remove_outlined), findsNothing);
-
-    final shelfButton = tester.widget<OutlinedButton>(
+    final shelfButton = tester.widget<InkWell>(
       find.byKey(const Key('book_detail_shelf_button')),
     );
-    expect(shelfButton.onPressed, isNull);
-
-    final readButton = tester.widget<FilledButton>(
-      find.byKey(const Key('book_detail_read_button')),
-    );
-    expect(readButton.onPressed, isNotNull);
+    expect(shelfButton.onTap, isNull);
   });
 
-  testWidgets('disables read button when onRead callback is null', (
+  testWidgets('disables organize button when onOpenOrganize callback is null', (
     tester,
   ) async {
     await _pumpPrimaryActions(
@@ -88,13 +85,13 @@ void main() {
       width: 300,
       isInBookshelf: false,
       isShelfActionLoading: false,
-      onRead: null,
+      onOpenOrganize: null,
     );
 
-    final readButton = tester.widget<FilledButton>(
-      find.byKey(const Key('book_detail_read_button')),
+    final cacheButton = tester.widget<InkWell>(
+      find.byKey(const Key('book_detail_cache_button')),
     );
-    expect(readButton.onPressed, isNull);
+    expect(cacheButton.onTap, isNull);
   });
 }
 
@@ -103,8 +100,10 @@ Future<void> _pumpPrimaryActions(
   required double width,
   required bool isInBookshelf,
   required bool isShelfActionLoading,
-  VoidCallback? onRead = _noop,
   VoidCallback? onToggleBookshelf = _noop,
+  VoidCallback? onOpenCatalog = _noop,
+  VoidCallback? onSwitchSource = _noop,
+  VoidCallback? onOpenOrganize = _noop,
 }) async {
   await tester.pumpWidget(
     MaterialApp(
@@ -118,8 +117,10 @@ Future<void> _pumpPrimaryActions(
                   availableWidth: constraints.maxWidth,
                   isInBookshelf: isInBookshelf,
                   isShelfActionLoading: isShelfActionLoading,
-                  onRead: onRead,
                   onToggleBookshelf: onToggleBookshelf,
+                  onOpenCatalog: onOpenCatalog,
+                  onSwitchSource: onSwitchSource,
+                  onOpenOrganize: onOpenOrganize,
                 );
               },
             ),

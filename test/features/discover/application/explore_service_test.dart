@@ -75,6 +75,48 @@ void main() {
     );
 
     test(
+      'loadDiscoverSourceSummary reloads when runtime registered sources are incomplete',
+      () async {
+        final persistedS1 = ScriptSource(
+          id: 's1',
+          name: '源1',
+          sourceCode: 'export default {}',
+          enabled: true,
+          createdAt: DateTime(2024),
+          updatedAt: DateTime(2024),
+        );
+        final persistedS2 = ScriptSource(
+          id: 's2',
+          name: '源2',
+          sourceCode: 'export default {}',
+          enabled: true,
+          createdAt: DateTime(2024),
+          updatedAt: DateTime(2024),
+        );
+
+        final runtimeS1 = _buildRegisteredSource(id: 's1', name: '源1');
+        final runtimeS2 = _buildRegisteredSource(id: 's2', name: '源2');
+
+        final facade = _FakeRuntimeFacade(
+          sources: <RegisteredSource>[runtimeS1],
+          reloadSources: <RegisteredSource>[runtimeS1, runtimeS2],
+          persistedSources: <ScriptSource>[persistedS1, persistedS2],
+        );
+        final service = ExploreService(sourceRuntimeFacade: facade);
+
+        final summary = await service.loadDiscoverSourceSummary();
+
+        expect(facade.reloadCallCount, 1);
+        expect(summary.enabledSourceCount, 2);
+        expect(summary.discoverCapableCount, 2);
+        expect(
+          summary.discoverSources.map((item) => item.id),
+          <String>['s1', 's2'],
+        );
+      },
+    );
+
+    test(
       'loadDiscoverSources ignores sources without discover capability declaration',
       () async {
         final service = ExploreService(
@@ -348,18 +390,30 @@ RegisteredSource _buildRegisteredSource({
 class _FakeRuntimeFacade extends SourceRuntimeFacade {
   _FakeRuntimeFacade({
     required this.sources,
+    List<RegisteredSource>? reloadSources,
+    List<ScriptSource>? persistedSources,
     this.categoriesBySourceId =
         const <String, List<runtime_models.DiscoverCategory>>{},
     this.booksBySourceId = const <String, List<runtime_models.Book>>{},
     this.failingCategorySourceIds = const <String>{},
     this.failingBookSourceIds = const <String>{},
-  }) : super(scriptSourceRepository: _FakeScriptSourceRepository());
+  }) : reloadSources = reloadSources ?? sources,
+       persistedSources = persistedSources ?? const <ScriptSource>[],
+       super(scriptSourceRepository: _FakeScriptSourceRepository());
 
   final List<RegisteredSource> sources;
+  final List<RegisteredSource> reloadSources;
+  final List<ScriptSource> persistedSources;
   final Map<String, List<runtime_models.DiscoverCategory>> categoriesBySourceId;
   final Map<String, List<runtime_models.Book>> booksBySourceId;
   final Set<String> failingCategorySourceIds;
   final Set<String> failingBookSourceIds;
+  int reloadCallCount = 0;
+
+  @override
+  Future<List<ScriptSource>> listScriptSources() async {
+    return persistedSources;
+  }
 
   @override
   List<RegisteredSource> registeredScriptSources({bool enabledOnly = true}) {
@@ -387,8 +441,15 @@ class _FakeRuntimeFacade extends SourceRuntimeFacade {
   Future<ScriptSourceReloadReport> reloadScriptSources({
     bool enabledOnly = true,
   }) async {
+    reloadCallCount += 1;
+    final loadedSources =
+        enabledOnly
+            ? reloadSources
+                .where((source) => source.definition.manifest.enabled)
+                .toList(growable: false)
+            : reloadSources;
     return ScriptSourceReloadReport(
-      loaded: registeredScriptSources(enabledOnly: enabledOnly),
+      loaded: loadedSources,
       failures: const <ScriptSourceReloadFailure>[],
     );
   }

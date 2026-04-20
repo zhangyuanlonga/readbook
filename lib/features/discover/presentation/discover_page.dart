@@ -262,12 +262,59 @@ class _DiscoverPageState extends ConsumerState<DiscoverPage>
   }
 
   Future<void> _bootstrapDiscoverState() async {
+    List<DiscoverSource> cachedSources = const <DiscoverSource>[];
+    List<ExploreCategoryItem> cachedCategories = const <ExploreCategoryItem>[];
     try {
       _rememberedSourceId =
           await _discoverPreferencesService.loadSelectedSourceId();
     } catch (_) {
       _rememberedSourceId = null;
     }
+
+    try {
+      cachedSources = await _discoverPreferencesService.loadSourceSnapshot();
+    } catch (_) {
+      cachedSources = const <DiscoverSource>[];
+    }
+
+    if (cachedSources.isNotEmpty) {
+      cachedSources = List<DiscoverSource>.from(cachedSources, growable: false)
+        ..sort((left, right) {
+          final groupCompare = (left.group ?? '').compareTo(right.group ?? '');
+          if (groupCompare != 0) {
+            return groupCompare;
+          }
+          return left.name.compareTo(right.name);
+        });
+      final cachedSelected = _findSourceById(cachedSources, _rememberedSourceId);
+      if (cachedSelected != null) {
+        try {
+          cachedCategories = await _discoverPreferencesService
+              .loadCategorySnapshot(cachedSelected.id);
+        } catch (_) {
+          cachedCategories = const <ExploreCategoryItem>[];
+        }
+      }
+
+      if (!mounted) {
+        return;
+      }
+
+      setState(() {
+        _discoverSources = cachedSources;
+        _sourceHealthById = _captureSourceHealth(cachedSources);
+        _selectedSource = cachedSelected;
+        _categories = cachedCategories;
+        _selectedCategoryIndex = _resolveCategorySelection(
+          categories: cachedCategories,
+          previousCategory: null,
+        );
+        _books = const <Book>[];
+        _nextPage = 1;
+        _hasMore = false;
+      });
+    }
+
     if (!mounted) {
       return;
     }
@@ -1278,6 +1325,7 @@ class _DiscoverPageState extends ConsumerState<DiscoverPage>
       });
 
       unawaited(_persistSelectedSourceId(selected?.id));
+      unawaited(_discoverPreferencesService.saveSourceSnapshot(loadedSources));
 
       if (selected != null) {
         await _loadCategoriesForSource(
@@ -1381,6 +1429,12 @@ class _DiscoverPageState extends ConsumerState<DiscoverPage>
         _categories = parsedCategories;
         _selectedCategoryIndex = nextCategoryIndex;
       });
+      unawaited(
+        _discoverPreferencesService.saveCategorySnapshot(
+          source.id,
+          parsedCategories,
+        ),
+      );
 
       if (nextCategoryIndex >= 0 &&
           nextCategoryIndex < parsedCategories.length &&

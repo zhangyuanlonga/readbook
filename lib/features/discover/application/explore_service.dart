@@ -157,8 +157,26 @@ class ExploreService {
       return const <RegisteredSource>[];
     }
 
+    final persistedSources = await facade.listScriptSources();
+    final enabledPersistedSourceIds =
+        persistedSources
+            .where((source) => source.enabled)
+            .map((source) => source.id.trim())
+            .where((id) => id.isNotEmpty)
+            .toSet();
+
     var sources = facade.registeredScriptSources(enabledOnly: true);
-    if (sources.isEmpty) {
+    final runtimeSourceIds =
+        sources
+            .map((source) => source.runtime.id.trim())
+            .where((id) => id.isNotEmpty)
+            .toSet();
+    final shouldReload =
+        enabledPersistedSourceIds.isNotEmpty &&
+        (runtimeSourceIds.length != enabledPersistedSourceIds.length ||
+            !runtimeSourceIds.containsAll(enabledPersistedSourceIds));
+
+    if (sources.isEmpty || shouldReload) {
       final report = await facade.reloadScriptSources();
       sources = report.loaded;
     }

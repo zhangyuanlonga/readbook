@@ -6,119 +6,125 @@ class BookDetailPrimaryActions extends StatelessWidget {
     required this.availableWidth,
     required this.isInBookshelf,
     required this.isShelfActionLoading,
-    required this.onRead,
     required this.onToggleBookshelf,
+    required this.onOpenCatalog,
+    required this.onSwitchSource,
+    required this.onOpenOrganize,
+    this.isCatalogEnabled = true,
+    this.isSwitchSourceEnabled = true,
+    this.isOrganizeEnabled = true,
   });
 
-  static const double actionRowCompactThreshold = 260;
-  static const double shortLabelThreshold = 210;
-  static const double hideIconThreshold = 186;
-  static const double actionButtonHeight = 34;
-  static const double actionButtonGapCompact = 8;
-  static const double actionButtonGapRegular = 10;
-  static const double readShortWidth = 104;
-  static const double readLongWidth = 140;
-  static const double shelfShortWidth = 96;
-  static const double shelfLongWidth = 128;
+  static const double actionButtonHeight = 62;
+  static const double actionButtonGap = 4;
 
   final double availableWidth;
   final bool isInBookshelf;
   final bool isShelfActionLoading;
-  final VoidCallback? onRead;
   final VoidCallback? onToggleBookshelf;
+  final VoidCallback? onOpenCatalog;
+  final VoidCallback? onSwitchSource;
+  final VoidCallback? onOpenOrganize;
+  final bool isCatalogEnabled;
+  final bool isSwitchSourceEnabled;
+  final bool isOrganizeEnabled;
 
   @override
   Widget build(BuildContext context) {
     final buttonTextStyle = Theme.of(
       context,
-    ).textTheme.labelSmall?.copyWith(fontWeight: FontWeight.w600, height: 1.05);
-    final compactStyle = availableWidth < actionRowCompactThreshold;
-    final useShortLabels = availableWidth < shortLabelThreshold;
-    final hideActionIcons = availableWidth < hideIconThreshold;
+    ).textTheme.labelSmall?.copyWith(fontWeight: FontWeight.w600, height: 1.0);
 
-    final readLabel = useShortLabels ? '阅读' : '开始阅读';
-    final shelfLabel =
-        useShortLabels
-            ? (isInBookshelf ? '移出' : '加入')
-            : (isInBookshelf ? '移出书架' : '加入书架');
+    Widget buildAction({
+      required Key key,
+      required IconData icon,
+      required String label,
+      required VoidCallback? onPressed,
+      bool enabled = true,
+    }) {
+      return SizedBox(
+        height: actionButtonHeight,
+        child: Material(
+          color: Colors.transparent,
+          child: InkWell(
+            key: key,
+            borderRadius: BorderRadius.circular(10),
+            onTap: enabled ? onPressed : null,
+            child: Opacity(
+              opacity: enabled ? 1 : 0.45,
+              child: _ActionButtonContent(
+                icon: icon,
+                label: label,
+                textStyle: buttonTextStyle,
+              ),
+            ),
+          ),
+        ),
+      );
+    }
 
-    final readButton = SizedBox(
-      height: actionButtonHeight,
-      child: FilledButton(
-        key: const Key('book_detail_read_button'),
-        style: FilledButton.styleFrom(
-          textStyle: buttonTextStyle,
-          tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-          visualDensity: const VisualDensity(horizontal: -1, vertical: -2),
-          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-        ),
-        onPressed: onRead,
-        child: _ActionButtonContent(
-          icon: Icons.chrome_reader_mode_outlined,
-          label: readLabel,
-          hideIcon: hideActionIcons,
-        ),
-      ),
+    final shelfButton = buildAction(
+      key: const Key('book_detail_shelf_button'),
+      icon:
+          isInBookshelf
+              ? Icons.favorite_rounded
+              : Icons.favorite_border_rounded,
+      label: '书架',
+      onPressed: isShelfActionLoading ? null : onToggleBookshelf,
+    );
+    final catalogButton = buildAction(
+      key: const Key('book_detail_catalog_button'),
+      icon: Icons.menu_book_rounded,
+      label: '目录',
+      onPressed: onOpenCatalog,
+      enabled: isCatalogEnabled,
+    );
+    final sourceButton = buildAction(
+      key: const Key('book_detail_source_button'),
+      icon: Icons.swap_horiz_rounded,
+      label: '书源',
+      onPressed: onSwitchSource,
+      enabled: isSwitchSourceEnabled,
+    );
+    final cacheButton = buildAction(
+      key: const Key('book_detail_cache_button'),
+      icon: Icons.category_outlined,
+      label: '归类',
+      onPressed: onOpenOrganize,
+      enabled: isOrganizeEnabled,
     );
 
-    final shelfButton = SizedBox(
-      height: actionButtonHeight,
-      child: OutlinedButton(
-        key: const Key('book_detail_shelf_button'),
-        style: OutlinedButton.styleFrom(
-          textStyle: buttonTextStyle,
-          tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-          visualDensity: const VisualDensity(horizontal: -1, vertical: -2),
-          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-        ),
-        onPressed: isShelfActionLoading ? null : onToggleBookshelf,
-        child: _ActionButtonContent(
-          icon:
-              isInBookshelf
-                  ? Icons.bookmark_remove_outlined
-                  : Icons.bookmark_add_outlined,
-          label: shelfLabel,
-          hideIcon: hideActionIcons,
-        ),
-      ),
-    );
-
-    final buttonGap =
-        compactStyle ? actionButtonGapCompact : actionButtonGapRegular;
-    final readIdealWidth = useShortLabels ? readShortWidth : readLongWidth;
-    final shelfIdealWidth = useShortLabels ? shelfShortWidth : shelfLongWidth;
-    final minPairWidth = shelfShortWidth * 2 + buttonGap;
-    final idealPairWidth = readIdealWidth + shelfIdealWidth + buttonGap;
-
-    if (availableWidth < minPairWidth) {
+    if (availableWidth < 320) {
       return Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          SizedBox(width: double.infinity, child: readButton),
-          const SizedBox(height: 6),
-          SizedBox(width: double.infinity, child: shelfButton),
+          Row(
+            children: [
+              Expanded(child: shelfButton),
+              const SizedBox(width: actionButtonGap),
+              Expanded(child: catalogButton),
+            ],
+          ),
+          const SizedBox(height: 8),
+          Row(
+            children: [
+              Expanded(child: sourceButton),
+              const SizedBox(width: actionButtonGap),
+              Expanded(child: cacheButton),
+            ],
+          ),
         ],
       );
     }
 
-    if (availableWidth >= idealPairWidth) {
-      return Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          SizedBox(width: readIdealWidth, child: readButton),
-          SizedBox(width: buttonGap),
-          SizedBox(width: shelfIdealWidth, child: shelfButton),
-        ],
-      );
-    }
-
-    final equalWidth = (availableWidth - buttonGap) / 2;
     return Row(
-      mainAxisSize: MainAxisSize.min,
       children: [
-        SizedBox(width: equalWidth, child: readButton),
-        SizedBox(width: buttonGap),
-        SizedBox(width: equalWidth, child: shelfButton),
+        Expanded(child: shelfButton),
+        const SizedBox(width: actionButtonGap),
+        Expanded(child: catalogButton),
+        const SizedBox(width: actionButtonGap),
+        Expanded(child: sourceButton),
+        const SizedBox(width: actionButtonGap),
+        Expanded(child: cacheButton),
       ],
     );
   }
@@ -128,26 +134,28 @@ class _ActionButtonContent extends StatelessWidget {
   const _ActionButtonContent({
     required this.icon,
     required this.label,
-    required this.hideIcon,
+    this.textStyle,
   });
 
   final IconData icon;
   final String label;
-  final bool hideIcon;
+  final TextStyle? textStyle;
 
   @override
   Widget build(BuildContext context) {
-    return FittedBox(
-      fit: BoxFit.scaleDown,
-      child: Row(
+    final color = Theme.of(context).colorScheme.onSurface;
+    return Center(
+      child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          if (!hideIcon) ...[Icon(icon, size: 14), const SizedBox(width: 3)],
+          Icon(icon, size: 18, color: color),
+          const SizedBox(height: 3),
           Text(
             label,
             maxLines: 1,
             softWrap: false,
-            overflow: TextOverflow.fade,
+            overflow: TextOverflow.ellipsis,
+            style: textStyle?.copyWith(color: color),
           ),
         ],
       ),

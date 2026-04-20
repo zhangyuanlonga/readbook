@@ -37,31 +37,51 @@ void main() {
     }
   });
 
-  testWidgets('矩阵测试：书籍详情主操作在 320dp 起保持完整文案和图标', (
+  testWidgets('矩阵测试：书籍详情主操作在 320dp 起保持四个操作文案和图标', (
     tester,
   ) async {
     for (final width in widths) {
       await _pumpPrimaryActions(tester, width: width);
 
       expect(
-        find.text('开始阅读'),
+        find.text('书架'),
         findsOneWidget,
-        reason: 'expected full read label at width=$width',
+        reason: 'expected shelf label at width=$width',
       );
       expect(
-        find.text('加入书架'),
+        find.text('目录'),
         findsOneWidget,
-        reason: 'expected full shelf label at width=$width',
+        reason: 'expected catalog label at width=$width',
       );
       expect(
-        find.byIcon(Icons.chrome_reader_mode_outlined),
+        find.text('书源'),
         findsOneWidget,
-        reason: 'expected read icon at width=$width',
+        reason: 'expected source label at width=$width',
       );
       expect(
-        find.byIcon(Icons.bookmark_add_outlined),
+        find.text('归类'),
+        findsOneWidget,
+        reason: 'expected organize label at width=$width',
+      );
+      expect(
+        find.byIcon(Icons.favorite_border_rounded),
         findsOneWidget,
         reason: 'expected shelf icon at width=$width',
+      );
+      expect(
+        find.byIcon(Icons.menu_book_rounded),
+        findsOneWidget,
+        reason: 'expected catalog icon at width=$width',
+      );
+      expect(
+        find.byIcon(Icons.swap_horiz_rounded),
+        findsOneWidget,
+        reason: 'expected source icon at width=$width',
+      );
+      expect(
+        find.byIcon(Icons.category_outlined),
+        findsOneWidget,
+        reason: 'expected organize icon at width=$width',
       );
     }
   });
@@ -172,8 +192,10 @@ Future<void> _pumpPrimaryActions(
                   availableWidth: constraints.maxWidth,
                   isInBookshelf: false,
                   isShelfActionLoading: false,
-                  onRead: () {},
                   onToggleBookshelf: () {},
+                  onOpenCatalog: () {},
+                  onSwitchSource: () {},
+                  onOpenOrganize: () {},
                 );
               },
             ),
