@@ -47,7 +47,55 @@
                     android:mimeType="application/x-javascript" />
                 <data
                     android:scheme="content"
+                    android:mimeType="text/markdown" />
+                <data
+                    android:scheme="content"
+                    android:mimeType="text/x-markdown" />
+                <data
+                    android:scheme="content"
+                    android:mimeType="text/html" />
+                <data
+                    android:scheme="content"
+                    android:mimeType="application/pdf" />
+                <data
+                    android:scheme="content"
+                    android:mimeType="application/epub+zip" />
+                <data
+                    android:scheme="content"
+                    android:mimeType="application/x-mobipocket-ebook" />
+                <data
+                    android:scheme="content"
+                    android:mimeType="application/vnd.amazon.ebook" />
+                <data
+                    android:scheme="content"
+                    android:mimeType="application/vnd.amazon.mobi8-ebook" />
+                <data
+                    android:scheme="content"
                     android:mimeType="text/plain" />
+                <data
+                    android:scheme="file"
+                    android:mimeType="text/markdown" />
+                <data
+                    android:scheme="file"
+                    android:mimeType="text/x-markdown" />
+                <data
+                    android:scheme="file"
+                    android:mimeType="text/html" />
+                <data
+                    android:scheme="file"
+                    android:mimeType="application/pdf" />
+                <data
+                    android:scheme="file"
+                    android:mimeType="application/epub+zip" />
+                <data
+                    android:scheme="file"
+                    android:mimeType="application/x-mobipocket-ebook" />
+                <data
+                    android:scheme="file"
+                    android:mimeType="application/vnd.amazon.ebook" />
+                <data
+                    android:scheme="file"
+                    android:mimeType="application/vnd.amazon.mobi8-ebook" />
                 <data
                     android:scheme="content"
                     android:mimeType="application/octet-stream" />
@@ -77,6 +125,14 @@
                 <data android:mimeType="application/javascript" />
                 <data android:mimeType="text/javascript" />
                 <data android:mimeType="application/x-javascript" />
+                <data android:mimeType="text/markdown" />
+                <data android:mimeType="text/x-markdown" />
+                <data android:mimeType="text/html" />
+                <data android:mimeType="application/pdf" />
+                <data android:mimeType="application/epub+zip" />
+                <data android:mimeType="application/x-mobipocket-ebook" />
+                <data android:mimeType="application/vnd.amazon.ebook" />
+                <data android:mimeType="application/vnd.amazon.mobi8-ebook" />
                 <data android:mimeType="text/plain" />
                 <data android:mimeType="application/octet-stream" />
             </intent-filter>
@@ -87,6 +143,14 @@
                 <data android:mimeType="application/javascript" />
                 <data android:mimeType="text/javascript" />
                 <data android:mimeType="application/x-javascript" />
+                <data android:mimeType="text/markdown" />
+                <data android:mimeType="text/x-markdown" />
+                <data android:mimeType="text/html" />
+                <data android:mimeType="application/pdf" />
+                <data android:mimeType="application/epub+zip" />
+                <data android:mimeType="application/x-mobipocket-ebook" />
+                <data android:mimeType="application/vnd.amazon.ebook" />
+                <data android:mimeType="application/vnd.amazon.mobi8-ebook" />
                 <data android:mimeType="text/plain" />
                 <data android:mimeType="application/octet-stream" />
             </intent-filter>

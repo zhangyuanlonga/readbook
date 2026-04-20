@@ -285,10 +285,28 @@ class MainActivity : FlutterActivity() {
         if (extension == "json" || normalizedMimeType == "application/json") {
             return PAYLOAD_TYPE_ADVANCED_THEME
         }
-        if (extension == "epub" || normalizedMimeType == "application/epub+zip") {
-            return PAYLOAD_TYPE_LOCAL_BOOK
-        }
-        if (extension == "txt" || normalizedMimeType == "text/plain" || normalizedMimeType == "application/octet-stream") {
+        if (
+            extension == "txt" ||
+            extension == "epub" ||
+            extension == "md" ||
+            extension == "markdown" ||
+            extension == "html" ||
+            extension == "htm" ||
+            extension == "pdf" ||
+            extension == "mobi" ||
+            extension == "azw" ||
+            extension == "azw3" ||
+            normalizedMimeType == "application/epub+zip" ||
+            normalizedMimeType == "text/plain" ||
+            normalizedMimeType == "text/markdown" ||
+            normalizedMimeType == "text/x-markdown" ||
+            normalizedMimeType == "text/html" ||
+            normalizedMimeType == "application/pdf" ||
+            normalizedMimeType == "application/x-mobipocket-ebook" ||
+            normalizedMimeType == "application/vnd.amazon.ebook" ||
+            normalizedMimeType == "application/vnd.amazon.mobi8-ebook" ||
+            normalizedMimeType == "application/octet-stream"
+        ) {
             return PAYLOAD_TYPE_LOCAL_BOOK
         }
         return null
@@ -353,7 +371,22 @@ class MainActivity : FlutterActivity() {
         return when {
             lowerLabel.endsWith(".txt") -> ".txt"
             lowerLabel.endsWith(".epub") -> ".epub"
+            lowerLabel.endsWith(".md") -> ".md"
+            lowerLabel.endsWith(".markdown") -> ".markdown"
+            lowerLabel.endsWith(".html") -> ".html"
+            lowerLabel.endsWith(".htm") -> ".htm"
+            lowerLabel.endsWith(".pdf") -> ".pdf"
+            lowerLabel.endsWith(".mobi") -> ".mobi"
+            lowerLabel.endsWith(".azw") -> ".azw"
+            lowerLabel.endsWith(".azw3") -> ".azw3"
             mimeType.equals("application/epub+zip", ignoreCase = true) -> ".epub"
+            mimeType.equals("text/markdown", ignoreCase = true) ||
+                mimeType.equals("text/x-markdown", ignoreCase = true) -> ".md"
+            mimeType.equals("text/html", ignoreCase = true) -> ".html"
+            mimeType.equals("application/pdf", ignoreCase = true) -> ".pdf"
+            mimeType.equals("application/x-mobipocket-ebook", ignoreCase = true) -> ".mobi"
+            mimeType.equals("application/vnd.amazon.ebook", ignoreCase = true) -> ".azw"
+            mimeType.equals("application/vnd.amazon.mobi8-ebook", ignoreCase = true) -> ".azw3"
             mimeType.equals("text/plain", ignoreCase = true) ||
                 mimeType.equals("application/octet-stream", ignoreCase = true) -> ".txt"
             else -> null

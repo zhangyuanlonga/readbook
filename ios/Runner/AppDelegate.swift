@@ -318,11 +318,25 @@ import UniformTypeIdentifiers
     let extensionName = url.pathExtension.lowercased()
     let normalizedMimeType = mimeType?.lowercased()
 
-    if extensionName == "epub" || normalizedMimeType == "application/epub+zip" {
-      return payloadTypeLocalBook
-    }
     if extensionName == "txt" ||
+      extensionName == "epub" ||
+      extensionName == "md" ||
+      extensionName == "markdown" ||
+      extensionName == "html" ||
+      extensionName == "htm" ||
+      extensionName == "pdf" ||
+      extensionName == "mobi" ||
+      extensionName == "azw" ||
+      extensionName == "azw3" ||
+      normalizedMimeType == "application/epub+zip" ||
       normalizedMimeType == "text/plain" ||
+      normalizedMimeType == "text/markdown" ||
+      normalizedMimeType == "text/x-markdown" ||
+      normalizedMimeType == "text/html" ||
+      normalizedMimeType == "application/pdf" ||
+      normalizedMimeType == "application/x-mobipocket-ebook" ||
+      normalizedMimeType == "application/vnd.amazon.ebook" ||
+      normalizedMimeType == "application/vnd.amazon.mobi8-ebook" ||
       normalizedMimeType == "application/octet-stream" {
       return payloadTypeLocalBook
     }
@@ -458,6 +472,30 @@ import UniformTypeIdentifiers
     if urlExtension == "epub" {
       return ".epub"
     }
+    if urlExtension == "md" {
+      return ".md"
+    }
+    if urlExtension == "markdown" {
+      return ".markdown"
+    }
+    if urlExtension == "html" {
+      return ".html"
+    }
+    if urlExtension == "htm" {
+      return ".htm"
+    }
+    if urlExtension == "pdf" {
+      return ".pdf"
+    }
+    if urlExtension == "mobi" {
+      return ".mobi"
+    }
+    if urlExtension == "azw" {
+      return ".azw"
+    }
+    if urlExtension == "azw3" {
+      return ".azw3"
+    }
     if urlExtension == "js" {
       return ".js"
     }
@@ -470,6 +508,30 @@ import UniformTypeIdentifiers
     if lowerLabel.hasSuffix(".epub") {
       return ".epub"
     }
+    if lowerLabel.hasSuffix(".md") {
+      return ".md"
+    }
+    if lowerLabel.hasSuffix(".markdown") {
+      return ".markdown"
+    }
+    if lowerLabel.hasSuffix(".html") {
+      return ".html"
+    }
+    if lowerLabel.hasSuffix(".htm") {
+      return ".htm"
+    }
+    if lowerLabel.hasSuffix(".pdf") {
+      return ".pdf"
+    }
+    if lowerLabel.hasSuffix(".mobi") {
+      return ".mobi"
+    }
+    if lowerLabel.hasSuffix(".azw") {
+      return ".azw"
+    }
+    if lowerLabel.hasSuffix(".azw3") {
+      return ".azw3"
+    }
     if lowerLabel.hasSuffix(".js") {
       return ".js"
     }
@@ -478,6 +540,24 @@ import UniformTypeIdentifiers
     }
     if normalizedMimeType == "application/epub+zip" {
       return ".epub"
+    }
+    if normalizedMimeType == "text/markdown" || normalizedMimeType == "text/x-markdown" {
+      return ".md"
+    }
+    if normalizedMimeType == "text/html" {
+      return ".html"
+    }
+    if normalizedMimeType == "application/pdf" {
+      return ".pdf"
+    }
+    if normalizedMimeType == "application/x-mobipocket-ebook" {
+      return ".mobi"
+    }
+    if normalizedMimeType == "application/vnd.amazon.ebook" {
+      return ".azw"
+    }
+    if normalizedMimeType == "application/vnd.amazon.mobi8-ebook" {
+      return ".azw3"
     }
     if normalizedMimeType == "text/plain" || normalizedMimeType == "application/octet-stream" {
       return ".txt"
