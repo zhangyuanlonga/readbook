@@ -2575,6 +2575,8 @@ const cookies = ctx.session.cookies();
 - `ctx.utils.decodeUri(value)`
 - `ctx.utils.encodeUriComponent(value)`
 - `ctx.utils.decodeUriComponent(value)`
+- `ctx.utils.getDeviceInfo()`
+- `ctx.utils.getUserId()`
 
 示例：
 
@@ -2953,6 +2955,83 @@ string
 const q = ctx.utils.decodeUriComponent(
   '%E5%87%A1%E4%BA%BA%E4%BF%AE%E4%BB%99%E4%BC%A0%20%26%20%E5%BF%98%E8%AF%AD',
 );
+```
+
+#### 8.8.15 `ctx.utils.getDeviceInfo()`
+
+作用：
+
+- 获取当前设备与安装实例的运行时标识信息
+
+返回值：
+
+```js
+Promise<{
+  installId: string,
+  deviceUid: string,
+  deviceFingerprint: string,
+  platform: string,
+  deviceBrand: string,
+  deviceModel: string,
+  osVersion: string,
+  appVersion: string,
+}>
+```
+
+说明：
+
+- `installId`：当前 App 安装实例 ID，适合做设备级缓存键或调试标识
+- `deviceUid`：基于设备信息生成的稳定哈希标识
+- `deviceFingerprint`：更细粒度的设备指纹哈希
+- `platform / deviceBrand / deviceModel / osVersion / appVersion`：当前宿主和设备信息
+
+推荐场景：
+
+- 某些接口需要设备标识时
+- 需要按安装实例隔离缓存时
+- 调试“为什么同一源在不同设备表现不一致”时
+
+示例：
+
+```js
+const device = await ctx.utils.getDeviceInfo();
+
+const traceKey = `${device.platform}:${device.installId}`;
+ctx.log(`device=${traceKey}`);
+```
+
+注意：
+
+- 这是运行时设备信息，不是站点 cookie 或浏览器指纹容器
+- `deviceUid / deviceFingerprint` 是宿主生成的稳定值，适合标识，不建议当作站点登录凭证替代品
+
+#### 8.8.16 `ctx.utils.getUserId()`
+
+作用：
+
+- 获取当前 App 登录用户的用户 ID
+
+返回值：
+
+```js
+Promise<string | null>
+```
+
+说明：
+
+- 当前用户未登录时返回 `null`
+- 返回的是宿主账户体系里的用户 ID，不是目标站点的用户 ID
+
+推荐场景：
+
+- 需要按当前登录用户隔离缓存或 session key 时
+- 某些书源要把宿主用户和本地行为绑定时
+
+示例：
+
+```js
+const userId = await ctx.utils.getUserId();
+const cacheKey = userId ? `feed:${userId}` : 'feed:guest';
 ```
 
 ### 8.9 `ctx.crypto`

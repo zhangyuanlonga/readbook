@@ -2,6 +2,8 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:typed_data';
 
+import '../../core/auth/auth_session_store.dart';
+import '../../core/device/device_identity_service.dart';
 import '../crypto/source_crypto.dart';
 import '../browser/browser_runtime.dart';
 import '../cache/cache_manager.dart';
@@ -403,7 +405,14 @@ class SourceBrowserContext {
 }
 
 class SourceUtilsContext {
-  const SourceUtilsContext();
+  SourceUtilsContext({
+    DeviceIdentityService? deviceIdentityService,
+    AuthSessionStore? authSessionStore,
+  }) : _deviceIdentityService = deviceIdentityService ?? DeviceIdentityService(),
+       _authSessionStore = authSessionStore ?? AuthSessionStore();
+
+  final DeviceIdentityService _deviceIdentityService;
+  final AuthSessionStore _authSessionStore;
 
   String absoluteUrl(String base, String relative) {
     if (relative.trim().isEmpty) {
@@ -535,6 +544,24 @@ class SourceUtilsContext {
 
   String decodeUriComponent(String? value) {
     return Uri.decodeComponent(value ?? '');
+  }
+
+  Future<Map<String, Object?>> getDeviceInfo() async {
+    final identity = await _deviceIdentityService.loadIdentity();
+    return <String, Object?>{
+      'installId': identity.installId,
+      'deviceUid': identity.deviceUid,
+      'deviceFingerprint': identity.deviceFingerprint,
+      'platform': identity.platform,
+      'deviceBrand': identity.deviceBrand,
+      'deviceModel': identity.deviceModel,
+      'osVersion': identity.osVersion,
+      'appVersion': identity.appVersion,
+    };
+  }
+
+  Future<String?> getUserId() {
+    return _authSessionStore.getUserId();
   }
 }
 

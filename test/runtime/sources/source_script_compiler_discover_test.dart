@@ -275,7 +275,7 @@ SourceRuntimeContext _buildRuntimeContext() {
     ),
     html: const DefaultHtmlRuntime(),
     session: session,
-    utils: const SourceUtilsContext(),
+    utils: SourceUtilsContext(),
     crypto: SourceCryptoContext(),
     log: (_) {},
   );

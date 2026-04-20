@@ -7869,6 +7869,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
             : const <String>[];
 
     _stopAutoRead();
+    _resetScrollEdgeAdvanceState();
     _disposeMangaTransformControllers();
     _document = resolvedDocument;
     _content = resolvedContent;
@@ -9410,6 +9411,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
     );
 
     _stopAutoRead();
+    _resetScrollEdgeAdvanceState();
     _commitReadingRecordSession();
     setState(() {
       _isLoadingContent = true;
@@ -9913,6 +9915,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
     }
 
     _stopAutoRead();
+    _resetScrollEdgeAdvanceState();
     final jumpDecision = _jumpPlanner.resolve(
       chapters: _chapters,
       requestedChapterIndex: index,

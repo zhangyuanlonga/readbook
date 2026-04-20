@@ -340,7 +340,7 @@ class SourceScriptDebugService {
       ),
       html: _htmlRuntime,
       session: session,
-      utils: const SourceUtilsContext(),
+      utils: SourceUtilsContext(),
       crypto: SourceCryptoContext(),
       log: (String message) {
         logs.add(
@@ -845,6 +845,12 @@ try {
     runtime.registerBridge('__ctx_utils_decode_uri_component', (dynamic args) {
       final payload = _asMap(args);
       return ctx.utils.decodeUriComponent(payload['value']?.toString());
+    });
+    runtime.registerBridge('__ctx_utils_get_device_info', (_) async {
+      return await ctx.utils.getDeviceInfo();
+    });
+    runtime.registerBridge('__ctx_utils_get_user_id', (_) async {
+      return await ctx.utils.getUserId();
     });
     runtime.registerBridge('__ctx_crypto_md5', (dynamic args) {
       final payload = _asMap(args);
@@ -2154,6 +2160,12 @@ var source = undefined;
         },
         decodeUriComponent(value) {
           return hostCall('__ctx_utils_decode_uri_component', { value });
+        },
+        getDeviceInfo() {
+          return hostCall('__ctx_utils_get_device_info', {});
+        },
+        getUserId() {
+          return hostCall('__ctx_utils_get_user_id', {});
         }
       },
       crypto: {

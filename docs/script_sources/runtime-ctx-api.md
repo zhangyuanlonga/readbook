@@ -108,6 +108,8 @@ ctx = {
 - `ctx.utils.decodeUri(value)`
 - `ctx.utils.encodeUriComponent(value)`
 - `ctx.utils.decodeUriComponent(value)`
+- `ctx.utils.getDeviceInfo()`
+- `ctx.utils.getUserId()`
 
 ### 2.9 `ctx.crypto`
 

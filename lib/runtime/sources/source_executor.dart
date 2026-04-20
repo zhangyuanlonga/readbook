@@ -348,7 +348,7 @@ class SourceExecutor {
       ),
       html: _htmlRuntime,
       session: session,
-      utils: const SourceUtilsContext(),
+      utils: SourceUtilsContext(),
       crypto: SourceCryptoContext(),
       log: (String message) {
         _logger?.call('[${runtime.id}] $message');
