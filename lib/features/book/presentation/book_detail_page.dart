@@ -2037,32 +2037,45 @@ class _BookDetailPageState extends State<BookDetailPage> {
     LocalBook book, {
     required String? preferredCharset,
   }) async {
-    final sourcePath = book.sourcePath?.trim() ?? '';
-    if (sourcePath.isEmpty) {
-      _showMessage('当前没有可用原文件路径，无法修正编码。');
-      return;
+    final normalizedPreferredCharset = preferredCharset?.trim().toLowerCase();
+    final originalSourcePath = book.sourcePath?.trim() ?? '';
+    final resolvedStoragePath = await _localBookStorageService
+        .resolveStoragePath(book.storagePath);
+
+    String effectiveSourcePath = '';
+    if (originalSourcePath.isNotEmpty) {
+      final originalFile = File(originalSourcePath);
+      if (await originalFile.exists()) {
+        effectiveSourcePath = originalSourcePath;
+      }
     }
-    final sourceFile = File(sourcePath);
-    if (!await sourceFile.exists()) {
-      _showMessage('原文件不存在，无法修正编码。');
+    if (effectiveSourcePath.isEmpty) {
+      final storageFile = File(resolvedStoragePath);
+      if (await storageFile.exists()) {
+        effectiveSourcePath = resolvedStoragePath;
+      }
+    }
+    if (effectiveSourcePath.isEmpty) {
+      _showMessage('当前没有可用的源文件或存储副本，无法修正编码。');
       return;
     }
 
-    final normalizedPreferredCharset = preferredCharset?.trim().toLowerCase();
+    final sourceFile = File(effectiveSourcePath);
+    if (!await sourceFile.exists()) {
+      _showMessage('用于修正编码的文件不存在。');
+      return;
+    }
 
     setState(() {
       _isLoading = true;
     });
 
     try {
-      final targetPath = await _localBookStorageService.resolveStoragePath(
-        book.storagePath,
-      );
       final storageResult = await _localBookStorageService.copyIntoStorage(
         sourceFile: sourceFile,
-        targetFile: File(targetPath),
+        targetFile: File(resolvedStoragePath),
         format: book.format,
-        sourcePath: sourcePath,
+        sourcePath: effectiveSourcePath,
         bookId: book.id,
         preferredCharset: normalizedPreferredCharset,
       );

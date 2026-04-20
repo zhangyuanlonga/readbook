@@ -126,6 +126,14 @@ class LocalTextEncodingDetector {
     }
 
     final bom = _detectBom(bytes);
+    final strictUtf8 = _tryDecodeUtf8Sample(bytes, bom: bom);
+    if (strictUtf8 != null && strictUtf8.trim().isNotEmpty) {
+      return LocalTextDecodeResult(
+        text: strictUtf8,
+        charsetName: 'utf-8',
+        bomLength: bom.length,
+      );
+    }
     final contentBytes =
         bom.length > 0 ? bytes.sublist(bom.length) : List<int>.from(bytes);
 
@@ -199,6 +207,14 @@ class LocalTextEncodingDetector {
     }
 
     final bom = _detectBom(bytes);
+    final strictUtf8 = _tryDecodeUtf8Sample(bytes, bom: bom);
+    if (strictUtf8 != null && strictUtf8.trim().isNotEmpty) {
+      return LocalTextDecodeResult(
+        text: strictUtf8,
+        charsetName: 'utf-8',
+        bomLength: bom.length,
+      );
+    }
     final contentBytes =
         bom.length > 0 ? bytes.sublist(bom.length) : List<int>.from(bytes);
 

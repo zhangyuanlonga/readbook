@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
 import 'package:url_launcher/url_launcher.dart';
 
@@ -20,30 +21,85 @@ class MembershipCenterPage extends StatefulWidget {
 }
 
 class _MembershipCenterPageState extends State<MembershipCenterPage> {
-  static final Uri _supportUri = Uri.parse(
+  static const String _supportQqNumber = '782045011';
+  static final Uri _supportChatUri = Uri.parse(
+    'mqqwpa://im/chat?chat_type=wpa&uin=$_supportQqNumber&version=1&src_type=app',
+  );
+  static final Uri _supportFallbackUri = Uri.parse(
+    'https://wpa.qq.com/msgrd?v=3&uin=$_supportQqNumber&site=qq&menu=yes',
+  );
+  static final Uri _supportGroupUri = Uri.parse(
     'https://qun.qq.com/universal-share/share?ac=1&authKey=Tabvg05EAafVbER7E8%2BzAQ18yErg2a%2B5PoqQH41t6dbPjcZIfDSnNX%2F4KCAXhzVh&busi_data=eyJncm91cENvZGUiOiIxMDgyODI3MjI0IiwidG9rZW4iOiIzam5tVFQ0cUs1T3VlMytzVk9iOXB1Zk40Q1RaUXJiQytzd2JlZUx3NDhXQTJscy9ZZGE5WW1hQXhPdGFwMHU1IiwidWluIjoiNzgyMDQ1MDExIn0%3D&data=PHNA5IOU4A3ujR5i9rmpWqWn4Qc-L9MNr8ByREa7IfvpXTo1utwnHVIfjkB7Rlk4x3yE9dfMR5_ZjOfsQ9wYcA&svctype=4&tempid=h5_group_info',
   );
 
   static const List<_MembershipFeatureItem> _featureItems = [
     _MembershipFeatureItem(
-      icon: Icons.verified_outlined,
-      title: '许可证激活开通',
-      description: '通过许可证快速开通高级会员，无需反复切换到外部页面。',
+      icon: Icons.all_inclusive_rounded,
+      title: '无限制阅读',
+      description: '畅享完整阅读能力，解锁所有高级会员功能，获得更自由的使用体验。',
     ),
     _MembershipFeatureItem(
-      icon: Icons.devices_outlined,
-      title: '设备席位管理',
-      description: '查看当前已绑定的设备席位，必要时可释放旧设备授权。',
+      icon: Icons.cloud_sync_outlined,
+      title: '多设备同步',
+      description: '支持跨端同步，在手机、平板、电脑之间无缝延续阅读进度、书架与主题设置。',
+      note: '需配置云存储服务（WebDAV / OneDrive 等）',
+    ),
+    _MembershipFeatureItem(
+      icon: Icons.sell_outlined,
+      title: '标签与分类无限制',
+      description: '自由管理书架标签与分类，不受数量限制，构建更清晰的个人整理体系。',
+    ),
+    _MembershipFeatureItem(
+      icon: Icons.font_download_outlined,
+      title: '自定义字体',
+      description: '支持导入自定义字体，并可应用到软件外观与阅读页面，打造专属阅读风格。',
+    ),
+    _MembershipFeatureItem(
+      icon: Icons.record_voice_over_outlined,
+      title: '语音朗读',
+      description: '支持更灵活的语音朗读体验，可结合后续语音能力扩展打造更自然的听书模式。',
+    ),
+    _MembershipFeatureItem(
+      icon: Icons.smart_toy_outlined,
+      title: 'AI 助手',
+      description: '为阅读理解、内容提炼、问答辅助等场景预留 AI 能力入口，后续将持续扩展。',
+      note: '需配置对应 AI 服务密钥或接入能力',
+    ),
+    _MembershipFeatureItem(
+      icon: Icons.translate_outlined,
+      title: '自定义 API 引擎翻译',
+      description: '支持接入自定义翻译服务，为阅读过程中的术语、句段和内容理解提供翻译辅助。',
+      note: '需配置对应翻译服务密钥或接口',
+    ),
+    _MembershipFeatureItem(
+      icon: Icons.devices_rounded,
+      title: '全平台解锁',
+      description: '支持 iOS、Android、macOS、Windows、Linux 多平台使用，登录账号即可自由切换设备。',
+    ),
+    _MembershipFeatureItem(
+      icon: Icons.palette_outlined,
+      title: '自定义高级主题',
+      description: '可设置自定义外观颜色、背景图、封面风格与导航栏资源，统一你的个性化视觉体验。',
+    ),
+    _MembershipFeatureItem(
+      icon: Icons.photo_library_outlined,
+      title: '封面图集',
+      description: '为书籍设置自定义封面图集，打造更有风格的专属书架。',
+    ),
+    _MembershipFeatureItem(
+      icon: Icons.wallpaper_outlined,
+      title: '背景图集',
+      description: '为应用设置自定义背景图片，让首页、发现页和我的页拥有统一的视觉氛围。',
+    ),
+    _MembershipFeatureItem(
+      icon: Icons.menu_book_outlined,
+      title: '多格式阅读',
+      description: '支持导入 TXT、EPUB、PDF、Markdown、HTML、MOBI、AZW、AZW3 等多种常见阅读格式。',
     ),
     _MembershipFeatureItem(
       icon: Icons.widgets_outlined,
-      title: '会员功能与配额扩展',
-      description: '按账号权益解锁对应模块能力和更高的使用额度。',
-    ),
-    _MembershipFeatureItem(
-      icon: Icons.manage_accounts_outlined,
-      title: '权益状态随时查看',
-      description: '集中查看会员状态、来源、有效期与当前支持的功能。',
+      title: '桌面小组件',
+      description: '为常用阅读入口、最近阅读与快捷状态展示预留桌面小组件能力，后续会逐步开放。',
     ),
   ];
 
@@ -79,7 +135,7 @@ class _MembershipCenterPageState extends State<MembershipCenterPage> {
   Widget build(BuildContext context) {
     final horizontal = AppSpacing.pageHorizontal(context);
     final bottomSafe = MediaQuery.viewPaddingOf(context).bottom;
-    final title = _hasActiveMembership ? '会员中心' : '高级会员';
+    const title = '会员中心';
 
     return PopScope<void>(
       canPop: context.canPop(),
@@ -196,7 +252,9 @@ class _MembershipCenterPageState extends State<MembershipCenterPage> {
       setState(() {
         _isLoading = false;
         _errorMessage =
-            error is AppException ? error.briefMessage : '会员信息加载失败。';
+            error is AppException
+                ? error.briefMessage
+                : _MembershipMessages.loadFailed;
       });
     }
   }
@@ -204,7 +262,7 @@ class _MembershipCenterPageState extends State<MembershipCenterPage> {
   Future<bool> _redeemCode() async {
     final code = _codeController.text.trim();
     if (code.isEmpty) {
-      _showMessage('请输入许可证码。');
+      _showMessage(_MembershipMessages.inputCode);
       return false;
     }
     if (!await _ensureSignedIn()) {
@@ -216,11 +274,15 @@ class _MembershipCenterPageState extends State<MembershipCenterPage> {
     try {
       await _membershipService.redeemActivationCode(code);
       _codeController.clear();
-      _showMessage('许可证兑换成功。');
+      _showMessage(_MembershipMessages.redeemSuccess);
       await _loadPage();
       return true;
     } catch (error) {
-      _showMessage(error is AppException ? error.briefMessage : '许可证兑换失败。');
+      _showMessage(
+        error is AppException
+            ? error.briefMessage
+            : _MembershipMessages.redeemFailed,
+      );
       return false;
     } finally {
       if (mounted) {
@@ -256,11 +318,15 @@ class _MembershipCenterPageState extends State<MembershipCenterPage> {
     }
     try {
       await _membershipService.releaseSeat(seat.id);
-      _showMessage('设备席位已释放。');
+      _showMessage(_MembershipMessages.seatReleased);
       await _loadPage();
       return true;
     } catch (error) {
-      _showMessage(error is AppException ? error.briefMessage : '释放设备席位失败。');
+      _showMessage(
+        error is AppException
+            ? error.briefMessage
+            : _MembershipMessages.seatReleaseFailed,
+      );
       return false;
     }
   }
@@ -269,6 +335,7 @@ class _MembershipCenterPageState extends State<MembershipCenterPage> {
     if (_session != null) {
       return true;
     }
+    _showMessage(_MembershipMessages.needLogin);
     await context.push('/auth');
     await _loadPage();
     return _session != null;
@@ -294,9 +361,63 @@ class _MembershipCenterPageState extends State<MembershipCenterPage> {
     await _showManageSheet();
   }
 
+  Future<void> _handleTrialAction() async {
+    _showMessage('可通过联系客服获取体验许可证，激活后即可体验会员功能。');
+  }
+
   Future<void> _openSupport() async {
+    if (!mounted) {
+      return;
+    }
+    await showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      useSafeArea: true,
+      showDragHandle: false,
+      builder: (context) {
+        final bottomInset = MediaQuery.viewInsetsOf(context).bottom;
+        return AnimatedPadding(
+          duration: const Duration(milliseconds: 180),
+          curve: Curves.easeOutCubic,
+          padding: EdgeInsets.only(bottom: bottomInset),
+          child: SingleChildScrollView(
+            padding: const EdgeInsets.fromLTRB(12, 12, 12, 12),
+            child: _buildSupportSheet(context),
+          ),
+        );
+      },
+    );
+  }
+
+  Future<void> _copySupportQqNumber() async {
+    await Clipboard.setData(const ClipboardData(text: _supportQqNumber));
+    if (!mounted) {
+      return;
+    }
+    _showMessage('已复制客服 QQ：$_supportQqNumber');
+  }
+
+  Future<void> _openSupportChatDirectly() async {
     final launched = await launchUrl(
-      _supportUri,
+      _supportChatUri,
+      mode: LaunchMode.externalApplication,
+    );
+    if (launched || !mounted) {
+      return;
+    }
+    final fallbackLaunched = await launchUrl(
+      _supportFallbackUri,
+      mode: LaunchMode.externalApplication,
+    );
+    if (fallbackLaunched || !mounted) {
+      return;
+    }
+    _showMessage('当前无法直接发起私聊，可先复制 QQ 号添加好友。');
+  }
+
+  Future<void> _openSupportGroup() async {
+    final launched = await launchUrl(
+      _supportGroupUri,
       mode: LaunchMode.externalApplication,
     );
     if (launched || !mounted) {
@@ -317,6 +438,7 @@ class _MembershipCenterPageState extends State<MembershipCenterPage> {
     final widgets = <Widget>[
       if (_errorMessage != null && _errorMessage!.isNotEmpty)
         _buildMessageCard(context, _errorMessage!, isError: true),
+      _buildTrialNoticeCard(context),
     ];
 
     if (_session == null) {
@@ -324,6 +446,8 @@ class _MembershipCenterPageState extends State<MembershipCenterPage> {
         _buildHeroCard(context, loggedIn: false),
         const SizedBox(height: 16),
         _buildFeatureCard(context),
+        const SizedBox(height: 16),
+        _buildMembershipStatusStrip(context),
       ]);
       return widgets;
     }
@@ -334,15 +458,31 @@ class _MembershipCenterPageState extends State<MembershipCenterPage> {
         const SizedBox(height: 16),
         _buildFeatureCard(context),
         const SizedBox(height: 16),
+        _buildMembershipStatusStrip(context),
       ]);
     }
 
-    widgets.addAll([_buildEntitlementCard(context)]);
+    if (_hasActiveMembership) {
+      widgets.addAll([
+        _buildEntitlementCard(context),
+        const SizedBox(height: 16),
+        _buildMembershipStatusStrip(context),
+      ]);
+    }
     return widgets;
   }
 
   Widget _buildBottomActionBar(BuildContext context, double bottomSafe) {
-    final primaryLabel = _hasActiveMembership ? '查看许可证激活' : '许可证激活';
+    final primaryLabel =
+        _session == null
+            ? '登录/注册'
+            : _hasActiveMembership
+            ? '管理会员'
+            : '¥38 立即购买';
+    final primaryColor =
+        _hasActiveMembership
+            ? Theme.of(context).colorScheme.primary
+            : const Color(0xFFD84B4B);
     return Container(
       padding: EdgeInsets.fromLTRB(12, 10, 12, 8 + bottomSafe),
       decoration: BoxDecoration(
@@ -359,11 +499,20 @@ class _MembershipCenterPageState extends State<MembershipCenterPage> {
             child: FilledButton(
               style: FilledButton.styleFrom(
                 minimumSize: const Size.fromHeight(48),
+                backgroundColor: primaryColor,
+                foregroundColor: Colors.white,
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(12),
                 ),
               ),
-              onPressed: _isRedeeming ? null : _handleActivateAction,
+              onPressed:
+                  _isRedeeming
+                      ? null
+                      : _session == null
+                      ? _handleLoginAction
+                      : _hasActiveMembership
+                      ? _handleManageAction
+                      : _openSupport,
               child: Text(primaryLabel),
             ),
           ),
@@ -371,16 +520,264 @@ class _MembershipCenterPageState extends State<MembershipCenterPage> {
           Row(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              TextButton(
-                onPressed: _isRedeeming ? null : _handleActivateAction,
-                child: const Text('许可证激活'),
-              ),
-              TextButton(
-                onPressed: _handleManageAction,
-                child: const Text('管理许可证'),
-              ),
+              if (_session == null)
+                TextButton(
+                  onPressed: _isRedeeming ? null : _handleActivateAction,
+                  child: const Text('许可证激活'),
+                )
+              else if (_hasActiveMembership)
+                TextButton(
+                  onPressed: _isRedeeming ? null : _handleActivateAction,
+                  child: const Text('激活新许可证'),
+                )
+              else
+                TextButton(
+                  onPressed: _handleTrialAction,
+                  child: const Text('试用会员'),
+                ),
+              if (!_hasActiveMembership)
+                TextButton(
+                  onPressed: _isRedeeming ? null : _handleActivateAction,
+                  child: const Text('激活许可证'),
+                ),
               TextButton(onPressed: _openSupport, child: const Text('联系客服')),
             ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _handleLoginAction() async {
+    await context.push('/auth');
+    await _loadPage();
+  }
+
+  Widget _buildTrialNoticeCard(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+    return Container(
+      margin: const EdgeInsets.only(bottom: 12),
+      padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
+      decoration: BoxDecoration(
+        color: colorScheme.primaryContainer.withValues(alpha: 0.42),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: colorScheme.primary.withValues(alpha: 0.22)),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(Icons.campaign_outlined, size: 18, color: colorScheme.primary),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Text(
+              '新注册用户可通过联系客服获取体验许可证。',
+              style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                color: colorScheme.onSurface,
+                fontWeight: FontWeight.w600,
+                height: 1.45,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildSupportSheet(BuildContext context) {
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
+    return Card(
+      margin: EdgeInsets.zero,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(18, 18, 18, 18),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Center(
+              child: Container(
+                width: 42,
+                height: 4,
+                margin: const EdgeInsets.only(bottom: 16),
+                decoration: BoxDecoration(
+                  color: colorScheme.outlineVariant,
+                  borderRadius: BorderRadius.circular(999),
+                ),
+              ),
+            ),
+            Text(
+              '联系客服',
+              style: theme.textTheme.titleMedium?.copyWith(
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              '你可以通过以下两种方式联系到客服，咨询会员、许可证或使用问题。',
+              style: theme.textTheme.bodySmall?.copyWith(
+                color: colorScheme.onSurfaceVariant,
+                height: 1.45,
+              ),
+            ),
+            const SizedBox(height: 14),
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.fromLTRB(14, 14, 14, 14),
+              decoration: BoxDecoration(
+                color: colorScheme.surfaceContainerLow,
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(
+                  color: colorScheme.outlineVariant.withValues(alpha: 0.42),
+                ),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    '方式一：客服 QQ',
+                    style: theme.textTheme.bodyMedium?.copyWith(
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                  const SizedBox(height: 6),
+                  Text(
+                    '客服 QQ 号：$_supportQqNumber',
+                    style: theme.textTheme.titleSmall?.copyWith(
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+                  const SizedBox(height: 6),
+                  Text(
+                    '有问题可以直接咨询这个号。如无法发起临时会话，可先复制 QQ 号添加好友。',
+                    style: theme.textTheme.bodySmall?.copyWith(
+                      color: colorScheme.onSurfaceVariant,
+                      height: 1.45,
+                    ),
+                  ),
+                  const SizedBox(height: 10),
+                  Row(
+                    children: [
+                      OutlinedButton(
+                        onPressed: _copySupportQqNumber,
+                        child: const Text('复制 QQ 号'),
+                      ),
+                      const SizedBox(width: 10),
+                      FilledButton(
+                        onPressed: _openSupportChatDirectly,
+                        child: const Text('尝试私聊'),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 12),
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.fromLTRB(14, 14, 14, 14),
+              decoration: BoxDecoration(
+                color: colorScheme.surfaceContainerLow,
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(
+                  color: colorScheme.outlineVariant.withValues(alpha: 0.42),
+                ),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    '方式二：加群后私信群主',
+                    style: theme.textTheme.bodyMedium?.copyWith(
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                  const SizedBox(height: 6),
+                  Text(
+                    '如果私聊客服受限，也可以先加入官方群，再通过群内私信群主获取帮助。',
+                    style: theme.textTheme.bodySmall?.copyWith(
+                      color: colorScheme.onSurfaceVariant,
+                      height: 1.45,
+                    ),
+                  ),
+                  const SizedBox(height: 10),
+                  FilledButton.tonal(
+                    onPressed: _openSupportGroup,
+                    child: const Text('前往官方群'),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 16),
+            Align(
+              alignment: Alignment.centerRight,
+              child: TextButton(
+                onPressed: () => Navigator.of(context).pop(),
+                child: const Text('关闭'),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildMembershipStatusStrip(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+    final label =
+        _session == null
+            ? '当前状态：未登录'
+            : _hasActiveMembership
+            ? '当前状态：会员已生效'
+            : '当前状态：未开通会员';
+    final detail =
+        _session == null
+            ? '登录后可激活许可证并同步权益信息。'
+            : _hasActiveMembership
+            ? '可继续管理许可证、设备席位与会员权益。'
+            : '可通过许可证激活会员，立即解锁完整能力。';
+    return Container(
+      margin: const EdgeInsets.only(bottom: 12),
+      padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
+      decoration: BoxDecoration(
+        color: colorScheme.surfaceContainerLow,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(
+          color: colorScheme.outlineVariant.withValues(alpha: 0.38),
+        ),
+      ),
+      child: Row(
+        children: [
+          Icon(
+            _hasActiveMembership
+                ? Icons.workspace_premium_outlined
+                : Icons.info_outline_rounded,
+            size: 18,
+            color:
+                _hasActiveMembership
+                    ? colorScheme.primary
+                    : colorScheme.onSurfaceVariant,
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  label,
+                  style: Theme.of(
+                    context,
+                  ).textTheme.bodyMedium?.copyWith(fontWeight: FontWeight.w700),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  detail,
+                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                    color: colorScheme.onSurfaceVariant,
+                    height: 1.4,
+                  ),
+                ),
+              ],
+            ),
           ),
         ],
       ),
@@ -390,189 +787,104 @@ class _MembershipCenterPageState extends State<MembershipCenterPage> {
   Widget _buildHeroCard(BuildContext context, {required bool loggedIn}) {
     final theme = Theme.of(context);
     final colorScheme = theme.colorScheme;
-    final accentColor = const Color(0xFFB68A4D);
-    final accentDeepColor = const Color(0xFF8D6730);
-    final titleText = 'Selune PRO';
-    final statusText = _hasActiveMembership ? '已开通' : '待开通';
-    final headline =
-        _hasActiveMembership
-            ? '高级权益已生效，继续享受更完整的阅读体验'
-            : loggedIn
-            ? '解锁高级阅读功能，享受更完整的阅读体验'
-            : '登录后激活许可证，解锁全部高级功能';
-    final subtitle =
-        _hasActiveMembership
-            ? '当前账号可以继续管理许可证、设备席位和已开通权益。'
-            : '支持通过许可证快速开通高级会员，并在同一页面完成许可证管理与客服联系。';
-
-    return Card(
-      clipBehavior: Clip.antiAlias,
-      child: Container(
-        decoration: BoxDecoration(
-          gradient: LinearGradient(
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-            colors: [
-              Color.alphaBlend(
-                accentColor.withValues(alpha: 0.16),
-                colorScheme.surface,
-              ),
-              Color.alphaBlend(
-                accentDeepColor.withValues(alpha: 0.1),
-                colorScheme.surfaceContainerLow,
-              ),
-            ],
+    const accentColor = Color(0xFFB68A4D);
+    const accentDeepColor = Color(0xFF8D6730);
+    return Container(
+      padding: const EdgeInsets.fromLTRB(8, 6, 8, 6),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          RichText(
+            text: TextSpan(
+              children: [
+                TextSpan(
+                  text: 'Selune',
+                  style: theme.textTheme.headlineSmall?.copyWith(
+                    color: colorScheme.onSurface,
+                    fontWeight: FontWeight.w900,
+                    letterSpacing: 0.2,
+                  ),
+                ),
+                TextSpan(
+                  text: ' PRO',
+                  style: theme.textTheme.headlineSmall?.copyWith(
+                    color: accentDeepColor,
+                    fontWeight: FontWeight.w900,
+                    letterSpacing: 0.35,
+                  ),
+                ),
+              ],
+            ),
           ),
-          border: Border.all(color: accentColor.withValues(alpha: 0.2)),
-        ),
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(18, 18, 18, 18),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
+          const SizedBox(height: 12),
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.end,
             children: [
-              Row(
-                children: [
-                  Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 10,
-                      vertical: 6,
-                    ),
-                    decoration: BoxDecoration(
-                      color: accentColor.withValues(alpha: 0.12),
-                      borderRadius: BorderRadius.circular(999),
-                    ),
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Text(
-                          titleText,
-                          style: theme.textTheme.titleMedium?.copyWith(
-                            fontWeight: FontWeight.w900,
-                            color: accentColor,
-                            letterSpacing: 0.45,
-                          ),
-                        ),
-                        const SizedBox(width: 6),
-                        Icon(
-                          Icons.diamond_outlined,
-                          size: 16,
-                          color: accentColor,
-                        ),
-                      ],
-                    ),
-                  ),
-                  const Spacer(),
-                  Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 10,
-                      vertical: 6,
-                    ),
-                    decoration: BoxDecoration(
-                      color: colorScheme.surfaceContainerHighest,
-                      borderRadius: BorderRadius.circular(999),
-                    ),
-                    child: Text(
-                      statusText,
-                      style: theme.textTheme.labelMedium?.copyWith(
-                        fontWeight: FontWeight.w700,
-                        color: colorScheme.onSurfaceVariant,
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 16),
               Text(
-                '高级会员',
-                style: theme.textTheme.labelLarge?.copyWith(
+                '¥38',
+                style: theme.textTheme.headlineLarge?.copyWith(
                   color: accentDeepColor,
-                  fontWeight: FontWeight.w800,
-                  letterSpacing: 0.2,
-                ),
-              ),
-              const SizedBox(height: 6),
-              Text(
-                headline,
-                style: theme.textTheme.headlineSmall?.copyWith(
                   fontWeight: FontWeight.w900,
-                  height: 1.18,
+                  height: 1.0,
                 ),
               ),
-              const SizedBox(height: 8),
+              const SizedBox(width: 10),
               Text(
-                subtitle,
-                style: theme.textTheme.bodyMedium?.copyWith(
-                  height: 1.5,
+                '¥68/年',
+                style: theme.textTheme.titleSmall?.copyWith(
                   color: colorScheme.onSurfaceVariant,
+                  fontWeight: FontWeight.w700,
+                  decoration: TextDecoration.lineThrough,
                 ),
               ),
-              const SizedBox(height: 16),
-              Wrap(
-                spacing: 8,
-                runSpacing: 8,
-                children: [
-                  _buildMetaChip(
-                    context,
-                    Icons.confirmation_number_outlined,
-                    '许可证开通',
+              const SizedBox(width: 10),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                decoration: BoxDecoration(
+                  color: accentColor.withValues(alpha: 0.14),
+                  borderRadius: BorderRadius.circular(999),
+                ),
+                child: Text(
+                  '早鸟价',
+                  style: theme.textTheme.labelSmall?.copyWith(
+                    color: accentDeepColor,
+                    fontWeight: FontWeight.w800,
                   ),
-                  _buildMetaChip(context, Icons.devices_outlined, '设备授权管理'),
-                  _buildMetaChip(context, Icons.auto_awesome_outlined, '高级功能'),
-                ],
+                ),
               ),
             ],
           ),
-        ),
+          const SizedBox(height: 12),
+          Text(
+            '解锁会员，享受最舒服的阅读体验',
+            style: theme.textTheme.bodyLarge?.copyWith(
+              color: colorScheme.onSurface,
+              fontWeight: FontWeight.w600,
+              height: 1.4,
+            ),
+          ),
+        ],
       ),
     );
   }
 
   Widget _buildFeatureCard(BuildContext context) {
-    final colorScheme = Theme.of(context).colorScheme;
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.fromLTRB(16, 16, 16, 14),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              '高级会员权益',
-              style: Theme.of(
-                context,
-              ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700),
+    final horizontalInset = MediaQuery.sizeOf(context).width * 0.05;
+    return Padding(
+      padding: EdgeInsets.symmetric(horizontal: horizontalInset),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            '高级会员权益',
+            style: Theme.of(context).textTheme.titleMedium?.copyWith(
+              fontWeight: FontWeight.w800,
+              letterSpacing: 0.1,
             ),
-            const SizedBox(height: 6),
-            Text(
-              '通过更完整的阅读能力和许可证管理体验，把会员功能收在一个清晰、稳定、专注内容的高级阅读工作台里。',
-              style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                color: Theme.of(context).colorScheme.onSurfaceVariant,
-                height: 1.45,
-              ),
-            ),
-            const SizedBox(height: 12),
-            Container(
-              width: double.infinity,
-              padding: const EdgeInsets.fromLTRB(12, 10, 12, 10),
-              decoration: BoxDecoration(
-                color: colorScheme.surfaceContainerHighest.withValues(
-                  alpha: 0.55,
-                ),
-                borderRadius: BorderRadius.circular(14),
-              ),
-              child: Text(
-                _hasActiveMembership
-                    ? '当前已开通高级会员，以下能力已纳入当前账号权益。'
-                    : '开通后可通过许可证激活使用以下高级能力。',
-                style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                  color: colorScheme.onSurfaceVariant,
-                  fontWeight: FontWeight.w600,
-                ),
-              ),
-            ),
-            const SizedBox(height: 12),
-            ..._featureItems.map((item) => _buildFeatureItem(context, item)),
-          ],
-        ),
+          ),
+          const SizedBox(height: 12),
+          ..._featureItems.map((item) => _buildFeatureItem(context, item)),
+        ],
       ),
     );
   }
@@ -581,33 +893,27 @@ class _MembershipCenterPageState extends State<MembershipCenterPage> {
     final colorScheme = Theme.of(context).colorScheme;
     final accentColor = const Color(0xFFB68A4D);
     return Container(
+      width: double.infinity,
       margin: const EdgeInsets.only(bottom: 10),
       padding: const EdgeInsets.fromLTRB(14, 14, 14, 14),
       decoration: BoxDecoration(
         color: colorScheme.surface,
-        borderRadius: BorderRadius.circular(16),
+        borderRadius: BorderRadius.circular(14),
         border: Border.all(
-          color: colorScheme.outlineVariant.withValues(alpha: 0.72),
+          color: colorScheme.outlineVariant.withValues(alpha: 0.42),
         ),
-        boxShadow: [
-          BoxShadow(
-            color: accentColor.withValues(alpha: 0.05),
-            blurRadius: 14,
-            offset: const Offset(0, 4),
-          ),
-        ],
       ),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Container(
-            width: 36,
-            height: 36,
+            width: 30,
+            height: 30,
             decoration: BoxDecoration(
-              color: accentColor.withValues(alpha: 0.12),
-              borderRadius: BorderRadius.circular(12),
+              color: accentColor.withValues(alpha: 0.1),
+              borderRadius: BorderRadius.circular(8),
             ),
-            child: Icon(item.icon, size: 18, color: accentColor),
+            child: Icon(item.icon, size: 16, color: accentColor),
           ),
           const SizedBox(width: 12),
           Expanded(
@@ -616,18 +922,33 @@ class _MembershipCenterPageState extends State<MembershipCenterPage> {
               children: [
                 Text(
                   item.title,
-                  style: Theme.of(
-                    context,
-                  ).textTheme.bodyMedium?.copyWith(fontWeight: FontWeight.w800),
+                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                    fontWeight: FontWeight.w800,
+                    height: 1.2,
+                  ),
                 ),
                 const SizedBox(height: 4),
                 Text(
                   item.description,
                   style: Theme.of(context).textTheme.bodySmall?.copyWith(
                     color: colorScheme.onSurfaceVariant,
-                    height: 1.45,
+                    fontSize: 12.5,
+                    height: 1.38,
+                    fontWeight: FontWeight.w500,
                   ),
                 ),
+                if (item.note != null && item.note!.trim().isNotEmpty) ...[
+                  const SizedBox(height: 4),
+                  Text(
+                    '注意：${item.note!}',
+                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                      color: colorScheme.onSurfaceVariant,
+                      fontSize: 12,
+                      height: 1.35,
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                ],
               ],
             ),
           ),
@@ -664,7 +985,7 @@ class _MembershipCenterPageState extends State<MembershipCenterPage> {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        hasMembership ? entitlement!.displayLevel : '未开通高级会员',
+                        entitlement!.displayLevel,
                         style: Theme.of(context).textTheme.titleLarge?.copyWith(
                           fontWeight: FontWeight.w800,
                         ),
@@ -688,28 +1009,24 @@ class _MembershipCenterPageState extends State<MembershipCenterPage> {
             _buildInfoRow(
               context,
               '会员状态',
-              _describeStatus(entitlement?.vipStatus),
+              _describeStatus(entitlement.vipStatus),
             ),
-            _buildInfoRow(
-              context,
-              '权益来源',
-              _describeSource(entitlement?.source),
-            ),
-            _buildInfoRow(context, '设备上限', '${entitlement?.maxDevices ?? 1} 台'),
+            _buildInfoRow(context, '权益来源', _describeSource(entitlement.source)),
+            _buildInfoRow(context, '设备上限', '${entitlement.maxDevices} 台'),
             _buildInfoRow(
               context,
               '试用状态',
-              entitlement?.isTrial == true ? '试用中' : '正式权益',
+              entitlement.isTrial ? '试用中' : '正式权益',
             ),
-            if ((entitlement?.features ?? const <String>[]).isNotEmpty) ...[
+            if (entitlement.features.isNotEmpty) ...[
               const SizedBox(height: 12),
               Wrap(
                 spacing: 8,
                 runSpacing: 8,
-                children: entitlement!.features
+                children: entitlement.features
                     .map(
                       (feature) => Chip(
-                        label: Text(feature),
+                        label: Text(_describeFeature(feature)),
                         visualDensity: VisualDensity.compact,
                       ),
                     )
@@ -748,14 +1065,14 @@ class _MembershipCenterPageState extends State<MembershipCenterPage> {
               ),
             ),
             Text(
-              '许可证激活',
+              '激活会员',
               style: theme.textTheme.titleMedium?.copyWith(
                 fontWeight: FontWeight.w700,
               ),
             ),
             const SizedBox(height: 8),
             Text(
-              '输入许可证码后可直接开通或续期高级会员。',
+              '输入您获取的许可证码，即可开通或续期会员。',
               style: theme.textTheme.bodySmall?.copyWith(
                 color: theme.colorScheme.onSurfaceVariant,
                 height: 1.45,
@@ -765,8 +1082,9 @@ class _MembershipCenterPageState extends State<MembershipCenterPage> {
             TextField(
               controller: _codeController,
               decoration: const InputDecoration(
-                labelText: '输入许可证码',
-                hintText: '例如 LIC2026-ABCDEFGH',
+                labelText: '许可证码',
+                hintText: '例如：PRO-XXXX-XXXX',
+                helperText: '许可证码通常以邮件或短信形式发送',
                 prefixIcon: Icon(Icons.confirmation_number_outlined),
               ),
             ),
@@ -830,27 +1148,25 @@ class _MembershipCenterPageState extends State<MembershipCenterPage> {
               ),
             ),
             Text(
-              '管理许可证',
+              '设备管理',
               style: theme.textTheme.titleMedium?.copyWith(
                 fontWeight: FontWeight.w700,
               ),
             ),
             const SizedBox(height: 8),
-            Wrap(
-              spacing: 8,
-              runSpacing: 8,
-              children: [
-                _buildMetaChip(
-                  context,
-                  Icons.devices_outlined,
-                  '已绑定 $activeCount / $maxDevices',
-                ),
-                _buildMetaChip(context, Icons.key_outlined, '设备授权'),
-              ],
-            ),
-            const SizedBox(height: 10),
             Text(
-              '这里可以查看当前许可证绑定的设备席位，并在需要时释放旧设备授权。',
+              '已授权 $activeCount 台设备，最多 $maxDevices 台',
+              style: theme.textTheme.bodyMedium?.copyWith(
+                color:
+                    activeCount >= maxDevices
+                        ? theme.colorScheme.error
+                        : theme.colorScheme.primary,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+            const SizedBox(height: 12),
+            Text(
+              '您可以在这里管理已授权的设备，释放不再使用的设备席位。',
               style: theme.textTheme.bodySmall?.copyWith(
                 color: theme.colorScheme.onSurfaceVariant,
                 height: 1.45,
@@ -1115,31 +1431,6 @@ class _MembershipCenterPageState extends State<MembershipCenterPage> {
     );
   }
 
-  Widget _buildMetaChip(BuildContext context, IconData icon, String label) {
-    final colorScheme = Theme.of(context).colorScheme;
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
-      decoration: BoxDecoration(
-        color: colorScheme.surfaceContainerHighest.withValues(alpha: 0.55),
-        borderRadius: BorderRadius.circular(999),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(icon, size: 14, color: colorScheme.onSurfaceVariant),
-          const SizedBox(width: 6),
-          Text(
-            label,
-            style: Theme.of(context).textTheme.labelMedium?.copyWith(
-              color: colorScheme.onSurfaceVariant,
-              fontWeight: FontWeight.w700,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
   Widget _buildInfoRow(BuildContext context, String label, String value) {
     return Padding(
       padding: const EdgeInsets.only(bottom: 8),
@@ -1201,6 +1492,32 @@ class _MembershipCenterPageState extends State<MembershipCenterPage> {
     }
   }
 
+  String _describeFeature(String raw) {
+    final normalized = raw.trim().toLowerCase();
+    switch (normalized) {
+      case 'theme_custom':
+        return '自定义主题';
+      case 'online_service':
+        return '在线服务';
+      case 'cloud_backup':
+      case 'cloud_sync':
+      case 'sync':
+        return '云端同步';
+      case 'advanced_rule':
+        return '高级规则';
+      case 'backup_restore':
+        return '备份恢复';
+      case 'ad_free':
+        return '去广告';
+      case 'priority_support':
+        return '优先支持';
+      case 'advanced_reader':
+        return '高级阅读功能';
+      default:
+        return raw.trim().isEmpty ? '未知权益' : raw.trim();
+    }
+  }
+
   String _formatTime(DateTime? time) {
     if (time == null) {
       return '-';
@@ -1224,14 +1541,26 @@ class _MembershipCenterPageState extends State<MembershipCenterPage> {
   }
 }
 
+class _MembershipMessages {
+  static const String redeemSuccess = '激活成功，会员权益已生效';
+  static const String seatReleased = '设备已释放，席位已空出';
+  static const String redeemFailed = '激活失败，请检查许可证码';
+  static const String seatReleaseFailed = '释放失败，请稍后重试';
+  static const String loadFailed = '加载失败，请下拉刷新';
+  static const String needLogin = '请先登录账号';
+  static const String inputCode = '请输入许可证码';
+}
+
 class _MembershipFeatureItem {
   const _MembershipFeatureItem({
     required this.icon,
     required this.title,
     required this.description,
+    this.note,
   });
 
   final IconData icon;
   final String title;
   final String description;
+  final String? note;
 }

@@ -123,105 +123,140 @@ class LocalBookStorageService {
     required String bookId,
     String? preferredCharset,
   }) async {
-    if (await targetFile.exists()) {
-      await targetFile.delete();
+    File effectiveSourceFile = sourceFile;
+    File? tempSourceFile;
+    final sourcePath = sourceFile.path;
+    final targetPath = targetFile.path;
+    final isSamePath = p.equals(
+      p.normalize(sourcePath),
+      p.normalize(targetPath),
+    );
+
+    if (isSamePath) {
+      final tempPath =
+          '${targetFile.path}.reencode_${DateTime.now().microsecondsSinceEpoch}.tmp';
+      tempSourceFile = File(tempPath);
+      await sourceFile.copy(tempSourceFile.path);
+      effectiveSourceFile = tempSourceFile;
     }
 
-    if (format != LocalBookFormat.txt) {
-      final parentDir = targetFile.parent;
-      if (!await parentDir.exists()) {
-        await parentDir.create(recursive: true);
-      }
-      await sourceFile.copy(targetFile.path);
-      final copiedStat = await targetFile.stat();
-      return LocalBookStorageWriteResult(storageStat: copiedStat);
-    }
-
-    final fileLength = await sourceFile.length();
-    if (fileLength == 0) {
-      await targetFile.writeAsBytes(const <int>[], flush: true);
-      final emptyStat = await targetFile.stat();
-      return LocalBookStorageWriteResult(
-        storageStat: emptyStat,
-        normalizedCharset: 'utf-8',
-        originalCharset: 'utf-8',
-      );
-    }
-
-    final normalizedPreferredCharset =
-        LocalTextEncodingDetector.normalizeCharsetName(preferredCharset);
-    if (normalizedPreferredCharset != null) {
-      await _ensureParentDir(targetFile);
-      await sourceFile.copy(targetFile.path);
-      final copiedStat = await targetFile.stat();
-      return LocalBookStorageWriteResult(
-        storageStat: copiedStat,
-        normalizedCharset: normalizedPreferredCharset,
-        originalCharset: normalizedPreferredCharset,
-        convertedToUtf8: false,
-      );
-    }
-
-    final sample = await _detectEncodingFromSamples(sourceFile);
-    if (fileLength >= _largeTxtRawCopyThresholdBytes && sample != null) {
-      await _ensureParentDir(targetFile);
-      await sourceFile.copy(targetFile.path);
-      final copiedStat = await targetFile.stat();
-      return LocalBookStorageWriteResult(
-        storageStat: copiedStat,
-        normalizedCharset: sample.charsetName,
-        originalCharset: sample.charsetName,
-        convertedToUtf8: false,
-      );
-    }
-
-    final bytes = await sourceFile.readAsBytes();
     try {
-      final decoded = await _textEncodingDetector.decodeBestEffortAsync(bytes);
-      await _ensureParentDir(targetFile);
-      final canKeepOriginalBytes =
-          decoded.charsetName == 'utf-8' &&
-          decoded.bomLength == 0 &&
-          !decoded.fallbackUsed &&
-          !decoded.text.startsWith('\uFEFF');
-      if (canKeepOriginalBytes) {
-        await sourceFile.copy(targetFile.path);
+      if (await targetFile.exists()) {
+        await targetFile.delete();
+      }
+
+      if (format != LocalBookFormat.txt) {
+        final parentDir = targetFile.parent;
+        if (!await parentDir.exists()) {
+          await parentDir.create(recursive: true);
+        }
+        await effectiveSourceFile.copy(targetFile.path);
+        final copiedStat = await targetFile.stat();
+        return LocalBookStorageWriteResult(storageStat: copiedStat);
+      }
+
+      final fileLength = await effectiveSourceFile.length();
+      if (fileLength == 0) {
+        await targetFile.writeAsBytes(const <int>[], flush: true);
+        final emptyStat = await targetFile.stat();
+        return LocalBookStorageWriteResult(
+          storageStat: emptyStat,
+          normalizedCharset: 'utf-8',
+          originalCharset: 'utf-8',
+        );
+      }
+
+      final normalizedPreferredCharset =
+          LocalTextEncodingDetector.normalizeCharsetName(preferredCharset);
+      if (normalizedPreferredCharset != null) {
+        await _ensureParentDir(targetFile);
+        await effectiveSourceFile.copy(targetFile.path);
         final copiedStat = await targetFile.stat();
         return LocalBookStorageWriteResult(
           storageStat: copiedStat,
-          normalizedCharset: 'utf-8',
-          originalCharset: decoded.charsetName,
+          normalizedCharset: normalizedPreferredCharset,
+          originalCharset: normalizedPreferredCharset,
           convertedToUtf8: false,
         );
       }
 
-      final normalizedText = decoded.text.replaceFirst('\uFEFF', '');
-      final normalizedBytes = utf8.encode(normalizedText);
-      await targetFile.writeAsBytes(normalizedBytes, flush: true);
-      final normalizedStat = await targetFile.stat();
-      return LocalBookStorageWriteResult(
-        storageStat: normalizedStat,
-        normalizedCharset: 'utf-8',
-        originalCharset: decoded.charsetName,
-        convertedToUtf8:
-            decoded.charsetName != 'utf-8' ||
-            decoded.bomLength > 0 ||
-            decoded.fallbackUsed,
+      final leadingSample = await _detectEncodingFromLeadingSample(
+        effectiveSourceFile,
       );
-    } catch (error) {
-      _logger.warn(
-        'Normalize local txt encoding failed, fallback to raw copy',
-        context: <String, Object?>{
-          'bookId': bookId,
-          'sourcePath': sourcePath,
-          'targetPath': targetFile.path,
-          'error': error.toString(),
-        },
-      );
-      await _ensureParentDir(targetFile);
-      await sourceFile.copy(targetFile.path);
-      final copiedStat = await targetFile.stat();
-      return LocalBookStorageWriteResult(storageStat: copiedStat);
+      final sample =
+          leadingSample?.charsetName == 'utf-8'
+              ? leadingSample
+              : await _detectEncodingFromSamples(effectiveSourceFile);
+      if (fileLength >= _largeTxtRawCopyThresholdBytes && sample != null) {
+        await _ensureParentDir(targetFile);
+        await effectiveSourceFile.copy(targetFile.path);
+        final copiedStat = await targetFile.stat();
+        return LocalBookStorageWriteResult(
+          storageStat: copiedStat,
+          normalizedCharset: sample.charsetName,
+          originalCharset: sample.charsetName,
+          convertedToUtf8: false,
+        );
+      }
+
+      final bytes = await effectiveSourceFile.readAsBytes();
+      try {
+        final decoded = await _textEncodingDetector.decodeBestEffortAsync(
+          bytes,
+        );
+        await _ensureParentDir(targetFile);
+        final canKeepOriginalBytes =
+            decoded.charsetName == 'utf-8' &&
+            decoded.bomLength == 0 &&
+            !decoded.fallbackUsed &&
+            !decoded.text.startsWith('\uFEFF');
+        if (canKeepOriginalBytes) {
+          await effectiveSourceFile.copy(targetFile.path);
+          final copiedStat = await targetFile.stat();
+          return LocalBookStorageWriteResult(
+            storageStat: copiedStat,
+            normalizedCharset: 'utf-8',
+            originalCharset: decoded.charsetName,
+            convertedToUtf8: false,
+          );
+        }
+
+        final normalizedText = decoded.text.replaceFirst('\uFEFF', '');
+        final normalizedBytes = utf8.encode(normalizedText);
+        await targetFile.writeAsBytes(normalizedBytes, flush: true);
+        final normalizedStat = await targetFile.stat();
+        return LocalBookStorageWriteResult(
+          storageStat: normalizedStat,
+          normalizedCharset: 'utf-8',
+          originalCharset: decoded.charsetName,
+          convertedToUtf8:
+              decoded.charsetName != 'utf-8' ||
+              decoded.bomLength > 0 ||
+              decoded.fallbackUsed,
+        );
+      } catch (error) {
+        _logger.warn(
+          'Normalize local txt encoding failed, fallback to raw copy',
+          context: <String, Object?>{
+            'bookId': bookId,
+            'sourcePath': sourcePath,
+            'targetPath': targetFile.path,
+            'error': error.toString(),
+          },
+        );
+        await _ensureParentDir(targetFile);
+        await effectiveSourceFile.copy(targetFile.path);
+        final copiedStat = await targetFile.stat();
+        return LocalBookStorageWriteResult(storageStat: copiedStat);
+      }
+    } finally {
+      if (tempSourceFile != null && await tempSourceFile.exists()) {
+        try {
+          await tempSourceFile.delete();
+        } catch (_) {
+          // Ignore temporary cleanup failure.
+        }
+      }
     }
   }
 
@@ -324,6 +359,37 @@ class LocalBookStorageService {
       return null;
     }
     return bestByCharset[bestCharset]?.result;
+  }
+
+  Future<LocalTextDecodeResult?> _detectEncodingFromLeadingSample(
+    File file,
+  ) async {
+    final fileLength = await file.length();
+    if (fileLength <= 0) {
+      return null;
+    }
+    final sampleLength =
+        fileLength < _encodingSampleBytes ? fileLength : _encodingSampleBytes;
+    final bytes = await file
+        .openRead(0, sampleLength)
+        .fold<List<int>>(
+          <int>[],
+          (buffer, chunk) => <int>[...buffer, ...chunk],
+        );
+    if (bytes.isEmpty) {
+      return null;
+    }
+    final decoded = await _textEncodingDetector.decodeSampleBestEffortAsync(
+      bytes,
+      htmlAware: false,
+    );
+    if (decoded == null || decoded.text.trim().isEmpty) {
+      return null;
+    }
+    if (decoded.charsetName == 'utf-8' && !decoded.fallbackUsed) {
+      return decoded;
+    }
+    return null;
   }
 
   int _scoreEncodingSample({
