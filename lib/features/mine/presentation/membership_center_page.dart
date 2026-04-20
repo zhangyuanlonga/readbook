@@ -114,9 +114,11 @@ class _MembershipCenterPageState extends State<MembershipCenterPage> {
   List<MembershipDeviceSeat> _deviceSeats = const <MembershipDeviceSeat>[];
   bool _isLoading = true;
   bool _isRedeeming = false;
+  bool _isClaimingTrial = false;
   String? _errorMessage;
 
   bool get _hasActiveMembership => _entitlement?.isActive ?? false;
+  bool get _isActing => _isRedeeming || _isClaimingTrial;
 
   @override
   void initState() {
@@ -362,7 +364,59 @@ class _MembershipCenterPageState extends State<MembershipCenterPage> {
   }
 
   Future<void> _handleTrialAction() async {
-    _showMessage('可通过联系客服获取体验许可证，激活后即可体验会员功能。');
+    if (!await _ensureSignedIn()) {
+      return;
+    }
+    if (_isClaimingTrial) {
+      return;
+    }
+    if (!mounted) {
+      return;
+    }
+
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) {
+        return AlertDialog(
+          title: const Text('领取试用会员'),
+          content: const Text('将为当前账号领取 7 天 Pro 试用会员，每个账号限领一次。确认立即领取吗？'),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(false),
+              child: const Text('取消'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.of(context).pop(true),
+              child: const Text('立即领取'),
+            ),
+          ],
+        );
+      },
+    );
+    if (confirmed != true) {
+      return;
+    }
+
+    setState(() {
+      _isClaimingTrial = true;
+    });
+    try {
+      await _membershipService.claimTrialMembership();
+      _showMessage(_MembershipMessages.trialSuccess);
+      await _loadPage();
+    } catch (error) {
+      _showMessage(
+        error is AppException
+            ? error.briefMessage
+            : _MembershipMessages.trialFailed,
+      );
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isClaimingTrial = false;
+        });
+      }
+    }
   }
 
   Future<void> _openSupport() async {
@@ -506,7 +560,7 @@ class _MembershipCenterPageState extends State<MembershipCenterPage> {
                 ),
               ),
               onPressed:
-                  _isRedeeming
+                  _isActing
                       ? null
                       : _session == null
                       ? _handleLoginAction
@@ -522,22 +576,22 @@ class _MembershipCenterPageState extends State<MembershipCenterPage> {
             children: [
               if (_session == null)
                 TextButton(
-                  onPressed: _isRedeeming ? null : _handleActivateAction,
+                  onPressed: _isActing ? null : _handleActivateAction,
                   child: const Text('许可证激活'),
                 )
               else if (_hasActiveMembership)
                 TextButton(
-                  onPressed: _isRedeeming ? null : _handleActivateAction,
+                  onPressed: _isActing ? null : _handleActivateAction,
                   child: const Text('激活新许可证'),
                 )
               else
                 TextButton(
-                  onPressed: _handleTrialAction,
-                  child: const Text('试用会员'),
+                  onPressed: _isActing ? null : _handleTrialAction,
+                  child: Text(_isClaimingTrial ? '领取中...' : '试用会员'),
                 ),
               if (!_hasActiveMembership)
                 TextButton(
-                  onPressed: _isRedeeming ? null : _handleActivateAction,
+                  onPressed: _isActing ? null : _handleActivateAction,
                   child: const Text('激活许可证'),
                 ),
               TextButton(onPressed: _openSupport, child: const Text('联系客服')),
@@ -555,6 +609,12 @@ class _MembershipCenterPageState extends State<MembershipCenterPage> {
 
   Widget _buildTrialNoticeCard(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
+    final message =
+        _session == null
+            ? '登录账号后可自助领取 7 天试用会员，每个账号限领一次。'
+            : _hasActiveMembership && (_entitlement?.isTrial ?? false)
+            ? '当前账号正处于试用期内，试用结束后可通过许可证继续开通正式会员。'
+            : '当前账号可自助领取 7 天试用会员，每个账号限领一次。';
     return Container(
       margin: const EdgeInsets.only(bottom: 12),
       padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
@@ -570,7 +630,7 @@ class _MembershipCenterPageState extends State<MembershipCenterPage> {
           const SizedBox(width: 10),
           Expanded(
             child: Text(
-              '新注册用户可通过联系客服获取体验许可证。',
+              message,
               style: Theme.of(context).textTheme.bodySmall?.copyWith(
                 color: colorScheme.onSurface,
                 fontWeight: FontWeight.w600,
@@ -1543,6 +1603,8 @@ class _MembershipCenterPageState extends State<MembershipCenterPage> {
 
 class _MembershipMessages {
   static const String redeemSuccess = '激活成功，会员权益已生效';
+  static const String trialSuccess = '试用领取成功，会员权益已生效';
+  static const String trialFailed = '试用领取失败，请稍后重试';
   static const String seatReleased = '设备已释放，席位已空出';
   static const String redeemFailed = '激活失败，请检查许可证码';
   static const String seatReleaseFailed = '释放失败，请稍后重试';

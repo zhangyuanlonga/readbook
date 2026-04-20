@@ -363,7 +363,6 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
   static const double _kBottomProgressReserve = 24;
   static const double _kBackgroundTileWidth = 72;
   static const double _kBackgroundTileHeight = 44;
-  static const int _kMaxCustomBackgrounds = 5;
   static const double _kSwipeTurnDistanceThreshold = 42;
   static const double _kSwipeTurnVelocityThreshold = 120;
   static const double _kSystemBackGestureGuardMin = 44;
@@ -10821,12 +10820,6 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
       final nextCustoms = List<String>.from(_customBackgroundImages);
       if (!nextCustoms.contains(activeBackgroundBase64)) {
         nextCustoms.add(activeBackgroundBase64);
-        if (nextCustoms.length > _kMaxCustomBackgrounds) {
-          nextCustoms.removeRange(
-            0,
-            nextCustoms.length - _kMaxCustomBackgrounds,
-          );
-        }
         _customBackgroundImages = nextCustoms;
         unawaited(_preferencesService.saveCustomBackgroundImages(nextCustoms));
       }
@@ -10936,13 +10929,6 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
                     List<String>.from(_customBackgroundImages)
                       ..removeWhere((entry) => entry == storedPath)
                       ..add(storedPath);
-                List<String> removedSources = const <String>[];
-                if (nextCustoms.length > _kMaxCustomBackgrounds) {
-                  final removeCount =
-                      nextCustoms.length - _kMaxCustomBackgrounds;
-                  removedSources = nextCustoms.take(removeCount).toList();
-                  nextCustoms.removeRange(0, removeCount);
-                }
 
                 setModalState(() {
                   draft = draft.copyWith(backgroundImageBase64: storedPath);
@@ -10950,11 +10936,6 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
                 });
                 updateCustomBackgrounds(nextCustoms);
                 await persistBackgroundDraftNow(draft);
-                for (final removedSource in removedSources) {
-                  unawaited(
-                    _deleteManagedBackgroundFileIfNeeded(removedSource),
-                  );
-                }
               }
 
               Future<void> applyStoredCustomBackground(String source) async {

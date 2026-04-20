@@ -792,28 +792,30 @@ class _MinePageState extends ConsumerState<MinePage> {
                             ),
                           ),
                           const SizedBox(width: 8),
-                          Container(
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 8,
-                              vertical: 4,
-                            ),
-                            decoration: BoxDecoration(
-                              color: palette.noticeSurfaceColor,
-                              borderRadius: BorderRadius.circular(999),
-                              border: Border.all(
-                                color: palette.noticeAccentColor.withValues(
-                                  alpha: 0.55,
+                          _userId == null
+                              ? Container(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 8,
+                                  vertical: 4,
                                 ),
-                              ),
-                            ),
-                            child: Text(
-                              statusLabel,
-                              style: theme.textTheme.labelSmall?.copyWith(
-                                fontWeight: FontWeight.w700,
-                                color: palette.noticeAccentColor,
-                              ),
-                            ),
-                          ),
+                                decoration: BoxDecoration(
+                                  color: palette.noticeSurfaceColor,
+                                  borderRadius: BorderRadius.circular(999),
+                                  border: Border.all(
+                                    color: palette.noticeAccentColor.withValues(
+                                      alpha: 0.55,
+                                    ),
+                                  ),
+                                ),
+                                child: Text(
+                                  statusLabel,
+                                  style: theme.textTheme.labelSmall?.copyWith(
+                                    fontWeight: FontWeight.w700,
+                                    color: palette.noticeAccentColor,
+                                  ),
+                                ),
+                              )
+                              : const SizedBox(width: 64, height: 28),
                         ],
                       ),
                       const SizedBox(height: 6),
@@ -852,7 +854,7 @@ class _MinePageState extends ConsumerState<MinePage> {
     if (_hasMembership) {
       return '高级权益已生效，可继续同步阅读进度并管理个性化设置。';
     }
-    return '点击查看账号信息、会员状态与当前权益。';
+    return '阅读进度、书架与个性设置会随账号持续同步。';
   }
 
   String _buildProfileStatusLabel() {

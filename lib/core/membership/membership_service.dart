@@ -72,6 +72,56 @@ class MembershipService {
     });
   }
 
+  Future<MembershipEntitlement> claimTrialMembership({
+    String trialType = 'new_user_7d',
+  }) async {
+    _ensureBaseUrl();
+    final normalizedTrialType = trialType.trim();
+    if (normalizedTrialType.isEmpty) {
+      throw const AppException(
+        code: ErrorCode.validation,
+        briefMessage: '缺少试用类型配置。',
+        stage: ErrorStage.unknown,
+      );
+    }
+
+    final identity = await _identityService.loadIdentity();
+    try {
+      final data = await _client.request<Map<String, dynamic>>(
+        method: ApiMethod.post,
+        path: '/v1/trials/claim',
+        attachAccessToken: true,
+        stage: ErrorStage.unknown,
+        body: {
+          'trial_type': normalizedTrialType,
+          'install_id': identity.installId,
+          'device_uid': identity.deviceUid,
+          'device_fingerprint': identity.deviceFingerprint,
+        },
+        decoder: _decodeMap,
+      );
+      return MembershipEntitlement.fromJson({
+        'vip_level': data['vip_level'],
+        'vip_status': 'active',
+        'plan_type': data['plan_type'],
+        'expire_at': data['expire_at'],
+        'source': data['source'],
+        'is_trial': data['is_trial'],
+        'max_devices': data['max_devices'],
+        'features': data['features'],
+      });
+    } on ApiException catch (error) {
+      if (error.apiCode == 'TRIAL_ALREADY_CLAIMED') {
+        throw const AppException(
+          code: ErrorCode.validation,
+          briefMessage: '当前账号已领取过试用会员，可通过许可证继续开通正式会员。',
+          stage: ErrorStage.unknown,
+        );
+      }
+      rethrow;
+    }
+  }
+
   Future<MembershipSeatSyncResult> syncCurrentDeviceSeat() async {
     _ensureBaseUrl();
     final identity = await _identityService.loadIdentity();

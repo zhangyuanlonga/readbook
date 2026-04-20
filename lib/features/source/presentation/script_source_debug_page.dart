@@ -1,6 +1,7 @@
 import 'dart:convert';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 import '../../../runtime/host/appread_browser_runtime.dart';
 import '../../../runtime/session/source_session.dart';
@@ -11,11 +12,13 @@ class ScriptSourceDebugPage extends StatefulWidget {
     super.key,
     required this.sourceCode,
     this.title,
+    this.initialKeyword,
     this.autoRunOnInit = false,
   });
 
   final String sourceCode;
   final String? title;
+  final String? initialKeyword;
   final bool autoRunOnInit;
 
   @override
@@ -27,8 +30,11 @@ class _ScriptSourceDebugPageState extends State<ScriptSourceDebugPage> {
     browserRuntime: AppReadBrowserRuntime(),
   );
   final SourceSession _session = SourceSession(sourceId: '__script_debug__');
-  final TextEditingController _keywordController = TextEditingController(
-    text: '斗罗大陆',
+  late final TextEditingController _keywordController = TextEditingController(
+    text:
+        widget.initialKeyword?.trim().isNotEmpty == true
+            ? widget.initialKeyword!.trim()
+            : '斗罗大陆',
   );
 
   bool _isRunning = false;
@@ -1238,10 +1244,64 @@ class _StageResultCard extends StatelessWidget {
   final String Function(Object? value) formatValue;
   final bool initiallyExpanded;
 
+  String _buildStageCopyText() {
+    final buffer =
+        StringBuffer()
+          ..writeln('阶段：${result.stage.title}')
+          ..writeln('状态：${result.statusLabel}')
+          ..writeln('摘要：${result.summary}');
+
+    if (result.highlights.isNotEmpty) {
+      buffer.writeln('亮点：${result.highlights.join(' / ')}');
+    }
+    if (result.errorText != null && result.errorText!.trim().isNotEmpty) {
+      buffer
+        ..writeln()
+        ..writeln('错误信息')
+        ..writeln(result.errorText!.trim());
+    }
+    if (result.logs.isNotEmpty) {
+      buffer
+        ..writeln()
+        ..writeln('脚本日志');
+      for (final log in result.logs) {
+        final label = switch (log.level) {
+          SourceScriptDebugLogLevel.warn => 'warn',
+          SourceScriptDebugLogLevel.error => 'error',
+          SourceScriptDebugLogLevel.info => 'log',
+        };
+        buffer.writeln('[$label] ${log.message}');
+      }
+    }
+    if (result.stageTraces.isNotEmpty) {
+      buffer
+        ..writeln()
+        ..writeln('网络轨迹');
+      for (final trace in result.stageTraces) {
+        buffer.writeln(jsonEncode(trace));
+      }
+    }
+    buffer
+      ..writeln()
+      ..writeln('原始结果')
+      ..writeln(formatValue(result.payload));
+    return buffer.toString().trimRight();
+  }
+
   @override
   Widget build(BuildContext context) {
     final preview = _buildPreview(result);
     final payloadText = formatValue(result.payload);
+    final logsText = result.logs
+        .map((log) {
+          final label = switch (log.level) {
+            SourceScriptDebugLogLevel.warn => 'warn',
+            SourceScriptDebugLogLevel.error => 'error',
+            SourceScriptDebugLogLevel.info => 'log',
+          };
+          return '[$label] ${log.message}';
+        })
+        .join('\n');
 
     return Container(
       decoration: BoxDecoration(
@@ -1298,20 +1358,43 @@ class _StageResultCard extends StatelessWidget {
               ),
             ],
           ),
-          trailing: Container(
-            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-            decoration: BoxDecoration(
-              color: result.accent.withValues(alpha: 0.16),
-              borderRadius: BorderRadius.circular(999),
-            ),
-            child: Text(
-              result.statusLabel,
-              style: TextStyle(
-                color: result.accent,
-                fontSize: 12,
-                fontWeight: FontWeight.w800,
+          trailing: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              IconButton(
+                tooltip: '复制完整信息',
+                visualDensity: VisualDensity.compact,
+                onPressed: () async {
+                  await Clipboard.setData(
+                    ClipboardData(text: _buildStageCopyText()),
+                  );
+                  if (context.mounted) {
+                    ScaffoldMessenger.of(
+                      context,
+                    ).showSnackBar(const SnackBar(content: Text('已复制完整调试信息')));
+                  }
+                },
+                icon: const Icon(Icons.copy_rounded, size: 18),
               ),
-            ),
+              Container(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 10,
+                  vertical: 6,
+                ),
+                decoration: BoxDecoration(
+                  color: result.accent.withValues(alpha: 0.16),
+                  borderRadius: BorderRadius.circular(999),
+                ),
+                child: Text(
+                  result.statusLabel,
+                  style: TextStyle(
+                    color: result.accent,
+                    fontSize: 12,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+              ),
+            ],
           ),
           children: [
             if (result.highlights.isNotEmpty)
@@ -1358,22 +1441,14 @@ class _StageResultCard extends StatelessWidget {
               const SizedBox(height: 12),
               _DetailBlock(
                 title: '脚本日志',
-                child: Column(
-                  children: result.logs
-                      .map(
-                        (log) => Padding(
-                          padding: const EdgeInsets.only(bottom: 8),
-                          child: _InlineLogTile(
-                            label: switch (log.level) {
-                              SourceScriptDebugLogLevel.warn => 'warn',
-                              SourceScriptDebugLogLevel.error => 'error',
-                              SourceScriptDebugLogLevel.info => 'log',
-                            },
-                            message: log.message,
-                          ),
-                        ),
-                      )
-                      .toList(growable: false),
+                child: SelectableText(
+                  logsText,
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontFamily: 'monospace',
+                    fontSize: 12.5,
+                    height: 1.45,
+                  ),
                 ),
               ),
             ],
@@ -1565,63 +1640,6 @@ class _DetailBlock extends StatelessWidget {
           ),
           const SizedBox(height: 10),
           child,
-        ],
-      ),
-    );
-  }
-}
-
-class _InlineLogTile extends StatelessWidget {
-  const _InlineLogTile({required this.label, required this.message});
-
-  final String label;
-  final String message;
-
-  @override
-  Widget build(BuildContext context) {
-    final accent = switch (label) {
-      'warn' => const Color(0xFFFFB020),
-      'error' => const Color(0xFFFF5D73),
-      'trace' => const Color(0xFF72B8FF),
-      _ => const Color(0xFF9AA3AF),
-    };
-
-    return Container(
-      width: double.infinity,
-      decoration: BoxDecoration(
-        color: const Color(0xFF121924),
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: const Color(0xFF1E2430)),
-      ),
-      padding: const EdgeInsets.fromLTRB(10, 8, 10, 8),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-            decoration: BoxDecoration(
-              color: accent.withValues(alpha: 0.18),
-              borderRadius: BorderRadius.circular(999),
-            ),
-            child: Text(
-              label,
-              style: TextStyle(
-                color: accent,
-                fontSize: 11,
-                fontWeight: FontWeight.w700,
-              ),
-            ),
-          ),
-          const SizedBox(height: 8),
-          SelectableText(
-            message,
-            style: const TextStyle(
-              color: Colors.white,
-              fontFamily: 'monospace',
-              fontSize: 12.5,
-              height: 1.45,
-            ),
-          ),
         ],
       ),
     );
