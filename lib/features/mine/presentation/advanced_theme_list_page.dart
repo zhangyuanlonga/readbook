@@ -126,8 +126,17 @@ class _AdvancedThemeListPageState extends ConsumerState<AdvancedThemeListPage> {
     if (!mounted) {
       return;
     }
+    final activeThemeId = ref.read(activeAdvancedThemeIdProvider);
+    final sortedThemes = List<AppAdvancedTheme>.from(themes)..sort((a, b) {
+      final aIsActive = a.id == activeThemeId;
+      final bIsActive = b.id == activeThemeId;
+      if (aIsActive != bIsActive) {
+        return aIsActive ? -1 : 1;
+      }
+      return b.updatedAt.compareTo(a.updatedAt);
+    });
     setState(() {
-      _themes = themes;
+      _themes = sortedThemes;
       _isLoading = false;
     });
   }
@@ -732,13 +741,6 @@ class _AdvancedThemeListPageState extends ConsumerState<AdvancedThemeListPage> {
                           ],
                         ],
                       ),
-                      const SizedBox(height: 4),
-                      Text(
-                        '更新于 ${_formatDateTime(theme.updatedAt.toLocal())}',
-                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                          color: colorScheme.onSurfaceVariant,
-                        ),
-                      ),
                     ],
                   ),
                 ),
@@ -778,62 +780,26 @@ class _AdvancedThemeListPageState extends ConsumerState<AdvancedThemeListPage> {
                 ),
               ],
             ),
-            const SizedBox(height: 12),
-            Row(
-              children: [
-                Expanded(
-                  child: _buildPreviewPanel(
-                    context,
-                    mode: AppAdvancedThemeMode.light,
-                    config: theme.lightConfig,
-                  ),
-                ),
-                const SizedBox(width: 10),
-                Expanded(
-                  child: _buildPreviewPanel(
-                    context,
-                    mode: AppAdvancedThemeMode.dark,
-                    config: theme.darkConfig,
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 12),
-            Row(
-              children: [
-                Expanded(
-                  child: FilledButton(
-                    onPressed:
-                        _isSaving || isActive ? null : () => _applyTheme(theme),
-                    child: Text(isActive ? '已应用' : '应用主题'),
-                  ),
-                ),
-                const SizedBox(width: 8),
-                OutlinedButton(
-                  onPressed: _isSaving ? null : () => _openEditor(theme),
-                  child: const Text('编辑'),
-                ),
-              ],
-            ),
+            const SizedBox(height: 10),
+            _buildDualModePreviewStrip(context, theme),
             const SizedBox(height: 12),
             Wrap(
               spacing: 8,
               runSpacing: 8,
-              children: [
-                _buildModeBadge(
-                  context,
-                  mode: AppAdvancedThemeMode.light,
-                  label:
-                      '浅色 ${theme.lightConfig.colors.configuredColorCount} 项',
-                  hasWallpaper: theme.lightConfig.hasWallpaper,
-                ),
-                _buildModeBadge(
-                  context,
-                  mode: AppAdvancedThemeMode.dark,
-                  label: '深色 ${theme.darkConfig.colors.configuredColorCount} 项',
-                  hasWallpaper: theme.darkConfig.hasWallpaper,
-                ),
-              ],
+              children: _buildResourceBadges(context, theme),
+            ),
+            const SizedBox(height: 12),
+            SizedBox(
+              width: double.infinity,
+              child: FilledButton(
+                onPressed:
+                    _isSaving
+                        ? null
+                        : isActive
+                        ? _disableActiveTheme
+                        : () => _applyTheme(theme),
+                child: Text(isActive ? '停用主题' : '应用主题'),
+              ),
             ),
           ],
         ),
@@ -841,10 +807,62 @@ class _AdvancedThemeListPageState extends ConsumerState<AdvancedThemeListPage> {
     );
   }
 
-  Widget _buildPreviewPanel(
+  Widget _buildDualModePreviewStrip(
+    BuildContext context,
+    AppAdvancedTheme theme,
+  ) {
+    return Container(
+      height: 112,
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(
+          color: Theme.of(
+            context,
+          ).colorScheme.outlineVariant.withValues(alpha: 0.45),
+        ),
+      ),
+      clipBehavior: Clip.antiAlias,
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          return Stack(
+            fit: StackFit.expand,
+            children: [
+              _buildPreviewSegment(
+                context,
+                mode: AppAdvancedThemeMode.light,
+                config: theme.lightConfig,
+                isLeft: true,
+              ),
+              ClipPath(
+                clipper: _DiagonalSplitClipper(),
+                child: _buildPreviewSegment(
+                  context,
+                  mode: AppAdvancedThemeMode.dark,
+                  config: theme.darkConfig,
+                  isLeft: false,
+                ),
+              ),
+              IgnorePointer(
+                child: CustomPaint(
+                  painter: _DiagonalSplitLinePainter(
+                    color: Theme.of(
+                      context,
+                    ).colorScheme.outlineVariant.withValues(alpha: 0.55),
+                  ),
+                ),
+              ),
+            ],
+          );
+        },
+      ),
+    );
+  }
+
+  Widget _buildPreviewSegment(
     BuildContext context, {
     required AppAdvancedThemeMode mode,
     required AppAdvancedThemeModeConfig config,
+    required bool isLeft,
   }) {
     final defaultScheme = _defaultSchemeFor(context, mode);
     final palette = resolveAdvancedThemePaletteFromModeConfig(
@@ -855,158 +873,123 @@ class _AdvancedThemeListPageState extends ConsumerState<AdvancedThemeListPage> {
       defaultScheme,
       config,
     );
+    final label = mode == AppAdvancedThemeMode.light ? '浅色' : '深色';
 
     return Container(
-      height: 118,
-      decoration: buildAdvancedThemeBackdropDecoration(
-        backdrop,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(
-          color: resolveAppBorderColor(
-            defaultScheme,
-            baseColor: palette.cardBorderColor,
-            containerColor: backdrop.backgroundColor,
-          ),
-        ),
-      ),
-      child: Padding(
-        padding: const EdgeInsets.all(12),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                Icon(
-                  mode == AppAdvancedThemeMode.light
-                      ? Icons.light_mode_outlined
-                      : Icons.dark_mode_outlined,
-                  size: 14,
+      decoration: buildAdvancedThemeBackdropDecoration(backdrop),
+      padding: const EdgeInsets.fromLTRB(12, 10, 12, 10),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(
+                mode == AppAdvancedThemeMode.light
+                    ? Icons.light_mode_outlined
+                    : Icons.dark_mode_outlined,
+                size: 14,
+                color: palette.textSecondaryColor,
+              ),
+              const SizedBox(width: 4),
+              Text(
+                label,
+                style: Theme.of(context).textTheme.labelSmall?.copyWith(
                   color: palette.textSecondaryColor,
+                  fontWeight: FontWeight.w700,
                 ),
-                const SizedBox(width: 4),
-                Text(
-                  mode == AppAdvancedThemeMode.light ? '浅色' : '深色',
-                  style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                    color: palette.textSecondaryColor,
-                    fontWeight: FontWeight.w700,
-                  ),
-                ),
-              ],
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          Container(
+            width: double.infinity,
+            height: 8,
+            decoration: BoxDecoration(
+              color: palette.primaryColor,
+              borderRadius: BorderRadius.circular(999),
             ),
-            const SizedBox(height: 8),
-            Container(
-              width: 74,
-              height: 10,
+          ),
+          const SizedBox(height: 8),
+          Expanded(
+            child: Container(
+              width: double.infinity,
+              padding: const EdgeInsets.fromLTRB(8, 7, 8, 7),
               decoration: BoxDecoration(
-                color: palette.primaryColor,
-                borderRadius: BorderRadius.circular(999),
+                color: palette.cardColor.withValues(alpha: 0.95),
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(
+                  color: resolveAppBorderColor(
+                    defaultScheme,
+                    baseColor: palette.cardBorderColor,
+                    containerColor: palette.cardColor,
+                  ),
+                ),
               ),
-            ),
-            const SizedBox(height: 8),
-            Expanded(
-              child: Container(
-                width: double.infinity,
-                padding: const EdgeInsets.all(8),
-                decoration: BoxDecoration(
-                  color: palette.cardColor.withValues(alpha: 0.96),
-                  borderRadius: BorderRadius.circular(14),
-                  border: Border.all(
-                    color: resolveAppBorderColor(
-                      defaultScheme,
-                      baseColor: palette.cardBorderColor,
-                      containerColor: palette.cardColor,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Container(
+                    width: isLeft ? 48 : 54,
+                    height: 7,
+                    decoration: BoxDecoration(
+                      color: palette.cardTextColor.withValues(alpha: 0.86),
+                      borderRadius: BorderRadius.circular(999),
                     ),
                   ),
-                  boxShadow: [
-                    BoxShadow(
-                      color: palette.shadowColor,
-                      blurRadius: 12,
-                      offset: const Offset(0, 4),
+                  Container(
+                    width: isLeft ? 76 : 84,
+                    height: 5,
+                    decoration: BoxDecoration(
+                      color: palette.textSecondaryColor.withValues(alpha: 0.72),
+                      borderRadius: BorderRadius.circular(999),
                     ),
-                  ],
-                ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Container(
-                      width: 64,
-                      height: 8,
+                  ),
+                  Align(
+                    alignment: Alignment.centerRight,
+                    child: Container(
+                      width: 34,
+                      height: 18,
                       decoration: BoxDecoration(
-                        color: palette.cardTextColor.withValues(alpha: 0.85),
+                        color: palette.primaryColor,
                         borderRadius: BorderRadius.circular(999),
                       ),
                     ),
-                    const SizedBox(height: 6),
-                    Container(
-                      width: 96,
-                      height: 6,
-                      decoration: BoxDecoration(
-                        color: palette.textSecondaryColor.withValues(
-                          alpha: 0.72,
-                        ),
-                        borderRadius: BorderRadius.circular(999),
-                      ),
-                    ),
-                    const SizedBox(height: 8),
-                    Row(
-                      children: [
-                        Container(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 7,
-                            vertical: 4,
-                          ),
-                          decoration: BoxDecoration(
-                            color: palette.primaryContainerColor,
-                            borderRadius: BorderRadius.circular(999),
-                          ),
-                          child: Text(
-                            '标签',
-                            style: Theme.of(
-                              context,
-                            ).textTheme.labelSmall?.copyWith(
-                              color: palette.textPrimaryColor,
-                              fontWeight: FontWeight.w700,
-                            ),
-                          ),
-                        ),
-                        const Spacer(),
-                        Container(
-                          width: 46,
-                          height: 22,
-                          decoration: BoxDecoration(
-                            color: palette.primaryColor,
-                            borderRadius: BorderRadius.circular(999),
-                          ),
-                          alignment: Alignment.center,
-                          child: Text(
-                            '按钮',
-                            style: Theme.of(
-                              context,
-                            ).textTheme.labelSmall?.copyWith(
-                              color: palette.buttonTextColor,
-                              fontWeight: FontWeight.w700,
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ],
-                ),
+                  ),
+                ],
               ),
             ),
-          ],
-        ),
+          ),
+        ],
       ),
     );
   }
 
-  Widget _buildModeBadge(
-    BuildContext context, {
-    required AppAdvancedThemeMode mode,
-    required String label,
-    required bool hasWallpaper,
-  }) {
+  List<Widget> _buildResourceBadges(
+    BuildContext context,
+    AppAdvancedTheme theme,
+  ) {
+    final badges = <Widget>[];
+    if (theme.lightConfig.hasWallpaper || theme.darkConfig.hasWallpaper) {
+      badges.add(_buildResourceBadge(context, label: '壁纸'));
+    }
+    if (theme.lightConfig.hasReaderWallpaper ||
+        theme.darkConfig.hasReaderWallpaper) {
+      badges.add(_buildResourceBadge(context, label: '阅读器背景'));
+    }
+    if ((theme.coverGalleryId?.trim().isNotEmpty ?? false)) {
+      badges.add(_buildResourceBadge(context, label: '封面'));
+    }
+    if ((theme.bottomNavGalleryId?.trim().isNotEmpty ?? false)) {
+      badges.add(_buildResourceBadge(context, label: '底栏'));
+    }
+    if (badges.isEmpty) {
+      badges.add(_buildResourceBadge(context, label: '仅颜色'));
+    }
+    return badges;
+  }
+
+  Widget _buildResourceBadge(BuildContext context, {required String label}) {
     final colorScheme = Theme.of(context).colorScheme;
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
@@ -1017,32 +1000,12 @@ class _AdvancedThemeListPageState extends ConsumerState<AdvancedThemeListPage> {
           color: colorScheme.outlineVariant.withValues(alpha: 0.45),
         ),
       ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(
-            mode == AppAdvancedThemeMode.light
-                ? Icons.light_mode_outlined
-                : Icons.dark_mode_outlined,
-            size: 13,
-            color: colorScheme.onSurfaceVariant,
-          ),
-          const SizedBox(width: 5),
-          Text(
-            label,
-            style: Theme.of(context).textTheme.labelSmall?.copyWith(
-              color: colorScheme.onSurfaceVariant,
-            ),
-          ),
-          const SizedBox(width: 6),
-          Icon(
-            hasWallpaper
-                ? Icons.wallpaper_outlined
-                : Icons.image_not_supported_outlined,
-            size: 13,
-            color: colorScheme.onSurfaceVariant,
-          ),
-        ],
+      child: Text(
+        label,
+        style: Theme.of(context).textTheme.labelSmall?.copyWith(
+          color: colorScheme.onSurfaceVariant,
+          fontWeight: FontWeight.w700,
+        ),
       ),
     );
   }
@@ -1071,10 +1034,46 @@ class _AdvancedThemeListPageState extends ConsumerState<AdvancedThemeListPage> {
       outlineVariant: const Color(0xFFE5EAF2),
     );
   }
+}
 
-  String _formatDateTime(DateTime value) {
-    String twoDigits(int number) => number.toString().padLeft(2, '0');
-    return '${value.year}-${twoDigits(value.month)}-${twoDigits(value.day)} '
-        '${twoDigits(value.hour)}:${twoDigits(value.minute)}';
+class _DiagonalSplitClipper extends CustomClipper<Path> {
+  @override
+  Path getClip(Size size) {
+    final cutTop = size.width * 0.62;
+    final cutBottom = size.width * 0.38;
+    return Path()
+      ..moveTo(cutTop, 0)
+      ..lineTo(size.width, 0)
+      ..lineTo(size.width, size.height)
+      ..lineTo(cutBottom, size.height)
+      ..close();
+  }
+
+  @override
+  bool shouldReclip(covariant CustomClipper<Path> oldClipper) => false;
+}
+
+class _DiagonalSplitLinePainter extends CustomPainter {
+  const _DiagonalSplitLinePainter({required this.color});
+
+  final Color color;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final paint =
+        Paint()
+          ..color = color
+          ..strokeWidth = 1
+          ..style = PaintingStyle.stroke;
+    canvas.drawLine(
+      Offset(size.width * 0.62, 0),
+      Offset(size.width * 0.38, size.height),
+      paint,
+    );
+  }
+
+  @override
+  bool shouldRepaint(covariant _DiagonalSplitLinePainter oldDelegate) {
+    return oldDelegate.color != color;
   }
 }

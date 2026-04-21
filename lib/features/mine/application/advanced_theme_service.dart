@@ -176,10 +176,12 @@ class AdvancedThemeService {
       lightConfig: source.lightConfig.copyWith(
         wallpaperPath: lightWallpaperPath,
         clearWallpaperPath: lightWallpaperPath == null,
+        readerWallpaperPath: source.lightConfig.readerWallpaperPath,
       ),
       darkConfig: source.darkConfig.copyWith(
         wallpaperPath: darkWallpaperPath,
         clearWallpaperPath: darkWallpaperPath == null,
+        readerWallpaperPath: source.darkConfig.readerWallpaperPath,
       ),
     );
     return saveTheme(clone);

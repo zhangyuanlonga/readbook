@@ -1192,12 +1192,20 @@ class _AdvancedThemeEditorPageState
       if (normalized.isEmpty) {
         continue;
       }
-      final file = File(normalized);
+      final file = _resolveLocalImageFile(normalized);
       if (file.existsSync()) {
-        return normalized;
+        return file.path;
       }
     }
     return null;
+  }
+
+  File _resolveLocalImageFile(String path) {
+    final normalized = path.trim();
+    if (normalized.startsWith('file://')) {
+      return File(Uri.parse(normalized).toFilePath());
+    }
+    return File(normalized);
   }
 
   Widget _buildGalleryPreviewThumb(
@@ -1253,7 +1261,7 @@ class _AdvancedThemeEditorPageState
           color: colorScheme.outlineVariant.withValues(alpha: 0.4),
         ),
         image: DecorationImage(
-          image: FileImage(File(previewPath)),
+          image: FileImage(_resolveLocalImageFile(previewPath)),
           fit: BoxFit.cover,
         ),
       ),
