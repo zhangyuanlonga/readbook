@@ -269,11 +269,13 @@ class AppAdvancedThemeModeConfig {
   const AppAdvancedThemeModeConfig({
     this.colors = const AppAdvancedThemeColors(),
     this.wallpaperPath,
+    this.readerWallpaperPath,
     this.wallpaperOverlayOpacity = 0.32,
   });
 
   final AppAdvancedThemeColors colors;
   final String? wallpaperPath;
+  final String? readerWallpaperPath;
   final double wallpaperOverlayOpacity;
 
   Map<String, dynamic> toJson() {
@@ -281,6 +283,8 @@ class AppAdvancedThemeModeConfig {
       'colors': colors.toJson(),
       if (wallpaperPath != null && wallpaperPath!.trim().isNotEmpty)
         'wallpaperPath': wallpaperPath,
+      if (readerWallpaperPath != null && readerWallpaperPath!.trim().isNotEmpty)
+        'readerWallpaperPath': readerWallpaperPath,
       'wallpaperOverlayOpacity': wallpaperOverlayOpacity,
     };
   }
@@ -297,6 +301,7 @@ class AppAdvancedThemeModeConfig {
     return AppAdvancedThemeModeConfig(
       colors: colors,
       wallpaperPath: _readNullableString(json, 'wallpaperPath'),
+      readerWallpaperPath: _readNullableString(json, 'readerWallpaperPath'),
       wallpaperOverlayOpacity:
           _readDouble(json, 'wallpaperOverlayOpacity') ?? 0.32,
     );
@@ -306,12 +311,18 @@ class AppAdvancedThemeModeConfig {
     AppAdvancedThemeColors? colors,
     String? wallpaperPath,
     bool clearWallpaperPath = false,
+    String? readerWallpaperPath,
+    bool clearReaderWallpaperPath = false,
     double? wallpaperOverlayOpacity,
   }) {
     return AppAdvancedThemeModeConfig(
       colors: colors ?? this.colors,
       wallpaperPath:
           clearWallpaperPath ? null : (wallpaperPath ?? this.wallpaperPath),
+      readerWallpaperPath:
+          clearReaderWallpaperPath
+              ? null
+              : (readerWallpaperPath ?? this.readerWallpaperPath),
       wallpaperOverlayOpacity:
           wallpaperOverlayOpacity ?? this.wallpaperOverlayOpacity,
     );
@@ -319,6 +330,11 @@ class AppAdvancedThemeModeConfig {
 
   bool get hasWallpaper {
     final normalized = wallpaperPath?.trim() ?? '';
+    return normalized.isNotEmpty;
+  }
+
+  bool get hasReaderWallpaper {
+    final normalized = readerWallpaperPath?.trim() ?? '';
     return normalized.isNotEmpty;
   }
 

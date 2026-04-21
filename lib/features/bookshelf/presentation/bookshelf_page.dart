@@ -2815,6 +2815,7 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
     BookshelfBook book, {
     required _BookshelfBookCardState cardState,
   }) {
+    const coverAspectRatio = 68 / 96;
     final progress = cardState.progress;
     final localBook = cardState.localBook;
     final progressDisplay = _resolveBookshelfProgressDisplay(
@@ -2860,187 +2861,191 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
                 : () async {
                   await _openFromBookshelf(book, progress: progress);
                 },
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 2),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Expanded(
-                child: Stack(
-                  fit: StackFit.expand,
-                  children: [
-                    Container(
-                      decoration: BoxDecoration(
-                        borderRadius: BorderRadius.circular(14),
-                        boxShadow: [
-                          BoxShadow(
-                            color: palette.shadowColor,
-                            blurRadius: 10,
-                            offset: const Offset(0, 4),
-                          ),
-                        ],
-                      ),
-                      child: LayoutBuilder(
-                        builder: (context, constraints) {
-                          return _buildCover(
-                            realCoverUrl: book.coverUrl,
-                            customCoverPath: localBook?.coverPath,
-                            title: displayTitle,
-                            author: displayAuthor,
-                            bookId: book.bookId,
-                            sourceId: book.sourceId,
-                            detailUrl: book.detailUrl,
-                            width: constraints.maxWidth,
-                            height: constraints.maxHeight,
-                          );
-                        },
-                      ),
-                    ),
-                    if (!_isSelectionMode)
-                      Positioned(
-                        top: 6,
-                        right: 6,
-                        child: _buildSourceBadge(book, compact: true),
-                      ),
-                    if (isOpening)
-                      Positioned(
-                        left: 6,
-                        right: 6,
-                        bottom: 6,
-                        child: DecoratedBox(
-                          decoration: BoxDecoration(
-                            color: colorScheme.scrim.withValues(alpha: 0.42),
-                            borderRadius: BorderRadius.circular(999),
-                          ),
-                          child: const Padding(
-                            padding: EdgeInsets.symmetric(
-                              horizontal: 8,
-                              vertical: 3,
+        child: SizedBox.expand(
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 2),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                AspectRatio(
+                  aspectRatio: coverAspectRatio,
+                  child: Stack(
+                    fit: StackFit.expand,
+                    children: [
+                      Container(
+                        decoration: BoxDecoration(
+                          borderRadius: BorderRadius.circular(14),
+                          boxShadow: [
+                            BoxShadow(
+                              color: palette.shadowColor,
+                              blurRadius: 10,
+                              offset: const Offset(0, 4),
                             ),
-                            child: Row(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                SizedBox(
-                                  width: 10,
-                                  height: 10,
-                                  child: CircularProgressIndicator(
-                                    strokeWidth: 1.8,
-                                    color: Colors.white,
+                          ],
+                        ),
+                        child: LayoutBuilder(
+                          builder: (context, constraints) {
+                            return _buildCover(
+                              realCoverUrl: book.coverUrl,
+                              customCoverPath: localBook?.coverPath,
+                              title: displayTitle,
+                              author: displayAuthor,
+                              bookId: book.bookId,
+                              sourceId: book.sourceId,
+                              detailUrl: book.detailUrl,
+                              width: constraints.maxWidth,
+                              height: constraints.maxHeight,
+                            );
+                          },
+                        ),
+                      ),
+                      if (!_isSelectionMode)
+                        Positioned(
+                          top: 6,
+                          right: 6,
+                          child: _buildSourceBadge(book, compact: true),
+                        ),
+                      if (isOpening)
+                        Positioned(
+                          left: 6,
+                          right: 6,
+                          bottom: 6,
+                          child: DecoratedBox(
+                            decoration: BoxDecoration(
+                              color: colorScheme.scrim.withValues(alpha: 0.42),
+                              borderRadius: BorderRadius.circular(999),
+                            ),
+                            child: const Padding(
+                              padding: EdgeInsets.symmetric(
+                                horizontal: 8,
+                                vertical: 3,
+                              ),
+                              child: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  SizedBox(
+                                    width: 10,
+                                    height: 10,
+                                    child: CircularProgressIndicator(
+                                      strokeWidth: 1.8,
+                                      color: Colors.white,
+                                    ),
                                   ),
-                                ),
-                                SizedBox(width: 6),
-                                Text(
-                                  '打开中',
-                                  style: TextStyle(
-                                    color: Colors.white,
-                                    fontSize: 11,
-                                    fontWeight: FontWeight.w600,
+                                  SizedBox(width: 6),
+                                  Text(
+                                    '打开中',
+                                    style: TextStyle(
+                                      color: Colors.white,
+                                      fontSize: 11,
+                                      fontWeight: FontWeight.w600,
+                                    ),
                                   ),
-                                ),
-                              ],
+                                ],
+                              ),
                             ),
                           ),
                         ),
-                      ),
-                    if (_isSelectionMode)
-                      Positioned(
-                        top: 6,
-                        right: 6,
-                        child: GestureDetector(
-                          onTap: () => _toggleBookSelection(book),
-                          child: AnimatedContainer(
-                            duration: const Duration(milliseconds: 160),
-                            width: 22,
-                            height: 22,
-                            decoration: BoxDecoration(
-                              color:
-                                  isSelected
-                                      ? palette.primaryColor
-                                      : palette.cardColor.withValues(
-                                        alpha: 0.9,
-                                      ),
-                              shape: BoxShape.circle,
-                              border: Border.all(
+                      if (_isSelectionMode)
+                        Positioned(
+                          top: 6,
+                          right: 6,
+                          child: GestureDetector(
+                            onTap: () => _toggleBookSelection(book),
+                            child: AnimatedContainer(
+                              duration: const Duration(milliseconds: 160),
+                              width: 22,
+                              height: 22,
+                              decoration: BoxDecoration(
                                 color:
                                     isSelected
                                         ? palette.primaryColor
-                                        : palette.cardBorderColor.withValues(
-                                          alpha: 0.7,
+                                        : palette.cardColor.withValues(
+                                          alpha: 0.9,
                                         ),
+                                shape: BoxShape.circle,
+                                border: Border.all(
+                                  color:
+                                      isSelected
+                                          ? palette.primaryColor
+                                          : palette.cardBorderColor.withValues(
+                                            alpha: 0.7,
+                                          ),
+                                ),
                               ),
-                            ),
-                            child: Icon(
-                              Icons.check,
-                              size: 14,
-                              color:
-                                  isSelected
-                                      ? palette.buttonTextColor
-                                      : palette.textSecondaryColor,
+                              child: Icon(
+                                Icons.check,
+                                size: 14,
+                                color:
+                                    isSelected
+                                        ? palette.buttonTextColor
+                                        : palette.textSecondaryColor,
+                              ),
                             ),
                           ),
                         ),
-                      ),
-                  ],
-                ),
-              ),
-              if (_gridShowTitle ||
-                  _gridShowAuthor ||
-                  _gridShowLatestChapter ||
-                  _gridShowProgressBar)
-                const SizedBox(height: 6),
-              if (_gridShowTitle) ...[
-                Text(
-                  titleText,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: Theme.of(context).textTheme.labelMedium?.copyWith(
-                    fontWeight: FontWeight.w700,
-                    color: palette.cardTextColor,
+                    ],
                   ),
                 ),
-              ],
-              if (_gridShowAuthor) ...[
-                SizedBox(height: _gridShowTitle ? 2 : 0),
-                Text(
-                  authorLine,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                    color: palette.textSecondaryColor,
-                    fontWeight: FontWeight.w500,
+                if (_gridShowTitle ||
+                    _gridShowAuthor ||
+                    _gridShowLatestChapter ||
+                    _gridShowProgressBar)
+                  const SizedBox(height: 6),
+                if (_gridShowTitle) ...[
+                  Text(
+                    titleText,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: Theme.of(context).textTheme.labelMedium?.copyWith(
+                      fontWeight: FontWeight.w700,
+                      color: palette.cardTextColor,
+                    ),
                   ),
-                ),
-              ],
-              if (_gridShowLatestChapter) ...[
-                SizedBox(height: (_gridShowTitle || _gridShowAuthor) ? 1 : 0),
-                Text(
-                  latestLine,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                    color: palette.textSecondaryColor,
+                ],
+                if (_gridShowAuthor) ...[
+                  SizedBox(height: _gridShowTitle ? 2 : 0),
+                  Text(
+                    authorLine,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                      color: palette.textSecondaryColor,
+                      fontWeight: FontWeight.w500,
+                    ),
                   ),
-                ),
-              ],
-              if (_gridShowProgressBar) ...[
-                SizedBox(
-                  height:
-                      (_gridShowTitle ||
-                              _gridShowAuthor ||
-                              _gridShowLatestChapter)
-                          ? 4
-                          : 0,
-                ),
-                ClipRRect(
-                  borderRadius: BorderRadius.circular(2),
-                  child: LinearProgressIndicator(
-                    value: progressDisplay.progressValue,
-                    minHeight: 3,
-                    backgroundColor: palette.elevatedSurfaceColor,
+                ],
+                if (_gridShowLatestChapter) ...[
+                  SizedBox(height: (_gridShowTitle || _gridShowAuthor) ? 1 : 0),
+                  Text(
+                    latestLine,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                      color: palette.textSecondaryColor,
+                    ),
                   ),
-                ),
+                ],
+                if (_gridShowProgressBar) ...[
+                  SizedBox(
+                    height:
+                        (_gridShowTitle ||
+                                _gridShowAuthor ||
+                                _gridShowLatestChapter)
+                            ? 4
+                            : 0,
+                  ),
+                  ClipRRect(
+                    borderRadius: BorderRadius.circular(2),
+                    child: LinearProgressIndicator(
+                      value: progressDisplay.progressValue,
+                      minHeight: 3,
+                      backgroundColor: palette.elevatedSurfaceColor,
+                    ),
+                  ),
+                ],
+                const Spacer(),
               ],
-            ],
+            ),
           ),
         ),
       ),

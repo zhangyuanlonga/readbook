@@ -566,6 +566,203 @@ class _AdvancedThemeEditorPageState
     }
   }
 
+  Future<void> _pickReaderWallpaperFromBackgroundLibrary() async {
+    if (_isSaving) {
+      return;
+    }
+    String? selectedPath;
+    final confirmedPath = await showModalBottomSheet<String>(
+      context: context,
+      showDragHandle: true,
+      useSafeArea: true,
+      builder: (context) {
+        final colorScheme = Theme.of(context).colorScheme;
+        final maxHeight = MediaQuery.sizeOf(context).height * 0.78;
+        return StatefulBuilder(
+          builder: (context, setSheetState) {
+            return Padding(
+              padding: const EdgeInsets.fromLTRB(12, 0, 12, 16),
+              child: ConstrainedBox(
+                constraints: BoxConstraints(maxHeight: maxHeight),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      '选择阅读器背景',
+                      style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                    const SizedBox(height: 10),
+                    if (_backgroundLibraryPaths.isEmpty)
+                      Container(
+                        width: double.infinity,
+                        padding: const EdgeInsets.fromLTRB(12, 18, 12, 18),
+                        decoration: BoxDecoration(
+                          color: colorScheme.surfaceContainerLow,
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(
+                            color: colorScheme.outlineVariant.withValues(
+                              alpha: 0.4,
+                            ),
+                          ),
+                        ),
+                        child: Column(
+                          children: [
+                            Icon(
+                              Icons.wallpaper_outlined,
+                              size: 22,
+                              color: colorScheme.onSurfaceVariant,
+                            ),
+                            const SizedBox(height: 8),
+                            Text(
+                              '还没有背景素材',
+                              style: Theme.of(context).textTheme.labelLarge
+                                  ?.copyWith(fontWeight: FontWeight.w700),
+                            ),
+                            const SizedBox(height: 4),
+                            Text(
+                              '先去背景页添加图片，再回来选择。',
+                              textAlign: TextAlign.center,
+                              style: Theme.of(
+                                context,
+                              ).textTheme.bodySmall?.copyWith(
+                                color: colorScheme.onSurfaceVariant,
+                              ),
+                            ),
+                          ],
+                        ),
+                      )
+                    else
+                      Flexible(
+                        child: LayoutBuilder(
+                          builder: (context, constraints) {
+                            const spacing = 8.0;
+                            final columns = AppLayout.optionGridColumnsForWidth(
+                              constraints.maxWidth,
+                            ).clamp(3, 5);
+                            final itemWidth =
+                                (constraints.maxWidth -
+                                    ((columns - 1) * spacing)) /
+                                columns;
+                            return SingleChildScrollView(
+                              child: Wrap(
+                                spacing: spacing,
+                                runSpacing: spacing,
+                                children: _backgroundLibraryPaths
+                                    .map((path) {
+                                      final selected = path == selectedPath;
+                                      return InkWell(
+                                        borderRadius: BorderRadius.circular(12),
+                                        onTap: () {
+                                          setSheetState(() {
+                                            selectedPath = path;
+                                          });
+                                        },
+                                        child: Stack(
+                                          children: [
+                                            Container(
+                                              width: itemWidth,
+                                              height: itemWidth * 1.28,
+                                              decoration: BoxDecoration(
+                                                borderRadius:
+                                                    BorderRadius.circular(12),
+                                                border: Border.all(
+                                                  color:
+                                                      selected
+                                                          ? colorScheme.primary
+                                                          : colorScheme
+                                                              .outlineVariant
+                                                              .withValues(
+                                                                alpha: 0.45,
+                                                              ),
+                                                  width: selected ? 2 : 1,
+                                                ),
+                                                image: DecorationImage(
+                                                  image: FileImage(File(path)),
+                                                  fit: BoxFit.cover,
+                                                ),
+                                              ),
+                                            ),
+                                            if (selected)
+                                              Positioned(
+                                                top: 8,
+                                                right: 8,
+                                                child: Container(
+                                                  width: 24,
+                                                  height: 24,
+                                                  decoration: BoxDecoration(
+                                                    color: colorScheme.primary,
+                                                    shape: BoxShape.circle,
+                                                  ),
+                                                  child: const Icon(
+                                                    Icons.check_rounded,
+                                                    size: 16,
+                                                    color: Colors.white,
+                                                  ),
+                                                ),
+                                              ),
+                                          ],
+                                        ),
+                                      );
+                                    })
+                                    .toList(growable: false),
+                              ),
+                            );
+                          },
+                        ),
+                      ),
+                    const SizedBox(height: 12),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: OutlinedButton(
+                            onPressed: () => Navigator.of(context).pop(),
+                            child: const Text('取消'),
+                          ),
+                        ),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: FilledButton(
+                            onPressed:
+                                selectedPath == null
+                                    ? null
+                                    : () =>
+                                        Navigator.of(context).pop(selectedPath),
+                            child: const Text('应用'),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+            );
+          },
+        );
+      },
+    );
+
+    if (confirmedPath == null || confirmedPath.trim().isEmpty) {
+      return;
+    }
+
+    final draft = _draft;
+    if (draft == null || _isSaving) {
+      return;
+    }
+
+    final normalized = confirmedPath.trim();
+    final currentConfig = draft.configFor(_selectedMode);
+    setState(() {
+      _draft = draft.copyWithModeConfig(
+        _selectedMode,
+        currentConfig.copyWith(readerWallpaperPath: normalized),
+      );
+    });
+  }
+
   Future<void> _openRouteFromSheet(
     BuildContext sheetContext,
     String route,
@@ -929,8 +1126,24 @@ class _AdvancedThemeEditorPageState
     return '未设置壁纸';
   }
 
+  String _resolvedReaderWallpaperName(AppAdvancedTheme draft) {
+    final path = _selectedReaderWallpaperPreviewPath(draft);
+    if (path != null && path.isNotEmpty) {
+      return '当前模式已设置阅读器背景';
+    }
+    return '未设置阅读器背景';
+  }
+
   String? _selectedWallpaperPreviewPath(AppAdvancedTheme draft) {
     final path = draft.configFor(_selectedMode).wallpaperPath?.trim();
+    if (path == null || path.isEmpty) {
+      return null;
+    }
+    return File(path).existsSync() ? path : null;
+  }
+
+  String? _selectedReaderWallpaperPreviewPath(AppAdvancedTheme draft) {
+    final path = draft.configFor(_selectedMode).readerWallpaperPath?.trim();
     if (path == null || path.isEmpty) {
       return null;
     }
@@ -1066,6 +1279,35 @@ class _AdvancedThemeEditorPageState
         _draft = draft.copyWithModeConfig(
           _selectedMode,
           currentConfig.copyWith(clearWallpaperPath: true),
+        );
+      });
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isSaving = false;
+        });
+      }
+    }
+  }
+
+  Future<void> _clearReaderWallpaper() async {
+    final draft = _draft;
+    final currentConfig = draft?.configFor(_selectedMode);
+    final path = currentConfig?.readerWallpaperPath?.trim() ?? '';
+    if (draft == null || currentConfig == null || path.isEmpty || _isSaving) {
+      return;
+    }
+    setState(() {
+      _isSaving = true;
+    });
+    try {
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _draft = draft.copyWithModeConfig(
+          _selectedMode,
+          currentConfig.copyWith(clearReaderWallpaperPath: true),
         );
       });
     } finally {
@@ -1628,6 +1870,9 @@ class _AdvancedThemeEditorPageState
   ) {
     final wallpaperPath = _selectedWallpaperPreviewPath(draft);
     final hasWallpaper = wallpaperPath != null && wallpaperPath.isNotEmpty;
+    final readerWallpaperPath = _selectedReaderWallpaperPreviewPath(draft);
+    final hasReaderWallpaper =
+        readerWallpaperPath != null && readerWallpaperPath.isNotEmpty;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -1665,6 +1910,42 @@ class _AdvancedThemeEditorPageState
                     onPressed: _isSaving ? null : _clearWallpaper,
                     icon: const Icon(Icons.delete_outline, size: 16),
                     label: const Text('移除当前壁纸'),
+                  ),
+                ),
+                const Divider(height: 1),
+              ] else
+                const Divider(height: 1),
+              _buildAppearanceLinkTile(
+                context,
+                icon: Icons.chrome_reader_mode_outlined,
+                title: '阅读器背景',
+                subtitle: _resolvedReaderWallpaperName(draft),
+                onTap:
+                    _isSaving
+                        ? () {}
+                        : _pickReaderWallpaperFromBackgroundLibrary,
+                trailing: SizedBox(
+                  width: 46,
+                  height: 46,
+                  child: _buildGalleryPreviewThumb(
+                    context,
+                    previewPath: readerWallpaperPath,
+                    title: '阅读器背景',
+                    width: 46,
+                    height: 46,
+                    borderRadius: 10,
+                    useAddPlaceholder: true,
+                  ),
+                ),
+              ),
+              if (hasReaderWallpaper) ...[
+                const Divider(height: 1),
+                Align(
+                  alignment: Alignment.centerRight,
+                  child: TextButton.icon(
+                    onPressed: _isSaving ? null : _clearReaderWallpaper,
+                    icon: const Icon(Icons.delete_outline, size: 16),
+                    label: const Text('移除阅读器背景'),
                   ),
                 ),
                 const Divider(height: 1),

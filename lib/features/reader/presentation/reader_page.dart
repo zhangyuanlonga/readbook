@@ -34,6 +34,7 @@ import '../../../core/errors/error_stage.dart';
 import '../../../core/media/image_selection_service.dart';
 import '../../../data/datasources/local/app_database.dart';
 import '../../../data/repositories/bookmark_repository_impl.dart';
+import '../../../domain/entities/app_advanced_theme.dart';
 import '../../../domain/entities/bookmark.dart';
 import '../../../domain/entities/book.dart';
 import '../../../domain/entities/bookshelf_book.dart';
@@ -47,6 +48,7 @@ import '../../../domain/repositories/bookmark_repository.dart';
 import '../../bookshelf/application/bookshelf_service.dart';
 import '../../book/application/book_detail_service.dart';
 import '../../book/presentation/book_detail_route.dart';
+import '../../mine/application/advanced_theme_provider.dart';
 import '../../search/application/search_hit_cache_service.dart';
 import '../../search/application/search_service.dart';
 import '../../source/application/source_health_service.dart';
@@ -1338,7 +1340,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
   }
 
   DecorationImage? _resolveBackgroundDecorationImage() {
-    final raw = _settings.backgroundImageBase64?.trim();
+    final raw = _effectiveReaderBackgroundPath();
     if (raw == null || raw.isEmpty) {
       _cachedBackgroundImageKey = null;
       _cachedBackgroundImage = null;
@@ -2103,6 +2105,28 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
       }
     }
     return null;
+  }
+
+  String? _effectiveReaderBackgroundPath() {
+    final activeThemeAsync = ref.read(activeAdvancedThemeProvider);
+    final activeTheme = activeThemeAsync.valueOrNull;
+    if (activeTheme != null) {
+      final colorScheme = Theme.of(context).colorScheme;
+      final modeConfig = activeTheme.configFor(
+        colorScheme.brightness == Brightness.dark
+            ? AppAdvancedThemeMode.dark
+            : AppAdvancedThemeMode.light,
+      );
+      final themeReaderWallpaper = modeConfig.readerWallpaperPath?.trim();
+      if (themeReaderWallpaper != null && themeReaderWallpaper.isNotEmpty) {
+        return themeReaderWallpaper;
+      }
+    }
+    final ownBackground = _settings.backgroundImageBase64?.trim();
+    if (ownBackground == null || ownBackground.isEmpty) {
+      return null;
+    }
+    return ownBackground;
   }
 
   Widget _buildStaticReaderBlockItem({

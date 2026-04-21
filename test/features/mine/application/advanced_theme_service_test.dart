@@ -22,12 +22,14 @@ void main() {
           primaryColorValue: 0xFF336699,
           backgroundColorValue: 0xFFF5F8F2,
         ),
+        readerWallpaperPath: '/tmp/reader_light.jpg',
       ),
       darkConfig: const AppAdvancedThemeModeConfig(
         colors: AppAdvancedThemeColors(
           primaryColorValue: 0xFF88CCAA,
           backgroundColorValue: 0xFF101512,
         ),
+        readerWallpaperPath: '/tmp/reader_dark.jpg',
       ),
       coverGalleryId: 'cover_gallery_1',
       bottomNavGalleryId: 'bottom_gallery_1',
@@ -73,9 +75,37 @@ void main() {
     expect(imported.bottomNavGalleryId, isNull);
     expect(imported.lightConfig.wallpaperPath, isNull);
     expect(imported.darkConfig.wallpaperPath, isNull);
+    expect(imported.lightConfig.readerWallpaperPath, isNull);
+    expect(imported.darkConfig.readerWallpaperPath, isNull);
 
     final themes = await service.loadThemes();
     expect(themes, hasLength(1));
     expect(themes.first.name, '薄雾灰');
+  });
+
+  test('persists reader wallpaper path inside theme mode config', () async {
+    final service = AdvancedThemeService();
+    final theme = AppAdvancedTheme(
+      id: 'theme_reader_wallpaper',
+      name: '阅读器联动',
+      createdAt: DateTime.parse('2026-04-21T00:00:00.000Z'),
+      updatedAt: DateTime.parse('2026-04-21T00:00:00.000Z'),
+      lightConfig: const AppAdvancedThemeModeConfig(
+        readerWallpaperPath: '/tmp/reader_light.jpg',
+      ),
+      darkConfig: const AppAdvancedThemeModeConfig(
+        readerWallpaperPath: '/tmp/reader_dark.jpg',
+      ),
+    );
+
+    await service.saveTheme(theme);
+    final themes = await service.loadThemes();
+
+    expect(themes, hasLength(1));
+    expect(
+      themes.first.lightConfig.readerWallpaperPath,
+      '/tmp/reader_light.jpg',
+    );
+    expect(themes.first.darkConfig.readerWallpaperPath, '/tmp/reader_dark.jpg');
   });
 }
