@@ -3,6 +3,7 @@ import 'dart:io';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shuxiang_reading_next/core/errors/app_exception.dart';
 import 'package:shuxiang_reading_next/domain/entities/local_book.dart';
+import 'package:shuxiang_reading_next/domain/entities/reader_document.dart';
 import 'package:shuxiang_reading_next/features/reader/application/local/pdf_local_book_parser.dart';
 
 void main() {
@@ -55,6 +56,11 @@ void main() {
       expect(result.chapters.first.title, '第1章 开始');
       expect(result.chapters.last.title, '第 2 页');
       expect(result.chapters.last.content, contains('第二页内容'));
+      expect(result.chapters.first.document, isNotNull);
+      expect(
+        result.chapters.first.document!.blocks.first,
+        isA<ReaderTitleBlock>(),
+      );
     });
 
     test('throws clear error when pdf has no text layer', () async {

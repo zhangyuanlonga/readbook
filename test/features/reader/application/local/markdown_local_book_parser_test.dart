@@ -1,7 +1,12 @@
 import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
+import 'package:shuxiang_reading_next/core/errors/app_exception.dart';
+import 'package:shuxiang_reading_next/core/errors/error_codes.dart';
+import 'package:shuxiang_reading_next/core/errors/error_stage.dart';
 import 'package:shuxiang_reading_next/domain/entities/local_book.dart';
+import 'package:shuxiang_reading_next/features/reader/application/local/local_book_parser.dart';
+import 'package:shuxiang_reading_next/features/reader/application/local/local_markup_book_parser_support.dart';
 import 'package:shuxiang_reading_next/features/reader/application/local/markdown_local_book_parser.dart';
 
 void main() {
@@ -72,5 +77,65 @@ cover: images/cover.png
         expect(File(result.coverPath!).existsSync(), isTrue);
       },
     );
+
+    test(
+      'throws markdown-specific error when support reports empty content',
+      () async {
+        final file = File('${tempDir.path}/empty.md');
+        await file.writeAsString('   \n\n   ');
+        final parser = MarkdownLocalBookParser(
+          support: const _ThrowingMarkupSupport(),
+        );
+
+        final now = DateTime.parse('2026-04-16T12:00:00.000Z');
+        await expectLater(
+          () async => parser.parse(
+            LocalBook(
+              id: 'local_md_empty_1',
+              title: 'fallback',
+              format: LocalBookFormat.md,
+              storagePath: file.path,
+              sourcePath: file.path,
+              fileSize: await file.length(),
+              createdAt: now,
+              updatedAt: now,
+            ),
+          ),
+          throwsA(
+            isA<AppException>().having(
+              (error) => error.briefMessage,
+              'briefMessage',
+              contains('Markdown 未解析出可读内容'),
+            ),
+          ),
+        );
+      },
+    );
   });
+}
+
+class _ThrowingMarkupSupport extends LocalMarkupBookParserSupport {
+  const _ThrowingMarkupSupport();
+
+  @override
+  Future<String> decodeTextFile(LocalBook book) async => '';
+
+  @override
+  Future<LocalParsedBook> parseHtmlBook({
+    required LocalBook book,
+    required String html,
+    String? title,
+    bool preferProvidedTitle = false,
+    String? preferredAuthor,
+    String? preferredDescription,
+    String? preferredCoverSource,
+    List<Directory> additionalBaseDirectories = const <Directory>[],
+    bool resetAssetDirectory = true,
+  }) async {
+    throw AppException(
+      code: ErrorCode.ruleMatchEmpty,
+      stage: ErrorStage.content,
+      briefMessage: '本地 HTML 未解析出可读内容。',
+    );
+  }
 }

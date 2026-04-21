@@ -31,6 +31,7 @@ import '../application/local_book_import_service.dart';
 import '../../reader/application/reader_preferences_service.dart';
 import '../../reader/application/reader_entry_route_resolver.dart';
 import '../../reader/application/local/local_book_index_service.dart';
+import '../../reader/application/local/local_book_workflow_policy.dart';
 import '../../reader/application/reading_record_service.dart';
 import '../../book/application/book_detail_service.dart';
 import '../../book/presentation/book_detail_route.dart';
@@ -1896,13 +1897,12 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
       }
 
       if (successCount > 0) {
-        if (failureCount > 0) {
-          _showMessage(
-            '已导入 $successCount 本书并加入书架，失败 $failureCount 本。后台会继续解析成功导入的图书。',
-          );
-        } else {
-          _showMessage('已导入 $successCount 本书并加入书架。后台会继续解析。');
-        }
+        _showMessage(
+          LocalBookWorkflowPolicy.importSuccessMessage(
+            successCount: successCount,
+            failureCount: failureCount,
+          ),
+        );
         return;
       }
 
@@ -4086,16 +4086,9 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
   }
 
   String? _localBookStatusActionText(LocalBook localBook) {
-    return switch (localBook.indexStatus) {
-      LocalBookIndexStatus.pending => '状态: 待建立目录，可在此直接触发解析',
-      LocalBookIndexStatus.indexing => '状态: 正在解析，可继续等待或重新打开详情查看进度',
-      LocalBookIndexStatus.stale => '状态: 目录需重建，建议先重建再阅读',
-      LocalBookIndexStatus.failed =>
-        localBook.lastError?.trim().isNotEmpty == true
-            ? '状态: 解析失败，${_toSingleLineText(localBook.lastError!)}'
-            : '状态: 解析失败，建议先重建目录',
-      _ => null,
-    };
+    return localBook.indexStatus == LocalBookIndexStatus.ready
+        ? null
+        : LocalBookWorkflowPolicy.statusActionText(localBook);
   }
 
   Color _localStatusTextColor(ColorScheme colorScheme, LocalBook? localBook) {
@@ -7031,19 +7024,19 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
     switch (localBook.indexStatus) {
       case LocalBookIndexStatus.pending:
         _openBookDetail(book);
-        _showMessage('这本本地图书正在等待建立目录，请稍后再试或在详情页重建。');
+        _showMessage(LocalBookWorkflowPolicy.nonReadyOpenMessage(localBook));
         return;
       case LocalBookIndexStatus.indexing:
         _openBookDetail(book);
-        _showMessage('这本本地图书正在解析中，详情页会自动刷新。');
+        _showMessage(LocalBookWorkflowPolicy.nonReadyOpenMessage(localBook));
         return;
       case LocalBookIndexStatus.stale:
         _openBookDetail(book);
-        _showMessage('检测到本地图书目录已过期，请先重建目录再阅读。');
+        _showMessage(LocalBookWorkflowPolicy.nonReadyOpenMessage(localBook));
         return;
       case LocalBookIndexStatus.failed:
         _openBookDetail(book);
-        _showMessage('本地图书目录解析失败，请先重建目录再阅读。');
+        _showMessage(LocalBookWorkflowPolicy.nonReadyOpenMessage(localBook));
         return;
       case LocalBookIndexStatus.ready:
         return;

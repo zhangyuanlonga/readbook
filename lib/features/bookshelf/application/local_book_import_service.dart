@@ -17,6 +17,7 @@ import '../../../domain/repositories/local_book_repository.dart';
 import '../../reader/application/reader_system_settings_service.dart';
 import '../../reader/application/local/local_book_index_service.dart';
 import '../../reader/application/local/local_book_storage_service.dart';
+import '../../reader/application/local/local_book_workflow_policy.dart';
 import 'bookshelf_service.dart';
 
 class LocalBookImportResult {
@@ -189,6 +190,11 @@ class LocalBookImportService {
       context: {
         'bookId': bookId,
         'format': format.name,
+        'indexExecutionMode':
+            _resolveImportExecutionMode(
+              format: format,
+              waitForIndexingRequested: waitForIndexing,
+            ).name,
         'sourcePath': normalizedPath,
         if (prepared.storageResult.originalCharset != null)
           'sourceCharset': prepared.storageResult.originalCharset,
@@ -198,7 +204,11 @@ class LocalBookImportService {
       },
     );
 
-    if (waitForIndexing) {
+    final executionMode = _resolveImportExecutionMode(
+      format: format,
+      waitForIndexingRequested: waitForIndexing,
+    );
+    if (executionMode == LocalBookImportExecutionMode.immediateIndex) {
       onProgress?.call(
         LocalBookImportProgress(
           stage: LocalBookImportStage.indexing,
@@ -239,6 +249,16 @@ class LocalBookImportService {
         context: {'bookId': bookId, 'error': error.toString()},
       );
     }
+  }
+
+  LocalBookImportExecutionMode _resolveImportExecutionMode({
+    required LocalBookFormat format,
+    required bool waitForIndexingRequested,
+  }) {
+    return LocalBookWorkflowPolicy.resolveImportExecutionMode(
+      format: format,
+      waitForIndexingRequested: waitForIndexingRequested,
+    );
   }
 
   bool _shouldIgnoreWarmUpError(Object error) {

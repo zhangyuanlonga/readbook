@@ -1,8 +1,3 @@
-import 'dart:convert';
-import 'dart:io';
-
-import 'package:charset/charset.dart';
-
 import '../../../../core/errors/app_exception.dart';
 import '../../../../core/errors/error_codes.dart';
 import '../../../../core/errors/error_stage.dart';
@@ -27,12 +22,10 @@ class LocalChapterContentService {
              localBookRepository:
                  localBookRepository ??
                  LocalBookRepositoryImpl(AppDatabase.instance),
-           ),
-       _storageService = storageService ?? LocalBookStorageService();
+           );
 
   final LocalBookRepository _localBookRepository;
   final LocalBookIndexService _indexService;
-  final LocalBookStorageService _storageService;
 
   Future<LocalChapter> load({
     required String bookId,
@@ -90,26 +83,10 @@ class LocalChapterContentService {
       return chapter;
     }
 
-    if (book.format == LocalBookFormat.txt) {
-      final readableBook = await _hydrateReadableBook(book);
-      final hydratedContent = await _loadTxtChapterContentByOffsets(
-        chapter: chapter,
-        book: readableBook,
-      );
-      return chapter.copyWith(content: hydratedContent);
-    }
-
-    if (book.format != LocalBookFormat.epub) {
-      throw AppException(
-        code: ErrorCode.ruleMatchEmpty,
-        stage: ErrorStage.content,
-        briefMessage: '本地章节内容缺失，请重新索引后重试。',
-      );
-    }
     throw AppException(
       code: ErrorCode.ruleMatchEmpty,
       stage: ErrorStage.content,
-      briefMessage: 'EPUB 章节内容缺失，请重新索引后重试。',
+      briefMessage: '本地章节正文缺失，请重建目录或重新导入后重试。',
     );
   }
 
@@ -219,208 +196,6 @@ class LocalChapterContentService {
   }
 
   bool _canUseStoredChapterContent({required LocalChapter chapter}) {
-    if (chapter.content.trim().isNotEmpty) {
-      return true;
-    }
-    if (chapter.imageUrls.isNotEmpty) {
-      return true;
-    }
-    final document = chapter.document;
-    return document != null && document.blocks.isNotEmpty;
-  }
-
-  Future<LocalBook> _hydrateReadableBook(LocalBook book) async {
-    final resolvedStoragePath = await _storageService.resolveStoragePath(
-      book.storagePath,
-    );
-    if (resolvedStoragePath == book.storagePath) {
-      return book;
-    }
-    return book.copyWith(storagePath: resolvedStoragePath);
-  }
-
-  Future<String> _loadTxtChapterContentByOffsets({
-    required LocalChapter chapter,
-    required LocalBook book,
-  }) async {
-    final startOffset = chapter.startOffset;
-    final endOffset = chapter.endOffset;
-    if (startOffset == null || endOffset == null || endOffset <= startOffset) {
-      throw AppException(
-        code: ErrorCode.ruleMatchEmpty,
-        stage: ErrorStage.content,
-        briefMessage: '本地章节缺少有效偏移信息，请重新索引后重试。',
-      );
-    }
-
-    final file = File(book.storagePath);
-    if (!await file.exists()) {
-      throw AppException(
-        code: ErrorCode.validation,
-        stage: ErrorStage.content,
-        briefMessage: '本地文件不存在：${book.storagePath}',
-      );
-    }
-
-    final fileLength = await file.length();
-    var safeStart = startOffset.clamp(0, fileLength).toInt();
-    var safeEnd = endOffset.clamp(0, fileLength).toInt();
-    final normalizedCharset = _normalizeCharsetName(book.charset);
-    if (normalizedCharset == 'utf-16' ||
-        normalizedCharset == 'utf-16le' ||
-        normalizedCharset == 'utf-16be') {
-      if (safeStart.isOdd) {
-        safeStart -= 1;
-      }
-      if (safeEnd.isOdd) {
-        safeEnd -= 1;
-      }
-    }
-    if (safeEnd <= safeStart) {
-      throw AppException(
-        code: ErrorCode.ruleMatchEmpty,
-        stage: ErrorStage.content,
-        briefMessage: '本地章节内容为空，请重新索引后重试。',
-      );
-    }
-
-    final handle = await file.open(mode: FileMode.read);
-    try {
-      await handle.setPosition(safeStart);
-      final bytes = await handle.read(safeEnd - safeStart);
-      final text = _decodeBytes(bytes, preferredCharset: book.charset).trim();
-      if (text.isEmpty) {
-        throw AppException(
-          code: ErrorCode.ruleMatchEmpty,
-          stage: ErrorStage.content,
-          briefMessage: '本地章节内容为空，请重新索引后重试。',
-        );
-      }
-      return text;
-    } finally {
-      await handle.close();
-    }
-  }
-
-  String _decodeBytes(List<int> bytes, {required String? preferredCharset}) {
-    final normalized = _normalizeCharsetName(preferredCharset);
-    if (normalized != null) {
-      if (normalized == 'utf-16le' || normalized == 'utf-16be') {
-        final preferred = _tryDecodeByCharset(bytes, normalized);
-        final alternate = _tryDecodeByCharset(
-          bytes,
-          normalized == 'utf-16le' ? 'utf-16be' : 'utf-16le',
-        );
-        final best = _pickBetterDecodedText(preferred, alternate);
-        if (best != null) {
-          return best;
-        }
-      }
-      final preferred = _tryDecodeByCharset(bytes, normalized);
-      if (preferred != null) {
-        return preferred;
-      }
-    }
-
-    for (final candidate in const <String>[
-      'utf-8',
-      'utf-16be',
-      'utf-16le',
-      'gbk',
-      'gb18030',
-      'latin1',
-    ]) {
-      final decoded = _tryDecodeByCharset(bytes, candidate);
-      if (decoded != null) {
-        return decoded;
-      }
-    }
-    return utf8.decode(bytes, allowMalformed: true);
-  }
-
-  String? _pickBetterDecodedText(String? primary, String? alternate) {
-    final primaryScore = _decodedTextScore(primary);
-    final alternateScore = _decodedTextScore(alternate);
-    if (primaryScore == null && alternateScore == null) {
-      return null;
-    }
-    if (alternateScore != null &&
-        (primaryScore == null || alternateScore > primaryScore)) {
-      return alternate;
-    }
-    return primary;
-  }
-
-  int? _decodedTextScore(String? value) {
-    final text = value?.trim();
-    if (text == null || text.isEmpty) {
-      return null;
-    }
-    var hanCount = 0;
-    var replacementCount = 0;
-    var nulCount = 0;
-    var controlCount = 0;
-    for (final rune in text.runes) {
-      if (rune >= 0x4E00 && rune <= 0x9FFF) {
-        hanCount += 1;
-      }
-      if (rune == 0xFFFD) {
-        replacementCount += 1;
-      }
-      if (rune == 0) {
-        nulCount += 1;
-      }
-      if (rune < 0x20 && rune != 0x09 && rune != 0x0A && rune != 0x0D) {
-        controlCount += 1;
-      }
-    }
-    return hanCount * 8 -
-        replacementCount * 20 -
-        nulCount * 40 -
-        controlCount * 12;
-  }
-
-  String? _normalizeCharsetName(String? value) {
-    final normalized = value?.trim().toLowerCase() ?? '';
-    if (normalized.isEmpty) {
-      return null;
-    }
-    return switch (normalized) {
-      'utf8' => 'utf-8',
-      'utf-8' => 'utf-8',
-      'utf16' => 'utf-16',
-      'utf-16' => 'utf-16',
-      'utf16be' => 'utf-16be',
-      'utf-16be' => 'utf-16be',
-      'utf16le' => 'utf-16le',
-      'utf-16le' => 'utf-16le',
-      'gb2312' => 'gbk',
-      'gbk' => 'gbk',
-      'gb18030' => 'gb18030',
-      'latin1' => 'latin1',
-      'iso-8859-1' => 'latin1',
-      _ => normalized,
-    };
-  }
-
-  String? _tryDecodeByCharset(List<int> bytes, String charsetName) {
-    try {
-      switch (charsetName) {
-        case 'utf-8':
-          return utf8.decode(bytes, allowMalformed: false);
-        case 'latin1':
-          return latin1.decode(bytes, allowInvalid: true);
-        default:
-          final encoding = Charset.getByName(charsetName);
-          if (encoding == null) {
-            return null;
-          }
-          return encoding.decode(bytes);
-      }
-    } on FormatException {
-      return null;
-    } on ArgumentError {
-      return null;
-    }
+    return chapter.hasReadablePayload;
   }
 }

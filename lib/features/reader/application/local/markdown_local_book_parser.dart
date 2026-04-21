@@ -1,5 +1,8 @@
 import 'package:markdown/markdown.dart' as markdown;
 
+import '../../../../core/errors/app_exception.dart';
+import '../../../../core/errors/error_codes.dart';
+import '../../../../core/errors/error_stage.dart';
 import '../../../../domain/entities/local_book.dart';
 import 'local_book_parser.dart';
 import 'local_markup_book_parser_support.dart';
@@ -22,15 +25,27 @@ class MarkdownLocalBookParser implements LocalBookParser {
       frontMatter.content,
       extensionSet: markdown.ExtensionSet.gitHubWeb,
     );
-    return _support.parseHtmlBook(
-      book: book,
-      html: html,
-      title: frontMatter.title ?? book.title,
-      preferProvidedTitle: frontMatter.title != null,
-      preferredAuthor: frontMatter.author,
-      preferredDescription: frontMatter.description,
-      preferredCoverSource: frontMatter.cover,
-    );
+    try {
+      return await _support.parseHtmlBook(
+        book: book,
+        html: html,
+        title: frontMatter.title ?? book.title,
+        preferProvidedTitle: frontMatter.title != null,
+        preferredAuthor: frontMatter.author,
+        preferredDescription: frontMatter.description,
+        preferredCoverSource: frontMatter.cover,
+      );
+    } on AppException catch (error) {
+      if (error.code == ErrorCode.ruleMatchEmpty) {
+        throw AppException(
+          code: error.code,
+          stage: ErrorStage.content,
+          briefMessage: '本地 Markdown 未解析出可读内容。',
+          cause: error,
+        );
+      }
+      rethrow;
+    }
   }
 
   _MarkdownFrontMatter _extractFrontMatter(String raw) {

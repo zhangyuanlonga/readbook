@@ -74,6 +74,7 @@ void main() {
       expect(File(result.coverPath!).existsSync(), isTrue);
       expect(result.chapters, hasLength(2));
       expect(result.chapters.first.title, '第一章');
+      expect(result.chapters.first.document, isNotNull);
       expect(result.chapters.last.imageUrls, isNotEmpty);
     });
 

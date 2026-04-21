@@ -6,6 +6,7 @@ import '../../../../core/errors/app_exception.dart';
 import '../../../../core/errors/error_codes.dart';
 import '../../../../core/errors/error_stage.dart';
 import '../../../../domain/entities/local_book.dart';
+import '../../../../domain/entities/reader_document.dart';
 import 'local_book_parser.dart';
 
 class PdfLocalBookParser implements LocalBookParser {
@@ -70,7 +71,15 @@ class PdfLocalBookParser implements LocalBookParser {
           .toList(growable: false);
       final title = _resolvePageTitle(pageNumber, lines);
       chapters.add(
-        LocalParsedChapter(title: title, content: text, document: null),
+        LocalParsedChapter(
+          title: title,
+          content: text,
+          document: ReaderDocument.fromContent(
+            content: text,
+            title: title,
+            includeTitleBlock: true,
+          ),
+        ),
       );
     }
 

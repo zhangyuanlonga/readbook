@@ -2,6 +2,33 @@ enum LocalBookFormat { txt, epub, md, html, pdf, mobi, azw, azw3 }
 
 enum LocalBookIndexStatus { pending, indexing, ready, stale, failed }
 
+extension LocalBookFormatSemantics on LocalBookFormat {
+  String get displayLabel => switch (this) {
+    LocalBookFormat.txt => 'TXT',
+    LocalBookFormat.epub => 'EPUB',
+    LocalBookFormat.md => 'Markdown',
+    LocalBookFormat.html => 'HTML',
+    LocalBookFormat.pdf => 'PDF',
+    LocalBookFormat.mobi => 'MOBI',
+    LocalBookFormat.azw => 'AZW',
+    LocalBookFormat.azw3 => 'AZW3',
+  };
+
+  bool get supportsBootstrapPreview => this == LocalBookFormat.txt;
+
+  bool get requiresManagedAssetDirectory => switch (this) {
+    LocalBookFormat.epub ||
+    LocalBookFormat.md ||
+    LocalBookFormat.html ||
+    LocalBookFormat.mobi ||
+    LocalBookFormat.azw ||
+    LocalBookFormat.azw3 => true,
+    LocalBookFormat.txt || LocalBookFormat.pdf => false,
+  };
+
+  bool get supportsBackgroundIndexOnImport => true;
+}
+
 class LocalBook {
   const LocalBook({
     required this.id,
@@ -44,6 +71,16 @@ class LocalBook {
   final int chapterCount;
   final String? lastError;
   final bool splitLongChapter;
+
+  bool get isReadableReady =>
+      indexStatus == LocalBookIndexStatus.ready && chapterCount > 0;
+
+  bool get needsIndex => !isReadableReady;
+
+  bool get supportsBootstrapPreview => format.supportsBootstrapPreview;
+
+  bool get requiresManagedAssetDirectory =>
+      format.requiresManagedAssetDirectory;
 
   LocalBook copyWith({
     String? id,

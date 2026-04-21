@@ -386,10 +386,29 @@ class LocalBookStorageService {
     if (decoded == null || decoded.text.trim().isEmpty) {
       return null;
     }
-    if (decoded.charsetName == 'utf-8' && !decoded.fallbackUsed) {
+    if (decoded.charsetName == 'utf-8' &&
+        !decoded.fallbackUsed &&
+        _looksLikeMeaningfulUtf8LeadSample(decoded.text)) {
       return decoded;
     }
     return null;
+  }
+
+  bool _looksLikeMeaningfulUtf8LeadSample(String text) {
+    final trimmed = text.trim();
+    if (trimmed.isEmpty) {
+      return false;
+    }
+    final hanCount =
+        trimmed.runes.where((rune) => rune >= 0x4E00 && rune <= 0x9FFF).length;
+    final punctuationCount =
+        trimmed.runes
+            .where((rune) => '，。！？；：“”‘’《》、（）【】'.runes.contains(rune))
+            .length;
+    if (hanCount > 0 || punctuationCount > 0) {
+      return true;
+    }
+    return false;
   }
 
   int _scoreEncodingSample({
@@ -608,12 +627,7 @@ class LocalBookStorageService {
         );
       }
     }
-    if (localBook.format == LocalBookFormat.epub ||
-        localBook.format == LocalBookFormat.md ||
-        localBook.format == LocalBookFormat.html ||
-        localBook.format == LocalBookFormat.mobi ||
-        localBook.format == LocalBookFormat.azw ||
-        localBook.format == LocalBookFormat.azw3) {
+    if (localBook.requiresManagedAssetDirectory) {
       final assetDir = await resolveAssetDirectory(localBook);
       if (await assetDir.exists()) {
         try {

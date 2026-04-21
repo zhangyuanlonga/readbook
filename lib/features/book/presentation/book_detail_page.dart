@@ -34,6 +34,7 @@ import '../../reader/application/reader_catalog_search_service.dart';
 import '../../reader/application/local/local_book_index_service.dart';
 import '../../reader/application/local/local_reader_identity.dart';
 import '../../reader/application/local/local_book_storage_service.dart';
+import '../../reader/application/local/local_book_workflow_policy.dart';
 import '../../reader/application/local_content_provider.dart';
 import '../../reader/application/reader_preferences_service.dart';
 import '../../reader/application/reader_system_settings_service.dart';
@@ -2010,38 +2011,36 @@ class _BookDetailPageState extends State<BookDetailPage> {
     final (title, message, background, foreground, icon) = switch (localBook
         .indexStatus) {
       LocalBookIndexStatus.pending => (
-        '本地图书待建立目录',
-        '这本书已加入书架，目录解析将在后台继续进行。',
+        LocalBookWorkflowPolicy.statusHeadline(localBook),
+        LocalBookWorkflowPolicy.statusDescription(localBook),
         colorScheme.secondaryContainer,
         colorScheme.onSecondaryContainer,
         Icons.schedule_rounded,
       ),
       LocalBookIndexStatus.indexing => (
-        '本地图书正在解析',
-        '目录和章节正在后台建立，完成后会自动刷新。',
+        LocalBookWorkflowPolicy.statusHeadline(localBook),
+        LocalBookWorkflowPolicy.statusDescription(localBook),
         colorScheme.tertiaryContainer,
         colorScheme.onTertiaryContainer,
         Icons.autorenew_rounded,
       ),
       LocalBookIndexStatus.stale => (
-        '本地图书需要重建目录',
-        '检测到文件或索引状态变化，建议重新索引后再阅读。',
+        LocalBookWorkflowPolicy.statusHeadline(localBook),
+        LocalBookWorkflowPolicy.statusDescription(localBook),
         colorScheme.secondaryContainer,
         colorScheme.onSecondaryContainer,
         Icons.refresh_rounded,
       ),
       LocalBookIndexStatus.failed => (
-        '本地图书目录解析失败',
-        localBook.lastError?.trim().isNotEmpty == true
-            ? localBook.lastError!.trim()
-            : '建议先重新索引；如果仍失败，再尝试重新导入。',
+        LocalBookWorkflowPolicy.statusHeadline(localBook),
+        LocalBookWorkflowPolicy.statusDescription(localBook),
         colorScheme.errorContainer,
         colorScheme.onErrorContainer,
         Icons.error_outline_rounded,
       ),
       _ => (
-        '本地图书已就绪',
-        '当前目录和章节索引可用。',
+        LocalBookWorkflowPolicy.statusHeadline(localBook),
+        LocalBookWorkflowPolicy.statusDescription(localBook),
         colorScheme.secondaryContainer,
         colorScheme.onSecondaryContainer,
         Icons.check_circle_outline_rounded,
@@ -2611,31 +2610,13 @@ class _BookDetailPageState extends State<BookDetailPage> {
   }
 
   String _localIndexStatusText(LocalBookIndexStatus status) {
-    return switch (status) {
-      LocalBookIndexStatus.pending => '待建立',
-      LocalBookIndexStatus.indexing => '索引中',
-      LocalBookIndexStatus.ready => '已就绪',
-      LocalBookIndexStatus.stale => '需重建',
-      LocalBookIndexStatus.failed => '失败',
-    };
+    return LocalBookWorkflowPolicy.statusLabel(status);
   }
 
   String _toUserReadableError(AppException error) {
     if (_isLocalContent) {
       final message = error.briefMessage;
-      if (message.contains('未找到本地书籍')) {
-        return '未找到本地书籍，请确认文件是否存在或重新导入。';
-      }
-      if (message.contains('索引失败')) {
-        return '本地书籍索引失败，请尝试重新索引。';
-      }
-      if (message.contains('没有可用章节') || message.contains('章节为空')) {
-        return '未解析到可读章节，请重新索引。';
-      }
-      if (message.contains('本地书籍信息缺失') || message.contains('bookId')) {
-        return '本地书籍信息缺失，请重新进入或重新导入。';
-      }
-      return '本地书籍加载失败，请重新索引或重新导入。';
+      return LocalBookWorkflowPolicy.userReadableLoadError(message);
     }
 
     return switch (error.code) {
@@ -2656,16 +2637,7 @@ class _BookDetailPageState extends State<BookDetailPage> {
 
     if (_isLocalContent) {
       final message = error.briefMessage;
-      if (message.contains('未找到本地书籍')) {
-        return '本地书籍不存在，目录暂不可用。';
-      }
-      if (message.contains('索引失败')) {
-        return '目录解析失败，请重新索引。';
-      }
-      if (message.contains('没有可用章节') || message.contains('章节为空')) {
-        return '未解析到可读章节，请重新索引。';
-      }
-      return '目录解析失败，请重新索引。';
+      return LocalBookWorkflowPolicy.tocWarningText(message);
     }
 
     return switch (error.code) {

@@ -219,27 +219,44 @@ class LocalTextEncodingDetector {
         bom.length > 0 ? bytes.sublist(bom.length) : List<int>.from(bytes);
 
     final normalizedPreferred = normalizeCharsetName(preferredCharset);
+    final normalizedHinted =
+        normalizeCharsetName(hintedCharset) ??
+        bom.charsetName ??
+        _detectUtf16ZeroPattern(contentBytes);
+
+    final candidates = <_AsyncDecodeCandidate>[];
+
+    final mobileDecoded = await _tryAutoDecodeOnMobile(contentBytes);
+    if (mobileDecoded != null && mobileDecoded.string.trim().isNotEmpty) {
+      candidates.add(
+        _AsyncDecodeCandidate(
+          result: LocalTextDecodeResult(
+            text: mobileDecoded.string,
+            charsetName: mobileDecoded.charset,
+            bomLength: bom.length,
+          ),
+          source: _AsyncDecodeSource.plugin,
+        ),
+      );
+    }
+
     if (normalizedPreferred != null) {
       final preferredDecoded = await _tryDecodeWithPlatformConverter(
         charsetName: normalizedPreferred,
         bytes: contentBytes,
       );
       if (preferredDecoded != null && preferredDecoded.trim().isNotEmpty) {
-        return LocalTextDecodeResult(
-          text: preferredDecoded,
-          charsetName: normalizedPreferred,
-          bomLength: bom.length,
+        candidates.add(
+          _AsyncDecodeCandidate(
+            result: LocalTextDecodeResult(
+              text: preferredDecoded,
+              charsetName: normalizedPreferred,
+              bomLength: bom.length,
+            ),
+            source: _AsyncDecodeSource.preferred,
+          ),
         );
       }
-    }
-
-    final mobileDecoded = await _tryAutoDecodeOnMobile(contentBytes);
-    if (mobileDecoded != null) {
-      return LocalTextDecodeResult(
-        text: mobileDecoded.string,
-        charsetName: mobileDecoded.charset,
-        bomLength: bom.length,
-      );
     }
 
     final fallback = decodeBestEffort(
@@ -249,7 +266,74 @@ class LocalTextEncodingDetector {
       candidateCharsets: candidateCharsets,
       htmlAware: htmlAware,
     );
-    return fallback;
+    candidates.add(
+      _AsyncDecodeCandidate(
+        result: fallback,
+        source: _AsyncDecodeSource.fallback,
+      ),
+    );
+
+    final bestCandidate = _pickBestAsyncCandidate(
+      candidates,
+      hintedCharset: normalizedHinted,
+      htmlAware: htmlAware,
+    );
+    if (bestCandidate != null) {
+      return bestCandidate.result;
+    }
+
+    return LocalTextDecodeResult(
+      text: utf8.decode(contentBytes, allowMalformed: true),
+      charsetName: 'utf-8',
+      bomLength: bom.length,
+      fallbackUsed: true,
+    );
+  }
+
+  LocalTextDecodeResult? decodeDirectBytes(
+    List<int> bytes, {
+    String? preferredCharset,
+    String? hintedCharset,
+    Iterable<String>? candidateCharsets,
+    bool htmlAware = false,
+  }) {
+    if (bytes.isEmpty) {
+      return null;
+    }
+    final decoded = decodeBestEffort(
+      bytes,
+      preferredCharset: preferredCharset,
+      hintedCharset: hintedCharset,
+      candidateCharsets: candidateCharsets,
+      htmlAware: htmlAware,
+    );
+    if (decoded.text.trim().isEmpty) {
+      return null;
+    }
+    return decoded;
+  }
+
+  Future<LocalTextDecodeResult?> decodeDirectBytesAsync(
+    List<int> bytes, {
+    String? preferredCharset,
+    String? hintedCharset,
+    Iterable<String>? candidateCharsets,
+    bool htmlAware = false,
+  }) async {
+    if (bytes.isEmpty) {
+      return null;
+    }
+    final decoded = await decodeBestEffortAsync(
+      bytes,
+      preferredCharset: preferredCharset,
+      hintedCharset: hintedCharset,
+      candidateCharsets: candidateCharsets,
+      htmlAware: htmlAware,
+    );
+    if (decoded.text.trim().isEmpty) {
+      return null;
+    }
+    return decoded;
   }
 
   LocalTextDecodeResult? decodeSampleBestEffort(
@@ -310,36 +394,66 @@ class LocalTextEncodingDetector {
     final contentBytes =
         bom.length > 0 ? bytes.sublist(bom.length) : List<int>.from(bytes);
     final normalizedPreferred = normalizeCharsetName(preferredCharset);
+    final normalizedHinted =
+        normalizeCharsetName(hintedCharset) ??
+        bom.charsetName ??
+        _detectUtf16ZeroPattern(contentBytes);
+
+    final candidates = <_AsyncDecodeCandidate>[];
+
+    final mobileDecoded = await _tryAutoDecodeOnMobile(contentBytes);
+    if (mobileDecoded != null && mobileDecoded.string.trim().isNotEmpty) {
+      candidates.add(
+        _AsyncDecodeCandidate(
+          result: LocalTextDecodeResult(
+            text: mobileDecoded.string,
+            charsetName: mobileDecoded.charset,
+            bomLength: bom.length,
+          ),
+          source: _AsyncDecodeSource.plugin,
+        ),
+      );
+    }
+
     if (normalizedPreferred != null) {
       final preferredDecoded = await _tryDecodeWithPlatformConverter(
         charsetName: normalizedPreferred,
         bytes: contentBytes,
       );
       if (preferredDecoded != null && preferredDecoded.trim().isNotEmpty) {
-        return LocalTextDecodeResult(
-          text: preferredDecoded,
-          charsetName: normalizedPreferred,
-          bomLength: bom.length,
+        candidates.add(
+          _AsyncDecodeCandidate(
+            result: LocalTextDecodeResult(
+              text: preferredDecoded,
+              charsetName: normalizedPreferred,
+              bomLength: bom.length,
+            ),
+            source: _AsyncDecodeSource.preferred,
+          ),
         );
       }
     }
 
-    final mobileDecoded = await _tryAutoDecodeOnMobile(contentBytes);
-    if (mobileDecoded != null && mobileDecoded.string.trim().isNotEmpty) {
-      return LocalTextDecodeResult(
-        text: mobileDecoded.string,
-        charsetName: mobileDecoded.charset,
-        bomLength: bom.length,
-      );
-    }
-
-    return decodeSampleBestEffort(
+    final fallback = decodeSampleBestEffort(
       bytes,
       preferredCharset: preferredCharset,
       hintedCharset: hintedCharset,
       candidateCharsets: candidateCharsets,
       htmlAware: htmlAware,
     );
+    if (fallback != null) {
+      candidates.add(
+        _AsyncDecodeCandidate(
+          result: fallback,
+          source: _AsyncDecodeSource.fallback,
+        ),
+      );
+    }
+    return _pickBestAsyncCandidate(
+      candidates,
+      hintedCharset: normalizedHinted,
+      htmlAware: htmlAware,
+    )?.result;
   }
 
   _BomInfo _detectBom(List<int> bytes) {
@@ -603,8 +717,7 @@ class LocalTextEncodingDetector {
       return true;
     }
     return defaultTargetPlatform == TargetPlatform.android ||
-        defaultTargetPlatform == TargetPlatform.iOS ||
-        defaultTargetPlatform == TargetPlatform.macOS;
+        defaultTargetPlatform == TargetPlatform.iOS;
   }
 
   bool get _shouldUsePlatformConverter {
@@ -666,6 +779,40 @@ class LocalTextEncodingDetector {
       return null;
     }
   }
+
+  _AsyncDecodeCandidate? _pickBestAsyncCandidate(
+    List<_AsyncDecodeCandidate> candidates, {
+    required String? hintedCharset,
+    required bool htmlAware,
+  }) {
+    if (candidates.isEmpty) {
+      return null;
+    }
+    _AsyncDecodeCandidate? best;
+    var bestScore = -0x7fffffff;
+    for (final candidate in candidates) {
+      final text = candidate.result.text.trim();
+      if (text.isEmpty) {
+        continue;
+      }
+      var score = _scoreDecodedText(
+        candidate.result.text,
+        charsetName: candidate.result.charsetName,
+        hintedCharset: hintedCharset,
+        htmlAware: htmlAware,
+      );
+      score += switch (candidate.source) {
+        _AsyncDecodeSource.plugin => 220,
+        _AsyncDecodeSource.preferred => 120,
+        _AsyncDecodeSource.fallback => 0,
+      };
+      if (best == null || score > bestScore) {
+        best = candidate;
+        bestScore = score;
+      }
+    }
+    return best;
+  }
 }
 
 class _BomInfo {
@@ -680,4 +827,13 @@ class _MobileAutoDecodeResult {
 
   final String charset;
   final String string;
+}
+
+enum _AsyncDecodeSource { plugin, preferred, fallback }
+
+class _AsyncDecodeCandidate {
+  const _AsyncDecodeCandidate({required this.result, required this.source});
+
+  final LocalTextDecodeResult result;
+  final _AsyncDecodeSource source;
 }

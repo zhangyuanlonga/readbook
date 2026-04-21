@@ -1,5 +1,6 @@
 import 'dart:convert';
 
+import 'package:charset/charset.dart';
 import 'package:shuxiang_reading_next/features/reader/application/local/local_text_encoding_detector.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -77,6 +78,23 @@ void main() {
 
         expect(decoded.charsetName, 'utf-8');
         expect(decoded.text, contains('正文内容'));
+      },
+    );
+
+    test(
+      'decodeDirectBytesAsync returns readable text for gbk bytes',
+      () async {
+        final gbk = Charset.getByName('gbk');
+        expect(gbk, isNotNull);
+
+        final bytes = gbk!.encode('第1章 开始\n正文内容。');
+        final decoded = await detector.decodeDirectBytesAsync(
+          bytes,
+          hintedCharset: 'gbk',
+        );
+
+        expect(decoded, isNotNull);
+        expect(decoded!.text, contains('正文内容'));
       },
     );
   });

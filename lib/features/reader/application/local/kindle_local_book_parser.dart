@@ -1,4 +1,3 @@
-import 'dart:convert';
 import 'dart:io';
 import 'dart:typed_data';
 
@@ -256,7 +255,8 @@ class PackageKindleContainerExtractor implements LocalKindleContainerExtractor {
     if (bytes == null || bytes.isEmpty) {
       return null;
     }
-    final normalized = utf8.decode(bytes, allowMalformed: true).trim();
+    final normalized =
+        _textEncodingDetector.decodeBestEffort(bytes).text.trim();
     if (normalized.isEmpty) {
       return null;
     }

@@ -242,6 +242,54 @@ $chapter2
       },
     );
 
+    test('marks offset-only ready txt as stale before reading', () async {
+      final file = File('${tempDir.path}/offset_only_book.txt');
+      await file.writeAsString('第1章 开始\n仅偏移正文');
+
+      final now = DateTime.parse('2026-03-21T12:00:00.000Z');
+      await repository.upsertBook(
+        LocalBook(
+          id: 'local_offset_only_1',
+          title: '仅偏移旧数据测试',
+          format: LocalBookFormat.txt,
+          storagePath: file.path,
+          fileSize: await file.length(),
+          indexStatus: LocalBookIndexStatus.ready,
+          chapterCount: 1,
+          createdAt: now,
+          updatedAt: now,
+        ),
+      );
+      await repository.replaceChapters(
+        bookId: 'local_offset_only_1',
+        chapters: <LocalChapter>[
+          LocalChapter(
+            id: 'local_offset_only_1_0',
+            bookId: 'local_offset_only_1',
+            chapterIndex: 0,
+            title: '第1章 开始',
+            content: '',
+            startOffset: 4,
+            endOffset: 18,
+            createdAt: now,
+            updatedAt: now,
+          ),
+        ],
+      );
+
+      await expectLater(
+        () =>
+            contentService.load(bookId: 'local_offset_only_1', chapterIndex: 0),
+        throwsA(
+          isA<AppException>().having(
+            (error) => error.briefMessage,
+            'briefMessage',
+            contains('目录已过期'),
+          ),
+        ),
+      );
+    });
+
     test('returns epub chapter content directly from indexed storage', () async {
       final archive =
           Archive()

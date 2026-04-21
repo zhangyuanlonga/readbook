@@ -261,36 +261,13 @@ class LocalBookIndexService {
     prepared = refreshedFile.book;
     shouldReindex = shouldReindex || refreshedFile.shouldReindex;
 
-    if (prepared.format == LocalBookFormat.epub &&
-        prepared.indexStatus == LocalBookIndexStatus.ready &&
-        prepared.chapterCount > 0) {
-      final chapterMetas = await _localBookRepository.getChapterMetas(
-        prepared.id,
-      );
-      final hasLegacyChaptersWithoutSourceRef = chapterMetas.any(
-        (chapter) => (chapter.sourceRef?.trim().isEmpty ?? true),
-      );
-      if (hasLegacyChaptersWithoutSourceRef) {
-        prepared = prepared.copyWith(
-          indexStatus: LocalBookIndexStatus.stale,
-          updatedAt: DateTime.now(),
-        );
-        shouldReindex = true;
-      }
-    }
-
-    if ((prepared.format == LocalBookFormat.txt ||
-            prepared.format == LocalBookFormat.epub) &&
-        prepared.indexStatus == LocalBookIndexStatus.ready &&
+    if (prepared.indexStatus == LocalBookIndexStatus.ready &&
         prepared.chapterCount > 0) {
       final chapters = await _localBookRepository.getChapters(prepared.id);
-      final hasDeferredContent = chapters.any(
-        (chapter) => _hasLegacyDeferredChapterContent(
-          format: prepared.format,
-          chapter: chapter,
-        ),
+      final hasUnreadablePayload = chapters.any(
+        (chapter) => !chapter.hasReadablePayload,
       );
-      if (hasDeferredContent) {
+      if (hasUnreadablePayload) {
         prepared = prepared.copyWith(
           indexStatus: LocalBookIndexStatus.stale,
           updatedAt: DateTime.now(),
@@ -523,7 +500,9 @@ class LocalBookIndexService {
   }) async {
     final allBooks = await _bookshelfService.getAll();
     BookshelfBook? matched;
-    final expectedDetailUrl = LocalReaderIdentity.buildBookDetailUrl(nextBook.id);
+    final expectedDetailUrl = LocalReaderIdentity.buildBookDetailUrl(
+      nextBook.id,
+    );
     for (final book in allBooks) {
       if (book.bookId == nextBook.id &&
           book.sourceId == LocalReaderIdentity.localSourceId &&
@@ -551,33 +530,6 @@ class LocalBookIndexService {
             normalizedNextCoverUrl == null || normalizedNextCoverUrl.isEmpty,
       ),
     );
-  }
-
-  bool _hasLegacyDeferredChapterContent({
-    required LocalBookFormat format,
-    required LocalChapter chapter,
-  }) {
-    return switch (format) {
-      LocalBookFormat.txt =>
-        chapter.content.trim().isEmpty && !_hasReadableTxtOffsets(chapter),
-      LocalBookFormat.epub =>
-        chapter.content.trim().isEmpty && chapter.imageUrls.isEmpty,
-      LocalBookFormat.md => false,
-      LocalBookFormat.html => false,
-      LocalBookFormat.pdf => false,
-      LocalBookFormat.mobi => false,
-      LocalBookFormat.azw => false,
-      LocalBookFormat.azw3 => false,
-    };
-  }
-
-  bool _hasReadableTxtOffsets(LocalChapter chapter) {
-    final startOffset = chapter.startOffset;
-    final endOffset = chapter.endOffset;
-    if (startOffset == null || endOffset == null) {
-      return false;
-    }
-    return startOffset >= 0 && endOffset > startOffset;
   }
 
   void _emitIndexEvent({

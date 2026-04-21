@@ -29,6 +29,22 @@ class LocalChapter {
   final int? endOffset;
   final ReaderDocument? document;
 
+  bool get hasStoredTextContent => content.trim().isNotEmpty;
+
+  bool get hasImageContent => imageUrls.isNotEmpty;
+
+  bool get hasStructuredContent =>
+      document != null && document!.blocks.isNotEmpty;
+
+  bool get hasReadablePayload =>
+      hasStoredTextContent || hasImageContent || hasStructuredContent;
+
+  bool get hasOffsetRange {
+    final start = startOffset;
+    final end = endOffset;
+    return start != null && end != null && end > start;
+  }
+
   LocalChapter copyWith({
     String? id,
     String? bookId,

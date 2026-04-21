@@ -1,5 +1,6 @@
 import 'dart:io';
 
+import 'package:charset/charset.dart';
 import 'package:drift/native.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shuxiang_reading_next/core/errors/app_exception.dart';
@@ -102,6 +103,34 @@ void main() {
           ),
         ),
       );
+    });
+
+    test('loads bootstrap preview for gbk txt book', () async {
+      final file = File('${tempDir.path}/pending_bootstrap_book_gbk.txt');
+      final gbk = Charset.getByName('gbk');
+      expect(gbk, isNotNull);
+      await file.writeAsBytes(gbk!.encode('第1章 开始\n第一章正文内容。'), flush: true);
+
+      final now = DateTime.parse('2026-03-21T12:00:00.000Z');
+      await repository.upsertBook(
+        LocalBook(
+          id: 'local_pending_bootstrap_gbk_1',
+          title: '待建立正文直读 GBK 测试',
+          format: LocalBookFormat.txt,
+          storagePath: file.path,
+          fileSize: await file.length(),
+          charset: 'gbk',
+          indexStatus: LocalBookIndexStatus.pending,
+          createdAt: now,
+          updatedAt: now,
+        ),
+      );
+
+      final chapter = await previewService.loadTxtBootstrapPreview(
+        bookId: 'local_pending_bootstrap_gbk_1',
+      );
+
+      expect(chapter.content, contains('第一章正文内容'));
     });
   });
 }

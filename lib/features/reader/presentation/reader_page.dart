@@ -92,6 +92,7 @@ import '../application/reader_volume_key_page_bridge.dart';
 import '../application/source_content_provider.dart';
 import '../application/source_switch_score_service.dart';
 import '../application/switch_source_shared.dart';
+import '../application/local/local_book_workflow_policy.dart';
 import '../application/local/local_book_storage_service.dart';
 import 'chapter_cache_sheets.dart';
 import 'paged_animation/curl_paged_animation_renderer.dart';
@@ -7846,38 +7847,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
   String _toUserReadableError(AppException error) {
     final message = error.briefMessage;
     if (_isLocalContent) {
-      if (message.contains('本地文件不存在')) {
-        return '本地文件不存在，请确认文件是否存在或重新导入。';
-      }
-      if (message.contains('未找到本地书籍')) {
-        return '未找到本地书籍，请确认文件是否存在或重新导入。';
-      }
-      if (message.contains('目录尚未建立完成') || message.contains('正在建立目录')) {
-        return '本地图书正在解析，请稍后再试。';
-      }
-      if (message.contains('目录已过期')) {
-        return '检测到本地图书目录已过期，请先在详情页重新索引。';
-      }
-      if (message.contains('索引失败')) {
-        return '本地书籍索引失败，请在详情页重新索引。';
-      }
-      if (message.contains('文本文件为空') || message.contains('文本内容为空')) {
-        return '本地文件内容为空，无法阅读。';
-      }
-      if (message.contains('没有可用章节') ||
-          message.contains('章节为空') ||
-          message.contains('解析完成但没有可用章节') ||
-          message.contains('未解析出有效章节') ||
-          message.contains('未找到本地章节内容')) {
-        return '未解析到可读章节，请在详情页重新索引。';
-      }
-      if (message.contains('暂不支持')) {
-        return '本地文件格式不受支持，请重新导入。';
-      }
-      if (message.contains('本地书籍信息缺失') || message.contains('bookId')) {
-        return '本地书籍信息缺失，请重新进入或重新导入。';
-      }
-      return '本地书籍加载失败，请在详情页重新索引或重新导入。';
+      return LocalBookWorkflowPolicy.readerLoadError(message);
     }
 
     return switch (error.code) {
