@@ -12,6 +12,7 @@ void main() {
 
     await tester.pumpWidget(
       MaterialApp(
+        theme: ThemeData(splashFactory: NoSplash.splashFactory),
         home: Scaffold(
           bottomNavigationBar: CupertinoDockNavigationBar(
             destinations: appShellDestinations,
@@ -43,6 +44,7 @@ void main() {
   testWidgets('CupertinoDockNavigationBar can hide tab labels', (tester) async {
     await tester.pumpWidget(
       MaterialApp(
+        theme: ThemeData(splashFactory: NoSplash.splashFactory),
         home: Scaffold(
           bottomNavigationBar: CupertinoDockNavigationBar(
             destinations: appShellDestinations,

@@ -1,4 +1,4 @@
-import 'dart:ui' show ImageFilter, lerpDouble;
+import 'dart:ui' show lerpDouble;
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
@@ -342,34 +342,29 @@ class _ShellScaffoldState extends ConsumerState<ShellScaffold>
           ),
         );
       case AppNavigationStyle.cupertinoDock:
-        return ClipRect(
-          child: BackdropFilter(
-            filter: ImageFilter.blur(sigmaX: 18, sigmaY: 18),
-            child: CupertinoDockNavigationBar(
-              destinations: destinations,
-              selectedIndex: selectedIndex,
-              showLabels: showNavigationLabels,
-              activeIconGallery: activeIconGallery,
-              themePalette: DockThemePalette(
-                containerColor:
-                    hasWallpaper
-                        ? advancedPalette.cardColor.withValues(alpha: 0.68)
-                        : advancedPalette.cardColor,
-                borderColor: advancedPalette.cardBorderColor.withValues(
-                  alpha: 0.92,
-                ),
-                selectedIconColor: advancedPalette.textPrimaryColor,
-                unselectedIconColor: advancedPalette.textSecondaryColor,
-                selectedLabelColor: advancedPalette.textPrimaryColor,
-                unselectedLabelColor: advancedPalette.textSecondaryColor,
-              ),
-              onDestinationSelected:
-                  (index) => _goToDestination(context, destinations[index]),
-              onSearchPressed: () {
-                context.push('/search?entry=dock');
-              },
+        return CupertinoDockNavigationBar(
+          destinations: destinations,
+          selectedIndex: selectedIndex,
+          showLabels: showNavigationLabels,
+          activeIconGallery: activeIconGallery,
+          themePalette: DockThemePalette(
+            containerColor:
+                hasWallpaper
+                    ? advancedPalette.cardColor.withValues(alpha: 0.68)
+                    : advancedPalette.cardColor,
+            borderColor: advancedPalette.cardBorderColor.withValues(
+              alpha: 0.92,
             ),
+            selectedIconColor: advancedPalette.textPrimaryColor,
+            unselectedIconColor: advancedPalette.textSecondaryColor,
+            selectedLabelColor: advancedPalette.textPrimaryColor,
+            unselectedLabelColor: advancedPalette.textSecondaryColor,
           ),
+          onDestinationSelected:
+              (index) => _goToDestination(context, destinations[index]),
+          onSearchPressed: () {
+            context.push('/search?entry=dock');
+          },
         );
     }
   }

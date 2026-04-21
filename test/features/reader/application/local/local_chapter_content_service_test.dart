@@ -224,7 +224,7 @@ $chapter2
           'local_offset_streamed_utf16be_1',
         );
         expect(metas.length, greaterThan(1));
-        expect(metas.first.content, isEmpty);
+        expect(metas.first.content, isNotEmpty);
         expect(metas.first.startOffset, isNotNull);
         expect(metas.first.endOffset, isNotNull);
 

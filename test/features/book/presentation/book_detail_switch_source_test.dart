@@ -105,7 +105,6 @@ void main() {
                 title: '凡人修仙传',
                 bookDetailService: detailService,
                 switchSourceSearchService: searchService,
-                cachedChapterCountStreamBuilder: (_) => Stream<int>.value(0),
               ),
         ),
       ],
@@ -114,16 +113,25 @@ void main() {
 
     await tester.pumpWidget(
       ProviderScope(
-        child: MaterialApp.router(routerConfig: router),
+        child: MaterialApp.router(
+          theme: ThemeData(splashFactory: NoSplash.splashFactory),
+          routerConfig: router,
+        ),
       ),
     );
     await tester.pumpAndSettle(const Duration(milliseconds: 120));
 
     expect(find.text('凡人修仙传-A'), findsWidgets);
-    final switchButtonFinder = find.text('去换源');
+    final switchButtonFinder = find.text('书源');
     expect(switchButtonFinder, findsOneWidget);
 
-    await tester.tap(switchButtonFinder);
+    final switchInkWell = tester.widget<InkWell>(
+      find
+          .ancestor(of: switchButtonFinder, matching: find.byType(InkWell))
+          .first,
+    );
+    switchInkWell.onTap?.call();
+    await tester.pump();
     for (
       var i = 0;
       i < 24 && find.textContaining('切换书源（').evaluate().isEmpty;
@@ -133,7 +141,11 @@ void main() {
     }
 
     expect(find.textContaining('切换书源（'), findsOneWidget);
-    for (var i = 0; i < 24 && find.textContaining('源B').evaluate().isEmpty; i++) {
+    for (
+      var i = 0;
+      i < 24 && find.textContaining('源B').evaluate().isEmpty;
+      i++
+    ) {
       await tester.pump(const Duration(milliseconds: 120));
     }
     expect(find.textContaining('源B'), findsWidgets);

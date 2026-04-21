@@ -183,38 +183,58 @@ class _DiscoverPageState extends ConsumerState<DiscoverPage>
         surfaceTintColor: Colors.transparent,
         shadowColor: Colors.transparent,
       ),
-      body: DecoratedBox(
-        decoration: buildAdvancedThemeBackdropDecoration(backdrop),
-        child: SafeArea(
-          top: false,
-          child: Padding(
-            padding: EdgeInsets.fromLTRB(
-              horizontal,
-              topInset + 12,
-              horizontal,
-              12,
+      body: LayoutBuilder(
+        builder: (context, _) {
+          final maxWidth = AppLayout.pageContentMaxWidth(
+            context,
+            maxWidth:
+                AppLayout.discoverExpandedContentMaxWidth +
+                AppLayout.discoverExpandedSidePanelWidth +
+                12,
+          );
+
+          return DecoratedBox(
+            decoration: buildAdvancedThemeBackdropDecoration(backdrop),
+            child: Align(
+              alignment: Alignment.topCenter,
+              child: ConstrainedBox(
+                constraints: BoxConstraints(maxWidth: maxWidth),
+                child: Padding(
+                  padding: EdgeInsets.fromLTRB(
+                    horizontal,
+                    topInset + 12,
+                    horizontal,
+                    12 + bottomInset,
+                  ),
+                  child: LayoutBuilder(
+                    builder: (context, constraints) {
+                      if (AppLayout.isExpandedWidth(constraints.maxWidth)) {
+                        return _buildWideLayout(
+                          context,
+                          sidePanelWidth:
+                              AppLayout.discoverExpandedSidePanelWidth,
+                          maxContentWidth:
+                              AppLayout.discoverExpandedContentMaxWidth,
+                        );
+                      }
+                      if (constraints.maxWidth >=
+                          AppLayout.railBreakpointWidth) {
+                        return _buildWideLayout(
+                          context,
+                          sidePanelWidth:
+                              AppLayout.discoverMediumSidePanelWidth,
+                          maxContentWidth:
+                              AppLayout.discoverMediumContentMaxWidth,
+                        );
+                      }
+                      return _buildCompactLayout(context);
+                    },
+                  ),
+                ),
+              ),
             ),
-            child: LayoutBuilder(
-              builder: (context, constraints) {
-                if (AppLayout.isExpandedWidth(constraints.maxWidth)) {
-                  return _buildWideLayout(
-                    context,
-                    sidePanelWidth: AppLayout.discoverExpandedSidePanelWidth,
-                    maxContentWidth: AppLayout.discoverExpandedContentMaxWidth,
-                  );
-                }
-                if (constraints.maxWidth >= AppLayout.railBreakpointWidth) {
-                  return _buildWideLayout(
-                    context,
-                    sidePanelWidth: AppLayout.discoverMediumSidePanelWidth,
-                    maxContentWidth: AppLayout.discoverMediumContentMaxWidth,
-                  );
-                }
-                return _buildCompactLayout(context, bottomInset: bottomInset);
-              },
-            ),
-          ),
-        ),
+          );
+        },
       ),
     );
   }
@@ -286,7 +306,10 @@ class _DiscoverPageState extends ConsumerState<DiscoverPage>
           }
           return left.name.compareTo(right.name);
         });
-      final cachedSelected = _findSourceById(cachedSources, _rememberedSourceId);
+      final cachedSelected = _findSourceById(
+        cachedSources,
+        _rememberedSourceId,
+      );
       if (cachedSelected != null) {
         try {
           cachedCategories = await _discoverPreferencesService
@@ -321,10 +344,7 @@ class _DiscoverPageState extends ConsumerState<DiscoverPage>
     await _loadSources();
   }
 
-  Widget _buildCompactLayout(
-    BuildContext context, {
-    required double bottomInset,
-  }) {
+  Widget _buildCompactLayout(BuildContext context) {
     return ScrollConfiguration(
       behavior: const MaterialScrollBehavior().copyWith(
         dragDevices: _dragDevices,
@@ -340,8 +360,6 @@ class _DiscoverPageState extends ConsumerState<DiscoverPage>
             SliverToBoxAdapter(child: _buildCategoryStripCard(context)),
             const SliverToBoxAdapter(child: SizedBox(height: 12)),
             ..._buildBooksPaneSlivers(context),
-            if (bottomInset > 0)
-              SliverToBoxAdapter(child: SizedBox(height: bottomInset)),
           ],
         ),
       ),

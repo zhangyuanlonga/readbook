@@ -319,13 +319,6 @@ class _SearchIconButton extends StatelessWidget {
                   color: palette.containerColor,
                   borderRadius: BorderRadius.circular(radius),
                   border: Border.all(color: palette.borderColor, width: 0.8),
-                  boxShadow: [
-                    BoxShadow(
-                      color: Colors.black.withValues(alpha: 0.035),
-                      blurRadius: 18,
-                      offset: const Offset(0, 8),
-                    ),
-                  ],
                 ),
                 child: Center(
                   child: Icon(

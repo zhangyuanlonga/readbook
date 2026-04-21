@@ -174,7 +174,13 @@ class TxtLocalBookParser implements LocalBookParser {
     if (chapters.isEmpty) {
       return null;
     }
-    return LocalParsedBook(chapters: chapters, charset: charsetName);
+    final hydratedChapters = await _hydrateChapterContentsFromOffsets(
+      file,
+      chapters,
+      charsetName: charsetName,
+      yieldGate: yieldGate,
+    );
+    return LocalParsedBook(chapters: hydratedChapters, charset: charsetName);
   }
 
   Future<List<_StreamingSampleChunk>> _readStreamingSampleChunks(
@@ -583,6 +589,50 @@ class TxtLocalBookParser implements LocalBookParser {
       }
     }
     return output;
+  }
+
+  Future<List<LocalParsedChapter>> _hydrateChapterContentsFromOffsets(
+    File file,
+    List<LocalParsedChapter> chapters, {
+    required String charsetName,
+    required _CooperativeYieldGate yieldGate,
+  }) async {
+    if (chapters.isEmpty) {
+      return const <LocalParsedChapter>[];
+    }
+
+    final normalizedCharset = _normalizeCharsetName(charsetName) ?? charsetName;
+    final hydrated = <LocalParsedChapter>[];
+    final handle = await file.open(mode: FileMode.read);
+    try {
+      for (final chapter in chapters) {
+        final startOffset = chapter.startOffset;
+        final endOffset = chapter.endOffset;
+        if (startOffset == null ||
+            endOffset == null ||
+            endOffset <= startOffset) {
+          hydrated.add(chapter);
+          continue;
+        }
+
+        await handle.setPosition(startOffset);
+        final bytes = await handle.read(endOffset - startOffset);
+        final content =
+            _decodeStoredBytes(bytes, charsetName: normalizedCharset).trim();
+        hydrated.add(
+          LocalParsedChapter(
+            title: chapter.title,
+            content: content,
+            startOffset: chapter.startOffset,
+            endOffset: chapter.endOffset,
+          ),
+        );
+        await yieldGate.maybeYield(processedBytes: bytes.length);
+      }
+    } finally {
+      await handle.close();
+    }
+    return hydrated;
   }
 
   Future<int> _findChunkEndByMaxBytesInFile(
@@ -1427,6 +1477,14 @@ class TxtLocalBookParser implements LocalBookParser {
 
   String? _tryDecodeByCharset(List<int> bytes, String charsetName) {
     return LocalTextEncodingDetector.tryDecodeByCharset(bytes, charsetName);
+  }
+
+  String _decodeStoredBytes(List<int> bytes, {required String charsetName}) {
+    if (bytes.isEmpty) {
+      return '';
+    }
+    return _tryDecodeByCharset(bytes, charsetName) ??
+        utf8.decode(bytes, allowMalformed: true);
   }
 
   int _encodedLength(String text, String charsetName) {

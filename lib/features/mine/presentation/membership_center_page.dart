@@ -1,6 +1,10 @@
+import 'dart:io';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
+import 'package:path/path.dart' as p;
+import 'package:path_provider/path_provider.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../../../app/layout/app_layout.dart';
@@ -22,6 +26,7 @@ class MembershipCenterPage extends StatefulWidget {
 
 class _MembershipCenterPageState extends State<MembershipCenterPage> {
   static const String _supportQqNumber = '782045011';
+  static const String _paymentQrAssetPath = 'assets/logo/vx.jpg';
   static final Uri _supportChatUri = Uri.parse(
     'mqqwpa://im/chat?chat_type=wpa&uin=$_supportQqNumber&version=1&src_type=app',
   );
@@ -480,6 +485,32 @@ class _MembershipCenterPageState extends State<MembershipCenterPage> {
     _showMessage('跳转失败，请稍后重试。');
   }
 
+  Future<void> _savePaymentQrCode() async {
+    try {
+      final data = await rootBundle.load(_paymentQrAssetPath);
+      final documentsDirectory = await getApplicationDocumentsDirectory();
+      final saveDirectory = Directory(
+        p.join(documentsDirectory.path, 'membership_payments'),
+      );
+      if (!await saveDirectory.exists()) {
+        await saveDirectory.create(recursive: true);
+      }
+      final targetFile = File(
+        p.join(saveDirectory.path, 'membership_payment_qr.jpg'),
+      );
+      await targetFile.writeAsBytes(data.buffer.asUint8List(), flush: true);
+      if (!mounted) {
+        return;
+      }
+      _showMessage('二维码已保存到 ${targetFile.path}');
+    } catch (error) {
+      if (!mounted) {
+        return;
+      }
+      _showMessage('保存二维码失败，请直接截图保存。');
+    }
+  }
+
   List<Widget> _buildContent(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
     if (_isLoading) {
@@ -666,14 +697,14 @@ class _MembershipCenterPageState extends State<MembershipCenterPage> {
               ),
             ),
             Text(
-              '联系客服',
+              '扫码支付',
               style: theme.textTheme.titleMedium?.copyWith(
                 fontWeight: FontWeight.w700,
               ),
             ),
             const SizedBox(height: 8),
             Text(
-              '你可以通过以下两种方式联系到客服，咨询会员、许可证或使用问题。',
+              '默认展示微信支付二维码。你可以先保存到本地，或者直接截图后扫码支付；如需确认开通结果，也可以使用下方方式联系我。',
               style: theme.textTheme.bodySmall?.copyWith(
                 color: colorScheme.onSurfaceVariant,
                 height: 1.45,
@@ -682,7 +713,7 @@ class _MembershipCenterPageState extends State<MembershipCenterPage> {
             const SizedBox(height: 14),
             Container(
               width: double.infinity,
-              padding: const EdgeInsets.fromLTRB(14, 14, 14, 14),
+              padding: const EdgeInsets.fromLTRB(14, 14, 14, 16),
               decoration: BoxDecoration(
                 color: colorScheme.surfaceContainerLow,
                 borderRadius: BorderRadius.circular(16),
@@ -693,86 +724,81 @@ class _MembershipCenterPageState extends State<MembershipCenterPage> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(
-                    '方式一：客服 QQ',
-                    style: theme.textTheme.bodyMedium?.copyWith(
-                      fontWeight: FontWeight.w700,
+                  Center(
+                    child: ClipRRect(
+                      borderRadius: BorderRadius.circular(18),
+                      child: Image.asset(
+                        _paymentQrAssetPath,
+                        width: 220,
+                        height: 220,
+                        fit: BoxFit.cover,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 14),
+                  Center(
+                    child: Text(
+                      '支付后如需人工确认，可联系 QQ：$_supportQqNumber',
+                      textAlign: TextAlign.center,
+                      style: theme.textTheme.bodyMedium?.copyWith(
+                        fontWeight: FontWeight.w700,
+                      ),
                     ),
                   ),
                   const SizedBox(height: 6),
                   Text(
-                    '客服 QQ 号：$_supportQqNumber',
-                    style: theme.textTheme.titleSmall?.copyWith(
-                      fontWeight: FontWeight.w800,
-                    ),
-                  ),
-                  const SizedBox(height: 6),
-                  Text(
-                    '有问题可以直接咨询这个号。如无法发起临时会话，可先复制 QQ 号添加好友。',
+                    '建议优先保存二维码到本地，若保存失败也可以直接截图后扫码支付。支付完成后可复制客服 QQ、尝试私聊，或前往官方群继续处理。',
                     style: theme.textTheme.bodySmall?.copyWith(
                       color: colorScheme.onSurfaceVariant,
                       height: 1.45,
                     ),
-                  ),
-                  const SizedBox(height: 10),
-                  Row(
-                    children: [
-                      OutlinedButton(
-                        onPressed: _copySupportQqNumber,
-                        child: const Text('复制 QQ 号'),
-                      ),
-                      const SizedBox(width: 10),
-                      FilledButton(
-                        onPressed: _openSupportChatDirectly,
-                        child: const Text('尝试私聊'),
-                      ),
-                    ],
-                  ),
-                ],
-              ),
-            ),
-            const SizedBox(height: 12),
-            Container(
-              width: double.infinity,
-              padding: const EdgeInsets.fromLTRB(14, 14, 14, 14),
-              decoration: BoxDecoration(
-                color: colorScheme.surfaceContainerLow,
-                borderRadius: BorderRadius.circular(16),
-                border: Border.all(
-                  color: colorScheme.outlineVariant.withValues(alpha: 0.42),
-                ),
-              ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    '方式二：加群后私信群主',
-                    style: theme.textTheme.bodyMedium?.copyWith(
-                      fontWeight: FontWeight.w700,
-                    ),
-                  ),
-                  const SizedBox(height: 6),
-                  Text(
-                    '如果私聊客服受限，也可以先加入官方群，再通过群内私信群主获取帮助。',
-                    style: theme.textTheme.bodySmall?.copyWith(
-                      color: colorScheme.onSurfaceVariant,
-                      height: 1.45,
-                    ),
-                  ),
-                  const SizedBox(height: 10),
-                  FilledButton.tonal(
-                    onPressed: _openSupportGroup,
-                    child: const Text('前往官方群'),
                   ),
                 ],
               ),
             ),
             const SizedBox(height: 16),
-            Align(
-              alignment: Alignment.centerRight,
-              child: TextButton(
-                onPressed: () => Navigator.of(context).pop(),
-                child: const Text('关闭'),
+            DecoratedBox(
+              decoration: BoxDecoration(
+                color: colorScheme.surfaceContainerLowest,
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(
+                  color: colorScheme.outlineVariant.withValues(alpha: 0.3),
+                ),
+              ),
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(6, 6, 6, 6),
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: _SupportActionButton(
+                        icon: Icons.download_rounded,
+                        label: '保存二维码',
+                        onPressed: _savePaymentQrCode,
+                      ),
+                    ),
+                    Expanded(
+                      child: _SupportActionButton(
+                        icon: Icons.copy_rounded,
+                        label: '复制客服QQ号',
+                        onPressed: _copySupportQqNumber,
+                      ),
+                    ),
+                    Expanded(
+                      child: _SupportActionButton(
+                        icon: Icons.chat_bubble_outline_rounded,
+                        label: '尝试私聊',
+                        onPressed: _openSupportChatDirectly,
+                      ),
+                    ),
+                    Expanded(
+                      child: _SupportActionButton(
+                        icon: Icons.groups_rounded,
+                        label: '前往官方群',
+                        onPressed: _openSupportGroup,
+                      ),
+                    ),
+                  ],
+                ),
               ),
             ),
           ],
@@ -1625,4 +1651,47 @@ class _MembershipFeatureItem {
   final String title;
   final String description;
   final String? note;
+}
+
+class _SupportActionButton extends StatelessWidget {
+  const _SupportActionButton({
+    required this.icon,
+    required this.label,
+    required this.onPressed,
+  });
+
+  final IconData icon;
+  final String label;
+  final VoidCallback onPressed;
+
+  @override
+  Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+    return TextButton(
+      onPressed: onPressed,
+      style: TextButton.styleFrom(
+        minimumSize: const Size(0, 64),
+        padding: const EdgeInsets.symmetric(horizontal: 2, vertical: 8),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 18, color: colorScheme.primary),
+          const SizedBox(height: 4),
+          Text(
+            label,
+            textAlign: TextAlign.center,
+            maxLines: 2,
+            overflow: TextOverflow.ellipsis,
+            style: Theme.of(context).textTheme.labelSmall?.copyWith(
+              fontSize: 10.5,
+              height: 1.15,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
 }

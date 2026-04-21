@@ -66,7 +66,6 @@ class BookDetailPage extends StatefulWidget {
     this.bookDetailService,
     this.bookshelfService,
     this.switchSourceSearchService,
-    this.cachedChapterCountStreamBuilder,
   });
 
   final String bookId;
@@ -77,10 +76,76 @@ class BookDetailPage extends StatefulWidget {
   final BookDetailService? bookDetailService;
   final BookshelfService? bookshelfService;
   final SearchService? switchSourceSearchService;
-  final Stream<int> Function(String bookId)? cachedChapterCountStreamBuilder;
 
   @override
   State<BookDetailPage> createState() => _BookDetailPageState();
+}
+
+class _BookDetailPresentationState {
+  const _BookDetailPresentationState({
+    this.isLoading = false,
+    this.showLoadingIndicator = false,
+    this.errorText,
+    this.tocWarningText,
+    this.result,
+  });
+
+  final bool isLoading;
+  final bool showLoadingIndicator;
+  final String? errorText;
+  final String? tocWarningText;
+  final BookDetailLoadResult? result;
+
+  _BookDetailPresentationState copyWith({
+    bool? isLoading,
+    bool? showLoadingIndicator,
+    String? errorText,
+    bool clearErrorText = false,
+    String? tocWarningText,
+    bool clearTocWarningText = false,
+    BookDetailLoadResult? result,
+    bool clearResult = false,
+  }) {
+    return _BookDetailPresentationState(
+      isLoading: isLoading ?? this.isLoading,
+      showLoadingIndicator: showLoadingIndicator ?? this.showLoadingIndicator,
+      errorText: clearErrorText ? null : (errorText ?? this.errorText),
+      tocWarningText:
+          clearTocWarningText ? null : (tocWarningText ?? this.tocWarningText),
+      result: clearResult ? null : (result ?? this.result),
+    );
+  }
+}
+
+class _BookDetailAuxiliaryState {
+  const _BookDetailAuxiliaryState({
+    this.isInBookshelf = false,
+    this.isShelfActionLoading = false,
+    this.localBookMeta,
+    this.showLocalAdvancedOptions = false,
+  });
+
+  final bool isInBookshelf;
+  final bool isShelfActionLoading;
+  final LocalBook? localBookMeta;
+  final bool showLocalAdvancedOptions;
+
+  _BookDetailAuxiliaryState copyWith({
+    bool? isInBookshelf,
+    bool? isShelfActionLoading,
+    LocalBook? localBookMeta,
+    bool clearLocalBookMeta = false,
+    bool? showLocalAdvancedOptions,
+  }) {
+    return _BookDetailAuxiliaryState(
+      isInBookshelf: isInBookshelf ?? this.isInBookshelf,
+      isShelfActionLoading: isShelfActionLoading ?? this.isShelfActionLoading,
+      localBookMeta:
+          clearLocalBookMeta ? null : (localBookMeta ?? this.localBookMeta),
+      showLocalAdvancedOptions:
+          showLocalAdvancedOptions ?? this.showLocalAdvancedOptions,
+    );
+  }
 }
 
 class _BookDetailPageState extends State<BookDetailPage> {
@@ -99,13 +164,19 @@ class _BookDetailPageState extends State<BookDetailPage> {
   late final BookshelfService _bookshelfService;
   late final SearchService _switchSourceSearchService;
   late final BookDetailSwitchSourceHelper _switchSourceHelper;
+  final ValueNotifier<_BookDetailPresentationState> _presentationStateNotifier =
+      ValueNotifier<_BookDetailPresentationState>(
+        const _BookDetailPresentationState(),
+      );
+  final ValueNotifier<_BookDetailAuxiliaryState> _auxiliaryStateNotifier =
+      ValueNotifier<_BookDetailAuxiliaryState>(
+        const _BookDetailAuxiliaryState(),
+      );
 
   static const Duration _kLoadingIndicatorDelay = Duration(milliseconds: 260);
   bool _isLoading = false;
-  bool _showLoadingIndicator = false;
   bool _isSwitchingSource = false;
   bool _manualTocReversed = false;
-  bool _isShelfActionLoading = false;
   bool _isInBookshelf = false;
   bool _showLocalAdvancedOptions = false;
   int _bookshelfStateSyncToken = 0;
@@ -198,7 +269,36 @@ class _BookDetailPageState extends State<BookDetailPage> {
         title: (_displayTitle ?? '').trim(),
       );
     }
+    _presentationStateNotifier.dispose();
+    _auxiliaryStateNotifier.dispose();
     super.dispose();
+  }
+
+  _BookDetailPresentationState get _presentationState =>
+      _presentationStateNotifier.value;
+
+  _BookDetailAuxiliaryState get _auxiliaryState =>
+      _auxiliaryStateNotifier.value;
+
+  void _updatePresentationState(
+    _BookDetailPresentationState nextState, {
+    bool syncLegacyFields = true,
+  }) {
+    _presentationStateNotifier.value = nextState;
+    if (!syncLegacyFields) {
+      return;
+    }
+    _isLoading = nextState.isLoading;
+    _errorText = nextState.errorText;
+    _tocWarningText = nextState.tocWarningText;
+    _result = nextState.result;
+  }
+
+  void _updateAuxiliaryState(_BookDetailAuxiliaryState nextState) {
+    _auxiliaryStateNotifier.value = nextState;
+    _isInBookshelf = nextState.isInBookshelf;
+    _localBookMeta = nextState.localBookMeta;
+    _showLocalAdvancedOptions = nextState.showLocalAdvancedOptions;
   }
 
   @override
@@ -242,7 +342,16 @@ class _BookDetailPageState extends State<BookDetailPage> {
           ],
         ),
         floatingActionButton:
-            _result == null ? null : _buildReadFloatingActionButton(_result!),
+            ValueListenableBuilder<_BookDetailPresentationState>(
+              valueListenable: _presentationStateNotifier,
+              builder: (context, presentationState, _) {
+                final result = presentationState.result;
+                return result == null
+                    ? const SizedBox.shrink()
+                    : (_buildReadFloatingActionButton(result) ??
+                        const SizedBox.shrink());
+              },
+            ),
         body: DecoratedBox(
           decoration: BoxDecoration(
             gradient: LinearGradient(
@@ -262,74 +371,103 @@ class _BookDetailPageState extends State<BookDetailPage> {
                 alignment: Alignment.topCenter,
                 child: ConstrainedBox(
                   constraints: BoxConstraints(maxWidth: maxWidth),
-                  child: RefreshIndicator(
-                    onRefresh: () => _load(forceRefresh: true),
-                    child: ListView(
-                      physics: const AlwaysScrollableScrollPhysics(),
-                      padding: EdgeInsets.fromLTRB(
-                        horizontal,
-                        16,
-                        horizontal,
-                        16 + bottomSafe,
-                      ),
-                      children: [
-                        if (_showLoadingIndicator)
-                          const Padding(
-                            padding: EdgeInsets.only(bottom: 12),
-                            child: LinearProgressIndicator(minHeight: 2),
+                  child: ValueListenableBuilder<_BookDetailPresentationState>(
+                    valueListenable: _presentationStateNotifier,
+                    builder: (context, presentationState, _) {
+                      final result = presentationState.result;
+                      final errorText = presentationState.errorText;
+                      final tocWarningText = presentationState.tocWarningText;
+                      return RefreshIndicator(
+                        onRefresh: () => _load(forceRefresh: true),
+                        child: ListView(
+                          physics: const AlwaysScrollableScrollPhysics(),
+                          padding: EdgeInsets.fromLTRB(
+                            horizontal,
+                            16,
+                            horizontal,
+                            16 + bottomSafe,
                           ),
-                        if (_isMissingParams)
-                          RuntimeFeedbackCard(
-                            title: '参数不完整',
-                            message:
-                                '缺少 sourceId/detailUrl，无法加载详情。请从搜索结果进入。bookId=${widget.bookId}',
-                            tone: RuntimeFeedbackTone.warning,
-                          )
-                        else if (_errorText != null && _result == null)
-                          RuntimeFeedbackCard(
-                            title: '加载失败',
-                            message: _errorText!,
-                            tone: RuntimeFeedbackTone.error,
-                            actions: [
-                              FilledButton.tonal(
-                                onPressed: () => _load(forceRefresh: true),
-                                child: const Text('重试'),
+                          children: [
+                            if (presentationState.showLoadingIndicator)
+                              const Padding(
+                                padding: EdgeInsets.only(bottom: 12),
+                                child: LinearProgressIndicator(minHeight: 2),
                               ),
-                              if (_isLocalContent)
-                                OutlinedButton.icon(
-                                  onPressed: _copyLocalDiagnosticsFromError,
-                                  icon: const Icon(
-                                    Icons.copy_rounded,
-                                    size: 16,
+                            if (_isMissingParams)
+                              RuntimeFeedbackCard(
+                                title: '参数不完整',
+                                message:
+                                    '缺少 sourceId/detailUrl，无法加载详情。请从搜索结果进入。bookId=${widget.bookId}',
+                                tone: RuntimeFeedbackTone.warning,
+                              )
+                            else if (errorText != null && result == null)
+                              RuntimeFeedbackCard(
+                                title: '加载失败',
+                                message: errorText,
+                                tone: RuntimeFeedbackTone.error,
+                                actions: [
+                                  FilledButton.tonal(
+                                    onPressed: () => _load(forceRefresh: true),
+                                    child: const Text('重试'),
                                   ),
-                                  label: const Text('复制诊断信息'),
+                                  if (_isLocalContent)
+                                    OutlinedButton.icon(
+                                      onPressed: _copyLocalDiagnosticsFromError,
+                                      icon: const Icon(
+                                        Icons.copy_rounded,
+                                        size: 16,
+                                      ),
+                                      label: const Text('复制诊断信息'),
+                                    ),
+                                ],
+                              )
+                            else if (result != null) ...[
+                              _buildDetailCard(result),
+                              const SizedBox(height: 12),
+                              ValueListenableBuilder<_BookDetailAuxiliaryState>(
+                                valueListenable: _auxiliaryStateNotifier,
+                                builder: (context, auxiliaryState, _) {
+                                  return _buildQuickActionsCard(
+                                    result,
+                                    auxiliaryState: auxiliaryState,
+                                  );
+                                },
+                              ),
+                              if (_resolveIntro(result.detail.intro) !=
+                                  null) ...[
+                                const SizedBox(height: 12),
+                                BookDetailIntroCard(
+                                  intro: _resolveIntro(result.detail.intro)!,
                                 ),
+                              ],
+                              ValueListenableBuilder<_BookDetailAuxiliaryState>(
+                                valueListenable: _auxiliaryStateNotifier,
+                                builder: (context, auxiliaryState, _) {
+                                  final localBookMeta =
+                                      auxiliaryState.localBookMeta;
+                                  if (!_isLocalContent ||
+                                      localBookMeta == null ||
+                                      localBookMeta.indexStatus ==
+                                          LocalBookIndexStatus.ready) {
+                                    return const SizedBox.shrink();
+                                  }
+                                  return Column(
+                                    children: [
+                                      const SizedBox(height: 12),
+                                      _buildLocalIndexStatusCard(localBookMeta),
+                                    ],
+                                  );
+                                },
+                              ),
+                              if (tocWarningText != null) ...[
+                                const SizedBox(height: 12),
+                                _buildTocWarningCard(tocWarningText),
+                              ],
                             ],
-                          )
-                        else if (_result != null) ...[
-                          _buildDetailCard(_result!),
-                          const SizedBox(height: 12),
-                          _buildQuickActionsCard(_result!),
-                          if (_resolveIntro(_result!.detail.intro) != null) ...[
-                            const SizedBox(height: 12),
-                            BookDetailIntroCard(
-                              intro: _resolveIntro(_result!.detail.intro)!,
-                            ),
                           ],
-                          if (_isLocalContent &&
-                              _localBookMeta != null &&
-                              _localBookMeta!.indexStatus !=
-                                  LocalBookIndexStatus.ready) ...[
-                            const SizedBox(height: 12),
-                            _buildLocalIndexStatusCard(_localBookMeta!),
-                          ],
-                          if (_tocWarningText != null) ...[
-                            const SizedBox(height: 12),
-                            _buildTocWarningCard(_tocWarningText!),
-                          ],
-                        ],
-                      ],
-                    ),
+                        ),
+                      );
+                    },
                   ),
                 ),
               );
@@ -373,6 +511,13 @@ class _BookDetailPageState extends State<BookDetailPage> {
     _activeDetailUrl = cached.detail.detailUrl.trim();
     _displayTitle = cached.detail.title.trim();
     _tocWarningText = null;
+    _updatePresentationState(
+      _presentationState.copyWith(
+        result: cached,
+        clearErrorText: true,
+        clearTocWarningText: true,
+      ),
+    );
     return true;
   }
 
@@ -456,28 +601,34 @@ class _BookDetailPageState extends State<BookDetailPage> {
     if (raw == null) {
       return null;
     }
-    final normalized = _normalizeSingleLineText(raw)
-        .replaceFirst(RegExp(r'^(作者|来源|最新章节|最新)\s*[:：]\s*'), '')
-        .trim();
+    final normalized =
+        _normalizeSingleLineText(
+          raw,
+        ).replaceFirst(RegExp(r'^(作者|来源|最新章节|最新)\s*[:：]\s*'), '').trim();
     return normalized.isEmpty ? null : normalized;
   }
 
-  Widget _buildQuickActionsCard(BookDetailLoadResult result) {
+  Widget _buildQuickActionsCard(
+    BookDetailLoadResult result, {
+    required _BookDetailAuxiliaryState auxiliaryState,
+  }) {
     return BookDetailQuickActionsCard(
       child: LayoutBuilder(
         builder: (context, constraints) {
           return BookDetailPrimaryActions(
             availableWidth: constraints.maxWidth,
-            isInBookshelf: _isInBookshelf,
-            isShelfActionLoading: _isShelfActionLoading,
+            isInBookshelf: auxiliaryState.isInBookshelf,
+            isShelfActionLoading: auxiliaryState.isShelfActionLoading,
             onToggleBookshelf: _toggleBookshelf,
             onOpenCatalog:
-                result.chapters.isEmpty ? null : () => _openCatalogSheet(result),
+                result.chapters.isEmpty
+                    ? null
+                    : () => _openCatalogSheet(result),
             isCatalogEnabled: result.chapters.isNotEmpty,
             onSwitchSource: _canSwitchSource ? _handleSwitchSource : null,
             isSwitchSourceEnabled: _canSwitchSource,
             onOpenOrganize: _openOrganizeSheet,
-            isOrganizeEnabled: _isInBookshelf,
+            isOrganizeEnabled: auxiliaryState.isInBookshelf,
           );
         },
       ),
@@ -567,7 +718,8 @@ class _BookDetailPageState extends State<BookDetailPage> {
                   title: const Text('查看目录'),
                   onTap: () => Navigator.of(context).pop('catalog'),
                 ),
-              if (detailResult != null && _buildOpenCacheAction(detailResult) != null)
+              if (detailResult != null &&
+                  _buildOpenCacheAction(detailResult) != null)
                 ListTile(
                   leading: const Icon(Icons.cloud_download_outlined),
                   title: const Text('缓存章节'),
@@ -725,9 +877,7 @@ class _BookDetailPageState extends State<BookDetailPage> {
     return () {
       final startIndex = 0;
       final endIndex =
-          totalChapters > 0
-              ? (startIndex + 49).clamp(0, totalChapters - 1)
-              : 0;
+          totalChapters > 0 ? (startIndex + 49).clamp(0, totalChapters - 1) : 0;
 
       showChapterCacheFlow(
         context: context,
@@ -755,20 +905,22 @@ class _BookDetailPageState extends State<BookDetailPage> {
     final initialCategoryOrder = await _bookshelfService.getCategoryOrder();
     final bookKey = '${detail.sourceId}::${detail.detailUrl}';
 
-    var selectedTags = List<String>.from(initialTagMap[bookKey] ?? const <String>[]);
+    var selectedTags = List<String>.from(
+      initialTagMap[bookKey] ?? const <String>[],
+    );
     var availableTags = <String>[
-      ...initialTagOrder,
-      ...initialTagMap.values.expand((items) => items),
-      ...selectedTags,
-    ].where((item) => item.trim().isNotEmpty).toSet().toList(growable: false)
+        ...initialTagOrder,
+        ...initialTagMap.values.expand((items) => items),
+        ...selectedTags,
+      ].where((item) => item.trim().isNotEmpty).toSet().toList(growable: false)
       ..sort();
 
     var selectedCategory = initialCategoryMap[bookKey];
     var availableCategories = <String>[
-      ...initialCategoryOrder,
-      ...initialCategoryMap.values,
-      if (selectedCategory?.trim().isNotEmpty ?? false) selectedCategory!,
-    ].where((item) => item.trim().isNotEmpty).toSet().toList(growable: false)
+        ...initialCategoryOrder,
+        ...initialCategoryMap.values,
+        if (selectedCategory?.trim().isNotEmpty ?? false) selectedCategory!,
+      ].where((item) => item.trim().isNotEmpty).toSet().toList(growable: false)
       ..sort();
 
     var createTagDraft = '';
@@ -930,7 +1082,10 @@ class _BookDetailPageState extends State<BookDetailPage> {
                               onSelected: (selected) {
                                 setSheetState(() {
                                   if (selected) {
-                                    selectedTags = <String>[...selectedTags, tag];
+                                    selectedTags = <String>[
+                                      ...selectedTags,
+                                      tag,
+                                    ];
                                   } else {
                                     selectedTags = selectedTags
                                         .where((item) => item != tag)
@@ -1135,7 +1290,10 @@ class _BookDetailPageState extends State<BookDetailPage> {
     }
   }
 
-  Chapter? _resolveChapterFromBookmark(List<Chapter> chapters, Bookmark bookmark) {
+  Chapter? _resolveChapterFromBookmark(
+    List<Chapter> chapters,
+    Bookmark bookmark,
+  ) {
     final chapterId = bookmark.chapterId.trim();
     if (chapterId.isNotEmpty) {
       for (final chapter in chapters) {
@@ -1156,6 +1314,7 @@ class _BookDetailPageState extends State<BookDetailPage> {
     }
     return null;
   }
+
   String _normalizeText(String text) {
     var normalized = text
         .replaceAll(r'\r\n', '\n')
@@ -1411,12 +1570,10 @@ class _BookDetailPageState extends State<BookDetailPage> {
       );
     }
 
-    setState(() {
-      _activeSourceId = candidate.book.sourceId.trim();
-      _activeDetailUrl = candidate.book.detailUrl.trim();
-      _activeBookId = candidate.book.id.trim();
-      _displayTitle = candidate.book.title.trim();
-    });
+    _activeSourceId = candidate.book.sourceId.trim();
+    _activeDetailUrl = candidate.book.detailUrl.trim();
+    _activeBookId = candidate.book.id.trim();
+    _displayTitle = candidate.book.title.trim();
 
     final switched = await _load(forceRefresh: true, clearResult: true);
     if (switched) {
@@ -1441,16 +1598,20 @@ class _BookDetailPageState extends State<BookDetailPage> {
     }
 
     if (mounted) {
-      setState(() {
-        _activeSourceId = previousSourceId;
-        _activeDetailUrl = previousDetailUrl;
-        _activeBookId = previousBookId;
-        _displayTitle = previousTitle;
-        _result = previousResult;
-        _errorText = previousErrorText;
-        _tocWarningText = previousTocWarning;
-        _isInBookshelf = previousInBookshelf;
-      });
+      _activeSourceId = previousSourceId;
+      _activeDetailUrl = previousDetailUrl;
+      _activeBookId = previousBookId;
+      _displayTitle = previousTitle;
+      _updatePresentationState(
+        _presentationState.copyWith(
+          result: previousResult,
+          errorText: previousErrorText,
+          tocWarningText: previousTocWarning,
+        ),
+      );
+      _updateAuxiliaryState(
+        _auxiliaryState.copyWith(isInBookshelf: previousInBookshelf),
+      );
     }
     return _DetailSwitchSourceApplyResult.failed;
   }
@@ -1501,9 +1662,7 @@ class _BookDetailPageState extends State<BookDetailPage> {
         ),
       );
       if (mounted) {
-        setState(() {
-          _isInBookshelf = true;
-        });
+        _updateAuxiliaryState(_auxiliaryState.copyWith(isInBookshelf: true));
       }
       return false;
     } catch (_) {
@@ -1645,19 +1804,17 @@ class _BookDetailPageState extends State<BookDetailPage> {
     final requestToken = ++_detailLoadRequestToken;
 
     final shouldShowLoading = !backgroundRefresh || _result == null;
-    setState(() {
-      if (shouldShowLoading) {
-        _isLoading = true;
-        _scheduleLoadingIndicator();
-      }
-      if (!backgroundRefresh) {
-        _errorText = null;
-        _tocWarningText = null;
-      }
-      if (clearResult) {
-        _result = null;
-      }
-    });
+    final nextPresentationBeforeLoad = _presentationState.copyWith(
+      isLoading: shouldShowLoading ? true : _presentationState.isLoading,
+      showLoadingIndicator: false,
+      clearErrorText: !backgroundRefresh,
+      clearTocWarningText: !backgroundRefresh,
+      clearResult: clearResult,
+    );
+    _updatePresentationState(nextPresentationBeforeLoad);
+    if (shouldShowLoading) {
+      _scheduleLoadingIndicator();
+    }
 
     try {
       final detailProvider = _requireContentProvider(
@@ -1676,14 +1833,16 @@ class _BookDetailPageState extends State<BookDetailPage> {
         return false;
       }
 
-      setState(() {
-        _result = result;
-        _tocWarningText = _toTocWarningText(result.tocError);
-        _activeBookId = result.detail.id.trim();
-        _activeSourceId = result.detail.sourceId.trim();
-        _activeDetailUrl = result.detail.detailUrl.trim();
-        _displayTitle = result.detail.title.trim();
-      });
+      _updatePresentationState(
+        _presentationState.copyWith(
+          result: result,
+          tocWarningText: _toTocWarningText(result.tocError),
+        ),
+      );
+      _activeBookId = result.detail.id.trim();
+      _activeSourceId = result.detail.sourceId.trim();
+      _activeDetailUrl = result.detail.detailUrl.trim();
+      _displayTitle = result.detail.title.trim();
 
       await _syncLocalBookMeta(loadRequestToken: requestToken);
       if (!_isActiveDetailLoadRequest(requestToken)) {
@@ -1701,11 +1860,13 @@ class _BookDetailPageState extends State<BookDetailPage> {
         }
         return false;
       }
-      setState(() {
-        _errorText = _toUserReadableError(error);
-        _tocWarningText = null;
-        _localBookMeta = null;
-      });
+      _updatePresentationState(
+        _presentationState.copyWith(
+          errorText: _toUserReadableError(error),
+          clearTocWarningText: true,
+        ),
+      );
+      _updateAuxiliaryState(_auxiliaryState.copyWith(clearLocalBookMeta: true));
       return false;
     } catch (_) {
       if (!_isActiveDetailLoadRequest(requestToken)) {
@@ -1717,18 +1878,22 @@ class _BookDetailPageState extends State<BookDetailPage> {
         }
         return false;
       }
-      setState(() {
-        _errorText = '加载失败，请稍后重试。';
-        _tocWarningText = null;
-        _localBookMeta = null;
-      });
+      _updatePresentationState(
+        _presentationState.copyWith(
+          errorText: '加载失败，请稍后重试。',
+          clearTocWarningText: true,
+        ),
+      );
+      _updateAuxiliaryState(_auxiliaryState.copyWith(clearLocalBookMeta: true));
       return false;
     } finally {
       if (_isActiveDetailLoadRequest(requestToken) && shouldShowLoading) {
-        setState(() {
-          _isLoading = false;
-          _showLoadingIndicator = false;
-        });
+        _updatePresentationState(
+          _presentationState.copyWith(
+            isLoading: false,
+            showLoadingIndicator: false,
+          ),
+        );
       }
       _loadingIndicatorTimer?.cancel();
       lease.release();
@@ -1737,14 +1902,16 @@ class _BookDetailPageState extends State<BookDetailPage> {
 
   void _scheduleLoadingIndicator() {
     _loadingIndicatorTimer?.cancel();
-    _showLoadingIndicator = false;
+    _updatePresentationState(
+      _presentationState.copyWith(showLoadingIndicator: false),
+    );
     _loadingIndicatorTimer = Timer(_kLoadingIndicatorDelay, () {
       if (!mounted || !_isLoading) {
         return;
       }
-      setState(() {
-        _showLoadingIndicator = true;
-      });
+      _updatePresentationState(
+        _presentationState.copyWith(showLoadingIndicator: true),
+      );
     });
   }
 
@@ -1794,9 +1961,7 @@ class _BookDetailPageState extends State<BookDetailPage> {
         _localBookMeta = null;
         return;
       }
-      setState(() {
-        _localBookMeta = null;
-      });
+      _updateAuxiliaryState(_auxiliaryState.copyWith(clearLocalBookMeta: true));
       return;
     }
 
@@ -1809,14 +1974,17 @@ class _BookDetailPageState extends State<BookDetailPage> {
       _localBookMeta = localBook;
       return;
     }
-    setState(() {
-      _localBookMeta = localBook;
-      if (localBook != null && localBook.format == LocalBookFormat.txt) {
-        _showLocalAdvancedOptions = true;
-      } else if (localBook != null && !_hasLocalRepairIssue(localBook)) {
-        _showLocalAdvancedOptions = false;
-      }
-    });
+    _updateAuxiliaryState(
+      _auxiliaryState.copyWith(
+        localBookMeta: localBook,
+        showLocalAdvancedOptions:
+            localBook != null && localBook.format == LocalBookFormat.txt
+                ? true
+                : localBook != null && !_hasLocalRepairIssue(localBook)
+                ? false
+                : _auxiliaryState.showLocalAdvancedOptions,
+      ),
+    );
   }
 
   bool _isActiveDetailLoadRequest(int requestToken) {
@@ -1998,9 +2166,12 @@ class _BookDetailPageState extends State<BookDetailPage> {
                 children: [
                   TextButton.icon(
                     onPressed: () {
-                      setState(() {
-                        _showLocalAdvancedOptions = !_showLocalAdvancedOptions;
-                      });
+                      _updateAuxiliaryState(
+                        _auxiliaryState.copyWith(
+                          showLocalAdvancedOptions:
+                              !_auxiliaryState.showLocalAdvancedOptions,
+                        ),
+                      );
                     },
                     icon: Icon(
                       _showLocalAdvancedOptions
@@ -2565,9 +2736,9 @@ class _BookDetailPageState extends State<BookDetailPage> {
         return;
       }
 
-      setState(() {
-        _isInBookshelf = isInBookshelf;
-      });
+      _updateAuxiliaryState(
+        _auxiliaryState.copyWith(isInBookshelf: isInBookshelf),
+      );
     }());
   }
 
@@ -2577,11 +2748,13 @@ class _BookDetailPageState extends State<BookDetailPage> {
       return;
     }
 
-    final wasInBookshelf = _isInBookshelf;
-    setState(() {
-      _isShelfActionLoading = true;
-      _isInBookshelf = !wasInBookshelf;
-    });
+    final wasInBookshelf = _auxiliaryState.isInBookshelf;
+    _updateAuxiliaryState(
+      _auxiliaryState.copyWith(
+        isShelfActionLoading: true,
+        isInBookshelf: !wasInBookshelf,
+      ),
+    );
     _bookshelfStateSyncToken++;
 
     try {
@@ -2614,16 +2787,16 @@ class _BookDetailPageState extends State<BookDetailPage> {
       _showMessage(wasInBookshelf ? '已从书架移除。' : '已加入书架。');
     } catch (_) {
       if (mounted) {
-        setState(() {
-          _isInBookshelf = wasInBookshelf;
-        });
+        _updateAuxiliaryState(
+          _auxiliaryState.copyWith(isInBookshelf: wasInBookshelf),
+        );
       }
       _showMessage('操作失败，请重试。');
     } finally {
       if (mounted) {
-        setState(() {
-          _isShelfActionLoading = false;
-        });
+        _updateAuxiliaryState(
+          _auxiliaryState.copyWith(isShelfActionLoading: false),
+        );
       }
     }
   }

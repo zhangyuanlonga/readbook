@@ -234,9 +234,10 @@ $chapter2
       expect(result.chapters, hasLength(2));
       expect(result.chapters.first.startOffset, isNotNull);
       expect(result.chapters.first.endOffset, isNotNull);
-      expect(result.chapters.first.content, isEmpty);
+      expect(result.chapters.first.content, contains('内容一'));
       expect(result.chapters.last.startOffset, isNotNull);
       expect(result.chapters.last.endOffset, isNotNull);
+      expect(result.chapters.last.content, contains('内容二'));
     });
 
     test(
@@ -278,9 +279,10 @@ $chapter2
         expect(result.chapters.first.title, '第1章 开始');
         expect(result.chapters.first.startOffset, isNotNull);
         expect(result.chapters.first.endOffset, isNotNull);
-        expect(result.chapters.first.content, isEmpty);
+        expect(result.chapters.first.content, contains('内容一'));
         expect(result.chapters.last.startOffset, isNotNull);
         expect(result.chapters.last.endOffset, isNotNull);
+        expect(result.chapters.last.content, contains('内容二'));
       },
     );
 
@@ -429,7 +431,7 @@ $chapter2
       expect(result.charset, 'utf-8');
       expect(result.chapters.length, greaterThan(50));
       expect(result.chapters.first.title, '第1章 流式章节');
-      expect(result.chapters.first.content, isEmpty);
+      expect(result.chapters.first.content, contains('这是第1章的正文内容'));
       expect(result.chapters.first.startOffset, isNotNull);
       expect(result.chapters.first.endOffset, isNotNull);
     });
@@ -468,6 +470,7 @@ $chapter2
         expect(result.chapters, isNotEmpty);
         expect(result.chapters.first.startOffset, isNotNull);
         expect(result.chapters.first.endOffset, isNotNull);
+        expect(result.chapters.first.content, isNotEmpty);
       },
     );
   });

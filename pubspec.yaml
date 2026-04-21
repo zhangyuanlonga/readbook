@@ -114,6 +114,7 @@ flutter:
   assets:
     - read.json
     - test_read.json
+    - assets/logo/
     - assets/reader/backgrounds/
     - assets/mov/vx.png
     - assets/branding/

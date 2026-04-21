@@ -31,6 +31,7 @@ import '../application/local_book_import_service.dart';
 import '../../reader/application/reader_preferences_service.dart';
 import '../../reader/application/reader_entry_route_resolver.dart';
 import '../../reader/application/local/local_book_index_service.dart';
+import '../../reader/application/reading_record_service.dart';
 import '../../book/application/book_detail_service.dart';
 import '../../book/presentation/book_detail_route.dart';
 import '../../announcement/application/announcement_service.dart';
@@ -158,6 +159,40 @@ class _BookshelfProgressDisplay {
   final bool hasProgress;
 }
 
+class _BookshelfBookCardState {
+  const _BookshelfBookCardState({
+    this.progress,
+    this.latestCachedChapterTitle,
+    this.cachedChapterCount = 0,
+    this.localBook,
+  });
+
+  final ReadingProgress? progress;
+  final String? latestCachedChapterTitle;
+  final int cachedChapterCount;
+  final LocalBook? localBook;
+
+  _BookshelfBookCardState copyWith({
+    ReadingProgress? progress,
+    bool clearProgress = false,
+    String? latestCachedChapterTitle,
+    bool clearLatestCachedChapterTitle = false,
+    int? cachedChapterCount,
+    LocalBook? localBook,
+    bool clearLocalBook = false,
+  }) {
+    return _BookshelfBookCardState(
+      progress: clearProgress ? null : (progress ?? this.progress),
+      latestCachedChapterTitle:
+          clearLatestCachedChapterTitle
+              ? null
+              : (latestCachedChapterTitle ?? this.latestCachedChapterTitle),
+      cachedChapterCount: cachedChapterCount ?? this.cachedChapterCount,
+      localBook: clearLocalBook ? null : (localBook ?? this.localBook),
+    );
+  }
+}
+
 class BookshelfPage extends ConsumerStatefulWidget {
   const BookshelfPage({super.key, this.prefetchAnnouncementOnInit = false});
 
@@ -181,6 +216,7 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
       BookshelfSystemSettingsService();
   final ReaderPreferencesService _readerPreferencesService =
       ReaderPreferencesService();
+  final ReadingRecordService _readingRecordService = ReadingRecordService();
   final ReaderEntryRouteResolver _readerEntryRouteResolver =
       const ReaderEntryRouteResolver();
   final LocalBookIndexService _localBookIndexService = LocalBookIndexService();
@@ -209,6 +245,8 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
       const <String, ReadingProgress>{};
   Map<String, String> _latestCachedChapterByBookKey = const <String, String>{};
   Map<String, int> _cachedChapterCountByBookKey = const <String, int>{};
+  final Map<String, ValueNotifier<_BookshelfBookCardState>>
+  _bookCardStateNotifiers = <String, ValueNotifier<_BookshelfBookCardState>>{};
   Map<String, int> _sourceTypeBySourceId = const <String, int>{};
   Map<String, LocalBook> _localBooksById = const <String, LocalBook>{};
   Map<String, List<String>> _bookTagsByKey = const <String, List<String>>{};
@@ -292,9 +330,9 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
   static const Duration _kAutoRefreshDebounce = Duration(milliseconds: 800);
   static const Duration _kDuplicateLoadCooldown = Duration(milliseconds: 700);
   static const Duration _kContinueReadingPromptDuration = Duration(seconds: 6);
-  static const double _kContinueReadingCardHeight = 84;
+  static const double _kContinueReadingCardHeight = 92;
   static const double _kContinueReadingDockGap = 12;
-  static const double _kContinueReadingStandardGap = 12;
+  static const double _kContinueReadingStandardGap = 16;
   static const double _kContinueReadingIosExtraGap = 10;
   static const Set<String> _kMangaCapabilityKeywords = <String>{
     'manga',
@@ -363,6 +401,9 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
     _bookshelfScrollController.dispose();
     _bookshelfSearchFocusNode.dispose();
     _bookshelfSearchController.dispose();
+    for (final notifier in _bookCardStateNotifiers.values) {
+      notifier.dispose();
+    }
     super.dispose();
   }
 
@@ -840,7 +881,7 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
           book: book,
           index: index,
           totalCount: books.length,
-          child: _buildBookCard(book),
+          child: _buildReactiveBookCard(book),
         );
       }, childCount: books.length),
     );
@@ -2015,8 +2056,13 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
     required double topInset,
   }) {
     final palette = _resolvedPalette(context);
+    final backdrop = _resolvedBackdrop(context);
+    final hasWallpaper =
+        backdrop.wallpaperPath != null && backdrop.wallpaperPath!.isNotEmpty;
     return Container(
-      color: palette.backgroundColor,
+      decoration: BoxDecoration(
+        color: hasWallpaper ? Colors.transparent : palette.backgroundColor,
+      ),
       padding: EdgeInsets.fromLTRB(horizontal, topInset, horizontal, 0),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -2692,8 +2738,26 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
           book: book,
           index: index,
           totalCount: books.length,
-          child: _buildGridCard(book),
+          child: _buildReactiveGridCard(book),
         );
+      },
+    );
+  }
+
+  Widget _buildReactiveGridCard(BookshelfBook book) {
+    return ValueListenableBuilder<_BookshelfBookCardState>(
+      valueListenable: _ensureBookCardStateNotifier(book),
+      builder: (context, cardState, _) {
+        return _buildGridCard(book, cardState: cardState);
+      },
+    );
+  }
+
+  Widget _buildReactiveBookCard(BookshelfBook book) {
+    return ValueListenableBuilder<_BookshelfBookCardState>(
+      valueListenable: _ensureBookCardStateNotifier(book),
+      builder: (context, cardState, _) {
+        return _buildBookCard(book, cardState: cardState);
       },
     );
   }
@@ -2747,13 +2811,17 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
     );
   }
 
-  Widget _buildGridCard(BookshelfBook book) {
-    final bookKey = _bookKey(book);
-    final progress = _progressByBookKey[bookKey];
-    final localBook = _bookshelfLocalBook(book);
+  Widget _buildGridCard(
+    BookshelfBook book, {
+    required _BookshelfBookCardState cardState,
+  }) {
+    final progress = cardState.progress;
+    final localBook = cardState.localBook;
     final progressDisplay = _resolveBookshelfProgressDisplay(
       book,
       progress: progress,
+      localBook: localBook,
+      cachedChapterCount: cardState.cachedChapterCount,
     );
     final colorScheme = Theme.of(context).colorScheme;
     final palette = _resolvedPalette(context);
@@ -2764,7 +2832,7 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
     final titleText = _toSingleLineText(displayTitle);
     final authorText = _toSingleLineText(displayAuthor ?? '');
     final latestChapterText = _toSingleLineText(
-      _latestCachedChapterByBookKey[bookKey] ?? book.latestChapter ?? '',
+      cardState.latestCachedChapterTitle ?? book.latestChapter ?? '',
     );
     final authorLine = authorText.isNotEmpty ? '作者: $authorText' : '作者: 未知';
     final latestLine =
@@ -2979,13 +3047,17 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
     );
   }
 
-  Widget _buildBookCard(BookshelfBook book) {
-    final bookKey = _bookKey(book);
-    final progress = _progressByBookKey[bookKey];
-    final localBook = _bookshelfLocalBook(book);
+  Widget _buildBookCard(
+    BookshelfBook book, {
+    required _BookshelfBookCardState cardState,
+  }) {
+    final progress = cardState.progress;
+    final localBook = cardState.localBook;
     final progressDisplay = _resolveBookshelfProgressDisplay(
       book,
       progress: progress,
+      localBook: localBook,
+      cachedChapterCount: cardState.cachedChapterCount,
     );
     final palette = _resolvedPalette(context);
     final isOpening = _openingBookId == book.bookId;
@@ -2995,7 +3067,7 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
     final titleText = _toSingleLineText(displayTitle);
     final authorText = _toSingleLineText(displayAuthor ?? '');
     final latestChapterText = _toSingleLineText(
-      _latestCachedChapterByBookKey[bookKey] ?? book.latestChapter ?? '',
+      cardState.latestCachedChapterTitle ?? book.latestChapter ?? '',
     );
     final authorLine = authorText.isNotEmpty ? '作者: $authorText' : '作者: 未知';
     final latestLine =
@@ -4797,6 +4869,12 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
       await _bookshelfService.upsert(
         book.copyWith(coverUrl: storedCoverUri.toString()),
       );
+      await _readingRecordService.syncBookPresentation(
+        bookId: book.bookId,
+        bookTitle: book.title,
+        bookAuthor: book.author,
+        coverUrl: storedCoverUri.toString(),
+      );
       await _loadBookshelf(force: true);
       _showMessage('已更新自定义封面。');
     } on ImageSelectionException catch (error) {
@@ -5164,6 +5242,7 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
       }
       _derivedBookshelfFingerprint = null;
     });
+    _syncBookCardStateNotifiers(_books);
   }
 
   String _toSingleLineText(String text) {
@@ -5210,6 +5289,99 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
       height: height,
       borderRadius: BorderRadius.circular(12),
     );
+  }
+
+  ValueNotifier<_BookshelfBookCardState> _ensureBookCardStateNotifier(
+    BookshelfBook book,
+  ) {
+    final key = _bookKey(book);
+    return _bookCardStateNotifiers.putIfAbsent(
+      key,
+      () => ValueNotifier<_BookshelfBookCardState>(_createBookCardState(book)),
+    );
+  }
+
+  _BookshelfBookCardState _createBookCardState(BookshelfBook book) {
+    final key = _bookKey(book);
+    return _BookshelfBookCardState(
+      progress: _progressByBookKey[key],
+      latestCachedChapterTitle: _latestCachedChapterByBookKey[key],
+      cachedChapterCount: _cachedChapterCountByBookKey[key] ?? 0,
+      localBook: _bookshelfLocalBook(book),
+    );
+  }
+
+  void _syncBookCardStateNotifiers(Iterable<BookshelfBook> books) {
+    final validKeys =
+        books.map(_bookKey).where((key) => key.isNotEmpty).toSet();
+    final staleKeys = _bookCardStateNotifiers.keys
+        .where((key) => !validKeys.contains(key))
+        .toList(growable: false);
+    for (final key in staleKeys) {
+      _bookCardStateNotifiers.remove(key)?.dispose();
+    }
+    for (final book in books) {
+      final notifier = _ensureBookCardStateNotifier(book);
+      notifier.value = _createBookCardState(book);
+    }
+  }
+
+  void _updateBookCardState(
+    BookshelfBook book, {
+    ReadingProgress? progress,
+    bool clearProgress = false,
+    String? latestCachedChapterTitle,
+    bool clearLatestCachedChapterTitle = false,
+    int? cachedChapterCount,
+    LocalBook? localBook,
+    bool clearLocalBook = false,
+  }) {
+    final notifier = _ensureBookCardStateNotifier(book);
+    notifier.value = notifier.value.copyWith(
+      progress: progress,
+      clearProgress: clearProgress,
+      latestCachedChapterTitle: latestCachedChapterTitle,
+      clearLatestCachedChapterTitle: clearLatestCachedChapterTitle,
+      cachedChapterCount: cachedChapterCount,
+      localBook: localBook,
+      clearLocalBook: clearLocalBook,
+    );
+  }
+
+  void _updateBookCardStatesForBooks(
+    Iterable<BookshelfBook> books, {
+    Map<String, ReadingProgress>? progressByKey,
+    Map<String, String>? latestCachedChapterByKey,
+    Map<String, int>? cachedChapterCountByKey,
+    Map<String, LocalBook>? localBooksById,
+  }) {
+    for (final book in books) {
+      final key = _bookKey(book);
+      if (key.isEmpty) {
+        continue;
+      }
+      _updateBookCardState(
+        book,
+        progress: progressByKey == null ? null : progressByKey[key],
+        clearProgress: progressByKey != null && !progressByKey.containsKey(key),
+        latestCachedChapterTitle:
+            latestCachedChapterByKey == null
+                ? null
+                : latestCachedChapterByKey[key],
+        clearLatestCachedChapterTitle:
+            latestCachedChapterByKey != null &&
+            !latestCachedChapterByKey.containsKey(key),
+        cachedChapterCount:
+            cachedChapterCountByKey == null
+                ? null
+                : (cachedChapterCountByKey[key] ?? 0),
+        localBook:
+            localBooksById == null ? null : localBooksById[book.bookId.trim()],
+        clearLocalBook:
+            localBooksById != null &&
+            !localBooksById.containsKey(book.bookId.trim()),
+      );
+    }
   }
 
   LocalBook? _bookshelfLocalBook(BookshelfBook book) {
@@ -5394,6 +5566,7 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
         _isLoading = false;
         _ensureFilterStillValid();
       });
+      _syncBookCardStateNotifiers(books);
       _syncSelectionWithBooks();
       unawaited(_maybeShowContinueReadingPrompt(ticket: ticket));
 
@@ -5524,6 +5697,7 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
       _bookshelfMetadataReady = true;
       _ensureFilterStillValid();
     });
+    _updateBookCardStatesForBooks(books, localBooksById: localBooksById);
     _syncSelectionWithBooks();
   }
 
@@ -5588,9 +5762,16 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
       latestByBookKey[bookKey] = title;
     }
 
-    setState(() {
-      _latestCachedChapterByBookKey = latestByBookKey;
-    });
+    _latestCachedChapterByBookKey = latestByBookKey;
+    _updateBookCardStatesForBooks(
+      books,
+      latestCachedChapterByKey: latestByBookKey,
+    );
+    if (_hasBookshelfSearchKeyword) {
+      setState(() {
+        _derivedBookshelfFingerprint = null;
+      });
+    }
   }
 
   Future<void> _loadCachedChapterCountMap(
@@ -5630,9 +5811,11 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
       countByBookKey[bookKey] = count;
     }
 
-    setState(() {
-      _cachedChapterCountByBookKey = countByBookKey;
-    });
+    _cachedChapterCountByBookKey = countByBookKey;
+    _updateBookCardStatesForBooks(
+      books,
+      cachedChapterCountByKey: countByBookKey,
+    );
   }
 
   Future<void> _refreshOnlineBookshelfLatestInfo(
@@ -5647,7 +5830,7 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
       return;
     }
 
-    var changed = false;
+    final updatedBooksByKey = <String, BookshelfBook>{};
     for (final book in onlineBooks) {
       if (_isLatestInfoRefreshCancelled(
         ticket: ticket,
@@ -5742,32 +5925,41 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
           continue;
         }
 
-        await _bookshelfService.upsert(
-          book.copyWith(
-            latestChapter: normalizedLatestChapter,
-            clearLatestChapter: normalizedLatestChapter == null,
-            author: normalizedAuthor,
-            clearAuthor: normalizedAuthor == null,
-            coverUrl: effectiveNextCoverUrl,
-            clearCoverUrl:
-                effectiveNextCoverUrl == null || effectiveNextCoverUrl.isEmpty,
-          ),
+        final updatedBook = book.copyWith(
+          latestChapter: normalizedLatestChapter,
+          clearLatestChapter: normalizedLatestChapter == null,
+          author: normalizedAuthor,
+          clearAuthor: normalizedAuthor == null,
+          coverUrl: effectiveNextCoverUrl,
+          clearCoverUrl:
+              effectiveNextCoverUrl == null || effectiveNextCoverUrl.isEmpty,
         );
-        changed = true;
+        await _bookshelfService.upsert(updatedBook);
+        updatedBooksByKey[_bookKey(book)] = updatedBook;
       } catch (_) {
         // Ignore per-book refresh failures to keep pull-to-refresh lightweight.
       }
     }
 
-    if (!changed ||
+    if (updatedBooksByKey.isEmpty ||
         _isLatestInfoRefreshCancelled(
           ticket: ticket,
           refreshEpoch: refreshEpoch,
         )) {
       return;
     }
-    _skipNextBackgroundLatestInfoRefresh = true;
-    await _loadBookshelf(force: true);
+
+    if (!mounted || ticket != _loadTicket) {
+      return;
+    }
+
+    setState(() {
+      _books = _books
+          .map((book) => updatedBooksByKey[_bookKey(book)] ?? book)
+          .toList(growable: false);
+      _derivedBookshelfFingerprint = null;
+    });
+    _syncBookCardStateNotifiers(_books);
   }
 
   void _cancelBackgroundLatestInfoRefresh() {
@@ -6139,9 +6331,17 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
           (batchesSinceUiUpdate >= _kProgressUiUpdateBatchInterval ||
               isLastBatch);
       if (shouldUpdateUi) {
-        setState(() {
-          _progressByBookKey = Map<String, ReadingProgress>.from(progressMap);
-        });
+        _progressByBookKey = Map<String, ReadingProgress>.from(progressMap);
+        _updateBookCardStatesForBooks(batch, progressByKey: _progressByBookKey);
+        final shouldResort =
+            _sortMode == _BookshelfSortMode.defaultOrder ||
+            _sortMode == _BookshelfSortMode.recentRead ||
+            _sortMode == _BookshelfSortMode.readingProgress;
+        if (shouldResort) {
+          setState(() {
+            _derivedBookshelfFingerprint = null;
+          });
+        }
         hasPendingUiUpdate = false;
         batchesSinceUiUpdate = 0;
       }
@@ -6221,6 +6421,8 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
   _BookshelfProgressDisplay _resolveBookshelfProgressDisplay(
     BookshelfBook book, {
     required ReadingProgress? progress,
+    LocalBook? localBook,
+    int? cachedChapterCount,
   }) {
     if (progress == null) {
       return const _BookshelfProgressDisplay(
@@ -6231,7 +6433,11 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
       );
     }
 
-    final totalChapters = _resolveApproximateChapterCount(book);
+    final totalChapters = _resolveApproximateChapterCount(
+      book,
+      localBook: localBook,
+      cachedChapterCount: cachedChapterCount,
+    );
     final currentChapterNo = (progress.chapterIndex + 1).clamp(1, 999999);
     if (totalChapters != null && totalChapters > 0) {
       final normalizedTotal = totalChapters.clamp(1, 999999);
@@ -6259,13 +6465,19 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
     );
   }
 
-  int? _resolveApproximateChapterCount(BookshelfBook book) {
+  int? _resolveApproximateChapterCount(
+    BookshelfBook book, {
+    LocalBook? localBook,
+    int? cachedChapterCount,
+  }) {
     if (book.sourceId == _kLocalBookSourceId) {
-      final localCount = _localBooksById[book.bookId.trim()]?.chapterCount ?? 0;
+      final localCount =
+          (localBook ?? _localBooksById[book.bookId.trim()])?.chapterCount ?? 0;
       return localCount > 0 ? localCount : null;
     }
 
-    final cachedCount = _cachedChapterCountByBookKey[_bookKey(book)] ?? 0;
+    final cachedCount =
+        cachedChapterCount ?? _cachedChapterCountByBookKey[_bookKey(book)] ?? 0;
     return cachedCount > 0 ? cachedCount : null;
   }
 

@@ -338,11 +338,11 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
       <String, Uint8List>{};
   final List<_ReaderBackgroundPreset> _backgroundPresets =
       <_ReaderBackgroundPreset>[];
+  static final Map<String, _PrecomputedChapterLayout>
+  _precomputedChapterLayouts = <String, _PrecomputedChapterLayout>{};
   String? _catalogSearchCacheFingerprint;
   Map<String, List<ReaderCatalogSearchEntry>> _catalogSearchEntriesCache =
       const <String, List<ReaderCatalogSearchEntry>>{};
-  final Map<String, _PrecomputedChapterLayout> _precomputedChapterLayouts =
-      <String, _PrecomputedChapterLayout>{};
   final Map<String, GlobalKey> _continuousTextChapterKeys =
       <String, GlobalKey>{};
   List<_ContinuousTextChapter> _continuousTextChapters =
@@ -360,7 +360,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
   static const int _kCustomBackgroundStoreMaxDimension = 1800;
   static const int _kCustomBackgroundStoreQuality = 82;
   static const double _kPinnedHeaderHeight = 40;
-  static const double _kBottomProgressReserve = 24;
+  static const double _kBottomProgressReserve = 12;
   static const double _kBackgroundTileWidth = 72;
   static const double _kBackgroundTileHeight = 44;
   static const double _kSwipeTurnDistanceThreshold = 42;
@@ -3172,7 +3172,20 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
 
     _bookmarkToolbarEntry = OverlayEntry(
       builder: (context) {
+        final fallbackAnchor = Offset(
+          MediaQuery.sizeOf(context).width / 2,
+          MediaQuery.sizeOf(context).height - 160,
+        );
         return _buildInspirationActionPanel(
+          anchors:
+              _selectionAreaKey
+                  .currentState
+                  ?.selectableRegion
+                  .contextMenuAnchors ??
+              TextSelectionToolbarAnchors(
+                primaryAnchor: fallbackAnchor,
+                secondaryAnchor: fallbackAnchor,
+              ),
           dismiss: _clearSelectionState,
           actions: _buildInspirationActionItems(clearSelectionState: null),
         );
@@ -3197,6 +3210,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
     }
 
     return _buildInspirationActionPanel(
+      anchors: selectableRegionState.contextMenuAnchors,
       dismiss: () {
         selectableRegionState.hideToolbar();
         selectableRegionState.clearSelection();
@@ -3301,6 +3315,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
   }
 
   Widget _buildInspirationActionPanel({
+    required TextSelectionToolbarAnchors anchors,
     required VoidCallback dismiss,
     required List<_ReaderInspirationActionItem> actions,
   }) {
@@ -3311,7 +3326,40 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
     final theme = Theme.of(context);
     final colorScheme = theme.colorScheme;
     final preview = _selectedSnippet.trim();
+    final screenSize = MediaQuery.sizeOf(context);
+    final safePadding = MediaQuery.paddingOf(context);
     final bottomInset = MediaQuery.viewPaddingOf(context).bottom;
+    final anchorTop = anchors.primaryAnchor.dy;
+    final anchorBottom = anchors.secondaryAnchor?.dy ?? anchorTop;
+    final panelWidth = min(screenSize.width - 24, 520.0).toDouble();
+    final secondaryAnchorX =
+        anchors.secondaryAnchor?.dx ?? anchors.primaryAnchor.dx;
+    final anchorCenterX = (anchors.primaryAnchor.dx + secondaryAnchorX) / 2;
+    final maxLeft = max(12.0, screenSize.width - panelWidth - 12);
+    final left = (anchorCenterX - panelWidth / 2).clamp(12.0, maxLeft);
+    final estimatedPanelHeight = preview.isNotEmpty ? 212.0 : 148.0;
+    final gap = 12.0;
+    final spaceBelow = screenSize.height - anchorBottom - bottomInset - gap;
+    final spaceAbove = anchorTop - safePadding.top - gap;
+    final showBelow =
+        spaceBelow >= estimatedPanelHeight ||
+        (anchorTop < screenSize.height * 0.45 && spaceBelow >= 120);
+    final topPosition =
+        showBelow
+            ? (anchorBottom + gap)
+                .clamp(12.0, screenSize.height - 80)
+                .toDouble()
+            : null;
+    final bottomPosition =
+        showBelow
+            ? null
+            : (screenSize.height - anchorTop + gap)
+                .clamp(12.0, max(12.0, screenSize.height - 80))
+                .toDouble();
+    final maxPanelHeight = max(
+      140.0,
+      min(screenSize.height * 0.42, (showBelow ? spaceBelow : spaceAbove) - 8),
+    );
 
     return Stack(
       children: [
@@ -3323,64 +3371,72 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
           ),
         ),
         Positioned(
-          left: 12,
-          right: 12,
-          bottom: 12 + bottomInset,
-          child: Material(
-            color: colorScheme.surface,
-            elevation: 8,
-            borderRadius: BorderRadius.circular(22),
-            child: Container(
-              padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
-              decoration: BoxDecoration(
-                borderRadius: BorderRadius.circular(22),
-                border: Border.all(
-                  color: colorScheme.outlineVariant.withValues(alpha: 0.55),
+          left: left,
+          top: topPosition,
+          bottom: bottomPosition,
+          child: ConstrainedBox(
+            constraints: BoxConstraints(
+              maxWidth: panelWidth,
+              maxHeight: maxPanelHeight,
+            ),
+            child: Material(
+              color: colorScheme.surface,
+              elevation: 8,
+              borderRadius: BorderRadius.circular(22),
+              child: Container(
+                padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(22),
+                  border: Border.all(
+                    color: colorScheme.outlineVariant.withValues(alpha: 0.55),
+                  ),
                 ),
-              ),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  if (preview.isNotEmpty) ...[
-                    Text(
-                      '所选内容',
-                      style: theme.textTheme.labelMedium?.copyWith(
-                        color: colorScheme.onSurfaceVariant,
-                        fontWeight: FontWeight.w700,
-                      ),
-                    ),
-                    const SizedBox(height: 6),
-                    Container(
-                      width: double.infinity,
-                      padding: const EdgeInsets.fromLTRB(12, 10, 12, 10),
-                      decoration: BoxDecoration(
-                        color: colorScheme.surfaceContainerLow,
-                        borderRadius: BorderRadius.circular(16),
-                      ),
-                      child: Text(
-                        preview,
-                        maxLines: 2,
-                        overflow: TextOverflow.ellipsis,
-                        style: theme.textTheme.bodyMedium?.copyWith(
-                          height: 1.35,
-                        ),
-                      ),
-                    ),
-                    const SizedBox(height: 12),
-                  ],
-                  Wrap(
-                    spacing: 8,
-                    runSpacing: 10,
+                child: SingleChildScrollView(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      for (final action in actions)
-                        _ReaderInspirationActionChip(
-                          action: action,
-                          colorScheme: colorScheme,
+                      if (preview.isNotEmpty) ...[
+                        Text(
+                          '所选内容',
+                          style: theme.textTheme.labelMedium?.copyWith(
+                            color: colorScheme.onSurfaceVariant,
+                            fontWeight: FontWeight.w700,
+                          ),
                         ),
+                        const SizedBox(height: 6),
+                        Container(
+                          width: double.infinity,
+                          padding: const EdgeInsets.fromLTRB(12, 10, 12, 10),
+                          decoration: BoxDecoration(
+                            color: colorScheme.surfaceContainerLow,
+                            borderRadius: BorderRadius.circular(16),
+                          ),
+                          child: Text(
+                            preview,
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
+                            style: theme.textTheme.bodyMedium?.copyWith(
+                              height: 1.35,
+                            ),
+                          ),
+                        ),
+                        const SizedBox(height: 12),
+                      ],
+                      Wrap(
+                        spacing: 8,
+                        runSpacing: 10,
+                        children: [
+                          for (final action in actions)
+                            _ReaderInspirationActionChip(
+                              action: action,
+                              colorScheme: colorScheme,
+                            ),
+                        ],
+                      ),
                     ],
                   ),
-                ],
+                ),
               ),
             ),
           ),
@@ -8259,6 +8315,48 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
     return '${sourceId.trim()}|${chapterUrl.trim()}|$signature';
   }
 
+  bool _shouldPersistChapterLayout({
+    required String sourceId,
+    required String chapterUrl,
+  }) {
+    return LocalReaderIdentity.isLocalSourceId(sourceId.trim()) &&
+        chapterUrl.trim().isNotEmpty;
+  }
+
+  Future<File> _chapterLayoutCacheFile({
+    required String sourceId,
+    required String chapterUrl,
+    required String signature,
+  }) async {
+    final supportDirectory = await getApplicationSupportDirectory();
+    final cacheDirectory = Directory(
+      p.join(supportDirectory.path, 'reader_pagination_cache'),
+    );
+    if (!await cacheDirectory.exists()) {
+      await cacheDirectory.create(recursive: true);
+    }
+    final cacheKey = _chapterLayoutCacheKey(
+      sourceId: sourceId,
+      chapterUrl: chapterUrl,
+      signature: signature,
+    );
+    return File(
+      p.join(
+        cacheDirectory.path,
+        '${_stablePaginationCacheHash(cacheKey)}.json',
+      ),
+    );
+  }
+
+  String _stablePaginationCacheHash(String input) {
+    var hash = 0xcbf29ce484222325;
+    for (final unit in input.codeUnits) {
+      hash ^= unit;
+      hash = (hash * 0x100000001b3) & 0x7fffffffffffffff;
+    }
+    return hash.toRadixString(16);
+  }
+
   void _storePrecomputedChapterLayout({
     required String sourceId,
     required String chapterUrl,
@@ -8270,14 +8368,55 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
       signature: layout.paginationSignature,
     );
     _precomputedChapterLayouts[key] = layout;
-    if (_precomputedChapterLayouts.length <= 6) {
+    if (_precomputedChapterLayouts.length <= 24) {
+      if (_shouldPersistChapterLayout(
+        sourceId: sourceId,
+        chapterUrl: chapterUrl,
+      )) {
+        unawaited(
+          _persistPrecomputedChapterLayout(
+            sourceId: sourceId,
+            chapterUrl: chapterUrl,
+            layout: layout,
+          ),
+        );
+      }
       return;
     }
     final oldestKey = _precomputedChapterLayouts.keys.first;
     _precomputedChapterLayouts.remove(oldestKey);
+    if (_shouldPersistChapterLayout(
+      sourceId: sourceId,
+      chapterUrl: chapterUrl,
+    )) {
+      unawaited(
+        _persistPrecomputedChapterLayout(
+          sourceId: sourceId,
+          chapterUrl: chapterUrl,
+          layout: layout,
+        ),
+      );
+    }
   }
 
-  _PrecomputedChapterLayout? _consumePrecomputedChapterLayout({
+  Future<void> _persistPrecomputedChapterLayout({
+    required String sourceId,
+    required String chapterUrl,
+    required _PrecomputedChapterLayout layout,
+  }) async {
+    try {
+      final file = await _chapterLayoutCacheFile(
+        sourceId: sourceId,
+        chapterUrl: chapterUrl,
+        signature: layout.paginationSignature,
+      );
+      await file.writeAsString(jsonEncode(layout.toJson()), flush: false);
+    } catch (_) {
+      // Ignore pagination cache persistence failures.
+    }
+  }
+
+  Future<_PrecomputedChapterLayout?> _loadPrecomputedChapterLayout({
     required String sourceId,
     required String chapterUrl,
     required String signature,
@@ -8287,7 +8426,56 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
       chapterUrl: chapterUrl,
       signature: signature,
     );
-    return _precomputedChapterLayouts.remove(key);
+    final memoryCached = _precomputedChapterLayouts[key];
+    if (memoryCached != null) {
+      return Future<_PrecomputedChapterLayout?>.value(memoryCached);
+    }
+    if (!_shouldPersistChapterLayout(
+      sourceId: sourceId,
+      chapterUrl: chapterUrl,
+    )) {
+      return Future<_PrecomputedChapterLayout?>.value(null);
+    }
+    return _readPersistedChapterLayout(
+      sourceId: sourceId,
+      chapterUrl: chapterUrl,
+      signature: signature,
+      cacheKey: key,
+    );
+  }
+
+  Future<_PrecomputedChapterLayout?> _readPersistedChapterLayout({
+    required String sourceId,
+    required String chapterUrl,
+    required String signature,
+    required String cacheKey,
+  }) async {
+    try {
+      final file = await _chapterLayoutCacheFile(
+        sourceId: sourceId,
+        chapterUrl: chapterUrl,
+        signature: signature,
+      );
+      if (!await file.exists()) {
+        return null;
+      }
+      final raw = await file.readAsString();
+      if (raw.trim().isEmpty) {
+        return null;
+      }
+      final decoded = jsonDecode(raw);
+      if (decoded is! Map<String, dynamic>) {
+        return null;
+      }
+      final layout = _PrecomputedChapterLayout.fromJson(decoded);
+      if (layout.paginationSignature != signature) {
+        return null;
+      }
+      _precomputedChapterLayouts[cacheKey] = layout;
+      return layout;
+    } catch (_) {
+      return null;
+    }
   }
 
   void _disposeMangaTransformControllers() {
@@ -9110,7 +9298,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
           layoutMetrics: layoutMetrics,
           chapterIdOverride: commitChapterIdentity ? chapterId : _chapterId,
         );
-        final cachedLayout = _consumePrecomputedChapterLayout(
+        final cachedLayout = await _loadPrecomputedChapterLayout(
           sourceId: _sourceId ?? '',
           chapterUrl: chapterUrl,
           signature: signature,
@@ -9755,7 +9943,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
             layoutMetrics: _lastPagedLayoutMetrics!,
             chapterIdOverride: chapter.id,
           );
-          if (_consumePrecomputedChapterLayout(
+          if (await _loadPrecomputedChapterLayout(
                 sourceId: normalizedSourceId,
                 chapterUrl: chapterUrl,
                 signature: signature,
@@ -16604,6 +16792,22 @@ class _PagedSlice {
   final int paragraphIndex;
   final int start;
   final int end;
+
+  Map<String, int> toJson() {
+    return <String, int>{
+      'paragraphIndex': paragraphIndex,
+      'start': start,
+      'end': end,
+    };
+  }
+
+  factory _PagedSlice.fromJson(Map<String, dynamic> json) {
+    return _PagedSlice(
+      paragraphIndex: (json['paragraphIndex'] as num?)?.toInt() ?? 0,
+      start: (json['start'] as num?)?.toInt() ?? 0,
+      end: (json['end'] as num?)?.toInt() ?? 0,
+    );
+  }
 }
 
 class _ChapterLoadSnapshot {
@@ -16693,6 +16897,51 @@ class _PrecomputedChapterLayout {
   final List<String> paragraphs;
   final List<List<_PagedSlice>> pagedPages;
   final String paginationSignature;
+
+  Map<String, Object?> toJson() {
+    return <String, Object?>{
+      'paragraphs': paragraphs,
+      'paginationSignature': paginationSignature,
+      'pagedPages': pagedPages
+          .map(
+            (page) =>
+                page.map((slice) => slice.toJson()).toList(growable: false),
+          )
+          .toList(growable: false),
+    };
+  }
+
+  factory _PrecomputedChapterLayout.fromJson(Map<String, dynamic> json) {
+    final rawParagraphs = json['paragraphs'];
+    final rawPages = json['pagedPages'];
+    return _PrecomputedChapterLayout(
+      paragraphs:
+          rawParagraphs is List
+              ? rawParagraphs
+                  .map((item) => item.toString())
+                  .toList(growable: false)
+              : const <String>[],
+      pagedPages:
+          rawPages is List
+              ? rawPages
+                  .whereType<List>()
+                  .map(
+                    (page) => page
+                        .whereType<Map>()
+                        .map(
+                          (slice) => _PagedSlice.fromJson(
+                            slice.map(
+                              (key, value) => MapEntry(key.toString(), value),
+                            ),
+                          ),
+                        )
+                        .toList(growable: false),
+                  )
+                  .toList(growable: false)
+              : const <List<_PagedSlice>>[],
+      paginationSignature: json['paginationSignature']?.toString().trim() ?? '',
+    );
+  }
 }
 
 class _ReaderThemeColors {
@@ -16860,13 +17109,14 @@ class _BodyUnderlinePainter extends CustomPainter {
           ..strokeWidth = thickness
           ..strokeCap = StrokeCap.round;
     final dashGap = max(1.0, dashLength * (dashGapRatio / 6));
+    final lineMetrics = textPainter.computeLineMetrics();
 
     for (final box in boxes) {
       final rect = box.toRect();
       if (rect.width <= 0) {
         continue;
       }
-      final baselineY = rect.bottom + gap;
+      final baselineY = _resolveBaselineY(rect: rect, lineMetrics: lineMetrics);
       if (style == ReaderBodyTextDecorationStyle.solid) {
         canvas.drawLine(
           Offset(rect.left, baselineY),
@@ -16883,6 +17133,24 @@ class _BodyUnderlinePainter extends CustomPainter {
         x = nextX + dashGap;
       }
     }
+  }
+
+  double _resolveBaselineY({
+    required Rect rect,
+    required List<LineMetrics> lineMetrics,
+  }) {
+    if (lineMetrics.isEmpty) {
+      return rect.bottom + gap;
+    }
+    final centerY = rect.center.dy;
+    for (final line in lineMetrics) {
+      final lineTop = line.baseline - line.ascent;
+      final lineBottom = line.baseline + line.descent;
+      if (centerY >= lineTop - 0.5 && centerY <= lineBottom + 0.5) {
+        return line.baseline + gap;
+      }
+    }
+    return rect.bottom + gap;
   }
 
   @override
