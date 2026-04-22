@@ -49,6 +49,7 @@ Future<ReaderCatalogSheetResult?> showReaderCatalogSheet({
   required String bookTitle,
   required String? bookAuthor,
   required String? bookCoverUrl,
+  String? customCoverPath,
   required bool supportsContentSearch,
   required BookmarkRepository bookmarkRepository,
   required String currentBookId,
@@ -557,6 +558,7 @@ Future<ReaderCatalogSheetResult?> showReaderCatalogSheet({
                           bookTitle: bookTitle,
                           bookAuthor: bookAuthor,
                           bookCoverUrl: bookCoverUrl,
+                          customCoverPath: customCoverPath,
                           supportsContentSearch: supportsContentSearch,
                           searchController: searchController,
                           onMoreActions: openCatalogMoreActions,
@@ -857,6 +859,7 @@ class _ReaderCatalogHeaderCard extends StatelessWidget {
     required this.bookTitle,
     required this.bookAuthor,
     required this.bookCoverUrl,
+    required this.customCoverPath,
     required this.supportsContentSearch,
     required this.searchController,
     required this.onMoreActions,
@@ -866,6 +869,7 @@ class _ReaderCatalogHeaderCard extends StatelessWidget {
   final String bookTitle;
   final String? bookAuthor;
   final String? bookCoverUrl;
+  final String? customCoverPath;
   final bool supportsContentSearch;
   final TextEditingController searchController;
   final VoidCallback onMoreActions;
@@ -908,7 +912,9 @@ class _ReaderCatalogHeaderCard extends StatelessWidget {
                     ref.watch(coverGalleriesProvider);
                     final resolvedCover = resolveBookCover(
                       realCoverUrl: bookCoverUrl,
-                      activeTheme: ref.read(activeAdvancedThemeProvider).valueOrNull,
+                      customCoverPath: customCoverPath,
+                      activeTheme:
+                          ref.read(activeAdvancedThemeProvider).valueOrNull,
                       galleries:
                           ref.read(coverGalleriesProvider).valueOrNull ??
                           const [],

@@ -6,6 +6,8 @@ import 'package:go_router/go_router.dart';
 
 import '../../../app/layout/app_layout.dart';
 import '../../../app/layout/app_spacing.dart';
+import '../../../app/theme/app_advanced_theme_tokens.dart';
+import '../../../app/widgets/advanced_theme_backdrop_decoration.dart';
 import '../../../app/widgets/resolved_book_cover.dart';
 import '../../../data/datasources/local/app_database.dart';
 import '../../../data/repositories/bookmark_repository_impl.dart';
@@ -85,10 +87,16 @@ class _BookmarksPageState extends ConsumerState<BookmarksPage> {
 
   @override
   Widget build(BuildContext context) {
-    ref.watch(activeAdvancedThemeProvider);
+    final activeAdvancedTheme =
+        ref.watch(activeAdvancedThemeProvider).valueOrNull;
     ref.watch(coverGalleriesProvider);
+    final backdrop = resolveAdvancedThemeBackdrop(
+      Theme.of(context).colorScheme,
+      activeAdvancedTheme,
+    );
     final horizontal = AppSpacing.pageHorizontal(context);
     final bottomSafe = MediaQuery.viewPaddingOf(context).bottom;
+    final topInset = MediaQuery.paddingOf(context).top + kToolbarHeight;
     final canPopRoute = context.canPop();
 
     return PopScope<void>(
@@ -100,7 +108,11 @@ class _BookmarksPageState extends ConsumerState<BookmarksPage> {
         context.go('/mine');
       },
       child: Scaffold(
+        extendBodyBehindAppBar: true,
         appBar: AppBar(
+          backgroundColor: Colors.transparent,
+          surfaceTintColor: Colors.transparent,
+          shadowColor: Colors.transparent,
           leading: IconButton(
             onPressed: _handleBackNavigation,
             tooltip: '返回',
@@ -115,14 +127,18 @@ class _BookmarksPageState extends ConsumerState<BookmarksPage> {
               maxWidth: AppLayout.mineContentMaxWidth,
             );
 
-            return Align(
-              alignment: Alignment.topCenter,
-              child: ConstrainedBox(
-                constraints: BoxConstraints(maxWidth: maxWidth),
-                child: _buildBody(
-                  context,
-                  horizontal: horizontal,
-                  bottomSafe: bottomSafe,
+            return DecoratedBox(
+              decoration: buildAdvancedThemeBackdropDecoration(backdrop),
+              child: Align(
+                alignment: Alignment.topCenter,
+                child: ConstrainedBox(
+                  constraints: BoxConstraints(maxWidth: maxWidth),
+                  child: _buildBody(
+                    context,
+                    horizontal: horizontal,
+                    topInset: topInset,
+                    bottomSafe: bottomSafe,
+                  ),
                 ),
               ),
             );
@@ -143,6 +159,7 @@ class _BookmarksPageState extends ConsumerState<BookmarksPage> {
   Widget _buildBody(
     BuildContext context, {
     required double horizontal,
+    required double topInset,
     required double bottomSafe,
   }) {
     if (_isLoading) {
@@ -159,6 +176,7 @@ class _BookmarksPageState extends ConsumerState<BookmarksPage> {
       return _buildStatusBody(
         context,
         horizontal: horizontal,
+        topInset: topInset,
         bottomSafe: bottomSafe,
         title: '加载失败',
         message: errorText,
@@ -172,6 +190,7 @@ class _BookmarksPageState extends ConsumerState<BookmarksPage> {
       return _buildStatusBody(
         context,
         horizontal: horizontal,
+        topInset: topInset,
         bottomSafe: bottomSafe,
         title: '还没有灵感',
         message: '在阅读页选中文本后点击“保存灵感”即可添加。',
@@ -186,7 +205,7 @@ class _BookmarksPageState extends ConsumerState<BookmarksPage> {
         physics: const AlwaysScrollableScrollPhysics(),
         padding: EdgeInsets.fromLTRB(
           horizontal,
-          12,
+          topInset + 12,
           horizontal,
           12 + bottomSafe,
         ),
@@ -202,6 +221,7 @@ class _BookmarksPageState extends ConsumerState<BookmarksPage> {
   Widget _buildStatusBody(
     BuildContext context, {
     required double horizontal,
+    required double topInset,
     required double bottomSafe,
     required String title,
     required String message,
@@ -217,7 +237,7 @@ class _BookmarksPageState extends ConsumerState<BookmarksPage> {
         physics: const AlwaysScrollableScrollPhysics(),
         padding: EdgeInsets.fromLTRB(
           horizontal,
-          48,
+          topInset + 48,
           horizontal,
           24 + bottomSafe,
         ),

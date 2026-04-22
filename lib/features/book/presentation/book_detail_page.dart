@@ -7,20 +7,24 @@ import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
 import 'package:html/parser.dart' as html_parser;
 import 'package:path/path.dart' as p;
+import 'package:path_provider/path_provider.dart';
 import 'package:share_plus/share_plus.dart';
 
 import '../../../app/layout/app_layout.dart';
 import '../../../app/layout/app_spacing.dart';
+import '../../../app/theme/app_advanced_theme_tokens.dart';
+import '../../../app/widgets/advanced_theme_backdrop_decoration.dart';
 import '../../../app/widgets/resolved_book_cover.dart';
 import '../../../app/widgets/runtime_feedback_card.dart';
 import '../../../app/widgets/switch_source_candidate_sheet.dart';
-
 import '../../../core/errors/app_exception.dart';
 import '../../../core/errors/error_codes.dart';
 import '../../../core/errors/error_stage.dart';
+import '../../../core/media/image_selection_service.dart';
 import '../../../data/datasources/local/app_database.dart';
 import '../../../data/repositories/bookmark_repository_impl.dart';
 import '../../../domain/entities/bookmark.dart';
+import '../../../domain/entities/book_detail.dart';
 import '../../../domain/entities/bookshelf_book.dart';
 import '../../../domain/entities/chapter.dart';
 import '../../../domain/entities/local_book.dart';
@@ -85,21 +89,18 @@ class BookDetailPage extends StatefulWidget {
 class _BookDetailPresentationState {
   const _BookDetailPresentationState({
     this.isLoading = false,
-    this.showLoadingIndicator = false,
     this.errorText,
     this.tocWarningText,
     this.result,
   });
 
   final bool isLoading;
-  final bool showLoadingIndicator;
   final String? errorText;
   final String? tocWarningText;
   final BookDetailLoadResult? result;
 
   _BookDetailPresentationState copyWith({
     bool? isLoading,
-    bool? showLoadingIndicator,
     String? errorText,
     bool clearErrorText = false,
     String? tocWarningText,
@@ -109,7 +110,6 @@ class _BookDetailPresentationState {
   }) {
     return _BookDetailPresentationState(
       isLoading: isLoading ?? this.isLoading,
-      showLoadingIndicator: showLoadingIndicator ?? this.showLoadingIndicator,
       errorText: clearErrorText ? null : (errorText ?? this.errorText),
       tocWarningText:
           clearTocWarningText ? null : (tocWarningText ?? this.tocWarningText),
@@ -174,7 +174,6 @@ class _BookDetailPageState extends State<BookDetailPage> {
         const _BookDetailAuxiliaryState(),
       );
 
-  static const Duration _kLoadingIndicatorDelay = Duration(milliseconds: 260);
   bool _isLoading = false;
   bool _isSwitchingSource = false;
   bool _manualTocReversed = false;
@@ -207,6 +206,7 @@ class _BookDetailPageState extends State<BookDetailPage> {
   final ReaderPreferencesService _readerPreferencesService =
       ReaderPreferencesService();
   final ReadingRecordService _readingRecordService = ReadingRecordService();
+  final ImageSelectionService _imageSelectionService = ImageSelectionService();
   final ReaderEntryRouteResolver _readerEntryRouteResolver =
       const ReaderEntryRouteResolver();
   final SourceRuntimeTaskConflictService _taskConflictService =
@@ -216,7 +216,6 @@ class _BookDetailPageState extends State<BookDetailPage> {
   String? _catalogSearchCacheFingerprint;
   Map<String, List<ReaderCatalogSearchEntry>> _catalogSearchEntriesCache =
       const <String, List<ReaderCatalogSearchEntry>>{};
-  Timer? _loadingIndicatorTimer;
 
   @override
   void initState() {
@@ -259,7 +258,6 @@ class _BookDetailPageState extends State<BookDetailPage> {
   @override
   void dispose() {
     _detailLoadRequestToken += 1;
-    _loadingIndicatorTimer?.cancel();
     _cancelActiveSwitchSourceSearch();
     _localIndexEventSubscription?.cancel();
     final sourceId = (_activeSourceId ?? '').trim();
@@ -304,178 +302,194 @@ class _BookDetailPageState extends State<BookDetailPage> {
 
   @override
   Widget build(BuildContext context) {
-    final colorScheme = Theme.of(context).colorScheme;
-    final horizontal = AppSpacing.pageHorizontal(context);
-    final bottomSafe = MediaQuery.viewPaddingOf(context).bottom;
-    final canPopRoute = context.canPop();
+    return Consumer(
+      builder: (context, ref, _) {
+        final activeAdvancedTheme =
+            ref.watch(activeAdvancedThemeProvider).valueOrNull;
+        final colorScheme = Theme.of(context).colorScheme;
+        final backdrop = resolveAdvancedThemeBackdrop(
+          colorScheme,
+          activeAdvancedTheme,
+        );
+        final horizontal = AppSpacing.pageHorizontal(context);
+        final bottomSafe = MediaQuery.viewPaddingOf(context).bottom;
+        final topInset = MediaQuery.paddingOf(context).top + kToolbarHeight;
+        final canPopRoute = context.canPop();
 
-    return PopScope<void>(
-      canPop: canPopRoute,
-      onPopInvokedWithResult: (didPop, _) {
-        if (didPop || !mounted) {
-          return;
-        }
-        context.go('/bookshelf');
-      },
-      child: Scaffold(
-        appBar: AppBar(
-          leading: IconButton(
-            onPressed: _handleBackNavigation,
-            tooltip: '返回',
-            icon: const Icon(Icons.arrow_back),
-          ),
-          actions: [
-            IconButton(
-              onPressed: _handleEditAction,
-              tooltip: '编辑',
-              icon: const Icon(Icons.edit_outlined),
-            ),
-            IconButton(
-              onPressed: _handleShareAction,
-              tooltip: '分享',
-              icon: const Icon(Icons.share_outlined),
-            ),
-            IconButton(
-              onPressed: _showMoreActionsSheet,
-              tooltip: '更多',
-              icon: const Icon(Icons.more_horiz_rounded),
-            ),
-          ],
-        ),
-        floatingActionButton:
-            ValueListenableBuilder<_BookDetailPresentationState>(
-              valueListenable: _presentationStateNotifier,
-              builder: (context, presentationState, _) {
-                final result = presentationState.result;
-                return result == null
-                    ? const SizedBox.shrink()
-                    : (_buildReadFloatingActionButton(result) ??
-                        const SizedBox.shrink());
-              },
-            ),
-        body: DecoratedBox(
-          decoration: BoxDecoration(
-            gradient: LinearGradient(
-              begin: Alignment.topCenter,
-              end: Alignment.bottomCenter,
-              colors: [colorScheme.surface, colorScheme.surfaceContainerLow],
-            ),
-          ),
-          child: LayoutBuilder(
-            builder: (context, _) {
-              final maxWidth = AppLayout.pageContentMaxWidth(
-                context,
-                maxWidth: AppLayout.bookDetailContentMaxWidth,
-              );
-
-              return Align(
-                alignment: Alignment.topCenter,
-                child: ConstrainedBox(
-                  constraints: BoxConstraints(maxWidth: maxWidth),
-                  child: ValueListenableBuilder<_BookDetailPresentationState>(
-                    valueListenable: _presentationStateNotifier,
-                    builder: (context, presentationState, _) {
-                      final result = presentationState.result;
-                      final errorText = presentationState.errorText;
-                      final tocWarningText = presentationState.tocWarningText;
-                      return RefreshIndicator(
-                        onRefresh: () => _load(forceRefresh: true),
-                        child: ListView(
-                          physics: const AlwaysScrollableScrollPhysics(),
-                          padding: EdgeInsets.fromLTRB(
-                            horizontal,
-                            16,
-                            horizontal,
-                            16 + bottomSafe,
-                          ),
-                          children: [
-                            if (presentationState.showLoadingIndicator)
-                              const Padding(
-                                padding: EdgeInsets.only(bottom: 12),
-                                child: LinearProgressIndicator(minHeight: 2),
-                              ),
-                            if (_isMissingParams)
-                              RuntimeFeedbackCard(
-                                title: '参数不完整',
-                                message:
-                                    '缺少 sourceId/detailUrl，无法加载详情。请从搜索结果进入。bookId=${widget.bookId}',
-                                tone: RuntimeFeedbackTone.warning,
-                              )
-                            else if (errorText != null && result == null)
-                              RuntimeFeedbackCard(
-                                title: '加载失败',
-                                message: errorText,
-                                tone: RuntimeFeedbackTone.error,
-                                actions: [
-                                  FilledButton.tonal(
-                                    onPressed: () => _load(forceRefresh: true),
-                                    child: const Text('重试'),
-                                  ),
-                                  if (_isLocalContent)
-                                    OutlinedButton.icon(
-                                      onPressed: _copyLocalDiagnosticsFromError,
-                                      icon: const Icon(
-                                        Icons.copy_rounded,
-                                        size: 16,
-                                      ),
-                                      label: const Text('复制诊断信息'),
-                                    ),
-                                ],
-                              )
-                            else if (result != null) ...[
-                              _buildDetailCard(result),
-                              const SizedBox(height: 12),
-                              ValueListenableBuilder<_BookDetailAuxiliaryState>(
-                                valueListenable: _auxiliaryStateNotifier,
-                                builder: (context, auxiliaryState, _) {
-                                  return _buildQuickActionsCard(
-                                    result,
-                                    auxiliaryState: auxiliaryState,
-                                  );
-                                },
-                              ),
-                              if (_resolveIntro(result.detail.intro) !=
-                                  null) ...[
-                                const SizedBox(height: 12),
-                                BookDetailIntroCard(
-                                  intro: _resolveIntro(result.detail.intro)!,
-                                ),
-                              ],
-                              ValueListenableBuilder<_BookDetailAuxiliaryState>(
-                                valueListenable: _auxiliaryStateNotifier,
-                                builder: (context, auxiliaryState, _) {
-                                  final localBookMeta =
-                                      auxiliaryState.localBookMeta;
-                                  if (!_isLocalContent ||
-                                      localBookMeta == null ||
-                                      localBookMeta.indexStatus ==
-                                          LocalBookIndexStatus.ready) {
-                                    return const SizedBox.shrink();
-                                  }
-                                  return Column(
-                                    children: [
-                                      const SizedBox(height: 12),
-                                      _buildLocalIndexStatusCard(localBookMeta),
-                                    ],
-                                  );
-                                },
-                              ),
-                              if (tocWarningText != null) ...[
-                                const SizedBox(height: 12),
-                                _buildTocWarningCard(tocWarningText),
-                              ],
-                            ],
-                          ],
-                        ),
-                      );
-                    },
-                  ),
+        return PopScope<void>(
+          canPop: canPopRoute,
+          onPopInvokedWithResult: (didPop, _) {
+            if (didPop || !mounted) {
+              return;
+            }
+            context.go('/bookshelf');
+          },
+          child: Scaffold(
+            extendBodyBehindAppBar: true,
+            appBar: AppBar(
+              backgroundColor: Colors.transparent,
+              surfaceTintColor: Colors.transparent,
+              shadowColor: Colors.transparent,
+              leading: IconButton(
+                onPressed: _handleBackNavigation,
+                tooltip: '返回',
+                icon: const Icon(Icons.arrow_back),
+              ),
+              actions: [
+                IconButton(
+                  onPressed: _handleEditAction,
+                  tooltip: '编辑',
+                  icon: const Icon(Icons.edit_outlined),
                 ),
-              );
-            },
+                IconButton(
+                  onPressed: _handleShareAction,
+                  tooltip: '分享',
+                  icon: const Icon(Icons.share_outlined),
+                ),
+                IconButton(
+                  onPressed: _showMoreActionsSheet,
+                  tooltip: '更多',
+                  icon: const Icon(Icons.more_horiz_rounded),
+                ),
+              ],
+            ),
+            floatingActionButton:
+                ValueListenableBuilder<_BookDetailPresentationState>(
+                  valueListenable: _presentationStateNotifier,
+                  builder: (context, presentationState, _) {
+                    final result = presentationState.result;
+                    return result == null
+                        ? const SizedBox.shrink()
+                        : (_buildReadFloatingActionButton(result) ??
+                            const SizedBox.shrink());
+                  },
+                ),
+            body: DecoratedBox(
+              decoration: buildAdvancedThemeBackdropDecoration(backdrop),
+              child: LayoutBuilder(
+                builder: (context, _) {
+                  final maxWidth = AppLayout.pageContentMaxWidth(
+                    context,
+                    maxWidth: AppLayout.bookDetailContentMaxWidth,
+                  );
+
+                  return Align(
+                    alignment: Alignment.topCenter,
+                    child: ConstrainedBox(
+                      constraints: BoxConstraints(maxWidth: maxWidth),
+                      child: ValueListenableBuilder<
+                        _BookDetailPresentationState
+                      >(
+                        valueListenable: _presentationStateNotifier,
+                        builder: (context, presentationState, _) {
+                          final result = presentationState.result;
+                          final errorText = presentationState.errorText;
+                          final tocWarningText =
+                              presentationState.tocWarningText;
+                          return RefreshIndicator(
+                            onRefresh: () => _load(forceRefresh: true),
+                            child: ListView(
+                              physics: const AlwaysScrollableScrollPhysics(),
+                              padding: EdgeInsets.fromLTRB(
+                                horizontal,
+                                topInset + 16,
+                                horizontal,
+                                16 + bottomSafe,
+                              ),
+                              children: [
+                                if (_isMissingParams)
+                                  RuntimeFeedbackCard(
+                                    title: '参数不完整',
+                                    message:
+                                        '缺少 sourceId/detailUrl，无法加载详情。请从搜索结果进入。bookId=${widget.bookId}',
+                                    tone: RuntimeFeedbackTone.warning,
+                                  )
+                                else if (errorText != null && result == null)
+                                  RuntimeFeedbackCard(
+                                    title: '加载失败',
+                                    message: errorText,
+                                    tone: RuntimeFeedbackTone.error,
+                                    actions: [
+                                      FilledButton.tonal(
+                                        onPressed:
+                                            () => _load(forceRefresh: true),
+                                        child: const Text('重试'),
+                                      ),
+                                      if (_isLocalContent)
+                                        OutlinedButton.icon(
+                                          onPressed:
+                                              _copyLocalDiagnosticsFromError,
+                                          icon: const Icon(
+                                            Icons.copy_rounded,
+                                            size: 16,
+                                          ),
+                                          label: const Text('复制诊断信息'),
+                                        ),
+                                    ],
+                                  )
+                                else if (result != null) ...[
+                                  _buildDetailCard(result),
+                                  const SizedBox(height: 12),
+                                  ValueListenableBuilder<
+                                    _BookDetailAuxiliaryState
+                                  >(
+                                    valueListenable: _auxiliaryStateNotifier,
+                                    builder: (context, auxiliaryState, _) {
+                                      return _buildQuickActionsCard(
+                                        result,
+                                        auxiliaryState: auxiliaryState,
+                                      );
+                                    },
+                                  ),
+                                  if (_resolveIntro(result.detail.intro) !=
+                                      null) ...[
+                                    const SizedBox(height: 12),
+                                    BookDetailIntroCard(
+                                      intro:
+                                          _resolveIntro(result.detail.intro)!,
+                                    ),
+                                  ],
+                                  ValueListenableBuilder<
+                                    _BookDetailAuxiliaryState
+                                  >(
+                                    valueListenable: _auxiliaryStateNotifier,
+                                    builder: (context, auxiliaryState, _) {
+                                      final localBookMeta =
+                                          auxiliaryState.localBookMeta;
+                                      if (!_isLocalContent ||
+                                          localBookMeta == null ||
+                                          localBookMeta.indexStatus ==
+                                              LocalBookIndexStatus.ready) {
+                                        return const SizedBox.shrink();
+                                      }
+                                      return Column(
+                                        children: [
+                                          const SizedBox(height: 12),
+                                          _buildLocalIndexStatusCard(
+                                            localBookMeta,
+                                          ),
+                                        ],
+                                      );
+                                    },
+                                  ),
+                                  if (tocWarningText != null) ...[
+                                    const SizedBox(height: 12),
+                                    _buildTocWarningCard(tocWarningText),
+                                  ],
+                                ],
+                              ],
+                            ),
+                          );
+                        },
+                      ),
+                    ),
+                  );
+                },
+              ),
+            ),
           ),
-        ),
-      ),
+        );
+      },
     );
   }
 
@@ -726,6 +740,12 @@ class _BookDetailPageState extends State<BookDetailPage> {
                   title: const Text('缓存章节'),
                   onTap: () => Navigator.of(context).pop('cache'),
                 ),
+              if (detailResult != null && _auxiliaryState.isInBookshelf)
+                ListTile(
+                  leading: const Icon(Icons.image_outlined),
+                  title: const Text('自定义封面'),
+                  onTap: () => Navigator.of(context).pop('custom_cover'),
+                ),
               if (latestChapter != null)
                 ListTile(
                   leading: const Icon(Icons.new_releases_outlined),
@@ -767,6 +787,11 @@ class _BookDetailPageState extends State<BookDetailPage> {
         final cacheAction =
             detailResult == null ? null : _buildOpenCacheAction(detailResult);
         cacheAction?.call();
+        return;
+      case 'custom_cover':
+        if (detailResult != null) {
+          await _pickAndApplyCustomCover(detailResult);
+        }
         return;
       case 'latest':
         if (latestChapter != null) {
@@ -1254,6 +1279,7 @@ class _BookDetailPageState extends State<BookDetailPage> {
       bookTitle: result.detail.title,
       bookAuthor: result.detail.author,
       bookCoverUrl: result.detail.coverUrl,
+      customCoverPath: _localBookMeta?.coverPath,
       supportsContentSearch: false,
       bookmarkRepository: _bookmarkRepository,
       currentBookId: _activeBookId,
@@ -1807,15 +1833,11 @@ class _BookDetailPageState extends State<BookDetailPage> {
     final shouldShowLoading = !backgroundRefresh || _result == null;
     final nextPresentationBeforeLoad = _presentationState.copyWith(
       isLoading: shouldShowLoading ? true : _presentationState.isLoading,
-      showLoadingIndicator: false,
       clearErrorText: !backgroundRefresh,
       clearTocWarningText: !backgroundRefresh,
       clearResult: clearResult,
     );
     _updatePresentationState(nextPresentationBeforeLoad);
-    if (shouldShowLoading) {
-      _scheduleLoadingIndicator();
-    }
 
     try {
       final detailProvider = _requireContentProvider(
@@ -1889,31 +1911,10 @@ class _BookDetailPageState extends State<BookDetailPage> {
       return false;
     } finally {
       if (_isActiveDetailLoadRequest(requestToken) && shouldShowLoading) {
-        _updatePresentationState(
-          _presentationState.copyWith(
-            isLoading: false,
-            showLoadingIndicator: false,
-          ),
-        );
+        _updatePresentationState(_presentationState.copyWith(isLoading: false));
       }
-      _loadingIndicatorTimer?.cancel();
       lease.release();
     }
-  }
-
-  void _scheduleLoadingIndicator() {
-    _loadingIndicatorTimer?.cancel();
-    _updatePresentationState(
-      _presentationState.copyWith(showLoadingIndicator: false),
-    );
-    _loadingIndicatorTimer = Timer(_kLoadingIndicatorDelay, () {
-      if (!mounted || !_isLoading) {
-        return;
-      }
-      _updatePresentationState(
-        _presentationState.copyWith(showLoadingIndicator: true),
-      );
-    });
   }
 
   List<String> _currentConflictKeys() {
@@ -2571,6 +2572,131 @@ class _BookDetailPageState extends State<BookDetailPage> {
       return;
     }
     await _copyLocalDiagnostics(book);
+  }
+
+  Future<void> _pickAndApplyCustomCover(
+    BookDetailLoadResult detailResult,
+  ) async {
+    try {
+      final picked = await _imageSelectionService.pickImage(
+        confirmButtonText: '选择封面',
+        allowedExtensions: const {'jpg', 'jpeg', 'png', 'webp', 'gif'},
+      );
+      if (!mounted || picked == null) {
+        return;
+      }
+
+      final storedCoverUri = await _persistCustomCover(detailResult, picked);
+      if (storedCoverUri == null) {
+        _showMessage('封面保存失败，请重试。');
+        return;
+      }
+
+      final coverUrl = storedCoverUri.toString();
+      final detail = detailResult.detail;
+      await _bookshelfService.upsert(
+        BookshelfBook(
+          bookId: detail.id,
+          sourceId: detail.sourceId,
+          title: detail.title,
+          detailUrl: detail.detailUrl,
+          author: detail.author,
+          coverUrl: coverUrl,
+          addedAt: DateTime.now(),
+        ),
+      );
+      await _readingRecordService.syncBookPresentation(
+        bookId: detail.id,
+        bookTitle: detail.title,
+        bookAuthor: detail.author,
+        coverUrl: coverUrl,
+      );
+
+      _updatePresentationState(
+        _presentationState.copyWith(
+          result: BookDetailLoadResult(
+            detail: BookDetail(
+              id: detail.id,
+              sourceId: detail.sourceId,
+              title: detail.title,
+              detailUrl: detail.detailUrl,
+              author: detail.author,
+              intro: detail.intro,
+              coverUrl: coverUrl,
+              tocUrl: detail.tocUrl,
+            ),
+            chapters: detailResult.chapters,
+            sourceName: detailResult.sourceName,
+            tocFromCache: detailResult.tocFromCache,
+            tocError: detailResult.tocError,
+          ),
+        ),
+      );
+      _showMessage('已更新自定义封面。');
+    } on ImageSelectionException catch (error) {
+      _showMessage(error.message);
+    } on AppException catch (error) {
+      _showMessage(error.briefMessage);
+    } catch (_) {
+      _showMessage('设置自定义封面失败，请重试。');
+    }
+  }
+
+  Future<Uri?> _persistCustomCover(
+    BookDetailLoadResult detailResult,
+    PickedImageData picked,
+  ) async {
+    final bytes = picked.bytes;
+    if (bytes.isEmpty) {
+      return null;
+    }
+
+    final baseDir = await getApplicationSupportDirectory();
+    final coverDir = Directory(
+      p.join(baseDir.path, 'shuxiang_reading_next', 'custom_covers'),
+    );
+    if (!await coverDir.exists()) {
+      await coverDir.create(recursive: true);
+    }
+
+    final detail = detailResult.detail;
+    final bookKey = '${detail.sourceId.trim()}::${detail.detailUrl.trim()}'
+        .replaceAll(RegExp(r'[^a-zA-Z0-9]+'), '_');
+    final sourceExtension = p.extension(picked.name).toLowerCase();
+    final extension =
+        const [
+              '.jpg',
+              '.jpeg',
+              '.png',
+              '.webp',
+              '.gif',
+            ].contains(sourceExtension)
+            ? sourceExtension
+            : '.jpg';
+
+    await for (final entity in coverDir.list(followLinks: false)) {
+      if (entity is! File) {
+        continue;
+      }
+      final name = p.basename(entity.path);
+      if (!name.startsWith('${bookKey}_')) {
+        continue;
+      }
+      try {
+        await entity.delete();
+      } catch (_) {
+        // Ignore stale cleanup failure.
+      }
+    }
+
+    final targetFile = File(
+      p.join(
+        coverDir.path,
+        '${bookKey}_${DateTime.now().millisecondsSinceEpoch}$extension',
+      ),
+    );
+    await targetFile.writeAsBytes(bytes, flush: true);
+    return targetFile.uri;
   }
 
   String _buildLocalDiagnosticsText(

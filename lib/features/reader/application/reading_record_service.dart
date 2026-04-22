@@ -653,6 +653,38 @@ class ReadingRecordService {
 
   DateTime _later(DateTime a, DateTime b) => a.isAfter(b) ? a : b;
 
+  ReadingRecordSession? _latestSessionWithCover(
+    List<ReadingRecordSession> sessions,
+  ) {
+    ReadingRecordSession? latest;
+    for (final session in sessions) {
+      final coverUrl = session.coverUrl?.trim() ?? '';
+      if (coverUrl.isEmpty) {
+        continue;
+      }
+      if (latest == null || session.endAt.isAfter(latest.endAt)) {
+        latest = session;
+      }
+    }
+    return latest;
+  }
+
+  ReadingRecordSession? _latestSessionWithAuthor(
+    List<ReadingRecordSession> sessions,
+  ) {
+    ReadingRecordSession? latest;
+    for (final session in sessions) {
+      final author = session.bookAuthor?.trim() ?? '';
+      if (author.isEmpty) {
+        continue;
+      }
+      if (latest == null || session.endAt.isAfter(latest.endAt)) {
+        latest = session;
+      }
+    }
+    return latest;
+  }
+
   String _normalizeMergeText(String value) {
     return value.trim().toLowerCase().replaceAll(RegExp(r'\s+'), '');
   }
@@ -754,6 +786,8 @@ class ReadingRecordService {
     final latestSession = sessions.reduce(
       (current, next) => current.endAt.isAfter(next.endAt) ? current : next,
     );
+    final latestSessionWithCover = _latestSessionWithCover(sessions);
+    final latestSessionWithAuthor = _latestSessionWithAuthor(sessions);
     final totalReadMillis = sessions.fold<int>(
       0,
       (sum, item) => sum + (item.durationMillis < 0 ? 0 : item.durationMillis),
@@ -768,8 +802,12 @@ class ReadingRecordService {
       sourceId: latestSession.sourceId.trim(),
       detailUrl: latestSession.detailUrl.trim(),
       bookTitle: latestSession.bookTitle.trim(),
-      bookAuthor: latestSession.bookAuthor?.trim(),
-      coverUrl: latestSession.coverUrl?.trim(),
+      bookAuthor:
+          latestSessionWithAuthor?.bookAuthor?.trim() ??
+          latestSession.bookAuthor?.trim(),
+      coverUrl:
+          latestSessionWithCover?.coverUrl?.trim() ??
+          latestSession.coverUrl?.trim(),
       lastChapterId: latestSession.chapterId?.trim(),
       lastChapterTitle: latestSession.chapterTitle?.trim(),
       lastChapterIndex: latestSession.chapterIndex,

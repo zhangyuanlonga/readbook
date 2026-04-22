@@ -24,6 +24,7 @@ import '../features/mine/presentation/bottom_nav_icon_gallery_editor_page.dart';
 import '../features/mine/presentation/cover_gallery_editor_page.dart';
 import '../features/mine/presentation/cover_gallery_page.dart';
 import '../features/mine/presentation/feedback_page.dart';
+import '../features/mine/presentation/feature_placeholder_page.dart';
 import '../features/mine/presentation/system_settings_page.dart';
 import '../features/auth/presentation/auth_page.dart';
 import '../features/auth/presentation/user_profile_page.dart';
@@ -110,6 +111,22 @@ final GoRouter appRouter = GoRouter(
         };
         return AppearancePage(section: section);
       },
+    ),
+    GoRoute(
+      path: '/appearance/reader-background',
+      name: 'reader-background',
+      builder:
+          (context, state) => const FeaturePlaceholderPage(
+            kind: FeaturePlaceholderKind.readerBackground,
+          ),
+    ),
+    GoRoute(
+      path: '/appearance/launch-image',
+      name: 'launch-image',
+      builder:
+          (context, state) => const FeaturePlaceholderPage(
+            kind: FeaturePlaceholderKind.launchImage,
+          ),
     ),
     GoRoute(
       path: '/appearance/advanced-themes',
@@ -214,6 +231,14 @@ final GoRouter appRouter = GoRouter(
       path: '/system-settings',
       name: 'system-settings',
       builder: (context, state) => const SystemSettingsPage(),
+    ),
+    GoRoute(
+      path: '/font-management',
+      name: 'font-management',
+      builder:
+          (context, state) => const FeaturePlaceholderPage(
+            kind: FeaturePlaceholderKind.fontManagement,
+          ),
     ),
     GoRoute(
       path: '/auth',

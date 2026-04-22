@@ -1,10 +1,14 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../../../app/layout/app_layout.dart';
 import '../../../app/layout/app_spacing.dart';
+import '../../../app/theme/app_advanced_theme_tokens.dart';
+import '../../../app/widgets/advanced_theme_backdrop_decoration.dart';
 import '../../../core/device/device_identity_service.dart';
+import '../application/advanced_theme_provider.dart';
 
 class AboutPage extends StatefulWidget {
   const AboutPage({super.key});
@@ -66,101 +70,123 @@ class _AboutPageState extends State<AboutPage> {
 
   @override
   Widget build(BuildContext context) {
-    final horizontal = AppSpacing.pageHorizontal(context);
-    final bottomSafe = MediaQuery.viewPaddingOf(context).bottom;
+    return Consumer(
+      builder: (context, ref, _) {
+        final activeAdvancedTheme =
+            ref.watch(activeAdvancedThemeProvider).valueOrNull;
+        final backdrop = resolveAdvancedThemeBackdrop(
+          Theme.of(context).colorScheme,
+          activeAdvancedTheme,
+        );
+        final horizontal = AppSpacing.pageHorizontal(context);
+        final bottomSafe = MediaQuery.viewPaddingOf(context).bottom;
+        final topInset = MediaQuery.paddingOf(context).top + kToolbarHeight;
 
-    return PopScope<void>(
-      canPop: context.canPop(),
-      onPopInvokedWithResult: (didPop, _) {
-        if (didPop || !context.mounted) {
-          return;
-        }
-        context.go('/mine');
-      },
-      child: Scaffold(
-        appBar: AppBar(title: const Text('关于')),
-        body: LayoutBuilder(
-          builder: (context, _) {
-            final contentMaxWidth = AppLayout.aboutPageContentMaxWidth(context);
-
-            return Align(
-              alignment: Alignment.topCenter,
-              child: ConstrainedBox(
-                constraints: BoxConstraints(maxWidth: contentMaxWidth),
-                child: LayoutBuilder(
-                  builder: (context, innerConstraints) {
-                    final width = innerConstraints.maxWidth;
-                    final isExpanded = AppLayout.isExpandedWidth(width);
-
-                    final leftColumn = <Widget>[
-                      _buildIntroCard(context),
-                      const SizedBox(height: 10),
-                      _buildSectionCard(
-                        context,
-                        title: '项目当前重点',
-                        subtitle: '当前版本以个人阅读和稳定体验为主。',
-                        icon: Icons.track_changes_outlined,
-                        items: AboutPage._projectFocus,
-                      ),
-                      const SizedBox(height: 10),
-                      _buildSectionCard(
-                        context,
-                        title: '当前能力',
-                        subtitle: '优先覆盖本地文档与个人阅读管理。',
-                        icon: Icons.checklist_rounded,
-                        items: AboutPage._mvpScope,
-                      ),
-                    ];
-
-                    final rightColumn = <Widget>[
-                      _buildWebsiteCard(context),
-                      const SizedBox(height: 10),
-                      _buildTagCard(
-                        context,
-                        title: '技术栈',
-                        subtitle: '当前版本采用的核心方案。',
-                        icon: Icons.developer_mode_rounded,
-                        tags: AboutPage._techStack,
-                      ),
-                      const SizedBox(height: 10),
-                      _buildComplianceCard(context),
-                    ];
-
-                    return ListView(
-                      padding: EdgeInsets.fromLTRB(
-                        horizontal,
-                        12,
-                        horizontal,
-                        12 + bottomSafe,
-                      ),
-                      children: [
-                        if (!isExpanded) ...leftColumn,
-                        if (!isExpanded) const SizedBox(height: 10),
-                        if (!isExpanded) ...rightColumn,
-                        if (isExpanded)
-                          Row(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Expanded(
-                                flex: 12,
-                                child: Column(children: leftColumn),
-                              ),
-                              const SizedBox(width: 10),
-                              Expanded(
-                                flex: 10,
-                                child: Column(children: rightColumn),
-                              ),
-                            ],
-                          ),
-                      ],
-                    );
-                  },
-                ),
-              ),
-            );
+        return PopScope<void>(
+          canPop: context.canPop(),
+          onPopInvokedWithResult: (didPop, _) {
+            if (didPop || !context.mounted) {
+              return;
+            }
+            context.go('/mine');
           },
-        ),
-      ),
+          child: Scaffold(
+            extendBodyBehindAppBar: true,
+            appBar: AppBar(
+              title: const Text('关于'),
+              backgroundColor: Colors.transparent,
+              surfaceTintColor: Colors.transparent,
+              shadowColor: Colors.transparent,
+            ),
+            body: LayoutBuilder(
+              builder: (context, _) {
+                final contentMaxWidth = AppLayout.aboutPageContentMaxWidth(
+                  context,
+                );
+
+                return DecoratedBox(
+                  decoration: buildAdvancedThemeBackdropDecoration(backdrop),
+                  child: Align(
+                    alignment: Alignment.topCenter,
+                    child: ConstrainedBox(
+                      constraints: BoxConstraints(maxWidth: contentMaxWidth),
+                      child: LayoutBuilder(
+                        builder: (context, innerConstraints) {
+                          final width = innerConstraints.maxWidth;
+                          final isExpanded = AppLayout.isExpandedWidth(width);
+
+                          final leftColumn = <Widget>[
+                            _buildIntroCard(context),
+                            const SizedBox(height: 10),
+                            _buildSectionCard(
+                              context,
+                              title: '项目当前重点',
+                              subtitle: '当前版本以个人阅读和稳定体验为主。',
+                              icon: Icons.track_changes_outlined,
+                              items: AboutPage._projectFocus,
+                            ),
+                            const SizedBox(height: 10),
+                            _buildSectionCard(
+                              context,
+                              title: '当前能力',
+                              subtitle: '优先覆盖本地文档与个人阅读管理。',
+                              icon: Icons.checklist_rounded,
+                              items: AboutPage._mvpScope,
+                            ),
+                          ];
+
+                          final rightColumn = <Widget>[
+                            _buildWebsiteCard(context),
+                            const SizedBox(height: 10),
+                            _buildTagCard(
+                              context,
+                              title: '技术栈',
+                              subtitle: '当前版本采用的核心方案。',
+                              icon: Icons.developer_mode_rounded,
+                              tags: AboutPage._techStack,
+                            ),
+                            const SizedBox(height: 10),
+                            _buildComplianceCard(context),
+                          ];
+
+                          return ListView(
+                            padding: EdgeInsets.fromLTRB(
+                              horizontal,
+                              topInset + 12,
+                              horizontal,
+                              12 + bottomSafe,
+                            ),
+                            children: [
+                              if (!isExpanded) ...leftColumn,
+                              if (!isExpanded) const SizedBox(height: 10),
+                              if (!isExpanded) ...rightColumn,
+                              if (isExpanded)
+                                Row(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Expanded(
+                                      flex: 12,
+                                      child: Column(children: leftColumn),
+                                    ),
+                                    const SizedBox(width: 10),
+                                    Expanded(
+                                      flex: 10,
+                                      child: Column(children: rightColumn),
+                                    ),
+                                  ],
+                                ),
+                            ],
+                          );
+                        },
+                      ),
+                    ),
+                  ),
+                );
+              },
+            ),
+          ),
+        );
+      },
     );
   }
 

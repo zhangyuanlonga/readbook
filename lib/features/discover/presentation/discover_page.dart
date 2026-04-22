@@ -173,6 +173,11 @@ class _DiscoverPageState extends ConsumerState<DiscoverPage>
       style: effectiveNavigationStyle,
       showNavigationLabels: showNavigationLabels,
     );
+    final contentBottomInset =
+        bottomInset +
+        (effectiveNavigationStyle == AppNavigationStyle.cupertinoDock
+            ? 8.0
+            : 0.0);
     final topInset = MediaQuery.paddingOf(context).top + kToolbarHeight;
 
     return Scaffold(
@@ -204,7 +209,7 @@ class _DiscoverPageState extends ConsumerState<DiscoverPage>
                     horizontal,
                     topInset + 12,
                     horizontal,
-                    12 + bottomInset,
+                    12 + contentBottomInset,
                   ),
                   child: LayoutBuilder(
                     builder: (context, constraints) {

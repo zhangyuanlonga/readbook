@@ -145,6 +145,11 @@ class _MinePageState extends ConsumerState<MinePage> {
       style: effectiveNavigationStyle,
       showNavigationLabels: showNavigationLabels,
     );
+    final contentBottomInset =
+        bottomInset +
+        (effectiveNavigationStyle == AppNavigationStyle.cupertinoDock
+            ? 8.0
+            : 0.0);
     final topInset = MediaQuery.paddingOf(context).top + kToolbarHeight;
     final toggleTooltip =
         _layoutMode == _MineLayoutMode.grid ? '切换为列表' : '切换为网格';
@@ -189,7 +194,7 @@ class _MinePageState extends ConsumerState<MinePage> {
                       horizontal,
                       topInset + 4,
                       horizontal,
-                      24 + bottomInset,
+                      24 + contentBottomInset,
                     ),
                     children: [
                       _buildPageEntrance(
@@ -211,7 +216,7 @@ class _MinePageState extends ConsumerState<MinePage> {
                           actions: [
                             _MineActionItem(
                               icon: Icons.palette_outlined,
-                              label: '外观',
+                              label: '应用外观',
                               subtitle:
                                   '${_themeModeLabel(themeMode)} · ${appThemeSeedLabel(seedColor)} · ${appNavigationStylePreferenceLabel(navigationPreference)}',
                               colorDot: seedColor,
@@ -244,7 +249,7 @@ class _MinePageState extends ConsumerState<MinePage> {
                             ),
                             _MineActionItem(
                               icon: Icons.dashboard_outlined,
-                              label: '底栏',
+                              label: '底栏图集',
                               subtitle: activeBottomNavIconGallery.when(
                                 data:
                                     (gallery) =>
@@ -261,16 +266,31 @@ class _MinePageState extends ConsumerState<MinePage> {
                             ),
                             _MineActionItem(
                               icon: Icons.photo_library_outlined,
-                              label: '封面',
+                              label: '封面图集',
                               onTap: () => context.push('/cover-galleries'),
                             ),
                             _MineActionItem(
                               icon: Icons.wallpaper_outlined,
-                              label: '背景',
+                              label: '应用背景',
                               onTap:
                                   () => context.push(
                                     '/appearance?section=background',
                                   ),
+                            ),
+                            _MineActionItem(
+                              icon: Icons.auto_stories_outlined,
+                              label: '阅读背景',
+                              onTap:
+                                  () => context.push(
+                                    '/appearance/reader-background',
+                                  ),
+                            ),
+                            _MineActionItem(
+                              icon: Icons.rocket_launch_outlined,
+                              label: '启动图集',
+                              onTap:
+                                  () =>
+                                      context.push('/appearance/launch-image'),
                             ),
                           ],
                         ),
@@ -281,7 +301,7 @@ class _MinePageState extends ConsumerState<MinePage> {
                         child: _buildActionSection(
                           context,
                           palette: advancedPalette,
-                          title: '常用',
+                          title: '配置',
                           padding:
                               _isListMode
                                   ? const EdgeInsets.fromLTRB(10, 2, 10, 2)
@@ -308,6 +328,22 @@ class _MinePageState extends ConsumerState<MinePage> {
                               onTap:
                                   () => context.push('/mine/content-cleanup'),
                             ),
+                          ],
+                        ),
+                      ),
+                      SizedBox(height: _secondarySectionGap),
+                      _buildPageEntrance(
+                        index: 3,
+                        child: _buildActionSection(
+                          context,
+                          palette: advancedPalette,
+                          title: '数据',
+                          actions: [
+                            _MineActionItem(
+                              icon: Icons.font_download_outlined,
+                              label: '字体管理',
+                              onTap: () => context.push('/font-management'),
+                            ),
                             _MineActionItem(
                               icon: Icons.tune_rounded,
                               label: '系统',
@@ -316,7 +352,7 @@ class _MinePageState extends ConsumerState<MinePage> {
                             if (_showSourceEntry)
                               _MineActionItem(
                                 icon: Icons.menu_book_rounded,
-                                label: '书源',
+                                label: '书源管理',
                                 subtitle: _buildSourceSubtitle(),
                                 onTap: _handleSourceTap,
                               ),
@@ -330,7 +366,7 @@ class _MinePageState extends ConsumerState<MinePage> {
                       ),
                       SizedBox(height: _secondarySectionGap),
                       _buildPageEntrance(
-                        index: 3,
+                        index: 4,
                         child: _buildActionSection(
                           context,
                           palette: advancedPalette,
@@ -343,7 +379,7 @@ class _MinePageState extends ConsumerState<MinePage> {
                             ),
                             _MineActionItem(
                               icon: Icons.feedback_outlined,
-                              label: '官方群',
+                              label: '官方 Q 群',
                               onTap: _openSourceFeedback,
                             ),
                             _MineActionItem(
@@ -353,7 +389,7 @@ class _MinePageState extends ConsumerState<MinePage> {
                             ),
                             _MineActionItem(
                               icon: Icons.info_outline,
-                              label: '关于',
+                              label: '关于我们',
                               onTap: () => context.push('/about'),
                             ),
                           ],

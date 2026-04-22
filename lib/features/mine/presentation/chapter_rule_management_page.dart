@@ -1,10 +1,14 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../app/layout/app_layout.dart';
 import '../../../app/layout/app_spacing.dart';
+import '../../../app/theme/app_advanced_theme_tokens.dart';
+import '../../../app/widgets/advanced_theme_backdrop_decoration.dart';
+import '../application/advanced_theme_provider.dart';
 import '../../reader/application/local/txt_chapter_rule_service.dart';
 
 class ChapterRuleManagementPage extends StatefulWidget {
@@ -353,88 +357,113 @@ class _ChapterRuleManagementPageState extends State<ChapterRuleManagementPage> {
 
   @override
   Widget build(BuildContext context) {
-    final horizontal = AppSpacing.pageHorizontal(context);
-    final bottomSafe = MediaQuery.viewPaddingOf(context).bottom;
+    return Consumer(
+      builder: (context, ref, _) {
+        final activeAdvancedTheme =
+            ref.watch(activeAdvancedThemeProvider).valueOrNull;
+        final backdrop = resolveAdvancedThemeBackdrop(
+          Theme.of(context).colorScheme,
+          activeAdvancedTheme,
+        );
+        final horizontal = AppSpacing.pageHorizontal(context);
+        final bottomSafe = MediaQuery.viewPaddingOf(context).bottom;
+        final topInset = MediaQuery.paddingOf(context).top + kToolbarHeight;
 
-    return PopScope<void>(
-      canPop: context.canPop(),
-      onPopInvokedWithResult: (didPop, _) {
-        if (didPop || !context.mounted) {
-          return;
-        }
-        context.go('/mine');
-      },
-      child: Scaffold(
-        appBar: AppBar(title: const Text('分章规则')),
-        floatingActionButton: FloatingActionButton.extended(
-          onPressed: _isSaving ? null : () => unawaited(_showRuleEditor()),
-          icon: const Icon(Icons.add_rounded),
-          label: const Text('新增规则'),
-        ),
-        body: LayoutBuilder(
-          builder: (context, _) {
-            final maxWidth = AppLayout.pageContentMaxWidth(
-              context,
-              maxWidth: AppLayout.settingsContentMaxWidth,
-            );
+        return PopScope<void>(
+          canPop: context.canPop(),
+          onPopInvokedWithResult: (didPop, _) {
+            if (didPop || !context.mounted) {
+              return;
+            }
+            context.go('/mine');
+          },
+          child: Scaffold(
+            extendBodyBehindAppBar: true,
+            appBar: AppBar(
+              title: const Text('分章规则'),
+              backgroundColor: Colors.transparent,
+              surfaceTintColor: Colors.transparent,
+              shadowColor: Colors.transparent,
+            ),
+            floatingActionButton: FloatingActionButton.extended(
+              onPressed: _isSaving ? null : () => unawaited(_showRuleEditor()),
+              icon: const Icon(Icons.add_rounded),
+              label: const Text('新增规则'),
+            ),
+            body: LayoutBuilder(
+              builder: (context, _) {
+                final maxWidth = AppLayout.pageContentMaxWidth(
+                  context,
+                  maxWidth: AppLayout.settingsContentMaxWidth,
+                );
 
-            return Align(
-              alignment: Alignment.topCenter,
-              child: ConstrainedBox(
-                constraints: BoxConstraints(maxWidth: maxWidth),
-                child:
-                    _isLoading
-                        ? const Center(child: CircularProgressIndicator())
-                        : ListView(
-                          padding: EdgeInsets.fromLTRB(
-                            horizontal,
-                            12,
-                            horizontal,
-                            96 + bottomSafe,
-                          ),
-                          children: [
-                            if (_loadErrorText != null) ...[
-                              _buildErrorCard(
-                                context,
-                                _loadErrorText!,
-                                onRetry:
-                                    () => unawaited(_load(showLoading: true)),
-                              ),
-                              const SizedBox(height: 12),
-                            ],
-                            if (_rules.isEmpty)
-                              Text(
-                                '还没有规则，点击右下角新增即可。',
-                                style: Theme.of(
-                                  context,
-                                ).textTheme.bodySmall?.copyWith(
-                                  color:
-                                      Theme.of(
-                                        context,
-                                      ).colorScheme.onSurfaceVariant,
+                return DecoratedBox(
+                  decoration: buildAdvancedThemeBackdropDecoration(backdrop),
+                  child: Align(
+                    alignment: Alignment.topCenter,
+                    child: ConstrainedBox(
+                      constraints: BoxConstraints(maxWidth: maxWidth),
+                      child:
+                          _isLoading
+                              ? const Center(child: CircularProgressIndicator())
+                              : ListView(
+                                padding: EdgeInsets.fromLTRB(
+                                  horizontal,
+                                  topInset + 12,
+                                  horizontal,
+                                  96 + bottomSafe,
                                 ),
-                              )
-                            else
-                              Column(
                                 children: [
-                                  for (
-                                    var index = 0;
-                                    index < _rules.length;
-                                    index++
-                                  ) ...[
-                                    _buildRuleTile(context, _rules[index]),
-                                    if (index < _rules.length - 1)
-                                      const SizedBox(height: 10),
+                                  if (_loadErrorText != null) ...[
+                                    _buildErrorCard(
+                                      context,
+                                      _loadErrorText!,
+                                      onRetry:
+                                          () => unawaited(
+                                            _load(showLoading: true),
+                                          ),
+                                    ),
+                                    const SizedBox(height: 12),
                                   ],
+                                  if (_rules.isEmpty)
+                                    Text(
+                                      '还没有规则，点击右下角新增即可。',
+                                      style: Theme.of(
+                                        context,
+                                      ).textTheme.bodySmall?.copyWith(
+                                        color:
+                                            Theme.of(
+                                              context,
+                                            ).colorScheme.onSurfaceVariant,
+                                      ),
+                                    )
+                                  else
+                                    Column(
+                                      children: [
+                                        for (
+                                          var index = 0;
+                                          index < _rules.length;
+                                          index++
+                                        ) ...[
+                                          _buildRuleTile(
+                                            context,
+                                            _rules[index],
+                                          ),
+                                          if (index < _rules.length - 1)
+                                            const SizedBox(height: 10),
+                                        ],
+                                      ],
+                                    ),
                                 ],
                               ),
-                          ],
-                        ),
-              ),
-            );
-          },
-        ),
-      ),
+                    ),
+                  ),
+                );
+              },
+            ),
+          ),
+        );
+      },
     );
   }
 

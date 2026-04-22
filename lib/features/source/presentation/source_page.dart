@@ -5,6 +5,7 @@ import 'package:dio/dio.dart';
 import 'package:file_selector/file_selector.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
 import 'package:path_provider/path_provider.dart';
@@ -13,12 +14,15 @@ import 'package:share_plus/share_plus.dart';
 import '../../../app/layout/app_layout.dart';
 import '../../../app/layout/app_spacing.dart';
 import '../../../app/platform/app_input_focus_behavior.dart';
+import '../../../app/theme/app_advanced_theme_tokens.dart';
+import '../../../app/widgets/advanced_theme_backdrop_decoration.dart';
 import '../../../core/auth/auth_event_bus.dart';
 import '../../../core/auth/auth_session_store.dart';
 import '../../../core/mobile_features/mobile_feature_module.dart';
 import '../../../core/mobile_features/mobile_feature_service.dart';
 import '../../../domain/entities/script_source.dart';
 import '../../../domain/entities/source_health.dart';
+import '../../mine/application/advanced_theme_provider.dart';
 import '../application/external_source_import_bridge.dart';
 import '../application/source_health_action_policy_service.dart';
 import '../application/source_check_service.dart';
@@ -662,222 +666,260 @@ class _SourcePageState extends State<SourcePage> {
 
   @override
   Widget build(BuildContext context) {
-    if (_isFeatureAccessLoading) {
-      return Scaffold(
-        appBar: AppBar(title: const Text('书源')),
-        body: const Center(child: CircularProgressIndicator()),
-      );
-    }
+    return Consumer(
+      builder: (context, ref, _) {
+        final backdrop = resolveAdvancedThemeBackdrop(
+          Theme.of(context).colorScheme,
+          ref.watch(activeAdvancedThemeProvider).valueOrNull,
+        );
+        final topInset = MediaQuery.paddingOf(context).top + kToolbarHeight;
 
-    // 只有在明确被禁用时才显示提示（基本上不会发生）
-    if (!_canAccessSourcePage) {
-      return Scaffold(
-        appBar: AppBar(title: const Text('书源')),
-        body: Center(
-          child: Padding(
-            padding: const EdgeInsets.all(24),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                const Icon(Icons.info_outline, size: 40),
-                const SizedBox(height: 12),
-                Text(
-                  '书源功能暂不可用',
-                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                    fontWeight: FontWeight.w700,
-                  ),
-                  textAlign: TextAlign.center,
-                ),
-                const SizedBox(height: 8),
-                Text(
-                  '当前设备上的书源入口暂未开放，请稍后再试。',
-                  style: Theme.of(context).textTheme.bodyMedium,
-                  textAlign: TextAlign.center,
-                ),
-              ],
-            ),
-          ),
-        ),
-      );
-    }
-
-    final canPopRoute =
-        widget.enableRouterNavigation
-            ? context.canPop()
-            : Navigator.of(context).canPop();
-
-    return PopScope<void>(
-      canPop: canPopRoute,
-      onPopInvokedWithResult: (didPop, _) {
-        if (didPop || !mounted) {
-          return;
-        }
-        if (widget.enableRouterNavigation) {
-          context.go('/mine');
-        }
-      },
-      child: StreamBuilder<List<ScriptSource>>(
-        stream: _sourceRuntimeFacade.watchScriptSources(),
-        builder: (context, snapshot) {
-          final rawSources = snapshot.data ?? const <ScriptSource>[];
-          _lastRawSources = rawSources;
-          final visibleSources = _resolveVisibleSources(rawSources);
-          _lastVisibleSources = visibleSources;
-          final clusterSummaries = _buildClusterSummaries(visibleSources);
-          final filteredVisibleSources = _applyClusterFilter(
-            visibleSources,
-            clusterSummaries,
+        Widget themedBody(Widget child) {
+          return DecoratedBox(
+            decoration: buildAdvancedThemeBackdropDecoration(backdrop),
+            child: child,
           );
-          final availableGroups = _collectGroupKeys(rawSources);
+        }
 
-          if (_selectedGroupKey != null &&
-              !_isCurrentGroupSelectionAvailable(
-                selectedGroupKey: _selectedGroupKey,
-                availableGroups: availableGroups,
-                sources: rawSources,
-              )) {
-            WidgetsBinding.instance.addPostFrameCallback((_) {
-              if (!mounted) {
-                return;
-              }
-              setState(() {
-                _selectedGroupKey = null;
-              });
-            });
-          }
-
+        if (_isFeatureAccessLoading) {
           return Scaffold(
+            extendBodyBehindAppBar: true,
             appBar: AppBar(
-              leading: IconButton(
-                onPressed: _handleBackNavigation,
-                tooltip: '返回',
-                icon: const Icon(Icons.arrow_back),
-              ),
-              titleSpacing: 0,
-              title: _buildSearchField(context),
-              actions: [
-                PopupMenuButton<_ScriptSourceSortOption>(
-                  tooltip: '排序',
-                  initialValue: _sortOption,
-                  onSelected: (value) {
-                    if (!mounted) {
-                      return;
-                    }
-                    setState(() {
-                      _sortOption = value;
-                    });
-                  },
-                  itemBuilder:
-                      (context) => const [
-                        PopupMenuItem(
-                          value: _ScriptSourceSortOption.updatedDesc,
-                          child: Text('最近更新'),
-                        ),
-                        PopupMenuItem(
-                          value: _ScriptSourceSortOption.nameAsc,
-                          child: Text('名称 A-Z'),
-                        ),
-                        PopupMenuItem(
-                          value: _ScriptSourceSortOption.nameDesc,
-                          child: Text('名称 Z-A'),
-                        ),
-                      ],
-                  icon: const Icon(Icons.swap_vert_rounded),
-                ),
-                PopupMenuButton<String?>(
-                  tooltip: '分组',
-                  initialValue: _selectedGroupKey,
-                  onSelected: (value) {
-                    if (!mounted) {
-                      return;
-                    }
-                    setState(() {
-                      _selectedGroupKey = value;
-                    });
-                  },
-                  itemBuilder: (context) {
-                    final items = <PopupMenuEntry<String?>>[
-                      const PopupMenuItem<String?>(
-                        value: null,
-                        child: Text('全部'),
-                      ),
-                    ];
-                    if (_hasDuplicateSources(rawSources)) {
-                      items.add(
-                        const PopupMenuItem<String?>(
-                          value: _duplicateGroupKey,
-                          child: Text('重复源'),
-                        ),
-                      );
-                    }
-                    if (_hasUngrouped(rawSources)) {
-                      items.add(
-                        const PopupMenuItem<String?>(
-                          value: _ungroupedGroupKey,
-                          child: Text('未分组'),
-                        ),
-                      );
-                    }
-                    for (final group in availableGroups) {
-                      items.add(
-                        PopupMenuItem<String?>(
-                          value: group,
-                          child: Text(group),
-                        ),
-                      );
-                    }
-                    return items;
-                  },
-                  icon: const Icon(Icons.filter_list_rounded),
-                ),
-                PopupMenuButton<_SourcePageMenuAction>(
-                  tooltip: '更多',
-                  icon: const Icon(Icons.more_vert_rounded),
-                  onSelected: _handlePageMenuAction,
-                  itemBuilder:
-                      (context) => [
-                        PopupMenuItem(
-                          value: _SourcePageMenuAction.create,
-                          child: Text('新增'),
-                        ),
-                        PopupMenuItem(
-                          value: _SourcePageMenuAction.importLocal,
-                          child: Text('本地导入'),
-                        ),
-                        PopupMenuItem(
-                          value: _SourcePageMenuAction.importNetwork,
-                          child: Text('网络导入'),
-                        ),
-                        PopupMenuItem(
-                          value: _SourcePageMenuAction.importPaste,
-                          child: Text('粘贴导入'),
-                        ),
-                        PopupMenuItem(
-                          value: _SourcePageMenuAction.batchCheck,
-                          child: Text('批量检测'),
-                        ),
-                      ],
-                ),
-              ],
+              title: const Text('书源'),
+              backgroundColor: Colors.transparent,
+              surfaceTintColor: Colors.transparent,
+              shadowColor: Colors.transparent,
             ),
-            body: SafeArea(
-              top: false,
-              child: _buildBody(
-                context,
-                snapshot: snapshot,
-                rawSources: rawSources,
-                visibleSources: filteredVisibleSources,
-                clusterSummaries: clusterSummaries,
+            body: themedBody(const Center(child: CircularProgressIndicator())),
+          );
+        }
+
+        // 只有在明确被禁用时才显示提示（基本上不会发生）
+        if (!_canAccessSourcePage) {
+          return Scaffold(
+            extendBodyBehindAppBar: true,
+            appBar: AppBar(
+              title: const Text('书源'),
+              backgroundColor: Colors.transparent,
+              surfaceTintColor: Colors.transparent,
+              shadowColor: Colors.transparent,
+            ),
+            body: themedBody(
+              Center(
+                child: Padding(
+                  padding: const EdgeInsets.all(24),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const Icon(Icons.info_outline, size: 40),
+                      const SizedBox(height: 12),
+                      Text(
+                        '书源功能暂不可用',
+                        style: Theme.of(context).textTheme.titleMedium
+                            ?.copyWith(fontWeight: FontWeight.w700),
+                        textAlign: TextAlign.center,
+                      ),
+                      const SizedBox(height: 8),
+                      Text(
+                        '当前设备上的书源入口暂未开放，请稍后再试。',
+                        style: Theme.of(context).textTheme.bodyMedium,
+                        textAlign: TextAlign.center,
+                      ),
+                    ],
+                  ),
+                ),
               ),
             ),
           );
-        },
-      ),
+        }
+
+        final canPopRoute =
+            widget.enableRouterNavigation
+                ? context.canPop()
+                : Navigator.of(context).canPop();
+
+        return PopScope<void>(
+          canPop: canPopRoute,
+          onPopInvokedWithResult: (didPop, _) {
+            if (didPop || !mounted) {
+              return;
+            }
+            if (widget.enableRouterNavigation) {
+              context.go('/mine');
+            }
+          },
+          child: StreamBuilder<List<ScriptSource>>(
+            stream: _sourceRuntimeFacade.watchScriptSources(),
+            builder: (context, snapshot) {
+              final rawSources = snapshot.data ?? const <ScriptSource>[];
+              _lastRawSources = rawSources;
+              final visibleSources = _resolveVisibleSources(rawSources);
+              _lastVisibleSources = visibleSources;
+              final clusterSummaries = _buildClusterSummaries(visibleSources);
+              final filteredVisibleSources = _applyClusterFilter(
+                visibleSources,
+                clusterSummaries,
+              );
+              final availableGroups = _collectGroupKeys(rawSources);
+
+              if (_selectedGroupKey != null &&
+                  !_isCurrentGroupSelectionAvailable(
+                    selectedGroupKey: _selectedGroupKey,
+                    availableGroups: availableGroups,
+                    sources: rawSources,
+                  )) {
+                WidgetsBinding.instance.addPostFrameCallback((_) {
+                  if (!mounted) {
+                    return;
+                  }
+                  setState(() {
+                    _selectedGroupKey = null;
+                  });
+                });
+              }
+
+              return Scaffold(
+                extendBodyBehindAppBar: true,
+                appBar: AppBar(
+                  backgroundColor: Colors.transparent,
+                  surfaceTintColor: Colors.transparent,
+                  shadowColor: Colors.transparent,
+                  leading: IconButton(
+                    onPressed: _handleBackNavigation,
+                    tooltip: '返回',
+                    icon: const Icon(Icons.arrow_back),
+                  ),
+                  titleSpacing: 0,
+                  title: _buildSearchField(context),
+                  actions: [
+                    PopupMenuButton<_ScriptSourceSortOption>(
+                      tooltip: '排序',
+                      initialValue: _sortOption,
+                      onSelected: (value) {
+                        if (!mounted) {
+                          return;
+                        }
+                        setState(() {
+                          _sortOption = value;
+                        });
+                      },
+                      itemBuilder:
+                          (context) => const [
+                            PopupMenuItem(
+                              value: _ScriptSourceSortOption.updatedDesc,
+                              child: Text('最近更新'),
+                            ),
+                            PopupMenuItem(
+                              value: _ScriptSourceSortOption.nameAsc,
+                              child: Text('名称 A-Z'),
+                            ),
+                            PopupMenuItem(
+                              value: _ScriptSourceSortOption.nameDesc,
+                              child: Text('名称 Z-A'),
+                            ),
+                          ],
+                      icon: const Icon(Icons.swap_vert_rounded),
+                    ),
+                    PopupMenuButton<String?>(
+                      tooltip: '分组',
+                      initialValue: _selectedGroupKey,
+                      onSelected: (value) {
+                        if (!mounted) {
+                          return;
+                        }
+                        setState(() {
+                          _selectedGroupKey = value;
+                        });
+                      },
+                      itemBuilder: (context) {
+                        final items = <PopupMenuEntry<String?>>[
+                          const PopupMenuItem<String?>(
+                            value: null,
+                            child: Text('全部'),
+                          ),
+                        ];
+                        if (_hasDuplicateSources(rawSources)) {
+                          items.add(
+                            const PopupMenuItem<String?>(
+                              value: _duplicateGroupKey,
+                              child: Text('重复源'),
+                            ),
+                          );
+                        }
+                        if (_hasUngrouped(rawSources)) {
+                          items.add(
+                            const PopupMenuItem<String?>(
+                              value: _ungroupedGroupKey,
+                              child: Text('未分组'),
+                            ),
+                          );
+                        }
+                        for (final group in availableGroups) {
+                          items.add(
+                            PopupMenuItem<String?>(
+                              value: group,
+                              child: Text(group),
+                            ),
+                          );
+                        }
+                        return items;
+                      },
+                      icon: const Icon(Icons.filter_list_rounded),
+                    ),
+                    PopupMenuButton<_SourcePageMenuAction>(
+                      tooltip: '更多',
+                      icon: const Icon(Icons.more_vert_rounded),
+                      onSelected: _handlePageMenuAction,
+                      itemBuilder:
+                          (context) => [
+                            PopupMenuItem(
+                              value: _SourcePageMenuAction.create,
+                              child: Text('新增'),
+                            ),
+                            PopupMenuItem(
+                              value: _SourcePageMenuAction.importLocal,
+                              child: Text('本地导入'),
+                            ),
+                            PopupMenuItem(
+                              value: _SourcePageMenuAction.importNetwork,
+                              child: Text('网络导入'),
+                            ),
+                            PopupMenuItem(
+                              value: _SourcePageMenuAction.importPaste,
+                              child: Text('粘贴导入'),
+                            ),
+                            PopupMenuItem(
+                              value: _SourcePageMenuAction.batchCheck,
+                              child: Text('批量检测'),
+                            ),
+                          ],
+                    ),
+                  ],
+                ),
+                body: themedBody(
+                  SafeArea(
+                    top: false,
+                    child: _buildBody(
+                      context,
+                      topInset: topInset,
+                      snapshot: snapshot,
+                      rawSources: rawSources,
+                      visibleSources: filteredVisibleSources,
+                      clusterSummaries: clusterSummaries,
+                    ),
+                  ),
+                ),
+              );
+            },
+          ),
+        );
+      },
     );
   }
 
   Widget _buildBody(
     BuildContext context, {
+    required double topInset,
     required AsyncSnapshot<List<ScriptSource>> snapshot,
     required List<ScriptSource> rawSources,
     required List<ScriptSource> visibleSources,
@@ -905,7 +947,7 @@ class _SourcePageState extends State<SourcePage> {
         child: ListView(
           padding: EdgeInsets.fromLTRB(
             horizontal,
-            12,
+            topInset + 12,
             horizontal,
             12 + bottomSafe,
           ),

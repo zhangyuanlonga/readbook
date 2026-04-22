@@ -13,11 +13,14 @@ import '../../../app/layout/app_spacing.dart';
 import '../../../app/navigation/app_navigation_style_provider.dart';
 import '../../../app/shell_navigation_provider.dart';
 import '../../../app/theme/app_interface_typography_provider.dart';
+import '../../../app/theme/app_advanced_theme_tokens.dart';
 import '../../../app/theme/app_theme_palette.dart';
 import '../../../app/theme/app_theme_provider.dart';
 import '../../../app/theme/app_theme_seed_provider.dart';
-import '../../../app/widgets/text_cover_placeholder.dart';
+import '../../../app/widgets/advanced_theme_backdrop_decoration.dart';
+import '../../../app/widgets/resolved_book_cover.dart';
 import '../../../core/media/image_selection_service.dart';
+import '../application/cover_gallery_provider.dart';
 import '../application/advanced_theme_provider.dart';
 import '../../reader/application/reader_font_registry_service.dart';
 
@@ -277,6 +280,13 @@ class _AppearancePageState extends ConsumerState<AppearancePage> {
       appNavigationLabelVisibilityProvider,
     );
     final navigationState = ref.watch(appShellNavigationProvider);
+    final activeAdvancedTheme =
+        ref.watch(activeAdvancedThemeProvider).valueOrNull;
+    final backdrop = resolveAdvancedThemeBackdrop(
+      Theme.of(context).colorScheme,
+      activeAdvancedTheme,
+    );
+    final topInset = MediaQuery.paddingOf(context).top + kToolbarHeight;
 
     return PopScope<void>(
       canPop: context.canPop(),
@@ -287,7 +297,13 @@ class _AppearancePageState extends ConsumerState<AppearancePage> {
         context.go('/mine');
       },
       child: Scaffold(
-        appBar: AppBar(title: Text(_pageTitle(widget.section))),
+        extendBodyBehindAppBar: true,
+        appBar: AppBar(
+          title: Text(_pageTitle(widget.section)),
+          backgroundColor: Colors.transparent,
+          surfaceTintColor: Colors.transparent,
+          shadowColor: Colors.transparent,
+        ),
         body: LayoutBuilder(
           builder: (context, _) {
             final maxWidth = AppLayout.pageContentMaxWidth(
@@ -295,19 +311,27 @@ class _AppearancePageState extends ConsumerState<AppearancePage> {
               maxWidth: AppLayout.settingsContentMaxWidth,
             );
 
-            return Align(
-              alignment: Alignment.topCenter,
-              child: ConstrainedBox(
-                constraints: BoxConstraints(maxWidth: maxWidth),
-                child: ListView(
-                  padding: EdgeInsets.fromLTRB(horizontal, 12, horizontal, 12),
-                  children: _buildSectionContent(
-                    context,
-                    navigationState,
-                    selectedThemeMode: selectedThemeMode,
-                    selectedSeedColor: selectedSeedColor,
-                    selectedNavigationStyle: selectedNavigationStyle,
-                    showNavigationLabels: showNavigationLabels,
+            return DecoratedBox(
+              decoration: buildAdvancedThemeBackdropDecoration(backdrop),
+              child: Align(
+                alignment: Alignment.topCenter,
+                child: ConstrainedBox(
+                  constraints: BoxConstraints(maxWidth: maxWidth),
+                  child: ListView(
+                    padding: EdgeInsets.fromLTRB(
+                      horizontal,
+                      topInset + 12,
+                      horizontal,
+                      12,
+                    ),
+                    children: _buildSectionContent(
+                      context,
+                      navigationState,
+                      selectedThemeMode: selectedThemeMode,
+                      selectedSeedColor: selectedSeedColor,
+                      selectedNavigationStyle: selectedNavigationStyle,
+                      showNavigationLabels: showNavigationLabels,
+                    ),
                   ),
                 ),
               ),
@@ -644,11 +668,25 @@ class _AppearancePageState extends ConsumerState<AppearancePage> {
   }
 
   Widget _buildCoverGallerySection(BuildContext context) {
+    final activeTheme = ref.watch(activeAdvancedThemeProvider).valueOrNull;
+    final coverGalleries =
+        ref.watch(coverGalleriesProvider).valueOrNull ?? const [];
+    final activeGalleryId = activeTheme?.coverGalleryId?.trim() ?? '';
+    final activeGalleryName = coverGalleries
+        .where((gallery) => gallery.id == activeGalleryId)
+        .map((gallery) => gallery.name.trim())
+        .where((name) => name.isNotEmpty)
+        .cast<String?>()
+        .firstWhere((name) => name != null, orElse: () => null);
+
     return _buildSectionCard(
       context,
       icon: Icons.photo_library_outlined,
       title: '封面图集',
-      subtitle: '预览当前应用使用的文字封面风格。',
+      subtitle:
+          activeGalleryName == null
+              ? '预览当前高级主题的实际封面效果，未绑定图集时会回退为文字封面。'
+              : '当前高级主题已绑定：$activeGalleryName',
       child: LayoutBuilder(
         builder: (context, constraints) {
           const spacing = 10.0;
@@ -668,8 +706,16 @@ class _AppearancePageState extends ConsumerState<AppearancePage> {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        TextCoverPlaceholder(
-                          title: sample['title'],
+                        ResolvedBookCoverView(
+                          cover: resolveBookCover(
+                            activeTheme: activeTheme,
+                            galleries: coverGalleries,
+                            bookId: 'appearance_cover_sample_$sample',
+                            sourceId: 'appearance.preview',
+                            detailUrl:
+                                'appearance://cover/${sample['title'] ?? ''}',
+                          ),
+                          title: sample['title'] ?? '',
                           author: sample['author'],
                           width: itemWidth,
                           height: itemWidth * 1.42,

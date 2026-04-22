@@ -6,6 +6,8 @@ import 'package:go_router/go_router.dart';
 
 import '../../../app/layout/app_layout.dart';
 import '../../../app/layout/app_spacing.dart';
+import '../../../app/theme/app_advanced_theme_tokens.dart';
+import '../../../app/widgets/advanced_theme_backdrop_decoration.dart';
 import '../../../app/widgets/resolved_book_cover.dart';
 import '../../../core/cache/cover_image_disk_cache.dart';
 import '../../../data/datasources/local/app_database.dart';
@@ -91,10 +93,16 @@ class _CacheManagementPageState extends ConsumerState<CacheManagementPage> {
 
   @override
   Widget build(BuildContext context) {
-    ref.watch(activeAdvancedThemeProvider);
+    final activeAdvancedTheme =
+        ref.watch(activeAdvancedThemeProvider).valueOrNull;
     ref.watch(coverGalleriesProvider);
+    final backdrop = resolveAdvancedThemeBackdrop(
+      Theme.of(context).colorScheme,
+      activeAdvancedTheme,
+    );
     final horizontal = AppSpacing.pageHorizontal(context);
     final bottomSafe = MediaQuery.viewPaddingOf(context).bottom;
+    final topInset = MediaQuery.paddingOf(context).top + kToolbarHeight;
     final canPopRoute = context.canPop();
 
     return PopScope<void>(
@@ -106,7 +114,11 @@ class _CacheManagementPageState extends ConsumerState<CacheManagementPage> {
         context.go('/mine');
       },
       child: Scaffold(
+        extendBodyBehindAppBar: true,
         appBar: AppBar(
+          backgroundColor: Colors.transparent,
+          surfaceTintColor: Colors.transparent,
+          shadowColor: Colors.transparent,
           leading: IconButton(
             onPressed: _handleBackNavigation,
             tooltip: '返回',
@@ -130,63 +142,66 @@ class _CacheManagementPageState extends ConsumerState<CacheManagementPage> {
               maxWidth: AppLayout.settingsContentMaxWidth,
             );
 
-            return Align(
-              alignment: Alignment.topCenter,
-              child: ConstrainedBox(
-                constraints: BoxConstraints(maxWidth: maxWidth),
-                child: Padding(
-                  padding: EdgeInsets.fromLTRB(
-                    horizontal,
-                    12,
-                    horizontal,
-                    12 + bottomSafe,
-                  ),
-                  child: FutureBuilder<Map<String, _CachedBookPresentation>>(
-                    future: _bookPresentationIndexFuture,
-                    builder: (context, snapshot) {
-                      final presentationIndex =
-                          snapshot.data ??
-                          const <String, _CachedBookPresentation>{};
+            return DecoratedBox(
+              decoration: buildAdvancedThemeBackdropDecoration(backdrop),
+              child: Align(
+                alignment: Alignment.topCenter,
+                child: ConstrainedBox(
+                  constraints: BoxConstraints(maxWidth: maxWidth),
+                  child: Padding(
+                    padding: EdgeInsets.fromLTRB(
+                      horizontal,
+                      topInset + 12,
+                      horizontal,
+                      12 + bottomSafe,
+                    ),
+                    child: FutureBuilder<Map<String, _CachedBookPresentation>>(
+                      future: _bookPresentationIndexFuture,
+                      builder: (context, snapshot) {
+                        final presentationIndex =
+                            snapshot.data ??
+                            const <String, _CachedBookPresentation>{};
 
-                      return StreamBuilder<List<ChapterCacheBookSummary>>(
-                        stream: AppDatabase.instance.watchCachedBooks(),
-                        builder: (context, summarySnapshot) {
-                          final summaries =
-                              summarySnapshot.data ??
-                              const <ChapterCacheBookSummary>[];
-                          final totalCachedChapters = summaries.fold<int>(
-                            0,
-                            (sum, item) => sum + item.cachedCount,
-                          );
+                        return StreamBuilder<List<ChapterCacheBookSummary>>(
+                          stream: AppDatabase.instance.watchCachedBooks(),
+                          builder: (context, summarySnapshot) {
+                            final summaries =
+                                summarySnapshot.data ??
+                                const <ChapterCacheBookSummary>[];
+                            final totalCachedChapters = summaries.fold<int>(
+                              0,
+                              (sum, item) => sum + item.cachedCount,
+                            );
 
-                          return Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              _buildHeaderCard(
-                                context,
-                                cachedBookCount: summaries.length,
-                                cachedChapterCount: totalCachedChapters,
-                                onClearAll: _confirmClearAll,
-                              ),
-                              const SizedBox(height: 12),
-                              Text(
-                                '小说缓存',
-                                style: Theme.of(context).textTheme.titleSmall
-                                    ?.copyWith(fontWeight: FontWeight.w700),
-                              ),
-                              const SizedBox(height: 8),
-                              Expanded(
-                                child: _buildCacheList(
+                            return Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                _buildHeaderCard(
                                   context,
-                                  summaries: summaries,
-                                  presentationIndex: presentationIndex,
+                                  cachedBookCount: summaries.length,
+                                  cachedChapterCount: totalCachedChapters,
+                                  onClearAll: _confirmClearAll,
                                 ),
-                              ),
-                            ],
-                          );
-                        },
-                      );
-                    },
+                                const SizedBox(height: 12),
+                                Text(
+                                  '小说缓存',
+                                  style: Theme.of(context).textTheme.titleSmall
+                                      ?.copyWith(fontWeight: FontWeight.w700),
+                                ),
+                                const SizedBox(height: 8),
+                                Expanded(
+                                  child: _buildCacheList(
+                                    context,
+                                    summaries: summaries,
+                                    presentationIndex: presentationIndex,
+                                  ),
+                                ),
+                              ],
+                            );
+                          },
+                        );
+                      },
+                    ),
                   ),
                 ),
               ),

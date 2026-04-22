@@ -18,11 +18,13 @@ import '../core/network/api_client.dart';
 import '../domain/entities/announcement.dart';
 import '../features/announcement/application/announcement_read_state_service.dart';
 import '../features/announcement/application/announcement_service.dart';
+import '../features/mine/application/advanced_theme_provider.dart';
 import '../features/source/application/external_source_import_bridge.dart';
 import '../features/source/application/source_runtime_facade.dart';
 import 'layout/app_layout.dart';
 import 'layout/app_spacing.dart';
 import 'router.dart';
+import 'theme/app_advanced_theme_tokens.dart';
 import 'theme/app_theme.dart';
 import 'theme/app_interface_typography_provider.dart';
 import 'theme/app_theme_palette.dart';
@@ -39,9 +41,27 @@ class App extends ConsumerWidget {
     final interfaceFontSettings = ref.watch(appInterfaceFontSettingsProvider);
     final interfaceTextScale = ref.watch(appInterfaceTextScaleProvider);
     final interfaceFontWeight = ref.watch(appInterfaceFontWeightProvider);
+    final activeAdvancedTheme =
+        ref.watch(activeAdvancedThemeProvider).valueOrNull;
 
     final lightScheme = buildAppLightColorScheme(seedColor);
     final darkScheme = buildAppDarkColorScheme(seedColor);
+    final lightAdvancedPalette = resolveAdvancedThemePaletteFromModeConfig(
+      lightScheme,
+      activeAdvancedTheme?.lightConfig,
+    );
+    final darkAdvancedPalette = resolveAdvancedThemePaletteFromModeConfig(
+      darkScheme,
+      activeAdvancedTheme?.darkConfig,
+    );
+    final lightAdvancedBackdrop = resolveAdvancedThemeBackdropFromModeConfig(
+      lightScheme,
+      activeAdvancedTheme?.lightConfig,
+    );
+    final darkAdvancedBackdrop = resolveAdvancedThemeBackdropFromModeConfig(
+      darkScheme,
+      activeAdvancedTheme?.darkConfig,
+    );
     final fontFamily = resolveAppInterfaceFontFamily(interfaceFontSettings);
     final fontWeight = appInterfaceFontWeightValue(interfaceFontWeight);
 
@@ -49,11 +69,15 @@ class App extends ConsumerWidget {
       title: 'Selune',
       theme: AppTheme.build(
         lightScheme,
+        advancedPalette: lightAdvancedPalette,
+        advancedBackdrop: lightAdvancedBackdrop,
         fontFamily: fontFamily,
         fontWeight: fontWeight,
       ),
       darkTheme: AppTheme.build(
         darkScheme,
+        advancedPalette: darkAdvancedPalette,
+        advancedBackdrop: darkAdvancedBackdrop,
         fontFamily: fontFamily,
         fontWeight: fontWeight,
       ),

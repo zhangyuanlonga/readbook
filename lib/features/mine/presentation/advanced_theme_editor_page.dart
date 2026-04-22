@@ -1327,6 +1327,24 @@ class _AdvancedThemeEditorPageState
     }
   }
 
+  void _setWallpaperOverlayOpacity(double value) {
+    final draft = _draft;
+    if (draft == null || _isSaving) {
+      return;
+    }
+    final currentConfig = draft.configFor(_selectedMode);
+    final normalized = value.clamp(0.0, 1.0).toDouble();
+    if ((currentConfig.wallpaperOverlayOpacity - normalized).abs() < 0.0001) {
+      return;
+    }
+    setState(() {
+      _draft = draft.copyWithModeConfig(
+        _selectedMode,
+        currentConfig.copyWith(wallpaperOverlayOpacity: normalized),
+      );
+    });
+  }
+
   void _selectMode(AppAdvancedThemeMode mode) {
     _modeTabController.animateTo(mode.index);
     setState(() {
@@ -1776,6 +1794,11 @@ class _AdvancedThemeEditorPageState
                   label: '阴影',
                   description: '卡片和浮层的阴影或光晕颜色',
                 ),
+                _ThemeColorFieldSpec(
+                  slot: _ThemeColorSlot.wallpaperOverlay,
+                  label: '壁纸遮罩色',
+                  description: '页面壁纸上层的统一覆盖色',
+                ),
               ]),
               const Divider(height: 1),
               _buildInfoRow(
@@ -1876,6 +1899,7 @@ class _AdvancedThemeEditorPageState
     BuildContext context,
     AppAdvancedTheme draft,
   ) {
+    final currentConfig = draft.configFor(_selectedMode);
     final wallpaperPath = _selectedWallpaperPreviewPath(draft);
     final hasWallpaper = wallpaperPath != null && wallpaperPath.isNotEmpty;
     final readerWallpaperPath = _selectedReaderWallpaperPreviewPath(draft);
@@ -1923,6 +1947,11 @@ class _AdvancedThemeEditorPageState
                 const Divider(height: 1),
               ] else
                 const Divider(height: 1),
+              _buildWallpaperOverlayOpacityRow(
+                context,
+                opacity: currentConfig.wallpaperOverlayOpacity,
+              ),
+              const Divider(height: 1),
               _buildAppearanceLinkTile(
                 context,
                 icon: Icons.chrome_reader_mode_outlined,
@@ -1990,6 +2019,87 @@ class _AdvancedThemeEditorPageState
           ),
         ),
       ],
+    );
+  }
+
+  Widget _buildWallpaperOverlayOpacityRow(
+    BuildContext context, {
+    required double opacity,
+  }) {
+    final colorScheme = Theme.of(context).colorScheme;
+    final normalizedOpacity = opacity.clamp(0.0, 1.0).toDouble();
+    final percentage = (normalizedOpacity * 100).round();
+
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(2, 10, 2, 10),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      '壁纸遮罩透明度',
+                      style: Theme.of(context).textTheme.labelLarge?.copyWith(
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      '控制当前${_modeLabel(_selectedMode)}模式下页面壁纸的覆盖强度。',
+                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                        color: colorScheme.onSurfaceVariant,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 12),
+              Container(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 10,
+                  vertical: 6,
+                ),
+                decoration: BoxDecoration(
+                  color: colorScheme.surface,
+                  borderRadius: BorderRadius.circular(999),
+                  border: Border.all(
+                    color: colorScheme.outlineVariant.withValues(alpha: 0.4),
+                  ),
+                ),
+                child: Text(
+                  '$percentage%',
+                  style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                    color: colorScheme.onSurfaceVariant,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          SliderTheme(
+            data: SliderTheme.of(context).copyWith(
+              trackHeight: 4,
+              overlayShape: const RoundSliderOverlayShape(overlayRadius: 18),
+            ),
+            child: Slider(
+              value: normalizedOpacity,
+              min: 0,
+              max: 1,
+              divisions: 20,
+              label: '$percentage%',
+              onChanged:
+                  _isSaving
+                      ? null
+                      : (value) => _setWallpaperOverlayOpacity(value),
+            ),
+          ),
+        ],
+      ),
     );
   }
 

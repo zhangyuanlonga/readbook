@@ -1,3 +1,6 @@
+import 'dart:async';
+import 'dart:io';
+
 import '../../../../core/errors/app_exception.dart';
 import '../../../../core/errors/error_codes.dart';
 import '../../../../core/errors/error_stage.dart';
@@ -8,6 +11,7 @@ import '../../../../domain/entities/local_chapter.dart';
 import '../../../../domain/repositories/local_book_repository.dart';
 import 'local_book_index_service.dart';
 import 'local_book_storage_service.dart';
+import 'local_text_encoding_detector.dart';
 
 class LocalChapterContentService {
   LocalChapterContentService({
@@ -22,10 +26,14 @@ class LocalChapterContentService {
              localBookRepository:
                  localBookRepository ??
                  LocalBookRepositoryImpl(AppDatabase.instance),
-           );
+           ),
+       _storageService = storageService ?? LocalBookStorageService();
 
   final LocalBookRepository _localBookRepository;
   final LocalBookIndexService _indexService;
+  final LocalBookStorageService _storageService;
+  final LocalTextEncodingDetector _textEncodingDetector =
+      const LocalTextEncodingDetector();
 
   Future<LocalChapter> load({
     required String bookId,
@@ -41,8 +49,10 @@ class LocalChapterContentService {
       );
     }
 
-    var book = await _localBookRepository.getBookById(normalizedBookId);
-    if (book == null) {
+    final originalBook = await _localBookRepository.getBookById(
+      normalizedBookId,
+    );
+    if (originalBook == null) {
       throw AppException(
         code: ErrorCode.validation,
         stage: ErrorStage.content,
@@ -53,9 +63,7 @@ class LocalChapterContentService {
     final refreshedBook = await _indexService.refreshBookState(
       bookId: normalizedBookId,
     );
-    if (refreshedBook != null) {
-      book = refreshedBook;
-    }
+    final book = refreshedBook ?? originalBook;
     final normalizedChapterId = (chapterId ?? '').trim().toLowerCase();
     if (normalizedChapterId == 'bootstrap') {
       throw AppException(
@@ -64,8 +72,6 @@ class LocalChapterContentService {
         briefMessage: 'TXT 预览已迁移到独立预览服务，请通过预览入口打开。',
       );
     }
-    _ensureBookReadyForReading(book);
-
     final chapter = await _resolveChapter(
       book: book,
       chapterId: chapterId,
@@ -78,6 +84,22 @@ class LocalChapterContentService {
         briefMessage: '未找到本地章节内容，请重新索引后重试。',
       );
     }
+
+    if (_canUseLegacyTxtOffsetFallback(
+      originalBook: originalBook,
+      refreshedBook: refreshedBook,
+      chapter: chapter,
+    )) {
+      unawaited(_indexService.ensureIndexed(bookId: normalizedBookId));
+      final readableBook = await _hydrateReadableBook(book);
+      final hydratedContent = await _loadTxtChapterContentByOffsets(
+        chapter: chapter,
+        book: readableBook,
+      );
+      return chapter.copyWith(content: hydratedContent);
+    }
+
+    _ensureBookReadyForReading(book);
 
     if (_canUseStoredChapterContent(chapter: chapter)) {
       return chapter;
@@ -197,5 +219,112 @@ class LocalChapterContentService {
 
   bool _canUseStoredChapterContent({required LocalChapter chapter}) {
     return chapter.hasReadablePayload;
+  }
+
+  bool _canUseLegacyTxtOffsetFallback({
+    required LocalBook originalBook,
+    required LocalBook? refreshedBook,
+    required LocalChapter chapter,
+  }) {
+    if (originalBook.format != LocalBookFormat.txt ||
+        originalBook.indexStatus != LocalBookIndexStatus.ready ||
+        !chapter.hasOffsetRange ||
+        chapter.hasReadablePayload) {
+      return false;
+    }
+    final nextBook = refreshedBook;
+    if (nextBook == null ||
+        nextBook.indexStatus != LocalBookIndexStatus.stale) {
+      return false;
+    }
+    final metadataChanged =
+        originalBook.sourceFileSize != nextBook.sourceFileSize ||
+        originalBook.sourceFileLastModifiedMs !=
+            nextBook.sourceFileLastModifiedMs ||
+        originalBook.storageFileLastModifiedMs !=
+            nextBook.storageFileLastModifiedMs ||
+        originalBook.fileSize != nextBook.fileSize ||
+        originalBook.splitLongChapter != nextBook.splitLongChapter;
+    return !metadataChanged;
+  }
+
+  Future<LocalBook> _hydrateReadableBook(LocalBook book) async {
+    final resolvedStoragePath = await _storageService.resolveStoragePath(
+      book.storagePath,
+    );
+    if (resolvedStoragePath == book.storagePath) {
+      return book;
+    }
+    return book.copyWith(storagePath: resolvedStoragePath);
+  }
+
+  Future<String> _loadTxtChapterContentByOffsets({
+    required LocalChapter chapter,
+    required LocalBook book,
+  }) async {
+    final startOffset = chapter.startOffset;
+    final endOffset = chapter.endOffset;
+    if (startOffset == null || endOffset == null || endOffset <= startOffset) {
+      throw AppException(
+        code: ErrorCode.ruleMatchEmpty,
+        stage: ErrorStage.content,
+        briefMessage: '本地章节缺少有效偏移信息，请重新索引后重试。',
+      );
+    }
+
+    final file = File(book.storagePath);
+    if (!await file.exists()) {
+      throw AppException(
+        code: ErrorCode.validation,
+        stage: ErrorStage.content,
+        briefMessage: '本地文件不存在：${book.storagePath}',
+      );
+    }
+
+    final fileLength = await file.length();
+    var safeStart = startOffset.clamp(0, fileLength).toInt();
+    var safeEnd = endOffset.clamp(0, fileLength).toInt();
+    final normalizedCharset = LocalTextEncodingDetector.normalizeCharsetName(
+      book.charset,
+    );
+    if (normalizedCharset == 'utf-16' ||
+        normalizedCharset == 'utf-16le' ||
+        normalizedCharset == 'utf-16be') {
+      if (safeStart.isOdd) {
+        safeStart -= 1;
+      }
+      if (safeEnd.isOdd) {
+        safeEnd -= 1;
+      }
+    }
+    if (safeEnd <= safeStart) {
+      throw AppException(
+        code: ErrorCode.ruleMatchEmpty,
+        stage: ErrorStage.content,
+        briefMessage: '本地章节内容为空，请重新索引后重试。',
+      );
+    }
+
+    final handle = await file.open(mode: FileMode.read);
+    try {
+      await handle.setPosition(safeStart);
+      final bytes = await handle.read(safeEnd - safeStart);
+      final decoded = await _textEncodingDetector.decodeDirectBytesAsync(
+        bytes,
+        preferredCharset: book.charset,
+        hintedCharset: book.charset,
+      );
+      final text = decoded?.text.trim() ?? '';
+      if (text.isEmpty) {
+        throw AppException(
+          code: ErrorCode.ruleMatchEmpty,
+          stage: ErrorStage.content,
+          briefMessage: '本地章节内容为空，请重新索引后重试。',
+        );
+      }
+      return text;
+    } finally {
+      await handle.close();
+    }
   }
 }

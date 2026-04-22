@@ -110,6 +110,8 @@ class ReaderPreferencesService {
       'reader.settings.infoHeaderMarginLeft';
   static const String _infoHeaderMarginRightKey =
       'reader.settings.infoHeaderMarginRight';
+  static const String _bodyMarginModeKey = 'reader.settings.bodyMarginMode';
+  static const String _bodyMarginPresetKey = 'reader.settings.bodyMarginPreset';
   static const String _bodyMarginTopKey = 'reader.settings.bodyMarginTop';
   static const String _bodyMarginBottomKey = 'reader.settings.bodyMarginBottom';
   static const String _bodyMarginLeftKey = 'reader.settings.bodyMarginLeft';
@@ -122,6 +124,10 @@ class ReaderPreferencesService {
       'reader.settings.infoFooterMarginLeft';
   static const String _infoFooterMarginRightKey =
       'reader.settings.infoFooterMarginRight';
+  static const String _pinnedChapterHeaderOffsetXKey =
+      'reader.settings.pinnedChapterHeaderOffsetX';
+  static const String _pinnedChapterHeaderOffsetYKey =
+      'reader.settings.pinnedChapterHeaderOffsetY';
   static const String _progressPrefix = 'reader.progress.';
   static const String _tocSnapshotPrefix = 'reader.tocSnapshot.';
 
@@ -197,6 +203,16 @@ class ReaderPreferencesService {
     final mangaLoadStrategy = ReaderMangaLoadStrategy.values.firstWhere(
       (item) => item.name == mangaLoadStrategyName,
       orElse: () => ReaderMangaLoadStrategy.balanced,
+    );
+    final bodyMarginModeName = prefs.getString(_bodyMarginModeKey);
+    final bodyMarginMode = ReaderBodyMarginMode.values.firstWhere(
+      (item) => item.name == bodyMarginModeName,
+      orElse: () => ReaderBodyMarginMode.preset,
+    );
+    final bodyMarginPresetName = prefs.getString(_bodyMarginPresetKey);
+    final bodyMarginPreset = ReaderBodyMarginPreset.values.firstWhere(
+      (item) => item.name == bodyMarginPresetName,
+      orElse: () => ReaderBodyMarginPreset.standard,
     );
 
     final legacyHorizontalPadding =
@@ -355,6 +371,8 @@ class ReaderPreferencesService {
                 ReaderSettings.maxLayoutMargin,
               )
               .toDouble(),
+      bodyMarginMode: bodyMarginMode,
+      bodyMarginPreset: bodyMarginPreset,
       bodyMarginTop:
           (prefs.getDouble(_bodyMarginTopKey) ?? 18)
               .clamp(
@@ -398,6 +416,17 @@ class ReaderPreferencesService {
               .clamp(
                 ReaderSettings.minLayoutMargin,
                 ReaderSettings.maxLayoutMargin,
+              )
+              .toDouble(),
+      pinnedChapterHeaderOffsetX:
+          ReaderSettings.normalizePinnedChapterHeaderOffsetX(
+            prefs.getDouble(_pinnedChapterHeaderOffsetXKey) ?? 0,
+          ),
+      pinnedChapterHeaderOffsetY:
+          (prefs.getDouble(_pinnedChapterHeaderOffsetYKey) ?? 8)
+              .clamp(
+                ReaderSettings.minPinnedHeaderOffsetY,
+                ReaderSettings.maxPinnedHeaderOffsetY,
               )
               .toDouble(),
     );
@@ -544,6 +573,8 @@ class ReaderPreferencesService {
       _infoHeaderMarginRightKey,
       settings.infoHeaderMarginRight,
     );
+    await prefs.setString(_bodyMarginModeKey, settings.bodyMarginMode.name);
+    await prefs.setString(_bodyMarginPresetKey, settings.bodyMarginPreset.name);
     await prefs.setDouble(_bodyMarginTopKey, settings.bodyMarginTop);
     await prefs.setDouble(_bodyMarginBottomKey, settings.bodyMarginBottom);
     await prefs.setDouble(_bodyMarginLeftKey, settings.bodyMarginLeft);
@@ -563,6 +594,14 @@ class ReaderPreferencesService {
     await prefs.setDouble(
       _infoFooterMarginRightKey,
       settings.infoFooterMarginRight,
+    );
+    await prefs.setDouble(
+      _pinnedChapterHeaderOffsetXKey,
+      settings.pinnedChapterHeaderOffsetX,
+    );
+    await prefs.setDouble(
+      _pinnedChapterHeaderOffsetYKey,
+      settings.pinnedChapterHeaderOffsetY,
     );
     final backgroundImageBase64 = settings.backgroundImageBase64;
     if (backgroundImageBase64 == null || backgroundImageBase64.isEmpty) {

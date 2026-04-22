@@ -7,17 +7,14 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:path/path.dart' as p;
-import 'package:path_provider/path_provider.dart';
 
 import '../../../app/layout/app_spacing.dart';
 import '../../../app/navigation/mobile_bottom_navigation_inset.dart';
 import '../../../app/navigation/app_navigation_style_provider.dart';
-import '../../../app/platform/app_input_focus_behavior.dart';
 import '../../../app/theme/app_advanced_theme_tokens.dart';
 import '../../../app/widgets/advanced_theme_backdrop_decoration.dart';
 import '../../../app/widgets/resolved_book_cover.dart';
 import '../../../core/errors/app_exception.dart';
-import '../../../core/media/image_selection_service.dart';
 import '../../../data/datasources/local/app_database.dart';
 import '../../../data/repositories/local_book_repository_impl.dart';
 import '../../../domain/entities/bookshelf_book.dart';
@@ -32,7 +29,6 @@ import '../../reader/application/reader_preferences_service.dart';
 import '../../reader/application/reader_entry_route_resolver.dart';
 import '../../reader/application/local/local_book_index_service.dart';
 import '../../reader/application/local/local_book_workflow_policy.dart';
-import '../../reader/application/reading_record_service.dart';
 import '../../book/application/book_detail_service.dart';
 import '../../book/presentation/book_detail_route.dart';
 import '../../announcement/application/announcement_service.dart';
@@ -46,17 +42,6 @@ import '../../../runtime/sources/source_registry.dart';
 import '../../../runtime/session/source_session.dart';
 import 'widgets/bookshelf_grid_sliver.dart';
 import 'widgets/bookshelf_page_sections.dart';
-
-enum _BookshelfSheetAction {
-  read,
-  detail,
-  repairLocal,
-  select,
-  category,
-  tag,
-  customCover,
-  delete,
-}
 
 enum _BookshelfFilter { all, local, novel, manga, custom }
 
@@ -72,8 +57,6 @@ enum _BookshelfSortMode {
 }
 
 enum _BookshelfViewKind { base, tag, category }
-
-enum _BookshelfCategorySheetAction { rename, delete }
 
 enum _BookshelfSearchQuickFilterContent { none, tags, categories }
 
@@ -217,12 +200,10 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
       BookshelfSystemSettingsService();
   final ReaderPreferencesService _readerPreferencesService =
       ReaderPreferencesService();
-  final ReadingRecordService _readingRecordService = ReadingRecordService();
   final ReaderEntryRouteResolver _readerEntryRouteResolver =
       const ReaderEntryRouteResolver();
   final LocalBookIndexService _localBookIndexService = LocalBookIndexService();
   final BookDetailService _bookDetailService = BookDetailService();
-  final ImageSelectionService _imageSelectionService = ImageSelectionService();
   final TextEditingController _bookshelfSearchController =
       TextEditingController();
   final FocusNode _bookshelfSearchFocusNode = FocusNode();
@@ -297,7 +278,6 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
   bool _isSelectionMode = false;
   bool _isBatchDeleting = false;
   bool _isImportingLocal = false;
-  final Set<String> _repairingLocalBookIds = <String>{};
   final Set<String> _selectedBookKeys = <String>{};
   int _loadTicket = 0;
   bool _hasActiveAnnouncement = false;
@@ -429,21 +409,27 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
       style: effectiveNavigationStyle,
       showNavigationLabels: showNavigationLabels,
     );
+    final navigationComfortInset =
+        effectiveNavigationStyle == AppNavigationStyle.cupertinoDock
+            ? 8.0
+            : 0.0;
     final showTopSearchAction =
         effectiveNavigationStyle != AppNavigationStyle.cupertinoDock;
     final filteredBooks = _filteredBooks;
     final continueReadingVisible =
         _continueReadingRecord != null && !_isSelectionMode;
-    final continueReadingBottomInset = _continueReadingBottomInset(
-      effectiveNavigationStyle,
-      navigationBottomInset: navigationBottomInset,
-      platform: platform,
-    );
+    final continueReadingBottomInset =
+        _continueReadingBottomInset(
+          effectiveNavigationStyle,
+          navigationBottomInset: navigationBottomInset,
+          platform: platform,
+        ) +
+        navigationComfortInset;
     final topInset = MediaQuery.paddingOf(context).top + kToolbarHeight;
     final continueReadingReservedSpace =
         continueReadingVisible
             ? _kContinueReadingCardHeight + continueReadingBottomInset
-            : 0.0;
+            : navigationBottomInset + navigationComfortInset;
     final contentTopPadding =
         _shouldShowBookshelfSearchSliver ? 12.0 : topInset + 12;
 
@@ -2732,6 +2718,7 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
       fixedCrossAxisCount: _gridAdaptiveColumns ? null : _gridColumnCount,
       crossSpacing: _gridCrossSpacing,
       mainSpacing: _gridMainSpacing,
+      itemHeightExtra: _gridCardItemHeightExtra,
       itemBuilder: (context, index) {
         final book = books[index];
         return _buildModeSwitchAnimatedBookItem(
@@ -2742,6 +2729,35 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
         );
       },
     );
+  }
+
+  double get _gridCardItemHeightExtra {
+    var extraHeight = 12.0;
+    final hasMetaInfo =
+        _gridShowTitle ||
+        _gridShowAuthor ||
+        _gridShowLatestChapter ||
+        _gridShowProgressBar;
+    if (hasMetaInfo) {
+      extraHeight += 6;
+    }
+    if (_gridShowTitle) {
+      extraHeight += 18;
+    }
+    if (_gridShowAuthor) {
+      extraHeight += (_gridShowTitle ? 2 : 0) + 16;
+    }
+    if (_gridShowLatestChapter) {
+      extraHeight += ((_gridShowTitle || _gridShowAuthor) ? 1 : 0) + 16;
+    }
+    if (_gridShowProgressBar) {
+      extraHeight +=
+          ((_gridShowTitle || _gridShowAuthor || _gridShowLatestChapter)
+              ? 4
+              : 0) +
+          5;
+    }
+    return extraHeight;
   }
 
   Widget _buildReactiveGridCard(BookshelfBook book) {
@@ -2851,7 +2867,7 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
                     _toggleBookSelection(book);
                     return;
                   }
-                  unawaited(_showBookActionSheet(book));
+                  _openBookDetail(book);
                 },
         onTap:
             _isSelectionMode
@@ -3129,7 +3145,7 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
                             _toggleBookSelection(book);
                             return;
                           }
-                          unawaited(_showBookActionSheet(book));
+                          _openBookDetail(book);
                         },
                 containedInkWell: true,
                 borderRadius: BorderRadius.circular(12),
@@ -3172,7 +3188,7 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
                               _toggleBookSelection(book);
                               return;
                             }
-                            unawaited(_showBookActionSheet(book));
+                            _openBookDetail(book);
                           },
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
@@ -3737,25 +3753,6 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
     });
   }
 
-  void _enterSelectionMode(BookshelfBook book) {
-    if (_isBatchDeleting) {
-      return;
-    }
-
-    if (_isSelectionMode) {
-      _toggleBookSelection(book);
-      return;
-    }
-
-    final key = _bookKey(book);
-    setState(() {
-      _isSelectionMode = true;
-      _selectedBookKeys
-        ..clear()
-        ..add(key);
-    });
-  }
-
   void _toggleBookSelection(BookshelfBook book) {
     if (!_isSelectionMode || _isBatchDeleting) {
       return;
@@ -3773,1281 +3770,6 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
         _isSelectionMode = false;
       }
     });
-  }
-
-  Future<void> _showBookActionSheet(BookshelfBook book) async {
-    if (_isBatchDeleting || !mounted) {
-      return;
-    }
-    final bookKey = _bookKey(book);
-    final progress = _progressByBookKey[bookKey];
-    final localBook = _bookshelfLocalBook(book);
-    final displayTitle = _displayBookTitle(book, localBook: localBook);
-    final displayAuthor = _displayBookAuthor(book, localBook: localBook);
-    final localStatusText =
-        localBook == null ? null : _localBookStatusActionText(localBook);
-    final canRepairLocalBook =
-        localBook != null && _canRepairLocalBookFromShelf(localBook);
-    final latestChapter = _toSingleLineText(
-      _latestCachedChapterByBookKey[bookKey] ?? book.latestChapter ?? '',
-    );
-    final author = _toSingleLineText(displayAuthor ?? '');
-    final authorLine = author.isNotEmpty ? '作者: $author' : '作者: 未知';
-    final latestLine =
-        latestChapter.isNotEmpty ? '最新: $latestChapter' : '最新: 暂无缓存章节';
-    final selected = await _showBookshelfBottomSheet<_BookshelfSheetAction>(
-      builder: (sheetContext) {
-        final colorScheme = Theme.of(sheetContext).colorScheme;
-        final palette = _resolvedPalette(sheetContext);
-        final horizontal = AppSpacing.pageHorizontal(sheetContext);
-        final bottomInset = _bookshelfBottomSafeInset(sheetContext);
-        final progressDisplay = _resolveBookshelfProgressDisplay(
-          book,
-          progress: progress,
-        );
-        return Padding(
-          padding: EdgeInsets.fromLTRB(
-            horizontal,
-            4,
-            horizontal,
-            10 + bottomInset,
-          ),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              SizedBox(
-                width: double.infinity,
-                child: ConstrainedBox(
-                  constraints: const BoxConstraints(minHeight: 88),
-                  child: Row(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      _buildCover(
-                        realCoverUrl: book.coverUrl,
-                        customCoverPath: localBook?.coverPath,
-                        title: displayTitle,
-                        author: displayAuthor,
-                        bookId: book.bookId,
-                        sourceId: book.sourceId,
-                        detailUrl: book.detailUrl,
-                        width: 56,
-                        height: 82,
-                      ),
-                      const SizedBox(width: 14),
-                      Expanded(
-                        child: Padding(
-                          padding: const EdgeInsets.only(top: 2),
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              Text(
-                                _toSingleLineText(displayTitle),
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                                style: Theme.of(sheetContext)
-                                    .textTheme
-                                    .titleSmall
-                                    ?.copyWith(fontWeight: FontWeight.w700),
-                              ),
-                              const SizedBox(height: 6),
-                              Text(
-                                authorLine,
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                                style: Theme.of(
-                                  sheetContext,
-                                ).textTheme.bodySmall?.copyWith(
-                                  color: colorScheme.onSurfaceVariant,
-                                ),
-                              ),
-                              const SizedBox(height: 4),
-                              Text(
-                                latestLine,
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                                style: Theme.of(
-                                  sheetContext,
-                                ).textTheme.bodySmall?.copyWith(
-                                  color: colorScheme.onSurfaceVariant,
-                                ),
-                              ),
-                              if (localStatusText != null) ...[
-                                const SizedBox(height: 4),
-                                Text(
-                                  localStatusText,
-                                  maxLines: 2,
-                                  overflow: TextOverflow.ellipsis,
-                                  style: Theme.of(
-                                    sheetContext,
-                                  ).textTheme.bodySmall?.copyWith(
-                                    color: _localStatusTextColor(
-                                      colorScheme,
-                                      localBook,
-                                    ),
-                                    fontWeight: FontWeight.w600,
-                                  ),
-                                ),
-                              ],
-                              if (progress != null) ...[
-                                const SizedBox(height: 6),
-                                Row(
-                                  children: [
-                                    Expanded(
-                                      child: ClipRRect(
-                                        borderRadius: BorderRadius.circular(2),
-                                        child: LinearProgressIndicator(
-                                          value: progressDisplay.progressValue,
-                                          minHeight: 4,
-                                          backgroundColor:
-                                              colorScheme
-                                                  .surfaceContainerHighest,
-                                        ),
-                                      ),
-                                    ),
-                                    const SizedBox(width: 8),
-                                    Text(
-                                      progressDisplay.trailingLabel,
-                                      style: Theme.of(
-                                        sheetContext,
-                                      ).textTheme.labelSmall?.copyWith(
-                                        color: colorScheme.primary,
-                                        fontWeight: FontWeight.w600,
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                              ],
-                            ],
-                          ),
-                        ),
-                      ),
-                      InkWell(
-                        borderRadius: BorderRadius.circular(8),
-                        onTap:
-                            () => Navigator.of(
-                              sheetContext,
-                              rootNavigator: true,
-                            ).pop(_BookshelfSheetAction.detail),
-                        child: Padding(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 4,
-                            vertical: 2,
-                          ),
-                          child: Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              Text(
-                                '书籍详情',
-                                style: Theme.of(
-                                  sheetContext,
-                                ).textTheme.labelLarge?.copyWith(
-                                  color: colorScheme.onSurfaceVariant,
-                                  fontWeight: FontWeight.w600,
-                                ),
-                              ),
-                              const SizedBox(width: 2),
-                              Icon(
-                                Icons.chevron_right_rounded,
-                                size: 18,
-                                color: colorScheme.onSurfaceVariant,
-                              ),
-                            ],
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-              const SizedBox(height: 12),
-              const Divider(height: 1),
-              const SizedBox(height: 12),
-              Wrap(
-                spacing: 8,
-                runSpacing: 8,
-                alignment: WrapAlignment.center,
-                children: [
-                  if (canRepairLocalBook)
-                    SizedBox(
-                      width: 84,
-                      child: _BookSheetActionButton(
-                        icon: Icons.refresh_rounded,
-                        label: '重建目录',
-                        backgroundColor: palette.elevatedSurfaceColor,
-                        onTap:
-                            () => Navigator.of(
-                              sheetContext,
-                              rootNavigator: true,
-                            ).pop(_BookshelfSheetAction.repairLocal),
-                      ),
-                    ),
-                  SizedBox(
-                    width: 84,
-                    child: _BookSheetActionButton(
-                      icon: Icons.folder_copy_outlined,
-                      label: '管理分类',
-                      backgroundColor: palette.elevatedSurfaceColor,
-                      onTap:
-                          () => Navigator.of(
-                            sheetContext,
-                            rootNavigator: true,
-                          ).pop(_BookshelfSheetAction.category),
-                    ),
-                  ),
-                  SizedBox(
-                    width: 84,
-                    child: _BookSheetActionButton(
-                      icon: Icons.label_rounded,
-                      label: '管理标签',
-                      backgroundColor: palette.elevatedSurfaceColor,
-                      onTap:
-                          () => Navigator.of(
-                            sheetContext,
-                            rootNavigator: true,
-                          ).pop(_BookshelfSheetAction.tag),
-                    ),
-                  ),
-                  SizedBox(
-                    width: 84,
-                    child: _BookSheetActionButton(
-                      icon: Icons.image_outlined,
-                      label: '自定义封面',
-                      backgroundColor: palette.elevatedSurfaceColor,
-                      onTap:
-                          () => Navigator.of(
-                            sheetContext,
-                            rootNavigator: true,
-                          ).pop(_BookshelfSheetAction.customCover),
-                    ),
-                  ),
-                  SizedBox(
-                    width: 84,
-                    child: _BookSheetActionButton(
-                      icon: Icons.delete_outline_rounded,
-                      label: '删除',
-                      backgroundColor: palette.elevatedSurfaceColor,
-                      onTap:
-                          () => Navigator.of(
-                            sheetContext,
-                            rootNavigator: true,
-                          ).pop(_BookshelfSheetAction.delete),
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 10),
-              SizedBox(
-                width: double.infinity,
-                child: FilledButton.tonal(
-                  onPressed:
-                      () => _dismissBookshelfBottomSheet<void>(sheetContext),
-                  child: const Text('取消'),
-                ),
-              ),
-            ],
-          ),
-        );
-      },
-    );
-    if (!mounted || selected == null) {
-      return;
-    }
-    switch (selected) {
-      case _BookshelfSheetAction.read:
-        await _openFromBookshelf(book, progress: progress);
-        break;
-      case _BookshelfSheetAction.detail:
-        _openBookDetail(book);
-        break;
-      case _BookshelfSheetAction.repairLocal:
-        if (localBook != null) {
-          await _repairLocalBookFromShelf(book, localBook);
-        }
-        break;
-      case _BookshelfSheetAction.select:
-        _enterSelectionMode(book);
-        break;
-      case _BookshelfSheetAction.category:
-        await _showBookCategorySheet(book);
-        break;
-      case _BookshelfSheetAction.tag:
-        await _showBookTagSheet(book);
-        break;
-      case _BookshelfSheetAction.customCover:
-        await _pickAndApplyCustomCover(book);
-        break;
-      case _BookshelfSheetAction.delete:
-        await _confirmAndRemoveBook(book);
-        break;
-    }
-  }
-
-  bool _canRepairLocalBookFromShelf(LocalBook localBook) {
-    return localBook.indexStatus == LocalBookIndexStatus.pending ||
-        localBook.indexStatus == LocalBookIndexStatus.indexing ||
-        localBook.indexStatus == LocalBookIndexStatus.stale ||
-        localBook.indexStatus == LocalBookIndexStatus.failed;
-  }
-
-  String? _localBookStatusActionText(LocalBook localBook) {
-    return localBook.indexStatus == LocalBookIndexStatus.ready
-        ? null
-        : LocalBookWorkflowPolicy.statusActionText(localBook);
-  }
-
-  Color _localStatusTextColor(ColorScheme colorScheme, LocalBook? localBook) {
-    return switch (localBook?.indexStatus) {
-      LocalBookIndexStatus.failed => colorScheme.error,
-      LocalBookIndexStatus.stale => colorScheme.primary,
-      LocalBookIndexStatus.pending => colorScheme.primary,
-      LocalBookIndexStatus.indexing => colorScheme.tertiary,
-      _ => colorScheme.onSurfaceVariant,
-    };
-  }
-
-  Future<void> _showBookTagSheet(BookshelfBook book) async {
-    await _showBookTagEditorSheet(book);
-  }
-
-  Future<void> _showBookCategorySheet(BookshelfBook book) async {
-    await _showBookCategoryEditorSheet(book);
-  }
-
-  Future<void> _showBookCategoryEditorSheet(BookshelfBook book) async {
-    final bookKey = _bookKey(book);
-    var selectedCategory = _bookCategoriesByKey[bookKey];
-    var availableCategories = _normalizeTags(<String>[
-      ..._userCategories,
-      if (selectedCategory != null && selectedCategory.trim().isNotEmpty)
-        selectedCategory,
-    ]);
-    var createCategoryDraft = '';
-    var createCategoryFieldVersion = 0;
-    String? createCategoryErrorText;
-    var showCreateCategoryInput = false;
-
-    await _showBookshelfBottomSheet<void>(
-      isScrollControlled: true,
-      builder: (sheetContext) {
-        final maxHeight = MediaQuery.sizeOf(sheetContext).height * 0.72;
-        final bottomInset = _bookshelfBottomSafeInset(sheetContext);
-
-        return StatefulBuilder(
-          builder: (sheetContext, setSheetState) {
-            final colorScheme = Theme.of(sheetContext).colorScheme;
-            final textTheme = Theme.of(sheetContext).textTheme;
-            final palette = _resolvedPalette(sheetContext);
-
-            Future<void> saveSelectedCategory() async {
-              final normalized = _normalizeTags([
-                selectedCategory?.trim() ?? '',
-              ]);
-              final category = normalized.isEmpty ? null : normalized.first;
-              try {
-                await _bookshelfService.setBookCategory(
-                  sourceId: book.sourceId,
-                  detailUrl: book.detailUrl,
-                  category: category,
-                );
-                if (category != null && !_userCategories.contains(category)) {
-                  final nextOrder = _normalizeTags([
-                    ..._categoryOrder,
-                    category,
-                  ]);
-                  await _bookshelfService.saveCategoryOrder(nextOrder);
-                }
-                if (!mounted) {
-                  return;
-                }
-                setState(() {
-                  final nextCategories = Map<String, String>.from(
-                    _bookCategoriesByKey,
-                  );
-                  if (category == null) {
-                    nextCategories.remove(bookKey);
-                  } else {
-                    nextCategories[bookKey] = category;
-                  }
-                  _bookCategoriesByKey = nextCategories;
-                  if (category != null && !_categoryOrder.contains(category)) {
-                    _categoryOrder = _normalizeTags([
-                      ..._categoryOrder,
-                      category,
-                    ]);
-                  }
-                  _ensureFilterStillValid();
-                });
-                if (!sheetContext.mounted) {
-                  return;
-                }
-                Navigator.of(sheetContext, rootNavigator: true).pop();
-                _showMessage(category == null ? '已清除分类。' : '分类已保存。');
-              } catch (_) {
-                if (!mounted) {
-                  return;
-                }
-                _showMessage('分类保存失败，请重试。');
-              }
-            }
-
-            Future<void> createCategoryInline() async {
-              final normalized = _normalizeTags([createCategoryDraft]);
-              if (normalized.isEmpty) {
-                setSheetState(() {
-                  createCategoryErrorText = '请输入分类名称';
-                });
-                return;
-              }
-              final nextCategory = normalized.first;
-              if (availableCategories.contains(nextCategory)) {
-                setSheetState(() {
-                  createCategoryErrorText = '该分类已存在';
-                });
-                return;
-              }
-              setSheetState(() {
-                availableCategories = _normalizeTags([
-                  ...availableCategories,
-                  nextCategory,
-                ]);
-                selectedCategory = nextCategory;
-                createCategoryDraft = '';
-                createCategoryErrorText = null;
-                createCategoryFieldVersion += 1;
-                showCreateCategoryInput = false;
-              });
-            }
-
-            return Padding(
-              padding: EdgeInsets.fromLTRB(8, 0, 8, 10 + bottomInset),
-              child: ConstrainedBox(
-                constraints: BoxConstraints(maxHeight: maxHeight),
-                child: ListView(
-                  shrinkWrap: true,
-                  children: [
-                    Padding(
-                      padding: const EdgeInsets.fromLTRB(16, 8, 16, 10),
-                      child: Text(
-                        '管理分类',
-                        style: textTheme.titleMedium?.copyWith(
-                          fontWeight: FontWeight.w700,
-                        ),
-                      ),
-                    ),
-                    Material(
-                      color:
-                          selectedCategory == null
-                              ? palette.primaryContainerColor.withValues(
-                                alpha: 0.36,
-                              )
-                              : Colors.transparent,
-                      borderRadius: BorderRadius.circular(12),
-                      child: InkWell(
-                        borderRadius: BorderRadius.circular(12),
-                        onTap: () {
-                          setSheetState(() {
-                            selectedCategory = null;
-                          });
-                        },
-                        child: Padding(
-                          padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
-                          child: Row(
-                            children: [
-                              const Expanded(child: Text('未分类')),
-                              if (selectedCategory == null)
-                                Icon(
-                                  Icons.check_rounded,
-                                  size: 18,
-                                  color: colorScheme.primary,
-                                ),
-                            ],
-                          ),
-                        ),
-                      ),
-                    ),
-                    if (availableCategories.isNotEmpty) ...[
-                      const SizedBox(height: 8),
-                      ...availableCategories.map((category) {
-                        final isSelected = selectedCategory == category;
-                        return Material(
-                          color:
-                              isSelected
-                                  ? palette.primaryContainerColor.withValues(
-                                    alpha: 0.42,
-                                  )
-                                  : Colors.transparent,
-                          borderRadius: BorderRadius.circular(12),
-                          child: InkWell(
-                            borderRadius: BorderRadius.circular(12),
-                            onTap: () {
-                              setSheetState(() {
-                                selectedCategory = category;
-                              });
-                            },
-                            onLongPress:
-                                () => unawaited(
-                                  _showCategoryManageSheet(category),
-                                ),
-                            child: Padding(
-                              padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
-                              child: Row(
-                                children: [
-                                  Expanded(
-                                    child: Text(
-                                      category,
-                                      maxLines: 1,
-                                      overflow: TextOverflow.ellipsis,
-                                    ),
-                                  ),
-                                  if (isSelected)
-                                    Icon(
-                                      Icons.check_rounded,
-                                      size: 18,
-                                      color: colorScheme.primary,
-                                    ),
-                                ],
-                              ),
-                            ),
-                          ),
-                        );
-                      }),
-                    ] else
-                      Padding(
-                        padding: const EdgeInsets.fromLTRB(16, 10, 16, 0),
-                        child: Text(
-                          '还没有分类，直接在下面新增一个即可。',
-                          style: textTheme.bodySmall?.copyWith(
-                            color: colorScheme.onSurfaceVariant,
-                          ),
-                        ),
-                      ),
-                    const SizedBox(height: 8),
-                    Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 16),
-                      child: TextButton.icon(
-                        onPressed: () {
-                          setSheetState(() {
-                            showCreateCategoryInput = !showCreateCategoryInput;
-                            createCategoryErrorText = null;
-                            if (showCreateCategoryInput) {
-                              createCategoryFieldVersion += 1;
-                            }
-                          });
-                        },
-                        icon: Icon(
-                          showCreateCategoryInput
-                              ? Icons.expand_less_rounded
-                              : Icons.add_rounded,
-                        ),
-                        label: Text(
-                          showCreateCategoryInput ? '收起新增分类' : '新增分类',
-                        ),
-                      ),
-                    ),
-                    if (showCreateCategoryInput) ...[
-                      Padding(
-                        padding: const EdgeInsets.fromLTRB(16, 4, 16, 0),
-                        child: TextFormField(
-                          key: ValueKey<String>(
-                            'create_category_field_$createCategoryFieldVersion',
-                          ),
-                          initialValue: createCategoryDraft,
-                          autofocus: appEnableAutoFocusForTextInput,
-                          decoration: InputDecoration(
-                            labelText: '分类名称',
-                            errorText: createCategoryErrorText,
-                            suffixIcon: IconButton(
-                              tooltip: '添加分类',
-                              onPressed: createCategoryInline,
-                              icon: const Icon(Icons.check_rounded),
-                            ),
-                          ),
-                          onChanged: (value) {
-                            createCategoryDraft = value;
-                            if (createCategoryErrorText == null) {
-                              return;
-                            }
-                            setSheetState(() {
-                              createCategoryErrorText = null;
-                            });
-                          },
-                          onFieldSubmitted: (_) => createCategoryInline(),
-                        ),
-                      ),
-                    ],
-                    const SizedBox(height: 12),
-                    Padding(
-                      padding: const EdgeInsets.fromLTRB(16, 0, 16, 0),
-                      child: FilledButton(
-                        onPressed: saveSelectedCategory,
-                        child: const Text('保存分类'),
-                      ),
-                    ),
-                    const SizedBox(height: 8),
-                  ],
-                ),
-              ),
-            );
-          },
-        );
-      },
-    );
-  }
-
-  Future<void> _showCategoryManageSheet(String category) async {
-    if (!mounted) {
-      return;
-    }
-    final selected =
-        await _showBookshelfBottomSheet<_BookshelfCategorySheetAction>(
-          builder: (sheetContext) {
-            return Padding(
-              padding: EdgeInsets.fromLTRB(
-                8,
-                0,
-                8,
-                10 + _bookshelfBottomSafeInset(sheetContext),
-              ),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  ListTile(
-                    title: const Text('重命名分类'),
-                    subtitle: Text(category),
-                    onTap:
-                        () => Navigator.of(
-                          sheetContext,
-                          rootNavigator: true,
-                        ).pop(_BookshelfCategorySheetAction.rename),
-                  ),
-                  ListTile(
-                    title: Text(
-                      '删除分类',
-                      style: TextStyle(
-                        color: Theme.of(sheetContext).colorScheme.error,
-                      ),
-                    ),
-                    subtitle: Text(category),
-                    onTap:
-                        () => Navigator.of(
-                          sheetContext,
-                          rootNavigator: true,
-                        ).pop(_BookshelfCategorySheetAction.delete),
-                  ),
-                ],
-              ),
-            );
-          },
-        );
-    if (!mounted || selected == null) {
-      return;
-    }
-    switch (selected) {
-      case _BookshelfCategorySheetAction.rename:
-        await _renameCategory(category);
-      case _BookshelfCategorySheetAction.delete:
-        await _deleteCategory(category);
-    }
-  }
-
-  Future<void> _renameCategory(String category) async {
-    final nextCategory = await _showTagNameDialog(
-      context,
-      title: '重命名分类',
-      confirmText: '保存',
-      hintText: '输入新的分类名称',
-      existingTags: _userCategories.toSet(),
-      initialValue: category,
-      originalTag: category,
-    );
-    if (!mounted || nextCategory == null || nextCategory == category) {
-      return;
-    }
-
-    try {
-      final affectedCount = await _bookshelfService.renameCategory(
-        fromCategory: category,
-        toCategory: nextCategory,
-      );
-      if (!mounted) {
-        return;
-      }
-      if (affectedCount <= 0) {
-        _showMessage('未找到可重命名的分类。');
-        return;
-      }
-      setState(() {
-        final nextMap = <String, String>{};
-        for (final entry in _bookCategoriesByKey.entries) {
-          final value = entry.value == category ? nextCategory : entry.value;
-          if (value.isNotEmpty) {
-            nextMap[entry.key] = value;
-          }
-        }
-        _bookCategoriesByKey = nextMap;
-        _categoryOrder = _normalizeTags(
-          _categoryOrder.map(
-            (value) => value == category ? nextCategory : value,
-          ),
-        );
-        if (_activeView.isCategory && _activeView.category == category) {
-          _activeView = _BookshelfViewSelection.category(nextCategory);
-        }
-        _ensureFilterStillValid();
-      });
-      _showMessage('分类已重命名为 $nextCategory。');
-    } catch (_) {
-      _showMessage('重命名失败，请重试。');
-    }
-  }
-
-  Future<void> _deleteCategory(String category) async {
-    final bindCount =
-        _bookCategoriesByKey.values.where((value) => value == category).length;
-    final confirmed = await _showConfirmDialog(
-      title: '删除分类',
-      content:
-          bindCount > 0
-              ? '确定删除分类 $category 吗？会从 $bindCount 本书中移除。'
-              : '确定删除分类 $category 吗？',
-      confirmText: '删除',
-    );
-    if (!mounted || confirmed != true) {
-      return;
-    }
-
-    try {
-      final affectedCount = await _bookshelfService.deleteCategory(category);
-      if (!mounted) {
-        return;
-      }
-      if (affectedCount <= 0) {
-        _showMessage('分类已不存在。');
-        return;
-      }
-      setState(() {
-        final nextMap = <String, String>{};
-        for (final entry in _bookCategoriesByKey.entries) {
-          if (entry.value != category) {
-            nextMap[entry.key] = entry.value;
-          }
-        }
-        _bookCategoriesByKey = nextMap;
-        _categoryOrder =
-            _categoryOrder.where((value) => value != category).toList();
-        _ensureFilterStillValid();
-      });
-      _showMessage('已删除分类 $category。');
-    } catch (_) {
-      _showMessage('删除分类失败，请重试。');
-    }
-  }
-
-  Future<void> _showBookTagEditorSheet(BookshelfBook book) async {
-    final bookKey = _bookKey(book);
-    var selectedTags = List<String>.from(
-      _bookTagsByKey[bookKey] ?? const <String>[],
-    );
-    var availableTags = _normalizeTags(<String>[..._userTags, ...selectedTags]);
-    var createTagDraft = '';
-    var createTagFieldVersion = 0;
-    String? createTagErrorText;
-    var showCreateTagInput = availableTags.isEmpty;
-
-    final selected = await _showBookshelfBottomSheet<List<String>>(
-      isScrollControlled: true,
-      builder: (sheetContext) {
-        final horizontal = AppSpacing.pageHorizontal(sheetContext);
-        final bottomInset = math.max(
-          MediaQuery.viewInsetsOf(sheetContext).bottom,
-          _bookshelfBottomSafeInset(sheetContext),
-        );
-        final maxHeight = MediaQuery.sizeOf(sheetContext).height * 0.76;
-        return StatefulBuilder(
-          builder: (sheetContext, setSheetState) {
-            void toggleCreateTagInput() {
-              setSheetState(() {
-                showCreateTagInput = !showCreateTagInput;
-                createTagErrorText = null;
-                if (!showCreateTagInput) {
-                  createTagDraft = '';
-                  createTagFieldVersion += 1;
-                }
-              });
-            }
-
-            bool commitPendingTagDraft() {
-              final normalized = _normalizeTags([createTagDraft]);
-              if (normalized.isEmpty) {
-                return true;
-              }
-
-              final created = normalized.first;
-              if (availableTags.contains(created)) {
-                setSheetState(() {
-                  createTagErrorText = '该标签已存在';
-                  showCreateTagInput = true;
-                });
-                return false;
-              }
-
-              setSheetState(() {
-                availableTags = _normalizeTags(<String>[
-                  ...availableTags,
-                  created,
-                ]);
-                selectedTags = _normalizeTags(<String>[
-                  ...selectedTags,
-                  created,
-                ]);
-                createTagDraft = '';
-                createTagFieldVersion += 1;
-                createTagErrorText = null;
-                showCreateTagInput = false;
-              });
-              return true;
-            }
-
-            void createTagInline() {
-              final hasDraft = _normalizeTags([createTagDraft]).isNotEmpty;
-              if (!hasDraft) {
-                setSheetState(() {
-                  createTagErrorText = '请输入标签名称';
-                  showCreateTagInput = true;
-                });
-                return;
-              }
-              final ok = commitPendingTagDraft();
-              if (!ok) {
-                return;
-              }
-            }
-
-            return Padding(
-              padding: EdgeInsets.fromLTRB(
-                horizontal,
-                4,
-                horizontal,
-                12 + bottomInset,
-              ),
-              child: ConstrainedBox(
-                constraints: BoxConstraints(maxHeight: maxHeight),
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      '管理标签',
-                      style: Theme.of(sheetContext).textTheme.titleMedium
-                          ?.copyWith(fontWeight: FontWeight.w700),
-                    ),
-                    const SizedBox(height: 4),
-                    Text(
-                      _toSingleLineText(_displayBookTitle(book)),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: Theme.of(
-                        sheetContext,
-                      ).textTheme.bodySmall?.copyWith(
-                        color:
-                            Theme.of(sheetContext).colorScheme.onSurfaceVariant,
-                      ),
-                    ),
-                    const SizedBox(height: 14),
-                    Flexible(
-                      child: ListView(
-                        shrinkWrap: true,
-                        children: [
-                          Text(
-                            '标签',
-                            style: Theme.of(sheetContext).textTheme.labelLarge
-                                ?.copyWith(fontWeight: FontWeight.w700),
-                          ),
-                          const SizedBox(height: 8),
-                          if (availableTags.isEmpty)
-                            Container(
-                              width: double.infinity,
-                              padding: const EdgeInsets.fromLTRB(
-                                12,
-                                12,
-                                12,
-                                12,
-                              ),
-                              decoration: BoxDecoration(
-                                color:
-                                    _resolvedPalette(sheetContext).surfaceColor,
-                                borderRadius: BorderRadius.circular(14),
-                              ),
-                              child: Text(
-                                '还没有标签，直接在下面新增一个即可。',
-                                style: Theme.of(
-                                  sheetContext,
-                                ).textTheme.bodySmall?.copyWith(
-                                  color:
-                                      Theme.of(
-                                        sheetContext,
-                                      ).colorScheme.onSurfaceVariant,
-                                ),
-                              ),
-                            )
-                          else
-                            Wrap(
-                              spacing: 8,
-                              runSpacing: 8,
-                              children: availableTags
-                                  .map((tag) {
-                                    final selected = selectedTags.contains(tag);
-                                    return FilterChip(
-                                      label: Text(tag),
-                                      selected: selected,
-                                      onSelected: (enabled) {
-                                        setSheetState(() {
-                                          if (enabled) {
-                                            if (!selectedTags.contains(tag)) {
-                                              selectedTags = _normalizeTags(
-                                                <String>[...selectedTags, tag],
-                                              );
-                                            }
-                                          } else {
-                                            selectedTags = selectedTags
-                                                .where((value) => value != tag)
-                                                .toList(growable: false);
-                                          }
-                                        });
-                                      },
-                                    );
-                                  })
-                                  .toList(growable: false),
-                            ),
-                          const SizedBox(height: 10),
-                          Align(
-                            alignment: Alignment.centerLeft,
-                            child: TextButton.icon(
-                              onPressed: toggleCreateTagInput,
-                              icon: Icon(
-                                showCreateTagInput
-                                    ? Icons.keyboard_arrow_up_rounded
-                                    : Icons.add_rounded,
-                              ),
-                              label: Text(
-                                showCreateTagInput ? '收起新增标签' : '新增标签',
-                              ),
-                            ),
-                          ),
-                          if (showCreateTagInput) ...[
-                            const SizedBox(height: 6),
-                            TextFormField(
-                              key: ValueKey<String>(
-                                'create_tag_field_$createTagFieldVersion',
-                              ),
-                              initialValue: createTagDraft,
-                              autofocus: appEnableAutoFocusForTextInput,
-                              maxLength: 12,
-                              decoration: InputDecoration(
-                                labelText: '标签名称',
-                                hintText: '例如：在读 / 已完结',
-                                errorText: createTagErrorText,
-                                suffixIcon: IconButton(
-                                  tooltip: '添加标签',
-                                  onPressed: createTagInline,
-                                  icon: const Icon(Icons.check_rounded),
-                                ),
-                              ),
-                              onChanged: (value) {
-                                createTagDraft = value;
-                                if (createTagErrorText == null) {
-                                  return;
-                                }
-                                setSheetState(() {
-                                  createTagErrorText = null;
-                                });
-                              },
-                              onFieldSubmitted: (_) => createTagInline(),
-                            ),
-                          ],
-                        ],
-                      ),
-                    ),
-                    const SizedBox(height: 10),
-                    Row(
-                      children: [
-                        Expanded(
-                          child: OutlinedButton(
-                            onPressed:
-                                () => _dismissBookshelfBottomSheet<void>(
-                                  sheetContext,
-                                ),
-                            child: const Text('取消'),
-                          ),
-                        ),
-                        const SizedBox(width: 10),
-                        Expanded(
-                          child: FilledButton(
-                            onPressed: () {
-                              final canSave =
-                                  !showCreateTagInput ||
-                                  commitPendingTagDraft();
-                              if (!canSave) {
-                                return;
-                              }
-                              _dismissBookshelfBottomSheet(
-                                sheetContext,
-                                _normalizeTags(selectedTags),
-                              );
-                            },
-                            child: const Text('保存'),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ],
-                ),
-              ),
-            );
-          },
-        );
-      },
-    );
-
-    if (!mounted || selected == null) {
-      return;
-    }
-
-    final normalizedTags = _normalizeTags(selected);
-    final previous = _bookTagsByKey[bookKey] ?? const <String>[];
-    final unchanged =
-        previous.length == normalizedTags.length &&
-        previous.every((tag) => normalizedTags.contains(tag));
-    if (unchanged) {
-      return;
-    }
-
-    try {
-      await _bookshelfService.setBookTags(
-        sourceId: book.sourceId,
-        detailUrl: book.detailUrl,
-        tags: normalizedTags,
-      );
-      if (!mounted) {
-        return;
-      }
-      setState(() {
-        final next = Map<String, List<String>>.from(_bookTagsByKey);
-        if (normalizedTags.isEmpty) {
-          next.remove(bookKey);
-        } else {
-          next[bookKey] = normalizedTags;
-        }
-        _bookTagsByKey = next;
-        _ensureFilterStillValid();
-      });
-      _showMessage(normalizedTags.isEmpty ? '已清除标签。' : '标签已保存。');
-    } catch (_) {
-      _showMessage('标签保存失败，请重试。');
-    }
-  }
-
-  Future<void> _pickAndApplyCustomCover(BookshelfBook book) async {
-    try {
-      final picked = await _imageSelectionService.pickImage(
-        confirmButtonText: '选择封面',
-        allowedExtensions: const {'jpg', 'jpeg', 'png', 'webp', 'gif'},
-      );
-      if (!mounted || picked == null) {
-        return;
-      }
-
-      final storedCoverUri = await _persistCustomCover(book, picked);
-      if (storedCoverUri == null) {
-        _showMessage('封面保存失败，请重试。');
-        return;
-      }
-
-      await _bookshelfService.upsert(
-        book.copyWith(coverUrl: storedCoverUri.toString()),
-      );
-      await _readingRecordService.syncBookPresentation(
-        bookId: book.bookId,
-        bookTitle: book.title,
-        bookAuthor: book.author,
-        coverUrl: storedCoverUri.toString(),
-      );
-      await _loadBookshelf(force: true);
-      _showMessage('已更新自定义封面。');
-    } on ImageSelectionException catch (error) {
-      _showMessage(error.message);
-    } on AppException catch (error) {
-      _showMessage(error.briefMessage);
-    } catch (_) {
-      _showMessage('设置自定义封面失败，请重试。');
-    }
-  }
-
-  Future<Uri?> _persistCustomCover(
-    BookshelfBook book,
-    PickedImageData picked,
-  ) async {
-    final bytes = picked.bytes;
-    if (bytes.isEmpty) {
-      return null;
-    }
-
-    final baseDir = await getApplicationSupportDirectory();
-    final coverDir = Directory(
-      p.join(baseDir.path, 'shuxiang_reading_next', 'custom_covers'),
-    );
-    if (!await coverDir.exists()) {
-      await coverDir.create(recursive: true);
-    }
-
-    final key = _bookKey(book).replaceAll(RegExp(r'[^a-zA-Z0-9]+'), '_');
-    final sourceExtension = p.extension(picked.name).toLowerCase();
-    final extension =
-        const [
-              '.jpg',
-              '.jpeg',
-              '.png',
-              '.webp',
-              '.gif',
-            ].contains(sourceExtension)
-            ? sourceExtension
-            : '.jpg';
-
-    await for (final entity in coverDir.list(followLinks: false)) {
-      if (entity is! File) {
-        continue;
-      }
-      final name = p.basename(entity.path);
-      if (!name.startsWith('${key}_')) {
-        continue;
-      }
-      try {
-        await entity.delete();
-      } catch (_) {
-        // Ignore stale cleanup failure.
-      }
-    }
-
-    final targetFile = File(
-      p.join(
-        coverDir.path,
-        '${key}_${DateTime.now().millisecondsSinceEpoch}$extension',
-      ),
-    );
-    await targetFile.writeAsBytes(bytes, flush: true);
-    return targetFile.uri;
-  }
-
-  Future<String?> _showTagNameDialog(
-    BuildContext dialogContext, {
-    required String title,
-    required String confirmText,
-    required String hintText,
-    required Set<String> existingTags,
-    String initialValue = '',
-    String? originalTag,
-  }) async {
-    var draftValue = initialValue;
-    String? errorText;
-
-    final result = await showDialog<String>(
-      context: dialogContext,
-      builder: (context) {
-        return StatefulBuilder(
-          builder: (context, setDialogState) {
-            String? validate() {
-              final value = _normalizeTags([draftValue]);
-              if (value.isEmpty) {
-                return '请输入标签名称';
-              }
-              final tag = value.first;
-              if (originalTag != null && tag == originalTag) {
-                return null;
-              }
-              if (originalTag == null && existingTags.contains(tag)) {
-                return '该标签已存在';
-              }
-              return null;
-            }
-
-            void submit() {
-              final validation = validate();
-              if (validation != null) {
-                setDialogState(() {
-                  errorText = validation;
-                });
-                return;
-              }
-              final tag = _normalizeTags([draftValue]).first;
-              Navigator.of(context).pop(tag);
-            }
-
-            return AlertDialog(
-              title: Text(title),
-              content: TextFormField(
-                initialValue: initialValue,
-                autofocus: appEnableAutoFocusForTextInput,
-                maxLength: 12,
-                decoration: InputDecoration(
-                  hintText: hintText,
-                  errorText: errorText,
-                ),
-                onChanged: (value) {
-                  draftValue = value;
-                  if (errorText != null) {
-                    setDialogState(() {
-                      errorText = null;
-                    });
-                  }
-                },
-                onFieldSubmitted: (_) => submit(),
-              ),
-              actions: [
-                TextButton(
-                  onPressed: () => Navigator.of(context).pop(),
-                  child: const Text('取消'),
-                ),
-                FilledButton(onPressed: submit, child: Text(confirmText)),
-              ],
-            );
-          },
-        );
-      },
-    );
-    return result;
-  }
-
-  Future<void> _confirmAndRemoveBook(BookshelfBook book) async {
-    final confirmed = await _showConfirmDialog(
-      title: '删除书籍',
-      content:
-          '确定从书架删除《${_toSingleLineText(_displayBookTitle(book))}》吗？该操作不可撤销。',
-      confirmText: '删除',
-    );
-    if (!mounted || confirmed != true) {
-      return;
-    }
-    _removeBooksFromLocalState([book]);
-    try {
-      await _removeBook(book, reload: false, showFeedback: false);
-      if (!mounted) {
-        return;
-      }
-      _showMessage('已从书架移除。');
-    } on AppException catch (error) {
-      await _loadBookshelf(force: true);
-      if (!mounted) {
-        return;
-      }
-      _showMessage(error.briefMessage);
-    } catch (_) {
-      await _loadBookshelf(force: true);
-      if (!mounted) {
-        return;
-      }
-      _showMessage('删除失败，请稍后重试。');
-    }
   }
 
   void _selectAllBooks() {
@@ -7048,55 +5770,6 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
     }
   }
 
-  Future<void> _repairLocalBookFromShelf(
-    BookshelfBook book,
-    LocalBook localBook,
-  ) async {
-    final normalizedBookId = book.bookId.trim();
-    if (normalizedBookId.isEmpty ||
-        _repairingLocalBookIds.contains(normalizedBookId)) {
-      return;
-    }
-
-    setState(() {
-      _repairingLocalBookIds.add(normalizedBookId);
-    });
-
-    try {
-      await _localBookIndexService.ensureIndexed(
-        bookId: normalizedBookId,
-        force:
-            localBook.indexStatus == LocalBookIndexStatus.stale ||
-            localBook.indexStatus == LocalBookIndexStatus.failed,
-      );
-      await _loadBookshelf(force: true);
-      if (!mounted) {
-        return;
-      }
-      _showMessage(
-        '《${_toSingleLineText(_displayBookTitle(book))}》目录已更新，可以继续阅读了。',
-      );
-    } on AppException catch (error) {
-      if (!mounted) {
-        return;
-      }
-      _showMessage(error.briefMessage);
-      _openBookDetail(book);
-    } catch (_) {
-      if (!mounted) {
-        return;
-      }
-      _showMessage('重建目录失败，请稍后重试。');
-      _openBookDetail(book);
-    } finally {
-      if (mounted) {
-        setState(() {
-          _repairingLocalBookIds.remove(normalizedBookId);
-        });
-      }
-    }
-  }
-
   void _openReaderFallbackForSourceSwitch(BookshelfBook book) {
     _cancelBackgroundLatestInfoRefresh();
     _cancelBackgroundRefreshForBook(
@@ -7227,56 +5900,5 @@ class _BookshelfPinnedHeaderDelegate extends SliverPersistentHeaderDelegate {
   @override
   bool shouldRebuild(covariant _BookshelfPinnedHeaderDelegate oldDelegate) {
     return oldDelegate.extent != extent || oldDelegate.child != child;
-  }
-}
-
-class _BookSheetActionButton extends StatelessWidget {
-  const _BookSheetActionButton({
-    required this.icon,
-    required this.label,
-    required this.backgroundColor,
-    required this.onTap,
-  });
-
-  final IconData icon;
-  final String label;
-  final Color backgroundColor;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    final colorScheme = Theme.of(context).colorScheme;
-    final fg = colorScheme.onSurface;
-    return InkWell(
-      borderRadius: BorderRadius.circular(14),
-      onTap: onTap,
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 6),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Container(
-              width: 46,
-              height: 46,
-              decoration: BoxDecoration(
-                color: backgroundColor,
-                shape: BoxShape.circle,
-              ),
-              child: Icon(icon, color: fg),
-            ),
-            const SizedBox(height: 8),
-            Text(
-              label,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: Theme.of(context).textTheme.labelMedium?.copyWith(
-                color: fg,
-                fontWeight: FontWeight.w600,
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
   }
 }

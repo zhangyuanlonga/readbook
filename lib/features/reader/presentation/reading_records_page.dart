@@ -7,6 +7,8 @@ import 'package:go_router/go_router.dart';
 
 import '../../../app/layout/app_layout.dart';
 import '../../../app/layout/app_spacing.dart';
+import '../../../app/navigation/app_navigation_style_provider.dart';
+import '../../../app/navigation/mobile_bottom_navigation_inset.dart';
 import '../../../app/theme/app_advanced_theme_tokens.dart';
 import '../../../app/widgets/advanced_theme_backdrop_decoration.dart';
 import '../../../app/widgets/resolved_book_cover.dart';
@@ -47,8 +49,7 @@ class ReadingRecordsPage extends ConsumerStatefulWidget {
   final ReadingRecordsPeriod? initialPeriod;
 
   @override
-  ConsumerState<ReadingRecordsPage> createState() =>
-      _ReadingRecordsPageState();
+  ConsumerState<ReadingRecordsPage> createState() => _ReadingRecordsPageState();
 }
 
 class _ReadingRecordsPageState extends ConsumerState<ReadingRecordsPage> {
@@ -246,10 +247,23 @@ class _ReadingRecordsPageState extends ConsumerState<ReadingRecordsPage> {
     ref.watch(activeAdvancedThemeProvider);
     ref.watch(coverGalleriesProvider);
     final horizontal = AppSpacing.pageHorizontal(context);
-    final bottomSafe = MediaQuery.viewPaddingOf(context).bottom;
     final backdrop = resolveAdvancedThemeBackdrop(
       Theme.of(context).colorScheme,
       ref.read(activeAdvancedThemeProvider).valueOrNull,
+    );
+    final platform = Theme.of(context).platform;
+    final effectiveNavigationStyle = resolveAppNavigationStyle(
+      ref.watch(appNavigationStylePreferenceProvider),
+      isWeb: false,
+      platform: platform,
+    );
+    final showNavigationLabels = ref.watch(
+      appNavigationLabelVisibilityProvider,
+    );
+    final bottomInset = mobileBottomNavigationContentInset(
+      context,
+      style: effectiveNavigationStyle,
+      showNavigationLabels: showNavigationLabels,
     );
     final topInset = MediaQuery.paddingOf(context).top + kToolbarHeight;
 
@@ -290,7 +304,8 @@ class _ReadingRecordsPageState extends ConsumerState<ReadingRecordsPage> {
                                 sessionSnapshot.data ??
                                 const <ReadingRecordSession>[];
                             return StreamBuilder<List<LocalBook>>(
-                              stream: _readingBookStatusService.watchLocalBooks(),
+                              stream:
+                                  _readingBookStatusService.watchLocalBooks(),
                               builder: (context, localBooksSnapshot) {
                                 final localBooks =
                                     localBooksSnapshot.data ??
@@ -306,11 +321,12 @@ class _ReadingRecordsPageState extends ConsumerState<ReadingRecordsPage> {
                                         statusSnapshot.data ??
                                         const <ReadingBookStatusEntry>[];
                                     final resolvedStatusesByBookId =
-                                        _readingBookStatusService.resolveStatuses(
-                                          latestRecords: latestRecords,
-                                          localBooks: localBooks,
-                                          manualStatuses: manualStatuses,
-                                        );
+                                        _readingBookStatusService
+                                            .resolveStatuses(
+                                              latestRecords: latestRecords,
+                                              localBooks: localBooks,
+                                              manualStatuses: manualStatuses,
+                                            );
                                     final queryView =
                                         _readingRecordsQueryService
                                             .buildQueryView(
@@ -341,7 +357,7 @@ class _ReadingRecordsPageState extends ConsumerState<ReadingRecordsPage> {
                                         horizontal,
                                         topInset + 12,
                                         horizontal,
-                                        12 + bottomSafe,
+                                        12 + bottomInset,
                                       ),
                                       children: [
                                         _buildControlsCard(),

@@ -6,6 +6,9 @@ import 'package:go_router/go_router.dart';
 
 import '../../../app/layout/app_layout.dart';
 import '../../../app/layout/app_spacing.dart';
+import '../../../app/theme/app_advanced_theme_tokens.dart';
+import '../../../app/widgets/advanced_theme_backdrop_decoration.dart';
+import '../application/advanced_theme_provider.dart';
 import '../application/cover_gallery_provider.dart';
 import '../../../domain/entities/cover_gallery.dart';
 import '../application/cover_gallery_service.dart';
@@ -74,64 +77,87 @@ class _CoverGalleryPageState extends State<CoverGalleryPage> {
 
   @override
   Widget build(BuildContext context) {
-    final horizontal = AppSpacing.pageHorizontal(context);
-    final bottomSafe = MediaQuery.viewPaddingOf(context).bottom;
-    return PopScope<void>(
-      canPop: context.canPop(),
-      onPopInvokedWithResult: (didPop, _) {
-        if (didPop || !context.mounted) {
-          return;
-        }
-        context.go('/mine');
-      },
-      child: Scaffold(
-        appBar: AppBar(
-          title: const Text('封面图集'),
-          actions: [
-            IconButton(
-              tooltip: '新增图集',
-              onPressed: _isLoading || _isSaving ? null : _createGallery,
-              icon: const Icon(Icons.add_rounded),
-            ),
-          ],
-        ),
-        body: LayoutBuilder(
-          builder: (context, _) {
-            final maxWidth = AppLayout.pageContentMaxWidth(
-              context,
-              maxWidth: AppLayout.settingsContentMaxWidth,
-            );
-            return Align(
-              alignment: Alignment.topCenter,
-              child: ConstrainedBox(
-                constraints: BoxConstraints(maxWidth: maxWidth),
-                child:
-                    _isLoading
-                        ? const Center(child: CircularProgressIndicator())
-                        : ListView(
-                          padding: EdgeInsets.fromLTRB(
-                            horizontal,
-                            12,
-                            horizontal,
-                            16 + bottomSafe,
-                          ),
-                          children: [
-                            if (_galleries.isEmpty)
-                              _buildEmptyState(context)
-                            else
-                              ..._galleries.map(
-                                (gallery) => Padding(
-                                  padding: const EdgeInsets.only(bottom: 10),
-                                  child: _buildGalleryCard(context, gallery),
-                                ),
-                              ),
-                          ],
-                        ),
-              ),
-            );
+    return Consumer(
+      builder: (context, ref, _) {
+        final activeAdvancedTheme =
+            ref.watch(activeAdvancedThemeProvider).valueOrNull;
+        final backdrop = resolveAdvancedThemeBackdrop(
+          Theme.of(context).colorScheme,
+          activeAdvancedTheme,
+        );
+        final horizontal = AppSpacing.pageHorizontal(context);
+        final bottomSafe = MediaQuery.viewPaddingOf(context).bottom;
+        final topInset = MediaQuery.paddingOf(context).top + kToolbarHeight;
+        return PopScope<void>(
+          canPop: context.canPop(),
+          onPopInvokedWithResult: (didPop, _) {
+            if (didPop || !context.mounted) {
+              return;
+            }
+            context.go('/mine');
           },
-        ),
-      ),
+          child: Scaffold(
+            extendBodyBehindAppBar: true,
+            appBar: AppBar(
+              title: const Text('封面图集'),
+              backgroundColor: Colors.transparent,
+              surfaceTintColor: Colors.transparent,
+              shadowColor: Colors.transparent,
+              actions: [
+                IconButton(
+                  tooltip: '新增图集',
+                  onPressed: _isLoading || _isSaving ? null : _createGallery,
+                  icon: const Icon(Icons.add_rounded),
+                ),
+              ],
+            ),
+            body: LayoutBuilder(
+              builder: (context, _) {
+                final maxWidth = AppLayout.pageContentMaxWidth(
+                  context,
+                  maxWidth: AppLayout.settingsContentMaxWidth,
+                );
+                return DecoratedBox(
+                  decoration: buildAdvancedThemeBackdropDecoration(backdrop),
+                  child: Align(
+                    alignment: Alignment.topCenter,
+                    child: ConstrainedBox(
+                      constraints: BoxConstraints(maxWidth: maxWidth),
+                      child:
+                          _isLoading
+                              ? const Center(child: CircularProgressIndicator())
+                              : ListView(
+                                padding: EdgeInsets.fromLTRB(
+                                  horizontal,
+                                  topInset + 12,
+                                  horizontal,
+                                  16 + bottomSafe,
+                                ),
+                                children: [
+                                  if (_galleries.isEmpty)
+                                    _buildEmptyState(context)
+                                  else
+                                    ..._galleries.map(
+                                      (gallery) => Padding(
+                                        padding: const EdgeInsets.only(
+                                          bottom: 10,
+                                        ),
+                                        child: _buildGalleryCard(
+                                          context,
+                                          gallery,
+                                        ),
+                                      ),
+                                    ),
+                                ],
+                              ),
+                    ),
+                  ),
+                );
+              },
+            ),
+          ),
+        );
+      },
     );
   }
 

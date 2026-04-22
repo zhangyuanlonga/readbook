@@ -1,13 +1,17 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../app/layout/app_layout.dart';
 import '../../../app/layout/app_spacing.dart';
 import '../../../app/platform/app_input_focus_behavior.dart';
+import '../../../app/theme/app_advanced_theme_tokens.dart';
+import '../../../app/widgets/advanced_theme_backdrop_decoration.dart';
 import 'chapter_rule_management_page.dart';
 import '../../bookshelf/application/bookshelf_service.dart';
+import '../application/advanced_theme_provider.dart';
 
 enum MineManagementSection {
   tagManagement,
@@ -48,79 +52,102 @@ class MineManagementPage extends StatelessWidget {
       return ChapterRuleManagementPage(loadTimeout: loadTimeout);
     }
 
-    final config = _MineManagementPageConfig.forSection(section);
-    final horizontal = AppSpacing.pageHorizontal(context);
-    final bottomSafe = MediaQuery.viewPaddingOf(context).bottom;
+    return Consumer(
+      builder: (context, ref, _) {
+        final activeAdvancedTheme =
+            ref.watch(activeAdvancedThemeProvider).valueOrNull;
+        final backdrop = resolveAdvancedThemeBackdrop(
+          Theme.of(context).colorScheme,
+          activeAdvancedTheme,
+        );
+        final config = _MineManagementPageConfig.forSection(section);
+        final horizontal = AppSpacing.pageHorizontal(context);
+        final bottomSafe = MediaQuery.viewPaddingOf(context).bottom;
+        final topInset = MediaQuery.paddingOf(context).top + kToolbarHeight;
 
-    return PopScope<void>(
-      canPop: context.canPop(),
-      onPopInvokedWithResult: (didPop, _) {
-        if (didPop || !context.mounted) {
-          return;
-        }
-        context.go('/mine');
-      },
-      child: Scaffold(
-        appBar: AppBar(title: Text(config.title)),
-        body: LayoutBuilder(
-          builder: (context, _) {
-            final maxWidth = AppLayout.pageContentMaxWidth(
-              context,
-              maxWidth: AppLayout.settingsContentMaxWidth,
-            );
-
-            return Align(
-              alignment: Alignment.topCenter,
-              child: ConstrainedBox(
-                constraints: BoxConstraints(maxWidth: maxWidth),
-                child: ListView(
-                  padding: EdgeInsets.fromLTRB(
-                    horizontal,
-                    12,
-                    horizontal,
-                    16 + bottomSafe,
-                  ),
-                  children: [
-                    _buildHeroCard(context, config),
-                    const SizedBox(height: 12),
-                    LayoutBuilder(
-                      builder: (context, constraints) {
-                        final wide =
-                            constraints.maxWidth >=
-                            AppLayout.railBreakpointWidth;
-                        final overviewCard = _buildOverviewCard(
-                          context,
-                          config,
-                        );
-                        final roadmapCard = _buildRoadmapCard(context, config);
-                        if (!wide) {
-                          return Column(
-                            children: [
-                              overviewCard,
-                              const SizedBox(height: 12),
-                              roadmapCard,
-                            ],
-                          );
-                        }
-                        return Row(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Expanded(child: overviewCard),
-                            const SizedBox(width: 12),
-                            Expanded(child: roadmapCard),
-                          ],
-                        );
-                      },
-                    ),
-                    const SizedBox(height: 12),
-                    _buildStatusCard(context, config),
-                  ],
-                ),
-              ),
-            );
+        return PopScope<void>(
+          canPop: context.canPop(),
+          onPopInvokedWithResult: (didPop, _) {
+            if (didPop || !context.mounted) {
+              return;
+            }
+            context.go('/mine');
           },
-        ),
-      ),
+          child: Scaffold(
+            extendBodyBehindAppBar: true,
+            appBar: AppBar(
+              title: Text(config.title),
+              backgroundColor: Colors.transparent,
+              surfaceTintColor: Colors.transparent,
+              shadowColor: Colors.transparent,
+            ),
+            body: LayoutBuilder(
+              builder: (context, _) {
+                final maxWidth = AppLayout.pageContentMaxWidth(
+                  context,
+                  maxWidth: AppLayout.settingsContentMaxWidth,
+                );
+
+                return DecoratedBox(
+                  decoration: buildAdvancedThemeBackdropDecoration(backdrop),
+                  child: Align(
+                    alignment: Alignment.topCenter,
+                    child: ConstrainedBox(
+                      constraints: BoxConstraints(maxWidth: maxWidth),
+                      child: ListView(
+                        padding: EdgeInsets.fromLTRB(
+                          horizontal,
+                          topInset + 12,
+                          horizontal,
+                          16 + bottomSafe,
+                        ),
+                        children: [
+                          _buildHeroCard(context, config),
+                          const SizedBox(height: 12),
+                          LayoutBuilder(
+                            builder: (context, constraints) {
+                              final wide =
+                                  constraints.maxWidth >=
+                                  AppLayout.railBreakpointWidth;
+                              final overviewCard = _buildOverviewCard(
+                                context,
+                                config,
+                              );
+                              final roadmapCard = _buildRoadmapCard(
+                                context,
+                                config,
+                              );
+                              if (!wide) {
+                                return Column(
+                                  children: [
+                                    overviewCard,
+                                    const SizedBox(height: 12),
+                                    roadmapCard,
+                                  ],
+                                );
+                              }
+                              return Row(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Expanded(child: overviewCard),
+                                  const SizedBox(width: 12),
+                                  Expanded(child: roadmapCard),
+                                ],
+                              );
+                            },
+                          ),
+                          const SizedBox(height: 12),
+                          _buildStatusCard(context, config),
+                        ],
+                      ),
+                    ),
+                  ),
+                );
+              },
+            ),
+          ),
+        );
+      },
     );
   }
 
@@ -821,87 +848,108 @@ class _BookshelfTaxonomyManagementPageState
 
   @override
   Widget build(BuildContext context) {
-    final horizontal = AppSpacing.pageHorizontal(context);
-    final bottomSafe = MediaQuery.viewPaddingOf(context).bottom;
+    return Consumer(
+      builder: (context, ref, _) {
+        final activeAdvancedTheme =
+            ref.watch(activeAdvancedThemeProvider).valueOrNull;
+        final backdrop = resolveAdvancedThemeBackdrop(
+          Theme.of(context).colorScheme,
+          activeAdvancedTheme,
+        );
+        final horizontal = AppSpacing.pageHorizontal(context);
+        final bottomSafe = MediaQuery.viewPaddingOf(context).bottom;
+        final topInset = MediaQuery.paddingOf(context).top + kToolbarHeight;
 
-    return PopScope<void>(
-      canPop: context.canPop(),
-      onPopInvokedWithResult: (didPop, _) {
-        if (didPop || !context.mounted) {
-          return;
-        }
-        context.go('/mine');
-      },
-      child: Scaffold(
-        appBar: AppBar(
-          title: Text(_title),
-          actions: [
-            IconButton(
-              tooltip: _showCreateInput ? '收起新增$_entityName' : '新增$_entityName',
-              onPressed:
-                  _isSaving
-                      ? null
-                      : () {
-                        setState(() {
-                          _showCreateInput = !_showCreateInput;
-                          _createErrorText = null;
-                          if (!_showCreateInput) {
-                            _createDraft = '';
-                          }
-                        });
-                      },
-              icon: Icon(
-                _showCreateInput
-                    ? Icons.keyboard_arrow_up_rounded
-                    : Icons.add_rounded,
-              ),
-            ),
-          ],
-        ),
-        body: LayoutBuilder(
-          builder: (context, _) {
-            final maxWidth = AppLayout.pageContentMaxWidth(
-              context,
-              maxWidth: AppLayout.settingsContentMaxWidth,
-            );
-
-            return Align(
-              alignment: Alignment.topCenter,
-              child: ConstrainedBox(
-                constraints: BoxConstraints(maxWidth: maxWidth),
-                child:
-                    _isLoading
-                        ? const Center(child: CircularProgressIndicator())
-                        : ListView(
-                          padding: EdgeInsets.fromLTRB(
-                            horizontal,
-                            12,
-                            horizontal,
-                            16 + bottomSafe,
-                          ),
-                          children: [
-                            _buildTaxonomyHeroCard(context),
-                            const SizedBox(height: 12),
-                            if (_loadErrorText != null) ...[
-                              _buildErrorCard(context),
-                              if (_items.isNotEmpty) const SizedBox(height: 12),
-                            ],
-                            if (_showCreateInput) ...[
-                              _buildCreateInputCard(context),
-                              const SizedBox(height: 12),
-                            ],
-                            if (_loadErrorText == null || _items.isNotEmpty)
-                              if (_items.isEmpty)
-                                _buildEmptyCard(context)
-                              else
-                                _buildListCard(context),
-                          ],
-                        ),
-              ),
-            );
+        return PopScope<void>(
+          canPop: context.canPop(),
+          onPopInvokedWithResult: (didPop, _) {
+            if (didPop || !context.mounted) {
+              return;
+            }
+            context.go('/mine');
           },
-        ),
-      ),
+          child: Scaffold(
+            extendBodyBehindAppBar: true,
+            appBar: AppBar(
+              title: Text(_title),
+              backgroundColor: Colors.transparent,
+              surfaceTintColor: Colors.transparent,
+              shadowColor: Colors.transparent,
+              actions: [
+                IconButton(
+                  tooltip:
+                      _showCreateInput ? '收起新增$_entityName' : '新增$_entityName',
+                  onPressed:
+                      _isSaving
+                          ? null
+                          : () {
+                            setState(() {
+                              _showCreateInput = !_showCreateInput;
+                              _createErrorText = null;
+                              if (!_showCreateInput) {
+                                _createDraft = '';
+                              }
+                            });
+                          },
+                  icon: Icon(
+                    _showCreateInput
+                        ? Icons.keyboard_arrow_up_rounded
+                        : Icons.add_rounded,
+                  ),
+                ),
+              ],
+            ),
+            body: LayoutBuilder(
+              builder: (context, _) {
+                final maxWidth = AppLayout.pageContentMaxWidth(
+                  context,
+                  maxWidth: AppLayout.settingsContentMaxWidth,
+                );
+
+                return DecoratedBox(
+                  decoration: buildAdvancedThemeBackdropDecoration(backdrop),
+                  child: Align(
+                    alignment: Alignment.topCenter,
+                    child: ConstrainedBox(
+                      constraints: BoxConstraints(maxWidth: maxWidth),
+                      child:
+                          _isLoading
+                              ? const Center(child: CircularProgressIndicator())
+                              : ListView(
+                                padding: EdgeInsets.fromLTRB(
+                                  horizontal,
+                                  topInset + 12,
+                                  horizontal,
+                                  16 + bottomSafe,
+                                ),
+                                children: [
+                                  _buildTaxonomyHeroCard(context),
+                                  const SizedBox(height: 12),
+                                  if (_loadErrorText != null) ...[
+                                    _buildErrorCard(context),
+                                    if (_items.isNotEmpty)
+                                      const SizedBox(height: 12),
+                                  ],
+                                  if (_showCreateInput) ...[
+                                    _buildCreateInputCard(context),
+                                    const SizedBox(height: 12),
+                                  ],
+                                  if (_loadErrorText == null ||
+                                      _items.isNotEmpty)
+                                    if (_items.isEmpty)
+                                      _buildEmptyCard(context)
+                                    else
+                                      _buildListCard(context),
+                                ],
+                              ),
+                    ),
+                  ),
+                );
+              },
+            ),
+          ),
+        );
+      },
     );
   }
 

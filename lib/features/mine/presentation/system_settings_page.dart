@@ -1,12 +1,16 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../app/layout/app_layout.dart';
 import '../../../app/layout/app_spacing.dart';
+import '../../../app/theme/app_advanced_theme_tokens.dart';
+import '../../../app/widgets/advanced_theme_backdrop_decoration.dart';
 import '../../../domain/entities/reader_settings.dart';
 import '../../bookshelf/application/bookshelf_system_settings_service.dart';
+import '../application/advanced_theme_provider.dart';
 import '../../reader/application/reader_preferences_service.dart';
 import '../../search/application/search_system_settings_service.dart';
 
@@ -15,89 +19,115 @@ class SystemSettingsPage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final horizontal = AppSpacing.pageHorizontal(context);
-    final bottomSafe = MediaQuery.viewPaddingOf(context).bottom;
+    return Consumer(
+      builder: (context, ref, _) {
+        final activeAdvancedTheme =
+            ref.watch(activeAdvancedThemeProvider).valueOrNull;
+        final backdrop = resolveAdvancedThemeBackdrop(
+          Theme.of(context).colorScheme,
+          activeAdvancedTheme,
+        );
+        final horizontal = AppSpacing.pageHorizontal(context);
+        final bottomSafe = MediaQuery.viewPaddingOf(context).bottom;
+        final topInset = MediaQuery.paddingOf(context).top + kToolbarHeight;
 
-    return PopScope<void>(
-      canPop: context.canPop(),
-      onPopInvokedWithResult: (didPop, _) {
-        if (didPop || !context.mounted) {
-          return;
-        }
-        context.go('/mine');
-      },
-      child: Scaffold(
-        appBar: AppBar(title: const Text('系统')),
-        body: LayoutBuilder(
-          builder: (context, _) {
-            final maxWidth = AppLayout.pageContentMaxWidth(
-              context,
-              maxWidth: AppLayout.systemSettingsContentMaxWidth,
-            );
-
-            return Align(
-              alignment: Alignment.topCenter,
-              child: ConstrainedBox(
-                constraints: BoxConstraints(maxWidth: maxWidth),
-                child: ListView(
-                  padding: EdgeInsets.fromLTRB(
-                    horizontal,
-                    12,
-                    horizontal,
-                    16 + bottomSafe,
-                  ),
-                  children: [
-                    _buildSystemOverviewCard(context),
-                    const SizedBox(height: 12),
-                    LayoutBuilder(
-                      builder: (context, constraints) {
-                        final wide =
-                            constraints.maxWidth >=
-                            AppLayout.railBreakpointWidth;
-                        if (wide) {
-                          return const Column(
-                            children: [
-                              Row(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Expanded(
-                                    child: _BookshelfAutoRefreshSettingPanel(),
-                                  ),
-                                  SizedBox(width: 12),
-                                  Expanded(
-                                    child: _SearchConcurrencySettingPanel(),
-                                  ),
-                                ],
-                              ),
-                              SizedBox(height: 12),
-                              Row(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Expanded(child: _ReaderSettingsResetPanel()),
-                                ],
-                              ),
-                            ],
-                          );
-                        }
-
-                        return const Column(
-                          children: [
-                            _BookshelfAutoRefreshSettingPanel(),
-                            SizedBox(height: 12),
-                            _SearchConcurrencySettingPanel(),
-                            SizedBox(height: 12),
-                            _ReaderSettingsResetPanel(),
-                          ],
-                        );
-                      },
-                    ),
-                  ],
-                ),
-              ),
-            );
+        return PopScope<void>(
+          canPop: context.canPop(),
+          onPopInvokedWithResult: (didPop, _) {
+            if (didPop || !context.mounted) {
+              return;
+            }
+            context.go('/mine');
           },
-        ),
-      ),
+          child: Scaffold(
+            extendBodyBehindAppBar: true,
+            appBar: AppBar(
+              title: const Text('系统'),
+              backgroundColor: Colors.transparent,
+              surfaceTintColor: Colors.transparent,
+              shadowColor: Colors.transparent,
+            ),
+            body: LayoutBuilder(
+              builder: (context, _) {
+                final maxWidth = AppLayout.pageContentMaxWidth(
+                  context,
+                  maxWidth: AppLayout.systemSettingsContentMaxWidth,
+                );
+
+                return DecoratedBox(
+                  decoration: buildAdvancedThemeBackdropDecoration(backdrop),
+                  child: Align(
+                    alignment: Alignment.topCenter,
+                    child: ConstrainedBox(
+                      constraints: BoxConstraints(maxWidth: maxWidth),
+                      child: ListView(
+                        padding: EdgeInsets.fromLTRB(
+                          horizontal,
+                          topInset + 12,
+                          horizontal,
+                          16 + bottomSafe,
+                        ),
+                        children: [
+                          _buildSystemOverviewCard(context),
+                          const SizedBox(height: 12),
+                          LayoutBuilder(
+                            builder: (context, constraints) {
+                              final wide =
+                                  constraints.maxWidth >=
+                                  AppLayout.railBreakpointWidth;
+                              if (wide) {
+                                return const Column(
+                                  children: [
+                                    Row(
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.start,
+                                      children: [
+                                        Expanded(
+                                          child:
+                                              _BookshelfAutoRefreshSettingPanel(),
+                                        ),
+                                        SizedBox(width: 12),
+                                        Expanded(
+                                          child:
+                                              _SearchConcurrencySettingPanel(),
+                                        ),
+                                      ],
+                                    ),
+                                    SizedBox(height: 12),
+                                    Row(
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.start,
+                                      children: [
+                                        Expanded(
+                                          child: _ReaderSettingsResetPanel(),
+                                        ),
+                                      ],
+                                    ),
+                                  ],
+                                );
+                              }
+
+                              return const Column(
+                                children: [
+                                  _BookshelfAutoRefreshSettingPanel(),
+                                  SizedBox(height: 12),
+                                  _SearchConcurrencySettingPanel(),
+                                  SizedBox(height: 12),
+                                  _ReaderSettingsResetPanel(),
+                                ],
+                              );
+                            },
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                );
+              },
+            ),
+          ),
+        );
+      },
     );
   }
 
@@ -433,6 +463,8 @@ class _ReaderSettingsResetPanelState extends State<_ReaderSettingsResetPanel> {
       infoFooterMarginBottom: defaults.infoFooterMarginBottom,
       infoFooterMarginLeft: defaults.infoFooterMarginLeft,
       infoFooterMarginRight: defaults.infoFooterMarginRight,
+      pinnedChapterHeaderOffsetX: defaults.pinnedChapterHeaderOffsetX,
+      pinnedChapterHeaderOffsetY: defaults.pinnedChapterHeaderOffsetY,
       clearBackgroundImage: true,
     );
   }
@@ -467,6 +499,8 @@ class _ReaderSettingsResetPanelState extends State<_ReaderSettingsResetPanel> {
       bodyTextUnderlineGap: defaults.bodyTextUnderlineGap,
       bodyTextUnderlineDashLength: defaults.bodyTextUnderlineDashLength,
       bodyTextUnderlineDashGapRatio: defaults.bodyTextUnderlineDashGapRatio,
+      bodyMarginMode: defaults.bodyMarginMode,
+      bodyMarginPreset: defaults.bodyMarginPreset,
       bodyMarginTop: defaults.bodyMarginTop,
       bodyMarginBottom: defaults.bodyMarginBottom,
       bodyMarginLeft: defaults.bodyMarginLeft,

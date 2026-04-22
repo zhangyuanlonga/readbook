@@ -432,6 +432,7 @@ class _AdvancedThemeListPageState extends ConsumerState<AdvancedThemeListPage> {
   Widget build(BuildContext context) {
     final horizontal = AppSpacing.pageHorizontal(context);
     final bottomSafe = MediaQuery.viewPaddingOf(context).bottom;
+    final topInset = MediaQuery.paddingOf(context).top + kToolbarHeight;
     final activeThemeId = ref.watch(activeAdvancedThemeIdProvider);
     final activeThemeAsync = ref.watch(activeAdvancedThemeProvider);
 
@@ -444,8 +445,12 @@ class _AdvancedThemeListPageState extends ConsumerState<AdvancedThemeListPage> {
         context.go('/appearance?section=appearance');
       },
       child: Scaffold(
+        extendBodyBehindAppBar: true,
         appBar: AppBar(
           title: const Text('高级主题'),
+          backgroundColor: Colors.transparent,
+          surfaceTintColor: Colors.transparent,
+          shadowColor: Colors.transparent,
           actions: [
             if (activeThemeId != null)
               TextButton(
@@ -478,11 +483,11 @@ class _AdvancedThemeListPageState extends ConsumerState<AdvancedThemeListPage> {
                     _isAccessLoading || _isLoading
                         ? const Center(child: CircularProgressIndicator())
                         : !_canUseAdvancedThemes
-                        ? _buildVipLockedState(context)
+                        ? _buildVipLockedState(context, topInset: topInset)
                         : ListView(
                           padding: EdgeInsets.fromLTRB(
                             horizontal,
-                            12,
+                            topInset + 12,
                             horizontal,
                             16 + bottomSafe,
                           ),
@@ -512,10 +517,13 @@ class _AdvancedThemeListPageState extends ConsumerState<AdvancedThemeListPage> {
     );
   }
 
-  Widget _buildVipLockedState(BuildContext context) {
+  Widget _buildVipLockedState(
+    BuildContext context, {
+    required double topInset,
+  }) {
     final colorScheme = Theme.of(context).colorScheme;
     return ListView(
-      padding: const EdgeInsets.fromLTRB(16, 18, 16, 24),
+      padding: EdgeInsets.fromLTRB(16, topInset + 18, 16, 24),
       children: [
         Container(
           padding: const EdgeInsets.fromLTRB(18, 18, 18, 18),

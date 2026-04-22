@@ -44,6 +44,8 @@ class LocalTextEncodingDetector {
       return null;
     }
     return switch (normalized) {
+      'ansi' => 'gb18030',
+      'x-ansi' => 'gb18030',
       'utf8' => 'utf-8',
       'utf-8' => 'utf-8',
       'utf16' => 'utf-16',
@@ -53,7 +55,10 @@ class LocalTextEncodingDetector {
       'utf16le' => 'utf-16le',
       'utf-16le' => 'utf-16le',
       'gb2312' => 'gbk',
+      'gb_2312-80' => 'gbk',
       'cp936' => 'gbk',
+      'windows936' => 'gbk',
+      'windows-936' => 'gbk',
       'gbk' => 'gbk',
       'gb18030' => 'gb18030',
       'big5-hkscs' => 'big5',
@@ -667,6 +672,10 @@ class LocalTextEncodingDetector {
 
     if (hintedCharset != null && hintedCharset == charsetName) {
       score += 140;
+    }
+    if ((charsetName == 'gb18030' || charsetName == 'gbk') &&
+        (hanCount > 0 || cjkPunctuationCount > 0)) {
+      score += 48;
     }
     if (charsetName == 'utf-8') {
       score += 24;

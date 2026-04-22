@@ -38,12 +38,35 @@ void main() {
     expect(delegate1100.crossAxisCount, 5);
     expect(delegate1400.crossAxisCount, 6);
   });
+
+  testWidgets('uses cover ratio plus extra height for child aspect ratio', (
+    tester,
+  ) async {
+    final delegate = await _pumpAndReadGridDelegate(
+      tester,
+      screenWidth: 1440,
+      constrainedWidth: 390,
+      itemHeightExtra: 74,
+      coverAspectRatio: 68 / 96,
+    );
+
+    const crossSpacing = 8.0;
+    final itemWidth = (390 - crossSpacing * (3 - 1)) / 3;
+    final expectedHeight = itemWidth / (68 / 96) + 74;
+
+    expect(
+      delegate.childAspectRatio,
+      closeTo(itemWidth / expectedHeight, 1e-6),
+    );
+  });
 }
 
 Future<SliverGridDelegateWithFixedCrossAxisCount> _pumpAndReadGridDelegate(
   WidgetTester tester, {
   required double screenWidth,
   required double constrainedWidth,
+  double itemHeightExtra = 42,
+  double coverAspectRatio = 68 / 96,
 }) async {
   await tester.binding.setSurfaceSize(Size(screenWidth, 900));
   addTearDown(() => tester.binding.setSurfaceSize(null));
@@ -60,6 +83,8 @@ Future<SliverGridDelegateWithFixedCrossAxisCount> _pumpAndReadGridDelegate(
               slivers: [
                 BookshelfGridSliver(
                   itemCount: 20,
+                  itemHeightExtra: itemHeightExtra,
+                  coverAspectRatio: coverAspectRatio,
                   itemBuilder:
                       (context, index) => Container(
                         key: ValueKey<String>('grid_item_$index'),

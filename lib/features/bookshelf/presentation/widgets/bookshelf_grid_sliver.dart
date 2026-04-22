@@ -14,6 +14,7 @@ class BookshelfGridSliver extends StatelessWidget {
     this.crossSpacing = 8,
     this.mainSpacing = 12,
     this.itemHeightExtra = 42,
+    this.coverAspectRatio = 68 / 96,
   });
 
   final int itemCount;
@@ -22,6 +23,7 @@ class BookshelfGridSliver extends StatelessWidget {
   final double crossSpacing;
   final double mainSpacing;
   final double itemHeightExtra;
+  final double coverAspectRatio;
 
   @override
   Widget build(BuildContext context) {
@@ -34,7 +36,7 @@ class BookshelfGridSliver extends StatelessWidget {
             AppLayout.bookshelfGridColumnsForWidth(width);
         final itemWidth =
             (width - crossSpacing * (crossAxisCount - 1)) / crossAxisCount;
-        final itemHeight = itemWidth * 1.32 + itemHeightExtra;
+        final itemHeight = itemWidth / coverAspectRatio + itemHeightExtra;
 
         return SliverGrid(
           delegate: SliverChildBuilderDelegate(

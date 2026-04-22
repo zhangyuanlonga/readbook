@@ -9,11 +9,12 @@ class ReaderLayoutResolver {
   const ReaderLayoutResolver();
 
   EdgeInsets resolveBodyPadding(ReaderSettings settings) {
+    final margins = settings.effectiveBodyMarginValues;
     return EdgeInsets.fromLTRB(
-      _clampLayoutMargin(settings.bodyMarginLeft),
-      _clampLayoutMargin(settings.bodyMarginTop),
-      _clampLayoutMargin(settings.bodyMarginRight),
-      _clampLayoutMargin(settings.bodyMarginBottom),
+      _clampLayoutMargin(margins.left),
+      _clampLayoutMargin(margins.top),
+      _clampLayoutMargin(margins.right),
+      _clampLayoutMargin(margins.bottom),
     );
   }
 

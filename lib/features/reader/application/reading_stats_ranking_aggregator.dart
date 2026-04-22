@@ -10,11 +10,26 @@ class ReadingStatsRankingAggregator {
     required List<ReadingRecordDay> filteredDailyRecords,
     required ReadingRecordsPeriodRange periodRange,
   }) {
+    final latestCoverByBookId = <String, ReadingRecordDay>{};
+    for (final day in filteredDailyRecords) {
+      final coverUrl = day.coverUrl?.trim() ?? '';
+      if (coverUrl.isEmpty) {
+        continue;
+      }
+      final current = latestCoverByBookId[day.bookId];
+      if (current == null || day.lastReadAt.isAfter(current.lastReadAt)) {
+        latestCoverByBookId[day.bookId] = day;
+      }
+    }
+
     if (periodRange.isAll) {
       final items = latestRecords
           .map(
             (record) => ReadingDurationRankingItem(
-              record: record,
+              record: _resolveRecordCover(
+                record,
+                latestCoverByBookId[record.bookId]?.coverUrl,
+              ),
               readMillis: record.totalReadMillis,
               readChars: record.totalReadChars,
               readDays: 0,
@@ -48,7 +63,10 @@ class ReadingStatsRankingAggregator {
       }
       items.add(
         ReadingDurationRankingItem(
-          record: record,
+          record: _resolveRecordCover(
+            record,
+            latestCoverByBookId[entry.key]?.coverUrl,
+          ),
           readMillis: entry.value,
           readChars: charsByBookId[entry.key] ?? 0,
           readDays: daysByBookId[entry.key]?.length ?? 0,
@@ -74,5 +92,32 @@ class ReadingStatsRankingAggregator {
       return b.record.lastReadAt.compareTo(a.record.lastReadAt);
     });
     return List<ReadingDurationRankingItem>.unmodifiable(mutable);
+  }
+
+  ReadingRecord _resolveRecordCover(
+    ReadingRecord record,
+    String? fallbackCover,
+  ) {
+    final currentCover = record.coverUrl?.trim() ?? '';
+    final nextCover = fallbackCover?.trim() ?? '';
+    if (currentCover.isNotEmpty || nextCover.isEmpty) {
+      return record;
+    }
+    return ReadingRecord(
+      bookId: record.bookId,
+      sourceId: record.sourceId,
+      detailUrl: record.detailUrl,
+      bookTitle: record.bookTitle,
+      bookAuthor: record.bookAuthor,
+      coverUrl: nextCover,
+      lastChapterId: record.lastChapterId,
+      lastChapterTitle: record.lastChapterTitle,
+      lastChapterIndex: record.lastChapterIndex,
+      lastChapterUrl: record.lastChapterUrl,
+      lastPositionRatio: record.lastPositionRatio,
+      totalReadMillis: record.totalReadMillis,
+      totalReadChars: record.totalReadChars,
+      lastReadAt: record.lastReadAt,
+    );
   }
 }
